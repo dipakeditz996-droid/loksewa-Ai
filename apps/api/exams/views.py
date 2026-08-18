@@ -1,0 +1,1414 @@
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Exam, Subject, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress
+from .serializers import (
+    ExamSerializer, SubjectSerializer, TopicSerializer, 
+    QuestionFullSerializer, PracticeSessionSerializer, UserTopicProgressSerializer
+)
+
+class ExamViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Exam.objects.filter(is_active=True)
+    serializer_class = ExamSerializer
+
+class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Subject.objects.all()
+    serializer_class = SubjectSerializer
+    filterset_fields = ['exam']
+
+class TopicViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Topic.objects.all()
+    serializer_class = TopicSerializer
+    filterset_fields = ['subject']
+
+class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Question.objects.all()
+    serializer_class = QuestionFullSerializer
+    filterset_fields = ['topic', 'difficulty']
+
+    @action(detail=False, methods=['get'])
+    def practice_set(self, request):
+        topic_id = request.query_params.get('topic')
+        difficulty = request.query_params.get('difficulty')
+        limit = int(request.query_params.get('limit', 20))
+        
+        qs = self.get_queryset()
+        if topic_id:
+            qs = qs.filter(topic_id=topic_id)
+        if difficulty and difficulty != 'all':
+            qs = qs.filter(difficulty=difficulty)
+            
+        # Randomize for practice
+        qs = qs.order_by('?')[:limit]
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+class PracticeSessionViewSet(viewsets.ModelViewSet):
+    serializer_class = PracticeSessionSerializer
+
+    def get_queryset(self):
+        return PracticeSession.objects.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        exam_id = request.data.get('exam')
+        subject_id = request.data.get('subject')
+        topic_id = request.data.get('topic')
+        difficulty = request.data.get('difficulty')
+        mode = request.data.get('mode', 'flexible')
+        total_questions = int(request.data.get('total_questions', 20))
+
+        qs = Question.objects.all()
+        if exam_id and str(exam_id) != 'all':
+            qs = qs.filter(topic__chapter__subject__exam_id=exam_id)
+        if subject_id and str(subject_id) != 'all':
+            qs = qs.filter(topic__chapter__subject_id=subject_id)
+        if topic_id and str(topic_id) != 'all':
+            qs = qs.filter(topic_id=topic_id)
+        if difficulty and difficulty != 'all':
+            qs = qs.filter(difficulty=difficulty)
+        
+        # Randomize
+        questions = list(qs.order_by('?')[:total_questions])
+        
+        if len(questions) == 0:
+            return Response({'detail': 'Not enough questions are available for this selection.'}, status=400)
+
+        # Create session
+        session = PracticeSession.objects.create(
+            user=request.user,
+            exam_id=exam_id if exam_id and str(exam_id) != 'all' else Exam.objects.first().id,
+            subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
+            topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
+            mode=mode,
+            difficulty=difficulty if difficulty and difficulty != 'all' else None,
+            total_questions=len(questions)
+        )
+
+        for q in questions:
+            QuestionAttempt.objects.create(session=session, question=q)
+
+        from .serializers import SecureQuestionSerializer
+        return Response({
+            'session': PracticeSessionSerializer(session).data,
+            'questions': SecureQuestionSerializer(questions, many=True).data
+        })
+
+    @action(detail=True, methods=['post'])
+    def answer(self, request, pk=None):
+        session = self.get_object()
+        if session.completed:
+            return Response({'detail': 'Session already completed.'}, status=400)
+            
+        question_id = request.data.get('question_id')
+        selected_option = request.data.get('selected_option')
+        is_marked_for_review = request.data.get('is_marked_for_review', False)
+        
+        try:
+            attempt = QuestionAttempt.objects.get(session=session, question_id=question_id)
+            if selected_option is not None:
+                attempt.selected_option = selected_option
+            attempt.is_marked_for_review = is_marked_for_review
+            attempt.save()
+            return Response({'status': 'success'})
+        except QuestionAttempt.DoesNotExist:
+            return Response({'detail': 'Question not found in this session.'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        session = self.get_object()
+        if session.completed:
+            return Response(self.get_serializer(session).data)
+            
+        time_taken_seconds = int(request.data.get('time_taken_seconds', 0))
+        attempts = QuestionAttempt.objects.filter(session=session)
+        
+        correct = 0
+        incorrect = 0
+        unanswered = 0
+        
+        for attempt in attempts:
+            if not attempt.selected_option:
+                unanswered += 1
+            elif attempt.selected_option == attempt.question.correct_option:
+                attempt.is_correct = True
+                correct += 1
+                attempt.save()
+            else:
+                attempt.is_correct = False
+                incorrect += 1
+                attempt.save()
+                
+        session.correct_count = correct
+        session.incorrect_count = incorrect
+        session.unanswered_count = unanswered
+        session.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
+        session.score = correct # No negative marking by default unless specified
+        session.time_taken_seconds = time_taken_seconds
+        session.completed = True
+        session.save()
+        
+        # After submission, return full data including answers
+        attempts_data = []
+        from .serializers import QuestionFullSerializer
+        for attempt in attempts:
+            attempts_data.append({
+                'attempt_id': attempt.id,
+                'question': QuestionFullSerializer(attempt.question).data,
+                'selected_option': attempt.selected_option,
+                'is_correct': attempt.is_correct,
+                'is_marked_for_review': attempt.is_marked_for_review,
+            })
+            
+        return Response({
+            'session': self.get_serializer(session).data,
+            'attempts': attempts_data
+        })
+
+class BookmarkViewSet(viewsets.ModelViewSet):
+    from .models import Bookmark
+    from .serializers import BookmarkSerializer
+    serializer_class = BookmarkSerializer
+
+    def get_queryset(self):
+        return self.Bookmark.objects.filter(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        question_id = request.data.get('question_id')
+        bookmark, created = self.Bookmark.objects.get_or_create(user=request.user, question_id=question_id)
+        if not created:
+            # If already exists, toggle it off (delete)
+            bookmark.delete()
+            return Response({'status': 'removed'})
+        return Response({'status': 'added', 'id': bookmark.id})
+
+class UserTopicProgressViewSet(viewsets.ModelViewSet):
+    from .models import UserTopicProgress
+    from .serializers import UserTopicProgressSerializer
+    serializer_class = UserTopicProgressSerializer
+    
+    def get_queryset(self):
+        return self.UserTopicProgress.objects.filter(user=self.request.user)
+        
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        from django.utils import timezone
+        from django.db.models import Avg, Sum
+        from django.db.models.functions import TruncDate
+        
+        now = timezone.now()
+
+        # 1. Profile Completion
+        try:
+            profile = user.student_profile
+            completion_score = 40
+            if profile.phone: completion_score += 20
+            if profile.target_category: completion_score += 20
+            if profile.target_position: completion_score += 20
+            profile_data = {
+                "name": user.get_full_name() or user.username,
+                "avatar": user.avatar,
+                "targetPosition": profile.target_position.title if profile.target_position else None,
+                "completionPercentage": completion_score,
+                "phone": profile.phone
+            }
+        except Exception:
+            profile_data = {
+                "name": user.get_full_name() or user.username,
+                "avatar": user.avatar,
+                "targetPosition": None,
+                "completionPercentage": 30,
+                "phone": ""
+            }
+
+        # 2. Stats
+        from .models import ModelExamAttempt, PracticeSession, QuestionAttempt, ModelExamAttemptAnswer
+        model_attempts = ModelExamAttempt.objects.filter(student=user)
+        practice_sessions = PracticeSession.objects.filter(user=user)
+
+        total_exams = model_attempts.count()
+        completed_exams = model_attempts.filter(status='COMPLETED').count()
+
+        avg_score = model_attempts.filter(status='COMPLETED').aggregate(Avg('score'))['score__avg'] or 0
+        best_score = model_attempts.filter(status='COMPLETED').order_by('-score').first()
+        best_score_val = best_score.score if best_score else 0
+
+        exam_questions = ModelExamAttemptAnswer.objects.filter(attempt__student=user).count()
+        practice_questions = QuestionAttempt.objects.filter(session__user=user).count()
+        questions_attempted = exam_questions + practice_questions
+
+        avg_accuracy = practice_sessions.filter(completed=True).aggregate(Avg('accuracy'))['accuracy__avg'] or 0
+
+        exam_time = model_attempts.filter(status='COMPLETED').aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
+        practice_time = practice_sessions.filter(completed=True).aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
+        total_seconds = exam_time + practice_time
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        study_time = f"{hours}h {minutes}m"
+
+        dates = set(model_attempts.annotate(date=TruncDate('started_at')).values_list('date', flat=True))
+        dates.update(set(practice_sessions.annotate(date=TruncDate('created_at')).values_list('date', flat=True)))
+        sorted_dates = sorted(list(dates), reverse=True)
+        
+        current_streak = 0
+        if sorted_dates:
+            check_date = now.date()
+            if sorted_dates[0] == check_date or sorted_dates[0] == check_date - timezone.timedelta(days=1):
+                curr = sorted_dates[0]
+                for d in sorted_dates:
+                    if d == curr:
+                        current_streak += 1
+                        curr = curr - timezone.timedelta(days=1)
+                    else:
+                        break
+
+        stats = {
+            'totalExams': total_exams,
+            'completedExams': completed_exams,
+            'averageScore': round(avg_score, 1),
+            'bestScore': round(best_score_val, 1),
+            'accuracy': round(avg_accuracy, 1),
+            'questionsAttempted': questions_attempted,
+            'studyStreak': current_streak,
+            'studyTime': study_time,
+            'progress': 0
+        }
+
+        # 3. Continue Learning
+        continue_learning = None
+        in_progress_exam = model_attempts.filter(status='IN_PROGRESS').order_by('-started_at').first()
+        if in_progress_exam:
+            continue_learning = {
+                'id': in_progress_exam.id,
+                'type': 'model_exam',
+                'title': in_progress_exam.exam.title,
+                'progress': 0,
+                'url': f'/student/model-exams/{in_progress_exam.exam.id}/attempt/{in_progress_exam.id}'
+            }
+        else:
+            in_progress_practice = practice_sessions.filter(completed=False).order_by('-created_at').first()
+            if in_progress_practice:
+                answered = QuestionAttempt.objects.filter(session=in_progress_practice, selected_option__isnull=False).count()
+                total = in_progress_practice.total_questions
+                continue_learning = {
+                    'id': in_progress_practice.id,
+                    'type': 'practice',
+                    'title': f'Practice: {in_progress_practice.topic.title if in_progress_practice.topic else "Mixed"}',
+                    'progress': int((answered / total * 100) if total > 0 else 0),
+                    'url': f'/student/practice/session/{in_progress_practice.id}'
+                }
+
+        # 4. Today's Plan
+        todays_plan = []
+        try:
+            from study_plan.models import StudyTask
+            tasks = StudyTask.objects.filter(study_plan__student=user, date=now.date())
+            for t in tasks:
+                todays_plan.append({
+                    'id': t.id,
+                    'title': t.title,
+                    'type': t.task_type,
+                    'completed': t.status == 'COMPLETED',
+                    'duration': t.duration_minutes
+                })
+        except Exception:
+            pass
+
+        # 5. Recent Exams
+        recent_exams = []
+        for e in model_attempts.filter(status='COMPLETED').order_by('-submitted_at')[:5]:
+            recent_exams.append({
+                'id': e.id,
+                'title': e.model_exam.title,
+                'date': e.submitted_at.strftime('%Y-%m-%d'),
+                'score': float(e.score),
+                'percentage': float((e.score / max(e.model_exam.total_marks, 1)) * 100) if getattr(e.model_exam, 'total_marks', 0) > 0 else 0
+            })
+
+        # 6. Marketplace
+        purchases = []
+        try:
+            from marketplace.models import Purchase, PaymentSubmission
+            for p in Purchase.objects.filter(student=user, status='ACTIVE').order_by('-approved_at')[:3]:
+                purchases.append({
+                    'id': p.id,
+                    'title': p.product.title,
+                    'status': 'APPROVED',
+                    'url': f'/student/marketplace/{p.product.id}'
+                })
+            for ps in PaymentSubmission.objects.filter(student=user, status='PENDING').order_by('-submitted_at')[:3]:
+                purchases.append({
+                    'id': ps.id,
+                    'title': ps.product.title,
+                    'status': 'PENDING',
+                    'url': f'/student/marketplace/purchases'
+                })
+        except Exception:
+            pass
+
+        # 7. Support Tickets
+        support_tickets = []
+        try:
+            from support.models import SupportTicket
+            tickets = SupportTicket.objects.filter(student=user, status__in=['OPEN', 'IN_PROGRESS']).order_by('-created_at')[:3]
+            for t in tickets:
+                support_tickets.append({
+                    'id': t.id,
+                    'title': t.subject,
+                    'status': t.status,
+                    'url': f'/student/help-support/tickets/{t.id}'
+                })
+        except Exception:
+            pass
+
+        return Response({
+            'profile': profile_data,
+            'stats': stats,
+            'continueLearning': continue_learning,
+            'todaysPlan': todays_plan,
+            'recentExams': recent_exams,
+            'purchases': purchases[:3],
+            'supportTickets': support_tickets,
+            'subjectPerformance': [
+                {"subject": "Constitution", "progress": 72},
+                {"subject": "General Knowledge", "progress": 64},
+                {"subject": "Current Affairs", "progress": 81}
+            ]
+        })
+
+class ModelExamViewSet(viewsets.ReadOnlyModelViewSet):
+    from .models import ModelExam
+    from .serializers import ModelExamSerializer
+    serializer_class = ModelExamSerializer
+    
+    def get_queryset(self):
+        return self.ModelExam.objects.filter(status='published')
+
+class ModelExamAttemptViewSet(viewsets.ModelViewSet):
+    from .models import ModelExamAttempt
+    from .serializers import ModelExamAttemptSerializer
+    serializer_class = ModelExamAttemptSerializer
+
+    def get_queryset(self):
+        return self.ModelExamAttempt.objects.filter(student=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        from .models import ModelExam, ModelExamAttemptAnswer
+        from .serializers import SecureQuestionSerializer
+        from django.utils import timezone
+        
+        model_exam_id = request.data.get('model_exam_id')
+        try:
+            model_exam = ModelExam.objects.get(id=model_exam_id, status='published')
+        except ModelExam.DoesNotExist:
+            return Response({'detail': 'Model Exam not found.'}, status=404)
+
+        # Check for in-progress attempt
+        existing_attempt = self.ModelExamAttempt.objects.filter(
+            student=request.user, 
+            model_exam=model_exam, 
+            status='in-progress'
+        ).first()
+
+        if existing_attempt:
+            # Check if time expired
+            elapsed = (timezone.now() - existing_attempt.started_at).total_seconds()
+            if elapsed > (model_exam.duration_minutes * 60):
+                # Auto submit
+                return self._submit_attempt(existing_attempt)
+            else:
+                attempt = existing_attempt
+        else:
+            attempt = self.ModelExamAttempt.objects.create(
+                student=request.user,
+                model_exam=model_exam
+            )
+            # Link all questions
+            for q in model_exam.questions.all():
+                ModelExamAttemptAnswer.objects.create(attempt=attempt, question=q)
+
+        questions = [ans.question for ans in attempt.answers.all()]
+        
+        # We need to return existing answers if any
+        answers_data = {
+            ans.question.id: {
+                'selected_option': ans.selected_option,
+                'is_marked_for_review': ans.is_marked_for_review
+            } for ans in attempt.answers.all()
+        }
+
+        return Response({
+            'attempt': self.get_serializer(attempt).data,
+            'questions': SecureQuestionSerializer(questions, many=True).data,
+            'answers': answers_data
+        })
+
+    @action(detail=True, methods=['post'])
+    def answer(self, request, pk=None):
+        from django.utils import timezone
+        from .models import ModelExamAttemptAnswer
+
+        attempt = self.get_object()
+        if attempt.status == 'submitted':
+            return Response({'detail': 'Exam already submitted.'}, status=400)
+            
+        elapsed = (timezone.now() - attempt.started_at).total_seconds()
+        if elapsed > (attempt.model_exam.duration_minutes * 60 + 5): # 5 seconds grace period
+            # Force submit
+            self._submit_attempt(attempt)
+            return Response({'detail': 'Time expired. Exam automatically submitted.'}, status=403)
+
+        question_id = request.data.get('question_id')
+        selected_option = request.data.get('selected_option')
+        is_marked_for_review = request.data.get('is_marked_for_review', False)
+        
+        try:
+            ans = ModelExamAttemptAnswer.objects.get(attempt=attempt, question_id=question_id)
+            if selected_option is not None:
+                ans.selected_option = selected_option
+            ans.is_marked_for_review = is_marked_for_review
+            ans.save()
+            return Response({'status': 'success'})
+        except ModelExamAttemptAnswer.DoesNotExist:
+            return Response({'detail': 'Question not found in this exam.'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        attempt = self.get_object()
+        return self._submit_attempt(attempt)
+        
+    def _submit_attempt(self, attempt):
+        from django.utils import timezone
+        from .serializers import QuestionFullSerializer
+        
+        if attempt.status == 'submitted':
+            attempts_data = []
+            for ans in attempt.answers.all():
+                attempts_data.append({
+                    'attempt_id': ans.id,
+                    'question': QuestionFullSerializer(ans.question).data,
+                    'selected_option': ans.selected_option,
+                    'is_correct': ans.is_correct,
+                    'is_marked_for_review': ans.is_marked_for_review,
+                })
+            return Response({
+                'attempt': self.get_serializer(attempt).data,
+                'answers': attempts_data
+            })
+
+        answers = attempt.answers.all()
+        correct = 0
+        incorrect = 0
+        unanswered = 0
+        
+        for ans in answers:
+            if not ans.selected_option:
+                unanswered += 1
+            elif ans.selected_option == ans.question.correct_option:
+                ans.is_correct = True
+                correct += 1
+                ans.save()
+            else:
+                ans.is_correct = False
+                incorrect += 1
+                ans.save()
+                
+        attempt.correct_count = correct
+        attempt.incorrect_count = incorrect
+        attempt.unanswered_count = unanswered
+        attempt.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
+        
+        # Calculate score with negative marking
+        negative_marks = incorrect * attempt.model_exam.negative_marking
+        attempt.score = max(0, correct - negative_marks) # Assuming 1 mark per correct answer
+        
+        attempt.submitted_at = timezone.now()
+        attempt.time_taken_seconds = min(
+            int((attempt.submitted_at - attempt.started_at).total_seconds()), 
+            attempt.model_exam.duration_minutes * 60
+        )
+        attempt.status = 'submitted'
+        attempt.save()
+        
+        attempts_data = []
+        for ans in answers:
+            attempts_data.append({
+                'attempt_id': ans.id,
+                'question': QuestionFullSerializer(ans.question).data,
+                'selected_option': ans.selected_option,
+                'is_correct': ans.is_correct,
+                'is_marked_for_review': ans.is_marked_for_review,
+            })
+            
+        return Response({
+            'attempt': self.get_serializer(attempt).data,
+            'answers': attempts_data
+        })
+
+# ============================================================
+# SUBJECTIVE PRACTICE VIEWS
+# ============================================================
+
+class SubjectivePracticeSetViewSet(viewsets.ReadOnlyModelViewSet):
+    from .models import SubjectivePracticeSet
+    from .serializers import SubjectivePracticeSetSerializer
+    serializer_class = SubjectivePracticeSetSerializer
+
+    def get_queryset(self):
+        return self.SubjectivePracticeSet.objects.filter(status='published')
+
+class SubjectiveModelExamViewSet(viewsets.ReadOnlyModelViewSet):
+    from .models import SubjectiveModelExam
+    from .serializers import SubjectiveModelExamSerializer
+    serializer_class = SubjectiveModelExamSerializer
+
+    def get_queryset(self):
+        return self.SubjectiveModelExam.objects.filter(status='published')
+
+class SubjectiveQuestionViewSet(viewsets.ReadOnlyModelViewSet):
+    from .models import Question
+    from .serializers import SubjectiveQuestionSerializer
+    serializer_class = SubjectiveQuestionSerializer
+
+    def get_queryset(self):
+        qs = self.Question.objects.filter(status='published', question_type='subjective')
+        topic_id = self.request.query_params.get('topic')
+        if topic_id:
+            qs = qs.filter(topic_id=topic_id)
+        return qs
+
+class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
+    from .models import SubjectiveAttempt
+    from .serializers import SubjectiveAttemptSerializer
+    serializer_class = SubjectiveAttemptSerializer
+
+    def get_queryset(self):
+        return self.SubjectiveAttempt.objects.filter(student=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        from .models import SubjectivePracticeSet, SubjectiveModelExam, SubjectiveAnswer, Question, SubjectiveAttempt
+        from django.utils import timezone
+
+        mode = request.data.get('mode', 'practice')
+        practice_set_id = request.data.get('practice_set_id')
+        model_exam_id = request.data.get('model_exam_id')
+        question_ids = request.data.get('question_ids', [])  # For topic practice
+
+        if mode == 'practice' and practice_set_id:
+            try:
+                ps = SubjectivePracticeSet.objects.get(id=practice_set_id, status='published')
+            except SubjectivePracticeSet.DoesNotExist:
+                return Response({'detail': 'Practice set not found.'}, status=404)
+
+            # Resume existing in-progress attempt
+            existing = SubjectiveAttempt.objects.filter(
+                student=request.user, practice_set=ps, status='in-progress'
+            ).first()
+            if existing:
+                return Response(self.get_serializer(existing).data)
+
+            attempt = SubjectiveAttempt.objects.create(
+                student=request.user, practice_set=ps, mode='practice'
+            )
+            for q in ps.questions.all():
+                SubjectiveAnswer.objects.create(attempt=attempt, question=q)
+
+        elif mode == 'model_exam' and model_exam_id:
+            try:
+                me = SubjectiveModelExam.objects.get(id=model_exam_id, status='published')
+            except SubjectiveModelExam.DoesNotExist:
+                return Response({'detail': 'Model exam not found.'}, status=404)
+
+            existing = SubjectiveAttempt.objects.filter(
+                student=request.user, model_exam=me, status='in-progress'
+            ).first()
+            if existing:
+                # Check timer
+                elapsed = (timezone.now() - existing.started_at).total_seconds()
+                if elapsed > me.duration_minutes * 60:
+                    existing.status = 'submitted'
+                    existing.submitted_at = timezone.now()
+                    existing.save()
+                    for ans in existing.answers.filter(status='draft'):
+                        ans.status = 'submitted'
+                        ans.submitted_at = timezone.now()
+                        ans.save()
+                    return Response(self.get_serializer(existing).data)
+                return Response(self.get_serializer(existing).data)
+
+            attempt = SubjectiveAttempt.objects.create(
+                student=request.user, model_exam=me, mode='model_exam'
+            )
+            for q in me.questions.all():
+                SubjectiveAnswer.objects.create(attempt=attempt, question=q)
+
+        elif mode == 'topic' and question_ids:
+            attempt = SubjectiveAttempt.objects.create(
+                student=request.user, mode='topic'
+            )
+            for qid in question_ids:
+                try:
+                    q = Question.objects.get(id=qid, status='published', question_type='subjective')
+                    SubjectiveAnswer.objects.create(attempt=attempt, question=q)
+                except Question.DoesNotExist:
+                    pass
+        else:
+            return Response({'detail': 'Invalid attempt configuration.'}, status=400)
+
+        return Response(self.get_serializer(attempt).data, status=201)
+
+    @action(detail=True, methods=['post'])
+    def save_draft(self, request, pk=None):
+        from .models import SubjectiveAnswer
+        attempt = self.get_object()
+        if attempt.status == 'submitted':
+            return Response({'detail': 'Attempt already submitted.'}, status=400)
+
+        # Check model exam timer
+        if attempt.model_exam:
+            from django.utils import timezone
+            elapsed = (timezone.now() - attempt.started_at).total_seconds()
+            if elapsed > attempt.model_exam.duration_minutes * 60:
+                return Response({'detail': 'Time expired.'}, status=403)
+
+        question_id = request.data.get('question_id')
+        answer_text = request.data.get('answer_text', '')
+        word_count = len(answer_text.split()) if answer_text else 0
+
+        try:
+            ans = SubjectiveAnswer.objects.get(attempt=attempt, question_id=question_id)
+            ans.answer_text = answer_text
+            ans.word_count = word_count
+            ans.status = 'draft'
+            ans.save()
+            return Response({'status': 'saved', 'word_count': word_count, 'last_saved_at': ans.last_saved_at})
+        except SubjectiveAnswer.DoesNotExist:
+            return Response({'detail': 'Question not in this attempt.'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def submit_answer(self, request, pk=None):
+        from .models import SubjectiveAnswer
+        from django.utils import timezone
+
+        attempt = self.get_object()
+        if attempt.status == 'submitted':
+            return Response({'detail': 'Attempt already submitted.'}, status=400)
+
+        question_id = request.data.get('question_id')
+        answer_text = request.data.get('answer_text', '')
+
+        try:
+            ans = SubjectiveAnswer.objects.get(attempt=attempt, question_id=question_id)
+            ans.answer_text = answer_text
+            ans.word_count = len(answer_text.split()) if answer_text else 0
+            ans.status = 'submitted'
+            ans.submitted_at = timezone.now()
+            ans.save()
+            return Response({'status': 'submitted'})
+        except SubjectiveAnswer.DoesNotExist:
+            return Response({'detail': 'Question not in this attempt.'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        from django.utils import timezone
+        attempt = self.get_object()
+        if attempt.status == 'submitted':
+            return Response(self.get_serializer(attempt).data)
+
+        attempt.status = 'submitted'
+        attempt.submitted_at = timezone.now()
+        attempt.save()
+
+        # Mark all draft answers as submitted
+        for ans in attempt.answers.filter(status='draft'):
+            ans.status = 'submitted'
+            ans.submitted_at = timezone.now()
+            ans.save()
+
+        return Response(self.get_serializer(attempt).data)
+
+
+class TeacherEvaluationViewSet(viewsets.ViewSet):
+    """Teacher/Admin evaluation endpoints"""
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """List all submitted answers pending evaluation"""
+        from .models import SubjectiveAnswer
+        from .serializers import SubjectiveAnswerListSerializer
+
+        user = request.user
+        if user.role not in ('teacher', 'admin', 'super-admin'):
+            return Response({'detail': 'Permission denied.'}, status=403)
+
+        status_filter = request.query_params.get('status', 'submitted')
+        qs = SubjectiveAnswer.objects.filter(status=status_filter).select_related(
+            'attempt__student', 'question__topic'
+        ).order_by('-submitted_at')
+
+        serializer = SubjectiveAnswerListSerializer(qs, many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        """Get a single answer with full detail for evaluation"""
+        from .models import SubjectiveAnswer
+        from .serializers import SubjectiveAnswerSerializer
+
+        user = request.user
+        if user.role not in ('teacher', 'admin', 'super-admin'):
+            return Response({'detail': 'Permission denied.'}, status=403)
+
+        try:
+            answer = SubjectiveAnswer.objects.select_related(
+                'attempt__student', 'question__topic'
+            ).get(id=pk)
+            serializer = SubjectiveAnswerSerializer(answer)
+            return Response(serializer.data)
+        except SubjectiveAnswer.DoesNotExist:
+            return Response({'detail': 'Answer not found.'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def evaluate(self, request, pk=None):
+        """Submit evaluation for a specific answer"""
+        from .models import SubjectiveAnswer, Evaluation
+
+        user = request.user
+        if user.role not in ('teacher', 'admin', 'super-admin'):
+            return Response({'detail': 'Permission denied.'}, status=403)
+
+        try:
+            answer = SubjectiveAnswer.objects.get(id=pk)
+        except SubjectiveAnswer.DoesNotExist:
+            return Response({'detail': 'Answer not found.'}, status=404)
+
+        marks = float(request.data.get('marks_obtained', 0))
+        feedback = request.data.get('feedback', '')
+
+        if marks > answer.question.marks:
+            return Response({'detail': f'Marks cannot exceed {answer.question.marks}.'}, status=400)
+
+        evaluation, created = Evaluation.objects.update_or_create(
+            answer=answer,
+            defaults={
+                'evaluator': user,
+                'marks_obtained': marks,
+                'feedback': feedback,
+            }
+        )
+
+        answer.status = 'evaluated'
+        answer.save()
+
+        from .serializers import EvaluationSerializer
+        return Response(EvaluationSerializer(evaluation).data)
+
+    @action(detail=True, methods=['post'])
+    def annotate(self, request, pk=None):
+        """Add annotation to an evaluation"""
+        from .models import SubjectiveAnswer, Evaluation, Annotation
+
+        user = request.user
+        if user.role not in ('teacher', 'admin', 'super-admin'):
+            return Response({'detail': 'Permission denied.'}, status=403)
+
+        try:
+            answer = SubjectiveAnswer.objects.get(id=pk)
+            evaluation = answer.evaluation
+        except (SubjectiveAnswer.DoesNotExist, Evaluation.DoesNotExist):
+            return Response({'detail': 'Answer or evaluation not found.'}, status=404)
+
+        annotation = Annotation.objects.create(
+            evaluation=evaluation,
+            selected_text=request.data.get('selected_text', ''),
+            comment=request.data.get('comment', ''),
+            start_offset=int(request.data.get('start_offset', 0)),
+            end_offset=int(request.data.get('end_offset', 0)),
+            created_by=user,
+        )
+
+        from .serializers import AnnotationSerializer
+        return Response(AnnotationSerializer(annotation).data, status=201)
+
+    @action(detail=True, methods=['post'])
+    def video_feedback(self, request, pk=None):
+        """Add YouTube video feedback URL"""
+        from .models import SubjectiveAnswer, Evaluation, VideoFeedback
+        import re
+
+        user = request.user
+        if user.role not in ('teacher', 'admin', 'super-admin'):
+            return Response({'detail': 'Permission denied.'}, status=403)
+
+        try:
+            answer = SubjectiveAnswer.objects.get(id=pk)
+            evaluation = answer.evaluation
+        except (SubjectiveAnswer.DoesNotExist, Evaluation.DoesNotExist):
+            return Response({'detail': 'Answer or evaluation not found.'}, status=404)
+
+        youtube_url = request.data.get('youtube_url', '')
+        # Validate YouTube URL
+        pattern = r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})'
+        if not re.search(pattern, youtube_url):
+            return Response({'detail': 'Invalid YouTube URL.'}, status=400)
+
+        vf, _ = VideoFeedback.objects.update_or_create(
+            evaluation=evaluation,
+            defaults={'youtube_url': youtube_url}
+        )
+
+        from .serializers import VideoFeedbackSerializer
+        return Response(VideoFeedbackSerializer(vf).data)
+
+from rest_framework.exceptions import PermissionDenied
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
+
+class TeacherQuestionViewSet(viewsets.ModelViewSet):
+    serializer_class = QuestionFullSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['topic', 'difficulty', 'question_type', 'status']
+    search_fields = ['text']
+    
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated or user.role != 'teacher':
+            return Question.objects.none()
+
+        # Questions created by this teacher
+        authored = Question.objects.filter(created_by=user).exclude(status='archived')
+        
+        # Questions assigned to the teacher's courses
+        from courses.models import Course
+        assigned_courses = Course.objects.filter(
+            assignments__teacher=user,
+            assignments__is_active=True
+        )
+        assigned_exam_ids = assigned_courses.values_list('exam_id', flat=True)
+        
+        assigned_questions = Question.objects.filter(
+            topic__chapter__subject__exam_id__in=assigned_exam_ids
+        ).exclude(status='archived')
+        
+        return (authored | assigned_questions).distinct().select_related('topic', 'topic__chapter', 'topic__chapter__subject', 'topic__chapter__subject__exam')
+        
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        question = self.get_object()
+        if question.created_by != self.request.user:
+            raise PermissionDenied("You can only edit questions you have created.")
+        if question.status not in ['draft', 'changes_requested']:
+            raise PermissionDenied("You can only edit questions in Draft or Changes Requested status.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.created_by != self.request.user:
+            raise PermissionDenied("You can only archive questions you have created.")
+        if instance.status not in ['draft', 'changes_requested', 'rejected']:
+            raise PermissionDenied("You cannot archive a question that is pending review or approved.")
+        instance.status = 'archived'
+        instance.save()
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        question = self.get_object()
+        if question.created_by != request.user:
+            raise PermissionDenied("Not authorized.")
+        if question.status not in ['draft', 'changes_requested']:
+            return Response({"detail": "Only drafts can be submitted."}, status=400)
+        
+        from django.utils import timezone
+        question.status = 'pending_review'
+        question.submitted_at = timezone.now()
+        question.save()
+        
+        return Response({"detail": "Question submitted for review successfully."})
+
+    @action(detail=False, methods=['post'], url_path='bulk-import')
+    def bulk_import(self, request):
+        # We expect JSON payload parsed from CSV in the frontend
+        # For a robust implementation, validate structure and create questions.
+        questions_data = request.data.get('questions', [])
+        if not questions_data:
+            return Response({"detail": "No questions provided."}, status=400)
+            
+        created_count = 0
+        from django.db import transaction
+        
+        try:
+            with transaction.atomic():
+                for q_data in questions_data:
+                    q = Question.objects.create(
+                        created_by=request.user,
+                        text=q_data.get('text', ''),
+                        question_type=q_data.get('question_type', 'mcq'),
+                        topic_id=q_data.get('topic_id'),
+                        difficulty=q_data.get('difficulty', 'medium'),
+                        marks=float(q_data.get('marks', 1.0)),
+                        negative_marks=float(q_data.get('negative_marks', 0.0)),
+                        expected_time_minutes=int(q_data.get('expected_time_minutes', 1)),
+                        explanation=q_data.get('explanation', ''),
+                        status='draft',
+                        
+                        option_a=q_data.get('option_a', ''),
+                        option_b=q_data.get('option_b', ''),
+                        option_c=q_data.get('option_c', ''),
+                        option_d=q_data.get('option_d', ''),
+                        correct_option=q_data.get('correct_option', ''),
+                        model_answer=q_data.get('model_answer', ''),
+                    )
+                    created_count += 1
+            return Response({"detail": f"Successfully imported {created_count} questions as drafts."})
+        except Exception as e:
+            return Response({"detail": f"Import failed: {str(e)}"}, status=400)
+
+class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = QuestionFullSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['topic', 'difficulty', 'question_type', 'status', 'created_by']
+    search_fields = ['text']
+    
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated or user.role != 'admin':
+            return Question.objects.none()
+        
+        # Admin can see all questions that have been submitted at some point, or all questions
+        # Prioritize pending review
+        return Question.objects.exclude(status='draft').exclude(status='archived')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        question = self.get_object()
+        from django.utils import timezone
+        question.status = 'approved'
+        question.reviewed_by = request.user
+        question.reviewed_at = timezone.now()
+        question.reviewer_comment = request.data.get('reviewer_comment', '')
+        question.save()
+        return Response({"detail": "Question approved."})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        question = self.get_object()
+        reason = request.data.get('reviewer_comment')
+        if not reason:
+            return Response({"detail": "Rejection reason is required."}, status=400)
+            
+        from django.utils import timezone
+        question.status = 'rejected'
+        question.reviewed_by = request.user
+        question.reviewed_at = timezone.now()
+        question.reviewer_comment = reason
+        question.save()
+        return Response({"detail": "Question rejected."})
+
+    @action(detail=True, methods=['post'], url_path='request-changes')
+    def request_changes(self, request, pk=None):
+        question = self.get_object()
+        feedback = request.data.get('reviewer_comment')
+        if not feedback:
+            return Response({"detail": "Feedback is required to request changes."}, status=400)
+            
+        from django.utils import timezone
+        question.status = 'changes_requested'
+        question.reviewed_by = request.user
+        question.reviewed_at = timezone.now()
+        question.reviewer_comment = feedback
+        question.save()
+        return Response({"detail": "Changes requested."})
+
+from .models import QuestionSet, QuestionSetQuestion
+from .serializers import TeacherQuestionSetSerializer
+from rest_framework.decorators import action
+
+class TeacherQuestionSetViewSet(viewsets.ModelViewSet):
+    serializer_class = TeacherQuestionSetSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['status', 'set_type', 'exam', 'subject']
+    search_fields = ['name', 'description']
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated or user.role != 'teacher':
+            return QuestionSet.objects.none()
+
+        # Questions sets created by this teacher
+        return QuestionSet.objects.filter(created_by=user).exclude(status='archived').order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        if self.get_object().created_by != self.request.user:
+            raise PermissionDenied("You can only edit practice sets you have created.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.created_by != self.request.user:
+            raise PermissionDenied("You can only archive practice sets you have created.")
+        # Soft-delete by setting status to 'archived'
+        instance.status = 'archived'
+        instance.save()
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        original_set = self.get_object()
+        if original_set.created_by != request.user:
+             raise PermissionDenied("You can only duplicate practice sets you own.")
+
+        # Duplicate the set
+        new_set = QuestionSet.objects.get(pk=original_set.pk)
+        new_set.pk = None
+        new_set.name = f"{original_set.name} (Copy)"
+        new_set.status = 'draft' # Always duplicate as draft
+        new_set.created_by = request.user
+        new_set.save()
+
+        # Duplicate the linked questions
+        for qsq in original_set.question_set_questions.all():
+            QuestionSetQuestion.objects.create(
+                question_set=new_set,
+                question=qsq.question,
+                order=qsq.order,
+                marks=qsq.marks
+            )
+
+        serializer = self.get_serializer(new_set)
+        return Response(serializer.data, status=201)
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        instance = self.get_object()
+        from django.utils import timezone
+        
+        if instance.question_set_questions.count() == 0:
+            return Response({"detail": "Cannot submit an empty practice set."}, status=400)
+            
+        unapproved = instance.question_set_questions.exclude(question__status='approved').exists()
+        if unapproved:
+            return Response({"detail": "All questions must be approved before submitting the practice set."}, status=400)
+            
+        instance.status = 'pending_review'
+        instance.submitted_at = timezone.now()
+        instance.save()
+        return Response(self.get_serializer(instance).data)
+
+    @action(detail=True, methods=['post'], url_path='generate-blueprint')
+    def generate_blueprint(self, request, pk=None):
+        instance = self.get_object()
+        total_questions = request.data.get('total_questions', 0)
+        difficulties = request.data.get('difficulties', {})
+        topics = request.data.get('topics', {})
+        
+        from .models import Question
+        from django.db.models import Max
+        import random
+        
+        base_qs = Question.objects.filter(status='approved')
+        questions_to_add = []
+        for topic_id, count in topics.items():
+            topic_qs = base_qs.filter(topic_id=topic_id).order_by('?')[:count]
+            questions_to_add.extend(topic_qs)
+            
+        remaining = total_questions - len(questions_to_add)
+        if remaining > 0:
+            extra = base_qs.exclude(id__in=[q.id for q in questions_to_add]).order_by('?')[:remaining]
+            questions_to_add.extend(extra)
+            
+        if len(questions_to_add) < total_questions:
+            return Response({"detail": f"Only found {len(questions_to_add)} matching questions out of {total_questions} requested."}, status=400)
+            
+        current_max = instance.question_set_questions.aggregate(Max('order'))['order__max'] or 0
+        
+        for idx, q in enumerate(questions_to_add, start=1):
+            QuestionSetQuestion.objects.get_or_create(
+                question_set=instance,
+                question=q,
+                defaults={'order': current_max + idx, 'marks': q.marks}
+            )
+            
+        return Response(self.get_serializer(instance).data)
+
+    @action(detail=True, methods=['post'], url_path='bulk-import')
+    def bulk_import(self, request, pk=None):
+        instance = self.get_object()
+        rows = request.data
+        if not isinstance(rows, list):
+            return Response({"detail": "Expected a list of questions"}, status=400)
+            
+        from .models import Question
+        from .serializers import TeacherQuestionSerializer
+        from django.db.models import Max
+        
+        results = {"added_existing": 0, "created_drafts": 0, "errors": []}
+        current_max = instance.question_set_questions.aggregate(Max('order'))['order__max'] or 0
+        
+        for idx, row in enumerate(rows):
+            question_id = row.get('id') or row.get('question_id')
+            if question_id:
+                try:
+                    q = Question.objects.get(id=question_id, status='approved')
+                    QuestionSetQuestion.objects.get_or_create(
+                        question_set=instance,
+                        question=q,
+                        defaults={'order': current_max + idx + 1, 'marks': q.marks}
+                    )
+                    results["added_existing"] += 1
+                except Question.DoesNotExist:
+                    results["errors"].append(f"Row {idx+1}: Approved Question {question_id} not found.")
+            else:
+                serializer = TeacherQuestionSerializer(data=row, context={'request': request})
+                if serializer.is_valid():
+                    q = serializer.save(created_by=request.user, status='draft')
+                    QuestionSetQuestion.objects.create(
+                        question_set=instance,
+                        question=q,
+                        order=current_max + idx + 1,
+                        marks=q.marks
+                    )
+                    results["created_drafts"] += 1
+                else:
+                    results["errors"].append(f"Row {idx+1}: {serializer.errors}")
+                    
+        return Response(results)
+
+class AdminPracticeSetReviewViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = TeacherQuestionSetSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_fields = ['status']
+    search_fields = ['name', 'description']
+    
+    def get_queryset(self):
+        user = self.request.user
+        if not user.is_authenticated or user.role != 'admin':
+            return QuestionSet.objects.none()
+            
+        return QuestionSet.objects.filter(
+            status__in=['pending_review', 'approved', 'changes_requested', 'rejected', 'published']
+        ).order_by('-submitted_at')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        instance = self.get_object()
+        from django.utils import timezone
+        
+        instance.status = 'approved'
+        instance.reviewed_by = request.user
+        instance.reviewed_at = timezone.now()
+        instance.reviewer_comment = request.data.get('feedback', '')
+        instance.save()
+        return Response({"status": "approved"})
+
+    @action(detail=True, methods=['post'], url_path='request-changes')
+    def request_changes(self, request, pk=None):
+        instance = self.get_object()
+        feedback = request.data.get('feedback')
+        if not feedback:
+            return Response({"detail": "Feedback is required."}, status=400)
+            
+        from django.utils import timezone
+        instance.status = 'changes_requested'
+        instance.reviewed_by = request.user
+        instance.reviewed_at = timezone.now()
+        instance.reviewer_comment = feedback
+        instance.save()
+        return Response({"status": "changes_requested"})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        instance = self.get_object()
+        feedback = request.data.get('feedback')
+        if not feedback:
+            return Response({"detail": "Feedback is required."}, status=400)
+            
+        from django.utils import timezone
+        instance.status = 'rejected'
+        instance.reviewed_by = request.user
+        instance.reviewed_at = timezone.now()
+        instance.reviewer_comment = feedback
+        instance.save()
+        return Response({"status": "rejected"})
+
+
+class TeacherMockExamViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    
+    def get_serializer_class(self):
+        from .serializers import TeacherExaminationSerializer
+        return TeacherExaminationSerializer
+        
+    def get_queryset(self):
+        from .models import Examination
+        user = self.request.user
+        if user.role not in ('teacher', 'admin', 'super-admin'):
+            return Examination.objects.none()
+        return Examination.objects.filter(created_by=user).order_by('-created_at')
+        
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def submit_review(self, request, pk=None):
+        from django.utils import timezone
+        exam = self.get_object()
+        
+        if exam.status not in ['draft', 'changes_requested', 'rejected']:
+            return Response({'detail': 'Only draft, changes_requested or rejected exams can be submitted.'}, status=400)
+            
+        if exam.questions.count() == 0:
+            return Response({'detail': 'Cannot submit an exam with no questions.'}, status=400)
+            
+        exam.status = 'pending_review'
+        exam.submitted_at = timezone.now()
+        exam.save()
+        return Response({'status': 'Exam submitted for review successfully.'})
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        exam = self.get_object()
+        new_exam = exam
+        new_exam.pk = None
+        new_exam.title = f"{exam.title} (Copy)"
+        new_exam.status = 'draft'
+        new_exam.submitted_at = None
+        new_exam.reviewed_at = None
+        new_exam.reviewer_comment = None
+        new_exam.reviewed_by = None
+        new_exam.save()
+        
+        # Clone questions
+        from .models import ExaminationQuestion
+        questions = ExaminationQuestion.objects.filter(examination_id=pk)
+        for eq in questions:
+            eq.pk = None
+            eq.examination = new_exam
+            eq.save()
+            
+        return Response(self.get_serializer(new_exam).data)
+
+    @action(detail=True, methods=['post'], url_path='questions')
+    def add_questions(self, request, pk=None):
+        exam = self.get_object()
+        if exam.status in ['pending_review', 'approved', 'published']:
+            return Response({'detail': 'Cannot modify questions for this exam.'}, status=400)
+            
+        question_ids = request.data.get('question_ids', [])
+        marks = request.data.get('marks', exam.marks_per_question)
+        
+        from .models import Question, ExaminationQuestion
+        from django.db.models import Max
+        
+        current_max = ExaminationQuestion.objects.filter(examination=exam).aggregate(Max('order'))['order__max'] or 0
+        added = 0
+        
+        for qid in question_ids:
+            try:
+                question = Question.objects.get(id=qid)
+                if not ExaminationQuestion.objects.filter(examination=exam, question=question).exists():
+                    current_max += 1
+                    ExaminationQuestion.objects.create(
+                        examination=exam,
+                        question=question,
+                        order=current_max,
+                        marks=marks
+                    )
+                    added += 1
+            except Question.DoesNotExist:
+                continue
+                
+        # Update total questions and marks
+        exam.total_questions = exam.examination_questions.count()
+        exam.total_marks = sum(q.marks for q in exam.examination_questions.all())
+        exam.save()
+                
+        return Response({'status': f'{added} questions added.'})
+
+    @action(detail=True, methods=['delete'], url_path='questions/(?P<question_id>[^/.]+)')
+    def remove_question(self, request, pk=None, question_id=None):
+        exam = self.get_object()
+        if exam.status in ['pending_review', 'approved', 'published']:
+            return Response({'detail': 'Cannot modify questions for this exam.'}, status=400)
+            
+        from .models import ExaminationQuestion
+        try:
+            eq = ExaminationQuestion.objects.get(examination=exam, question_id=question_id)
+            eq.delete()
+            
+            # Reorder remaining
+            for idx, item in enumerate(exam.examination_questions.order_by('order'), 1):
+                item.order = idx
+                item.save()
+                
+            exam.total_questions = exam.examination_questions.count()
+            exam.total_marks = sum(q.marks for q in exam.examination_questions.all())
+            exam.save()
+            return Response({'status': 'Question removed.'})
+        except ExaminationQuestion.DoesNotExist:
+            return Response({'detail': 'Question not found in this exam.'}, status=404)
+
+    @action(detail=True, methods=['post'], url_path='questions/reorder')
+    def reorder_questions(self, request, pk=None):
+        exam = self.get_object()
+        if exam.status in ['pending_review', 'approved', 'published']:
+            return Response({'detail': 'Cannot modify questions for this exam.'}, status=400)
+            
+        order_data = request.data.get('order_data', []) # [{'question_id': 1, 'order': 1}]
+        from .models import ExaminationQuestion
+        for item in order_data:
+            try:
+                eq = ExaminationQuestion.objects.get(examination=exam, question_id=item['question_id'])
+                eq.order = item['order']
+                eq.save()
+            except ExaminationQuestion.DoesNotExist:
+                pass
+        return Response({'status': 'Questions reordered.'})
+
+
+class AdminExaminationReviewViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated]
+    
+    def get_serializer_class(self):
+        from .serializers import AdminExaminationReviewSerializer
+        return AdminExaminationReviewSerializer
+        
+    def get_queryset(self):
+        from .models import Examination
+        user = self.request.user
+        if user.role not in ('admin', 'super-admin'):
+            return Examination.objects.none()
+        return Examination.objects.exclude(status='draft').order_by('-submitted_at', '-created_at')
+
+    @action(detail=True, methods=['post'])
+    def moderate(self, request, pk=None):
+        from django.utils import timezone
+        exam = self.get_object()
+        
+        action = request.data.get('action') # approve, request_changes, reject
+        comment = request.data.get('comment', '')
+        
+        if action == 'approve':
+            exam.status = 'published'
+        elif action == 'request_changes':
+            exam.status = 'changes_requested'
+        elif action == 'reject':
+            exam.status = 'rejected'
+        else:
+            return Response({'detail': 'Invalid action'}, status=400)
+            
+        exam.reviewer_comment = comment
+        exam.reviewed_by = request.user
+        exam.reviewed_at = timezone.now()
+        exam.save()
+        
+        return Response({'status': f'Exam marked as {exam.status}'})

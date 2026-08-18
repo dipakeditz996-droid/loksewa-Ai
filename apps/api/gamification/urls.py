@@ -1,0 +1,13 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('referrals/validate/', views.validate_referral_code, name='validate-referral'),
+    path('referrals/me/', views.student_referral_dashboard, name='student-referral-dashboard'),
+    path('referrals/history/', views.student_referral_history, name='student-referral-history'),
+    
+    path('settings/referrals/', views.admin_referral_settings, name='admin-referral-settings'),
+    path('analytics/referrals/', views.admin_referral_analytics, name='admin-referral-analytics'),
+    path('admin/referrals/', views.admin_referrals_list, name='admin-referrals-list'),
+    path('admin/referrals/<int:pk>/approve/', views.admin_manual_approve, name='admin-manual-approve'),
+]

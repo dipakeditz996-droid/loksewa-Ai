@@ -1,0 +1,413 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  LayoutDashboard,
+  Users,
+  GraduationCap,
+  BookOpen,
+  ClipboardCheck,
+  Store,
+  Gamepad2,
+  BarChart3,
+  Settings,
+  ShieldAlert,
+  Database,
+  FileText,
+  Brain,
+  Menu,
+  X,
+  Layers,
+  Bell,
+  LogOut,
+  Search,
+  ChevronRight,
+  Sparkles,
+  ListTodo,
+  CalendarDays,
+  LifeBuoy,
+  ClipboardList,
+  Trophy,
+} from "lucide-react";
+
+// ===== Sidebar Nav Config =====
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ElementType;
+  exact?: boolean;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const SIDEBAR_NAV: NavSection[] = [
+  {
+    title: "Overview",
+    items: [
+      { title: "Dashboard", href: "/admin-dashboard", icon: LayoutDashboard, exact: true },
+    ],
+  },
+  {
+    title: "User & Access",
+    items: [
+      { title: "Users", href: "/admin-dashboard/users", icon: Users },
+      { title: "Administrators", href: "/admin-dashboard/admins", icon: ShieldAlert },
+      { title: "Roles", href: "/admin-dashboard/roles", icon: Database },
+      { title: "Permissions", href: "/admin-dashboard/permissions", icon: Settings },
+    ],
+  },
+  {
+    title: "Academic",
+    items: [
+      { title: "Academic Management", href: "/admin-dashboard/academic", icon: GraduationCap },
+      { title: "Question Bank", href: "/admin-dashboard/academic/questions", icon: BookOpen },
+      { title: "Collections", href: "/admin-dashboard/academic/collections", icon: ListTodo },
+      { title: "Question Sets", href: "/admin-dashboard/academic/question-sets", icon: Layers },
+      { title: "Study Plans", href: "/admin-dashboard/study-plans", icon: CalendarDays },
+      { title: "Study Materials", href: "/admin-dashboard/study-materials", icon: BookOpen },
+    ],
+  },
+  {
+    title: "Exams",
+    items: [
+      { title: "Exams & Mock Tests", href: "/admin-dashboard/exams", icon: FileText },
+      { title: "Rankings & Leaderboards", href: "/admin-dashboard/rankings", icon: Trophy },
+    ],
+  },
+  {
+    title: "Platform",
+    items: [
+      { title: "Notifications", href: "/admin-dashboard/notifications", icon: Bell },
+      { title: "Help & Support", href: "/admin-dashboard/support", icon: LifeBuoy },
+      { title: "AI Tutor", href: "/admin-dashboard/ai-tutor", icon: Brain },
+      { title: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },
+      { title: "Evaluations", href: "/admin-dashboard/evaluations", icon: ClipboardCheck },
+      { title: "Games", href: "/admin-dashboard/games", icon: Gamepad2 },
+    ],
+  },
+  {
+    title: "System",
+    items: [
+      { title: "Audit Logs", href: "/admin-dashboard/audit-logs", icon: ClipboardList },
+      { title: "Analytics", href: "/admin-dashboard/analytics", icon: BarChart3 },
+      { title: "Settings", href: "/admin-dashboard/settings", icon: Settings },
+    ],
+  },
+];
+
+// ===== Sidebar Component =====
+function AdminSidebar({
+  collapsed,
+  setCollapsed,
+  mobileOpen,
+  setMobileOpen,
+}: {
+  collapsed: boolean;
+  setCollapsed: (v: boolean) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (v: boolean) => void;
+}) {
+  const pathname = usePathname();
+
+  const isActive = (href: string, exact?: boolean) => {
+    if (exact) return pathname === href;
+    return pathname === href || pathname.startsWith(href + "/");
+  };
+
+  const NavItem = ({ item }: { item: NavItem }) => {
+    const active = isActive(item.href, item.exact);
+    return (
+      <Link
+        href={item.href}
+        onClick={() => setMobileOpen(false)}
+        title={collapsed ? item.title : undefined}
+        className={cn(
+          "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13.5px] font-medium transition-all duration-150",
+          active
+            ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#D4A72C]"
+            : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
+          collapsed && "justify-center px-2"
+        )}
+      >
+        <item.icon
+          className={cn("shrink-0 h-[18px] w-[18px]", active ? "text-[#D4A72C]" : "text-slate-400")}
+          strokeWidth={active ? 2 : 1.5}
+        />
+        {!collapsed && <span className="truncate">{item.title}</span>}
+        {!collapsed && active && (
+          <ChevronRight className="ml-auto h-3.5 w-3.5 text-slate-400" />
+        )}
+      </Link>
+    );
+  };
+
+  const sidebarContent = (
+    <>
+      {/* Logo + Collapse Toggle */}
+      <div className="flex h-[60px] items-center justify-between px-4 border-b border-white/10 shrink-0">
+        {!collapsed && (
+          <Link href="/admin-dashboard" className="flex items-center gap-2.5">
+            <div className="bg-[#D4A72C] text-[#0B2545] p-1.5 rounded-[7px]">
+              <BookOpen className="h-4 w-4" strokeWidth={2.5} />
+            </div>
+            <div className="leading-none">
+              <span className="font-[800] text-[17px] tracking-tight text-white">
+                Loksewa<span className="text-[#D4A72C]">AI</span>
+              </span>
+              <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest mt-0.5">
+                Admin
+              </p>
+            </div>
+          </Link>
+        )}
+        {collapsed && (
+          <div className="mx-auto bg-[#D4A72C] text-[#0B2545] p-1.5 rounded-[7px]">
+            <BookOpen className="h-4 w-4" strokeWidth={2.5} />
+          </div>
+        )}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="hidden md:flex items-center justify-center h-7 w-7 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Toggle sidebar"
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <Menu className="h-4 w-4" />
+          )}
+        </button>
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden flex items-center justify-center h-7 w-7 rounded-md text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <ScrollArea className="flex-1 py-4">
+        <div className={cn("space-y-5 px-3", collapsed && "px-2")}>
+          {SIDEBAR_NAV.map((section, idx) => (
+            <div key={idx}>
+              {!collapsed && (
+                <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">
+                  {section.title}
+                </p>
+              )}
+              {collapsed && idx > 0 && <div className="my-2 border-t border-white/10" />}
+              <nav className="space-y-0.5">
+                {section.items.map((item) => (
+                  <NavItem key={item.href} item={item} />
+                ))}
+              </nav>
+            </div>
+          ))}
+        </div>
+      </ScrollArea>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Desktop sidebar */}
+      <aside
+        className={cn(
+          "hidden md:flex flex-col bg-[#0B2545] border-r border-white/10 transition-all duration-300 shrink-0 sticky top-0 h-screen",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile sidebar */}
+      <aside
+        className={cn(
+          "fixed top-0 left-0 z-50 flex md:hidden flex-col bg-[#0B2545] h-screen w-72 transition-transform duration-300 ease-in-out shadow-2xl",
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {sidebarContent}
+      </aside>
+    </>
+  );
+}
+
+// ===== Header Component =====
+function AdminHeader({
+  user,
+  onMobileMenuOpen,
+}: {
+  user: { name: string; email: string; role: string; avatar?: string | null };
+  onMobileMenuOpen: () => void;
+}) {
+  const router = useRouter();
+  const { logout } = useAuth();
+
+  const handleAdminLogout = () => {
+    logout("/admin-login");
+  };
+
+  const initials = user.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  return (
+    <header className="h-[60px] bg-white border-b border-slate-200 flex items-center px-4 gap-3 sticky top-0 z-30 shrink-0">
+      {/* Mobile hamburger */}
+      <button
+        onClick={onMobileMenuOpen}
+        className="md:hidden flex items-center justify-center h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Search */}
+      <div className="flex-1 max-w-sm hidden sm:block">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search..."
+            className="w-full pl-9 pr-4 py-2 text-sm bg-slate-100 border border-transparent rounded-lg text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 focus:border-[#0B2545]/30 transition"
+          />
+        </div>
+      </div>
+
+      <div className="ml-auto flex items-center gap-1.5">
+        {/* Notifications */}
+        <button className="relative flex items-center justify-center h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
+          <Bell className="h-4.5 w-4.5 h-5 w-5" />
+          <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-[#D4A72C] rounded-full border-2 border-white" />
+        </button>
+
+        {/* Separator */}
+        <div className="h-6 w-px bg-slate-200 mx-1" />
+
+        {/* Admin info */}
+        <div className="flex items-center gap-2.5 pl-1">
+          <div className="text-right hidden sm:block leading-none">
+            <p className="text-[13px] font-semibold text-[#0B2545]">{user.name}</p>
+            <p className="text-[11px] text-slate-400 capitalize font-medium">{user.role}</p>
+          </div>
+          <Avatar className="h-8 w-8 border-2 border-[#D4A72C]/30">
+            <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[12px]">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+
+          {/* Logout */}
+          <button
+            onClick={handleAdminLogout}
+            className="flex items-center justify-center h-9 w-9 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+            title="Logout"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ===== Main Layout =====
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">Loading admin panel...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    // Not authenticated — redirect to admin login
+    if (typeof window !== "undefined") {
+      window.location.href = "/admin-login";
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
+          <p className="text-sm text-slate-400">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!["admin", "super-admin"].includes(user.role)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center max-w-sm mx-auto px-6">
+          <div className="h-20 w-20 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-5">
+            <ShieldAlert className="w-10 h-10 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-[#0B2545] mb-2">Access Denied</h1>
+          <p className="text-slate-500 mb-6 text-sm leading-relaxed">
+            You do not have permission to view this page. This area is restricted to administrators only.
+          </p>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0B2545] text-white text-sm font-semibold rounded-lg hover:bg-[#163E6C] transition-colors"
+          >
+            Return to Home
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-slate-50">
+      <AdminSidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+      />
+
+      {/* Main area */}
+      <div className="flex flex-col flex-1 min-w-0 overflow-x-hidden">
+        <AdminHeader
+          user={{
+            name: user.name || user.email,
+            email: user.email,
+            role: user.role,
+            avatar: user.avatar,
+          }}
+          onMobileMenuOpen={() => setMobileOpen(true)}
+        />
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

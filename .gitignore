@@ -1,38 +1,65 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# Dependencies
+# ─── Node.js / pnpm ───────────────────────────────────────────────────────────
 node_modules
 .pnp
 .pnp.js
 
-# Local env files
+# ─── Environment / Secrets ────────────────────────────────────────────────────
 .env
+.env.*
+!.env.example
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
-# Testing
-coverage
-
-# Turbo
-.turbo
-
-# Vercel
-.vercel
-
-# Build Outputs
+# ─── Build Outputs ────────────────────────────────────────────────────────────
 .next/
 out/
 build
 dist
+coverage
 
+# ─── Turbo / Vercel ───────────────────────────────────────────────────────────
+.turbo
+.vercel
 
-# Debug
+# ─── Debug logs ───────────────────────────────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+*.log
 
-# Misc
+# ─── Misc ─────────────────────────────────────────────────────────────────────
 .DS_Store
 *.pem
+
+# ─── Python / Django ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+venv/
+.venv/
+*.egg-info/
+*.egg
+db.sqlite3
+db.sqlite3-journal
+
+# Django uploaded media (user-generated content, not source code)
+apps/api/media/
+media/
+
+# ─── Temporary / scratch files ────────────────────────────────────────────────
+temp_error*.html
+output*.html
+output2.html
+page_tsx_recovery.txt
+fix_units.py
+replace_units.py
+input.txt
+verify*.py
+migrate_sq.py
+verification_report.md

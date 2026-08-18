@@ -1,0 +1,114 @@
+import { apiClient } from './client';
+import { QuestionData as Question } from './teacher-questions';
+
+export interface MockExamQuestion {
+  id: number;
+  question: number;
+  question_detail?: Question;
+  order: number;
+  marks: number;
+}
+
+export interface MockExam {
+  id: number;
+  title: string;
+  description: string;
+  exam_type: string;
+  category: number;
+  category_name?: string;
+  exam: number;
+  exam_name?: string;
+  subject?: number;
+  subject_name?: string;
+  total_questions: number;
+  time_limit: number;
+  total_marks: number;
+  passing_marks: number;
+  marks_per_question: number;
+  negative_marking: boolean;
+  negative_marking_value: number;
+  max_attempts: number;
+  allow_resume: boolean;
+  auto_submit: boolean;
+  result_visibility: string;
+  show_correct_answers: boolean;
+  randomize_questions: boolean;
+  randomize_options: boolean;
+  start_time?: string;
+  end_time?: string;
+  status: 'draft' | 'pending_review' | 'approved' | 'published' | 'changes_requested' | 'rejected' | 'archived';
+  reviewer_comment?: string;
+  reviewed_by?: number;
+  submitted_at?: string;
+  reviewed_at?: string;
+  questions_list?: MockExamQuestion[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const teacherMockExamsApi = {
+  getAll: async () => {
+    return apiClient<MockExam[]>('/teacher/mock-exams/');
+  },
+
+  getById: async (id: number) => {
+    return apiClient<MockExam>(`/teacher/mock-exams/${id}/`);
+  },
+
+  create: async (data: Partial<MockExam>) => {
+    return apiClient<MockExam>('/teacher/mock-exams/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (id: number, data: Partial<MockExam>) => {
+    return apiClient<MockExam>(`/teacher/mock-exams/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (id: number) => {
+    return apiClient<void>(`/teacher/mock-exams/${id}/`, {
+      method: 'DELETE',
+    });
+  },
+
+  submitReview: async (id: number) => {
+    return apiClient<MockExam>(`/teacher/mock-exams/${id}/submit_review/`, {
+      method: 'POST',
+    });
+  },
+
+  duplicate: async (id: number) => {
+    return apiClient<MockExam>(`/teacher/mock-exams/${id}/duplicate/`, {
+      method: 'POST',
+    });
+  },
+
+  addQuestions: async (id: number, questionIds: number[], marks?: number) => {
+    return apiClient<{ message: string }>(`/teacher/mock-exams/${id}/questions/`, {
+      method: 'POST',
+      body: JSON.stringify({
+        question_ids: questionIds,
+        marks: marks,
+      }),
+    });
+  },
+
+  removeQuestion: async (id: number, questionId: number) => {
+    return apiClient<{ message: string }>(`/teacher/mock-exams/${id}/questions/${questionId}/`, {
+      method: 'DELETE',
+    });
+  },
+
+  reorderQuestions: async (id: number, orderData: { question_id: number; order: number }[]) => {
+    return apiClient<{ message: string }>(`/teacher/mock-exams/${id}/questions/reorder/`, {
+      method: 'POST',
+      body: JSON.stringify({
+        order_data: orderData,
+      }),
+    });
+  },
+};

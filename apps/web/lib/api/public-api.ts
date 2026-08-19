@@ -70,12 +70,12 @@ async function safeGet<T>(endpoint: string): Promise<T | null> {
 export const publicApi = {
   /** Get published exam categories (used as "courses" on homepage) */
   getExamCategories: (): Promise<ApiExamCategory[] | null> =>
-    safeGet<ApiExamCategory[]>("/administration/syllabus/categories/"),
+    safeGet<ApiExamCategory[]>("/admin/syllabus/categories/"),
 
   /** Get published exams (optionally filtered by category) */
   getExams: (categoryId?: number): Promise<ApiExam[] | null> =>
     safeGet<ApiExam[]>(
-      `/administration/syllabus/exams/${categoryId ? `?category=${categoryId}` : ""}`
+      `/admin/syllabus/exams/${categoryId ? `?category=${categoryId}` : ""}`
     ),
 
   /** Get recent study materials for notes showcase */

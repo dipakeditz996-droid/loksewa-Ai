@@ -92,7 +92,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
                  </div>
                </div>
                <CardContent className="p-6 space-y-8">
-                 <div className="prose dark:prose-invert max-w-none text-lg">
+                 <div className="prose  max-w-none text-lg">
                     {question.text}
                  </div>
                  
@@ -104,7 +104,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
                        const isCorrect = question.correct_option === letter;
                        
                        return (
-                         <div key={letter} className={`flex items-start p-4 rounded-lg border ${isCorrect ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20' : 'bg-background'}`}>
+                         <div key={letter} className={`flex items-start p-4 rounded-lg border ${isCorrect ? 'border-emerald-500 bg-emerald-50 ' : 'bg-background'}`}>
                            <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold mr-4 ${isCorrect ? 'border-emerald-500 text-emerald-600' : 'border-muted text-muted-foreground'}`}>
                              {letter}
                            </div>
@@ -117,9 +117,9 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
                  )}
 
                  {question.question_type === 'subjective' && question.model_answer && (
-                   <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg p-4">
-                     <h4 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">Model Answer / Rubric:</h4>
-                     <p className="text-blue-700 dark:text-blue-400 whitespace-pre-wrap">{question.model_answer}</p>
+                   <div className="bg-blue-50  border border-blue-200  rounded-lg p-4">
+                     <h4 className="font-semibold text-blue-800  mb-2">Model Answer / Rubric:</h4>
+                     <p className="text-blue-700  whitespace-pre-wrap">{question.model_answer}</p>
                    </div>
                  )}
 
@@ -178,7 +178,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
              
              <Button 
                variant="outline"
-               className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20" 
+               className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 :bg-blue-900/20" 
                disabled={isSubmitting || question.status === 'changes_requested'}
                onClick={() => handleAction('request_changes')}
              >
@@ -187,7 +187,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
 
              <Button 
                variant="outline"
-               className="w-full border-red-200 text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20" 
+               className="w-full border-red-200 text-red-700 hover:bg-red-50 :bg-red-900/20" 
                disabled={isSubmitting || question.status === 'rejected'}
                onClick={() => handleAction('reject')}
              >
@@ -199,3 +199,4 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
     </div>
   );
 }
+

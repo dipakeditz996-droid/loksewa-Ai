@@ -65,7 +65,7 @@ export default function UsersManagementPage() {
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      let url = '/administration/users/?page=1&page_size=50';
+      let url = '/admin/users/?page=1&page_size=50';
       if (filterRole !== "All Roles") {
         url += `&role=${filterRole.toLowerCase()}`;
       }
@@ -132,7 +132,7 @@ export default function UsersManagementPage() {
     }
     
     try {
-      await apiClient('/administration/users/', {
+      await apiClient('/admin/users/', {
         method: 'POST',
         body: JSON.stringify({
           username: newUsername,
@@ -151,7 +151,7 @@ export default function UsersManagementPage() {
   const handleSuspend = async () => {
     if (actionUserId) {
       try {
-        await apiClient(`/administration/users/${actionUserId}/`, {
+        await apiClient(`/admin/users/${actionUserId}/`, {
           method: 'PATCH',
           body: JSON.stringify({ is_active: false })
         });
@@ -166,7 +166,7 @@ export default function UsersManagementPage() {
   const handleActivate = async () => {
     if (actionUserId) {
       try {
-        await apiClient(`/administration/users/${actionUserId}/`, {
+        await apiClient(`/admin/users/${actionUserId}/`, {
           method: 'PATCH',
           body: JSON.stringify({ is_active: true })
         });

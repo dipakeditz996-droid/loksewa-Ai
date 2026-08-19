@@ -67,36 +67,36 @@ export interface ApiTopic {
 
 export const adminAcademicApi = {
   // Stats & Tree
-  getStats: () => apiClient<any>("/administration/syllabus/stats/"),
-  getTree: () => apiClient<any>("/administration/syllabus/tree/"),
+  getStats: () => apiClient<any>("/admin/syllabus/stats/"),
+  getTree: () => apiClient<any>("/admin/syllabus/tree/"),
   
   // Reorder
   reorderItems: (endpoint: string, items: {id: number, order: number}[]) => 
-    apiClient<any>(`/administration/syllabus/${endpoint}/reorder/`, {
+    apiClient<any>(`/admin/syllabus/${endpoint}/reorder/`, {
       method: "PATCH",
       body: JSON.stringify(items)
     }),
 
   // Exam Categories
-  getCategories: () => apiClient<ApiExamCategory[]>("/administration/syllabus/categories/"),
+  getCategories: () => apiClient<ApiExamCategory[]>("/admin/syllabus/categories/"),
   
   // Exams
   getExams: (categoryId?: number) => 
-    apiClient<ApiExam[]>(`/administration/syllabus/exams/${categoryId ? `?category=${categoryId}` : ''}`),
+    apiClient<ApiExam[]>(`/admin/syllabus/exams/${categoryId ? `?category=${categoryId}` : ''}`),
     
   // Papers
   getPapers: (examId?: number) => 
-    apiClient<ApiPaper[]>(`/administration/syllabus/papers/${examId ? `?exam=${examId}` : ''}`),
+    apiClient<ApiPaper[]>(`/admin/syllabus/papers/${examId ? `?exam=${examId}` : ''}`),
 
   // Subjects
   getSubjects: (paperId?: number) => 
-    apiClient<ApiSubject[]>(`/administration/syllabus/subjects/${paperId ? `?paper=${paperId}` : ''}`),
+    apiClient<ApiSubject[]>(`/admin/syllabus/subjects/${paperId ? `?paper=${paperId}` : ''}`),
 
   // Chapters
   getChapters: (subjectId?: number) => 
-    apiClient<ApiChapter[]>(`/administration/syllabus/chapters/${subjectId ? `?subject=${subjectId}` : ''}`),
+    apiClient<ApiChapter[]>(`/admin/syllabus/chapters/${subjectId ? `?subject=${subjectId}` : ''}`),
 
   // Topics
   getTopics: (chapterId?: number) => 
-    apiClient<ApiTopic[]>(`/administration/syllabus/topics/${chapterId ? `?chapter=${chapterId}` : ''}`),
+    apiClient<ApiTopic[]>(`/admin/syllabus/topics/${chapterId ? `?chapter=${chapterId}` : ''}`),
 };

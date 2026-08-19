@@ -97,9 +97,9 @@ export default function AcademicOverviewPage() {
     const examPapers = papers.filter(p => p.exam === exam.id);
 
     return (
-      <div className="border border-slate-200 dark:border-white/10 rounded-lg mb-2 overflow-hidden bg-white dark:bg-[#0B1521]">
+      <div className="border border-slate-200  rounded-lg mb-2 overflow-hidden bg-white ">
         <div 
-          className="flex items-center p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+          className="flex items-center p-3 cursor-pointer hover:bg-slate-50 :bg-white/5 transition-colors"
           onClick={() => setIsOpen(!isOpen)}
         >
           {isOpen ? <ChevronDown className="w-5 h-5 text-slate-500 mr-2 shrink-0" /> : <ChevronRight className="w-5 h-5 text-slate-500 mr-2 shrink-0" />}
@@ -107,22 +107,22 @@ export default function AcademicOverviewPage() {
             {exam.name.substring(0, 2).toUpperCase()}
           </div>
           <div className="flex-1">
-            <h4 className="font-[700] text-slate-900 dark:text-white">{exam.name}</h4>
+            <h4 className="font-[700] text-slate-900 ">{exam.name}</h4>
             <p className="text-xs text-slate-500">{exam.category_name}</p>
           </div>
           <Badge className="bg-[#163E6B] text-white hover:bg-[#163E6B]">Exam</Badge>
         </div>
         
         {isOpen && (
-          <div className="pl-14 pr-4 pb-4 space-y-2 border-t border-slate-100 dark:border-white/5 pt-3">
+          <div className="pl-14 pr-4 pb-4 space-y-2 border-t border-slate-100  pt-3">
             {examPapers.length === 0 ? (
               <p className="text-sm text-slate-500 italic">No papers added yet.</p>
             ) : (
               examPapers.map(paper => (
-                <div key={paper.id} className="border border-slate-100 dark:border-white/5 rounded p-3 bg-slate-50 dark:bg-[#0A1118]">
+                <div key={paper.id} className="border border-slate-100  rounded p-3 bg-slate-50 ">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-[600] text-sm text-slate-900 dark:text-white">{paper.paper_number}: {paper.name}</p>
+                      <p className="font-[600] text-sm text-slate-900 ">{paper.paper_number}: {paper.name}</p>
                       <p className="text-xs text-slate-500">{subjects.filter(s => s.paper === paper.id).length} Subjects</p>
                     </div>
                     <Button variant="ghost" size="sm" asChild>
@@ -152,11 +152,11 @@ export default function AcademicOverviewPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-[800] text-slate-900 dark:text-white">Academic Content</h2>
+          <h2 className="text-2xl font-[800] text-slate-900 ">Academic Content</h2>
           <p className="text-slate-500 text-sm mt-1">Centralized management for exams, papers, subjects, and topics.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" className="gap-2 border-slate-200 dark:border-white/10 dark:text-white">
+          <Button variant="outline" className="gap-2 border-slate-200  ">
             <Upload className="w-4 h-4"/> Import Syllabus
           </Button>
           <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-[#0A1118] font-[700] gap-2">
@@ -168,13 +168,13 @@ export default function AcademicOverviewPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {stats.map((stat, idx) => (
-          <Card key={idx} className="border-slate-200 dark:border-white/10 dark:bg-[#0B1521] shadow-sm">
+          <Card key={idx} className="border-slate-200   shadow-sm">
             <CardContent className="p-5 flex items-center gap-4">
               <div className={`p-3 rounded-lg ${stat.bg} ${stat.color} shrink-0`}>
                 <stat.icon className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-2xl font-[800] text-slate-900 dark:text-white leading-none mb-1">{stat.value}</h3>
+                <h3 className="text-2xl font-[800] text-slate-900  leading-none mb-1">{stat.value}</h3>
                 <p className="text-xs font-[600] text-slate-500 uppercase tracking-wider">{stat.title}</p>
               </div>
             </CardContent>
@@ -183,22 +183,22 @@ export default function AcademicOverviewPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4 bg-white dark:bg-[#0B1521] p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between gap-4 bg-white  p-4 rounded-xl border border-slate-200  shadow-sm">
         <div className="relative w-full sm:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
             placeholder="Search exams, subjects, topics..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-slate-50 dark:bg-[#0A1118] border-slate-200 dark:border-white/10"
+            className="pl-9 bg-slate-50  border-slate-200 "
           />
         </div>
-        <div className="flex items-center gap-2 bg-slate-100 dark:bg-[#0A1118] p-1 rounded-lg border border-slate-200 dark:border-white/10">
+        <div className="flex items-center gap-2 bg-slate-100  p-1 rounded-lg border border-slate-200 ">
           <Button 
             variant={viewMode === "table" ? "default" : "ghost"} 
             size="sm"
             onClick={() => setViewMode("table")}
-            className={viewMode === "table" ? "bg-white text-slate-900 dark:bg-[#163E6B] dark:text-white shadow-sm" : "text-slate-500"}
+            className={viewMode === "table" ? "bg-white text-slate-900   shadow-sm" : "text-slate-500"}
           >
             <Table2 className="w-4 h-4 mr-2" /> Table View
           </Button>
@@ -206,7 +206,7 @@ export default function AcademicOverviewPage() {
             variant={viewMode === "tree" ? "default" : "ghost"} 
             size="sm"
             onClick={() => setViewMode("tree")}
-            className={viewMode === "tree" ? "bg-white text-slate-900 dark:bg-[#163E6B] dark:text-white shadow-sm" : "text-slate-500"}
+            className={viewMode === "tree" ? "bg-white text-slate-900   shadow-sm" : "text-slate-500"}
           >
             <ListTree className="w-4 h-4 mr-2" /> Tree View
           </Button>
@@ -215,10 +215,10 @@ export default function AcademicOverviewPage() {
 
       {/* Content Area */}
       {viewMode === "table" ? (
-        <Card className="border-slate-200 dark:border-white/10 dark:bg-[#0B1521] shadow-sm overflow-hidden">
+        <Card className="border-slate-200   shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-[#0A1118] uppercase border-b border-slate-200 dark:border-white/10">
+              <thead className="text-xs text-slate-500 bg-slate-50  uppercase border-b border-slate-200 ">
                 <tr>
                   <th className="px-6 py-4 font-[700] w-10"></th>
                   <th className="px-6 py-4 font-[700]">Exam Name</th>
@@ -229,11 +229,11 @@ export default function AcademicOverviewPage() {
                   <th className="px-6 py-4 font-[700] text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+              <tbody className="divide-y divide-slate-100 ">
                 {filteredExams.map((exam) => {
                   const paperCount = papers.filter(p => p.exam === exam.id).length;
                   return (
-                    <tr key={exam.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
+                    <tr key={exam.id} className="hover:bg-slate-50 :bg-white/5 transition-colors group">
                       <td className="px-6 py-4">
                         <ArrowUpDown className="w-4 h-4 text-slate-300 cursor-grab hover:text-slate-500" />
                       </td>
@@ -243,30 +243,30 @@ export default function AcademicOverviewPage() {
                             {exam.name.substring(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-[700] text-slate-900 dark:text-white text-base">{exam.name}</div>
+                            <div className="font-[700] text-slate-900  text-base">{exam.name}</div>
                             <div className="text-slate-500 text-xs">{exam.category_name}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-300 font-[500]">
+                      <td className="px-6 py-4 text-slate-600  font-[500]">
                         {exam.category_name}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
-                          <Badge variant="outline" className="bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10">
+                          <Badge variant="outline" className="bg-slate-50  border-slate-200 ">
                             {paperCount} Papers
                           </Badge>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
-                          <span className="text-xs text-blue-600 dark:text-blue-400 font-[600]">Visible</span>
+                          <span className="text-xs text-blue-600  font-[600]">Visible</span>
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <Badge className={`${
-                          exam.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                          'bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400'
+                          exam.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100  ' :
+                          'bg-red-100 text-red-700 hover:bg-red-100  '
                         } border-none font-[700]`}>
                           {exam.is_active ? 'Active' : 'Inactive'}
                         </Badge>
@@ -290,7 +290,7 @@ export default function AcademicOverviewPage() {
                             <DropdownMenuItem>
                               <Copy className="w-4 h-4 mr-2" /> Duplicate
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600 dark:text-red-400">
+                            <DropdownMenuItem className="text-red-600 ">
                               <Archive className="w-4 h-4 mr-2" /> Archive Exam
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -322,3 +322,4 @@ export default function AcademicOverviewPage() {
     </div>
   );
 }
+

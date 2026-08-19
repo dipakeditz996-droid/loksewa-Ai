@@ -242,3 +242,24 @@ export const mockTopics: MockTopic[] = [
     status: "Published"
   }
 ];
+
+export interface MockTag {
+  id: string;
+  name: string;
+  color: string;
+  usageCount: number;
+  status: "Active" | "Inactive";
+}
+
+export const mockTags: MockTag[] = [
+  { id: "tag1", name: "Constitution", color: "blue", usageCount: 142, status: "Active" },
+  { id: "tag2", name: "Economy", color: "emerald", usageCount: 98, status: "Active" },
+  { id: "tag3", name: "History", color: "amber", usageCount: 75, status: "Active" },
+  { id: "tag4", name: "Geography", color: "green", usageCount: 63, status: "Active" },
+  { id: "tag5", name: "Current Affairs", color: "purple", usageCount: 201, status: "Active" },
+  { id: "tag6", name: "Public Administration", color: "indigo", usageCount: 87, status: "Active" },
+  { id: "tag7", name: "Science & Technology", color: "cyan", usageCount: 54, status: "Active" },
+  { id: "tag8", name: "Arithmetic", color: "rose", usageCount: 110, status: "Active" },
+  { id: "tag9", name: "Logical Reasoning", color: "orange", usageCount: 92, status: "Inactive" },
+  { id: "tag10", name: "Nepal Government", color: "teal", usageCount: 38, status: "Active" },
+];

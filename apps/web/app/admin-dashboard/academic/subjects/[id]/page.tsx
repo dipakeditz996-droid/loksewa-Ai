@@ -48,13 +48,13 @@ export default function ManageChaptersPage() {
     <div className="space-y-6">
       {/* Breadcrumbs */}
       <div className="flex items-center text-sm font-[500] text-slate-500 gap-2 mb-2 flex-wrap">
-        <Link href="/admin-dashboard/academic" className="hover:text-slate-900 dark:hover:text-white transition-colors">Academic Content</Link>
+        <Link href="/admin-dashboard/academic" className="hover:text-slate-900 :text-white transition-colors">Academic Content</Link>
         <ChevronRight className="w-4 h-4" />
-        <Link href={`/admin-dashboard/academic/exams/${exam.id}`} className="hover:text-slate-900 dark:hover:text-white transition-colors">{exam.name}</Link>
+        <Link href={`/admin-dashboard/academic/exams/${exam.id}`} className="hover:text-slate-900 :text-white transition-colors">{exam.name}</Link>
         <ChevronRight className="w-4 h-4" />
-        <Link href={`/admin-dashboard/academic/papers/${paper.id}`} className="hover:text-slate-900 dark:hover:text-white transition-colors">{paper.paperNumber}</Link>
+        <Link href={`/admin-dashboard/academic/papers/${paper.id}`} className="hover:text-slate-900 :text-white transition-colors">{paper.paperNumber}</Link>
         <ChevronRight className="w-4 h-4" />
-        <span className="text-slate-900 dark:text-white font-[700]">{subject.name}</span>
+        <span className="text-slate-900  font-[700]">{subject.name}</span>
       </div>
 
       {/* Header */}
@@ -64,33 +64,33 @@ export default function ManageChaptersPage() {
             <Button variant="ghost" size="icon" onClick={() => router.push(`/admin-dashboard/academic/papers/${paper.id}`)} className="-ml-2">
               <ArrowLeft className="w-5 h-5" />
             </Button>
-            <h2 className="text-2xl font-[800] text-slate-900 dark:text-white">Manage Chapters</h2>
+            <h2 className="text-2xl font-[800] text-slate-900 ">Manage Chapters</h2>
           </div>
           <p className="text-slate-500 text-sm mt-1 ml-11">Configure chapters for Subject: {subject.name} ({subject.code})</p>
         </div>
-        <Button className="bg-[#163E6B] hover:bg-[#163E6B]/90 text-white font-[700] gap-2 dark:bg-white dark:text-[#0A1118] dark:hover:bg-slate-200">
+        <Button className="bg-[#163E6B] hover:bg-[#163E6B]/90 text-white font-[700] gap-2   :bg-slate-200">
           <Plus className="w-4 h-4"/> Add Chapter
         </Button>
       </div>
 
       {/* Toolbar */}
-      <div className="bg-white dark:bg-[#0B1521] p-4 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+      <div className="bg-white  p-4 rounded-xl border border-slate-200  shadow-sm">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
             placeholder="Search chapters..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-slate-50 dark:bg-[#0A1118] border-slate-200 dark:border-white/10"
+            className="pl-9 bg-slate-50  border-slate-200 "
           />
         </div>
       </div>
 
       {/* Table */}
-      <Card className="border-slate-200 dark:border-white/10 dark:bg-[#0B1521] shadow-sm overflow-hidden">
+      <Card className="border-slate-200   shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="text-xs text-slate-500 bg-slate-50 dark:bg-[#0A1118] uppercase border-b border-slate-200 dark:border-white/10">
+            <thead className="text-xs text-slate-500 bg-slate-50  uppercase border-b border-slate-200 ">
               <tr>
                 <th className="px-6 py-4 font-[700] w-10"></th>
                 <th className="px-6 py-4 font-[700]">No.</th>
@@ -100,11 +100,11 @@ export default function ManageChaptersPage() {
                 <th className="px-6 py-4 font-[700] text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+            <tbody className="divide-y divide-slate-100 ">
               {filteredChapters.map((chapter) => {
                 const topicCount = mockTopics.filter(t => t.chapterId === chapter.id).length;
                 return (
-                  <tr key={chapter.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
+                  <tr key={chapter.id} className="hover:bg-slate-50 :bg-white/5 transition-colors group">
                     <td className="px-6 py-4">
                       <ArrowUpDown className="w-4 h-4 text-slate-300 cursor-grab hover:text-slate-500" />
                     </td>
@@ -114,19 +114,19 @@ export default function ManageChaptersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="font-[700] text-slate-900 dark:text-white text-base">{chapter.name}</div>
+                      <div className="font-[700] text-slate-900  text-base">{chapter.name}</div>
                       <div className="text-slate-500 text-xs mt-1 truncate max-w-sm">{chapter.description}</div>
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <Badge variant="outline" className="bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10">
+                      <Badge variant="outline" className="bg-slate-50  border-slate-200 ">
                         {topicCount} Topics
                       </Badge>
                     </td>
                     <td className="px-6 py-4">
                       <Badge className={`${
-                        chapter.status === 'Published' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                        chapter.status === 'Draft' ? 'bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-white/10 dark:text-slate-300' :
-                        'bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400'
+                        chapter.status === 'Published' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100  ' :
+                        chapter.status === 'Draft' ? 'bg-slate-100 text-slate-700 hover:bg-slate-100  ' :
+                        'bg-red-100 text-red-700 hover:bg-red-100  '
                       } border-none font-[700]`}>
                         {chapter.status}
                       </Badge>
@@ -147,7 +147,7 @@ export default function ManageChaptersPage() {
                           <DropdownMenuItem>
                             <Edit2 className="w-4 h-4 mr-2" /> Edit Details
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600 dark:text-red-400" onClick={() => alert("This chapter is currently used by 45 questions. Archiving it will hide it from new content creation but preserve existing references.")}>
+                          <DropdownMenuItem className="text-red-600 " onClick={() => alert("This chapter is currently used by 45 questions. Archiving it will hide it from new content creation but preserve existing references.")}>
                             <Archive className="w-4 h-4 mr-2" /> Archive Chapter
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -170,3 +170,4 @@ export default function ManageChaptersPage() {
     </div>
   );
 }
+

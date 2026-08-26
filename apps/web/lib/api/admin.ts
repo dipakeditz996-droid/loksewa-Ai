@@ -167,6 +167,30 @@ export interface AdminEvaluationsResponse {
   totalPages: number;
 }
 
+export interface AdminStudyMaterial {
+  id: number;
+  title: string;
+  description: string;
+  teacher: string;
+  subject: string;
+  exam: string;
+  materialType: string;
+  difficulty: string;
+  status: string;
+  accessType: string;
+  estimatedReadingTime: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminStudyMaterialsResponse {
+  materials: AdminStudyMaterial[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 // ===== API FUNCTIONS =====
 
 export const adminApi = {
@@ -232,5 +256,21 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminEvaluationsResponse>(`/admin/evaluations/?${query.toString()}`);
+  },
+
+  getStudyMaterials: async (params?: {
+    status?: string;
+    type?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminStudyMaterialsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.type) query.set("type", params.type);
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminStudyMaterialsResponse>(`/admin/study-materials/?${query.toString()}`);
   },
 };

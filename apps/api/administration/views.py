@@ -1171,3 +1171,70 @@ class AdminEvaluationsView(APIView):
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
         })
+
+
+# ============================================================
+# STUDY MATERIALS MANAGEMENT VIEW
+# ============================================================
+
+class AdminStudyMaterialsView(APIView):
+    """List study materials with pagination and filtering."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from notes.models import StudyMaterial
+
+        status_filter = request.query_params.get('status', 'published')  # 'draft', 'pending_review', 'published', 'all'
+        material_type = request.query_params.get('type', '')
+        search = request.query_params.get('search', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Start with all materials ordered by creation date
+        qs = StudyMaterial.objects.select_related(
+            'teacher', 'subject', 'exam'
+        ).order_by('-created_at')
+
+        if status_filter != 'all':
+            qs = qs.filter(status=status_filter)
+
+        if material_type:
+            qs = qs.filter(material_type=material_type)
+
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search) |
+                Q(description__icontains=search) |
+                Q(teacher__username__icontains=search) |
+                Q(subject__name__icontains=search)
+            )
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        materials = qs[start:start + page_size]
+
+        data = []
+        for material in materials:
+            data.append({
+                "id": material.id,
+                "title": material.title,
+                "description": material.description[:100] if material.description else '',
+                "teacher": material.teacher.get_full_name() or material.teacher.username if material.teacher else 'Unknown',
+                "subject": material.subject.name if material.subject else 'N/A',
+                "exam": material.exam.name if material.exam else 'N/A',
+                "materialType": material.material_type,
+                "difficulty": material.difficulty,
+                "status": material.status,
+                "accessType": material.access_type,
+                "estimatedReadingTime": material.estimated_reading_time,
+                "createdAt": material.created_at.isoformat(),
+                "updatedAt": material.updated_at.isoformat(),
+            })
+
+        return Response({
+            "materials": data,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+            "totalPages": (total + page_size - 1) // page_size,
+        })

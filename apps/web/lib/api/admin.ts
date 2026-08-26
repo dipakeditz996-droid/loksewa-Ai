@@ -191,6 +191,36 @@ export interface AdminStudyMaterialsResponse {
   totalPages: number;
 }
 
+export interface AdminChapter {
+  id: number;
+  title: string;
+  description?: string;
+  is_active: boolean;
+  order: number;
+  created_at: string;
+  updated_at: string;
+  subject?: number;
+}
+
+export interface AdminSubject {
+  id: number;
+  name: string;
+  code?: string;
+  description?: string;
+  is_active: boolean;
+  order: number;
+  created_at: string;
+  updated_at: string;
+  paper?: number;
+}
+
+export interface AdminChaptersResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: AdminChapter[];
+}
+
 // ===== API FUNCTIONS =====
 
 export const adminApi = {
@@ -272,5 +302,29 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminStudyMaterialsResponse>(`/admin/study-materials/?${query.toString()}`);
+  },
+
+  getChapters: async (params?: {
+    subject?: number;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminChaptersResponse> => {
+    const query = new URLSearchParams();
+    if (params?.subject) query.set("subject", String(params.subject));
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminChaptersResponse>(`/admin/syllabus/chapters/?${query.toString()}`);
+  },
+
+  getSubjects: async (params?: {
+    paper?: number;
+    page?: number;
+    pageSize?: number;
+  }): Promise<any> => {
+    const query = new URLSearchParams();
+    if (params?.paper) query.set("paper", String(params.paper));
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<any>(`/admin/syllabus/subjects/?${query.toString()}`);
   },
 };

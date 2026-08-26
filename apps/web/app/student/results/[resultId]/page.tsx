@@ -24,7 +24,7 @@ import {
   SubjectPerformance,
   TopicPerformance,
   QuestionReview,
-} from "@/lib/mock/student-results";
+} from "@/lib/api/student-results";
 
 export default function FullResultPage() {
   const params = useParams();

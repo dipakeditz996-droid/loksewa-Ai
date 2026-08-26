@@ -1,7 +1,5 @@
 import { apiClient } from './client';
-import { ApiQuestion } from '@/types/api';
-
-export interface QuestionData extends ApiQuestion {
+export interface QuestionData {
   id: number;
   question_id: string;
   topic: number;

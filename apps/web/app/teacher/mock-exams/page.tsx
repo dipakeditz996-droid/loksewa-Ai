@@ -3,24 +3,37 @@
 import { useState, useEffect } from "react";
 import { teacherMockExamsApi, MockExam } from "@/lib/api/teacher-mock-exams";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Search, FileText, CheckCircle, Clock, AlertCircle, TrendingUp, MoreVertical, Edit, Copy, Eye, BarChart, Send, Trash2 } from "lucide-react";
+import { PlusCircle, Search, FileText, CheckCircle, Clock, AlertCircle, MoreVertical, Edit, Copy, BarChart, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { format } from "date-fns";
 import { toast } from "react-hot-toast";
+import { PageHeader, StatCard, StatusPill } from "@/components/teacher/portal";
 
 export default function MockExamsDashboard() {
   const [exams, setExams] = useState<MockExam[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [subjectFilter, setSubjectFilter] = useState("all");
+  const [taxonomy, setTaxonomy] = useState<any[]>([]);
 
   useEffect(() => {
     fetchExams();
+    fetchTaxonomy();
   }, []);
+
+  const fetchTaxonomy = async () => {
+    try {
+      const data = await teacherMockExamsApi.getTaxonomy();
+      setTaxonomy(data);
+    } catch (error) {
+      console.error("Failed to fetch taxonomy:", error);
+    }
+  };
 
   const fetchExams = async () => {
     try {
@@ -69,124 +82,82 @@ export default function MockExamsDashboard() {
   const filteredExams = exams.filter(exam => {
     const matchesSearch = exam.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || exam.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCategory = categoryFilter === "all" || exam.category.toString() === categoryFilter;
+    const matchesSubject = subjectFilter === "all" || (exam.subject && exam.subject.toString() === subjectFilter);
+    return matchesSearch && matchesStatus && matchesCategory && matchesSubject;
   });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'published':
-        return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium border border-green-200">Published</span>;
-      case 'draft':
-        return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium border border-gray-200">Draft</span>;
-      case 'pending_review':
-        return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium border border-purple-200 flex items-center gap-1"><Clock className="w-3 h-3"/> Pending Review</span>;
-      case 'changes_requested':
-        return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-medium border border-orange-200">Changes Requested</span>;
-      case 'rejected':
-        return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium border border-red-200">Rejected</span>;
-      case 'archived':
-        return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium border border-slate-200">Archived</span>;
-      default:
-        return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">{status}</span>;
-    }
-  };
-
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-      
-      {/* HEADER */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Mock Exams</h1>
-          <p className="text-slate-500 mt-1">Create, manage and monitor timed examinations for your students.</p>
-        </div>
-        <Link href="/teacher/mock-exams/new">
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-md transition-all gap-2">
-            <PlusCircle className="w-4 h-4" />
-            Create Mock Exam
-          </Button>
-        </Link>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-12 md:p-8">
+
+      <PageHeader
+        title="Mock Exams"
+        description="Create, manage and monitor timed examinations for your students."
+        action={
+          <div className="flex gap-2">
+            <Button disabled variant="outline" className="gap-2 rounded-[9px] border-[#D9E1EA] bg-[#F7F9FC] text-[#8A98AE] cursor-not-allowed">
+              <PlusCircle className="h-4 w-4" />
+              Auto-generate (Coming Soon)
+            </Button>
+            <Link href="/teacher/mock-exams/new">
+              <Button className="gap-2 rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C]">
+                <PlusCircle className="h-4 w-4" />
+                New Mock Exam
+              </Button>
+            </Link>
+          </div>
+        }
+      />
 
       {/* KPI CARDS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-none shadow-sm bg-white overflow-hidden group">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Total Exams</p>
-                <p className="text-3xl font-bold text-slate-900 mt-1">{exams.length}</p>
-              </div>
-              <div className="p-3 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
-                <FileText className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-none shadow-sm bg-white overflow-hidden group">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Published</p>
-                <p className="text-3xl font-bold text-green-600 mt-1">
-                  {exams.filter(e => e.status === 'published').length}
-                </p>
-              </div>
-              <div className="p-3 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-none shadow-sm bg-white overflow-hidden group">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Pending Review</p>
-                <p className="text-3xl font-bold text-purple-600 mt-1">
-                  {exams.filter(e => e.status === 'pending_review').length}
-                </p>
-              </div>
-              <div className="p-3 bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors">
-                <Clock className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-none shadow-sm bg-white overflow-hidden group">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm font-medium text-slate-500">Drafts & Needs Work</p>
-                <p className="text-3xl font-bold text-orange-600 mt-1">
-                  {exams.filter(e => ['draft', 'changes_requested', 'rejected'].includes(e.status)).length}
-                </p>
-              </div>
-              <div className="p-3 bg-orange-50 rounded-xl group-hover:bg-orange-100 transition-colors">
-                <AlertCircle className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={FileText} label="Total Exams" value={exams.length} />
+        <StatCard icon={CheckCircle} label="Published" value={exams.filter(e => e.status === 'published').length} tone="success" />
+        <StatCard icon={Clock} label="Pending Review" value={exams.filter(e => e.status === 'pending_review').length} tone="pending" />
+        <StatCard
+          icon={AlertCircle}
+          label="Drafts & Needs Work"
+          value={exams.filter(e => ['draft', 'changes_requested', 'rejected'].includes(e.status)).length}
+          tone={exams.some(e => ['changes_requested', 'rejected'].includes(e.status)) ? "error" : "neutral"}
+        />
       </div>
 
       {/* TOOLBAR */}
-      <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-[#E7EBF3] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:flex-row">
         <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input 
-            placeholder="Search exams..." 
-            className="pl-9 bg-slate-50 border-none"
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A98AE]" />
+          <Input
+            placeholder="Search exams..."
+            className="rounded-lg border-[#D9E1EA] bg-[#F7F9FC] pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex w-full items-center gap-3 md:w-auto">
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-[160px] rounded-lg border-[#D9E1EA] bg-[#F7F9FC]">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {taxonomy.map(cat => (
+                <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={subjectFilter} onValueChange={setSubjectFilter}>
+            <SelectTrigger className="w-[160px] rounded-lg border-[#D9E1EA] bg-[#F7F9FC]">
+              <SelectValue placeholder="Filter by subject" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Subjects</SelectItem>
+              {taxonomy.flatMap(cat => cat.exams).flatMap(ex => ex.subjects).map(sub => (
+                <SelectItem key={sub.id} value={sub.id.toString()}>{sub.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px] bg-slate-50 border-none">
+            <SelectTrigger className="w-[160px] rounded-lg border-[#D9E1EA] bg-[#F7F9FC]">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -202,105 +173,96 @@ export default function MockExamsDashboard() {
 
       {/* MAIN CONTENT */}
       {loading ? (
-        <div className="text-center py-12 text-slate-500">Loading exams...</div>
+        <div className="py-12 text-center text-[#667085]">Loading exams...</div>
       ) : filteredExams.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center flex flex-col items-center justify-center">
-          <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-            <FileText className="w-10 h-10 text-blue-500" />
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#D9E1EA] bg-white p-12 text-center">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#EEF2F8]">
+            <FileText className="h-10 w-10 text-[#0B2545]" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">Your examination workspace is ready.</h3>
-          <p className="text-slate-500 max-w-md mx-auto mb-6">
+          <h3 className="mb-2 text-xl font-bold text-[#101828]">Your examination workspace is ready.</h3>
+          <p className="mx-auto mb-6 max-w-md text-[13px] text-[#667085]">
             Create your first model exam and build a realistic Loksewa examination experience for your students.
           </p>
-          <div className="flex gap-4">
-            <Link href="/teacher/mock-exams/new">
-              <Button className="bg-blue-600 hover:bg-blue-700">Create Mock Exam</Button>
-            </Link>
-          </div>
+          <Link href="/teacher/mock-exams/new">
+            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]">Create Mock Exam</Button>
+          </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 font-medium text-slate-500 text-sm">Exam Details</th>
-                <th className="px-6 py-4 font-medium text-slate-500 text-sm">Config</th>
-                <th className="px-6 py-4 font-medium text-slate-500 text-sm">Status</th>
-                <th className="px-6 py-4 font-medium text-slate-500 text-sm">Date</th>
-                <th className="px-6 py-4 font-medium text-slate-500 text-sm text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredExams.map((exam) => (
-                <tr key={exam.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-slate-900 mb-1">{exam.title}</div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span className="px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">{exam.exam_type === 'mock' ? 'Mock Test' : 'Model Exam'}</span>
-                      <span>•</span>
-                      <span>{exam.category_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700 font-medium">{exam.total_questions} Questions</div>
-                    <div className="text-xs text-slate-500 mt-1">{exam.total_marks} Marks • {exam.time_limit} mins</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {getStatusBadge(exam.status)}
-                    {exam.status === 'rejected' && exam.reviewer_comment && (
-                      <p className="text-xs text-red-500 mt-1 max-w-[150px] truncate" title={exam.reviewer_comment}>
-                        {exam.reviewer_comment}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-slate-700">{format(new Date(exam.created_at), 'MMM d, yyyy')}</div>
-                    <div className="text-xs text-slate-500 mt-1">Updated {format(new Date(exam.updated_at), 'MMM d')}</div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 group-hover:text-slate-600">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <Link href={`/teacher/mock-exams/${exam.id}/edit`}>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Edit className="w-4 h-4 mr-2" /> Edit Exam
-                          </DropdownMenuItem>
-                        </Link>
-                        <DropdownMenuItem className="cursor-pointer" onClick={() => handleDuplicate(exam.id)}>
-                          <Copy className="w-4 h-4 mr-2" /> Duplicate
-                        </DropdownMenuItem>
-                        
-                        {(exam.status === 'draft' || exam.status === 'changes_requested' || exam.status === 'rejected') && (
-                          <DropdownMenuItem className="cursor-pointer text-blue-600 focus:text-blue-700" onClick={() => handleSubmitReview(exam.id)}>
-                            <Send className="w-4 h-4 mr-2" /> Submit for Review
-                          </DropdownMenuItem>
-                        )}
-                        
-                        {exam.status === 'published' && (
-                          <Link href={`/teacher/mock-exams/${exam.id}/analytics`}>
-                            <DropdownMenuItem className="cursor-pointer text-green-600 focus:text-green-700">
-                              <BarChart className="w-4 h-4 mr-2" /> View Analytics
-                            </DropdownMenuItem>
-                          </Link>
-                        )}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {filteredExams.map((exam) => (
+            <div key={exam.id} className="group flex flex-col overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-shadow hover:shadow-md">
+              <div className="mb-3.5 flex items-center justify-between">
+                <StatusPill status={exam.status} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#8A98AE] hover:text-[#344054]">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <Link href={`/teacher/mock-exams/${exam.id}/edit`}>
+                      <DropdownMenuItem className="cursor-pointer">
+                        <Edit className="mr-2 h-4 w-4" /> Edit Exam
+                      </DropdownMenuItem>
+                    </Link>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => handleDuplicate(exam.id)}>
+                      <Copy className="mr-2 h-4 w-4" /> Duplicate
+                    </DropdownMenuItem>
 
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-700" onClick={() => handleDelete(exam.id)}>
-                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                    {(exam.status === 'draft' || exam.status === 'changes_requested' || exam.status === 'rejected') && (
+                      <DropdownMenuItem className="cursor-pointer text-[#0B2545]" onClick={() => handleSubmitReview(exam.id)}>
+                        <Send className="mr-2 h-4 w-4" /> Submit for Review
+                      </DropdownMenuItem>
+                    )}
+
+                    {exam.status === 'published' && (
+                      <Link href={`/teacher/mock-exams/${exam.id}/analytics`}>
+                        <DropdownMenuItem className="cursor-pointer text-[#0F7A69]">
+                          <BarChart className="mr-2 h-4 w-4" /> View Analytics
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      </Link>
+                    )}
+
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="cursor-pointer text-[#B23A3A]" onClick={() => handleDelete(exam.id)}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <h3 className="text-[15px] font-bold text-[#101828]">{exam.title}</h3>
+              <div className="mt-1.5 flex items-center gap-2 text-xs text-[#8A98AE]">
+                <span className="rounded bg-[#EEF1F6] px-1.5 py-0.5 text-[#667085]">{exam.exam_type === 'mock' ? 'Mock Test' : 'Model Exam'}</span>
+                <span>{exam.category_name}</span>
+              </div>
+              <div className="mt-2.5 text-[12px] text-[#8A98AE]">
+                {exam.total_questions} Questions &middot; {exam.time_limit} min &middot; {exam.total_marks} Marks
+              </div>
+
+              {exam.status === 'rejected' && exam.reviewer_comment && (
+                <p className="mt-2 max-w-[220px] truncate text-xs text-[#B23A3A]" title={exam.reviewer_comment}>
+                  {exam.reviewer_comment}
+                </p>
+              )}
+
+              <div className="mt-4 border-t border-[#F2F4F8] pt-3.5 text-[11.5px] text-[#8A98AE]">
+                Updated {format(new Date(exam.updated_at), 'MMM d, yyyy')}
+              </div>
+            </div>
+          ))}
+
+          <Link
+            href="/teacher/mock-exams/new"
+            className="flex flex-col items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-[#D9E1EA] p-5 text-center transition-colors hover:border-[#0B2545]/40 hover:bg-[#F7F9FC]"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#EEF2F8] text-[#0B2545]">
+              <PlusCircle className="h-[18px] w-[18px]" />
+            </div>
+            <span className="text-[13px] font-semibold text-[#475467]">Start a new mock exam</span>
+          </Link>
         </div>
       )}
     </div>

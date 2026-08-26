@@ -41,24 +41,31 @@ class TeacherStudentViewSet(viewsets.GenericViewSet):
     def list(self, request):
         qs = self.get_queryset()
         
+        course_id = request.query_params.get('course')
+        if course_id:
+            qs = qs.filter(enrollments__course_id=course_id, enrollments__status='active')
+        
         # Annotate with basic stats
         qs = qs.annotate(
             enrolled_courses=Count('enrollments', filter=Q(enrollments__status='active'), distinct=True),
             completed_courses=Count('enrollments', filter=Q(enrollments__status='completed'), distinct=True),
             average_score=Coalesce(Avg('examination_attempts__percentage', filter=Q(examination_attempts__status='submitted')), 0.0),
-            last_active=Max('examination_attempts__started_at')
+            last_active=Max('examination_attempts__started_at'),
+            practice_accuracy=Coalesce(Avg('practice_sessions__accuracy'), 0.0),
+            mock_exam_performance=Coalesce(Avg('model_exam_attempts__score'), 0.0)
         )
         
-        # Manual Python-side "status" calculation for list (At Risk, Active, Inactive)
-        # In a real heavy app, this would be a complex SQL annotation
         now = timezone.now()
         thirty_days_ago = now - timedelta(days=30)
+        seven_days_ago = now - timedelta(days=7)
         
         results = []
         for student in qs:
+            student.practice_accuracy = student.practice_accuracy
+            student.mock_exam_performance = student.mock_exam_performance
+            
             data = TeacherStudentListSerializer(student).data
             
-            # Simple status logic
             if student.last_active and student.last_active < thirty_days_ago:
                 data['status'] = 'Inactive'
             elif data['average_score'] < 40 and data['average_score'] > 0:
@@ -66,7 +73,39 @@ class TeacherStudentViewSet(viewsets.GenericViewSet):
             else:
                 data['status'] = 'Active'
                 
+            status_filter = request.query_params.get('status')
+            if status_filter and status_filter.lower() != 'all':
+                if data['status'].lower() != status_filter.lower():
+                    continue
+                    
+            perf_filter = request.query_params.get('performance')
+            if perf_filter and perf_filter.lower() != 'all':
+                score = data['average_score']
+                if perf_filter.lower() == 'excellent' and score < 80: continue
+                if perf_filter.lower() == 'good' and (score < 60 or score >= 80): continue
+                if perf_filter.lower() == 'average' and (score < 40 or score >= 60): continue
+                if perf_filter.lower() == 'needs attention' and score >= 40: continue
+                
+            activity_filter = request.query_params.get('activity')
+            if activity_filter and activity_filter.lower() != 'all':
+                if activity_filter.lower() == 'active recently':
+                    if not student.last_active or student.last_active < seven_days_ago: continue
+                elif activity_filter.lower() == 'no activity':
+                    if student.last_active: continue
+                elif activity_filter.lower() == 'low activity':
+                    if not student.last_active or student.last_active >= thirty_days_ago: continue
+                    
             results.append(data)
+            
+        sort_by = request.query_params.get('sort', 'name')
+        if sort_by == 'recent':
+            results.sort(key=lambda x: x['last_active'] or '', reverse=True)
+        elif sort_by == 'highest_perf':
+            results.sort(key=lambda x: x['average_score'], reverse=True)
+        elif sort_by == 'lowest_perf':
+            results.sort(key=lambda x: x['average_score'])
+        else:
+            results.sort(key=lambda x: f"{x['first_name']} {x['last_name']}")
             
         return Response(results)
 
@@ -228,7 +267,7 @@ class TeacherStudentViewSet(viewsets.GenericViewSet):
                 
         return Response(at_risk)
 
-    @action(detail=True, methods=['get', 'post'])
+    @action(detail=True, methods=['get', 'post', 'patch', 'delete'])
     def notes(self, request, pk=None):
         student = get_object_or_404(self.get_queryset(), pk=pk)
         
@@ -239,9 +278,62 @@ class TeacherStudentViewSet(viewsets.GenericViewSet):
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
+        elif request.method == 'PATCH':
+            note_id = request.data.get('note_id')
+            note = get_object_or_404(TeacherStudentNote, id=note_id, teacher=request.user, student=student)
+            serializer = TeacherStudentNoteSerializer(note, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        elif request.method == 'DELETE':
+            note_id = request.query_params.get('note_id')
+            if not note_id:
+                note_id = request.data.get('note_id')
+            if not note_id:
+                return Response({"detail": "note_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+            note = get_object_or_404(TeacherStudentNote, id=note_id, teacher=request.user, student=student)
+            note.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+            
         notes = TeacherStudentNote.objects.filter(teacher=request.user, student=student)
         serializer = TeacherStudentNoteSerializer(notes, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def attempts(self, request, pk=None):
+        student = get_object_or_404(self.get_queryset(), pk=pk)
+        
+        exams = ExaminationAttempt.objects.filter(student=student).order_by('-started_at')
+        exam_data = [{
+            'id': f"exam_{ex.id}",
+            'type': 'exam',
+            'title': ex.examination.title,
+            'started_at': ex.started_at,
+            'submitted_at': ex.submitted_at,
+            'status': ex.status,
+            'score': ex.percentage,
+            'time_taken': ex.time_taken_seconds
+        } for ex in exams]
+        
+        practices = PracticeSession.objects.filter(user=student).order_by('-created_at')
+        practice_data = [{
+            'id': f"prac_{p.id}",
+            'type': 'practice',
+            'title': f"Practiced {p.topic.name}" if p.topic else (f"Practiced {p.subject.name}" if p.subject else "Practice Session"),
+            'started_at': p.created_at,
+            'submitted_at': p.created_at,
+            'status': 'completed' if p.completed else 'in-progress',
+            'score': p.accuracy,
+            'time_taken': p.time_taken_seconds
+        } for p in practices]
+        
+        return Response({
+            'mock_exams': exam_data,
+            'practice': practice_data,
+            'all_attempts': sorted(exam_data + practice_data, key=lambda x: x['started_at'], reverse=True)
+        })
 
     @action(detail=False, methods=['get'])
     def export(self, request):

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { studyPlanApi, StudyPlan, StudyTask, StudyPlanProgress } from "@/lib/api/study-plan";
+import { studyPlanApi, StudyPlan, StudyTask, UnifiedDashboard } from "@/lib/api/study-plan";
 import { Button } from "@/components/ui/button";
 
 import { Calendar, Target, CheckCircle2, Circle, Clock, Flame, Loader2, BookOpen, PenTool, LayoutTemplate, RotateCw } from "lucide-react";
@@ -9,9 +9,7 @@ import { useRouter } from "next/navigation";
 
 export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerate: () => void }) {
   const router = useRouter();
-  const [tasks, setTasks] = useState<StudyTask[]>([]);
-  const [upcoming, setUpcoming] = useState<StudyTask[]>([]);
-  const [progress, setProgress] = useState<StudyPlanProgress | null>(null);
+  const [dashboard, setDashboard] = useState<UnifiedDashboard | null>(null);
   const [loadingTasks, setLoadingTasks] = useState(true);
   
   const target = new Date(plan.target_date);
@@ -20,14 +18,8 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
 
   const fetchDashboardData = async () => {
     try {
-      const [todayTasks, upcomingTasks, prog] = await Promise.all([
-        studyPlanApi.getTodayTasks(),
-        studyPlanApi.getUpcomingTasks(),
-        studyPlanApi.getProgress(plan.id)
-      ]);
-      setTasks(todayTasks);
-      setUpcoming(upcomingTasks);
-      setProgress(prog);
+      const data = await studyPlanApi.getDashboard();
+      setDashboard(data);
     } catch (e) {
       console.error(e);
     } finally {
@@ -44,11 +36,8 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
       if (action === 'complete') await studyPlanApi.completeTask(taskId);
       else await studyPlanApi.skipTask(taskId);
       
-      // Refresh local tasks without full reload for snapiness
-      setTasks(tasks.map(t => t.id === taskId ? { ...t, status: action === 'complete' ? 'COMPLETED' : 'SKIPPED' } : t));
-      
-      // Fetch progress again
-      studyPlanApi.getProgress(plan.id).then(setProgress).catch(console.error);
+      // Refresh full dashboard without full reload for snapiness
+      fetchDashboardData();
     } catch (e) {
       alert(`Failed to ${action} task`);
     }
@@ -72,12 +61,68 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
     else if (task.task_type === 'SUBJECTIVE_PRACTICE') router.push('/student/practice');
   };
 
+  const tasks = dashboard?.today_tasks || [];
+  const upcoming = dashboard?.upcoming_tasks || [];
+  const progress = dashboard?.progress;
+  const streak = dashboard?.streak || 0;
+  const motivation = dashboard?.motivation;
+  const courseProgress = dashboard?.courses || [];
+  const topicProgress = dashboard?.topic_progress || [];
+  const continueLearning = dashboard?.continue_learning;
+
   const completedToday = tasks.filter(t => t.status === 'COMPLETED').length;
   const totalToday = tasks.length;
 
   return (
     <div className="space-y-6">
       
+      {motivation && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+          <p className="text-blue-800 italic font-medium">"{motivation}"</p>
+        </div>
+      )}
+
+      {/* Progress & Continue Learning Header */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-[#0B2545] mb-2">Your Progress</h2>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex-1 bg-slate-100 h-4 rounded-full overflow-hidden">
+                <div 
+                  className="bg-[#0B2545] h-full rounded-full transition-all duration-1000" 
+                  style={{ width: `${progress?.overall_percentage || 0}%` }}
+                />
+              </div>
+              <span className="font-bold text-lg text-[#0B2545]">{progress?.overall_percentage || 0}%</span>
+            </div>
+            <p className="text-sm text-slate-500">
+              {progress?.completed_tasks || 0} tasks completed • {(progress?.total_tasks || 0) - (progress?.completed_tasks || 0)} remaining
+            </p>
+          </div>
+          
+          {continueLearning && (
+            <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">Continue Learning</p>
+                <p className="text-[#0B2545] font-medium">{continueLearning.title}</p>
+              </div>
+              <Button onClick={() => router.push(continueLearning.url)} className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-white">
+                Resume <RotateCw className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          )}
+        </div>
+        
+        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-center items-center text-center">
+          <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-4">
+            <Flame className="w-10 h-10 text-orange-500" />
+          </div>
+          <h2 className="text-3xl font-black text-[#0B2545]">{streak}</h2>
+          <p className="text-slate-500 font-medium mt-1">Day Study Streak</p>
+        </div>
+      </div>
+
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white border rounded-xl p-5 shadow-sm flex items-center justify-between">
@@ -178,6 +223,27 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
         
         {/* Sidebar */}
         <div className="space-y-6">
+          
+          {/* Topic Progress */}
+          {topicProgress.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-[#0B2545] mb-4">Topic Progress</h2>
+              <div className="space-y-4">
+                {topicProgress.map(tp => (
+                  <div key={tp.topic_id}>
+                    <div className="flex justify-between text-sm font-medium mb-1">
+                      <span className="text-slate-700 line-clamp-1">{tp.title}</span>
+                      <span className="text-[#0B2545]">{Math.round(tp.progress)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div className="bg-[#0B2545] h-full" style={{ width: `${tp.progress}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* Upcoming */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
             <h2 className="text-lg font-bold text-[#0B2545] mb-4">Upcoming Schedule</h2>
@@ -205,6 +271,28 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
               View Full Calendar
             </Button>
           </div>
+
+          {/* Enrolled Courses (Course Context) */}
+          {courseProgress.length > 0 && (
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-[#0B2545] mb-4">Your Courses</h2>
+              <div className="space-y-3">
+                {courseProgress.map(c => (
+                  <Button 
+                    key={c.id} 
+                    variant="outline" 
+                    className="w-full justify-start text-left h-auto py-3 whitespace-normal"
+                    onClick={() => router.push(`/student/courses/${c.id}`)}
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-700">{c.title}</div>
+                      {c.duration_months > 0 && <div className="text-xs text-slate-500">{c.duration_months} Months</div>}
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           
           {/* Plan Settings */}
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-sm">

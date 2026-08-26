@@ -111,4 +111,19 @@ export const teacherMockExamsApi = {
       }),
     });
   },
+
+  getTaxonomy: async () => {
+    return apiClient<any[]>('/teacher/mock-exams/taxonomy/');
+  },
+
+  autoGenerate: async (id: number, config: {
+    subject_id?: number;
+    topic_id?: number;
+    counts: { easy: number; medium: number; hard: number; };
+  }) => {
+    return apiClient<{ status: string; added: number; missing: any }>(`/teacher/mock-exams/${id}/auto_generate/`, {
+      method: 'POST',
+      body: JSON.stringify({ config }),
+    });
+  },
 };

@@ -7,13 +7,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-import { mockCourses } from "@/lib/mock/public-data";
 import { Badge } from "@/components/ui/badge";
 import { LoksewaBadgeIcon } from "@/components/ui/loksewa-badge-icon";
 import Image from "next/image";
+import { publicApi } from "@/lib/api/public-api";
+import { Loader2 } from "lucide-react";
 
 export default function CoursesPage() {
   const [activeCategory, setActiveCategory] = useState("All Courses");
+  const [courses, setCourses] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch courses on mount
+  useState(() => {
+    const fetchCourses = async () => {
+      try {
+        const data = await publicApi.getCourses();
+        if (data) {
+          setCourses(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch courses:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCourses();
+  });
 
   // Format price helper
   const formatPrice = (price: number) => {
@@ -180,8 +200,10 @@ export default function CoursesPage() {
                         <span className="text-sm font-semibold text-slate-400 line-through decoration-slate-300 dark:decoration-slate-600">{formatPrice(6499)}</span>
                       </div>
                     </div>
-                    <Button className="h-[48px] px-8 rounded-[12px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[700] text-[15px] transition-all shadow-md flex items-center gap-2 group/btn">
-                      View Course <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                    <Button asChild className="h-[48px] px-8 rounded-[12px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[700] text-[15px] transition-all shadow-md flex items-center gap-2 group/btn">
+                      <Link href={`/courses/1`}>
+                        View Course <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                      </Link>
                     </Button>
                   </div>
                 </div>
@@ -193,7 +215,7 @@ export default function CoursesPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
               <h2 className="text-2xl font-[800] text-slate-900 dark:text-white">Preparation Programs</h2>
-              <p className="text-[14px] font-[500] text-slate-500 dark:text-slate-400 mt-1">{mockCourses.length} courses available</p>
+              <p className="text-[14px] font-[500] text-slate-500 dark:text-slate-400 mt-1">{courses.length} courses available</p>
             </div>
             
             <div className="flex items-center gap-3">
@@ -212,9 +234,14 @@ export default function CoursesPage() {
           </div>
 
           {/* 5. COURSE GRID */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {mockCourses.map((course) => (
-              <div key={course.id} className="group flex flex-col bg-white dark:bg-[#0B1521] rounded-[20px] border border-slate-200 dark:border-white/10 overflow-hidden shadow-sm hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-[#163E6B]/10 transition-all duration-300 hover:-translate-y-1">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {courses.map((course) => (
+                <div key={course.id} className="group flex flex-col bg-white dark:bg-[#0B1521] rounded-[20px] border border-slate-200 dark:border-white/10 overflow-hidden shadow-sm hover:shadow-xl dark:hover:shadow-2xl dark:hover:shadow-[#163E6B]/10 transition-all duration-300 hover:-translate-y-1">
                 
                 {/* 6. COURSE CARD DESIGN - Rich Header Image */}
                 <div className="relative h-[200px] overflow-hidden bg-[#0A1118]">
@@ -238,7 +265,7 @@ export default function CoursesPage() {
                   
                   {/* Badges */}
                   <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10">
-                    {course.badges?.map((badge, idx) => (
+                    {course.badges?.map((badge: string, idx: number) => (
                       <Badge key={idx} className={`${
                         badge === "Best Seller" || badge === "Popular" || badge === "Trending"
                           ? "bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]"
@@ -262,7 +289,7 @@ export default function CoursesPage() {
                 {/* Content */}
                 <div className="flex flex-col flex-1 p-6 relative">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-[12px] font-[700] text-[#163E6B] dark:text-[#8BA4C4] uppercase tracking-wider">{course.category}</span>
+                    <span className="text-[12px] font-[700] text-[#163E6B] dark:text-[#8BA4C4] uppercase tracking-wider">{course.category || "General"}</span>
                   </div>
                   
                   <h3 className="text-[18px] font-[800] text-slate-900 dark:text-white leading-[1.3] mb-3 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors line-clamp-2">
@@ -270,7 +297,7 @@ export default function CoursesPage() {
                   </h3>
                   
                   <p className="text-[14px] text-slate-600 dark:text-slate-400 line-clamp-2 mb-6 leading-relaxed">
-                    {course.description}
+                    {course.short_description || course.description || "Comprehensive preparation for this subject."}
                   </p>
                   
                   {/* Stats Row */}
@@ -280,8 +307,8 @@ export default function CoursesPage() {
                         <BookOpen className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.subjects}</span>
-                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Subjects</span>
+                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.duration_months || 0}</span>
+                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Months</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -289,8 +316,8 @@ export default function CoursesPage() {
                         <Target className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.questions}+</span>
-                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">MCQs</span>
+                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.is_open_for_enrollment ? 'Yes' : 'No'}</span>
+                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Enroll</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -298,8 +325,8 @@ export default function CoursesPage() {
                         <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.mockTests}</span>
-                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Exams</span>
+                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.featured ? 'Yes' : 'No'}</span>
+                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Featured</span>
                       </div>
                     </div>
                   </div>
@@ -309,33 +336,39 @@ export default function CoursesPage() {
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-1.5">
                         <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                        <span className="text-[14px] font-[700] text-slate-900 dark:text-white">{course.rating || "4.8"}</span>
-                        <span className="text-[12px] text-slate-500">({course.students})</span>
+                        <span className="text-[14px] font-[700] text-slate-900 dark:text-white">{course.rating || "New"}</span>
+                        <span className="text-[12px] text-slate-500">({course.students || 0})</span>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="text-[20px] font-[800] text-slate-900 dark:text-white tracking-tight leading-none">{formatPrice(course.price || 2999)}</span>
+                        <span className="text-[20px] font-[800] text-slate-900 dark:text-white tracking-tight leading-none">{course.price ? formatPrice(course.price) : "Free"}</span>
                         {course.originalPrice && (
                           <span className="text-[12px] font-[600] text-slate-400 line-through mt-1">{formatPrice(course.originalPrice)}</span>
                         )}
                       </div>
                     </div>
                     
-                    <Button className={`w-full h-[44px] rounded-[10px] font-[700] text-[14px] transition-all flex items-center justify-center gap-2 group/btn ${
+                    <Button asChild className={`w-full h-[44px] rounded-[10px] font-[700] text-[14px] transition-all flex items-center justify-center gap-2 group/btn ${
                       course.status === "Coming Soon" 
                         ? "bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 cursor-not-allowed" 
                         : "bg-white dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 hover:bg-[#0B2545] hover:border-[#0B2545] hover:text-white dark:hover:bg-white/10 dark:hover:border-white/20 shadow-sm"
                     }`}>
-                      {course.status === "Coming Soon" ? "Coming Soon" : "View Course"} 
-                      {course.status !== "Coming Soon" && <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />}
+                      {course.status === "Coming Soon" ? (
+                        <span>Coming Soon</span>
+                      ) : (
+                        <Link href={`/courses/${course.id}`}>
+                          View Course <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                        </Link>
+                      )}
                     </Button>
                   </div>
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          )}
           
-          {/* 13. EMPTY STATE (Hidden by default since we have mock data, but structure is here) */}
-          {mockCourses.length === 0 && (
+          {/* 13. EMPTY STATE */}
+          {!isLoading && courses.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 px-4 text-center border border-slate-200 dark:border-white/5 rounded-[24px] bg-white/50 dark:bg-white/5 backdrop-blur-sm">
               <div className="w-20 h-20 bg-slate-100 dark:bg-[#0B1521] rounded-full flex items-center justify-center mb-6 shadow-inner">
                 <Search className="w-8 h-8 text-slate-400" />

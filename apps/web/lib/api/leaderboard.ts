@@ -11,23 +11,50 @@
  * ╚══════════════════════════════════════════════════════════════════╝
  */
 
-import {
-  DEMO_LEADERBOARD,
-  DEMO_CURRENT_USER,
-  DEMO_SCORE_TREND,
-  getDemoStats,
-  filterDemoByTime,
-  paginateDemoData,
-  type LeaderboardStudent,
-  type LeaderboardStats,
-  type ScoreTrendPoint,
-} from "@/lib/mock/leaderboard-demo-data";
+// Removed DEMO_LEADERBOARD import
 
 // ─── Re-export types for UI layer ────────────────────────────────────────────
 
-export type { LeaderboardStudent, LeaderboardStats, ScoreTrendPoint };
-
 // ─── Filters ─────────────────────────────────────────────────────────────────
+
+export interface LeaderboardStudent {
+  studentId: string;
+  studentName: string;
+  avatar: string | null;
+  rank: number;
+  previousRank: number;
+  rankChange: number;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  examsAttempted: number;
+  testsCleared: number;
+  averageScore: number;
+  bestScore: number;
+  timeTaken: number;
+  trend: "up" | "down" | "same";
+  isCurrentUser?: boolean;
+}
+
+export interface LeaderboardStats {
+  currentRank: number;
+  totalStudents: number;
+  score: number;
+  maxScore: number;
+  percentile: number;
+  rankChange: number;
+  bestRank: number;
+  averageScore: number;
+  highestScore: number;
+  testsTaken: number;
+  testsCleared: number;
+  passRate: number;
+}
+
+export interface ScoreTrendPoint {
+  date: string;
+  score: number;
+}
 
 export interface LeaderboardFilters {
   page: number;
@@ -44,25 +71,9 @@ export interface LeaderboardPageResult {
   totalPages: number;
   currentUser: LeaderboardStudent | null;
   stats: LeaderboardStats;
-  usedDemoData: boolean;
 }
 
-// ─── API base ─────────────────────────────────────────────────────────────────
-
-const API_BASE =
-  typeof process !== "undefined"
-    ? process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api"
-    : "http://127.0.0.1:8000/api";
-
-async function apiFetch<T>(path: string): Promise<T> {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<T>;
-}
+import { apiClient } from "./client";
 
 // ─── Ranking logic (primary sort for client-side re-ranking) ─────────────────
 
@@ -120,12 +131,11 @@ export const leaderboardService = {
         }>;
       };
 
-      const data = await apiFetch<ApiResponse>(`/student/leaderboard/?${params}`);
+      const data = await apiClient<ApiResponse>(`/student/leaderboard/?${params}`);
       const results = data.results ?? [];
 
       if (results.length === 0) {
-        // Real API returned empty — fall through to demo data
-        throw new Error("empty");
+        // Return empty result naturally instead of throwing error
       }
 
       // Map API shape → internal type (stripping sensitive fields)
@@ -154,7 +164,7 @@ export const leaderboardService = {
       // Fetch my-rank separately (non-blocking)
       let currentUser: LeaderboardStudent | null = null;
       try {
-        const myRank = await apiFetch<ApiResponse["results"][0]>(
+        const myRank = await apiClient<ApiResponse["results"][0]>(
           `/student/leaderboard/my-rank/?${params}`
         );
         if (myRank) {
@@ -183,7 +193,20 @@ export const leaderboardService = {
         // my-rank failure is non-fatal
       }
 
-      const stats = getDemoStats(); // TODO: replace with /leaderboard/stats/ API
+      const stats = {
+        currentRank: currentUser?.rank ?? 0,
+        totalStudents: data.count,
+        score: currentUser?.score ?? 0,
+        maxScore: 100,
+        percentile: currentUser ? currentUser.percentage : 0,
+        rankChange: currentUser?.rankChange ?? 0,
+        bestRank: currentUser?.rank ?? 0,
+        averageScore: currentUser?.percentage ?? 0,
+        highestScore: currentUser?.percentage ?? 0,
+        testsTaken: currentUser?.examsAttempted ?? 0,
+        testsCleared: currentUser?.testsCleared ?? 0,
+        passRate: 100,
+      };
 
       return {
         students,
@@ -191,57 +214,16 @@ export const leaderboardService = {
         totalPages: Math.max(1, Math.ceil(data.count / filters.pageSize)),
         currentUser,
         stats,
-        usedDemoData: false,
       };
-    } catch {
-      // ── Fallback: demo data ──────────────────────────────────────
-      return leaderboardService._getDemoResult(filters);
+    } catch (e) {
+      throw e;
     }
   },
 
   /** Fetch score trend for the current user */
   async fetchScoreTrend(): Promise<ScoreTrendPoint[]> {
-    try {
-      const data = await apiFetch<ScoreTrendPoint[]>("/student/leaderboard/trend/");
-      if (data && data.length > 0) return data;
-    } catch {
-      // fall through
-    }
-    return DEMO_SCORE_TREND;
-  },
-
-  /** Internal: produce a result from demo data */
-  _getDemoResult(filters: LeaderboardFilters): LeaderboardPageResult {
-    let pool = [...DEMO_LEADERBOARD];
-
-    // Apply time filter
-    pool = filterDemoByTime(pool, filters.timeFilter);
-
-    // Apply search
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase();
-      pool = pool.filter((s) =>
-        s.studentName.toLowerCase().includes(q)
-      );
-    }
-
-    const { data, totalCount, totalPages } = paginateDemoData(
-      pool,
-      filters.page,
-      filters.pageSize
-    );
-
-    const currentUser: LeaderboardStudent = {
-      ...DEMO_CURRENT_USER,
-    };
-
-    return {
-      students: data,
-      totalCount,
-      totalPages,
-      currentUser,
-      stats: getDemoStats(),
-      usedDemoData: true,
-    };
+    const data = await apiClient<ScoreTrendPoint[]>("/student/leaderboard/trend/");
+    if (data && data.length > 0) return data;
+    return [];
   },
 };

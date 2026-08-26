@@ -6,6 +6,9 @@ export interface OverviewMetrics {
   model_exams_taken: number;
   subjective_evaluated: number;
   study_streak: number;
+  best_streak: number;
+  active_course: { name: string; id: number; slug?: string | null } | null;
+  journey_progress: number;
 }
 
 export interface PerformanceTrend {

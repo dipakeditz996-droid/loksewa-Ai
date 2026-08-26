@@ -26,7 +26,7 @@ export function FinalCTASection() {
       {/* ── Content ── */}
       <div className="relative z-10 max-w-[800px] mx-auto px-4 sm:px-6 lg:px-8 text-center">
         
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8">
+        <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8">
           <Sparkles className="w-3.5 h-3.5 text-[#D4A72C]" />
           <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-300">
             Start Your Journey Today
@@ -44,7 +44,7 @@ export function FinalCTASection() {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link href="/register" className="w-full sm:w-auto">
-            <Button className="w-full sm:w-auto bg-gradient-to-r from-[#C29322] to-[#E6BA3D] hover:opacity-95 text-[#020611] h-[60px] px-10 rounded-[14px] font-[800] text-[17px] shadow-[0_12px_40px_-8px_rgba(212,167,44,0.5)] border-none flex items-center justify-center gap-2.5 group transition-all hover:scale-105">
+            <Button className="btn-gold-gradient relative overflow-hidden w-full sm:w-auto text-[#020611] h-[60px] px-10 rounded-[14px] font-[800] text-[17px] shadow-[0_12px_40px_-8px_rgba(212,167,44,0.5)] border-none flex items-center justify-center gap-2.5 group">
               <span className="absolute inset-0 bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_ease-in-out]" />
               Create Free Account
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

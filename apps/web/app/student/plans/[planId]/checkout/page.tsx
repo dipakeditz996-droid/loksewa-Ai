@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Upload, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { apiClient } from "@/lib/api/client";
 
-export default function CheckoutPage({ params }: { params: { planId: string } }) {
+export default function CheckoutPage({ params }: { params: Promise<{ planId: string }> }) {
   const router = useRouter();
+  const unwrappedParams = use(params);
   const [plan, setPlan] = useState<any>(null);
   const [methods, setMethods] = useState<any[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<any>(null);
@@ -22,26 +24,21 @@ export default function CheckoutPage({ params }: { params: { planId: string } })
   
   useEffect(() => {
     fetchData();
-  }, [params.planId]);
+  }, [unwrappedParams.planId]);
 
   const fetchData = async () => {
     try {
       const [planRes, methodsRes] = await Promise.all([
-        fetch(`http://127.0.0.1:8000/api/subscriptions/plans/${params.planId}/`),
-        fetch(`http://127.0.0.1:8000/api/marketplace/payment-methods/`)
+        apiClient<any>(`/subscriptions/plans/${unwrappedParams.planId}/`),
+        apiClient<any[]>(`/marketplace/payment-methods/`)
       ]);
       
-      if (planRes.ok) {
-        setPlan(await planRes.json());
-      }
+      setPlan(planRes);
       
-      if (methodsRes.ok) {
-        const data = await methodsRes.json();
-        const activeMethods = data.filter((m: any) => m.is_active);
-        setMethods(activeMethods);
-        if (activeMethods.length > 0) {
-          setSelectedMethod(activeMethods[0]);
-        }
+      const activeMethods = methodsRes.filter((m: any) => m.is_active);
+      setMethods(activeMethods);
+      if (activeMethods.length > 0) {
+        setSelectedMethod(activeMethods[0]);
       }
     } catch (error) {
       console.error(error);
@@ -73,19 +70,12 @@ export default function CheckoutPage({ params }: { params: { planId: string } })
     if (note) formData.append('note', note);
     
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/subscriptions/payments/", {
+      await apiClient("/subscriptions/payments/", {
         method: "POST",
-        headers: {
-          'Authorization': 'Bearer test-token' // Placeholder
-        },
         body: formData,
       });
       
-      if (res.ok) {
-        router.push("/student/purchases?success=true");
-      } else {
-        alert("Payment submission failed. Please check your inputs.");
-      }
+      router.push("/student/purchases?success=true");
     } catch (error) {
       console.error(error);
       alert("An error occurred.");

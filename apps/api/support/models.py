@@ -71,6 +71,16 @@ class StudentProfile(models.Model):
         max_length=5, choices=LANGUAGE_CHOICES, default='en'
     )
 
+    # Focus / Do Not Disturb
+    # The student's PERSISTENT preference only. The temporary focus state that
+    # applies while an ExaminationAttempt is in progress is derived from the
+    # attempt itself and is deliberately NOT stored here, so finishing an exam
+    # restores whatever the student had chosen.
+    focus_mode_enabled = models.BooleanField(
+        default=False,
+        help_text="Reduce in-app distractions while studying and taking exams."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -110,6 +120,19 @@ class NotificationPreference(models.Model):
     # System
     security_alerts = models.BooleanField(default=True)
     account_notifications = models.BooleanField(default=True)
+
+    # Teacher - Content Reviews
+    question_reviews_inapp = models.BooleanField(default=True)
+    question_reviews_email = models.BooleanField(default=True)
+    study_material_reviews_inapp = models.BooleanField(default=True)
+    study_material_reviews_email = models.BooleanField(default=True)
+
+    # Teacher - Student Activity
+    student_activity_inapp = models.BooleanField(default=True)
+    student_activity_email = models.BooleanField(default=True)
+
+    # Teacher - System
+    teacher_system_email = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Notifications: {self.user.username}"

@@ -277,7 +277,7 @@ function ModelExamSessionContent() {
               </div>
 
               <h2 className="text-[18px] md:text-[20px] font-semibold text-[#0B2545] leading-relaxed mb-8">
-                {currentQ.questionText || (currentQ as any).question_text}
+                {(currentQ as any).questionText || (currentQ as any).question_text}
               </h2>
 
               <div className="space-y-3">

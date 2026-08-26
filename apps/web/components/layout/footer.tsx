@@ -57,6 +57,9 @@ export function Footer() {
   return (
     <footer className="relative overflow-hidden bg-slate-50 dark:bg-[#020610] border-t border-slate-200 dark:border-white/[0.06]">
 
+      {/* Top accent line */}
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4A72C]/40 to-transparent" />
+
       {/* ── Background atmosphere ─────────────── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Neural grid */}
@@ -106,7 +109,7 @@ export function Footer() {
               </div>
 
               {/* Support card */}
-              <div className="bg-white dark:bg-[#0A1520] border border-slate-200 dark:border-white/8 rounded-[14px] p-4">
+              <div className="card-hover bg-white dark:bg-[#0A1520] border border-slate-200 dark:border-white/8 rounded-[14px] p-4">
                 <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Need Help?</div>
                 <a
                   href="mailto:support@loksewaai.com"
@@ -174,6 +177,15 @@ export function Footer() {
                   >
                     <GraduationCap className="w-3.5 h-3.5" />
                     Teacher Portal
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/admin-login"
+                    className="flex items-center gap-1.5 text-[14px] text-red-500 hover:text-red-600 transition-colors"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Admin Portal
                   </Link>
                 </li>
               </ul>

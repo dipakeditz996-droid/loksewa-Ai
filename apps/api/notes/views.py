@@ -11,10 +11,18 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = StudyMaterial.objects.filter(status='published')
         
+        # Enforce Enrollment Access Control
+        # Students can only see materials belonging to courses they are enrolled in, 
+        # or materials not explicitly linked to a course.
+        from courses.models import Enrollment
+        active_courses = Enrollment.objects.filter(student=self.request.user, status='active').values_list('course_id', flat=True)
+        queryset = queryset.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
+        
         # Filtering
         exam = self.request.query_params.get('exam')
         subject = self.request.query_params.get('subject')
         topic = self.request.query_params.get('topic')
+        course = self.request.query_params.get('course')
         material_type = self.request.query_params.get('material_type')
         search = self.request.query_params.get('search')
         
@@ -24,6 +32,8 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(subject_id=subject)
         if topic:
             queryset = queryset.filter(topic_id=topic)
+        if course:
+            queryset = queryset.filter(course_id=course)
         if material_type:
             queryset = queryset.filter(material_type=material_type)
         if search:
@@ -33,7 +43,7 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(content__icontains=search)
             )
             
-        return queryset.order_by('-updated_at')
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -75,6 +85,11 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
     def bookmarks(self, request):
         bookmarks = StudentMaterialBookmark.objects.filter(student=request.user).values_list('material_id', flat=True)
         queryset = StudyMaterial.objects.filter(id__in=bookmarks, status='published')
+        
+        from courses.models import Enrollment
+        active_courses = Enrollment.objects.filter(student=self.request.user, status='active').values_list('course_id', flat=True)
+        queryset = queryset.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
+        
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -83,8 +98,10 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
         recent_progress = StudentMaterialProgress.objects.filter(student=request.user).order_by('-last_viewed_at')[:5]
         material_ids = [rp.material_id for rp in recent_progress]
         
-        # Preserve ordering based on last_viewed_at
         queryset = StudyMaterial.objects.filter(id__in=material_ids, status='published')
+        from courses.models import Enrollment
+        active_courses = Enrollment.objects.filter(student=self.request.user, status='active').values_list('course_id', flat=True)
+        queryset = queryset.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
         
         # Sort in Python to keep the recent order
         materials_dict = {m.id: m for m in queryset}
@@ -92,3 +109,109 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
         
         serializer = self.get_serializer(ordered_materials, many=True)
         return Response(serializer.data)
+
+# ==========================================
+# TEACHER / ADMIN WORKFLOW VIEWS
+# ==========================================
+from .serializers import TeacherStudyMaterialSerializer, AdminStudyMaterialSerializer
+
+class TeacherStudyMaterialViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = TeacherStudyMaterialSerializer
+
+    def get_queryset(self):
+        # Teachers only see their own materials
+        queryset = StudyMaterial.objects.filter(teacher=self.request.user)
+        
+        status_filter = self.request.query_params.get('status')
+        exam = self.request.query_params.get('exam')
+        subject = self.request.query_params.get('subject')
+        course = self.request.query_params.get('course')
+        search = self.request.query_params.get('search')
+
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        if exam:
+            queryset = queryset.filter(exam_id=exam)
+        if subject:
+            queryset = queryset.filter(subject_id=subject)
+        if course:
+            queryset = queryset.filter(course_id=course)
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(description__icontains=search)
+            )
+            
+        return queryset.order_by('-updated_at')
+
+    def perform_create(self, serializer):
+        serializer.save(teacher=self.request.user, status='draft')
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Returns material count grouped by status for the requesting teacher."""
+        from django.db.models import Count
+        qs = StudyMaterial.objects.filter(teacher=request.user)
+        counts = qs.values('status').annotate(count=Count('id'))
+        result = {item['status']: item['count'] for item in counts}
+        return Response({
+            'total': qs.count(),
+            'draft': result.get('draft', 0),
+            'pending_review': result.get('pending_review', 0),
+            'published': result.get('published', 0),
+            'changes_requested': result.get('changes_requested', 0),
+            'rejected': result.get('rejected', 0),
+        })
+
+    @action(detail=True, methods=['post'])
+    def submit(self, request, pk=None):
+        material = self.get_object()
+        if material.status in ['draft', 'changes_requested', 'rejected']:
+            material.status = 'pending_review'
+            material.save()
+            return Response({"status": "Submitted for review"})
+        return Response({"error": "Invalid status for submission"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        material = self.get_object()
+        material.pk = None
+        material.title = f"{material.title} (Copy)"
+        material.status = 'draft'
+        material.slug = "" # Will be regenerated
+        material.save()
+        return Response(TeacherStudyMaterialSerializer(material).data)
+
+
+class AdminStudyMaterialViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = AdminStudyMaterialSerializer
+    queryset = StudyMaterial.objects.all().order_by('-updated_at')
+
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        material = self.get_object()
+        if material.teacher == request.user:
+            return Response({"detail": "You cannot approve your own material."}, status=status.HTTP_403_FORBIDDEN)
+        material.status = 'published'
+        material.save()
+        return Response({"status": "Approved and published"})
+
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        material = self.get_object()
+        material.status = 'rejected'
+        material.review_note = request.data.get('note', '')
+        material.save()
+        return Response({"status": "Rejected"})
+
+    @action(detail=True, methods=['post'])
+    def request_changes(self, request, pk=None):
+        material = self.get_object()
+        material.status = 'changes_requested'
+        material.review_note = request.data.get('note', 'Please update the material and resubmit.')
+        material.save()
+        return Response({"status": "Changes requested"})
+
+        material.save()
+        return Response({"status": "Changes requested"})

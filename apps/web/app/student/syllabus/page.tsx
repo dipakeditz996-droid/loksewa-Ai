@@ -92,14 +92,15 @@ export default function SyllabusPage() {
     let total = 0;
     let completed = 0;
     
-    activeExam.subjects.forEach(subject => {
-      subject.units.forEach(unit => {
-        unit.topics.forEach(topic => {
+    activeExam.subjects?.forEach(subject => {
+      subject.units?.forEach(unit => {
+        unit.topics?.forEach(topic => {
           total++;
           if (topic.status === "completed") completed++;
         });
       });
     });
+
 
     return {
       totalTopics: total,
@@ -150,7 +151,7 @@ export default function SyllabusPage() {
                 key={exam.id} 
                 onClick={() => {
                   setActiveExamId(exam.id);
-                  setActiveSubjectId(exam.subjects[0]?.id || "");
+                  setActiveSubjectId(exam.subjects?.[0]?.id || "");
                 }}
                 className="font-medium text-[#0B2545]"
               >
@@ -253,7 +254,7 @@ export default function SyllabusPage() {
         <div className="lg:col-span-1 space-y-2">
           <div className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-3 px-2">Subjects</div>
           <div className="flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-            {activeExam.subjects.map((subject, index) => {
+            {activeExam.subjects?.map((subject, index) => {
               const isActive = subject.id === activeSubjectId;
               return (
                 <button
@@ -302,15 +303,15 @@ export default function SyllabusPage() {
           </div>
 
           {/* Units and Topics */}
-          {activeSubject.units.length > 0 ? (
+          {(activeSubject.units?.length || 0) > 0 ? (
             <div className="space-y-6">
-              {activeSubject.units.map(unit => (
+              {activeSubject.units?.map(unit => (
                 <div key={unit.id} className="bg-white rounded-[16px] border border-slate-200 shadow-sm overflow-hidden">
                   <div className="bg-slate-50/80 p-4 border-b border-slate-100">
                     <h3 className="text-[15px] font-bold text-[#0B2545]">{unit.title}</h3>
                   </div>
                   <div className="divide-y divide-slate-100">
-                    {unit.topics.map(topic => {
+                    {unit.topics?.map(topic => {
                       const isExpanded = expandedTopics[topic.id];
                       
                       // Status colors

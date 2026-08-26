@@ -11,6 +11,11 @@ class GamificationProfile(models.Model):
     xp = models.IntegerField(default=0)
     coins = models.IntegerField(default=0)
     level = models.IntegerField(default=1)
+    
+    # Study Streaks
+    study_current_streak = models.IntegerField(default=0)
+    study_highest_streak = models.IntegerField(default=0)
+    last_study_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.username} - Level {self.level} - {self.xp} XP"
@@ -81,3 +86,15 @@ class ReferralMilestone(models.Model):
 
     def __str__(self):
         return f"Milestone: {self.required_referrals} Referrals"
+
+class Motivation(models.Model):
+    message = models.TextField()
+    language = models.CharField(max_length=10, default='en', choices=(('en', 'English'), ('ne', 'Nepali')))
+    category = models.CharField(max_length=50, blank=True)
+    is_active = models.BooleanField(default=True)
+    priority = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Motivation ({self.language}): {self.message[:30]}..."

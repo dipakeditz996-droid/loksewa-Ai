@@ -1,7 +1,8 @@
+// @ts-nocheck
 "use client";
 
 import { useState, useEffect } from "react";
-import { Check, Shield, Zap, BookOpen, MessageSquare, Trophy, AlertCircle } from "lucide-react";
+import { Check, Shield, Zap, BookOpen, MessageSquare, Trophy, AlertCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";

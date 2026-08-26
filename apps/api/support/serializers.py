@@ -35,7 +35,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             'difficulty_preference', 'study_mode',
             'show_profile', 'show_leaderboard',
             'allow_comparisons', 'allow_activity_visibility',
-            'language',
+            'language', 'focus_mode_enabled',
         ]
         read_only_fields = ['id']
 
@@ -50,6 +50,18 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             instance.user.last_name = user_data['last_name']
         instance.user.save()
         return super().update(instance, validated_data)
+
+
+class FocusModePreferenceSerializer(serializers.ModelSerializer):
+    """
+    Minimal read/write serializer for the student's persistent Focus Mode
+    preference. Separate from StudentProfileSerializer so the header toggle
+    does not round-trip the whole profile payload on every click.
+    """
+
+    class Meta:
+        model = StudentProfile
+        fields = ['focus_mode_enabled']
 
 
 class ChangePasswordSerializer(serializers.Serializer):

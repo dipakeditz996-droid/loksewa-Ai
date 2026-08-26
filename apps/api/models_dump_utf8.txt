@@ -1,0 +1,160 @@
+
+APP: core | MODEL: User
+
+APP: core | MODEL: TeacherProfile
+
+APP: core | MODEL: Notification
+
+APP: exams | MODEL: ExamCategory
+
+APP: exams | MODEL: Exam
+
+APP: exams | MODEL: Paper
+
+APP: exams | MODEL: Subject
+
+APP: exams | MODEL: Chapter
+
+APP: exams | MODEL: Topic
+
+APP: exams | MODEL: UserTopicProgress
+
+APP: exams | MODEL: Question
+
+APP: exams | MODEL: QuestionCollection
+
+APP: exams | MODEL: CollectionRule
+
+APP: exams | MODEL: AIClassificationSuggestion
+
+APP: exams | MODEL: QuestionSet
+
+APP: exams | MODEL: QuestionSetQuestion
+
+APP: exams | MODEL: PracticeSession
+
+APP: exams | MODEL: QuestionAttempt
+
+APP: exams | MODEL: Bookmark
+
+APP: exams | MODEL: ModelExam
+
+APP: exams | MODEL: ModelExamAttempt
+
+APP: exams | MODEL: ModelExamAttemptAnswer
+
+APP: exams | MODEL: SubjectivePracticeSet
+
+APP: exams | MODEL: SubjectiveModelExam
+
+APP: exams | MODEL: SubjectiveAttempt
+
+APP: exams | MODEL: SubjectiveAnswer
+
+APP: exams | MODEL: Evaluation
+
+APP: exams | MODEL: Annotation
+
+APP: exams | MODEL: VideoFeedback
+
+APP: exams | MODEL: Examination
+
+APP: exams | MODEL: ExaminationQuestion
+
+APP: exams | MODEL: ExaminationEligibility
+
+APP: exams | MODEL: ExaminationAttempt
+
+APP: exams | MODEL: StudentAnswer
+
+APP: gamification | MODEL: GamificationProfile
+
+APP: gamification | MODEL: ReferralSetting
+
+APP: gamification | MODEL: Referral
+
+APP: gamification | MODEL: XPTransaction
+
+APP: gamification | MODEL: ReferralMilestone
+
+APP: gamification | MODEL: Motivation
+
+APP: notes | MODEL: StudyMaterial
+
+APP: notes | MODEL: StudentMaterialProgress
+
+APP: notes | MODEL: StudentMaterialBookmark
+
+APP: marketplace | MODEL: Product
+
+APP: marketplace | MODEL: PaymentMethod
+
+APP: marketplace | MODEL: PaymentSubmission
+
+APP: marketplace | MODEL: Purchase
+
+APP: games | MODEL: GameProfile
+
+APP: games | MODEL: GameMatch
+
+APP: games | MODEL: GameQuestion
+
+APP: games | MODEL: GameAnswer
+
+APP: games | MODEL: SurvivalGame
+
+APP: games | MODEL: SurvivalAnswer
+
+APP: study_plan | MODEL: StudyPlanTemplate
+
+APP: study_plan | MODEL: StudyPlan
+
+APP: study_plan | MODEL: StudyTask
+
+APP: study_plan | MODEL: StudyPlanTemplateTask
+
+APP: administration | MODEL: AuditLog
+
+APP: administration | MODEL: CSVImport
+
+APP: ai_tutor | MODEL: Conversation
+
+APP: ai_tutor | MODEL: Message
+
+APP: ai_tutor | MODEL: TutorUsage
+
+APP: support | MODEL: StudentProfile
+
+APP: support | MODEL: NotificationPreference
+
+APP: support | MODEL: SupportTicket
+
+APP: support | MODEL: SupportMessage
+
+APP: support | MODEL: SupportAttachment
+
+APP: support | MODEL: FAQ
+
+APP: support | MODEL: FAQFeedback
+
+APP: subscriptions | MODEL: SubscriptionPlan
+
+APP: subscriptions | MODEL: Subscription
+
+APP: subscriptions | MODEL: SubscriptionPayment
+
+APP: subscriptions | MODEL: Notification
+
+APP: subscriptions | MODEL: Invoice
+
+APP: courses | MODEL: Course
+
+APP: courses | MODEL: Enrollment
+
+APP: courses | MODEL: CourseApplication
+
+APP: courses | MODEL: TeacherCourseAssignment
+
+APP: courses | MODEL: TeacherStudentNote
+
+APP: courses | MODEL: TeacherMessage

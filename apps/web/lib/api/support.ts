@@ -45,10 +45,10 @@ export interface HelpCategory {
 export const supportApi = {
   // Tickets
   getTickets: () =>
-    apiClient<SupportTicket[]>("/student/support/tickets/"),
+    apiClient<SupportTicket[]>("/support/support/tickets/"),
 
   getTicket: (id: number) =>
-    apiClient<SupportTicket>(`/student/support/tickets/${id}/`),
+    apiClient<SupportTicket>(`/support/support/tickets/${id}/`),
 
   createTicket: (data: {
     subject: string;
@@ -59,22 +59,22 @@ export const supportApi = {
     related_question?: string;
     related_page?: string;
   }) =>
-    apiClient<SupportTicket>("/student/support/tickets/", {
+    apiClient<SupportTicket>("/support/support/tickets/", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   closeTicket: (id: number) =>
-    apiClient<SupportTicket>(`/student/support/tickets/${id}/close/`, {
+    apiClient<SupportTicket>(`/support/support/tickets/${id}/close/`, {
       method: "PATCH",
     }),
 
   // Messages
   getMessages: (ticketId: number) =>
-    apiClient<SupportMessage[]>(`/student/support/tickets/${ticketId}/messages/`),
+    apiClient<SupportMessage[]>(`/support/support/tickets/${ticketId}/messages/`),
 
   sendMessage: (ticketId: number, message: string) =>
-    apiClient<SupportMessage>(`/student/support/tickets/${ticketId}/messages/`, {
+    apiClient<SupportMessage>(`/support/support/tickets/${ticketId}/messages/`, {
       method: "POST",
       body: JSON.stringify({ message }),
     }),
@@ -85,16 +85,16 @@ export const supportApi = {
     if (params?.search) searchParams.set("search", params.search);
     if (params?.category) searchParams.set("category", params.category);
     const query = searchParams.toString();
-    return apiClient<FAQ[]>(`/student/help/faqs/${query ? `?${query}` : ""}`);
+    return apiClient<FAQ[]>(`/support/help/faqs/${query ? `?${query}` : ""}`);
   },
 
   sendFAQFeedback: (faqId: number, is_helpful: boolean, feedback_text?: string) =>
-    apiClient<{ detail: string }>(`/student/help/faqs/${faqId}/feedback/`, {
+    apiClient<{ detail: string }>(`/support/help/faqs/${faqId}/feedback/`, {
       method: "POST",
       body: JSON.stringify({ is_helpful, feedback_text: feedback_text || "" }),
     }),
 
   // Help categories
   getHelpCategories: () =>
-    apiClient<HelpCategory[]>("/student/help/categories/"),
+    apiClient<HelpCategory[]>("/support/help/categories/"),
 };

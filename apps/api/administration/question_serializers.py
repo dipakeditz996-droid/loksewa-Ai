@@ -3,11 +3,27 @@ from exams.models import Question, Topic
 
 class AdminQuestionSerializer(serializers.ModelSerializer):
     topic_name = serializers.CharField(source='topic.name', read_only=True)
-    chapter_name = serializers.CharField(source='topic.Chapter.title', read_only=True)
-    subject_name = serializers.CharField(source='topic.Chapter.subject.name', read_only=True)
-    position_name = serializers.CharField(source='topic.Chapter.subject.exam.name', read_only=True)
-    category_name = serializers.CharField(source='topic.Chapter.subject.exam.category.name', read_only=True)
+    chapter_name = serializers.CharField(source='topic.chapter.title', read_only=True)
+    subject_name = serializers.CharField(source='topic.chapter.subject.name', read_only=True)
+    position_name = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
     usage_count = serializers.IntegerField(read_only=True)
+
+    def _question_exam(self, obj):
+        # Subject links up via the current `paper` FK, falling back to the
+        # legacy `exam` FK for subjects not yet migrated onto a Paper.
+        subject = obj.topic.chapter.subject
+        if subject.paper_id:
+            return subject.paper.exam
+        return subject.exam
+
+    def get_position_name(self, obj):
+        exam = self._question_exam(obj)
+        return exam.name if exam else None
+
+    def get_category_name(self, obj):
+        exam = self._question_exam(obj)
+        return exam.category.name if exam and exam.category_id else None
     
     class Meta:
         model = Question

@@ -118,6 +118,21 @@ export interface AdminRecentOrder {
   createdAt: string;
 }
 
+export interface AdminRole {
+  id: string;
+  name: string;
+  description: string;
+  users: number;
+  color: string;
+  type: string;
+}
+
+export interface AdminRolesResponse {
+  roles: AdminRole[];
+  total: number;
+  totalUsers: number;
+}
+
 export interface AdminMarketplaceOverview {
   totalProducts: number;
   activeProducts: number;
@@ -126,6 +141,30 @@ export interface AdminMarketplaceOverview {
   completedOrders: number;
   revenue: number;
   recentOrders: AdminRecentOrder[];
+}
+
+export interface AdminEvaluation {
+  id: number;
+  student: string;
+  studentId: number;
+  email: string;
+  question: string;
+  questionId: number;
+  marks: number;
+  status: string;
+  submittedAt: string;
+  wordCount: number;
+  evaluator: string | null;
+  marksObtained: number | null;
+  evaluatedAt: string | null;
+}
+
+export interface AdminEvaluationsResponse {
+  evaluations: AdminEvaluation[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 // ===== API FUNCTIONS =====
@@ -154,7 +193,7 @@ export const adminApi = {
   },
 
   getExamsOverview: async (): Promise<AdminExamsOverview> => {
-    return apiClient<AdminExamsOverview>("/admin/exams/");
+    return apiClient<AdminExamsOverview>("/admin/exams-overview/");
   },
 
   getAITutorOverview: async (): Promise<AdminAITutorOverview> => {
@@ -163,5 +202,35 @@ export const adminApi = {
 
   getMarketplaceOverview: async (): Promise<AdminMarketplaceOverview> => {
     return apiClient<AdminMarketplaceOverview>("/admin/marketplace/");
+  },
+
+  getAdministrators: async (params?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminUsersResponse> => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminUsersResponse>(`/admin/admins/?${query.toString()}`);
+  },
+
+  getRoles: async (): Promise<AdminRolesResponse> => {
+    return apiClient<AdminRolesResponse>("/admin/roles/");
+  },
+
+  getEvaluations: async (params?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminEvaluationsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminEvaluationsResponse>(`/admin/evaluations/?${query.toString()}`);
   },
 };

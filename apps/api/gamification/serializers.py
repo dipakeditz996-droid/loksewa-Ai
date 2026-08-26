@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction, ReferralMilestone
+from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction, ReferralMilestone, Motivation
 
 User = get_user_model()
 
@@ -8,7 +8,7 @@ class GamificationProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     class Meta:
         model = GamificationProfile
-        fields = ['referral_code', 'xp', 'coins', 'level', 'username']
+        fields = ['referral_code', 'xp', 'coins', 'level', 'username', 'study_current_streak', 'study_highest_streak', 'last_study_date']
 
 class ReferralSettingSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,3 +33,8 @@ class ReferralSerializer(serializers.ModelSerializer):
             settings = ReferralSetting.get_settings()
             return settings.referrer_xp_reward
         return 0
+
+class MotivationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Motivation
+        fields = '__all__'

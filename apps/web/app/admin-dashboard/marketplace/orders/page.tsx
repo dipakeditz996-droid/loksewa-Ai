@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Search, Filter, ShoppingCart, CheckCircle2, 
   MoreHorizontal, Eye, Ban, Download, RotateCcw
@@ -14,39 +14,62 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockOrders } from "@/lib/mock/admin-marketplace";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { marketplaceApi, Purchase } from "@/lib/api/marketplace";
 
 export default function MarketplaceOrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredOrders = mockOrders.filter(o => {
+  useEffect(() => {
+    const fetchPurchases = async () => {
+      try {
+        const data = await marketplaceApi.adminGetPurchases();
+        setPurchases(data);
+      } catch (error) {
+        console.error("Failed to fetch purchases:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPurchases();
+  }, []);
+
+  const filteredOrders = purchases.filter(o => {
+    const studentName = o.payment_submission_details?.student_details?.first_name 
+      ? `${o.payment_submission_details.student_details.first_name} ${o.payment_submission_details.student_details.last_name}`
+      : o.payment_submission_details?.student_details?.username || "Unknown";
+      
     const matchesSearch = 
-      o.orderId.toLowerCase().includes(search.toLowerCase()) || 
-      o.student.name.toLowerCase().includes(search.toLowerCase()) ||
-      o.productName.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "All" || o.orderStatus === statusFilter;
+      o.id.toString().includes(search) || 
+      studentName.toLowerCase().includes(search.toLowerCase()) ||
+      (o.product_details?.title || "").toLowerCase().includes(search.toLowerCase());
+      
+    const matchesStatus = statusFilter === "All" || o.status.toLowerCase() === statusFilter.toLowerCase();
     return matchesSearch && matchesStatus;
   });
 
   const getOrderStatusColor = (status: string) => {
-    switch(status) {
-      case "Pending": return "bg-slate-100 text-slate-700 border-slate-200";
-      case "Processing": return "bg-blue-100 text-blue-700 border-blue-200";
-      case "Completed": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "Cancelled": return "bg-red-100 text-red-700 border-red-200";
+    switch(status.toUpperCase()) {
+      case "PENDING": return "bg-slate-100 text-slate-700 border-slate-200";
+      case "PROCESSING": return "bg-blue-100 text-blue-700 border-blue-200";
+      case "ACTIVE":
+      case "COMPLETED": return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "REVOKED":
+      case "CANCELLED": return "bg-red-100 text-red-700 border-red-200";
       default: return "bg-slate-100 text-slate-600 border-slate-200";
     }
   };
 
   const getPaymentStatusColor = (status: string) => {
-    switch(status) {
-      case "Pending": return "text-slate-500 bg-slate-100";
-      case "Submitted": return "text-amber-600 bg-amber-100";
-      case "Approved": return "text-emerald-600 bg-emerald-100";
-      case "Rejected": return "text-red-600 bg-red-100";
-      case "Refunded": return "text-purple-600 bg-purple-100";
+    switch(status.toUpperCase()) {
+      case "PENDING": return "text-slate-500 bg-slate-100";
+      case "SUBMITTED": return "text-amber-600 bg-amber-100";
+      case "APPROVED": return "text-emerald-600 bg-emerald-100";
+      case "REJECTED": return "text-red-600 bg-red-100";
+      case "REFUNDED": return "text-purple-600 bg-purple-100";
       default: return "text-slate-500 bg-slate-100";
     }
   };
@@ -72,10 +95,8 @@ export default function MarketplaceOrdersPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="All">All Statuses</option>
-            <option value="Pending">Pending</option>
-            <option value="Processing">Processing</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
+            <option value="ACTIVE">Active</option>
+            <option value="REVOKED">Revoked</option>
           </select>
           <Button variant="outline" className="bg-white gap-2 px-3">
             <Filter className="w-4 h-4" /> <span className="hidden sm:inline">More Filters</span>
@@ -98,7 +119,13 @@ export default function MarketplaceOrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.length === 0 ? (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-32 text-center text-slate-500">
+                    Loading orders...
+                  </TableCell>
+                </TableRow>
+              ) : filteredOrders.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-32 text-center text-slate-500">
                     <ShoppingCart className="w-8 h-8 text-slate-300 mx-auto mb-2" />
@@ -107,42 +134,44 @@ export default function MarketplaceOrdersPage() {
                 </TableRow>
               ) : (
                 filteredOrders.map((order) => {
-                  const studentInitials = order.student.name.split(" ").map(n => n[0]).join("").substring(0,2).toUpperCase();
+                  const studentDetails = order.payment_submission_details?.student_details;
+                  const studentName = studentDetails?.first_name 
+                    ? `${studentDetails.first_name} ${studentDetails.last_name}`
+                    : studentDetails?.username || "Unknown";
+                  const studentEmail = studentDetails?.email || "";
+                  const studentInitials = studentName.split(" ").map((n: string) => n[0]).join("").substring(0,2).toUpperCase();
+                  
                   return (
                     <TableRow key={order.id} className="hover:bg-slate-50/80">
                       <TableCell>
-                        <div className="font-mono text-xs font-semibold text-[#0B2545]">{order.orderId}</div>
-                        <div className="text-[11px] text-slate-400 mt-1">{new Date(order.createdAt).toLocaleDateString()}</div>
+                        <div className="font-mono text-xs font-semibold text-[#0B2545]">#{order.id}</div>
+                        <div className="text-[11px] text-slate-400 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Avatar className="h-7 w-7 border border-slate-200">
-                            {order.student.avatar ? (
-                              <AvatarImage src={order.student.avatar} alt={order.student.name} />
-                            ) : (
-                              <AvatarFallback className="bg-slate-100 text-slate-600 text-[10px] font-bold">{studentInitials}</AvatarFallback>
-                            )}
+                            <AvatarFallback className="bg-slate-100 text-slate-600 text-[10px] font-bold">{studentInitials}</AvatarFallback>
                           </Avatar>
                           <div className="flex flex-col">
-                            <span className="font-semibold text-slate-700 text-xs">{order.student.name}</span>
-                            <span className="text-[10px] text-slate-500 truncate max-w-[120px]">{order.student.email}</span>
+                            <span className="font-semibold text-slate-700 text-xs">{studentName}</span>
+                            <span className="text-[10px] text-slate-500 truncate max-w-[120px]">{studentEmail}</span>
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium text-sm text-[#0B2545] line-clamp-2">{order.productName}</span>
+                        <span className="font-medium text-sm text-[#0B2545] line-clamp-2">{order.product_details?.title || "Unknown Product"}</span>
                       </TableCell>
                       <TableCell className="text-right font-bold text-slate-800">
-                        Rs. {order.amount.toLocaleString()}
+                        Rs. {Number(order.amount_paid).toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${getPaymentStatusColor(order.paymentStatus)}`}>
-                          {order.paymentStatus}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${getPaymentStatusColor(order.payment_submission_details?.status || "UNKNOWN")}`}>
+                          {order.payment_submission_details?.status || "UNKNOWN"}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getOrderStatusColor(order.orderStatus)}`}>
-                          {order.orderStatus}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getOrderStatusColor(order.status)}`}>
+                          {order.status}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -160,17 +189,16 @@ export default function MarketplaceOrdersPage() {
                               <Download className="mr-2 h-4 w-4" /> Download Invoice
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {order.orderStatus !== "Completed" && (
+                            {order.status !== "ACTIVE" && (
                               <DropdownMenuItem className="cursor-pointer text-emerald-600 focus:text-emerald-600">
-                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Completed
+                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Active
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="cursor-pointer text-amber-600 focus:text-amber-600">
-                              <RotateCcw className="mr-2 h-4 w-4" /> Process Refund
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600">
-                              <Ban className="mr-2 h-4 w-4" /> Cancel Order
-                            </DropdownMenuItem>
+                            {order.status === "ACTIVE" && (
+                              <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600">
+                                <Ban className="mr-2 h-4 w-4" /> Revoke Access
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>

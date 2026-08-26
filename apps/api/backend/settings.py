@@ -13,9 +13,59 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 from datetime import timedelta
 import os
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+# --- ENVIRONMENT VARIABLE LOADING --------------------------------------------
+# Minimal, dependency-free .env loader (no new third-party package required).
+#
+# Search order:
+#   1. apps/api/.env          (backend-specific, preferred)
+#   2. <repo root>/.env       (shared monorepo values)
+#
+# Real process environment variables ALWAYS win over .env file values, so
+# hosting platforms (Render / Railway / Fly / Docker / systemd) work with no
+# .env file present at all. Never commit a .env file - see .env.example.
+
+def _load_env_file(path):
+    """Populate os.environ from a KEY=VALUE file, without overriding real env."""
+    try:
+        if not path.is_file():
+            return
+        content = path.read_text(encoding='utf-8')
+    except (OSError, UnicodeDecodeError):
+        return
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith('export '):
+            line = line[len('export '):].lstrip()
+        key, separator, value = line.partition('=')
+        if not separator:
+            continue
+        key = key.strip()
+        value = value.strip()
+        # Strip a single matching pair of surrounding quotes.
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+for _env_path in (BASE_DIR / '.env', BASE_DIR.parent.parent / '.env'):
+    _load_env_file(_env_path)
+
+
+def _env_bool(name, default=False):
+    """Read a boolean env var. Unset OR empty falls back to `default`."""
+    raw = (os.environ.get(name) or '').strip()
+    if not raw:
+        return default
+    return raw.lower() in ('1', 'true', 'yes', 'on')
 
 
 # Quick-start development settings - unsuitable for production
@@ -23,15 +73,29 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
 # Set DJANGO_SECRET_KEY environment variable in production.
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-local-dev-only-do-not-use-in-production'
-)
+INSECURE_DEFAULT_SECRET_KEY = 'django-insecure-local-dev-only-do-not-use-in-production'
+# An empty value in .env is treated as "not configured".
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or INSECURE_DEFAULT_SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+# DJANGO_DEBUG is the canonical name; DEBUG is accepted as an alias.
+DEBUG = _env_bool('DJANGO_DEBUG', _env_bool('DEBUG', False))
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost 127.0.0.1').split()
+# DJANGO_ALLOWED_HOSTS is space-separated; ALLOWED_HOSTS is comma-separated.
+if (os.environ.get('DJANGO_ALLOWED_HOSTS') or '').strip():
+    ALLOWED_HOSTS = os.environ['DJANGO_ALLOWED_HOSTS'].split()
+elif (os.environ.get('ALLOWED_HOSTS') or '').strip():
+    ALLOWED_HOSTS = [h.strip() for h in os.environ['ALLOWED_HOSTS'].split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# Fail loudly instead of shipping the development secret key to production.
+if not DEBUG and SECRET_KEY == INSECURE_DEFAULT_SECRET_KEY:
+    raise RuntimeError(
+        'DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is False. '
+        'Generate one with: python -c "from django.core.management.utils '
+        'import get_random_secret_key; print(get_random_secret_key())"'
+    )
 
 
 # Application definition
@@ -64,6 +128,7 @@ INSTALLED_APPS = [
     'support',
     'subscriptions',
     'courses',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -75,6 +140,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+AUTHENTICATION_BACKENDS = [
+    'core.backends.EmailOrUsernameModelBackend',
+    'django.contrib.auth.backends.ModelBackend',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -99,13 +169,87 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
+#
+# ARCHITECTURE
+#   Next.js  ->  Django REST API  ->  Supabase PostgreSQL
+#   The Django ORM is the ONLY database abstraction layer. Next.js never
+#   talks to PostgreSQL directly and never receives database credentials.
+#
+# CONFIGURATION
+#   DATABASE_URL  Supabase transaction pooler (port 6543, pgbouncer=true).
+#                 Used by the running web/API process.
+#   DIRECT_URL    Supabase direct session connection (port 5432).
+#                 Used automatically for schema commands (migrate, test, ...),
+#                 because PgBouncer's transaction pooling cannot run them
+#                 reliably. Set DJANGO_DB_USE_DIRECT=1 to force it.
+#
+#   If DATABASE_URL is NOT set, Django falls back to the local SQLite file so
+#   a fresh clone runs with zero credentials. SQLite is a DEVELOPMENT-ONLY
+#   fallback - production must set DATABASE_URL to PostgreSQL.
+#   Run `python manage.py dbcheck` to see which backend is actually active.
+import dj_database_url
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+DIRECT_URL = os.environ.get('DIRECT_URL', '').strip()
+
+# Commands that alter schema or otherwise need a session-scoped connection.
+_SCHEMA_COMMANDS = {
+    'migrate', 'makemigrations', 'squashmigrations', 'sqlmigrate', 'sqlflush',
+    'showmigrations', 'test', 'dbshell', 'inspectdb', 'createcachetable',
 }
+_running_schema_command = len(sys.argv) > 1 and sys.argv[1] in _SCHEMA_COMMANDS
+_force_direct = _env_bool('DJANGO_DB_USE_DIRECT')
+
+_active_db_url = DATABASE_URL
+if 'test' in sys.argv:
+    _active_db_url = None
+elif DIRECT_URL and (_running_schema_command or _force_direct):
+    _active_db_url = DIRECT_URL
+
+if _active_db_url:
+    _is_postgres = _active_db_url.startswith(
+        ('postgres://', 'postgresql://', 'postgis://')
+    )
+    # Supabase's transaction pooler runs PgBouncer, which does its own
+    # connection pooling and does not support server-side cursors.
+    _is_pooled = _is_postgres and (
+        ':6543' in _active_db_url or 'pgbouncer=true' in _active_db_url
+    )
+    # Supabase's copied connection URI carries `?pgbouncer=true`, which is a
+    # Prisma flag. dj-database-url would forward it to psycopg2 as a connection
+    # option and psycopg2 rejects it ("invalid connection option"). Strip it;
+    # the equivalent behaviour is applied below via DISABLE_SERVER_SIDE_CURSORS.
+    if 'pgbouncer' in _active_db_url:
+        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+        _parts = urlsplit(_active_db_url)
+        _query = [(k, v) for k, v in parse_qsl(_parts.query) if k != 'pgbouncer']
+        _active_db_url = urlunsplit(_parts._replace(query=urlencode(_query)))
+
+    DATABASES = {
+        'default': dj_database_url.parse(
+            _active_db_url,
+            conn_max_age=0 if _is_pooled else 600,
+            conn_health_checks=not _is_pooled,
+            # Supabase requires TLS. This adds sslmode=require to OPTIONS;
+            # no certificate is bundled or hardcoded.
+            ssl_require=_is_postgres,
+        )
+    }
+    if _is_pooled:
+        DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+else:
+    if not DEBUG and 'test' not in sys.argv:
+        raise RuntimeError(
+            "DATABASE_URL must be set in production. "
+            "Refusing to silently fall back to SQLite."
+        )
+    # Local development fallback only.
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -136,6 +280,8 @@ TIME_ZONE = 'UTC'
 
 USE_I18N = True
 
+# Store all timestamps in UTC. PostgreSQL columns are created as
+# `timestamp with time zone`, matching Supabase's default expectations.
 USE_TZ = True
 
 
@@ -145,7 +291,24 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # --- DRF & CORS CONFIGURATION ---
-CORS_ALLOW_ALL_ORIGINS = True
+# Set CORS_ALLOWED_ORIGINS (comma-separated) in production, e.g.
+#   CORS_ALLOWED_ORIGINS="https://app.example.com"
+# When it is unset, all origins are allowed (previous development behaviour).
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+if not CORS_ALLOWED_ORIGINS and not DEBUG:
+    raise RuntimeError("CORS_ALLOWED_ORIGINS must be explicitly set in production.")
+CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -161,6 +324,8 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
+    # Defaults to SECRET_KEY when JWT_SECRET is not provided.
+    'SIGNING_KEY': os.environ.get('JWT_SECRET') or SECRET_KEY,
 }
 
 AUTH_USER_MODEL = 'core.User'
@@ -169,3 +334,37 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# --- CLOUD STORAGE CONFIGURATION ---
+# Media (avatars, thumbnails, study-material PDFs, student uploads) lives in
+# Cloudflare R2 via Django's storage abstraction - NEVER inside PostgreSQL.
+S3_ENDPOINT_URL = (os.environ.get('S3_ENDPOINT') or '').strip()
+
+if S3_ENDPOINT_URL:
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    AWS_ACCESS_KEY_ID = os.environ.get('S3_ACCESS_KEY')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('S3_SECRET_KEY')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('S3_BUCKET')
+    AWS_S3_ENDPOINT_URL = S3_ENDPOINT_URL
+    AWS_S3_REGION_NAME = os.environ.get('S3_REGION', 'auto')
+    
+    # Optional: configure custom domain if serving through CDN
+    S3_PUBLIC_DOMAIN = os.environ.get('S3_PUBLIC_DOMAIN')
+    if S3_PUBLIC_DOMAIN:
+        AWS_S3_CUSTOM_DOMAIN = S3_PUBLIC_DOMAIN
+    else:
+        AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.r2.cloudflarestorage.com"
+        
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_QUERYSTRING_AUTH = False  # Disable signed URLs for public files
+
+# --- PRODUCTION SECURITY HARDENING ---
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_SSL_REDIRECT = _env_bool('DJANGO_SECURE_SSL_REDIRECT', False)

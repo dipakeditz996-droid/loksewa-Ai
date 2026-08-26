@@ -16,7 +16,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-const TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+const TYPE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
   registration: { icon: UserPlus, color: "text-emerald-600", bg: "bg-emerald-50" },
   exam_attempt: { icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
   order: { icon: ShoppingBag, color: "text-amber-600", bg: "bg-amber-50" },
@@ -24,7 +24,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: 
   content: { icon: BookOpen, color: "text-slate-600", bg: "bg-slate-100" },
 };
 
-const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+const STATUS_CONFIG: Record<string, { icon: any; color: string; label: string }> = {
   success: { icon: CheckCircle2, color: "text-emerald-500", label: "Success" },
   submitted: { icon: CheckCircle2, color: "text-blue-500", label: "Submitted" },
   "in-progress": { icon: Clock, color: "text-amber-500", label: "In Progress" },

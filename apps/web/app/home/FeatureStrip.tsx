@@ -56,32 +56,26 @@ const features = [
 
 export function FeatureStrip() {
   return (
-    <section className="relative z-10 -mt-2 py-0">
-      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white/80 dark:bg-[#040B14]/80 backdrop-blur-xl border border-slate-200 dark:border-white/[0.06] rounded-[20px] shadow-[0_4px_30px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_40px_rgba(0,0,0,0.5)] overflow-hidden">
-          <div className="flex overflow-x-auto scrollbar-none">
-            {features.map((f, i) => {
-              const Icon = f.icon;
-              return (
-                <div
-                  key={f.title}
-                  className={`flex-1 min-w-[160px] flex flex-col items-center gap-2.5 px-6 py-5 group cursor-default transition-all hover:bg-slate-50 dark:hover:bg-white/[0.02] ${
-                    i < features.length - 1
-                      ? "border-r border-slate-100 dark:border-white/[0.04]"
-                      : ""
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-[10px] ${f.bg} border ${f.border} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <Icon className={`w-4.5 h-4.5 ${f.color}`} />
-                  </div>
-                  <div className="text-center">
-                    <div className="text-[13px] font-[700] text-slate-800 dark:text-white leading-tight">{f.title}</div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">{f.sub}</div>
-                  </div>
+    <section className="relative z-20 -mt-10 py-0">
+      <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {features.map((f) => {
+            const Icon = f.icon;
+            return (
+              <div
+                key={f.title}
+                className="card-hover flex flex-col items-center text-center gap-2.5 px-4 py-5 rounded-[18px] bg-white/90 dark:bg-white/[0.05] backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_-12px_rgba(11,37,69,0.16)] dark:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6)] cursor-default"
+              >
+                <div className={`w-10 h-10 rounded-[11px] ${f.bg} border ${f.border} flex items-center justify-center transition-transform duration-300`}>
+                  <Icon className={`w-[18px] h-[18px] ${f.color}`} />
                 </div>
-              );
-            })}
-          </div>
+                <div>
+                  <div className="text-[13px] font-[700] text-slate-800 dark:text-white leading-tight">{f.title}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">{f.sub}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

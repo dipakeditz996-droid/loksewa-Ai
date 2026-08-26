@@ -85,7 +85,7 @@ export const studentExamsApi = {
   },
   
   saveAnswer: async (attemptId: number, questionId: number, selectedOption: string | null) => {
-    return await apiClient(`/student/exam-attempts/${attemptId}/answers/`, {
+    return await apiClient(`/student/exam-attempts/${attemptId}/answer/`, {
       method: 'POST',
       body: JSON.stringify({
         question: questionId,

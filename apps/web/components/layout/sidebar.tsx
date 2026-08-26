@@ -24,7 +24,6 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { mockUsers } from "@/lib/mock/dashboard-data";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -38,11 +37,12 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const pathname = usePathname();
   const { user: authUser } = useAuth();
   
-  // Use real user if available, fallback to mock user for structure
-  const user = authUser ? { name: authUser.name ? authUser.name : authUser.username } : mockUsers[role];
+  // Use real user if available, fallback to Guest for unauthenticated renders
+  const user = authUser ? { name: authUser.name ? authUser.name : authUser.username } : { name: "Guest" };
 
   const studentLinks = [
     { href: "/student", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/student/courses", label: "My Courses", icon: BookOpen },
     { href: "/student/study-plan", label: "My Study Plan", icon: Target },
     { href: "/student/syllabus", label: "Syllabus", icon: BookOpen },
     { href: "/student/practice", label: "Practice", icon: Trophy },
@@ -79,7 +79,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
         { href: "/teacher/questions", label: "Question Bank", icon: Target },
         { href: "/teacher/practice-sets", label: "Practice Sets", icon: Trophy },
         { href: "/teacher/mock-exams", label: "Mock Exams", icon: FileText },
-        { href: "/teacher/materials", label: "Study Materials", icon: Bookmark },
+        { href: "/teacher/study-materials", label: "Study Materials", icon: Bookmark },
       ]
     },
     {
@@ -259,13 +259,19 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
 
           <div className="flex items-center gap-3 bg-white/5 p-3 rounded-[12px] border border-white/10 mt-2">
             <Avatar className="h-10 w-10 border border-[#D4A72C]/30 bg-[#0A1118]">
-              <AvatarFallback className="bg-transparent text-[#D4A72C] font-bold">
-                {user.name.charAt(0)}
-              </AvatarFallback>
+              {authUser?.avatar ? (
+                <AvatarImage src={authUser.avatar} alt={user.name} className="object-cover" />
+              ) : (
+                <AvatarFallback className="bg-transparent text-[#D4A72C] font-bold">
+                  {user.name.charAt(0)}
+                </AvatarFallback>
+              )}
             </Avatar>
             <div className="flex flex-col overflow-hidden">
               <span className="text-[13px] font-bold text-white truncate">{user.name}</span>
-              <span className="text-[11px] font-medium text-slate-400 truncate">Section Officer</span>
+              <span className="text-[11px] font-medium text-slate-400 truncate capitalize">
+                {authUser?.role?.replace("-", " ") || "User"}
+              </span>
             </div>
           </div>
         </div>

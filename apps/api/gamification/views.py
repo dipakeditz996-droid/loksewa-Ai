@@ -1,10 +1,13 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
+from rest_framework import viewsets
 from django.db.models import Sum
+from django.utils import timezone
+import hashlib
 
-from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction
-from .serializers import GamificationProfileSerializer, ReferralSettingSerializer, ReferralSerializer, XPTransactionSerializer
+from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction, Motivation
+from .serializers import GamificationProfileSerializer, ReferralSettingSerializer, ReferralSerializer, XPTransactionSerializer, MotivationSerializer
 from .services import get_or_create_profile, award_xp
 
 @api_view(['GET'])
@@ -107,3 +110,49 @@ def admin_manual_approve(request, pk):
         return Response({'error': 'Already rewarded'}, status=400)
     except Referral.DoesNotExist:
         return Response({'error': 'Not found'}, status=404)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def daily_motivation(request):
+    today = timezone.now().date()
+    # Find all active motivations
+    motivations = list(Motivation.objects.filter(is_active=True).order_by('id'))
+    
+    if not motivations:
+        return Response({'message': 'Small progress every day becomes a big result.', 'language': 'en', 'category': 'General'})
+    
+    # Hash date and user ID to consistently pick one for today
+    seed_str = f"{today.isoformat()}-{request.user.id}"
+    seed = int(hashlib.md5(seed_str.encode()).hexdigest(), 16)
+    
+    index = seed % len(motivations)
+    selected_motivation = motivations[index]
+    
+    return Response(MotivationSerializer(selected_motivation).data)
+
+class MotivationAdminViewSet(viewsets.ModelViewSet):
+    queryset = Motivation.objects.all().order_by('-created_at')
+    serializer_class = MotivationSerializer
+    permission_classes = [IsAdminUser]
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def leaderboard(request):
+    """
+    Returns the top 50 users based on XP.
+    """
+    top_users = GamificationProfile.objects.select_related('user').order_by('-xp', 'user__date_joined')[:50]
+    
+    leaderboard_data = []
+    for idx, profile in enumerate(top_users):
+        leaderboard_data.append({
+            'rank': idx + 1,
+            'username': profile.user.username,
+            'full_name': profile.user.get_full_name(),
+            'avatar': profile.user.avatar,
+            'xp': profile.xp,
+            'level': profile.level
+        })
+        
+    return Response(leaderboard_data)

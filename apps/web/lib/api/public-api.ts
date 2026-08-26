@@ -90,6 +90,10 @@ export const publicApi = {
   getModelExams: (): Promise<ModelExam[] | null> =>
     safeGet<ModelExam[]>("/model-exams/"),
 
+  /** Get public courses from the courses module */
+  getCourses: (): Promise<any[] | null> =>
+    safeGet<any[]>("/courses/public/"),
+
   /**
    * Get public subscription packages.
    * Integration-ready: backend must expose GET /packages/public/

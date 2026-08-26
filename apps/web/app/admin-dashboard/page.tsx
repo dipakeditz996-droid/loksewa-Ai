@@ -92,7 +92,7 @@ function SectionCard({
       <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-slate-100">
         <div>
           <h3 className="text-[14px] font-bold text-[#0B2545]">{title}</h3>
-          {description && <p className="text-[12px] text-slate-400 mt-0.5">{description}</p>}
+          {description && <p className="text-[12px] text-slate-600 mt-0.5">{description}</p>}
         </div>
         {action && actionHref && (
           <Link
@@ -247,7 +247,7 @@ export default function AdminDashboardOverview() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-[22px] font-bold text-[#0B2545] tracking-tight">Dashboard Overview</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Monitor your platform metrics and activity.</p>
+          <p className="text-sm text-slate-600 mt-0.5">Monitor your platform metrics and activity.</p>
         </div>
         <button
           onClick={() => { fetchStats(); fetchSupplementary(); fetchChart(period); }}
@@ -354,7 +354,7 @@ export default function AdminDashboardOverview() {
                 <TrendingUp className="h-4 w-4 text-[#D4A72C]" />
                 Platform Activity
               </h3>
-              <p className="text-[12px] text-slate-400 mt-0.5">Registrations, exam attempts &amp; AI sessions</p>
+              <p className="text-[12px] text-slate-600 mt-0.5">Registrations, exam attempts &amp; AI sessions</p>
             </div>
             <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
               {PERIODS.map((p) => (
@@ -380,7 +380,7 @@ export default function AdminDashboardOverview() {
                 ))}
               </div>
             ) : chartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-slate-400">
+              <div className="h-full flex items-center justify-center text-sm text-slate-600">
                 No data available for this period.
               </div>
             ) : (
@@ -436,7 +436,7 @@ export default function AdminDashboardOverview() {
             ].map((l) => (
               <div key={l.label} className="flex items-center gap-1.5">
                 <div className="h-2 w-2 rounded-full" style={{ background: l.color }} />
-                <span className="text-[11px] text-slate-400 font-medium">{l.label}</span>
+                <span className="text-[11px] text-slate-600 font-medium">{l.label}</span>
               </div>
             ))}
           </div>
@@ -527,7 +527,7 @@ export default function AdminDashboardOverview() {
                 ].map((s) => (
                   <div key={s.label} className="p-3 bg-slate-50 rounded-lg text-center">
                     <p className="text-[18px] font-bold text-[#0B2545] tabular-nums">{s.value.toLocaleString()}</p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">{s.label}</p>
+                    <p className="text-[10px] text-slate-600 font-medium mt-0.5">{s.label}</p>
                   </div>
                 ))}
               </div>
@@ -537,13 +537,13 @@ export default function AdminDashboardOverview() {
                   <div key={e.id} className="flex items-center justify-between py-1.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-[12px] font-medium text-slate-700 truncate">{e.title}</p>
-                      <p className="text-[11px] text-slate-400">{e.attempts} attempts</p>
+                      <p className="text-[11px] text-slate-600">{e.attempts} attempts</p>
                     </div>
                     <StatusBadge status={e.status} />
                   </div>
                 ))}
                 {(examsData?.recentExams?.length ?? 0) === 0 && (
-                  <p className="text-sm text-slate-400 text-center py-2">No exams yet.</p>
+                  <p className="text-sm text-slate-600 text-center py-2">No exams yet.</p>
                 )}
               </div>
             </div>
@@ -574,14 +574,14 @@ export default function AdminDashboardOverview() {
                 ].map((s) => (
                   <div key={s.label} className="p-3 bg-slate-50 rounded-lg text-center">
                     <p className="text-[18px] font-bold text-[#0B2545] tabular-nums">{s.value.toLocaleString()}</p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">{s.label}</p>
+                    <p className="text-[10px] text-slate-600 font-medium mt-0.5">{s.label}</p>
                   </div>
                 ))}
               </div>
               {/* Usage trend mini bar */}
               {aiData && aiData.trend.length > 0 && (
                 <div>
-                  <p className="text-[11px] text-slate-400 font-medium mb-2">Last 7 days trend</p>
+                  <p className="text-[11px] text-slate-600 font-medium mb-2">Last 7 days trend</p>
                   <div className="h-12">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={aiData.trend} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -603,7 +603,7 @@ export default function AdminDashboardOverview() {
               {/* Top modes */}
               {aiData && aiData.topModes.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[11px] text-slate-400 font-medium">Top modes</p>
+                  <p className="text-[11px] text-slate-600 font-medium">Top modes</p>
                   {aiData.topModes.slice(0, 3).map((m) => (
                     <div key={m.mode} className="flex items-center justify-between">
                       <span className="text-[12px] text-slate-600 capitalize">{m.mode.toLowerCase().replace("_", " ")}</span>
@@ -650,23 +650,23 @@ export default function AdminDashboardOverview() {
                 ].map((s) => (
                   <div key={s.label} className="p-3 bg-slate-50 rounded-lg text-center">
                     <p className="text-[16px] font-bold text-[#0B2545]">{s.value}</p>
-                    <p className="text-[10px] text-slate-400 font-medium mt-0.5">{s.label}</p>
+                    <p className="text-[10px] text-slate-600 font-medium mt-0.5">{s.label}</p>
                   </div>
                 ))}
               </div>
 
               {/* Recent orders table */}
               <div>
-                <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-wide mb-2">Recent Orders</p>
+                <p className="text-[11px] text-slate-600 font-semibold uppercase tracking-wide mb-2">Recent Orders</p>
                 <div className="space-y-1">
                   {(marketData?.recentOrders ?? []).length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-3">No orders yet.</p>
+                    <p className="text-sm text-slate-600 text-center py-3">No orders yet.</p>
                   ) : (
                     (marketData?.recentOrders ?? []).map((o) => (
                       <div key={o.id} className="flex items-center gap-3 py-2 border-b border-slate-100 last:border-0">
                         <div className="flex-1 min-w-0">
                           <p className="text-[12px] font-medium text-slate-700 truncate">{o.product}</p>
-                          <p className="text-[11px] text-slate-400">by {o.buyer}</p>
+                          <p className="text-[11px] text-slate-600">by {o.buyer}</p>
                         </div>
                         <span className="text-[12px] font-semibold text-[#0B2545] shrink-0">NPR {o.price.toLocaleString()}</span>
                         <StatusBadge status={o.status} />
@@ -686,7 +686,7 @@ export default function AdminDashboardOverview() {
               <Activity className="h-4 w-4 text-[#D4A72C]" />
               Quick Actions
             </h3>
-            <p className="text-[12px] text-slate-400 mt-0.5">Frequently used admin actions</p>
+            <p className="text-[12px] text-slate-600 mt-0.5">Frequently used admin actions</p>
           </div>
           <div className="px-5 py-4 grid grid-cols-2 gap-2.5">
             {quickActions.map((action) => (

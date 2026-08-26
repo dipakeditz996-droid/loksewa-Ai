@@ -117,6 +117,11 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
                 details={"ids": ids, "count": count}
             )
         elif action_type in ['publish', 'draft', 'archive']:
+            if action_type == 'publish':
+                for q in questions:
+                    if q.created_by == request.user:
+                        return Response({"error": "You cannot approve your own question."}, status=403)
+                        
             status_map = {'publish': 'published', 'draft': 'draft', 'archive': 'archived'}
             questions.update(status=status_map[action_type])
             AuditLog.objects.create(

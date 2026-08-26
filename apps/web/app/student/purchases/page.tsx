@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { apiClient } from "@/lib/api/client";
 
 interface Subscription {
   id: number;
@@ -30,7 +31,9 @@ interface Payment {
   submitted_at: string;
 }
 
-export default function StudentPurchasesPage() {
+import { Suspense } from "react";
+
+function StudentPurchasesContent() {
   const searchParams = useSearchParams();
   const success = searchParams.get('success');
   
@@ -46,24 +49,14 @@ export default function StudentPurchasesPage() {
     setIsLoading(true);
     try {
       const [subsRes, paymentsRes] = await Promise.all([
-        fetch("http://127.0.0.1:8000/api/subscriptions/my-subscriptions/", {
-          headers: { 'Authorization': 'Bearer test-token' }
-        }),
-        fetch("http://127.0.0.1:8000/api/subscriptions/payments/", {
-          headers: { 'Authorization': 'Bearer test-token' }
-        })
+        apiClient<Subscription[]>("/subscriptions/my-subscriptions/"),
+        apiClient<Payment[]>("/subscriptions/payments/")
       ]);
       
-      if (subsRes.ok) {
-        const data = await subsRes.json();
-        const active = data.find((s: Subscription) => s.status === 'ACTIVE');
-        if (active) setActiveSubscription(active);
-      }
+      const active = subsRes.find((s: Subscription) => s.status === 'ACTIVE');
+      if (active) setActiveSubscription(active);
       
-      if (paymentsRes.ok) {
-        const data = await paymentsRes.json();
-        setPayments(data);
-      }
+      setPayments(paymentsRes);
     } catch (error) {
       console.error(error);
     } finally {
@@ -200,5 +193,13 @@ export default function StudentPurchasesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function StudentPurchasesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading purchases...</div>}>
+      <StudentPurchasesContent />
+    </Suspense>
   );
 }

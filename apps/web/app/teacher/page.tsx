@@ -2,55 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { 
-  Users, FileText, CheckCircle, Clock, BookOpen, AlertCircle, 
-  RefreshCcw, Target, Trophy, ArrowRight, Activity, TrendingUp, Bell, ChevronRight
+import {
+  Users, FileText, CheckCircle, Clock, BookOpen, AlertCircle,
+  RefreshCcw, Target, Trophy, Activity, TrendingUp, Bell, ChevronRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PremiumIcon } from "@/components/ui/premium-icon";
-import { apiClient } from "@/lib/api/client";
+import { teacherDashboardApi, TeacherDashboardData as DashboardData } from "@/lib/api/teacher-dashboard";
 import { useAuth } from "@/contexts/AuthContext";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-
-interface DashboardData {
-  stats: {
-    total_students: number;
-    assigned_courses: number;
-    pending_evaluations: number;
-    completed_evaluations: number;
-    published_content: number;
-  };
-  courses: {
-    id: number;
-    title: string;
-    thumbnail: string | null;
-    status: string;
-    student_count: number;
-  }[];
-  pending_evaluations: {
-    id: number;
-    student_name: string;
-    question_id: string;
-    context: string;
-    submitted_at: string;
-    status: string;
-  }[];
-  recent_practice_sets: {
-    id: number;
-    name: string;
-    status: string;
-    questions_count: number;
-    created_at: string;
-  }[];
-  recent_activity: {
-    id: string;
-    type: string;
-    description: string;
-    date: string;
-  }[];
-}
+import { StatCard } from "@/components/teacher/portal";
 
 export default function TeacherDashboardPage() {
   const { user } = useAuth();
@@ -62,7 +21,7 @@ export default function TeacherDashboardPage() {
     try {
       setLoading(true);
       setError(null);
-      const responseData = await apiClient<DashboardData>('/teacher/dashboard/');
+      const responseData = await teacherDashboardApi.getDashboardData();
       setData(responseData);
     } catch (err: any) {
       console.error("Failed to load teacher dashboard:", err);
@@ -78,13 +37,13 @@ export default function TeacherDashboardPage() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good Morning";
-    if (hour < 18) return "Good Afternoon";
-    return "Good Evening";
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
   };
 
   const teacherName = user?.name ? `${user.name}` : (user?.username || "Teacher");
-  const firstLetter = teacherName.charAt(0).toUpperCase();
+  const firstName = teacherName.split(" ")[0];
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
@@ -94,19 +53,16 @@ export default function TeacherDashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-pulse">
-        <div className="flex flex-col gap-4 bg-muted/20 p-8 rounded-3xl border border-border/50">
-          <div className="h-8 bg-muted rounded w-64 mb-2"></div>
-          <div className="h-4 bg-muted rounded w-96"></div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="mx-auto max-w-7xl space-y-6 p-4 pb-12 md:p-8 animate-pulse">
+        <div className="h-[104px] rounded-2xl border border-[#E7EBF3] bg-white" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="border border-border/50 bg-card rounded-2xl h-32"></div>
+            <div key={i} className="h-[124px] rounded-2xl border border-[#E7EBF3] bg-white" />
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 border border-border/50 bg-card rounded-2xl h-80"></div>
-          <div className="border border-border/50 bg-card rounded-2xl h-80"></div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="h-64 rounded-2xl border border-[#E7EBF3] bg-white" />
+          <div className="h-64 rounded-2xl border border-[#E7EBF3] bg-white" />
         </div>
       </div>
     );
@@ -114,13 +70,13 @@ export default function TeacherDashboardPage() {
 
   if (error) {
     return (
-      <div className="p-4 md:p-8 max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/10 flex items-center justify-center mb-4">
-          <AlertCircle className="w-8 h-8 text-red-500" />
+      <div className="mx-auto flex min-h-[60vh] max-w-7xl flex-col items-center justify-center p-4 text-center md:p-8">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#FBEAEA]">
+          <AlertCircle className="h-8 w-8 text-[#B23A3A]" />
         </div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">{error}</h2>
-        <Button onClick={fetchDashboardData} className="mt-4 flex items-center gap-2">
-          <RefreshCcw className="w-4 h-4" /> Try Again
+        <h2 className="text-xl font-bold text-[#101828]">{error}</h2>
+        <Button onClick={fetchDashboardData} className="mt-4 gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]">
+          <RefreshCcw className="h-4 w-4" /> Try Again
         </Button>
       </div>
     );
@@ -128,340 +84,293 @@ export default function TeacherDashboardPage() {
 
   if (!data) return null;
 
-  // Workload calculations
   const totalEvaluations = data.stats.pending_evaluations + data.stats.completed_evaluations;
   const completedPercent = totalEvaluations > 0 ? (data.stats.completed_evaluations / totalEvaluations) * 100 : 0;
   const pendingPercent = totalEvaluations > 0 ? (data.stats.pending_evaluations / totalEvaluations) * 100 : 0;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 pb-12">
-      
-      {/* 1. HERO COMMAND CENTER */}
-      <div className="relative overflow-hidden rounded-3xl border border-border/50 bg-gradient-to-br from-blue-50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10">
-        <div className="absolute inset-0 bg-grid-black/[0.02] dark:bg-grid-white/[0.02] bg-[size:20px_20px]" />
-        <div className="relative p-6 sm:p-8 md:p-10 flex flex-col md:flex-row items-start justify-between gap-6">
-          <div className="space-y-4">
-            <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 mb-4 rounded-full bg-white/60 dark:bg-background/40 border border-border/50 text-xs font-medium text-muted-foreground backdrop-blur-sm">
-                <Clock className="w-3.5 h-3.5" />
-                Teaching Overview — {currentDate}
+    <div className="mx-auto max-w-7xl space-y-6 p-4 pb-12 md:p-8">
+
+      {/* HERO STRIP */}
+      <div className="relative overflow-hidden rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6 shadow-lg border border-[#163E6B]" style={{ background: "radial-gradient(120% 160% at 100% 0%, #163E6C 0%, #0B2545 46%, #08192F 100%)" }}>
+        {/* Soft gold glow overlay */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4A72C] opacity-[0.08] blur-[80px] rounded-full pointer-events-none translate-x-1/3 -translate-y-1/3" />
+        
+        <div className="relative z-10">
+          <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-white/50">{currentDate}</div>
+          <h1 className="font-heading mt-2 text-[26px] sm:text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">
+            {getGreeting()}, <span className="text-white">{firstName}</span>
+          </h1>
+          <p className="mt-2 max-w-xl text-[14px] text-white/70">
+            {data.stats.assigned_courses} courses, {data.stats.total_students} students, and {data.stats.pending_evaluations} evaluations waiting for you today.
+          </p>
+          <div className="mt-5 flex items-center gap-3">
+            <Button className="rounded-xl bg-white text-[#0B2545] hover:bg-slate-100 font-bold h-10 px-5 transition-transform hover:scale-[1.02] active:scale-[0.98]" asChild>
+              <Link href="/teacher/questions">
+                <Target className="mr-2 h-4 w-4" /> New Question
+              </Link>
+            </Button>
+            <Button variant="outline" className="rounded-xl border-white/20 text-white hover:bg-white/10 hover:text-white font-semibold h-10 px-5 transition-colors bg-white/5" asChild>
+              <Link href="/teacher/practice-sets/new">
+                <Trophy className="mr-2 h-4 w-4" /> New Practice Set
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Weekly Goal / Progress Ring */}
+        <div className="relative z-10 flex shrink-0 items-center justify-center p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-sm sm:w-[140px] sm:h-[140px]">
+           <div className="relative flex items-center justify-center">
+              <svg className="w-24 h-24 transform -rotate-90">
+                <circle cx="48" cy="48" r="42" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+                <circle 
+                  cx="48" cy="48" r="42" fill="none" stroke="#D4A72C" strokeWidth="6" 
+                  strokeDasharray="264" 
+                  strokeDashoffset={264 - (264 * (completedPercent || 0) / 100)} 
+                  strokeLinecap="round" 
+                  className="transition-all duration-1000 ease-out" 
+                />
+              </svg>
+              <div className="absolute flex flex-col items-center justify-center text-center">
+                <span className="text-xl font-extrabold text-white">{completedPercent.toFixed(0)}%</span>
+                <span className="text-[8px] font-bold uppercase tracking-wider text-white/50">Done</span>
               </div>
-              <h1 className="text-3xl md:text-4xl font-[800] tracking-tight text-foreground">
-                {getGreeting()}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400">{teacherName}</span>
-              </h1>
-              <p className="text-muted-foreground mt-2 font-medium max-w-xl">
-                Here's what's happening across your teaching workspace today. Manage your courses, track performance, and review pending evaluations.
-              </p>
-            </div>
-          </div>
-          
-          <div className="shrink-0 flex items-center gap-3">
-             <Button className="bg-blue-600 hover:bg-blue-700 text-white shadow-md rounded-full px-6" asChild>
-                <Link href="/teacher/questions">
-                   <Target className="mr-2 h-4 w-4" /> Create Question
-                </Link>
-             </Button>
-             <Button variant="outline" className="rounded-full shadow-sm bg-white/50 dark:bg-background/50 backdrop-blur-sm px-6" asChild>
-                <Link href="/teacher/practice-sets/new">
-                   <Trophy className="mr-2 h-4 w-4" /> Create Practice Set
-                </Link>
-             </Button>
-          </div>
+           </div>
         </div>
       </div>
 
-      {/* 2. PRIMARY KPIS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        <div className="relative overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-blue-500/30 transition-all group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="bg-blue-100 dark:bg-blue-900/30 p-2.5 rounded-xl border border-blue-200 dark:border-blue-800/50">
-              <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="flex h-6 items-center rounded-full bg-blue-50 dark:bg-blue-900/20 px-2 text-xs font-medium text-blue-600 dark:text-blue-400">
-               Active
-            </div>
-          </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-muted-foreground">Assigned Courses</h3>
-            <div className="text-3xl font-bold tracking-tight text-foreground">{data.stats.assigned_courses}</div>
-          </div>
-        </div>
+      {/* KPI ROW */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={BookOpen} label="Assigned Courses" value={data.stats.assigned_courses} />
+        <StatCard icon={Users} label="Total Students" value={data.stats.total_students} />
+        <StatCard
+          icon={Clock}
+          label="Pending Evaluations"
+          value={data.stats.pending_evaluations}
+          tone="pending"
+          badge={data.stats.pending_evaluations > 0 ? `${data.stats.pending_evaluations} due` : undefined}
+        />
+        <StatCard icon={FileText} label="Published Content" value={data.stats.published_content} />
+      </div>
 
-        <div className="relative overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-500/30 transition-all group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="bg-emerald-100 dark:bg-emerald-900/30 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/50">
-              <Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
+      {/* NEEDS ATTENTION + WORKLOAD */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="border-b border-[#EEF1F6] px-5 py-4 text-[14.5px] font-bold text-[#101828]">
+            Needs Attention
           </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-muted-foreground">Total Students</h3>
-            <div className="text-3xl font-bold tracking-tight text-foreground">{data.stats.total_students}</div>
-          </div>
-        </div>
-
-        <div className="relative overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-amber-500/30 transition-all group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="bg-amber-100 dark:bg-amber-900/30 p-2.5 rounded-xl border border-amber-200 dark:border-amber-800/50">
-              <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            {data.stats.pending_evaluations > 0 && (
-               <div className="flex h-6 items-center rounded-full bg-amber-500 text-white px-2 text-xs font-bold animate-pulse">
-                  {data.stats.pending_evaluations} Due
-               </div>
+          <div className="p-5">
+            {data.stats.pending_evaluations > 0 ? (
+              <div className="flex items-center justify-between gap-4 rounded-[11px] border border-[#F0DFAF] bg-[#FBF2DC] p-4">
+                <div>
+                  <div className="text-[13.5px] font-bold text-[#5C4300]">Pending Evaluations</div>
+                  <div className="mt-0.5 text-[12.5px] text-[#8A6E1F]">
+                    {data.stats.pending_evaluations} submissions waiting for your review
+                  </div>
+                </div>
+                <Button className="flex-shrink-0 rounded-lg bg-[#D4A72C] text-[12.5px] font-bold text-[#0A1118] hover:bg-[#c2971f]" asChild>
+                  <Link href="/teacher/evaluations">Review Now</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-4 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#E9F6F2]">
+                  <CheckCircle className="h-6 w-6 text-[#0F7A69]" />
+                </div>
+                <h3 className="text-[15px] font-bold text-[#101828]">Everything looks good</h3>
+                <p className="text-[13px] text-[#667085]">No urgent tasks require your attention right now.</p>
+              </div>
             )}
           </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-muted-foreground">Pending Evaluations</h3>
-            <div className="text-3xl font-bold tracking-tight text-foreground">{data.stats.pending_evaluations}</div>
-          </div>
         </div>
 
-        <div className="relative overflow-hidden border border-border/50 bg-card/60 backdrop-blur-xl p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-purple-500/30 transition-all group">
-          <div className="flex justify-between items-start mb-4">
-            <div className="bg-purple-100 dark:bg-purple-900/30 p-2.5 rounded-xl border border-purple-200 dark:border-purple-800/50">
-              <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            </div>
+        <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="flex items-center justify-between border-b border-[#EEF1F6] px-5 py-4">
+            <div className="text-[14.5px] font-bold text-[#101828]">Evaluation Workload</div>
+            <Link href="/teacher/evaluations" className="text-[12px] font-semibold text-[#0B2545] hover:underline">
+              Open Center
+            </Link>
           </div>
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-muted-foreground">Published Content</h3>
-            <div className="text-3xl font-bold tracking-tight text-foreground">{data.stats.published_content}</div>
+          <div className="p-5 pb-[22px]">
+            <div className="mb-4 flex justify-around">
+              <div className="text-center">
+                <div className="text-xl font-extrabold text-[#101828]">{data.stats.pending_evaluations}</div>
+                <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#8A98AE]">Pending</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-extrabold text-[#101828]">{data.stats.completed_evaluations}</div>
+                <div className="mt-0.5 text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#8A98AE]">Completed</div>
+              </div>
+            </div>
+            <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold">
+              <span className="text-[#946B00]">Needs Review ({pendingPercent.toFixed(0)}%)</span>
+              <span className="text-[#0F7A69]">Done ({completedPercent.toFixed(0)}%)</span>
+            </div>
+            <div className="flex h-2 w-full overflow-hidden rounded-full bg-[#EEF1F6]">
+              {totalEvaluations === 0 ? (
+                <div className="h-full w-full bg-[#EEF1F6]" />
+              ) : (
+                <>
+                  <div className="h-full bg-[#D4A72C] transition-all duration-500" style={{ width: `${pendingPercent}%` }} />
+                  <div className="h-full bg-[#159A82] transition-all duration-500" style={{ width: `${completedPercent}%` }} />
+                </>
+              )}
+            </div>
           </div>
         </div>
-
       </div>
 
-      {/* 3. NEEDS ATTENTION & WORKLOAD (GRID) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {/* Needs Attention */}
-         <div className="border border-border/50 bg-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-border/50 flex items-center gap-2">
-               <AlertCircle className="w-5 h-5 text-amber-500" />
-               <h2 className="text-lg font-bold">Needs Attention</h2>
-            </div>
-            <div className="flex-1 p-6 flex flex-col justify-center">
-               {data.stats.pending_evaluations > 0 ? (
-                  <div className="flex items-center justify-between p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 rounded-xl">
-                     <div>
-                        <h4 className="font-semibold text-amber-900 dark:text-amber-400">Pending Evaluations</h4>
-                        <p className="text-sm text-amber-700/80 dark:text-amber-500/80">{data.stats.pending_evaluations} submissions waiting for your review.</p>
-                     </div>
-                     <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white" asChild>
-                        <Link href="/teacher/evaluations">Review Now</Link>
-                     </Button>
+      {/* COURSES + PRACTICE SETS */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] xl:col-span-2">
+          <div className="flex items-center justify-between border-b border-[#EEF1F6] px-5 py-4">
+            <h2 className="text-[14.5px] font-bold text-[#101828]">Course Performance</h2>
+            <Link href="/teacher/courses" className="flex items-center text-[12px] font-semibold text-[#0B2545] hover:underline">
+              View All <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+            </Link>
+          </div>
+          {data.courses.length > 0 ? (
+            <div className="divide-y divide-[#F2F4F8]">
+              {data.courses.slice(0, 4).map((course) => (
+                <div key={course.id} className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:gap-6">
+                  <div className="flex w-full items-center gap-3.5 md:w-1/3">
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] bg-[#EEF2F8] text-[#0B2545]">
+                      {course.thumbnail ? (
+                        <img src={course.thumbnail} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <BookOpen className="h-[18px] w-[18px]" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="truncate text-[13.5px] font-bold text-[#101828]">{course.title}</h4>
+                      <span className="mt-1 inline-block rounded-full bg-[#EEF2F8] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.03em] text-[#0B2545]">
+                        {course.status}
+                      </span>
+                    </div>
                   </div>
-               ) : (
-                  <div className="text-center space-y-2 py-4">
-                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 mb-2">
-                        <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                     </div>
-                     <h3 className="text-lg font-bold">Everything looks good 🎉</h3>
-                     <p className="text-sm text-muted-foreground">No urgent tasks require your attention right now.</p>
+                  <div className="flex w-full items-center justify-between gap-6 md:w-2/3">
+                    <div className="w-[70px] flex-shrink-0 text-center">
+                      <div className="text-base font-extrabold text-[#101828]">{course.student_count}</div>
+                      <div className="text-[9.5px] font-bold uppercase tracking-[0.05em] text-[#8A98AE]">Students</div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-[#475467]">
+                        <span>Completion</span>
+                        <span className="italic text-[#8A98AE]">Gathering data</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-[#EEF1F6]">
+                        <div className="h-full rounded-full bg-[#D4A72C]" style={{ width: "0%" }} />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-[#475467]">
+                        <span>Avg Score</span>
+                        <span className="italic text-[#8A98AE]">Gathering data</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-[#EEF1F6]">
+                        <div className="h-full rounded-full bg-[#159A82]" style={{ width: "0%" }} />
+                      </div>
+                    </div>
                   </div>
-               )}
+                </div>
+              ))}
             </div>
-         </div>
+          ) : (
+            <div className="p-12 text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF2F8]">
+                <BookOpen className="h-5 w-5 text-[#0B2545]" />
+              </div>
+              <h3 className="text-[15px] font-bold text-[#101828]">No courses assigned yet</h3>
+              <p className="mt-1 text-[13px] text-[#667085]">Courses assigned by the administrator will appear here.</p>
+            </div>
+          )}
+        </div>
 
-         {/* Evaluation Workload */}
-         <div className="border border-border/50 bg-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
-            <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between">
-               <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-500" />
-                  <h2 className="text-lg font-bold">Evaluation Workload</h2>
-               </div>
-               <Link href="/teacher/evaluations" className="text-xs font-semibold text-blue-600 hover:underline">
-                  Open Center
-               </Link>
-            </div>
-            <div className="flex-1 p-6 flex flex-col justify-center">
-               <div className="flex justify-between mb-2 px-1">
-                  <div className="text-center">
-                     <div className="text-2xl font-bold text-foreground">{data.stats.pending_evaluations}</div>
-                     <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Pending</div>
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="border-b border-[#EEF1F6] px-5 py-4">
+            <h2 className="text-[14.5px] font-bold text-[#101828]">Recent Practice Sets</h2>
+          </div>
+          <div className="flex-1 divide-y divide-[#F2F4F8]">
+            {data.recent_practice_sets?.length > 0 ? (
+              data.recent_practice_sets.map((pset) => (
+                <div key={pset.id} className="p-4">
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <h4 className="line-clamp-1 text-[13px] font-bold text-[#101828]">{pset.name}</h4>
+                    <span
+                      className={`flex-shrink-0 rounded-full px-[7px] py-[2px] text-[9.5px] font-bold uppercase ${
+                        pset.status === "published"
+                          ? "bg-[#E9F6F2] text-[#0F7A69]"
+                          : pset.status === "pending" || pset.status === "pending_review"
+                          ? "bg-[#FBF2DC] text-[#946B00]"
+                          : "bg-[#EEF1F6] text-[#667085]"
+                      }`}
+                    >
+                      {pset.status}
+                    </span>
                   </div>
-                  <div className="text-center">
-                     <div className="text-2xl font-bold text-foreground">{data.stats.completed_evaluations}</div>
-                     <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mt-1">Completed</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11.5px] font-medium text-[#8A98AE]">{pset.questions_count} Questions</span>
+                    <Link href={`/teacher/practice-sets/${pset.id}/edit`} className="text-[11.5px] font-semibold text-[#0B2545] hover:underline">
+                      Manage
+                    </Link>
                   </div>
-               </div>
-               
-               <div className="mt-6 space-y-2">
-                  <div className="flex justify-between text-xs font-medium">
-                     <span className="text-amber-600 dark:text-amber-400">Needs Review ({pendingPercent.toFixed(0)}%)</span>
-                     <span className="text-emerald-600 dark:text-emerald-400">Done ({completedPercent.toFixed(0)}%)</span>
-                  </div>
-                  <div className="h-4 w-full bg-muted rounded-full overflow-hidden flex">
-                     {totalEvaluations === 0 ? (
-                        <div className="w-full bg-muted/50 h-full" />
-                     ) : (
-                        <>
-                           <div className="bg-amber-500 h-full transition-all duration-500" style={{ width: `${pendingPercent}%` }} />
-                           <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${completedPercent}%` }} />
-                        </>
-                     )}
-                  </div>
-               </div>
-            </div>
-         </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center">
+                <Trophy className="mx-auto mb-3 h-7 w-7 text-[#D9E1EA]" />
+                <p className="text-[13px] text-[#667085]">No practice sets created.</p>
+              </div>
+            )}
+          </div>
+          <div className="border-t border-[#EEF1F6] p-3.5">
+            <Button variant="outline" className="w-full rounded-lg border-[#D9E1EA] text-[12.5px] text-[#344054]" asChild>
+              <Link href="/teacher/practice-sets">View All Practice Sets</Link>
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* 4. MAIN CONTENT GRID */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-         
-         {/* Course Performance */}
-         <div className="xl:col-span-2 border border-border/50 bg-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
-            <div className="px-6 py-5 border-b border-border/50 flex justify-between items-center bg-muted/5">
-               <h2 className="text-lg font-bold">Course Performance</h2>
-               <Link href="/teacher/courses" className="text-sm font-semibold text-primary hover:text-primary/80 transition-colors flex items-center">
-                  View All <ChevronRight className="w-4 h-4 ml-1" />
-               </Link>
-            </div>
-            <div className="p-0">
-               {data.courses.length > 0 ? (
-                  <div className="divide-y divide-border/50">
-                     {data.courses.slice(0, 4).map((course) => (
-                        <div key={course.id} className="p-6 hover:bg-muted/5 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-6">
-                           <div className="flex items-center gap-4 w-full md:w-1/3">
-                              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden">
-                                 {course.thumbnail ? (
-                                    <img src={course.thumbnail} alt="" className="w-full h-full object-cover" />
-                                 ) : (
-                                    <BookOpen className="w-5 h-5 text-muted-foreground" />
-                                 )}
-                              </div>
-                              <div className="min-w-0">
-                                 <h4 className="font-bold text-sm truncate">{course.title}</h4>
-                                 <Badge variant="secondary" className="mt-1 text-[10px] uppercase font-semibold">
-                                    {course.status}
-                                 </Badge>
-                              </div>
-                           </div>
+      {/* ANALYTICS + ACTIVITY */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-[#E7EBF3] bg-white p-12 text-center shadow-[0_1px_2px_rgba(16,24,40,0.04)] xl:col-span-2">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#EEF2F8] text-[#0B2545]">
+            <TrendingUp className="h-[22px] w-[22px]" />
+          </div>
+          <h3 className="text-[15px] font-bold text-[#101828]">Not enough student activity yet</h3>
+          <p className="mt-1.5 max-w-md text-[12.5px] text-[#667085]">
+            Score trends, accuracy, and completion rates will appear here as your students engage with the materials.
+          </p>
+        </div>
 
-                           <div className="flex items-center justify-between w-full md:w-2/3 gap-8">
-                              <div className="text-center min-w-[80px]">
-                                 <div className="text-xl font-bold">{course.student_count}</div>
-                                 <div className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider">Students</div>
-                              </div>
-                              <div className="flex-1 max-w-[200px]">
-                                 <div className="flex justify-between text-xs mb-1.5 font-medium">
-                                    <span>Completion</span>
-                                    <span className="text-muted-foreground italic">Gathering data</span>
-                                 </div>
-                                 <Progress value={0} className="h-2 bg-muted/50" />
-                              </div>
-                              <div className="flex-1 max-w-[200px]">
-                                 <div className="flex justify-between text-xs mb-1.5 font-medium">
-                                    <span>Avg Score</span>
-                                    <span className="text-muted-foreground italic">Gathering data</span>
-                                 </div>
-                                 <Progress value={0} className="h-2 bg-muted/50" />
-                              </div>
-                           </div>
-                        </div>
-                     ))}
+        <div className="flex flex-col overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="border-b border-[#EEF1F6] px-5 py-4">
+            <h2 className="flex items-center gap-2 text-[14.5px] font-bold text-[#101828]">
+              <Bell className="h-4 w-4 text-[#8A98AE]" /> Activity Feed
+            </h2>
+          </div>
+          <div className="max-h-[400px] flex-1 overflow-y-auto p-5">
+            {data.recent_activity.length > 0 ? (
+              <div className="flex flex-col gap-[18px]">
+                {data.recent_activity.map((activity) => (
+                  <div key={activity.id} className="flex gap-3">
+                    <div className="mt-0.5 flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full bg-[#EEF2F8] text-[#0B2545]">
+                      <Activity className="h-3 w-3" />
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-[#101828]">{activity.description}</div>
+                      <div className="mt-0.5 text-[11px] text-[#8A98AE]">{new Date(activity.date).toLocaleDateString()}</div>
+                    </div>
                   </div>
-               ) : (
-                  <div className="text-center p-12">
-                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
-                        <BookOpen className="w-5 h-5 text-muted-foreground" />
-                     </div>
-                     <h3 className="text-lg font-bold">No courses assigned yet</h3>
-                     <p className="text-sm text-muted-foreground mt-1">Courses assigned by the administrator will appear here.</p>
-                  </div>
-               )}
-            </div>
-         </div>
-
-         {/* Right Sidebar: Recent Practice Sets */}
-         <div className="border border-border/50 bg-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
-            <div className="px-6 py-5 border-b border-border/50 bg-muted/5">
-               <h2 className="text-lg font-bold">Recent Practice Sets</h2>
-            </div>
-            <div className="flex-1 divide-y divide-border/50">
-               {data.recent_practice_sets?.length > 0 ? (
-                  data.recent_practice_sets.map((pset) => (
-                     <div key={pset.id} className="p-5 hover:bg-muted/5 transition-colors group">
-                        <div className="flex justify-between items-start mb-2">
-                           <h4 className="font-semibold text-sm line-clamp-1">{pset.name}</h4>
-                           <Badge variant="outline" className="text-[10px] shrink-0 border-border/50">{pset.status}</Badge>
-                        </div>
-                        <div className="flex items-center justify-between mt-4">
-                           <span className="text-xs font-medium text-muted-foreground">
-                              {pset.questions_count} Questions
-                           </span>
-                           <Button variant="ghost" size="sm" className="h-7 text-xs opacity-0 group-hover:opacity-100 transition-opacity" asChild>
-                              <Link href={`/teacher/practice-sets/${pset.id}/edit`}>Manage</Link>
-                           </Button>
-                        </div>
-                     </div>
-                  ))
-               ) : (
-                  <div className="text-center p-10">
-                     <Trophy className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-                     <p className="text-sm text-muted-foreground">No practice sets created.</p>
-                  </div>
-               )}
-            </div>
-            <div className="p-4 border-t border-border/50 bg-muted/5">
-               <Button variant="outline" className="w-full text-xs" asChild>
-                  <Link href="/teacher/practice-sets">View All Practice Sets</Link>
-               </Button>
-            </div>
-         </div>
-
-      </div>
-
-      {/* 5. ANALYTICS & ACTIVITY */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-         
-         {/* Student Analytics Placeholder */}
-         <div className="xl:col-span-2 border border-border/50 bg-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
-            <div className="px-6 py-5 border-b border-border/50 bg-muted/5 flex items-center gap-2">
-               <TrendingUp className="w-5 h-5 text-indigo-500" />
-               <h2 className="text-lg font-bold">Student Analytics</h2>
-            </div>
-            <div className="flex-1 p-12 flex flex-col items-center justify-center text-center">
-               <Activity className="w-12 h-12 text-muted-foreground/20 mb-4" />
-               <h3 className="text-lg font-bold">Not enough student activity yet</h3>
-               <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                  Detailed analytics covering average score trends, overall accuracy, and completion rates will appear here as your students start engaging with the materials.
-               </p>
-            </div>
-         </div>
-
-         {/* Activity Feed */}
-         <div className="border border-border/50 bg-card rounded-2xl flex flex-col overflow-hidden shadow-sm">
-            <div className="px-6 py-5 border-b border-border/50 bg-muted/5 flex items-center gap-2">
-               <Bell className="w-5 h-5 text-slate-500" />
-               <h2 className="text-lg font-bold">Activity Feed</h2>
-            </div>
-            <div className="flex-1 p-6 overflow-y-auto max-h-[400px]">
-               {data.recent_activity.length > 0 ? (
-                  <div className="relative before:absolute before:inset-0 before:ml-[13px] before:h-full before:w-px before:bg-border/50">
-                     <div className="space-y-6">
-                        {data.recent_activity.map((activity) => (
-                           <div key={activity.id} className="relative flex items-start gap-4">
-                              <div className="absolute left-0 mt-1 flex items-center justify-center w-7 h-7 rounded-full border border-background bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 shrink-0 z-10">
-                                 <Activity className="w-3 h-3" />
-                              </div>
-                              <div className="pl-11">
-                                 <div className="font-medium text-sm text-foreground leading-snug">{activity.description}</div>
-                                 <div className="text-[10px] font-medium text-muted-foreground mt-1">
-                                    {new Date(activity.date).toLocaleDateString()}
-                                 </div>
-                              </div>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-               ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-center py-8">
-                     <p className="text-sm font-medium text-muted-foreground">No recent activity.</p>
-                  </div>
-               )}
-            </div>
-         </div>
-
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center py-8 text-center">
+                <p className="text-[13px] font-medium text-[#667085]">No recent activity.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
     </div>

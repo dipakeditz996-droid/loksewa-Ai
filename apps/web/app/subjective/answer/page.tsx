@@ -336,7 +336,7 @@ function SubjectiveAnswerContent() {
                   setAnswers(prev => ({...prev, [currentQ.id]: e.target.value}));
                 }}
                 placeholder="Write your answer here..."
-                className="flex-1 w-full resize-none outline-none text-[16px] leading-relaxed text-slate-700 bg-transparent placeholder:text-slate-300 font-sans"
+                className="flex-1 w-full resize-none outline-none text-[16px] leading-relaxed text-slate-700 bg-transparent placeholder:text-slate-700 font-sans"
                 spellCheck={false}
               />
             </div>

@@ -1,151 +1,158 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { 
-  FileText, HelpCircle, Clock, Target, Calendar, BarChart3, Lock, Users
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { mockExams, ExamMetadata } from "@/lib/mock/admin-exams";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, Clock, HelpCircle, Layers, Trophy, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatTile } from "@/components/admin/exams/StatTile";
+import { EmptyState } from "@/components/admin/exams/ExamStateViews";
+import { adminExamApi } from "@/lib/api/admin-exams";
+import { formatDateTime, formatNumber } from "@/lib/format";
 
-export default function ExamOverviewTab() {
-  const params = useParams();
-  const examId = params.id as string;
-  const [exam, setExam] = useState<ExamMetadata | null>(null);
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2 border-b border-slate-100 last:border-0">
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-sm text-slate-800 text-right">{value}</span>
+    </div>
+  );
+}
 
-  useEffect(() => {
-    const found = mockExams.find(e => e.id === examId);
-    setExam(found || null);
-  }, [examId]);
+export default function ExamOverviewPage() {
+  const params = useParams<{ id: string }>();
+  const examId = Number(params?.id);
+  const validId = Number.isFinite(examId) && examId > 0;
 
-  if (!exam) return null;
+  // Shares the cache entry populated by the exam detail layout — no extra request.
+  const { data: exam, isLoading } = useQuery({
+    queryKey: ["admin", "exam", examId],
+    queryFn: () => adminExamApi.getExam(examId),
+    enabled: validId,
+    retry: false,
+  });
+
+  if (!validId) return <EmptyState title="Invalid examination reference." />;
+
+  if (isLoading || !exam) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      {/* Configuration Summary Card */}
-      <div className="lg:col-span-2 space-y-6">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-            <h2 className="font-bold text-[#0B2545]">Exam Configuration Summary</h2>
-          </div>
-          
-          <div className="p-6 grid grid-cols-2 gap-6">
-            <div className="space-y-1 text-sm">
-              <p className="text-slate-500 font-medium">Difficulty Level</p>
-              <Badge variant="outline" className="bg-slate-50">{exam.difficulty}</Badge>
-            </div>
-            
-            <div className="space-y-1 text-sm">
-              <p className="text-slate-500 font-medium">Access Control</p>
-              {exam.access === "Premium" ? (
-                <div className="flex items-center gap-1 text-amber-700 font-medium"><Lock className="w-4 h-4" /> Premium Content</div>
-              ) : (
-                <div className="flex items-center gap-1 text-emerald-700 font-medium"><Lock className="w-4 h-4" /> Free Content</div>
-              )}
-            </div>
-
-            <div className="space-y-1 text-sm">
-              <p className="text-slate-500 font-medium">Exam Duration</p>
-              <div className="flex items-center gap-1 font-medium text-slate-800">
-                <Clock className="w-4 h-4 text-slate-400" /> {exam.durationMinutes ? `${exam.durationMinutes} Minutes` : "Unlimited"}
-              </div>
-            </div>
-
-            <div className="space-y-1 text-sm">
-              <p className="text-slate-500 font-medium">Total Questions & Marks</p>
-              <div className="flex items-center gap-1 font-medium text-slate-800">
-                <HelpCircle className="w-4 h-4 text-slate-400" /> {exam.questionCount} Qs ({exam.totalMarks} Marks)
-              </div>
-            </div>
-
-            <div className="space-y-1 text-sm">
-              <p className="text-slate-500 font-medium">Negative Marking</p>
-              <div className="font-medium text-slate-800">
-                {exam.negativeMarking > 0 ? `${exam.negativeMarking}% Deduction` : "None"}
-              </div>
-            </div>
-
-            <div className="space-y-1 text-sm">
-              <p className="text-slate-500 font-medium">Maximum Attempts</p>
-              <div className="flex items-center gap-1 font-medium text-slate-800">
-                <Target className="w-4 h-4 text-slate-400" /> {exam.maxAttempts ? `${exam.maxAttempts} Attempts` : "Unlimited"}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 pt-0">
-            <p className="text-sm text-slate-500 font-medium mb-2">Description</p>
-            <div className="p-4 bg-slate-50 rounded-lg text-sm text-slate-700 border border-slate-100">
-              {exam.description || "No description provided."}
-            </div>
-          </div>
-        </div>
-
-        {/* Schedule Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-4 border-b border-slate-100 bg-slate-50">
-            <h2 className="font-bold text-[#0B2545] flex items-center gap-2"><Calendar className="w-4 h-4" /> Schedule Window</h2>
-          </div>
-          <div className="p-6">
-            {exam.scheduleStart ? (
-              <div className="flex flex-col md:flex-row gap-6 items-start md:items-center">
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Opens</p>
-                  <p className="font-medium text-[#0B2545]">{new Date(exam.scheduleStart).toLocaleString()}</p>
-                </div>
-                <div className="hidden md:block w-px h-8 bg-slate-200"></div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Closes</p>
-                  <p className="font-medium text-[#0B2545]">{exam.scheduleEnd ? new Date(exam.scheduleEnd).toLocaleString() : "Never (Manual Close)"}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-slate-500 text-sm italic">This exam does not have a strict time window and is available indefinitely while published.</p>
-            )}
-          </div>
-        </div>
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <StatTile
+          label="Questions"
+          value={formatNumber(exam.total_questions)}
+          icon={<HelpCircle className="w-4 h-4" />}
+        />
+        <StatTile
+          label="Total marks"
+          value={formatNumber(exam.total_marks)}
+          hint={`Pass mark ${formatNumber(exam.passing_marks)}`}
+          icon={<Trophy className="w-4 h-4" />}
+        />
+        <StatTile
+          label="Time limit"
+          value={exam.time_limit ? `${formatNumber(exam.time_limit)} min` : "Unlimited"}
+          icon={<Clock className="w-4 h-4" />}
+        />
+        <StatTile
+          label="Attempts"
+          value={formatNumber(exam.attempts_count)}
+          icon={<Users className="w-4 h-4" />}
+        />
+        <StatTile
+          label="Max attempts"
+          value={exam.max_attempts ? formatNumber(exam.max_attempts) : "Unlimited"}
+          icon={<Layers className="w-4 h-4" />}
+        />
       </div>
 
-      {/* Right Column (Performance Snapshot) */}
-      <div className="space-y-6">
-        <div className="bg-gradient-to-br from-[#0B2545] to-[#163E6C] rounded-xl shadow-sm p-6 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10"><BarChart3 className="w-24 h-24" /></div>
-          <h3 className="font-bold text-lg mb-6 relative z-10">Performance Snapshot</h3>
-          
-          <div className="space-y-6 relative z-10">
-            <div>
-              <p className="text-blue-200 text-xs uppercase font-bold tracking-wider mb-1 flex items-center gap-1"><Users className="w-3 h-3" /> Total Attempts</p>
-              <p className="text-3xl font-bold">{exam.totalAttempts.toLocaleString()}</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-              <div>
-                <p className="text-blue-200 text-xs uppercase font-bold tracking-wider mb-1">Avg Score</p>
-                <p className="text-xl font-bold">{exam.averageScore}%</p>
-              </div>
-              <div>
-                <p className="text-blue-200 text-xs uppercase font-bold tracking-wider mb-1">Pass Rate</p>
-                <p className="text-xl font-bold">{exam.passRate}%</p>
-              </div>
-            </div>
+      <div className="grid gap-5 lg:grid-cols-3">
+        <section className="rounded-xl border border-slate-200 bg-white lg:col-span-2">
+          <header className="px-5 py-3.5 border-b border-slate-100">
+            <h2 className="text-sm font-semibold text-[#0B2545]">Configuration</h2>
+          </header>
+          <div className="px-5 py-2">
+            <DetailRow label="Question set" value={exam.question_set_name ?? "Not assigned"} />
+            <DetailRow
+              label="Marks per question"
+              value={formatNumber(exam.marks_per_question, 2)}
+            />
+            <DetailRow
+              label="Negative marking"
+              value={
+                exam.negative_marking
+                  ? `Yes (−${formatNumber(exam.negative_marking_value, 2)})`
+                  : "No"
+              }
+            />
+            <DetailRow label="Resume allowed" value={exam.allow_resume ? "Yes" : "No"} />
+            <DetailRow label="Auto submit" value={exam.auto_submit ? "Yes" : "No"} />
+            <DetailRow
+              label="Randomisation"
+              value={
+                [
+                  exam.randomize_questions ? "Questions" : null,
+                  exam.randomize_options ? "Options" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "Disabled"
+              }
+            />
+            <DetailRow
+              label="Result visibility"
+              value={<span className="capitalize">{String(exam.result_visibility).replace(/_/g, " ")}</span>}
+            />
+            <DetailRow
+              label="Correct answers shown"
+              value={exam.show_correct_answers ? "Yes" : "No"}
+            />
+            <DetailRow label="Window opens" value={formatDateTime(exam.start_time)} />
+            <DetailRow label="Window closes" value={formatDateTime(exam.end_time)} />
+            <DetailRow label="Last updated" value={formatDateTime(exam.updated_at)} />
           </div>
-        </div>
+        </section>
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="font-bold text-[#0B2545] mb-4">Exam Tags</h3>
-          <div className="flex flex-wrap gap-2">
-            {exam.tags.length > 0 ? (
-              exam.tags.map(tag => (
-                <Badge key={tag} variant="secondary" className="bg-slate-100 text-slate-700">#{tag}</Badge>
-              ))
-            ) : (
-              <span className="text-sm text-slate-400 italic">No tags added.</span>
-            )}
-          </div>
+        <div className="space-y-5">
+          <section className="rounded-xl border border-slate-200 bg-white">
+            <header className="px-5 py-3.5 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-[#0B2545]">Reporting</h2>
+            </header>
+            <div className="p-5 space-y-2">
+              <Link href={`/admin-dashboard/exams/${examId}/analytics`} className="block">
+                <Button variant="outline" className="w-full justify-start">
+                  <BarChart3 className="w-4 h-4" />
+                  View analytics
+                </Button>
+              </Link>
+              <Link href={`/admin-dashboard/exams/${examId}/results`} className="block">
+                <Button variant="outline" className="w-full justify-start">
+                  <Trophy className="w-4 h-4" />
+                  View student results
+                </Button>
+              </Link>
+            </div>
+          </section>
+
+          {exam.description && (
+            <section className="rounded-xl border border-slate-200 bg-white">
+              <header className="px-5 py-3.5 border-b border-slate-100">
+                <h2 className="text-sm font-semibold text-[#0B2545]">Description</h2>
+              </header>
+              <p className="p-5 text-sm text-slate-600 whitespace-pre-line">{exam.description}</p>
+            </section>
+          )}
         </div>
       </div>
-      
     </div>
   );
 }

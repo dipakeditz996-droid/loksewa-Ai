@@ -1,0 +1,112 @@
+
+--- App: rest_framework_simplejwt.token_blacklist ---
+OutstandingToken: 1
+BlacklistedToken: 0
+
+--- App: core ---
+User: 2
+TeacherProfile: 0
+Notification: 0
+
+--- App: exams ---
+ExamCategory: 1
+Exam: 1
+Paper: 1
+Subject: 1
+Chapter: 1
+Topic: 2
+UserTopicProgress: 0
+Question: 0
+QuestionCollection: 0
+CollectionRule: 0
+AIClassificationSuggestion: 0
+QuestionSet: 0
+QuestionSetQuestion: 0
+PracticeSession: 0
+QuestionAttempt: 0
+Bookmark: 0
+ModelExam: 0
+ModelExamAttempt: 0
+ModelExamAttemptAnswer: 0
+SubjectivePracticeSet: 0
+SubjectiveModelExam: 0
+SubjectiveAttempt: 0
+SubjectiveAnswer: 0
+Evaluation: 0
+Annotation: 0
+VideoFeedback: 0
+Examination: 0
+ExaminationQuestion: 0
+ExaminationEligibility: 0
+ExaminationAttempt: 0
+StudentAnswer: 0
+LegacyModelExamMigration: 0
+
+--- App: analytics ---
+
+--- App: gamification ---
+GamificationProfile: 1
+ReferralSetting: 1
+Referral: 0
+XPTransaction: 0
+ReferralMilestone: 0
+Motivation: 0
+
+--- App: notes ---
+StudyMaterial: 0
+StudentMaterialProgress: 0
+StudentMaterialBookmark: 0
+
+--- App: marketplace ---
+Product: 1
+PaymentMethod: 1
+PaymentSubmission: 0
+Purchase: 0
+
+--- App: games ---
+GameProfile: 0
+GameMatch: 0
+GameQuestion: 0
+GameAnswer: 0
+SurvivalGame: 0
+SurvivalAnswer: 0
+
+--- App: study_plan ---
+StudyPlanTemplate: 0
+StudyPlan: 0
+StudyTask: 0
+StudyPlanTemplateTask: 0
+
+--- App: administration ---
+AuditLog: 0
+CSVImport: 0
+
+--- App: ai_tutor ---
+Conversation: 0
+Message: 0
+TutorUsage: 0
+
+--- App: support ---
+StudentProfile: 0
+NotificationPreference: 0
+SupportTicket: 0
+SupportMessage: 0
+SupportAttachment: 0
+FAQ: 0
+FAQFeedback: 0
+
+--- App: subscriptions ---
+SubscriptionPlan: 1
+Subscription: 0
+SubscriptionPayment: 1
+Invoice: 0
+
+--- App: courses ---
+Course: 1
+Enrollment: 0
+CourseApplication: 0
+TeacherCourseAssignment: 0
+TeacherStudentNote: 0
+TeacherMessage: 0
+
+--- App: storages ---

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { evaluationService } from "@/lib/api/evaluations";
-import { EvaluationDetail, ResultStatus } from "@/lib/mock/evaluations-demo-data";
+import { EvaluationDetail, ResultStatus } from "@/lib/api/evaluations-types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ChevronLeft,

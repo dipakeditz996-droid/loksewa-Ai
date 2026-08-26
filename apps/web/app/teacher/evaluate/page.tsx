@@ -31,12 +31,9 @@ function AnnotatableText({
     // Get robust offset calculation
     let startOffset = 0;
     
-    // Very simplified offset calculation for demonstration.
-    // In a real robust system, we would map selection range against the entire text node.
-    // Here we'll do a simple indexOf, which is brittle if there are duplicate phrases.
     const fullText = containerRef.current?.innerText || "";
     startOffset = fullText.indexOf(selectedText);
-    if (startOffset === -1) return; // fallback
+    if (startOffset === -1) return;
     
     const endOffset = startOffset + selectedText.length;
 
@@ -62,11 +59,11 @@ function AnnotatableText({
     parts.push(
       <span 
         key={`ann-${i}`} 
-        className="bg-yellow-200 border-b-2 border-yellow-400 cursor-help relative group"
+        className="bg-[#F5E1A8] border-b-2 border-[#D4A72C] cursor-help relative group"
       >
         {text.substring(ann.start_offset, ann.end_offset)}
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[250px] bg-slate-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl">
-          <div className="font-bold text-yellow-300 mb-1">Annotation</div>
+          <div className="font-bold text-[#D4A72C] mb-1">Annotation</div>
           {ann.comment}
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
         </div>
@@ -84,7 +81,7 @@ function AnnotatableText({
     <div 
       ref={containerRef}
       onMouseUp={handleMouseUp}
-      className="whitespace-pre-wrap leading-relaxed font-serif text-[16px] text-slate-800"
+      className="whitespace-pre-wrap leading-relaxed font-serif text-[16px] text-[#101828]"
     >
       {parts}
     </div>
@@ -210,31 +207,31 @@ export default function TeacherEvaluationDashboard() {
 
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] h-screen overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-[#F7F9FC] h-screen overflow-hidden">
       {/* HEADER */}
       <header className="h-16 bg-[#0B2545] text-white flex items-center px-6 shrink-0 shadow-md z-10">
-        <Target className="w-5 h-5 mr-3 text-blue-300" />
+        <Target className="w-5 h-5 mr-3 text-[#D4A72C]" />
         <h1 className="text-[16px] font-bold tracking-wide">TEACHER EVALUATION DESK</h1>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
         
         {/* LEFT PANEL - LIST */}
-        <div className="w-[350px] bg-white border-r border-slate-200 flex flex-col shrink-0">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="w-[350px] bg-white border-r border-[#E7EBF3] flex flex-col shrink-0">
+          <div className="p-4 border-b border-[#E7EBF3] bg-[#F7F9FC] flex items-center justify-between">
             <h2 className="font-bold text-[#0B2545] flex items-center gap-2">
               <FileText className="w-4 h-4" /> Pending ({pendingAnswers.length})
             </h2>
             <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full">
-              <Search className="w-4 h-4 text-slate-500" />
+              <Search className="w-4 h-4 text-[#667085]" />
             </Button>
           </div>
           
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {loadingList ? (
-              <div className="p-8 text-center text-slate-400">Loading...</div>
+              <div className="p-8 text-center text-[#8A98AE]">Loading...</div>
             ) : pendingAnswers.length === 0 ? (
-              <div className="p-8 text-center text-slate-400">No pending submissions.</div>
+              <div className="p-8 text-center text-[#8A98AE]">No pending submissions.</div>
             ) : (
               pendingAnswers.map(ans => (
                 <button
@@ -243,20 +240,20 @@ export default function TeacherEvaluationDashboard() {
                   className={cn(
                     "w-full text-left p-4 rounded-xl transition-all border",
                     selectedAnswer?.id === ans.id 
-                      ? "bg-blue-50 border-blue-200 shadow-sm" 
-                      : "bg-white border-transparent hover:bg-slate-50 hover:border-slate-200"
+                      ? "bg-[#EEF2F8] border-[#0B2545]/20 shadow-sm"
+                      : "bg-white border-transparent hover:bg-[#F7F9FC] hover:border-[#E7EBF3]"
                   )}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[13px] font-bold text-[#0B2545]">{ans.student_name}</span>
-                    <span className="text-[11px] font-medium text-slate-400">{new Date(ans.submitted_at || '').toLocaleDateString()}</span>
+                    <span className="text-[11px] font-medium text-[#8A98AE]">{new Date(ans.submitted_at || '').toLocaleDateString()}</span>
                   </div>
-                  <div className="text-[12px] text-slate-600 truncate mb-2">
+                  <div className="text-[12px] text-[#475467] truncate mb-2">
                     {ans.question.text}
                   </div>
                   <div className="flex justify-between items-center text-[11px] font-bold">
-                    <span className="text-slate-400">{ans.word_count} words</span>
-                    <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{ans.question.marks} Marks</span>
+                    <span className="text-[#8A98AE]">{ans.word_count} words</span>
+                    <span className="text-[#0B2545] bg-[#EEF2F8] px-2 py-0.5 rounded-full">{ans.question.marks} Marks</span>
                   </div>
                 </button>
               ))
@@ -266,13 +263,13 @@ export default function TeacherEvaluationDashboard() {
 
 
         {/* RIGHT PANEL - DETAIL */}
-        <div className="flex-1 bg-[#f8fafc] flex overflow-hidden">
+        <div className="flex-1 bg-[#F7F9FC] flex overflow-hidden">
           {loadingDetail ? (
              <div className="flex-1 flex justify-center items-center">
                <div className="w-8 h-8 border-4 border-[#0B2545] border-t-transparent rounded-full animate-spin"></div>
              </div>
           ) : !selectedAnswer ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
+            <div className="flex-1 flex flex-col items-center justify-center text-[#8A98AE]">
               <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
               <p className="font-medium">Select a submission from the queue to evaluate</p>
             </div>
@@ -284,17 +281,17 @@ export default function TeacherEvaluationDashboard() {
                 <div className="max-w-[800px] w-full mx-auto flex-1">
                   
                   {/* Question Reference */}
-                  <div className="bg-white border border-slate-200 rounded-[16px] p-6 mb-6 shadow-sm">
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Question</div>
+                  <div className="bg-white border border-[#E7EBF3] rounded-[16px] p-6 mb-6 shadow-sm">
+                    <div className="text-[11px] font-bold text-[#8A98AE] uppercase tracking-wider mb-2">Question</div>
                     <h3 className="text-[16px] font-bold text-[#0B2545] leading-relaxed mb-4">
                       {selectedAnswer.question.text}
                     </h3>
                     <div className="flex gap-4">
-                      <span className="text-[12px] font-bold bg-blue-50 text-blue-700 px-3 py-1 rounded-lg border border-blue-100">
+                      <span className="text-[12px] font-bold bg-[#EEF2F8] text-[#0B2545] px-3 py-1 rounded-lg border border-[#E3E9F2]">
                         Max Marks: {selectedAnswer.question.marks}
                       </span>
                       {selectedAnswer.question.model_answer && (
-                        <span className="text-[12px] font-bold bg-slate-100 text-slate-600 px-3 py-1 rounded-lg border border-slate-200 flex items-center gap-1 cursor-pointer hover:bg-slate-200 transition-colors">
+                        <span className="text-[12px] font-bold bg-[#EEF1F6] text-[#475467] px-3 py-1 rounded-lg border border-[#E7EBF3] flex items-center gap-1 cursor-pointer hover:bg-[#E3E9F2] transition-colors">
                           <CheckCircle2 className="w-3.5 h-3.5" /> View Model Answer
                         </span>
                       )}
@@ -302,19 +299,19 @@ export default function TeacherEvaluationDashboard() {
                   </div>
 
                   {/* Student Answer */}
-                  <div className="bg-white border border-slate-200 rounded-[16px] overflow-hidden shadow-sm">
-                    <div className="h-12 bg-slate-50 border-b border-slate-200 flex items-center px-6 justify-between">
+                  <div className="bg-white border border-[#E7EBF3] rounded-[16px] overflow-hidden shadow-sm">
+                    <div className="h-12 bg-[#F7F9FC] border-b border-[#E7EBF3] flex items-center px-6 justify-between">
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-slate-400" />
+                        <User className="w-4 h-4 text-[#8A98AE]" />
                         <span className="text-[13px] font-bold text-[#0B2545]">{selectedAnswer.student_name}'s Answer</span>
                       </div>
-                      <div className="text-[12px] font-medium text-slate-500">
+                      <div className="text-[12px] font-medium text-[#667085]">
                         {selectedAnswer.word_count} words
                       </div>
                     </div>
                     
                     <div className="p-6 md:p-8 min-h-[300px]">
-                      <div className="mb-4 text-[12px] font-medium text-slate-400 flex items-center gap-1 bg-yellow-50 text-yellow-800 p-2 rounded border border-yellow-200 inline-flex">
+                      <div className="mb-4 text-[12px] font-medium flex items-center gap-1 bg-[#FBF2DC] text-[#946B00] p-2 rounded border border-[#F0DFAF] inline-flex">
                         <MessageCircle className="w-3.5 h-3.5" />
                         Highlight any text to add an annotation. (Save marks first if brand new)
                       </div>
@@ -330,20 +327,20 @@ export default function TeacherEvaluationDashboard() {
               </div>
 
               {/* Evaluation Sidebar */}
-              <div className="w-[380px] bg-white border-l border-slate-200 shrink-0 flex flex-col">
-                <div className="p-6 border-b border-slate-100">
+              <div className="w-[380px] bg-white border-l border-[#E7EBF3] shrink-0 flex flex-col">
+                <div className="p-6 border-b border-[#EEF1F6]">
                   <h3 className="text-[16px] font-bold text-[#0B2545] flex items-center gap-2 mb-1">
                     <Target className="w-4 h-4" /> Assessment
                   </h3>
-                  <p className="text-[12px] text-slate-500">Provide marks, feedback, and video.</p>
+                  <p className="text-[12px] text-[#667085]">Provide marks, feedback, and video.</p>
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
                   
                   {/* Marks */}
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      Marks Obtained <span className="text-red-500">*</span>
+                    <label className="block text-[12px] font-bold text-[#344054] uppercase tracking-wider mb-2">
+                      Marks Obtained <span className="text-[#B23A3A]">*</span>
                     </label>
                     <div className="flex items-center gap-3">
                       <input 
@@ -351,31 +348,31 @@ export default function TeacherEvaluationDashboard() {
                         min="0" max={selectedAnswer.question.marks} step="0.5"
                         value={marks}
                         onChange={(e) => setMarks(e.target.value)}
-                        className="w-24 h-12 rounded-[12px] border-2 border-slate-200 text-center font-bold text-[18px] text-[#0B2545] outline-none focus:border-blue-500 transition-colors"
+                        className="w-24 h-12 rounded-[12px] border-2 border-[#E7EBF3] text-center font-bold text-[18px] text-[#0B2545] outline-none focus:border-[#0B2545] transition-colors"
                       />
-                      <span className="text-[16px] font-bold text-slate-400">/ {selectedAnswer.question.marks}</span>
+                      <span className="text-[16px] font-bold text-[#8A98AE]">/ {selectedAnswer.question.marks}</span>
                     </div>
                   </div>
 
                   {/* Feedback */}
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      Written Feedback <span className="text-red-500">*</span>
+                    <label className="block text-[12px] font-bold text-[#344054] uppercase tracking-wider mb-2">
+                      Written Feedback <span className="text-[#B23A3A]">*</span>
                     </label>
                     <textarea 
                       value={feedback}
                       onChange={(e) => setFeedback(e.target.value)}
                       placeholder="Provide constructive feedback here..."
-                      className="w-full h-40 rounded-[12px] border-2 border-slate-200 p-4 text-[14px] text-slate-700 outline-none focus:border-blue-500 transition-colors resize-none leading-relaxed"
+                      className="w-full h-40 rounded-[12px] border-2 border-[#E7EBF3] p-4 text-[14px] text-[#344054] outline-none focus:border-[#0B2545] transition-colors resize-none leading-relaxed"
                     />
                   </div>
 
                   {/* Video Feedback */}
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-2">
-                      <PlayCircle className="w-4 h-4 text-red-500" /> Video Feedback (Optional)
+                    <label className="block text-[12px] font-bold text-[#344054] uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <PlayCircle className="w-4 h-4 text-[#B23A3A]" /> Video Feedback (Optional)
                     </label>
-                    <div className="text-[11px] text-slate-500 mb-2">
+                    <div className="text-[11px] text-[#667085] mb-2">
                       Record a short review, upload to YouTube (Unlisted), and paste the link.
                     </div>
                     <input 
@@ -383,11 +380,11 @@ export default function TeacherEvaluationDashboard() {
                       value={youtubeUrl}
                       onChange={(e) => setYoutubeUrl(e.target.value)}
                       placeholder="https://youtu.be/..."
-                      className="w-full h-12 rounded-[12px] border-2 border-slate-200 px-4 text-[14px] text-slate-700 outline-none focus:border-blue-500 transition-colors"
+                      className="w-full h-12 rounded-[12px] border-2 border-[#E7EBF3] px-4 text-[14px] text-[#344054] outline-none focus:border-[#0B2545] transition-colors"
                     />
                     
                     {selectedAnswer.evaluation?.video_feedback?.embed_url && (
-                      <div className="mt-3 aspect-video rounded-[12px] overflow-hidden bg-slate-900 border border-slate-200 relative">
+                      <div className="mt-3 aspect-video rounded-[12px] overflow-hidden bg-slate-900 border border-[#E7EBF3] relative">
                         <iframe 
                           src={selectedAnswer.evaluation.video_feedback.embed_url}
                           className="w-full h-full absolute inset-0"
@@ -399,7 +396,7 @@ export default function TeacherEvaluationDashboard() {
                   </div>
                 </div>
 
-                <div className="p-6 border-t border-slate-100 bg-slate-50 mt-auto">
+                <div className="p-6 border-t border-[#EEF1F6] bg-[#F7F9FC] mt-auto">
                   <Button 
                     onClick={handleSaveEvaluation}
                     disabled={submitting || !marks || !feedback}

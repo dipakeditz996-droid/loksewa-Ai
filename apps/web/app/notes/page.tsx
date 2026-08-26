@@ -238,7 +238,7 @@ export default function NotesPage() {
                 <input 
                   type="text"
                   placeholder="Search notes, subjects, topics, or keywords..."
-                  className="w-full bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-0 text-lg py-3"
+                  className="w-full bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-600 focus:outline-none focus:ring-0 text-lg py-3"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />

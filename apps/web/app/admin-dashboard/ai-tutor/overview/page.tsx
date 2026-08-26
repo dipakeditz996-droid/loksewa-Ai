@@ -1,54 +1,43 @@
 "use client";
 
-import React, { useState } from "react";
-import Link from "next/link";
+import React from "react";
 import { 
   MessageSquare, Users, Activity, Clock, Server, 
   Settings2, FileCode2, BookOpen, BarChart3, ShieldAlert,
-  CheckCircle2, AlertTriangle, Play, Square, Settings
+  CheckCircle2, AlertCircle, RefreshCw
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { mockAIUsageAnalytics, mockAIConfiguration } from "@/lib/mock/admin-ai-tutor";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import toast from "react-hot-toast";
+import { adminApi } from "@/lib/api/admin";
+import { useQuery } from "@tanstack/react-query";
 
 export default function AITutorOverviewPage() {
-  const [status, setStatus] = useState(mockAIConfiguration.status);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [pendingStatus, setPendingStatus] = useState("");
+  const { data: overview, isLoading, error } = useQuery({
+    queryKey: ["admin", "ai-tutor", "overview"],
+    queryFn: adminApi.getAITutorOverview,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <RefreshCw className="w-8 h-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 text-red-500 p-6 rounded-xl flex items-center gap-4">
+        <AlertCircle className="w-6 h-6" />
+        <p>Failed to load AI Tutor overview data.</p>
+      </div>
+    );
+  }
 
   const statCards = [
-    { label: "Total Conversations", value: mockAIUsageAnalytics.totalConversations.toLocaleString(), icon: MessageSquare, color: "text-blue-500", bg: "bg-blue-50" },
-    { label: "Active Students", value: mockAIUsageAnalytics.uniqueStudents.toLocaleString(), icon: Users, color: "text-emerald-500", bg: "bg-emerald-50" },
-    { label: "Total Questions", value: mockAIUsageAnalytics.totalMessages.toLocaleString(), icon: Activity, color: "text-purple-500", bg: "bg-purple-50" },
-    { label: "Avg. Response Time", value: `${(mockAIUsageAnalytics.averageResponseTimeMs / 1000).toFixed(1)}s`, icon: Clock, color: "text-amber-500", bg: "bg-amber-50" },
+    { label: "Total Sessions", value: (overview?.totalSessions || 0).toLocaleString(), icon: MessageSquare, color: "text-blue-500", bg: "bg-blue-50" },
+    { label: "Active Students", value: (overview?.activeStudents || 0).toLocaleString(), icon: Users, color: "text-emerald-500", bg: "bg-emerald-50" },
+    { label: "Sessions Today", value: (overview?.sessionsToday || 0).toLocaleString(), icon: Activity, color: "text-purple-500", bg: "bg-purple-50" },
+    { label: "Most Active Topic", value: overview?.topModes?.[0]?.mode || "None", icon: Clock, color: "text-amber-500", bg: "bg-amber-50" },
   ];
-
-  const quickActions = [
-    { name: "AI Configuration", icon: Settings2, href: "/admin-dashboard/ai-tutor/configuration", desc: "Change provider, model, limits" },
-    { name: "Manage Prompts", icon: FileCode2, href: "/admin-dashboard/ai-tutor/prompts", desc: "Edit system and behavior prompts" },
-    { name: "Knowledge Sources", icon: BookOpen, href: "/admin-dashboard/ai-tutor/knowledge", desc: "Upload and manage RAG documents" },
-    { name: "Usage Analytics", icon: BarChart3, href: "/admin-dashboard/ai-tutor/usage", desc: "View detailed token and cost metrics" },
-    { name: "Safety Settings", icon: ShieldAlert, href: "/admin-dashboard/ai-tutor/safety", desc: "Manage moderation and safety logs" },
-  ];
-
-  const handleStatusChange = (newStatus: string) => {
-    setPendingStatus(newStatus);
-    setShowStatusModal(true);
-  };
-
-  const confirmStatusChange = () => {
-    setStatus(pendingStatus as any);
-    setShowStatusModal(false);
-    toast.success(`AI Tutor is now ${pendingStatus}.`);
-  };
 
   return (
     <div className="space-y-6">
@@ -59,58 +48,26 @@ export default function AITutorOverviewPage() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-[#0B2545]">System Status</h2>
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
-              status === "Operational" ? "bg-emerald-100 text-emerald-700" :
-              status === "Maintenance" ? "bg-amber-100 text-amber-700" :
-              "bg-red-100 text-red-700"
-            }`}>
-              {status === "Operational" && <CheckCircle2 className="w-3.5 h-3.5" />}
-              {status === "Maintenance" && <Settings className="w-3.5 h-3.5" />}
-              {status === "Disabled" && <AlertTriangle className="w-3.5 h-3.5" />}
-              {status}
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Operational
             </div>
           </div>
           
           <div className="flex items-center gap-4 mb-8">
-            <div className={`p-4 rounded-xl ${
-              status === "Operational" ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"
-            }`}>
+            <div className="p-4 rounded-xl bg-emerald-50 text-emerald-600">
               <Server className="w-8 h-8" />
             </div>
             <div>
               <p className="text-sm font-medium text-slate-500">Provider API</p>
-              <p className="text-lg font-bold text-slate-800">{mockAIConfiguration.aiProvider}</p>
+              <p className="text-lg font-bold text-slate-800">Connected</p>
             </div>
           </div>
 
-          <div className="mt-auto space-y-3">
-            {status !== "Operational" ? (
-              <Button 
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-                onClick={() => handleStatusChange("Operational")}
-              >
-                <Play className="w-4 h-4 mr-2" /> Enable AI Tutor
-              </Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  className="w-full text-amber-600 border-amber-200 hover:bg-amber-50"
-                  onClick={() => handleStatusChange("Maintenance")}
-                >
-                  <Settings className="w-4 h-4 mr-2" /> Maintenance
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                  onClick={() => handleStatusChange("Disabled")}
-                >
-                  <Square className="w-4 h-4 mr-2" /> Disable
-                </Button>
-              </div>
-            )}
-            <p className="text-xs text-center text-slate-400">
-              Disabling will prevent students from sending new messages.
+          <div className="mt-auto pt-4 border-t border-slate-100">
+            <p className="text-xs text-slate-500">
+              System status is automatically inferred from backend connectivity. 
+              Advanced model controls are pending backend implementation.
             </p>
           </div>
         </div>
@@ -131,44 +88,46 @@ export default function AITutorOverviewPage() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h3 className="text-lg font-bold text-[#0B2545] mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {quickActions.map((action, idx) => (
-            <Link key={idx} href={action.href}>
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:border-[#D4A72C]/50 hover:shadow-md transition-all group h-full flex flex-col">
-                <div className="p-3 bg-slate-50 rounded-lg w-fit mb-4 group-hover:bg-[#0B2545]/5 transition-colors">
-                  <action.icon className="w-6 h-6 text-[#0B2545]" />
-                </div>
-                <h4 className="font-semibold text-slate-800 mb-1">{action.name}</h4>
-                <p className="text-xs text-slate-500 leading-relaxed">{action.desc}</p>
+      {/* Backend Gaps Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-amber-50 rounded-lg">
+            <ShieldAlert className="w-6 h-6 text-amber-500" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-[#0B2545] mb-2 flex items-center gap-3">
+              Advanced AI Settings & Moderation
+              <span className="text-xs font-bold px-2 py-1 rounded border text-amber-600 bg-amber-50 border-amber-200">
+                Backend Gap
+              </span>
+            </h3>
+            <p className="text-sm text-slate-600 mb-4 max-w-3xl leading-relaxed">
+              Detailed configuration panels for the AI Tutor (including temperature controls, system prompts editing, 
+              RAG knowledge base uploading, safety logs, and granular token usage) are currently not supported by the 
+              Django backend API. These features will be enabled once backend endpoints are exposed.
+            </p>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 opacity-60 pointer-events-none">
+              <div className="border border-slate-200 rounded-lg p-4 flex items-center gap-3 bg-slate-50">
+                <Settings2 className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-medium text-slate-500">Configuration</span>
               </div>
-            </Link>
-          ))}
+              <div className="border border-slate-200 rounded-lg p-4 flex items-center gap-3 bg-slate-50">
+                <FileCode2 className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-medium text-slate-500">Prompts</span>
+              </div>
+              <div className="border border-slate-200 rounded-lg p-4 flex items-center gap-3 bg-slate-50">
+                <BookOpen className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-medium text-slate-500">Knowledge</span>
+              </div>
+              <div className="border border-slate-200 rounded-lg p-4 flex items-center gap-3 bg-slate-50">
+                <BarChart3 className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-medium text-slate-500">Usage Analytics</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <Dialog open={showStatusModal} onOpenChange={setShowStatusModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Change AI Tutor Status</DialogTitle>
-            <DialogDescription>
-              You are about to change the AI Tutor status to <strong>{pendingStatus}</strong>.
-              {pendingStatus !== "Operational" && " Students will temporarily lose access to AI tutoring features."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => setShowStatusModal(false)}>Cancel</Button>
-            <Button 
-              className={pendingStatus === "Operational" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}
-              onClick={confirmStatusChange}
-            >
-              Confirm Change
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

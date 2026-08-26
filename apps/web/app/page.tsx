@@ -9,12 +9,14 @@ import { HeroSection } from "./home/HeroSection";
 import { FeatureStrip } from "./home/FeatureStrip";
 import { SocialProofSection } from "./home/SocialProofSection";
 import { AIPreparationSection } from "./home/AIPreparationSection";
+import { AILearningNetworkSection } from "./home/AILearningNetworkSection";
 import { StudyPlanSection } from "./home/StudyPlanSection";
 import { CoursesSection } from "./home/CoursesSection";
 import { SyllabusSection } from "./home/SyllabusSection";
 import { PracticeSection } from "./home/PracticeSection";
 import { MockExamSection } from "./home/MockExamSection";
 import { AnalyticsSection } from "./home/AnalyticsSection";
+import { LeaderboardStreakSection } from "./home/LeaderboardStreakSection";
 import { NotesSection } from "./home/NotesSection";
 import { MarketplaceSection } from "./home/MarketplaceSection";
 import { PricingSection } from "./home/PricingSection";
@@ -48,17 +50,19 @@ export default async function Home() {
     <>
       <Navbar />
       
-      <main className="flex-1 bg-slate-50 dark:bg-[#020611] min-h-screen">
+      <main className="flex-1 bg-slate-50 dark:bg-[#020611] bg-aurora min-h-screen">
         <HeroSection />
         <FeatureStrip />
         <SocialProofSection testimonials={testimonials} />
         <AIPreparationSection />
+        <AILearningNetworkSection />
         <StudyPlanSection />
         <CoursesSection examCategories={examCategories} />
         <SyllabusSection examCategories={examCategories} />
         <PracticeSection />
         <MockExamSection />
         <AnalyticsSection />
+        <LeaderboardStreakSection />
         <NotesSection notes={notes} />
         <MarketplaceSection products={products} />
         <PricingSection packages={packages} />

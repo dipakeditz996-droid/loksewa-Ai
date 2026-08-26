@@ -13,6 +13,8 @@ export interface TeacherStudentList {
   last_active: string | null;
   status: 'Active' | 'Inactive' | 'At Risk';
   risk_reason?: string;
+  practice_accuracy?: number;
+  mock_exam_performance?: number;
 }
 
 export interface TeacherStudentDetail {
@@ -83,38 +85,54 @@ export interface TeacherStudentNote {
 }
 
 export const teacherStudentsApi = {
-  getStudents: () => 
-    apiClient('/api/teacher/students/'),
+  getStudents: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return apiClient<any>(`/teacher/students/${qs}`);
+  },
 
   getStudentDetail: (id: number | string) => 
-    apiClient(`/api/teacher/students/${id}/`),
+    apiClient<any>(`/teacher/students/${id}/`),
 
   getStudentCourses: (id: number | string) => 
-    apiClient(`/api/teacher/students/${id}/courses/`),
+    apiClient<any>(`/teacher/students/${id}/courses/`),
 
   getStudentAnalytics: (id: number | string) => 
-    apiClient(`/api/teacher/students/${id}/analytics/`),
+    apiClient<any>(`/teacher/students/${id}/analytics/`),
 
   getStudentPerformance: (id: number | string) => 
-    apiClient(`/api/teacher/students/${id}/performance/`),
+    apiClient<any>(`/teacher/students/${id}/performance/`),
 
   getStudentActivity: (id: number | string) => 
-    apiClient(`/api/teacher/students/${id}/activity/`),
+    apiClient<any>(`/teacher/students/${id}/activity/`),
+    
+  getStudentAttempts: (id: number | string) => 
+    apiClient<any>(`/teacher/students/${id}/attempts/`),
 
   getAtRiskStudents: () => 
-    apiClient('/api/teacher/students/at-risk/'),
+    apiClient<any>('/teacher/students/at-risk/'),
 
   getStudentNotes: (id: number | string) => 
-    apiClient(`/api/teacher/students/${id}/notes/`),
+    apiClient<any>(`/teacher/students/${id}/notes/`),
 
   addStudentNote: (id: number | string, note_text: string) => 
-    apiClient(`/api/teacher/students/${id}/notes/`, {
+    apiClient<any>(`/teacher/students/${id}/notes/`, {
       method: 'POST',
       body: JSON.stringify({ note_text }),
     }),
+    
+  updateStudentNote: (id: number | string, note_id: number, note_text: string) => 
+    apiClient<any>(`/teacher/students/${id}/notes/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ note_id, note_text }),
+    }),
+    
+  deleteStudentNote: (id: number | string, note_id: number) => 
+    apiClient<any>(`/teacher/students/${id}/notes/?note_id=${note_id}`, {
+      method: 'DELETE',
+    }),
 
   sendMessage: (recipientId: number | string, subject: string, body: string) => 
-    apiClient('/api/teacher/messages/', {
+    apiClient<any>('/teacher/messages/', {
       method: 'POST',
       body: JSON.stringify({ recipient: recipientId, subject, body }),
     }),

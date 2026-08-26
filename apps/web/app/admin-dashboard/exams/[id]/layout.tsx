@@ -1,124 +1,133 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { usePathname, useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { BarChart3, ChevronLeft, FileText, ListTodo, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { 
-  ArrowLeft, FileText, LayoutList, Users, BarChart3, Settings,
-  Eye, Edit2, Archive, Target
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { mockExams, ExamMetadata } from "@/lib/mock/admin-exams";
+import { Skeleton } from "@/components/ui/skeleton";
+import { adminExamApi } from "@/lib/api/admin-exams";
+import { ApiError } from "@/lib/api/client";
+import { ApiErrorState } from "@/components/admin/exams/ExamStateViews";
+import { ExamStatusBadge } from "@/components/admin/exams/ExamStatusBadge";
 
 export default function ExamDetailLayout({ children }: { children: React.ReactNode }) {
-  const params = useParams();
   const pathname = usePathname();
-  const examId = params.id as string;
-  
-  const [exam, setExam] = useState<ExamMetadata | null>(null);
-  const [loading, setLoading] = useState(true);
+  const params = useParams<{ id: string }>();
+  const examId = Number(params?.id);
+  const validId = Number.isFinite(examId) && examId > 0;
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const found = mockExams.find(e => e.id === examId);
-      setExam(found || null);
-      setLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [examId]);
+  const {
+    data: exam,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useQuery({
+    queryKey: ["admin", "exam", examId],
+    queryFn: () => adminExamApi.getExam(examId),
+    enabled: validId,
+    retry: false,
+  });
 
-  const TABS = [
-    { name: "Overview", href: `/admin-dashboard/exams/${examId}`, icon: FileText, exact: true },
-    { name: "Questions", href: `/admin-dashboard/exams/${examId}/questions`, icon: LayoutList },
-    { name: "Results", href: `/admin-dashboard/exams/${examId}/results`, icon: Users },
-    { name: "Analytics", href: `/admin-dashboard/exams/${examId}/analytics`, icon: BarChart3 },
-    { name: "Settings", href: `/admin-dashboard/exams/${examId}/settings`, icon: Settings },
+  const base = `/admin-dashboard/exams/${params?.id}`;
+  const tabs = [
+    { label: "Overview", href: base, icon: FileText, exact: true },
+    { label: "Questions", href: `${base}/questions`, icon: ListTodo },
+    { label: "Analytics", href: `${base}/analytics`, icon: BarChart3 },
+    { label: "Results", href: `${base}/results`, icon: Trophy },
   ];
 
-  if (loading) {
-    return <div className="p-8 h-48 bg-slate-100 rounded-xl animate-pulse mx-8 mt-6"></div>;
-  }
-
-  if (!exam) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
-        <FileText className="w-12 h-12 text-slate-300" />
-        <h2 className="text-xl font-bold text-slate-700">Exam Not Found</h2>
-        <Link href="/admin-dashboard/exams">
-          <Button variant="outline">Return to Exams</Button>
-        </Link>
-      </div>
-    );
-  }
+  const meta = exam
+    ? [exam.category_name, exam.exam_name, exam.subject_name].filter(Boolean)
+    : [];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-10">
-      
-      {/* Detail Header */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <Link href="/admin-dashboard/exams" className="mt-1">
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-[#0B2545] hover:bg-slate-200">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-[#0B2545]">{exam.title}</h1>
-              {exam.status === "Published" && <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100">Published</Badge>}
-              {exam.status === "Draft" && <Badge className="bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-100">Draft</Badge>}
-            </div>
-            <div className="flex items-center gap-3 mt-1.5 text-sm text-slate-500">
-              <span className="flex items-center gap-1"><Target className="w-4 h-4" /> {exam.category}</span>
-              <span>•</span>
-              <span>{exam.type}</span>
-              <span>•</span>
-              <span className="font-mono text-xs text-slate-400">{exam.id}</span>
-            </div>
+    <div className="space-y-6">
+      <Link
+        href="/admin-dashboard/exams"
+        className="text-sm text-slate-500 hover:text-slate-700 inline-flex items-center gap-1"
+      >
+        <ChevronLeft className="w-4 h-4" /> Back to exams
+      </Link>
+
+      {/* ---- Examination header ---- */}
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="px-5 py-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            {isLoading ? (
+              <>
+                <Skeleton className="h-6 w-64" />
+                <Skeleton className="h-3 w-80 mt-3" />
+              </>
+            ) : exam ? (
+              <>
+                <h1 className="text-xl font-semibold text-[#0B2545] truncate">{exam.title}</h1>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-xs text-slate-500">
+                  <span className="capitalize font-medium text-slate-600">
+                    {String(exam.exam_type ?? "").replace(/_/g, " ")}
+                  </span>
+                  {meta.map((item) => (
+                    <React.Fragment key={item}>
+                      <span className="text-slate-300">•</span>
+                      <span>{item}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <h1 className="text-xl font-semibold text-[#0B2545]">Examination</h1>
+            )}
           </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50">
-            <Eye className="w-4 h-4 mr-2" /> Preview
-          </Button>
-          <Button variant="outline" className="text-slate-600 bg-white">
-            <Edit2 className="w-4 h-4 mr-2" /> Edit Details
-          </Button>
-        </div>
-      </div>
 
-      {/* Navigation Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex overflow-x-auto">
-          {TABS.map(tab => {
-            const isActive = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={cn(
-                  "flex items-center gap-2 px-6 py-4 text-sm font-semibold transition-colors whitespace-nowrap border-b-2",
-                  isActive 
-                    ? "border-blue-600 text-blue-600 bg-blue-50/50" 
-                    : "border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-                )}
-              >
-                <tab.icon className={cn("w-4 h-4", isActive ? "text-blue-600" : "text-slate-400")} />
-                {tab.name}
-              </Link>
-            );
-          })}
+          {exam && (
+            <div className="flex items-center gap-2 shrink-0">
+              <ExamStatusBadge status={exam.status} />
+            </div>
+          )}
+        </div>
+
+        {/* ---- Section tabs ---- */}
+        <div className="border-t border-slate-100 px-2 overflow-x-auto">
+          <nav className="flex items-center gap-1 min-w-max">
+            {tabs.map((tab) => {
+              const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                    active
+                      ? "border-[#D4A72C] text-[#0B2545]"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  )}
+                >
+                  <tab.icon className={cn("w-4 h-4", active ? "text-[#D4A72C]" : "text-slate-400")} />
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </div>
 
-      {/* Tab Content */}
-      <div className="min-h-[400px]">
-        {children}
-      </div>
-
+      {!validId ? (
+        <ApiErrorState
+          error={new ApiError(404, { detail: "Not found" })}
+          resourceLabel="this examination"
+        />
+      ) : error ? (
+        <ApiErrorState
+          error={error}
+          resourceLabel="this examination"
+          onRetry={() => refetch()}
+          isRetrying={isFetching}
+        />
+      ) : (
+        children
+      )}
     </div>
   );
 }

@@ -146,7 +146,7 @@ export default function QuestionStudio({ questionId }: QuestionStudioProps) {
   }
 
   // Prevent edits if not draft/changes requested (in case URL is bypassed)
-  const isReadOnly = formData.status && !['draft', 'changes_requested'].includes(formData.status);
+  const isReadOnly = Boolean(formData.status && !['draft', 'changes_requested'].includes(formData.status));
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-background">

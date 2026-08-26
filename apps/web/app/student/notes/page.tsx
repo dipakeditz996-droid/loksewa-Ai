@@ -97,6 +97,10 @@ function NotesContent() {
             <option value="">All Types</option>
             <option value="notes">Notes</option>
             <option value="pdf">PDF</option>
+            <option value="video">Video</option>
+            <option value="document">Document</option>
+            <option value="presentation">Presentation</option>
+            <option value="external_link">External Link</option>
             <option value="study_guide">Study Guide</option>
             <option value="reference">Reference Material</option>
           </select>

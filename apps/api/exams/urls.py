@@ -2,17 +2,23 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     TeacherMockExamViewSet, AdminExaminationReviewViewSet,
-    ExamViewSet, SubjectViewSet, TopicViewSet, QuestionViewSet, 
+    ExamViewSet, SubjectViewSet, TopicViewSet, QuestionViewSet,
     PracticeSessionViewSet, DashboardView, UserTopicProgressViewSet, BookmarkViewSet,
     ModelExamViewSet, ModelExamAttemptViewSet,
     SubjectivePracticeSetViewSet, SubjectiveModelExamViewSet, SubjectiveQuestionViewSet,
     SubjectiveAttemptViewSet, TeacherEvaluationViewSet, TeacherQuestionViewSet,
-    TeacherQuestionSetViewSet, AdminQuestionReviewViewSet, AdminPracticeSetReviewViewSet
+    TeacherQuestionSetViewSet, AdminQuestionReviewViewSet, AdminPracticeSetReviewViewSet,
+    QuestionAvailabilityView,
 )
 from .student_exam_views import (
-    StudentExaminationViewSet, 
+    StudentExaminationViewSet,
     StudentExaminationAttemptViewSet,
     LeaderboardViewSet
+)
+from .admin_views import (
+    AdminExamCategoryViewSet, AdminExamViewSet, AdminPaperViewSet,
+    AdminSubjectViewSet, AdminChapterViewSet, AdminTopicViewSet,
+    AdminAcademicTreeAPIView
 )
 
 router = DefaultRouter()
@@ -44,7 +50,18 @@ router.register(r'student/exams', StudentExaminationViewSet, basename='student-e
 router.register(r'student/exam-attempts', StudentExaminationAttemptViewSet, basename='student-exam-attempt')
 router.register(r'student/leaderboard', LeaderboardViewSet, basename='student-leaderboard')
 
+# Admin Academic routes
+router.register(r'admin/academic/categories', AdminExamCategoryViewSet, basename='admin-category')
+router.register(r'admin/academic/exams', AdminExamViewSet, basename='admin-exam')
+router.register(r'admin/academic/papers', AdminPaperViewSet, basename='admin-paper')
+router.register(r'admin/academic/subjects', AdminSubjectViewSet, basename='admin-subject')
+router.register(r'admin/academic/chapters', AdminChapterViewSet, basename='admin-chapter')
+router.register(r'admin/academic/topics', AdminTopicViewSet, basename='admin-topic')
+
 urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    # Master Question Bank — availability check endpoint
+    path('questions/availability/', QuestionAvailabilityView.as_view(), name='question-availability'),
+    path('admin/academic/tree/', AdminAcademicTreeAPIView.as_view(), name='admin-academic-tree'),
     path('', include(router.urls)),
 ]

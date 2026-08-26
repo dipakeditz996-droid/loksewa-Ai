@@ -5,8 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { 
-  Settings, Globe, GraduationCap, FileText, Brain, 
-  Bell, Store, ShieldAlert, HardDrive, Palette, Wrench, Search,
+  Settings, Globe, Search,
   Menu, X
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -15,16 +14,20 @@ import { Button } from "@/components/ui/button";
 
 const SETTINGS_NAV = [
   { title: "Overview", href: "/admin-dashboard/settings", icon: Settings, exact: true },
-  { title: "General", href: "/admin-dashboard/settings/general", icon: Globe },
-  { title: "Academic", href: "/admin-dashboard/settings/academic", icon: GraduationCap },
-  { title: "Exams", href: "/admin-dashboard/settings/exams", icon: FileText },
-  { title: "AI Tutor", href: "/admin-dashboard/settings/ai", icon: Brain },
-  { title: "Notifications", href: "/admin-dashboard/settings/notifications", icon: Bell },
-  { title: "Marketplace", href: "/admin-dashboard/settings/marketplace", icon: Store },
-  { title: "Security", href: "/admin-dashboard/settings/security", icon: ShieldAlert },
-  { title: "Storage", href: "/admin-dashboard/settings/storage", icon: HardDrive },
-  { title: "Appearance", href: "/admin-dashboard/settings/appearance", icon: Palette },
-  { title: "Maintenance", href: "/admin-dashboard/settings/maintenance", icon: Wrench },
+  // Referrals: backed by GET/PUT /api/gamification/settings/referrals/ (IsAdminUser)
+  { title: "Referral & Gamification", href: "/admin-dashboard/settings/referrals", icon: Globe },
+  // BACKEND GAP — the following settings have no Django model, serializer, or API endpoint.
+  // They are intentionally excluded until backend support is implemented:
+  // - General     (/settings/general)
+  // - Academic    (/settings/academic)
+  // - Exams       (/settings/exams)
+  // - AI Tutor    (/settings/ai)
+  // - Notifications (/settings/notifications)
+  // - Marketplace (/settings/marketplace)
+  // - Security    (/settings/security)
+  // - Storage     (/settings/storage)
+  // - Appearance  (/settings/appearance)
+  // - Maintenance (/settings/maintenance)
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

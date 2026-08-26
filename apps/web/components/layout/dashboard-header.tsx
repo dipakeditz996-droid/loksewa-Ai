@@ -4,6 +4,7 @@ import { Menu, Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import { FocusModeHeaderToggle } from "@/components/student/focus/FocusModeHeaderToggle";
 
 interface DashboardHeaderProps {
   onMenuClick: () => void;
@@ -51,33 +53,33 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
           className="lg:hidden"
           onClick={onMenuClick}
         >
-          <Menu className="h-5 w-5 text-[#0B2545]" />
+          <Menu className="h-5 w-5 text-[#0B2545] dark:text-white" />
           <span className="sr-only">Toggle sidebar</span>
         </Button>
         <div className="hidden lg:flex flex-col">
-          <span className="text-[16px] font-bold text-foreground flex items-center gap-1.5">
+          <span className="text-[16px] font-bold text-foreground dark:text-white flex items-center gap-1.5">
             {greeting}, {user.name.split(" ")[0]}! <span className="text-xl">{icon}</span>
           </span>
-          <span className="text-[12px] font-medium text-muted-foreground">Welcome back! Keep up the excellent work.</span>
+          <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Welcome back! Keep up the excellent work.</span>
         </div>
       </div>
 
       <div className="flex items-center gap-3 sm:gap-5">
         <div className="hidden md:flex relative w-64 lg:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground dark:text-slate-400" />
           <Input
             type="search"
             placeholder="Search syllabus, notes..."
-            className="w-full bg-muted/50 pl-9 focus-visible:ring-1 focus-visible:ring-primary rounded-full text-[13px] h-9"
+            className="w-full bg-muted/50 dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder:text-slate-400 pl-9 focus-visible:ring-1 focus-visible:ring-primary rounded-full text-[13px] h-9"
           />
         </div>
 
+        {/* Do Not Disturb / Focus Mode - student portal only. */}
+        {role === "student" && <FocusModeHeaderToggle />}
+
         <ThemeToggle />
 
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 text-muted-foreground hover:bg-accent rounded-full">
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-2 ring-background" />
-        </Button>
+        <NotificationBell />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

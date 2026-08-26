@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import { Question } from "./teacher-questions";
+import { QuestionData as Question } from "./teacher-questions";
 
 export interface QuestionSetQuestion {
   id?: number;

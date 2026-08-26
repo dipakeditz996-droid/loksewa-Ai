@@ -4,6 +4,18 @@ from exams.models import Exam, Subject, Topic
 
 User = get_user_model()
 
+class StudyPlanTemplate(models.Model):
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    duration_days = models.IntegerField(default=30)
+    course = models.ForeignKey('courses.Course', on_delete=models.SET_NULL, related_name='study_plan_templates', null=True, blank=True)
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='study_plan_templates', null=True, blank=True)
+    is_active = models.BooleanField(default=False)  # Draft by default
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return self.name
+
 class StudyPlan(models.Model):
     LEVEL_CHOICES = [
         ('BEGINNER', 'Beginner'),
@@ -20,6 +32,7 @@ class StudyPlan(models.Model):
 
     student = models.OneToOneField(User, on_delete=models.CASCADE, related_name='study_plan')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='study_plans')
+    template = models.ForeignKey('StudyPlanTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='instances')
     
     target_date = models.DateField()
     daily_minutes = models.IntegerField(default=120)
@@ -75,3 +88,15 @@ class StudyTask(models.Model):
 
     class Meta:
         ordering = ['date', 'created_at']
+
+class StudyPlanTemplateTask(models.Model):
+    template = models.ForeignKey(StudyPlanTemplate, on_delete=models.CASCADE, related_name='tasks')
+    day_number = models.IntegerField(help_text="Day 1, Day 2, etc.")
+    title = models.CharField(max_length=255)
+    task_type = models.CharField(max_length=50, choices=StudyTask.TASK_TYPE_CHOICES)
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name='template_tasks')
+    topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True, related_name='template_tasks')
+    duration_minutes = models.IntegerField(default=30)
+    
+    def __str__(self):
+        return f"Day {self.day_number}: {self.title}"

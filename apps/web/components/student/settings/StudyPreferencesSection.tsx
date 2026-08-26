@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BookOpen, Save, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
+import { FocusModeToggle } from "@/components/student/focus/FocusModeToggle";
 
 const STUDY_TIMES = [
   { key: "morning", label: "Morning", sub: "6AM - 12PM", emoji: "🌅" },
@@ -86,6 +87,9 @@ export function StudyPreferencesSection() {
 
   return (
     <div className="space-y-6">
+      {/* Focus Mode - same control as the header, same stored preference */}
+      <FocusModeToggle variant="card" />
+
       {/* Preferred Study Time */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
         <div className="flex items-center gap-3 mb-6">

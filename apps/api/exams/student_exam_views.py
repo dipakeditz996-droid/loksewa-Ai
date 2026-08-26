@@ -5,6 +5,12 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 from .models import Examination, ExaminationAttempt, StudentAnswer, Question, ModelExam, ModelExamAttempt
+from .attempt_timing import (
+    attempt_remaining_seconds,
+    attempt_is_expired,
+    enforce_expiry,
+    finalize_attempt,
+)
 from .student_serializers import (
     StudentExaminationSerializer, 
     StudentExaminationAttemptSerializer, 
@@ -24,38 +30,107 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        # Get published and live exams
-        # Note: You can add logic to filter by ExaminationEligibility here
-        return Examination.objects.filter(status__in=['published', 'live'])
+        
+        # Enforce Enrollment Access Control
+        from courses.models import Enrollment
+        active_courses = Enrollment.objects.filter(student=user, status='active').values_list('course_id', flat=True)
+        
+        # Get published and live exams, filtering out exams that are restricted to a course the student is not enrolled in
+        from django.db.models import Q
+        return Examination.objects.filter(status__in=['published', 'live']).filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
         
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
+        """
+        Create *or resume* an ExaminationAttempt.
+
+        Idempotent by design: a second tab, a refresh, or a double-click
+        returns the student's existing in-progress attempt rather than
+        creating a duplicate. The attempt row stays the single source of truth
+        for "am I in an exam right now", which is what drives exam Focus Mode.
+        """
         examination = self.get_object()
         user = request.user
-        
+
         if examination.status not in ['published', 'live']:
-            return Response({'detail': 'Exam is not currently active.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        # Check for in-progress attempts
-        active_attempt = ExaminationAttempt.objects.filter(examination=examination, student=user, status='in-progress').first()
-        if active_attempt:
-            return Response({'detail': 'You already have an active attempt for this exam.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        # Check max attempts
-        if examination.max_attempts > 0:
-            attempts_count = ExaminationAttempt.objects.filter(examination=examination, student=user).count()
-            if attempts_count >= examination.max_attempts:
-                return Response({'detail': 'Maximum attempts reached for this exam.'}, status=status.HTTP_403_FORBIDDEN)
-                
-        # Create attempt
-        attempt = ExaminationAttempt.objects.create(
-            examination=examination,
-            student=user,
-            status='in-progress'
-        )
-        
+            return Response(
+                {'detail': 'Exam is not currently active.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        now = timezone.now()
+        if examination.start_time and now < examination.start_time:
+            return Response(
+                {'detail': 'This exam has not opened yet.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if examination.end_time and now > examination.end_time:
+            return Response(
+                {'detail': 'This exam window has closed.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            # Lock this student's rows for this exam so two tabs racing on
+            # "Start" cannot both create an attempt.
+            active_attempt = (
+                ExaminationAttempt.objects
+                .select_for_update()
+                .filter(examination=examination, student=user, status='in-progress')
+                .first()
+            )
+
+            if active_attempt:
+                # An attempt that ran out of time while the student was away is
+                # closed here rather than silently resumed.
+                if enforce_expiry(active_attempt):
+                    active_attempt = None
+                else:
+                    serializer = StudentExaminationAttemptSerializer(active_attempt)
+                    return Response(
+                        {**serializer.data, 'resumed': True},
+                        status=status.HTTP_200_OK,
+                    )
+
+            if examination.max_attempts and examination.max_attempts > 0:
+                attempts_count = ExaminationAttempt.objects.filter(
+                    examination=examination, student=user
+                ).count()
+                if attempts_count >= examination.max_attempts:
+                    return Response(
+                        {'detail': 'Maximum attempts reached for this exam.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
+
+            attempt = ExaminationAttempt.objects.create(
+                examination=examination,
+                student=user,
+                status='in-progress',
+            )
+
         serializer = StudentExaminationAttemptSerializer(attempt)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(
+            {**serializer.data, 'resumed': False},
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=['get'], url_path='active-attempt')
+    def active_attempt(self, request, pk=None):
+        """The student's in-progress attempt for this exam, if any."""
+        examination = self.get_object()
+        attempt = ExaminationAttempt.objects.filter(
+            examination=examination, student=request.user, status='in-progress'
+        ).first()
+
+        if attempt and enforce_expiry(attempt):
+            attempt = None
+
+        if not attempt:
+            return Response({'active_attempt': None})
+
+        return Response({
+            'active_attempt': StudentExaminationAttemptSerializer(attempt).data
+        })
 
 class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     """
@@ -65,13 +140,58 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     serializer_class = StudentExaminationAttemptSerializer
     
     def get_queryset(self):
-        return ExaminationAttempt.objects.filter(student=self.request.user)
-        
+        return ExaminationAttempt.objects.filter(
+            student=self.request.user
+        ).select_related('examination')
+
     def get_serializer_class(self):
         if self.action == 'result':
             return StudentExaminationResultSerializer
         return super().get_serializer_class()
-        
+
+    def get_object(self):
+        """
+        Every read of an attempt first settles its clock. A tab left open past
+        the deadline therefore sees a submitted attempt, not a running one.
+        """
+        attempt = super().get_object()
+        enforce_expiry(attempt)
+        return attempt
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """
+        All still-running attempts for the current student.
+
+        The Focus Mode context calls this on mount so a refresh, a reopened
+        tab, or a second device re-applies exam focus from server state rather
+        than from anything the browser remembered.
+        """
+        attempts = self.get_queryset().filter(status='in-progress')
+        live = []
+        for attempt in attempts:
+            if not enforce_expiry(attempt):
+                live.append(attempt)
+        serializer = StudentExaminationAttemptSerializer(live, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def state(self, request, pk=None):
+        """
+        Lightweight poll target: attempt status plus remaining time. Used by
+        the exam timer and the Focus Mode watchdog to re-sync with the server.
+        """
+        attempt = self.get_object()
+        return Response({
+            'id': attempt.id,
+            'status': attempt.status,
+            'is_active': attempt.status == 'in-progress',
+            'is_expired': attempt_is_expired(attempt),
+            'remaining_seconds': attempt_remaining_seconds(attempt),
+            'server_time': timezone.now().isoformat(),
+        })
+
+
     @action(detail=True, methods=['get'])
     def questions(self, request, pk=None):
         """Returns the questions for this attempt without the correct answers."""
@@ -95,10 +215,16 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     def answer(self, request, pk=None):
         """Save or update an answer for a specific question."""
         attempt = self.get_object()
-        
+
         if attempt.status != 'in-progress':
-            return Response({'detail': 'Cannot answer - exam is not in progress.'}, status=status.HTTP_400_BAD_REQUEST)
-            
+            detail = (
+                'Time is up - this attempt has been submitted automatically.'
+                if attempt.submitted_at else
+                'Cannot answer - exam is not in progress.'
+            )
+            return Response({'detail': detail, 'status': attempt.status},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         question_id = request.data.get('question')
         selected_option = request.data.get('selected_option')
         
@@ -124,46 +250,34 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
-        """Submit the exam attempt and calculate the score."""
+        """
+        Submit the exam attempt and calculate the score.
+
+        Scoring lives in attempt_timing.finalize_attempt so that a manual
+        submit and an automatic expiry cannot drift apart, and so a second tab
+        pressing Submit is a harmless no-op instead of an error.
+        """
         attempt = self.get_object()
-        
+
         if attempt.status != 'in-progress':
-            return Response({'detail': 'Exam already submitted.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        with transaction.atomic():
-            examination = attempt.examination
-            answers = StudentAnswer.objects.filter(attempt=attempt)
-            
-            score = 0
-            total_possible = examination.total_marks
-            
-            for answer in answers:
-                question = answer.question
-                if answer.selected_option and question.correct_option:
-                    if answer.selected_option.upper() == question.correct_option.upper():
-                        answer.is_correct = True
-                        answer.marks_awarded = question.marks
-                        score += question.marks
-                    elif examination.negative_marking:
-                        score -= examination.negative_marking_value
-                answer.save()
-            
-            score = max(0, score)  # Floor at 0
-            percentage = round((score / total_possible * 100), 2) if total_possible > 0 else 0
-            
-            attempt.score = score
-            attempt.percentage = percentage
-            attempt.passed = score >= examination.passing_marks
-            attempt.submitted_at = timezone.now()
-            attempt.status = 'submitted'
-            
-            if attempt.started_at:
-                delta = timezone.now() - attempt.started_at
-                attempt.time_taken_seconds = int(delta.total_seconds())
-            
-            attempt.save()
-            
-        return Response({'detail': 'Exam submitted successfully.', 'attempt_id': attempt.id})
+            # get_object() may have just auto-submitted an expired attempt;
+            # from the student's point of view that is a success.
+            if attempt.submitted_at:
+                return Response({
+                    'detail': 'Exam submitted.',
+                    'attempt_id': attempt.id,
+                    'auto_submitted': True,
+                })
+            return Response({'detail': 'Exam already submitted.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        finalize_attempt(attempt)
+
+        return Response({
+            'detail': 'Exam submitted successfully.',
+            'attempt_id': attempt.id,
+            'auto_submitted': False,
+        })
 
     @action(detail=True, methods=['get'])
     def result(self, request, pk=None):

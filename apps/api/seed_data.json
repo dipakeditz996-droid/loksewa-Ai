@@ -1,0 +1,97 @@
+{
+  "users": [
+    {
+      "email": "admin@loksewa.ai",
+      "username": "admin",
+      "role": "admin",
+      "first_name": "System",
+      "last_name": "Admin"
+    },
+    {
+      "email": "teacher@loksewa.ai",
+      "username": "gk_expert",
+      "role": "teacher",
+      "first_name": "Hari",
+      "last_name": "Sharma"
+    },
+    {
+      "email": "student@loksewa.ai",
+      "username": "aspirant99",
+      "role": "student",
+      "first_name": "Ram",
+      "last_name": "Karki"
+    }
+  ],
+  "hierarchy": [
+    {
+      "name": "Loksewa Aayog (Public Service Commission)",
+      "description": "Official government exams.",
+      "exams": [
+        {
+          "name": "Section Officer (Non-Technical)",
+          "description": "Gazetted Third Class Officer",
+          "papers": [
+            {
+              "name": "First Paper (General Awareness & Aptitude Test)",
+              "paper_number": "1",
+              "subjects": [
+                {
+                  "name": "General Awareness (GK)",
+                  "code": "GK",
+                  "chapters": [
+                    {
+                      "title": "Geography of Nepal",
+                      "topics": [
+                        {
+                          "name": "Physical Geography",
+                          "questions": [
+                            {
+                              "text": "What is the total area of Nepal?",
+                              "question_type": "mcq",
+                              "option_a": "147,181 sq. km",
+                              "option_b": "147,516 sq. km",
+                              "option_c": "141,181 sq. km",
+                              "option_d": "145,181 sq. km",
+                              "correct_option": "A",
+                              "explanation": "The official area of Nepal is 147,181 square kilometers.",
+                              "marks": 2,
+                              "negative_marks": 0.4,
+                              "difficulty": "easy"
+                            },
+                            {
+                              "text": "Which is the deepest gorge in the world located in Nepal?",
+                              "question_type": "mcq",
+                              "option_a": "Kali Gandaki Gorge",
+                              "option_b": "Arun Valley",
+                              "option_c": "Karnali Gorge",
+                              "option_d": "Marsyangdi Valley",
+                              "correct_option": "A",
+                              "explanation": "Kali Gandaki gorge is considered the deepest gorge in the world.",
+                              "marks": 2,
+                              "negative_marks": 0.4,
+                              "difficulty": "medium"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "courses": [
+    {
+      "title": "Section Officer First Paper Masterclass",
+      "description": "Complete preparation for the First Paper (GK, IQ, English).",
+      "exam_name": "Section Officer (Non-Technical)",
+      "price": 2500,
+      "duration_days": 90,
+      "teacher_email": "teacher@loksewa.ai"
+    }
+  ]
+}

@@ -29,24 +29,34 @@ class SubscriptionPlan(models.Model):
     description = models.TextField()
     duration = models.IntegerField()
     duration_unit = models.CharField(max_length=20, choices=DURATION_UNIT_CHOICES, default='DAYS')
-    
+
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     discount = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Discount percentage")
-    
+
     badge = models.CharField(max_length=20, choices=BADGE_CHOICES, default='NONE')
-    
+
     # Feature access configuration
     features = models.JSONField(default=list, blank=True, help_text="List of string feature keys this plan unlocks")
-    
+
+    # Which course this plan grants enrollment access to (optional)
+    course = models.ForeignKey(
+        'courses.Course',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='subscription_plans',
+        help_text='The Course this plan grants enrollment access to. When payment is approved, student is enrolled in this course.'
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     display_order = models.IntegerField(default=0)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.name} - {self.price}"
+
 
 class Subscription(models.Model):
     STATUS_CHOICES = (
@@ -99,18 +109,6 @@ class SubscriptionPayment(models.Model):
     def __str__(self):
         return f"{self.student.username} - {self.plan.name} - {self.status}"
 
-class Notification(models.Model):
-    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='student_notifications')
-    type = models.CharField(max_length=50)
-    title = models.CharField(max_length=255)
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    related_id = models.CharField(max_length=255, blank=True, null=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"To {self.student.username}: {self.title}"
 
 class Invoice(models.Model):
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invoices')

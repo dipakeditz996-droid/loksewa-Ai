@@ -8,10 +8,12 @@ class TeacherStudentListSerializer(serializers.ModelSerializer):
     average_score = serializers.FloatField(read_only=True)
     last_active = serializers.DateTimeField(read_only=True)
     status = serializers.CharField(read_only=True)
+    practice_accuracy = serializers.FloatField(read_only=True)
+    mock_exam_performance = serializers.FloatField(read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'username', 'email', 'avatar', 'enrolled_courses', 'completed_courses', 'average_score', 'last_active', 'status']
+        fields = ['id', 'first_name', 'last_name', 'username', 'email', 'avatar', 'enrolled_courses', 'completed_courses', 'average_score', 'last_active', 'status', 'practice_accuracy', 'mock_exam_performance']
 
 class TeacherStudentDetailSerializer(serializers.ModelSerializer):
     enrolled_courses_count = serializers.IntegerField(read_only=True)

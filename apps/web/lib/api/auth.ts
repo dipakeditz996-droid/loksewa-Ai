@@ -59,10 +59,8 @@ export const authApi = {
     const refresh = localStorage.getItem("refresh_token");
     // Fire-and-forget — we don't need to await this
     if (refresh) {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
-      fetch(`${API_URL}/auth/logout/`, {
+      apiClient("/auth/logout/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refresh }),
       }).catch(() => {});
     }
@@ -85,5 +83,14 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email }),
     });
+  },
+
+  socialLogin: async (provider: 'google' | 'facebook' | 'apple', token: string, additional_data?: any) => {
+    const data = await apiClient<{ access: string; refresh: string }>("/auth/social/", {
+      method: "POST",
+      body: JSON.stringify({ provider, token, additional_data }),
+    });
+    setAuthToken(data.access, data.refresh);
+    return data;
   },
 };

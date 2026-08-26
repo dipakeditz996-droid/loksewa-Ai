@@ -1,0 +1,339 @@
+"""
+Master Question Bank — Centralized Question Selection Engine
+============================================================
+
+This module provides the single source of truth for all question selection
+across the LoksewaAI platform:
+
+  MASTER QUESTION BANK
+          │
+  QuestionSelectionService
+          │
+  ┌───────┼───────────┐
+  │       │           │
+PRACTICE GAMES   MOCK EXAMS
+
+Usage:
+    service = QuestionSelectionService()
+    result = service.select(
+        exam_id=1,
+        subject_id=5,
+        difficulty_distribution={"easy": 6, "medium": 10, "hard": 4},
+        question_type="mcq",
+        randomize=True,
+        exclude_ids=[101, 205],
+    )
+    if result["satisfied"]:
+        questions = result["questions"]
+    else:
+        warnings = result["warnings"]
+"""
+
+import random
+from typing import Optional
+from django.db.models import QuerySet, Q
+
+
+class QuestionSelectionService:
+    """
+    Reusable service for selecting approved questions from the Master Question Bank.
+
+    All student-facing content (Practice, Games, Mock Exams) must go through
+    this service to ensure:
+      - Only APPROVED questions are returned
+      - Difficulty distribution is respected
+      - Randomization is server-side only
+      - Insufficient question pools are handled gracefully
+    """
+
+    APPROVED_STATUS = "approved"
+
+    def get_base_queryset(self) -> QuerySet:
+        """Returns the base queryset of all approved questions."""
+        from .models import Question
+        return Question.objects.filter(status=self.APPROVED_STATUS).select_related(
+            "topic", "topic__chapter", "topic__chapter__subject",
+            "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
+        )
+
+    def apply_filters(
+        self,
+        qs: QuerySet,
+        *,
+        exam_id: Optional[int] = None,
+        paper_id: Optional[int] = None,
+        subject_id: Optional[int] = None,
+        chapter_id: Optional[int] = None,
+        topic_id: Optional[int] = None,
+        question_type: Optional[str] = None,
+        tags: Optional[str] = None,
+        exclude_ids: Optional[list] = None,
+    ) -> QuerySet:
+        """Apply academic-hierarchy and metadata filters to a queryset."""
+        if exam_id:
+            qs = qs.filter(
+                Q(topic__chapter__subject__paper__exam_id=exam_id) |
+                Q(topic__chapter__subject__exam_id=exam_id)
+            )
+        if paper_id:
+            qs = qs.filter(topic__chapter__subject__paper_id=paper_id)
+        if subject_id:
+            qs = qs.filter(topic__chapter__subject_id=subject_id)
+        if chapter_id:
+            qs = qs.filter(topic__chapter_id=chapter_id)
+        if topic_id:
+            qs = qs.filter(topic_id=topic_id)
+        if question_type:
+            qs = qs.filter(question_type=question_type)
+        if tags:
+            # Tags are stored comma-separated; filter by any matching tag
+            for tag in [t.strip() for t in tags.split(",") if t.strip()]:
+                qs = qs.filter(tags__icontains=tag)
+        if exclude_ids:
+            qs = qs.exclude(id__in=exclude_ids)
+        return qs.distinct()
+
+    def check_availability(
+        self,
+        *,
+        exam_id=None,
+        paper_id=None,
+        subject_id=None,
+        chapter_id=None,
+        topic_id=None,
+        question_type=None,
+        tags=None,
+        exclude_ids=None,
+    ) -> dict:
+        """
+        Returns availability counts for the given criteria WITHOUT selecting.
+        Used by the /questions/availability/ endpoint so teachers/admins can
+        verify pool size before generating an exam.
+
+        Returns:
+            {
+                "total": int,
+                "by_difficulty": {"easy": int, "medium": int, "hard": int},
+            }
+        """
+        qs = self.apply_filters(
+            self.get_base_queryset(),
+            exam_id=exam_id,
+            paper_id=paper_id,
+            subject_id=subject_id,
+            chapter_id=chapter_id,
+            topic_id=topic_id,
+            question_type=question_type,
+            tags=tags,
+            exclude_ids=exclude_ids,
+        )
+        total = qs.count()
+        by_diff = {
+            "easy": qs.filter(difficulty="easy").count(),
+            "medium": qs.filter(difficulty="medium").count(),
+            "hard": qs.filter(difficulty="hard").count(),
+        }
+        return {"total": total, "by_difficulty": by_diff}
+
+    def select(
+        self,
+        *,
+        # Academic hierarchy filters
+        exam_id=None,
+        paper_id=None,
+        subject_id=None,
+        chapter_id=None,
+        topic_id=None,
+        # Content filters
+        question_type=None,
+        tags=None,
+        # Selection config
+        count: int = 0,
+        difficulty_distribution: Optional[dict] = None,
+        topic_distribution: Optional[dict] = None,
+        randomize: bool = True,
+        exclude_ids: Optional[list] = None,
+    ) -> dict:
+        """
+        Select approved questions from the Master Question Bank.
+
+        Args:
+            exam_id: Filter by exam (Loksewa level)
+            paper_id: Filter by paper
+            subject_id: Filter by subject
+            chapter_id: Filter by chapter
+            topic_id: Filter by specific topic
+            question_type: 'mcq', 'true_false', 'subjective', etc.
+            tags: Comma-separated tags to filter by
+            count: Total number of questions to select (used when no distribution given)
+            difficulty_distribution: Dict mapping difficulty → count.
+                e.g. {"easy": 6, "medium": 10, "hard": 4}
+                Takes priority over `count`.
+            topic_distribution: Dict mapping topic_id (str/int) → count.
+                e.g. {"1": 10, "2": 5, "3": 5}
+                Applied before difficulty distribution.
+            randomize: Whether to randomize selection order
+            exclude_ids: List of question IDs to exclude from selection
+
+        Returns:
+            {
+                "questions": [Question, ...],   # ORM objects
+                "available": int,               # Total matching approved questions
+                "requested": int,               # Total questions requested
+                "selected": int,                # Total actually selected
+                "satisfied": bool,              # True if selected == requested
+                "warnings": [str, ...],         # Human-readable warnings
+            }
+        """
+        warnings = []
+        exclude_ids = list(exclude_ids or [])
+
+        base_qs = self.apply_filters(
+            self.get_base_queryset(),
+            exam_id=exam_id,
+            paper_id=paper_id,
+            subject_id=subject_id,
+            chapter_id=chapter_id,
+            topic_id=topic_id,
+            question_type=question_type,
+            tags=tags,
+            exclude_ids=exclude_ids,
+        )
+        total_available = base_qs.count()
+
+        # ── Strategy 1: Topic Distribution ───────────────────────────────────
+        if topic_distribution:
+            return self._select_by_topic_distribution(
+                base_qs=base_qs,
+                topic_distribution=topic_distribution,
+                randomize=randomize,
+                total_available=total_available,
+                warnings=warnings,
+            )
+
+        # ── Strategy 2: Difficulty Distribution ──────────────────────────────
+        if difficulty_distribution:
+            return self._select_by_difficulty_distribution(
+                base_qs=base_qs,
+                difficulty_distribution=difficulty_distribution,
+                randomize=randomize,
+                total_available=total_available,
+                warnings=warnings,
+            )
+
+        # ── Strategy 3: Simple Count ──────────────────────────────────────────
+        return self._select_by_count(
+            base_qs=base_qs,
+            count=count,
+            randomize=randomize,
+            total_available=total_available,
+            warnings=warnings,
+        )
+
+    # ── Private helpers ──────────────────────────────────────────────────────
+
+    def _select_by_count(self, *, base_qs, count, randomize, total_available, warnings):
+        requested = count
+        if total_available < count:
+            warnings.append(
+                f"Only {total_available} approved question(s) are available for the "
+                f"selected criteria, but {count} were requested."
+            )
+            count = total_available
+
+        if randomize:
+            ids = list(base_qs.values_list("id", flat=True))
+            selected_ids = random.sample(ids, count) if len(ids) >= count else ids
+            from .models import Question
+            questions = list(Question.objects.filter(id__in=selected_ids))
+            # Shuffle to avoid consistent ordering by id
+            random.shuffle(questions)
+        else:
+            questions = list(base_qs[:count])
+
+        return {
+            "questions": questions,
+            "available": total_available,
+            "requested": requested,
+            "selected": len(questions),
+            "satisfied": len(questions) == requested,
+            "warnings": warnings,
+        }
+
+    def _select_by_difficulty_distribution(
+        self, *, base_qs, difficulty_distribution, randomize, total_available, warnings
+    ):
+        requested = sum(difficulty_distribution.values())
+        selected_questions = []
+
+        for difficulty, needed in difficulty_distribution.items():
+            if needed <= 0:
+                continue
+            diff_qs = base_qs.filter(difficulty=difficulty)
+            available_ids = list(diff_qs.values_list("id", flat=True))
+            available_count = len(available_ids)
+
+            if available_count < needed:
+                warnings.append(
+                    f"Only {available_count} approved '{difficulty}' question(s) available "
+                    f"but {needed} were requested."
+                )
+                selected_ids = available_ids
+            else:
+                selected_ids = (
+                    random.sample(available_ids, needed) if randomize else available_ids[:needed]
+                )
+
+            selected_questions.extend(selected_ids)
+
+        from .models import Question
+        questions = list(Question.objects.filter(id__in=selected_questions))
+        if randomize:
+            random.shuffle(questions)
+
+        return {
+            "questions": questions,
+            "available": total_available,
+            "requested": requested,
+            "selected": len(questions),
+            "satisfied": len(questions) == requested,
+            "warnings": warnings,
+        }
+
+    def _select_by_topic_distribution(
+        self, *, base_qs, topic_distribution, randomize, total_available, warnings
+    ):
+        requested = sum(topic_distribution.values())
+        selected_ids = []
+
+        for topic_id, needed in topic_distribution.items():
+            if needed <= 0:
+                continue
+            topic_qs = base_qs.filter(topic_id=int(topic_id))
+            available_ids = list(topic_qs.values_list("id", flat=True))
+            available_count = len(available_ids)
+
+            if available_count < needed:
+                warnings.append(
+                    f"Topic {topic_id}: only {available_count} approved question(s) available "
+                    f"but {needed} were requested."
+                )
+                selected_ids.extend(available_ids)
+            else:
+                selected_ids.extend(
+                    random.sample(available_ids, needed) if randomize else available_ids[:needed]
+                )
+
+        from .models import Question
+        questions = list(Question.objects.filter(id__in=selected_ids))
+        if randomize:
+            random.shuffle(questions)
+
+        return {
+            "questions": questions,
+            "available": total_available,
+            "requested": requested,
+            "selected": len(questions),
+            "satisfied": len(questions) == requested,
+            "warnings": warnings,
+        }

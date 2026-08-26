@@ -5,7 +5,8 @@ from .views import (
     AdminAnalyticsView,
     AdminUsersView,
     AdminUserDetailView,
-
+    AdminAdministratorsView,
+    AdminRolesView,
     AdminExamsOverviewView,
     AdminAITutorOverviewView,
     AdminMarketplaceOverviewView,
@@ -15,6 +16,9 @@ from .views import (
     AdminEvaluatorUpdateView,
     AdminEvaluatorsSubjectsView,
     AdminEvaluationAssignmentsView,
+    AdminCourseApplicationView,
+    AdminCourseApplicationDetailView,
+    AdminEvaluationsView,
 )
 from .syllabus_views import (
     ExamCategoryViewSet, ExamViewSet, PaperViewSet, SubjectViewSet, 
@@ -26,6 +30,8 @@ from .import_views import QuestionImportViewSet
 from .question_set_views import QuestionSetViewSet
 from .collection_views import QuestionCollectionViewSet
 from .exam_views import ExaminationViewSet
+from .study_plan_views import AdminStudyPlanTemplateViewSet
+
 
 router = DefaultRouter()
 router.register(r'questions', AdminQuestionViewSet, basename='admin-questions')
@@ -33,6 +39,7 @@ router.register(r'questions/import', QuestionImportViewSet, basename='admin-ques
 router.register(r'question-sets', QuestionSetViewSet, basename='admin-question-set')
 router.register(r'collections', QuestionCollectionViewSet, basename='admin-collection')
 router.register(r'exams', ExaminationViewSet, basename='admin-examination')
+router.register(r'study-plan-templates', AdminStudyPlanTemplateViewSet, basename='admin-study-plan-templates')
 router.register(r'syllabus/categories', ExamCategoryViewSet, basename='syllabus-categories')
 router.register(r'syllabus/exams', ExamViewSet, basename='syllabus-exams')
 router.register(r'syllabus/papers', PaperViewSet, basename='syllabus-papers')
@@ -47,7 +54,9 @@ urlpatterns = [
     path('analytics/', AdminAnalyticsView.as_view(), name='admin-analytics'),
     path('users/', AdminUsersView.as_view(), name='admin-users'),
     path('users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
-    path('exams/', AdminExamsOverviewView.as_view(), name='admin-exams'),
+    path('admins/', AdminAdministratorsView.as_view(), name='admin-administrators'),
+    path('roles/', AdminRolesView.as_view(), name='admin-roles'),
+    path('exams-overview/', AdminExamsOverviewView.as_view(), name='admin-exams-overview'),
     path('ai-tutor/', AdminAITutorOverviewView.as_view(), name='admin-ai-tutor'),
     path('ai-tutor/generate-bulk-content/', AIBulkGenerateContentView.as_view(), name='admin-ai-bulk-generate'),
     path('marketplace/', AdminMarketplaceOverviewView.as_view(), name='admin-marketplace'),
@@ -59,6 +68,11 @@ urlpatterns = [
     path('evaluators/<int:pk>/update/', AdminEvaluatorUpdateView.as_view(), name='admin-evaluator-update'),
     # Evaluation assignments
     path('evaluator-assignments/', AdminEvaluationAssignmentsView.as_view(), name='admin-evaluator-assignments'),
+    # Evaluations list
+    path('evaluations/', AdminEvaluationsView.as_view(), name='admin-evaluations'),
+    # Course applications / enrollment management
+    path('course-applications/', AdminCourseApplicationView.as_view(), name='admin-course-applications'),
+    path('course-applications/<int:pk>/', AdminCourseApplicationDetailView.as_view(), name='admin-course-application-detail'),
     # Syllabus
     path('syllabus/stats/', SyllabusStatsView.as_view(), name='syllabus-stats'),
     path('syllabus/tree/', SyllabusTreeView.as_view(), name='syllabus-tree'),

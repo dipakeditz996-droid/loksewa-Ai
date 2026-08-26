@@ -1,16 +1,53 @@
 import { apiClient } from "./client";
-import { 
-  mockPlayerStats, 
-  mockAchievements, 
-  mockRecentActivity, 
-  mockGameLeaderboard, 
-  mockPerformanceData,
-  PlayerStats,
-  Achievement,
-  RecentActivity,
-  GameLeaderboardEntry,
-  PerformanceDataPoint
-} from "../mock/gamification-demo-data";
+export interface PlayerStats {
+  level: number;
+  xp: number;
+  nextLevelXp: number;
+  coins: number;
+  streak: number;
+  streakDays: boolean[];
+  rank: number;
+  previousRank: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  questionsAnswered: number;
+  accuracy: number;
+  bestScore: number;
+  studentName: string;
+  studentAvatar?: string;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  locked: boolean;
+  progress: number;
+  maxProgress: number;
+}
+
+export interface RecentActivity {
+  id: string;
+  title: string;
+  description: string;
+  xpGained: number;
+  timestamp: string;
+}
+
+export interface GameLeaderboardEntry {
+  rank: number;
+  name: string;
+  xp: number;
+  avatar?: string;
+}
+
+export interface PerformanceDataPoint {
+  date: string;
+  xp: number;
+  accuracy: number;
+  score: number;
+}
 
 export interface ReferralStats {
   total_referrals: number;
@@ -63,34 +100,39 @@ class GamificationService {
    * Fetch current player's overall statistics (Level, XP, Coins, etc.)
    */
   async getPlayerStats(): Promise<PlayerStats> {
-    try {
-      throw new Error("Backend not connected");
-    } catch (error) {
-      console.warn("Gamification API failed, falling back to mock data.", error);
-      return new Promise(resolve => setTimeout(() => resolve(mockPlayerStats), 600));
-    }
+    const res = await apiClient<{ profile: ReferralProfile, stats: ReferralStats }>('/gamification/referrals/me/');
+    const profile = res.profile;
+    return {
+      level: profile.level || 1,
+      xp: profile.xp || 0,
+      coins: profile.coins || 0,
+      rank: res.stats?.rank || 0,
+      nextLevelXp: (profile.level || 1) * 1000,
+      streak: 0,
+      streakDays: [false, false, false, false, false, false, false],
+      previousRank: res.stats?.rank || 0,
+      gamesPlayed: 0,
+      gamesWon: 0,
+      questionsAnswered: 0,
+      accuracy: 0,
+      bestScore: 0,
+      studentName: profile.username || "Student",
+      studentAvatar: undefined,
+    };
   }
 
   /**
    * Fetch player's achievements
    */
   async getAchievements(): Promise<Achievement[]> {
-    try {
-      throw new Error("Backend not connected");
-    } catch (error) {
-      return new Promise(resolve => setTimeout(() => resolve(mockAchievements), 600));
-    }
+    return []; // Backend gap
   }
 
   /**
    * Fetch player's recent gaming activity
    */
   async getRecentActivity(): Promise<RecentActivity[]> {
-    try {
-      throw new Error("Backend not connected");
-    } catch (error) {
-      return new Promise(resolve => setTimeout(() => resolve(mockRecentActivity), 600));
-    }
+    return []; // Backend gap
   }
 
   /**
@@ -98,9 +140,12 @@ class GamificationService {
    */
   async getLeaderboard(): Promise<GameLeaderboardEntry[]> {
     try {
-      throw new Error("Backend not connected");
-    } catch (error) {
-      return new Promise(resolve => setTimeout(() => resolve(mockGameLeaderboard), 600));
+      const res = await apiClient<any>('/games/leaderboard/');
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.results)) return res.results;
+      return [];
+    } catch (e) {
+      return [];
     }
   }
 
@@ -108,31 +153,13 @@ class GamificationService {
    * Fetch performance analytics data for the chart
    */
   async getPerformanceData(period: '7days' | '30days' | 'alltime' = '7days'): Promise<PerformanceDataPoint[]> {
-    try {
-      throw new Error("Backend not connected");
-    } catch (error) {
-      return new Promise(resolve => setTimeout(() => resolve(mockPerformanceData), 600));
-    }
+    return []; // Backend gap
   }
 
   // --- Referral API Endpoints ---
 
   async getStudentReferralDashboard(): Promise<{ profile: ReferralProfile, stats: ReferralStats, settings?: ReferralSettings }> {
-    try {
-      const res = await apiClient<{ profile: ReferralProfile, stats: ReferralStats, settings: ReferralSettings }>('/gamification/referrals/me/');
-      return res;
-    } catch (error) {
-      // Fallback dummy data if backend not connected or token missing
-      return {
-        profile: { referral_code: "DIPAK7X2", xp: 1200, coins: 50, level: 2, username: "dipak" },
-        stats: { total_referrals: 0, successful_referrals: 0, pending_referrals: 0, total_xp_earned: 0, total_coins_earned: 0, rank: 0 },
-        settings: {
-          id: 1, is_enabled: true, referrer_xp_reward: 100, referred_xp_reward: 50,
-          referrer_coins_reward: 50, referred_coins_reward: 25, qualification_action: 'signup',
-          reward_processing: 'automatic', xp_per_level: 1000
-        }
-      };
-    }
+    return await apiClient<{ profile: ReferralProfile, stats: ReferralStats, settings: ReferralSettings }>('/gamification/referrals/me/');
   }
 
   async getStudentReferralHistory(): Promise<ReferralHistoryEntry[]> {
@@ -172,6 +199,34 @@ class GamificationService {
       method: "POST"
     });
   }
+
+  async getDailyMotivation(): Promise<{ id: number; message: string; language: string; category: string }> {
+    return await apiClient<{ id: number; message: string; language: string; category: string }>('/gamification/daily-motivation/');
+  }
+
+  async getMotivations(params?: { language?: string; category?: string; is_active?: boolean }): Promise<any[]> {
+    const query = new URLSearchParams(params as any).toString();
+    return await apiClient<any[]>(`/gamification/admin/motivations/${query ? '?' + query : ''}`);
+  }
+
+  async createMotivation(data: { message: string; language: string; category: string; is_active?: boolean; priority?: number }): Promise<any> {
+    return await apiClient<any>('/gamification/admin/motivations/', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async updateMotivation(id: number, data: Partial<{ message: string; language: string; category: string; is_active: boolean; priority: number }>): Promise<any> {
+    return await apiClient<any>(`/gamification/admin/motivations/${id}/`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  async deleteMotivation(id: number): Promise<void> {
+    await apiClient<void>(`/gamification/admin/motivations/${id}/`, { method: 'DELETE' });
+  }
 }
 
 export const gamificationService = new GamificationService();
+
+// Subscription Plans API
+export const subscriptionPlansApi = {
+  getPlans: (): Promise<any[]> => apiClient<any[]>('/subscriptions/plans/'),
+  getMySubscriptions: (): Promise<any[]> => apiClient<any[]>('/subscriptions/subscriptions/'),
+  getMyPayments: (): Promise<any[]> => apiClient<any[]>('/subscriptions/payments/'),
+};

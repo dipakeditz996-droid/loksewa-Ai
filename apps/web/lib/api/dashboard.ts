@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { analyticsApi, OverviewMetrics as AnalyticsOverview } from "./analytics";
 
 export interface DashboardProfile {
   name: string;
@@ -83,8 +84,22 @@ export const QUICK_ACTIONS = [
   { label: "Invite Friends", href: "/student/referrals", icon: "gift" },
 ];
 
+export type { AnalyticsOverview };
+
+export interface DailyMotivation {
+  message: string;
+  language: string;
+  category: string;
+}
+
 export const dashboardApi = {
   getStudentDashboard: async (): Promise<DashboardData> => {
     return apiClient<DashboardData>("/dashboard/");
   },
+  getAnalyticsOverview: async (): Promise<AnalyticsOverview> => {
+    return analyticsApi.getOverview();
+  },
+  getDailyMotivation: async (): Promise<DailyMotivation> => {
+    return apiClient<DailyMotivation>("/gamification/motivation/daily/");
+  }
 };

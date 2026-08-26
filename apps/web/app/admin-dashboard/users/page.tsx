@@ -191,7 +191,7 @@ export default function UsersManagementPage() {
           <p className="text-slate-500 text-sm mt-1">Manage students, teachers, and platform access.</p>
         </div>
         <div className="flex gap-2">
-          <Button className="gap-2 bg-[#0B2545] text-white hover:bg-[#0B2545]/90" onClick={openCreateUserModal}>
+          <Button className="gap-2 bg-[#0B2545] text-white font-bold hover:bg-[#0B2545]/90" onClick={openCreateUserModal}>
             <UserPlus className="w-4 h-4" /> Add User
           </Button>
         </div>
@@ -217,9 +217,9 @@ export default function UsersManagementPage() {
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
         <div className="relative w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input 
-            placeholder="Search name, email or username..." 
-            className="pl-9 bg-slate-50"
+          <Input
+            placeholder="Search name, email or username..."
+            className="pl-9 bg-slate-50 placeholder:text-slate-700"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -227,7 +227,7 @@ export default function UsersManagementPage() {
         <div className="flex w-full md:w-auto gap-2 items-center overflow-x-auto pb-2 md:pb-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="bg-white gap-2 whitespace-nowrap">
+              <Button variant="outline" className="bg-white border border-slate-300 text-slate-700 font-medium gap-2 whitespace-nowrap hover:bg-slate-50">
                 <Filter className="w-4 h-4" /> {filterRole}
               </Button>
             </DropdownMenuTrigger>
@@ -238,8 +238,8 @@ export default function UsersManagementPage() {
               <DropdownMenuItem onClick={() => setFilterRole("Admin")}>Admin</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          <Button variant="ghost" className="text-slate-500 hover:text-slate-900 whitespace-nowrap" onClick={() => { setSearchTerm(""); setFilterRole("All Roles"); }}>
+
+          <Button variant="outline" className="border border-slate-300 text-slate-700 font-medium whitespace-nowrap hover:bg-slate-50" onClick={() => { setSearchTerm(""); setFilterRole("All Roles"); }}>
             Clear Filters
           </Button>
         </div>
@@ -399,21 +399,21 @@ export default function UsersManagementPage() {
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Username *</label>
-              <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="e.g. johndoe" />
+              <label className="text-sm font-bold text-white">Username *</label>
+              <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="e.g. johndoe" className="placeholder:text-slate-600" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Email *</label>
-              <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="e.g. john@example.com" />
+              <label className="text-sm font-bold text-white">Email *</label>
+              <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="e.g. john@example.com" className="placeholder:text-slate-600" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Password *</label>
-              <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="Temporary password" />
+              <label className="text-sm font-bold text-white">Password *</label>
+              <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="Temporary password" className="placeholder:text-slate-600" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Role *</label>
-              <select 
-                className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0B2545]"
+              <label className="text-sm font-bold text-white">Role *</label>
+              <select
+                className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white text-[#0B2545] font-medium focus:outline-none focus:ring-2 focus:ring-[#0B2545]"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
               >

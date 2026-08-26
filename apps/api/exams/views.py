@@ -3,9 +3,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Exam, Subject, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress
 from .serializers import (
-    ExamSerializer, SubjectSerializer, TopicSerializer, 
-    QuestionFullSerializer, PracticeSessionSerializer, UserTopicProgressSerializer
+    ExamSerializer, SubjectSerializer, TopicSerializer,
+    QuestionFullSerializer, SecureQuestionSerializer, PracticeSessionSerializer, UserTopicProgressSerializer
 )
+from .selection_service import QuestionSelectionService
 
 class ExamViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Exam.objects.filter(is_active=True)
@@ -22,25 +23,40 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['subject']
 
 class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
+    """Read-only, student-reachable question catalog.
+
+    Only APPROVED questions from the Master Question Bank are ever exposed
+    here, and answers are hidden via SecureQuestionSerializer — this endpoint
+    has no teacher/admin ownership scoping, so it must never return
+    draft/pending/rejected questions or answer keys.
+    """
+    # Class-level `queryset` is kept only so DRF's router can infer a
+    # basename/schema; every actual request is served by get_queryset()
+    # below, which is the one that enforces the approval filter.
     queryset = Question.objects.all()
-    serializer_class = QuestionFullSerializer
+    serializer_class = SecureQuestionSerializer
     filterset_fields = ['topic', 'difficulty']
+
+    def get_queryset(self):
+        return QuestionSelectionService().get_base_queryset()
 
     @action(detail=False, methods=['get'])
     def practice_set(self, request):
         topic_id = request.query_params.get('topic')
         difficulty = request.query_params.get('difficulty')
         limit = int(request.query_params.get('limit', 20))
-        
-        qs = self.get_queryset()
-        if topic_id:
-            qs = qs.filter(topic_id=topic_id)
-        if difficulty and difficulty != 'all':
-            qs = qs.filter(difficulty=difficulty)
-            
-        # Randomize for practice
-        qs = qs.order_by('?')[:limit]
-        serializer = self.get_serializer(qs, many=True)
+
+        difficulty_distribution = {difficulty: limit} if difficulty and difficulty != 'all' else None
+
+        # Use the centralized selection service — approved questions only.
+        service = QuestionSelectionService()
+        result = service.select(
+            topic_id=topic_id if topic_id else None,
+            count=limit,
+            difficulty_distribution=difficulty_distribution,
+            randomize=True,
+        )
+        serializer = self.get_serializer(result['questions'], many=True)
         return Response(serializer.data)
 
 class PracticeSessionViewSet(viewsets.ModelViewSet):
@@ -53,30 +69,64 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         exam_id = request.data.get('exam')
         subject_id = request.data.get('subject')
         topic_id = request.data.get('topic')
+        course_id = request.data.get('course')
         difficulty = request.data.get('difficulty')
         mode = request.data.get('mode', 'flexible')
         total_questions = int(request.data.get('total_questions', 20))
+        
+        # Enforce Enrollment Access Control
+        # If a course is provided, ensure the student is enrolled.
+        if course_id:
+            from courses.models import Enrollment
+            if not Enrollment.objects.filter(student=request.user, course_id=course_id, status='active').exists():
+                return Response({'detail': 'You are not enrolled in this course.'}, status=403)
+            # Override exam_id with the course's exam if applicable
+            from courses.models import Course
+            try:
+                course = Course.objects.get(id=course_id)
+                if course.exam:
+                    exam_id = course.exam.id
+            except Course.DoesNotExist:
+                return Response({'detail': 'Course not found.'}, status=404)
 
-        qs = Question.objects.all()
-        if exam_id and str(exam_id) != 'all':
-            qs = qs.filter(topic__chapter__subject__exam_id=exam_id)
-        if subject_id and str(subject_id) != 'all':
-            qs = qs.filter(topic__chapter__subject_id=subject_id)
-        if topic_id and str(topic_id) != 'all':
-            qs = qs.filter(topic_id=topic_id)
+        # Build difficulty distribution if a specific difficulty is requested
+        difficulty_distribution = None
         if difficulty and difficulty != 'all':
-            qs = qs.filter(difficulty=difficulty)
-        
-        # Randomize
-        questions = list(qs.order_by('?')[:total_questions])
-        
+            difficulty_distribution = {difficulty: total_questions}
+
+        # Use centralized selection service — only approved questions
+        service = QuestionSelectionService()
+        result = service.select(
+            exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
+            subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
+            topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
+            count=total_questions,
+            difficulty_distribution=difficulty_distribution,
+            randomize=True,
+        )
+
+        questions = result['questions']
+
         if len(questions) == 0:
-            return Response({'detail': 'Not enough questions are available for this selection.'}, status=400)
+            return Response(
+                {'detail': 'No approved questions are available for the selected criteria.'},
+                status=400
+            )
+
+        if not result['satisfied'] and result['warnings']:
+            # We still create the session with available questions, but warn caller
+            pass  # warnings are surfaced in response below
+
+        # Resolve exam_id for session record
+        resolved_exam_id = exam_id if exam_id and str(exam_id) != 'all' else None
+        if not resolved_exam_id:
+            first_exam = Exam.objects.first()
+            resolved_exam_id = first_exam.id if first_exam else None
 
         # Create session
         session = PracticeSession.objects.create(
             user=request.user,
-            exam_id=exam_id if exam_id and str(exam_id) != 'all' else Exam.objects.first().id,
+            exam_id=resolved_exam_id,
             subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
             topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
             mode=mode,
@@ -88,10 +138,18 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             QuestionAttempt.objects.create(session=session, question=q)
 
         from .serializers import SecureQuestionSerializer
-        return Response({
+        response_data = {
             'session': PracticeSessionSerializer(session).data,
-            'questions': SecureQuestionSerializer(questions, many=True).data
-        })
+            'questions': SecureQuestionSerializer(questions, many=True).data,
+            'selection_info': {
+                'available': result['available'],
+                'requested': result['requested'],
+                'selected': result['selected'],
+                'satisfied': result['satisfied'],
+                'warnings': result['warnings'],
+            }
+        }
+        return Response(response_data)
 
     @action(detail=True, methods=['post'])
     def answer(self, request, pk=None):
@@ -147,6 +205,14 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         session.completed = True
         session.save()
         
+        # Award XP for practice session
+        try:
+            from gamification.services import award_xp
+            if correct > 0:
+                award_xp(session.user, correct, "Practice Session Completed")
+        except Exception:
+            pass
+        
         # After submission, return full data including answers
         attempts_data = []
         from .serializers import QuestionFullSerializer
@@ -189,8 +255,24 @@ class UserTopicProgressViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return self.UserTopicProgress.objects.filter(user=self.request.user)
         
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        topic_id = request.data.get('topic')
+        status = request.data.get('status', 'not-started')
+        progress = request.data.get('progress', 0)
+        
+        if not topic_id:
+            return Response({'error': 'topic is required'}, status=400)
+            
+        obj, created = self.UserTopicProgress.objects.update_or_create(
+            user=request.user,
+            topic_id=topic_id,
+            defaults={
+                'status': status,
+                'progress': progress
+            }
+        )
+        serializer = self.get_serializer(obj)
+        return Response(serializer.data)
 
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -386,173 +468,42 @@ class DashboardView(APIView):
         })
 
 class ModelExamViewSet(viewsets.ReadOnlyModelViewSet):
-    from .models import ModelExam
+    """
+    [LEGACY - DEPRECATED]
+    This ViewSet is deprecated in favor of StudentExaminationViewSet.
+    It will be removed in a future phase.
+    """
+    from .models import Examination
     from .serializers import ModelExamSerializer
     serializer_class = ModelExamSerializer
     
     def get_queryset(self):
-        return self.ModelExam.objects.filter(status='published')
+        return self.Examination.objects.filter(status='published', exam_type='mock')
 
 class ModelExamAttemptViewSet(viewsets.ModelViewSet):
-    from .models import ModelExamAttempt
+    """
+    [LEGACY - DEPRECATED]
+    This ViewSet is deprecated in favor of StudentExaminationAttemptViewSet.
+    It will be removed in a future phase.
+    """
+    from .models import ExaminationAttempt
     from .serializers import ModelExamAttemptSerializer
     serializer_class = ModelExamAttemptSerializer
 
     def get_queryset(self):
-        return self.ModelExamAttempt.objects.filter(student=self.request.user)
+        return self.ExaminationAttempt.objects.filter(student=self.request.user)
 
     def create(self, request, *args, **kwargs):
-        from .models import ModelExam, ModelExamAttemptAnswer
-        from .serializers import SecureQuestionSerializer
-        from django.utils import timezone
-        
-        model_exam_id = request.data.get('model_exam_id')
-        try:
-            model_exam = ModelExam.objects.get(id=model_exam_id, status='published')
-        except ModelExam.DoesNotExist:
-            return Response({'detail': 'Model Exam not found.'}, status=404)
-
-        # Check for in-progress attempt
-        existing_attempt = self.ModelExamAttempt.objects.filter(
-            student=request.user, 
-            model_exam=model_exam, 
-            status='in-progress'
-        ).first()
-
-        if existing_attempt:
-            # Check if time expired
-            elapsed = (timezone.now() - existing_attempt.started_at).total_seconds()
-            if elapsed > (model_exam.duration_minutes * 60):
-                # Auto submit
-                return self._submit_attempt(existing_attempt)
-            else:
-                attempt = existing_attempt
-        else:
-            attempt = self.ModelExamAttempt.objects.create(
-                student=request.user,
-                model_exam=model_exam
-            )
-            # Link all questions
-            for q in model_exam.questions.all():
-                ModelExamAttemptAnswer.objects.create(attempt=attempt, question=q)
-
-        questions = [ans.question for ans in attempt.answers.all()]
-        
-        # We need to return existing answers if any
-        answers_data = {
-            ans.question.id: {
-                'selected_option': ans.selected_option,
-                'is_marked_for_review': ans.is_marked_for_review
-            } for ans in attempt.answers.all()
-        }
-
-        return Response({
-            'attempt': self.get_serializer(attempt).data,
-            'questions': SecureQuestionSerializer(questions, many=True).data,
-            'answers': answers_data
-        })
+        # Deprecated: Forward to StudentExaminationAttemptViewSet internally or mock response
+        return Response({'detail': 'Legacy create attempt is deprecated. Use /student/exams/{id}/start'}, status=400)
 
     @action(detail=True, methods=['post'])
     def answer(self, request, pk=None):
-        from django.utils import timezone
-        from .models import ModelExamAttemptAnswer
-
-        attempt = self.get_object()
-        if attempt.status == 'submitted':
-            return Response({'detail': 'Exam already submitted.'}, status=400)
-            
-        elapsed = (timezone.now() - attempt.started_at).total_seconds()
-        if elapsed > (attempt.model_exam.duration_minutes * 60 + 5): # 5 seconds grace period
-            # Force submit
-            self._submit_attempt(attempt)
-            return Response({'detail': 'Time expired. Exam automatically submitted.'}, status=403)
-
-        question_id = request.data.get('question_id')
-        selected_option = request.data.get('selected_option')
-        is_marked_for_review = request.data.get('is_marked_for_review', False)
-        
-        try:
-            ans = ModelExamAttemptAnswer.objects.get(attempt=attempt, question_id=question_id)
-            if selected_option is not None:
-                ans.selected_option = selected_option
-            ans.is_marked_for_review = is_marked_for_review
-            ans.save()
-            return Response({'status': 'success'})
-        except ModelExamAttemptAnswer.DoesNotExist:
-            return Response({'detail': 'Question not found in this exam.'}, status=404)
+        return Response({'detail': 'Legacy answer is deprecated.'}, status=400)
 
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
-        attempt = self.get_object()
-        return self._submit_attempt(attempt)
-        
-    def _submit_attempt(self, attempt):
-        from django.utils import timezone
-        from .serializers import QuestionFullSerializer
-        
-        if attempt.status == 'submitted':
-            attempts_data = []
-            for ans in attempt.answers.all():
-                attempts_data.append({
-                    'attempt_id': ans.id,
-                    'question': QuestionFullSerializer(ans.question).data,
-                    'selected_option': ans.selected_option,
-                    'is_correct': ans.is_correct,
-                    'is_marked_for_review': ans.is_marked_for_review,
-                })
-            return Response({
-                'attempt': self.get_serializer(attempt).data,
-                'answers': attempts_data
-            })
-
-        answers = attempt.answers.all()
-        correct = 0
-        incorrect = 0
-        unanswered = 0
-        
-        for ans in answers:
-            if not ans.selected_option:
-                unanswered += 1
-            elif ans.selected_option == ans.question.correct_option:
-                ans.is_correct = True
-                correct += 1
-                ans.save()
-            else:
-                ans.is_correct = False
-                incorrect += 1
-                ans.save()
-                
-        attempt.correct_count = correct
-        attempt.incorrect_count = incorrect
-        attempt.unanswered_count = unanswered
-        attempt.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
-        
-        # Calculate score with negative marking
-        negative_marks = incorrect * attempt.model_exam.negative_marking
-        attempt.score = max(0, correct - negative_marks) # Assuming 1 mark per correct answer
-        
-        attempt.submitted_at = timezone.now()
-        attempt.time_taken_seconds = min(
-            int((attempt.submitted_at - attempt.started_at).total_seconds()), 
-            attempt.model_exam.duration_minutes * 60
-        )
-        attempt.status = 'submitted'
-        attempt.save()
-        
-        attempts_data = []
-        for ans in answers:
-            attempts_data.append({
-                'attempt_id': ans.id,
-                'question': QuestionFullSerializer(ans.question).data,
-                'selected_option': ans.selected_option,
-                'is_correct': ans.is_correct,
-                'is_marked_for_review': ans.is_marked_for_review,
-            })
-            
-        return Response({
-            'attempt': self.get_serializer(attempt).data,
-            'answers': attempts_data
-        })
+        return Response({'detail': 'Legacy submit is deprecated.'}, status=400)
 
 # ============================================================
 # SUBJECTIVE PRACTICE VIEWS
@@ -567,12 +518,16 @@ class SubjectivePracticeSetViewSet(viewsets.ReadOnlyModelViewSet):
         return self.SubjectivePracticeSet.objects.filter(status='published')
 
 class SubjectiveModelExamViewSet(viewsets.ReadOnlyModelViewSet):
-    from .models import SubjectiveModelExam
+    """
+    [LEGACY - DEPRECATED]
+    This ViewSet is deprecated in favor of the new Examination architecture.
+    """
+    from .models import Examination
     from .serializers import SubjectiveModelExamSerializer
     serializer_class = SubjectiveModelExamSerializer
 
     def get_queryset(self):
-        return self.SubjectiveModelExam.objects.filter(status='published')
+        return self.Examination.objects.filter(status='published', exam_type='subjective')
 
 class SubjectiveQuestionViewSet(viewsets.ReadOnlyModelViewSet):
     from .models import Question
@@ -580,7 +535,8 @@ class SubjectiveQuestionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubjectiveQuestionSerializer
 
     def get_queryset(self):
-        qs = self.Question.objects.filter(status='published', question_type='subjective')
+        # Security: only approved questions are student-facing
+        qs = self.Question.objects.filter(status='approved', question_type='subjective')
         topic_id = self.request.query_params.get('topic')
         if topic_id:
             qs = qs.filter(topic_id=topic_id)
@@ -871,13 +827,19 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
+from administration.permissions import IsTeacher, IsEvaluatorUser
 
 class TeacherQuestionViewSet(viewsets.ModelViewSet):
+    # get_queryset already restricted list/retrieve/update/destroy to teachers
+    # (returning an empty queryset otherwise), but `create` bypasses
+    # get_queryset entirely — without this, any authenticated non-teacher
+    # could POST a question straight into the review queue.
+    permission_classes = [IsAuthenticated, IsTeacher]
     serializer_class = QuestionFullSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['topic', 'difficulty', 'question_type', 'status']
     search_fields = ['text']
-    
+
     def get_queryset(self):
         user = self.request.user
         if not user.is_authenticated or user.role != 'teacher':
@@ -889,8 +851,7 @@ class TeacherQuestionViewSet(viewsets.ModelViewSet):
         # Questions assigned to the teacher's courses
         from courses.models import Course
         assigned_courses = Course.objects.filter(
-            assignments__teacher=user,
-            assignments__is_active=True
+            teachers__teacher=user,
         )
         assigned_exam_ids = assigned_courses.values_list('exam_id', flat=True)
         
@@ -901,6 +862,26 @@ class TeacherQuestionViewSet(viewsets.ModelViewSet):
         return (authored | assigned_questions).distinct().select_related('topic', 'topic__chapter', 'topic__chapter__subject', 'topic__chapter__subject__exam')
         
     def perform_create(self, serializer):
+        # Duplicate detection: check for exact normalized text match
+        question_text = serializer.validated_data.get('text', '').strip().lower()
+        force_create = self.request.data.get('force_create', False)
+        if not force_create and question_text:
+            import unicodedata
+            normalized = unicodedata.normalize('NFKC', question_text)
+            existing = Question.objects.filter(text__iexact=normalized).exclude(
+                status='archived'
+            ).first()
+            if existing:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({
+                    'duplicate': True,
+                    'existing_id': existing.question_id,
+                    'detail': (
+                        f'A similar question already exists in the Master Question Bank '
+                        f'({existing.question_id}, status: {existing.status}). '
+                        f'Pass force_create=true to create anyway.'
+                    ),
+                })
         serializer.save(created_by=self.request.user)
 
     def perform_update(self, serializer):
@@ -990,6 +971,8 @@ class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         question = self.get_object()
+        if question.created_by == request.user:
+            return Response({"detail": "You cannot approve your own question."}, status=403)
         from django.utils import timezone
         question.status = 'approved'
         question.reviewed_by = request.user
@@ -1033,6 +1016,9 @@ from .serializers import TeacherQuestionSetSerializer
 from rest_framework.decorators import action
 
 class TeacherQuestionSetViewSet(viewsets.ModelViewSet):
+    # Same gap as TeacherQuestionViewSet: get_queryset scopes reads/writes to
+    # teachers, but `create` isn't routed through get_queryset at all.
+    permission_classes = [IsAuthenticated, IsTeacher]
     serializer_class = TeacherQuestionSetSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_fields = ['status', 'set_type', 'exam', 'subject']
@@ -1106,39 +1092,74 @@ class TeacherQuestionSetViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='generate-blueprint')
     def generate_blueprint(self, request, pk=None):
+        """
+        Generate questions for a Practice Set using the Master Question Bank.
+
+        Accepts:
+          - total_questions: int
+          - difficulties: {"easy": int, "medium": int, "hard": int}  (optional)
+          - topics: {"<topic_id>": int, ...}  (optional, takes priority)
+          - subject_id, exam_id, question_type  (optional filters)
+          - replace_existing: bool (default False)
+        """
         instance = self.get_object()
-        total_questions = request.data.get('total_questions', 0)
+        total_questions = int(request.data.get('total_questions', 0))
         difficulties = request.data.get('difficulties', {})
         topics = request.data.get('topics', {})
-        
-        from .models import Question
+        subject_id = request.data.get('subject_id')
+        exam_id = request.data.get('exam_id') or instance.exam_id
+        question_type = request.data.get('question_type')
+        replace_existing = request.data.get('replace_existing', False)
+
+        # Exclude questions already in the set (unless replacing)
+        exclude_ids = []
+        if not replace_existing:
+            exclude_ids = list(instance.question_set_questions.values_list('question_id', flat=True))
+        else:
+            # Clear existing
+            instance.question_set_questions.all().delete()
+
+        # Build selection parameters
+        difficulty_distribution = {k: int(v) for k, v in difficulties.items() if int(v) > 0} if difficulties else None
+        topic_distribution = {str(k): int(v) for k, v in topics.items() if int(v) > 0} if topics else None
+
+        service = QuestionSelectionService()
+        result = service.select(
+            exam_id=exam_id,
+            subject_id=subject_id,
+            count=total_questions,
+            difficulty_distribution=difficulty_distribution,
+            topic_distribution=topic_distribution,
+            question_type=question_type,
+            exclude_ids=exclude_ids,
+            randomize=True,
+        )
+
+        if len(result['questions']) == 0:
+            return Response(
+                {'detail': 'No approved questions found for the selected criteria.', 'warnings': result['warnings']},
+                status=400
+            )
+
         from django.db.models import Max
-        import random
-        
-        base_qs = Question.objects.filter(status='approved')
-        questions_to_add = []
-        for topic_id, count in topics.items():
-            topic_qs = base_qs.filter(topic_id=topic_id).order_by('?')[:count]
-            questions_to_add.extend(topic_qs)
-            
-        remaining = total_questions - len(questions_to_add)
-        if remaining > 0:
-            extra = base_qs.exclude(id__in=[q.id for q in questions_to_add]).order_by('?')[:remaining]
-            questions_to_add.extend(extra)
-            
-        if len(questions_to_add) < total_questions:
-            return Response({"detail": f"Only found {len(questions_to_add)} matching questions out of {total_questions} requested."}, status=400)
-            
         current_max = instance.question_set_questions.aggregate(Max('order'))['order__max'] or 0
-        
-        for idx, q in enumerate(questions_to_add, start=1):
+        for idx, q in enumerate(result['questions'], start=1):
             QuestionSetQuestion.objects.get_or_create(
                 question_set=instance,
                 question=q,
                 defaults={'order': current_max + idx, 'marks': q.marks}
             )
-            
-        return Response(self.get_serializer(instance).data)
+
+        return Response({
+            **self.get_serializer(instance).data,
+            'generation_info': {
+                'available': result['available'],
+                'requested': result['requested'],
+                'selected': result['selected'],
+                'satisfied': result['satisfied'],
+                'warnings': result['warnings'],
+            }
+        })
 
     @action(detail=True, methods=['post'], url_path='bulk-import')
     def bulk_import(self, request, pk=None):
@@ -1201,6 +1222,8 @@ class AdminPracticeSetReviewViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
         instance = self.get_object()
+        if instance.created_by == request.user:
+            return Response({"detail": "You cannot approve your own practice set."}, status=403)
         from django.utils import timezone
         
         instance.status = 'approved'
@@ -1242,8 +1265,10 @@ class AdminPracticeSetReviewViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TeacherMockExamViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    
+    # get_queryset restricts reads/writes to teacher/admin/super-admin, but
+    # `create` bypasses get_queryset entirely — mirror the same roles here.
+    permission_classes = [IsAuthenticated, IsEvaluatorUser]
+
     def get_serializer_class(self):
         from .serializers import TeacherExaminationSerializer
         return TeacherExaminationSerializer
@@ -1257,6 +1282,135 @@ class TeacherMockExamViewSet(viewsets.ModelViewSet):
         
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def taxonomy(self, request):
+        from .models import ExamCategory
+        categories = ExamCategory.objects.prefetch_related(
+            'exams__papers__subjects__chapters__topics'
+        ).filter(is_active=True).order_by('order')
+        
+        data = []
+        for cat in categories:
+            cat_data = {
+                'id': cat.id,
+                'name': cat.name,
+                'exams': []
+            }
+            for exam in cat.exams.filter(is_active=True):
+                exam_data = {
+                    'id': exam.id,
+                    'name': exam.name,
+                    'subjects': []
+                }
+                # Subjects are under Papers which are under Exams
+                for paper in exam.papers.filter(is_active=True):
+                    for sub in paper.subjects.filter(is_active=True):
+                        sub_data = {
+                            'id': sub.id,
+                            'name': sub.name,
+                            'chapters': []
+                        }
+                        for chap in sub.chapters.filter(is_active=True):
+                            chap_data = {
+                                'id': chap.id,
+                                'name': chap.title,
+                                'topics': [{'id': t.id, 'name': t.name} for t in chap.topics.filter(is_active=True)]
+                            }
+                            sub_data['chapters'].append(chap_data)
+                        exam_data['subjects'].append(sub_data)
+                cat_data['exams'].append(exam_data)
+            data.append(cat_data)
+            
+        return Response(data)
+
+    @action(detail=True, methods=['post'])
+    def auto_generate(self, request, pk=None):
+        """
+        Auto-generate questions for a Mock Exam using the Master Question Bank.
+
+        Accepts:
+          config: {
+            subject_id: int (optional)
+            topic_id: int (optional)
+            exam_id: int (optional, defaults to exam's linked exam)
+            question_type: str (optional)
+            counts: {"easy": int, "medium": int, "hard": int}
+            replace_existing: bool (default False)
+          }
+        """
+        mock_exam = self.get_object()
+        if mock_exam.status in ['pending_review', 'approved', 'published']:
+            return Response({'detail': 'Cannot modify questions for this exam.'}, status=400)
+
+        config = request.data.get('config', {})
+        subject_id = config.get('subject_id')
+        topic_id = config.get('topic_id')
+        exam_id = config.get('exam_id') or mock_exam.exam_id
+        question_type = config.get('question_type')
+        counts = config.get('counts', {})
+        replace_existing = config.get('replace_existing', False)
+
+        from .models import ExaminationQuestion
+        from django.db.models import Max
+
+        if replace_existing:
+            mock_exam.examination_questions.all().delete()
+            existing_ids = []
+        else:
+            existing_ids = list(mock_exam.examination_questions.values_list('question_id', flat=True))
+
+        difficulty_distribution = {k: int(v) for k, v in counts.items() if int(v) > 0} if counts else None
+        total_count = sum(difficulty_distribution.values()) if difficulty_distribution else 0
+
+        if total_count == 0:
+            return Response({'detail': 'No question counts specified in config.counts.'}, status=400)
+
+        service = QuestionSelectionService()
+        result = service.select(
+            exam_id=exam_id,
+            subject_id=subject_id,
+            topic_id=topic_id,
+            question_type=question_type,
+            difficulty_distribution=difficulty_distribution,
+            exclude_ids=existing_ids,
+            randomize=True,
+        )
+
+        if not result['questions']:
+            return Response(
+                {'detail': 'No approved questions found for the selected criteria.', 'warnings': result['warnings']},
+                status=400
+            )
+
+        current_max = ExaminationQuestion.objects.filter(examination=mock_exam).aggregate(Max('order'))['order__max'] or 0
+        added = 0
+        for q in result['questions']:
+            current_max += 1
+            ExaminationQuestion.objects.create(
+                examination=mock_exam,
+                question_id=q.id,
+                order=current_max,
+                marks=mock_exam.marks_per_question
+            )
+            added += 1
+
+        # Update totals
+        mock_exam.total_questions = mock_exam.examination_questions.count()
+        mock_exam.total_marks = sum(eq.marks for eq in mock_exam.examination_questions.all())
+        mock_exam.save()
+
+        return Response({
+            'status': f'{added} question(s) auto-generated.',
+            'added': added,
+            'generation_info': {
+                'available': result['available'],
+                'requested': result['requested'],
+                'selected': result['selected'],
+                'satisfied': result['satisfied'],
+                'warnings': result['warnings'],
+            }
+        })
 
     @action(detail=True, methods=['post'])
     def submit_review(self, request, pk=None):
@@ -1410,5 +1564,71 @@ class AdminExaminationReviewViewSet(viewsets.ReadOnlyModelViewSet):
         exam.reviewed_by = request.user
         exam.reviewed_at = timezone.now()
         exam.save()
-        
+
         return Response({'status': f'Exam marked as {exam.status}'})
+
+
+# ============================================================
+# QUESTION AVAILABILITY ENDPOINT
+# ============================================================
+
+class QuestionAvailabilityView(APIView):
+    """
+    GET /api/questions/availability/
+
+    Returns the count of approved questions matching the given criteria.
+    Used by teachers/admins before generating a practice set or mock exam
+    so they know whether the question pool is large enough.
+
+    Query params (all optional):
+      exam, paper, subject, chapter, topic, question_type, tags, count
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        params = request.query_params
+
+        def _int(key):
+            val = params.get(key)
+            try:
+                return int(val) if val else None
+            except (ValueError, TypeError):
+                return None
+
+        exam_id = _int('exam')
+        paper_id = _int('paper')
+        subject_id = _int('subject')
+        chapter_id = _int('chapter')
+        topic_id = _int('topic')
+        question_type = params.get('question_type')
+        tags = params.get('tags')
+        requested = _int('count') or 0
+
+        service = QuestionSelectionService()
+        availability = service.check_availability(
+            exam_id=exam_id,
+            paper_id=paper_id,
+            subject_id=subject_id,
+            chapter_id=chapter_id,
+            topic_id=topic_id,
+            question_type=question_type,
+            tags=tags,
+        )
+
+        total = availability['total']
+        sufficient = (total >= requested) if requested else None
+
+        warning = None
+        if requested and not sufficient:
+            warning = (
+                f'Only {total} approved question(s) available for the selected criteria, '
+                f'but {requested} were requested.'
+            )
+
+        return Response({
+            'available': total,
+            'requested': requested,
+            'sufficient': sufficient,
+            'by_difficulty': availability['by_difficulty'],
+            'warning': warning,
+        })

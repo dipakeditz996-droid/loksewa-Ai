@@ -74,7 +74,7 @@ export function CoursesSection({ examCategories }: Props) {
         difficulty: i < 2 ? "Advanced" : "Intermediate",
         students: `${(cat.position_count || 1) * 1000}+`,
         rating: 4.8,
-        accent: STATIC_COURSES[i % STATIC_COURSES.length].accent,
+        accent: STATIC_COURSES[i % STATIC_COURSES.length]?.accent || "from-blue-600 to-indigo-600",
         tag: i === 0 ? "Most Popular" : i === 1 ? "High Demand" : "Available",
       }))
     : STATIC_COURSES;
@@ -90,7 +90,7 @@ export function CoursesSection({ examCategories }: Props) {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
+            <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 mb-4">
               <BookOpen className="w-3.5 h-3.5 text-blue-500" />
               <span className="text-[10.5px] font-[800] uppercase tracking-widest text-blue-500 dark:text-blue-400">Courses</span>
             </div>

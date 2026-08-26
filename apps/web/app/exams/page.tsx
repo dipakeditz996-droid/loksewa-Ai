@@ -231,7 +231,7 @@ export default function ExamsPage() {
               <input 
                 type="text" 
                 placeholder="Search exams, subjects, papers..." 
-                className="w-full h-14 pl-12 pr-4 rounded-[12px] border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0A1118] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#D4A72C]/50 transition-all font-[500]"
+                className="w-full h-14 pl-12 pr-4 rounded-[12px] border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0A1118] text-slate-900 dark:text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#D4A72C]/50 transition-all font-[500]"
               />
             </div>
 

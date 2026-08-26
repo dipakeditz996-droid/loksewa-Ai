@@ -1,15 +1,21 @@
+import logging
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
 import uuid
 
-from .models import SubscriptionPlan, Subscription, SubscriptionPayment, Notification, Invoice
+from .models import SubscriptionPlan, Subscription, SubscriptionPayment, Invoice
+from core.models import Notification
 from .serializers import (
     SubscriptionPlanSerializer, SubscriptionSerializer,
     SubscriptionPaymentSerializer, NotificationSerializer, InvoiceSerializer
 )
+
+logger = logging.getLogger(__name__)
 
 class IsAdminUser(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -29,7 +35,7 @@ class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Subscription.objects.filter(student=self.request.user).order_by('-created_at')
+        return Subscription.objects.filter(recipient=self.request.user).order_by('-created_at')
 
 class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     serializer_class = SubscriptionPaymentSerializer
@@ -38,14 +44,14 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if self.request.user.role in ['admin', 'super-admin']:
             return SubscriptionPayment.objects.all().order_by('-submitted_at')
-        return SubscriptionPayment.objects.filter(student=self.request.user).order_by('-submitted_at')
+        return SubscriptionPayment.objects.filter(recipient=self.request.user).order_by('-submitted_at')
 
     def perform_create(self, serializer):
-        payment = serializer.save(student=self.request.user)
+        payment = serializer.save(recipient=self.request.user)
         # Notify user
         Notification.objects.create(
-            student=self.request.user,
-            type='PAYMENT_SUBMITTED',
+            recipient=self.request.user,
+            type='payment',
             title='Payment Submitted',
             message='Your payment has been submitted and is awaiting verification.',
             related_id=str(payment.id)
@@ -57,64 +63,110 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         if payment.status != 'PENDING':
             return Response({'detail': 'Payment is not pending.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Approve payment
-        payment.status = 'APPROVED'
-        payment.verified_by = request.user
-        payment.verified_at = timezone.now()
-        
-        # Determine start and expiry dates
-        plan = payment.plan
-        now = timezone.now()
-        start_date = now
-        
-        # Check if user has active subscription to extend
-        active_sub = Subscription.objects.filter(student=payment.student, status='ACTIVE', expiry_date__gt=now).order_by('-expiry_date').first()
-        if active_sub:
-            start_date = active_sub.expiry_date
-            
-        if plan.duration_unit == 'DAYS':
-            delta = timedelta(days=plan.duration)
-        elif plan.duration_unit == 'WEEKS':
-            delta = timedelta(weeks=plan.duration)
-        elif plan.duration_unit == 'MONTHS':
-            delta = timedelta(days=30 * plan.duration)
-        elif plan.duration_unit == 'YEAR':
-            delta = timedelta(days=365 * plan.duration)
-        else:
-            delta = timedelta(days=plan.duration)
-            
-        expiry_date = start_date + delta
+        # Everything below is one admin action with several dependent writes
+        # (payment, subscription, enrollment, invoice, notification) — wrap
+        # it so a failure partway through rolls back cleanly instead of
+        # leaving e.g. an APPROVED payment with no subscription/enrollment.
+        with transaction.atomic():
+            # Approve payment
+            payment.status = 'APPROVED'
+            payment.verified_by = request.user
+            payment.verified_at = timezone.now()
 
-        # Create subscription
-        subscription = Subscription.objects.create(
-            student=payment.student,
-            plan=plan,
-            status='ACTIVE',
-            start_date=start_date,
-            expiry_date=expiry_date
-        )
-        
-        payment.subscription = subscription
-        payment.save()
-        
-        # Create invoice
-        Invoice.objects.create(
-            student=payment.student,
-            payment=payment,
-            receipt_number=f"LKAI-{now.year}-{str(uuid.uuid4())[:8].upper()}",
-            amount=payment.amount
-        )
-        
-        # Create notification
-        Notification.objects.create(
-            student=payment.student,
-            type='PAYMENT_APPROVED',
-            title='Payment Approved',
-            message='Your Premium plan has been activated successfully.',
-            related_id=str(payment.id)
-        )
+            # Determine start and expiry dates
+            plan = payment.plan
+            now = timezone.now()
+            start_date = now
+
+            # Check if user has active subscription to extend
+            active_sub = Subscription.objects.filter(recipient=payment.student, status='ACTIVE', expiry_date__gt=now).order_by('-expiry_date').first()
+            if active_sub:
+                start_date = active_sub.expiry_date
+
+            if plan.duration_unit == 'DAYS':
+                delta = timedelta(days=plan.duration)
+            elif plan.duration_unit == 'WEEKS':
+                delta = timedelta(weeks=plan.duration)
+            elif plan.duration_unit == 'MONTHS':
+                delta = timedelta(days=30 * plan.duration)
+            elif plan.duration_unit == 'YEAR':
+                delta = timedelta(days=365 * plan.duration)
+            else:
+                delta = timedelta(days=plan.duration)
+
+            expiry_date = start_date + delta
+
+            # Create subscription
+            subscription = Subscription.objects.create(
+                recipient=payment.student,
+                plan=plan,
+                status='ACTIVE',
+                start_date=start_date,
+                expiry_date=expiry_date
+            )
+
+            payment.subscription = subscription
+            payment.save()
+
+            # ── AUTO-ENROLL: if plan has a linked Course, create/activate Enrollment ──
+            enrolled_course_title = plan.name  # fallback notification text
+            if plan.course:
+                try:
+                    from courses.models import Enrollment, CourseApplication
+                    enrollment, created = Enrollment.objects.get_or_create(
+                        recipient=payment.student,
+                        course=plan.course,
+                        defaults={
+                            'status': 'active',
+                            'expires_at': expiry_date,
+                        }
+                    )
+                    if not created:
+                        # Reactivate if previously cancelled/suspended
+                        enrollment.status = 'active'
+                        enrollment.expires_at = expiry_date
+                        enrollment.save(update_fields=['status', 'expires_at'])
+
+                    enrolled_course_title = plan.course.title
+
+                    # Approve any CourseApplication linked to this payment or this student+course
+                    CourseApplication.objects.filter(
+                        recipient=payment.student,
+                        course=plan.course,
+                        status='pending'
+                    ).update(
+                        status='approved',
+                        reviewed_at=now,
+                        reviewed_by=request.user,
+                    )
+                except Exception:
+                    # Deliberately not re-raised: a bug in the auto-enroll
+                    # step shouldn't block the payment approval itself, but
+                    # it must not fail silently either.
+                    logger.exception(
+                        "Auto-enroll failed for payment_id=%s student_id=%s course_id=%s",
+                        payment.id, payment.student_id, plan.course_id,
+                    )
+
+            # Create invoice
+            Invoice.objects.create(
+                recipient=payment.student,
+                payment=payment,
+                receipt_number=f"LKAI-{now.year}-{str(uuid.uuid4())[:8].upper()}",
+                amount=payment.amount
+            )
+
+            # Create notification
+            Notification.objects.create(
+                recipient=payment.student,
+                type='payment',
+                title='Enrollment Activated',
+                message=f'Your enrollment in "{enrolled_course_title}" has been activated successfully!',
+                related_id=str(payment.id)
+            )
 
         return Response({'status': 'approved'})
+
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def reject(self, request, pk=None):
@@ -134,8 +186,8 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         
         # Create notification
         Notification.objects.create(
-            student=payment.student,
-            type='PAYMENT_REJECTED',
+            recipient=payment.student,
+            type='payment',
             title='Payment Rejected',
             message=f'Your payment was rejected. Reason: {reason}',
             related_id=str(payment.id)
@@ -148,7 +200,12 @@ class NotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(student=self.request.user).order_by('-created_at')
+        return Notification.objects.filter(recipient=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True)
+        return Response({'status': 'all_read'})
 
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):

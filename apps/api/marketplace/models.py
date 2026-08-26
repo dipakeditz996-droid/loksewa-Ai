@@ -21,6 +21,14 @@ class Product(models.Model):
     target_exam = models.ForeignKey(Exam, on_delete=models.SET_NULL, null=True, blank=True, related_name='marketplace_products')
     target_position = models.CharField(max_length=255, blank=True)
     
+    course = models.ForeignKey(
+        'courses.Course',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='marketplace_products',
+        help_text='If this product is a course, link it here for automatic enrollment upon purchase.'
+    )
+    
     is_free = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

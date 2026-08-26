@@ -5,7 +5,7 @@ from django.db.models import Count, Sum, Q
 from django.utils import timezone
 from datetime import timedelta, date
 from core.models import User
-from exams.models import Exam, Question, ModelExam, ModelExamAttempt, PracticeSession
+from exams.models import Exam, Question, ModelExam, ModelExamAttempt, PracticeSession, ExaminationAttempt
 from notes.models import StudyMaterial
 from marketplace.models import Product, PaymentSubmission, Purchase
 from games.models import GameMatch, SurvivalGame
@@ -87,13 +87,19 @@ class AdminDashboardStatsView(APIView):
             })
             activity_id += 1
 
-        # Recent exam attempts
-        recent_attempts = ModelExamAttempt.objects.select_related('student', 'model_exam').order_by('-started_at')[:3]
-        for a in recent_attempts:
+        # Recent exam attempts (legacy + new)
+        legacy_attempts = list(ModelExamAttempt.objects.select_related('student', 'model_exam').order_by('-started_at')[:3])
+        new_attempts = list(ExaminationAttempt.objects.select_related('student', 'examination').order_by('-started_at')[:3])
+        
+        all_recent = sorted(legacy_attempts + new_attempts, key=lambda x: x.started_at, reverse=True)[:3]
+        
+        for a in all_recent:
+            is_legacy = isinstance(a, ModelExamAttempt)
+            title = a.model_exam.title if is_legacy else a.examination.title
             recent_activity.append({
                 "id": activity_id,
                 "type": "exam_attempt",
-                "description": f"'{a.student.get_full_name() or a.student.username}' attempted '{a.model_exam.title}'",
+                "description": f"'{a.student.get_full_name() or a.student.username}' attempted '{title}'",
                 "user": a.student.get_full_name() or a.student.username,
                 "time": _format_time_ago(a.started_at),
                 "status": a.status,
@@ -175,8 +181,8 @@ class AdminAnalyticsView(APIView):
         )
         reg_map = {str(r['day']): r['count'] for r in reg_qs}
 
-        # Exam attempts per day
-        attempts_qs = (
+        # Exam attempts per day (Legacy ModelExamAttempt + new ExaminationAttempt)
+        legacy_qs = (
             ModelExamAttempt.objects.filter(
                 started_at__date__gte=start_date,
                 started_at__date__lte=end_date,
@@ -185,7 +191,23 @@ class AdminAnalyticsView(APIView):
             .values('day')
             .annotate(count=Count('id'))
         )
-        attempts_map = {str(a['day']): a['count'] for a in attempts_qs}
+        
+        new_qs = (
+            ExaminationAttempt.objects.filter(
+                started_at__date__gte=start_date,
+                started_at__date__lte=end_date,
+            )
+            .extra(select={'day': 'DATE(started_at)'})
+            .values('day')
+            .annotate(count=Count('id'))
+        )
+        
+        attempts_map = {}
+        for a in legacy_qs:
+            attempts_map[str(a['day'])] = attempts_map.get(str(a['day']), 0) + a['count']
+        for a in new_qs:
+            attempts_map[str(a['day'])] = attempts_map.get(str(a['day']), 0) + a['count']
+
 
         # AI tutor usage per day
         ai_qs = (
@@ -331,6 +353,102 @@ class AdminUserDetailView(APIView):
             "isActive": user.is_active,
             "role": user.role,
             "message": "User updated successfully."
+        })
+
+
+class AdminRolesView(APIView):
+    """Get list of system roles and their usage statistics."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # System roles and their usage
+        roles_data = [
+            {
+                "id": "super-admin",
+                "name": "Super Administrator",
+                "description": "Full platform access with all permissions",
+                "users": User.objects.filter(role='super-admin').count(),
+                "color": "red",
+                "type": "system"
+            },
+            {
+                "id": "admin",
+                "name": "Administrator",
+                "description": "Can manage users, content, and settings",
+                "users": User.objects.filter(role='admin').count(),
+                "color": "blue",
+                "type": "system"
+            },
+            {
+                "id": "teacher",
+                "name": "Teacher",
+                "description": "Can create content and manage students",
+                "users": User.objects.filter(role='teacher').count(),
+                "color": "purple",
+                "type": "system"
+            },
+            {
+                "id": "student",
+                "name": "Student",
+                "description": "Can access learning materials and take exams",
+                "users": User.objects.filter(role='student').count(),
+                "color": "green",
+                "type": "system"
+            },
+        ]
+
+        return Response({
+            "roles": roles_data,
+            "total": len(roles_data),
+            "totalUsers": User.objects.count(),
+        })
+
+
+class AdminAdministratorsView(APIView):
+    """Get list of all administrators (admin and super-admin users)."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        search = request.query_params.get('search', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Filter for admin and super-admin users only
+        qs = User.objects.filter(
+            Q(role='admin') | Q(role='super-admin')
+        ).order_by('-date_joined')
+
+        if search:
+            qs = qs.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        admins = qs[start:start + page_size]
+
+        data = []
+        for admin in admins:
+            data.append({
+                "id": admin.id,
+                "name": admin.get_full_name() or admin.username,
+                "username": admin.username,
+                "email": admin.email,
+                "role": admin.role,
+                "isActive": admin.is_active,
+                "dateJoined": admin.date_joined.isoformat(),
+                "avatar": admin.avatar,
+            })
+
+        return Response({
+            "users": data,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+            "totalPages": (total + page_size - 1) // page_size,
         })
 
 
@@ -771,3 +889,285 @@ class AdminEvaluationAssignmentsView(APIView):
             "totalPages": (total + page_size - 1) // page_size,
         })
 
+
+# ============================================================
+# ADMIN COURSE APPLICATION MANAGEMENT
+# ============================================================
+
+class AdminCourseApplicationView(APIView):
+    """
+    GET /api/admin/course-applications/
+
+    Returns all course applications with full enrollment/payment context.
+    Admin can see: student, applied course, payment status, enrollment status.
+
+    Query params:
+      status  = pending | approved | rejected | cancelled
+      page    = int (default 1)
+      per_page = int (default 20)
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from courses.models import CourseApplication, Enrollment
+        from subscriptions.models import SubscriptionPayment
+
+        status_filter = request.query_params.get('status')
+        page = int(request.query_params.get('page', 1))
+        per_page = int(request.query_params.get('per_page', 20))
+
+        qs = CourseApplication.objects.select_related(
+            'student', 'course', 'subscription_payment', 'subscription_payment__plan',
+            'marketplace_payment', 'marketplace_payment__product',
+            'reviewed_by'
+        ).order_by('-applied_at')
+
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+
+        total = qs.count()
+        start = (page - 1) * per_page
+        applications = qs[start:start + per_page]
+
+        data = []
+        for app in applications:
+            # Enrollment status for this student+course
+            enrollment = Enrollment.objects.filter(
+                student=app.student, course=app.course
+            ).first()
+
+            payment = app.subscription_payment
+
+            data.append({
+                'id': app.id,
+                'student': {
+                    'id': app.student.id,
+                    'name': app.student.get_full_name() or app.student.username,
+                    'username': app.student.username,
+                    'email': app.student.email,
+                },
+                'course': {
+                    'id': app.course.id,
+                    'title': app.course.title,
+                },
+                'application_status': app.status,
+                'applied_at': app.applied_at,
+                'reviewed_at': app.reviewed_at,
+                'reviewed_by': app.reviewed_by.get_full_name() if app.reviewed_by else None,
+                'note': app.note,
+                'payment': {
+                    'id': app.subscription_payment.id,
+                    'status': app.subscription_payment.status,
+                    'amount': str(app.subscription_payment.amount),
+                    'plan_name': app.subscription_payment.plan.name,
+                    'submitted_at': app.subscription_payment.submitted_at,
+                    'type': 'subscription'
+                } if app.subscription_payment else ({
+                    'id': app.marketplace_payment.id,
+                    'status': app.marketplace_payment.status,
+                    'amount': str(app.marketplace_payment.submitted_amount),
+                    'plan_name': app.marketplace_payment.product.title,
+                    'submitted_at': app.marketplace_payment.submitted_at,
+                    'type': 'marketplace'
+                } if app.marketplace_payment else None),
+                'enrollment': {
+                    'id': enrollment.id,
+                    'status': enrollment.status,
+                    'enrolled_at': enrollment.enrolled_at,
+                    'expires_at': enrollment.expires_at,
+                } if enrollment else None,
+            })
+
+        return Response({
+            'results': data,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'total_pages': (total + per_page - 1) // per_page,
+        })
+
+    def post(self, request):
+        """
+        POST /api/admin/course-applications/
+        Manually enroll a student in a course (admin action — no payment required).
+        Body: { student_id, course_id, note }
+        """
+        from courses.models import CourseApplication, Enrollment, Course
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+
+        student_id = request.data.get('student_id')
+        course_id = request.data.get('course_id')
+        note = request.data.get('note', 'Manually enrolled by admin.')
+
+        if not student_id or not course_id:
+            return Response({'error': 'student_id and course_id are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            student = UserModel.objects.get(id=student_id, role='student')
+        except UserModel.DoesNotExist:
+            return Response({'error': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            course = Course.objects.get(id=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': 'Course not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.utils import timezone as tz
+        now = tz.now()
+
+        app, _ = CourseApplication.objects.update_or_create(
+            student=student,
+            course=course,
+            defaults={
+                'status': 'approved',
+                'note': note,
+                'reviewed_at': now,
+                'reviewed_by': request.user,
+            }
+        )
+
+        enrollment, created = Enrollment.objects.get_or_create(
+            student=student,
+            course=course,
+            defaults={'status': 'active'}
+        )
+        if not created:
+            enrollment.status = 'active'
+            enrollment.save(update_fields=['status'])
+
+        return Response({
+            'application_id': app.id,
+            'enrollment_id': enrollment.id,
+            'created': created,
+            'message': f'{student.username} enrolled in {course.title}.',
+        }, status=status.HTTP_201_CREATED)
+
+
+class AdminCourseApplicationDetailView(APIView):
+    """
+    PATCH /api/admin/course-applications/<id>/
+    Body: { status: 'approved' | 'rejected', note?: str }
+
+    Approves or rejects a single CourseApplication directly. This covers
+    applications that have no linked SubscriptionPayment (e.g. free
+    courses applied to via POST /api/courses/apply/) — payment-linked
+    applications are still approved/rejected through
+    SubscriptionPaymentViewSet.approve/reject, which also handles the
+    subscription + invoice side and keeps this record in sync.
+    """
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        from django.db import transaction
+        from courses.models import CourseApplication, Enrollment
+
+        try:
+            app = CourseApplication.objects.select_related('student', 'course').get(pk=pk)
+        except CourseApplication.DoesNotExist:
+            return Response({'error': 'Application not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        new_status = request.data.get('status')
+        if new_status not in ('approved', 'rejected'):
+            return Response(
+                {'error': "status must be 'approved' or 'rejected'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if app.status not in ('pending',):
+            return Response(
+                {'error': f'Application is already {app.status}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        note = request.data.get('note', '')
+        now = timezone.now()
+
+        with transaction.atomic():
+            app.status = new_status
+            app.note = note
+            app.reviewed_at = now
+            app.reviewed_by = request.user
+            app.save(update_fields=['status', 'note', 'reviewed_at', 'reviewed_by'])
+
+            if new_status == 'approved':
+                enrollment, created = Enrollment.objects.get_or_create(
+                    student=app.student,
+                    course=app.course,
+                    defaults={'status': 'active'},
+                )
+                if not created and enrollment.status != 'active':
+                    enrollment.status = 'active'
+                    enrollment.save(update_fields=['status'])
+
+        return Response({
+            'application_id': app.id,
+            'status': app.status,
+            'reviewed_at': app.reviewed_at,
+        })
+
+
+# ============================================================
+# EVALUATIONS MANAGEMENT VIEW
+# ============================================================
+
+class AdminEvaluationsView(APIView):
+    """List pending evaluations (submitted subjective answers) with pagination and filtering."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from exams.models import SubjectiveAnswer, Evaluation
+
+        status_filter = request.query_params.get('status', 'submitted')  # 'submitted', 'under-review', 'evaluated', 'all'
+        search = request.query_params.get('search', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Start with pending evaluations
+        qs = SubjectiveAnswer.objects.select_related(
+            'attempt__student', 'question'
+        ).order_by('-submitted_at')
+
+        if status_filter != 'all':
+            qs = qs.filter(status=status_filter)
+
+        if search:
+            qs = qs.filter(
+                Q(attempt__student__username__icontains=search) |
+                Q(attempt__student__email__icontains=search) |
+                Q(attempt__student__first_name__icontains=search) |
+                Q(attempt__student__last_name__icontains=search) |
+                Q(question__text__icontains=search)
+            )
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        answers = qs[start:start + page_size]
+
+        data = []
+        for answer in answers:
+            # Check if evaluation exists for this answer
+            evaluation = Evaluation.objects.filter(answer=answer).first()
+
+            data.append({
+                "id": answer.id,
+                "student": answer.attempt.student.get_full_name() or answer.attempt.student.username,
+                "studentId": answer.attempt.student.id,
+                "email": answer.attempt.student.email,
+                "question": answer.question.text[:100] if answer.question else '',
+                "questionId": answer.question.id if answer.question else None,
+                "marks": float(answer.question.marks) if answer.question else 0,
+                "status": answer.status,
+                "submittedAt": answer.submitted_at.isoformat() if answer.submitted_at else None,
+                "wordCount": answer.word_count,
+                "evaluator": evaluation.evaluator.get_full_name() or evaluation.evaluator.username if evaluation else None,
+                "marksObtained": float(evaluation.marks_obtained) if evaluation else None,
+                "evaluatedAt": evaluation.evaluated_at.isoformat() if evaluation else None,
+            })
+
+        return Response({
+            "evaluations": data,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+            "totalPages": (total + page_size - 1) // page_size,
+        })

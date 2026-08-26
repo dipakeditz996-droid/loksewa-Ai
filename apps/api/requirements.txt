@@ -1,0 +1,31 @@
+# LoksewaAI Django backend dependencies (apps/api)
+# Install:  pip install -r requirements.txt
+# Pinned to the versions currently present in apps/api/venv.
+
+# --- Core framework ---
+Django==6.1
+djangorestframework==3.18.0
+djangorestframework-simplejwt==5.5.1
+PyJWT==2.13.0
+django-cors-headers==4.9.0
+django-filter==26.1
+
+# --- Database ---
+# dj-database-url parses DATABASE_URL / DIRECT_URL into Django's DATABASES.
+dj-database-url==3.1.2
+# PostgreSQL driver for Supabase. Do not add a second driver (psycopg v3)
+# alongside this one.
+psycopg2-binary==2.9.12
+
+# --- Media storage (Cloudflare R2 / S3-compatible) ---
+django-storages==1.14.6
+boto3==1.43.76
+Pillow==12.3.0
+
+# --- AI Tutor ---
+google-genai==2.18.1
+google-api-python-client==2.198.0
+
+# --- Runtime support ---
+tzdata==2026.3
+requests==2.34.2

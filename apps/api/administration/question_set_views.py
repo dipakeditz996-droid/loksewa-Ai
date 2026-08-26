@@ -1,9 +1,9 @@
-import random
 from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 from exams.models import QuestionSet, Question, ExamCategory, Exam, Subject, QuestionSetQuestion
+from exams.selection_service import QuestionSelectionService
 from administration.models import AuditLog
 from administration.question_serializers import AdminQuestionSerializer
 
@@ -20,7 +20,7 @@ class QuestionSetSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     position_name = serializers.CharField(source='exam.name', read_only=True)
     subject_name = serializers.CharField(source='subject.name', read_only=True)
-    unit_name = serializers.CharField(source='Chapter.title', read_only=True)
+    unit_name = serializers.CharField(source='chapter.title', read_only=True)
     topic_name = serializers.CharField(source='topic.name', read_only=True)
 
     class Meta:
@@ -32,8 +32,8 @@ class QuestionSetSerializer(serializers.ModelSerializer):
         set_type = data.get('set_type', 'custom')
         if set_type in ['subject', 'chapter', 'topic'] and not data.get('subject'):
             raise serializers.ValidationError({"subject": f"Subject is required for {set_type} set."})
-        if set_type in ['chapter', 'topic'] and not data.get('Chapter'):
-            raise serializers.ValidationError({"Chapter": f"Chapter (Chapter) is required for {set_type} set."})
+        if set_type in ['chapter', 'topic'] and not data.get('chapter'):
+            raise serializers.ValidationError({"chapter": f"Chapter is required for {set_type} set."})
         if set_type == 'topic' and not data.get('topic'):
             raise serializers.ValidationError({"topic": "Topic is required for topic set."})
         
@@ -95,14 +95,19 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
             
         # Validation based on set_type
         if qset.set_type != 'custom':
-            questions_qs = Question.objects.filter(id__in=question_ids)
+            questions_qs = Question.objects.filter(id__in=question_ids).select_related(
+                'topic', 'topic__chapter', 'topic__chapter__subject',
+                'topic__chapter__subject__paper'
+            )
             for q in questions_qs:
-                if qset.set_type == 'position' and q.topic.Chapter.subject.exam_id != qset.exam_id:
+                subject = q.topic.chapter.subject
+                question_exam_id = subject.paper.exam_id if subject.paper_id else subject.exam_id
+                if qset.set_type == 'position' and question_exam_id != qset.exam_id:
                     return Response({"error": f"Question {q.id} does not belong to Position {qset.exam.name}."}, status=400)
-                if qset.set_type == 'subject' and q.topic.Chapter.subject_id != qset.subject_id:
+                if qset.set_type == 'subject' and q.topic.chapter.subject_id != qset.subject_id:
                     return Response({"error": f"Question {q.id} does not belong to Subject {qset.subject.name}."}, status=400)
-                if qset.set_type == 'chapter' and q.topic.unit_id != qset.unit_id:
-                    return Response({"error": f"Question {q.id} does not belong to Chapter {qset.Chapter.title}."}, status=400)
+                if qset.set_type == 'chapter' and q.topic.chapter_id != qset.chapter_id:
+                    return Response({"error": f"Question {q.id} does not belong to Chapter {qset.chapter.title}."}, status=400)
                 if qset.set_type == 'topic' and q.topic_id != qset.topic_id:
                     return Response({"error": f"Question {q.id} does not belong to Topic {qset.topic.name}."}, status=400)
                 # full_mock logic could validate if it matches distribution, but we'll trust the selector for simplicity.
@@ -167,20 +172,25 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
     def generate(self, request, pk=None):
         """
         Generate questions based on the difficulty distribution.
+
+        Routes through the shared QuestionSelectionService (the same one used
+        by Practice, Games, and Teacher Mock Exam auto-generation) so this
+        preview only ever draws from APPROVED questions and stays in sync
+        with the rest of the Master Question Bank selection logic.
         """
         qset = self.get_object()
-        
+
         # Determine how many questions are needed per difficulty
-        distribution = qset.difficulty_distribution
+        distribution = qset.difficulty_distribution or {}
         easy_needed = int(distribution.get('easy', 0))
         medium_needed = int(distribution.get('medium', 0))
         hard_needed = int(distribution.get('hard', 0))
-        
+
         total_needed = easy_needed + medium_needed + hard_needed
         if total_needed != qset.total_questions:
             return Response({"error": "Distribution sum does not match total_questions."}, status=400)
-            
-        base_qs = Question.objects.filter(status='published')
+
+        service = QuestionSelectionService()
         selected_ids = []
 
         if qset.set_type == 'full_mock':
@@ -189,60 +199,59 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
             total_subj_needed = sum(int(v) for v in subject_dist.values() if str(v).isdigit())
             if total_subj_needed != qset.total_questions:
                 return Response({"error": "Subject distribution sum does not match total_questions."}, status=400)
-            
-            # Simple approach: for each subject, grab questions randomly ignoring global difficulty 
+
+            # Simple approach: for each subject, grab questions randomly ignoring global difficulty
             # (or trying to balance it, but keeping it simple for now)
             for subj_id_str, count_str in subject_dist.items():
                 if not str(count_str).isdigit(): continue
                 count = int(count_str)
                 if count <= 0: continue
                 subj_id = int(subj_id_str)
-                pool = list(base_qs.filter(topic__unit__subject_id=subj_id).values_list('id', flat=True))
-                if len(pool) < count:
-                    return Response({"error": f"Not enough questions for Subject ID {subj_id}. Needed {count}, found {len(pool)}."}, status=400)
-                selected_ids.extend(random.sample(pool, count))
-                
+                result = service.select(subject_id=subj_id, count=count, randomize=True)
+                if not result['satisfied']:
+                    return Response(
+                        {"error": f"Not enough questions for Subject ID {subj_id}. Needed {count}, found {result['available']}."},
+                        status=400,
+                    )
+                selected_ids.extend(q.id for q in result['questions'])
+
         else:
-            # Hierarchy filter
+            # Hierarchy filter — mirrors QuestionSelectionService.apply_filters' academic-hierarchy kwargs
+            filters = {}
             if qset.set_type == 'topic' and qset.topic_id:
-                base_qs = base_qs.filter(topic_id=qset.topic_id)
-            elif qset.set_type == 'chapter' and qset.unit_id:
-                base_qs = base_qs.filter(topic__unit_id=qset.unit_id)
+                filters['topic_id'] = qset.topic_id
+            elif qset.set_type == 'chapter' and qset.chapter_id:
+                filters['chapter_id'] = qset.chapter_id
             elif qset.set_type == 'subject' and qset.subject_id:
-                base_qs = base_qs.filter(topic__unit__subject_id=qset.subject_id)
+                filters['subject_id'] = qset.subject_id
             elif qset.set_type == 'position' and qset.exam_id:
-                base_qs = base_qs.filter(topic__unit__subject__exam_id=qset.exam_id)
+                filters['exam_id'] = qset.exam_id
             elif qset.set_type == 'custom':
                 # Custom can be anything, but we might optionally filter by what's provided
-                if qset.topic_id: base_qs = base_qs.filter(topic_id=qset.topic_id)
-                elif qset.unit_id: base_qs = base_qs.filter(topic__unit_id=qset.unit_id)
-                elif qset.subject_id: base_qs = base_qs.filter(topic__unit__subject_id=qset.subject_id)
-                elif qset.exam_id: base_qs = base_qs.filter(topic__unit__subject__exam_id=qset.exam_id)
-            
-            easy_pool = list(base_qs.filter(difficulty='easy').values_list('id', flat=True))
-            medium_pool = list(base_qs.filter(difficulty='medium').values_list('id', flat=True))
-            hard_pool = list(base_qs.filter(difficulty='hard').values_list('id', flat=True))
-            
-            if len(easy_pool) < easy_needed:
-                return Response({"error": f"Not enough easy questions. Needed {easy_needed}, found {len(easy_pool)}."}, status=400)
-            if len(medium_pool) < medium_needed:
-                return Response({"error": f"Not enough medium questions. Needed {medium_needed}, found {len(medium_pool)}."}, status=400)
-            if len(hard_pool) < hard_needed:
-                return Response({"error": f"Not enough hard questions. Needed {hard_needed}, found {len(hard_pool)}."}, status=400)
-                
-            selected_ids.extend(random.sample(easy_pool, easy_needed))
-            selected_ids.extend(random.sample(medium_pool, medium_needed))
-            selected_ids.extend(random.sample(hard_pool, hard_needed))
-        
+                if qset.topic_id: filters['topic_id'] = qset.topic_id
+                elif qset.chapter_id: filters['chapter_id'] = qset.chapter_id
+                elif qset.subject_id: filters['subject_id'] = qset.subject_id
+                elif qset.exam_id: filters['exam_id'] = qset.exam_id
+
+            result = service.select(
+                difficulty_distribution={'easy': easy_needed, 'medium': medium_needed, 'hard': hard_needed},
+                randomize=True,
+                **filters,
+            )
+            if not result['satisfied']:
+                message = " ".join(result['warnings']) or "Not enough approved questions available for the requested distribution."
+                return Response({"error": message}, status=400)
+            selected_ids.extend(q.id for q in result['questions'])
+
         # Don't save, just return the preview data for AI generation
         questions = Question.objects.filter(id__in=selected_ids)
         serializer = AdminQuestionSerializer(questions, many=True)
-        
+
         AuditLog.objects.create(
             actor=request.user, action='GENERATE_QUESTION_SET_PREVIEW', entity_type='QuestionSet', entity_id=str(qset.id),
             details={"questions_generated": len(selected_ids)}
         )
-        
+
         return Response({"success": True, "generated_count": len(selected_ids), "preview_questions": serializer.data})
 
     @action(detail=True, methods=['post'])

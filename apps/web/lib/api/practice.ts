@@ -1,7 +1,15 @@
 import { apiClient } from "./client";
-import { Question } from "../mock/practice-data";
-
-export type { Question };
+export interface Question {
+  id: number;
+  text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  difficulty: string;
+  correct_option?: string;
+  explanation?: string;
+}
 
 export interface StartSessionParams {
   exam: string;

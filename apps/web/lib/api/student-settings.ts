@@ -45,10 +45,10 @@ export interface NotificationPreferences {
 
 export const studentSettingsApi = {
   // Profile
-  getProfile: () => apiClient<StudentProfile>("/student/profile/"),
+  getProfile: () => apiClient<StudentProfile>("/support/profile/"),
 
   updateProfile: (data: Partial<StudentProfile>) =>
-    apiClient<StudentProfile>("/student/profile/", {
+    apiClient<StudentProfile>("/support/profile/", {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
@@ -56,14 +56,14 @@ export const studentSettingsApi = {
   uploadPhoto: (file: File) => {
     const formData = new FormData();
     formData.append("photo", file);
-    return apiClient<{ avatar: string }>("/student/profile/photo/", {
+    return apiClient<{ avatar: string }>("/support/profile/photo/", {
       method: "POST",
       body: formData,
     });
   },
 
   removePhoto: () =>
-    apiClient<{ avatar: null }>("/student/profile/photo/", { method: "DELETE" }),
+    apiClient<{ avatar: null }>("/support/profile/photo/", { method: "DELETE" }),
 
   // Password
   changePassword: (data: {
@@ -71,30 +71,30 @@ export const studentSettingsApi = {
     new_password: string;
     confirm_password: string;
   }) =>
-    apiClient<{ detail: string }>("/student/password/", {
+    apiClient<{ detail: string }>("/support/password/", {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
 
   // Notifications
   getNotifications: () =>
-    apiClient<NotificationPreferences>("/student/notifications/"),
+    apiClient<NotificationPreferences>("/support/notifications/"),
 
   updateNotifications: (data: Partial<NotificationPreferences>) =>
-    apiClient<NotificationPreferences>("/student/notifications/", {
+    apiClient<NotificationPreferences>("/support/notifications/", {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
 
   // Account management
   deactivateAccount: (password: string) =>
-    apiClient<{ detail: string }>("/student/account/deactivate/", {
+    apiClient<{ detail: string }>("/support/account/deactivate/", {
       method: "POST",
       body: JSON.stringify({ password }),
     }),
 
   deleteAccount: (password: string, confirmation: string) =>
-    apiClient<{ detail: string }>("/student/account/delete/", {
+    apiClient<{ detail: string }>("/support/account/delete/", {
       method: "POST",
       body: JSON.stringify({ password, confirmation }),
     }),

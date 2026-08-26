@@ -252,7 +252,7 @@ export default function SubjectsPage() {
                           <DropdownMenuSeparator />
                           <DropdownMenuItem>
                             <Power className="mr-2 h-4 w-4" /> 
-                            {subject.status === 'Active' ? 'Deactivate' : 'Activate'}
+                            {(subject as any).status === 'Active' ? 'Deactivate' : 'Activate'}
                           </DropdownMenuItem>
                           <DropdownMenuItem className="text-red-600 focus:text-red-600">
                             <Trash2 className="mr-2 h-4 w-4" /> Delete

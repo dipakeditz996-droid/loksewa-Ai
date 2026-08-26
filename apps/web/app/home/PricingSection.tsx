@@ -101,7 +101,7 @@ export function PricingSection({ packages }: Props) {
         
         {/* Header */}
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 mb-5">
+          <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 mb-5">
             <Sparkles className="w-3.5 h-3.5 text-[#D4A72C]" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#D4A72C]">Simple Pricing</span>
           </div>
@@ -118,7 +118,7 @@ export function PricingSection({ packages }: Props) {
           {displayPackages.map((pkg) => (
             <div 
               key={pkg.id} 
-              className={`relative bg-white dark:bg-[#060E18] border rounded-[24px] overflow-hidden transition-all ${
+              className={`card-hover relative bg-white dark:bg-[#060E18] border rounded-[24px] overflow-hidden ${
                 pkg.is_popular 
                   ? "border-[#D4A72C]/50 dark:border-[#D4A72C]/50 shadow-[0_20px_60px_rgba(212,167,44,0.1)] dark:shadow-[0_20px_80px_rgba(212,167,44,0.15)] md:scale-105 z-10" 
                   : "border-slate-200 dark:border-white/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
@@ -143,11 +143,11 @@ export function PricingSection({ packages }: Props) {
                 </div>
 
                 <Link href="/register">
-                  <Button 
+                  <Button
                     className={`w-full h-[48px] rounded-[12px] font-[700] text-[15px] transition-all mb-8 ${
-                      pkg.is_popular 
-                        ? "bg-gradient-to-r from-[#C29322] to-[#E6BA3D] hover:opacity-90 text-[#020611] border-none shadow-[0_8px_25px_rgba(212,167,44,0.3)]" 
-                        : "bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10"
+                      pkg.is_popular
+                        ? "btn-gold-gradient text-[#020611] border-none shadow-[0_8px_25px_rgba(212,167,44,0.3)]"
+                        : "bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 hover:-translate-y-0.5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10"
                     }`}
                   >
                     Get Started Now

@@ -51,25 +51,56 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
             
             if new_status == 'REJECTED' and not rejection_reason:
                 return Response({"rejection_reason": ["Required when rejecting."]}, status=status.HTTP_400_BAD_REQUEST)
-                
-            submission.status = new_status
-            submission.rejection_reason = rejection_reason if new_status == 'REJECTED' else ''
-            submission.verified_at = timezone.now()
-            submission.verified_by = request.user
-            submission.save()
             
-            # If approved, create purchase
-            if new_status == 'APPROVED':
-                Purchase.objects.update_or_create(
-                    student=submission.student,
-                    product=submission.product,
-                    defaults={
-                        'payment_submission': submission,
-                        'amount_paid': submission.submitted_amount,
-                        'status': 'ACTIVE',
-                        'approved_at': timezone.now()
-                    }
-                )
+            # Product validation on approval just to be safe
+            if new_status == 'APPROVED' and submission.product.category == 'COURSE' and not submission.product.course:
+                return Response({"detail": "Cannot approve. This COURSE product is missing a linked course."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            from django.db import transaction
+            from courses.models import Enrollment, CourseApplication
+            
+            with transaction.atomic():
+                submission.status = new_status
+                submission.rejection_reason = rejection_reason if new_status == 'REJECTED' else ''
+                submission.verified_at = timezone.now()
+                submission.verified_by = request.user
+                submission.save()
+                
+                # If approved, create purchase
+                if new_status == 'APPROVED':
+                    Purchase.objects.update_or_create(
+                        student=submission.student,
+                        product=submission.product,
+                        defaults={
+                            'payment_submission': submission,
+                            'amount_paid': submission.submitted_amount,
+                            'status': 'ACTIVE',
+                            'approved_at': timezone.now()
+                        }
+                    )
+                    
+                    # Provision Course Access
+                    if submission.product.category == 'COURSE' and submission.product.course:
+                        enrollment, created = Enrollment.objects.get_or_create(
+                            student=submission.student,
+                            course=submission.product.course,
+                            defaults={
+                                'status': 'active'
+                            }
+                        )
+                        if not created and enrollment.status != 'active':
+                            enrollment.status = 'active'
+                            enrollment.save(update_fields=['status'])
+
+                        CourseApplication.objects.filter(
+                            student=submission.student,
+                            course=submission.product.course,
+                            status='pending'
+                        ).update(
+                            status='approved',
+                            reviewed_at=timezone.now(),
+                            reviewed_by=request.user
+                        )
             
             return Response(PaymentSubmissionSerializer(submission).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -110,6 +141,9 @@ class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
         if pending:
             raise serializers.ValidationError({"detail": "You already have a pending payment verification for this product."})
             
+        if product.category == 'COURSE' and not product.course:
+            raise serializers.ValidationError({"detail": "This course product is missing a valid course linkage. Please contact support."})
+            
         # Prevent duplicate purchase
         purchased = Purchase.objects.filter(student=self.request.user, product=product, status='ACTIVE').exists()
         if purchased:
@@ -117,10 +151,22 @@ class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
             
         expected_amount = product.discount_price if product.discount_price is not None else product.price
         
-        serializer.save(
+        submission = serializer.save(
             student=self.request.user,
             expected_amount=expected_amount
         )
+        
+        # If product is a course, automatically create a pending CourseApplication
+        if product.category == 'COURSE' and product.course:
+            from courses.models import CourseApplication
+            CourseApplication.objects.update_or_create(
+                student=self.request.user,
+                course=product.course,
+                defaults={
+                    'status': 'pending',
+                    'marketplace_payment': submission
+                }
+            )
 
 class StudentPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PurchaseSerializer

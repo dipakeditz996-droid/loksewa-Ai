@@ -1,13 +1,38 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { 
   Package, ShoppingCart, CreditCard, DollarSign, TrendingUp,
   BarChart3, PieChart
 } from "lucide-react";
-import { mockMarketplaceAnalytics } from "@/lib/mock/admin-marketplace";
+import { marketplaceApi } from "@/lib/api/marketplace";
 
 export default function MarketplaceDashboardPage() {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await marketplaceApi.adminGetOverview();
+        setStats(data);
+      } catch (error) {
+        console.error("Failed to fetch marketplace stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return <div className="p-6 text-center text-slate-500">Loading dashboard...</div>;
+  }
+
+  if (!stats) {
+    return <div className="p-6 text-center text-red-500">Failed to load marketplace statistics.</div>;
+  }
+
   return (
     <div className="space-y-6">
       {/* Overview Cards */}
@@ -17,10 +42,10 @@ export default function MarketplaceDashboardPage() {
             <p className="text-slate-500 text-sm font-medium">Total Revenue</p>
             <DollarSign className="w-4 h-4 text-emerald-500" />
           </div>
-          <p className="text-2xl font-bold text-[#0B2545]">Rs. {mockMarketplaceAnalytics.totalRevenue.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-[#0B2545]">Rs. {stats.revenue?.toLocaleString() || 0}</p>
           <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1 font-medium">
             <TrendingUp className="w-3 h-3" />
-            + Rs. {mockMarketplaceAnalytics.revenueToday.toLocaleString()} today
+            + Rs. {stats.revenueToday?.toLocaleString() || 0} today
           </p>
         </div>
 
@@ -29,7 +54,7 @@ export default function MarketplaceDashboardPage() {
             <p className="text-slate-500 text-sm font-medium">Pending Payments</p>
             <CreditCard className="w-4 h-4 text-amber-500" />
           </div>
-          <p className="text-2xl font-bold text-[#0B2545]">{mockMarketplaceAnalytics.pendingPayments}</p>
+          <p className="text-2xl font-bold text-[#0B2545]">{stats.pendingOrders || 0}</p>
           <p className="text-xs text-amber-600 mt-1 font-medium">Action Required</p>
         </div>
 
@@ -38,8 +63,8 @@ export default function MarketplaceDashboardPage() {
             <p className="text-slate-500 text-sm font-medium">Total Orders</p>
             <ShoppingCart className="w-4 h-4 text-blue-500" />
           </div>
-          <p className="text-2xl font-bold text-[#0B2545]">{mockMarketplaceAnalytics.totalOrders.toLocaleString()}</p>
-          <p className="text-xs text-slate-400 mt-1 font-medium">{mockMarketplaceAnalytics.approvedPayments.toLocaleString()} approved</p>
+          <p className="text-2xl font-bold text-[#0B2545]">{stats.totalOrders?.toLocaleString() || 0}</p>
+          <p className="text-xs text-slate-400 mt-1 font-medium">{stats.completedOrders?.toLocaleString() || 0} approved</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
@@ -47,8 +72,8 @@ export default function MarketplaceDashboardPage() {
             <p className="text-slate-500 text-sm font-medium">Active Products</p>
             <Package className="w-4 h-4 text-purple-500" />
           </div>
-          <p className="text-2xl font-bold text-[#0B2545]">{mockMarketplaceAnalytics.publishedProducts}</p>
-          <p className="text-xs text-slate-400 mt-1 font-medium">Out of {mockMarketplaceAnalytics.totalProducts} total</p>
+          <p className="text-2xl font-bold text-[#0B2545]">{stats.activeProducts || 0}</p>
+          <p className="text-xs text-slate-400 mt-1 font-medium">Out of {stats.totalProducts || 0} total</p>
         </div>
       </div>
 
@@ -57,7 +82,7 @@ export default function MarketplaceDashboardPage() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center min-h-[300px]">
           <h3 className="font-bold text-[#0B2545] mb-6 flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-slate-400" />
-            Revenue Over Time (Mock)
+            Revenue Over Time (Static Demo)
           </h3>
           <div className="flex-1 flex items-end justify-between gap-2 px-4 pb-4 border-b border-slate-100 relative h-48">
             {/* Simple CSS bars for mock data */}
@@ -79,7 +104,7 @@ export default function MarketplaceDashboardPage() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center min-h-[300px]">
           <h3 className="font-bold text-[#0B2545] mb-6 flex items-center gap-2">
             <PieChart className="w-5 h-5 text-slate-400" />
-            Payment Methods Usage (Mock)
+            Payment Methods Usage (Static Demo)
           </h3>
           <div className="space-y-6">
             <div className="space-y-2">
@@ -117,3 +142,4 @@ export default function MarketplaceDashboardPage() {
     </div>
   );
 }
+

@@ -1,22 +1,132 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { BookOpen, Eye, EyeOff, User, Lock, Trophy, BarChart2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import bgImage from "../../media/login.png";
+import leftBranchImg from "../../media/left-branch.png";
+import rightBranchImg from "../../media/right-branch.png";
+import Image from "next/image";
 
 import { useRouter } from "next/navigation";
 import { authApi } from "../../lib/api/auth";
 import { useAuth } from "../../contexts/AuthContext";
+import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
 
-export default function LoginPage() {
+declare global {
+  interface Window {
+    fbAsyncInit: () => void;
+    FB: any;
+    AppleID: any;
+  }
+}
+
+function LoginContent() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const { refreshUser } = useAuth();
+
+  const handleSocialSuccess = async (provider: 'google' | 'facebook' | 'apple', token: string) => {
+    setIsLoading(true);
+    setError("");
+    try {
+      await authApi.socialLogin(provider, token);
+      await refreshUser();
+      
+      const user = await authApi.me();
+      if (user.role === "teacher") {
+        router.push("/teacher");
+      } else if (user.role === "admin" || user.role === "super-admin") {
+        router.push("/admin-dashboard");
+      } else {
+        router.push("/student");
+      }
+    } catch (err: any) {
+      setError(err.message || err.detail || `Failed to login with ${provider}`);
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithGoogle = useGoogleLogin({
+    onSuccess: (tokenResponse) => handleSocialSuccess('google', tokenResponse.access_token),
+    onError: () => setError("Google login failed")
+  });
+
+  useEffect(() => {
+    // 1. Facebook SDK
+    window.fbAsyncInit = function() {
+      window.FB.init({
+        appId: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || 'placeholder_fb_id',
+        cookie: true,
+        xfbml: true,
+        version: 'v18.0'
+      });
+    };
+    (function(d, s, id) {
+       var js, fjs = d.getElementsByTagName(s)[0] as any;
+       if (d.getElementById(id)) {return;}
+       js = d.createElement(s) as any; js.id = id;
+       js.src = "https://connect.facebook.net/en_US/sdk.js";
+       fjs.parentNode.insertBefore(js, fjs);
+     }(document, 'script', 'facebook-jssdk'));
+
+    // 2. Apple SDK
+    const script = document.createElement("script");
+    script.src = "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
+    script.onload = () => {
+      window.AppleID.auth.init({
+        clientId: process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || 'placeholder_apple_id',
+        scope: 'name email',
+        redirectURI: process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI || window.location.href.split('?')[0],
+        usePopup: true
+      });
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  const loginWithFacebook = () => {
+    if (!window.FB) return setError("Facebook SDK is still loading, please try again.");
+    
+    // Facebook SDK throws a hard console.error if called from http:// which crashes Next.js dev overlay
+    if (window.location.protocol !== 'https:' && window.location.hostname === 'localhost') {
+      setError("Facebook Login requires HTTPS. For local testing, please use ngrok or local HTTPS.");
+      return;
+    }
+
+    window.FB.login((response: any) => {
+      if (response.authResponse) {
+        handleSocialSuccess('facebook', response.authResponse.accessToken);
+      } else {
+        setError("Facebook login was cancelled or failed.");
+      }
+    }, {scope: 'email,public_profile'});
+  };
+
+  const loginWithApple = async () => {
+    if (!window.AppleID) return setError("Apple SDK is still loading, please try again.");
+    
+    if (window.location.protocol !== 'https:' && window.location.hostname === 'localhost') {
+      setError("Apple Login requires HTTPS. For local testing, please use ngrok or local HTTPS.");
+      return;
+    }
+
+    try {
+      const response = await window.AppleID.auth.signIn();
+      
+      // Apple passes `user` object only on the very first login
+      const additionalData = response.user ? { name: response.user.name } : undefined;
+      
+      await handleSocialSuccess('apple', response.authorization.id_token);
+    } catch (err: any) {
+      if (err.error !== 'popup_closed_by_user') {
+        setError("Apple login failed.");
+      }
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -214,7 +324,12 @@ export default function LoginPage() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-3">
-                  <button type="button" className="h-[44px] flex items-center justify-center bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors">
+                  <button 
+                    type="button" 
+                    disabled={isLoading}
+                    onClick={() => loginWithGoogle()}
+                    className="h-[44px] flex items-center justify-center bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors disabled:opacity-50"
+                  >
                     {/* Google SVG */}
                     <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
                       <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
@@ -225,14 +340,24 @@ export default function LoginPage() {
                       </g>
                     </svg>
                   </button>
-                  <button type="button" className="h-[44px] flex items-center justify-center bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors">
+                  <button 
+                    type="button" 
+                    disabled={isLoading}
+                    onClick={loginWithFacebook}
+                    className="h-[44px] flex items-center justify-center bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors disabled:opacity-50"
+                  >
                     {/* Facebook SVG */}
                     <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
                       <path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 9.39 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z" fill="#1877F2"/>
                       <path d="M15.89 14.96L16.34 12.06H13.56V10.18C13.56 9.39 13.95 8.62 15.19 8.62H16.45V6.15C16.45 6.15 15.31 5.96 14.22 5.96C11.93 5.96 10.44 7.34 10.44 9.85V12.06H7.9V14.96H10.44V21.96C10.96 22.03 11.48 22.06 12 22.06C12.52 22.06 13.04 22.03 13.56 21.96V14.96H15.89Z" fill="white"/>
                     </svg>
                   </button>
-                  <button type="button" className="h-[44px] flex items-center justify-center bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors">
+                  <button 
+                    type="button" 
+                    disabled={isLoading}
+                    onClick={loginWithApple}
+                    className="h-[44px] flex items-center justify-center bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors disabled:opacity-50"
+                  >
                     {/* Apple SVG */}
                     <svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg">
                       <path d="M16.6 9.80005C16.5 7.60005 18.4 6.40005 18.5 6.30005C17.5 4.80005 15.9 4.60005 15.4 4.50005C14.1 4.40005 12.8 5.30005 12.1 5.30005C11.4 5.30005 10.3 4.50005 9.20001 4.50005C7.80001 4.50005 6.50001 5.30005 5.80001 6.50005C4.30001 9.10005 5.40001 12.9 6.80001 15C7.50001 16 8.30001 17.1 9.40001 17.1C10.5 17.1 10.9 16.4 12.2 16.4C13.5 16.4 13.9 17.1 15 17.1C16.2 17.1 16.9 16.1 17.6 15.1C18.4 13.9 18.7 12.7 18.7 12.7C18.7 12.6 16.7 11.9 16.6 9.80005Z" fill="white"/>
@@ -243,18 +368,11 @@ export default function LoginPage() {
 
                 <div className="mt-8 pt-4 flex items-center justify-between opacity-90 relative px-2">
                   {/* Left Laurel Wreath */}
-                  <svg width="24" height="60" viewBox="0 0 24 60" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="text-white/20">
-                    <path d="M22.5 58.5C22.5 58.5 2 45 2 28C2 11 22.5 1.5 22.5 1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                    <path d="M4.5 45C2.5 43 1 39 1 35C1 35 4 36 6 39C8 42 4.5 45 4.5 45Z" />
-                    <path d="M3.5 35C1.5 33 0 29 0 25C0 25 3 26 5 29C7 32 3.5 35 3.5 35Z" />
-                    <path d="M4.5 25C2.5 23 1 19 1 15C1 15 4 16 6 19C8 22 4.5 25 4.5 25Z" />
-                    <path d="M8.5 16C6.5 14 5 10 5 6C5 6 8 7 10 10C12 13 8.5 16 8.5 16Z" />
-                    <path d="M15.5 8C13.5 6 12 2 12 0C12 0 15 1 17 4C19 7 15.5 8 15.5 8Z" />
-                    <path d="M5.5 41C7.5 39 10 37 14 37C14 37 12 40 9 42C6 44 5.5 41 5.5 41Z" />
-                    <path d="M4.5 31C6.5 29 9 27 13 27C13 27 11 30 8 32C5 34 4.5 31 4.5 31Z" />
-                    <path d="M5.5 21C7.5 19 10 17 14 17C14 17 12 20 9 22C6 24 5.5 21 5.5 21Z" />
-                    <path d="M9.5 12C11.5 10 14 8 18 8C18 8 16 11 13 13C10 15 9.5 12 9.5 12Z" />
-                  </svg>
+                  <Image 
+                    src={leftBranchImg} 
+                    alt="Left Branch" 
+                    className="h-[80px] w-auto object-contain drop-shadow-[0_2px_8px_rgba(212,167,44,0.4)] opacity-90 hover:scale-105 transition-transform duration-500"
+                  />
                   
                   <div className="text-center px-2 flex-1 flex flex-col items-center">
                     {/* Golden Quote Icon */}
@@ -269,24 +387,42 @@ export default function LoginPage() {
                   </div>
 
                   {/* Right Laurel Wreath */}
-                  <svg width="24" height="60" viewBox="0 0 24 60" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="text-white/20">
-                    <path d="M1.5 58.5C1.5 58.5 22 45 22 28C22 11 1.5 1.5 1.5 1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                    <path d="M19.5 45C21.5 43 23 39 23 35C23 35 20 36 18 39C16 42 19.5 45 19.5 45Z" />
-                    <path d="M20.5 35C22.5 33 24 29 24 25C24 25 21 26 19 29C17 32 20.5 35 20.5 35Z" />
-                    <path d="M19.5 25C21.5 23 23 19 23 15C23 15 20 16 18 19C16 22 19.5 25 19.5 25Z" />
-                    <path d="M15.5 16C17.5 14 19 10 19 6C19 6 16 7 14 10C12 13 15.5 16 15.5 16Z" />
-                    <path d="M8.5 8C10.5 6 12 2 12 0C12 0 9 1 7 4C5 7 8.5 8 8.5 8Z" />
-                    <path d="M18.5 41C16.5 39 14 37 10 37C10 37 12 40 15 42C18 44 18.5 41 18.5 41Z" />
-                    <path d="M19.5 31C17.5 29 15 27 11 27C11 27 13 30 16 32C19 34 19.5 31 19.5 31Z" />
-                    <path d="M18.5 21C16.5 19 14 17 10 17C10 17 12 20 15 22C18 24 18.5 21 18.5 21Z" />
-                    <path d="M14.5 12C12.5 10 10 8 6 8C6 8 8 11 11 13C14 15 14.5 12 14.5 12Z" />
-                  </svg>
+                  <Image 
+                    src={rightBranchImg} 
+                    alt="Right Branch" 
+                    className="h-[80px] w-auto object-contain drop-shadow-[0_2px_8px_rgba(212,167,44,0.4)] opacity-90 hover:scale-105 transition-transform duration-500"
+                  />
                 </div>
               </form>
+
+              {/* Attribution for icons */}
+              <div className="mt-8 text-center text-[9px] text-white/30 space-y-1">
+                <p>
+                  <a href="https://www.flaticon.com/free-icons/roman" target="_blank" rel="noopener noreferrer" title="roman icons" className="hover:text-white/50 transition-colors">
+                    Roman icons created by egorpolyakov - Flaticon
+                  </a>
+                </p>
+                <p>
+                  <a href="https://www.flaticon.com/free-icons/laurels" target="_blank" rel="noopener noreferrer" title="laurels icons" className="hover:text-white/50 transition-colors">
+                    Laurels icons created by egorpolyakov - Flaticon
+                  </a>
+                </p>
+              </div>
+
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "PLACEHOLDER";
+  
+  return (
+    <GoogleOAuthProvider clientId={clientId}>
+      <LoginContent />
+    </GoogleOAuthProvider>
   );
 }

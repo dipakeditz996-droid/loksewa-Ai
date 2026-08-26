@@ -43,7 +43,7 @@ export function ExamPreviewModal({ examId, onClose }: ExamPreviewModalProps) {
 
   return (
     <div className="fixed inset-0 bg-gray-100 z-50 flex flex-col h-screen overflow-hidden">
-      {/* Fake Student Header */}
+      {/* Student Preview Header */}
       <div className="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center shrink-0">
         <div>
           <h1 className="text-xl font-bold text-gray-900">{data.title}</h1>

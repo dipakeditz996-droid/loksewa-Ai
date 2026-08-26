@@ -55,7 +55,7 @@ export const teacherEvaluationService = {
    */
   getEvaluations: async (status: string = "submitted"): Promise<SubjectiveAnswerList[]> => {
     try {
-      const data = await apiClient<SubjectiveAnswerList[]>(`/exams/evaluations/?status=${status}`);
+      const data = await apiClient<SubjectiveAnswerList[]>(`/evaluations/?status=${status}`);
       return data || [];
     } catch (error) {
       console.error("Failed to fetch evaluations list:", error);
@@ -69,7 +69,7 @@ export const teacherEvaluationService = {
    */
   getEvaluationDetail: async (id: number | string): Promise<SubjectiveAnswerDetail> => {
     try {
-      const data = await apiClient<SubjectiveAnswerDetail>(`/exams/evaluations/${id}/`);
+      const data = await apiClient<SubjectiveAnswerDetail>(`/evaluations/${id}/`);
       return data;
     } catch (error) {
       console.error(`Failed to fetch evaluation detail for ${id}:`, error);
@@ -85,7 +85,7 @@ export const teacherEvaluationService = {
     payload: { marks_obtained: number; feedback: string }
   ): Promise<EvaluationData> => {
     try {
-      const data = await apiClient<EvaluationData>(`/exams/evaluations/${id}/evaluate/`, {
+      const data = await apiClient<EvaluationData>(`/evaluations/${id}/evaluate/`, {
         method: "POST",
         body: JSON.stringify(payload),
       });

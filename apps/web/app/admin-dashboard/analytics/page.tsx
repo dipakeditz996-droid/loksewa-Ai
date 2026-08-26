@@ -1,67 +1,121 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { 
   Users, GraduationCap, Bot, Store, Activity, 
-  HelpCircle, CreditCard, Ticket
+  CreditCard, Ticket, AlertCircle, RefreshCw, HelpCircle
 } from "lucide-react";
-import { mockPlatformHealth, mockPlatformActivityChart } from "@/lib/mock/admin-analytics";
 import { TrendCard, AreaChart } from "@/components/analytics/ChartComponents";
 import { Area, AreaChart as RechartsAreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CustomTooltip, COLORS } from "@/components/analytics/ChartComponents";
+import { adminApi } from "@/lib/api/admin";
+import { useQuery } from "@tanstack/react-query";
 
 export default function AnalyticsOverviewPage() {
+  const [period, setPeriod] = useState<"7d" | "30d" | "90d" | "1y">("30d");
+
+  // Fetch KPI Stats
+  const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
+    queryKey: ["admin", "dashboard", "stats"],
+    queryFn: adminApi.getDashboardStats,
+  });
+
+  // Fetch Time-Series Analytics
+  const { data: analytics, isLoading: analyticsLoading, error: analyticsError } = useQuery({
+    queryKey: ["admin", "analytics", period],
+    queryFn: () => adminApi.getAnalytics(period),
+  });
+
+  const isLoading = statsLoading || analyticsLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <RefreshCw className="w-8 h-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (statsError || analyticsError) {
+    return (
+      <div className="bg-red-50 text-red-500 p-6 rounded-xl flex items-center gap-4">
+        <AlertCircle className="w-6 h-6" />
+        <p>Failed to load analytics data from the server.</p>
+      </div>
+    );
+  }
+
+  const chartData = analytics?.chartData || [];
+
   return (
     <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-xl font-bold text-[#0B2545] hidden sm:block">Analytics Overview</h2>
+        <div className="flex bg-white border border-slate-200 rounded-lg p-1">
+          {(["7d", "30d", "90d", "1y"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                period === p 
+                  ? "bg-slate-100 text-[#0B2545]" 
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {p.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
       
       {/* Platform Health Scorecard (KPIs) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <TrendCard 
           title="Total Students" 
-          value={mockPlatformHealth.totalStudents.toLocaleString()} 
-          trend={12} 
+          value={(stats?.users.totalStudents || 0).toLocaleString()} 
+          trend={0} // Backend doesn't provide trend percentage currently
           icon={<Users className="w-5 h-5 text-blue-500" />} 
         />
         <TrendCard 
           title="Active Students" 
-          value={mockPlatformHealth.activeStudents.toLocaleString()} 
-          trend={18} 
+          value={(stats?.users.activeStudents || 0).toLocaleString()} 
+          trend={0}
           icon={<Activity className="w-5 h-5 text-emerald-500" />} 
         />
         <TrendCard 
-          title="Total Exams Taken" 
-          value={mockPlatformHealth.totalExams.toLocaleString()} 
-          trend={8} 
+          title="Total Exams" 
+          value={(stats?.academic.publishedExams || 0).toLocaleString()} 
+          trend={0} 
           icon={<GraduationCap className="w-5 h-5 text-purple-500" />} 
         />
         <TrendCard 
-          title="Questions Solved" 
-          value={mockPlatformHealth.questionsSolved.toLocaleString()} 
-          trend={24} 
+          title="Questions Available" 
+          value={(stats?.academic.questions || 0).toLocaleString()} 
+          trend={0} 
           icon={<HelpCircle className="w-5 h-5 text-amber-500" />} 
         />
         <TrendCard 
-          title="Active Study Plans" 
-          value={mockPlatformHealth.studyPlansActive.toLocaleString()} 
-          trend={15} 
-          icon={<GraduationCap className="w-5 h-5 text-indigo-500" />} 
+          title="Games Played" 
+          value={(stats?.games.totalPlayed || 0).toLocaleString()} 
+          trend={0} 
+          icon={<Activity className="w-5 h-5 text-indigo-500" />} 
         />
         <TrendCard 
           title="AI Conversations" 
-          value={mockPlatformHealth.aiConversations.toLocaleString()} 
-          trend={45} 
+          value={(stats?.aiTutor.totalSessions || 0).toLocaleString()} 
+          trend={0} 
           icon={<Bot className="w-5 h-5 text-cyan-500" />} 
         />
         <TrendCard 
           title="Marketplace Orders" 
-          value={mockPlatformHealth.marketplaceOrders.toLocaleString()} 
-          trend={5} 
+          value={(stats?.marketplace.totalOrders || 0).toLocaleString()} 
+          trend={0} 
           icon={<Store className="w-5 h-5 text-rose-500" />} 
         />
         <TrendCard 
           title="Total Revenue" 
-          value={`Rs. ${mockPlatformHealth.revenue.toLocaleString()}`} 
-          trend={2} 
+          value={`Rs. ${(stats?.marketplace.revenue || 0).toLocaleString()}`} 
+          trend={0} 
           icon={<CreditCard className="w-5 h-5 text-emerald-600" />} 
         />
       </div>
@@ -75,51 +129,59 @@ export default function AnalyticsOverviewPage() {
           </h3>
         </div>
         <div className="flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <RechartsAreaChart data={mockPlatformActivityChart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="colorQuestions" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS[2]} stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor={COLORS[2]} stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-              <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
-              <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
-              
-              <Area yAxisId="left" type="monotone" dataKey="students" stroke={COLORS[0]} fillOpacity={1} fill="url(#colorStudents)" strokeWidth={2} name="Active Students" />
-              <Area yAxisId="right" type="monotone" dataKey="questions" stroke={COLORS[2]} fillOpacity={1} fill="url(#colorQuestions)" strokeWidth={2} name="Questions Solved" />
-            </RechartsAreaChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <RechartsAreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorRegistrations" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorExams" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS[1]} stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor={COLORS[1]} stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorAI" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS[2]} stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor={COLORS[2]} stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorPractice" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS[3]} stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor={COLORS[3]} stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px' }} />
+                
+                <Area yAxisId="left" type="monotone" dataKey="registrations" stroke={COLORS[0]} fillOpacity={1} fill="url(#colorRegistrations)" strokeWidth={2} name="Registrations" />
+                <Area yAxisId="left" type="monotone" dataKey="examAttempts" stroke={COLORS[1]} fillOpacity={1} fill="url(#colorExams)" strokeWidth={2} name="Exam Attempts" />
+                <Area yAxisId="left" type="monotone" dataKey="aiSessions" stroke={COLORS[2]} fillOpacity={1} fill="url(#colorAI)" strokeWidth={2} name="AI Sessions" />
+                <Area yAxisId="left" type="monotone" dataKey="practiceSessions" stroke={COLORS[3]} fillOpacity={1} fill="url(#colorPractice)" strokeWidth={2} name="Practice Sessions" />
+              </RechartsAreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex justify-center items-center h-full text-slate-500">
+              No activity data available for this period.
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cross Module Mini Status */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="font-bold text-[#0B2545] mb-4">Platform Health Indicators</h3>
-          <div className="space-y-4">
-            {[
-              { name: "Student Engagement", status: "Healthy", color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
-              { name: "Server Load / Exams", status: "Normal", color: "text-blue-600 bg-blue-50 border-blue-200" },
-              { name: "AI Tutor Latency", status: "Needs Attention", color: "text-amber-600 bg-amber-50 border-amber-200" },
-              { name: "Support Ticket Volume", status: "Healthy", color: "text-emerald-600 bg-emerald-50 border-emerald-200" }
-            ].map((indicator, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 border border-slate-100 rounded-lg bg-slate-50">
-                <span className="font-medium text-slate-700">{indicator.name}</span>
-                <span className={`text-xs font-bold px-2 py-1 rounded border ${indicator.color}`}>
-                  {indicator.status}
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* Module Breakdowns (Truthful Empty State) */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center items-center text-center">
+          <AlertCircle className="w-12 h-12 text-slate-300 mb-4" />
+          <h3 className="font-bold text-[#0B2545] mb-2">Detailed Module Analytics</h3>
+          <p className="text-slate-500 text-sm max-w-sm mb-4">
+            Advanced module-level analytics (Students, Exams, Marketplace) are currently pending backend API support.
+          </p>
+          <span className="text-xs font-bold px-2 py-1 rounded border text-amber-600 bg-amber-50 border-amber-200">
+            Backend Gap
+          </span>
         </div>
 
         {/* Quick Report Generate */}
@@ -129,11 +191,11 @@ export default function AnalyticsOverviewPage() {
           </div>
           <h3 className="text-xl font-bold mb-2">Generate Custom Report</h3>
           <p className="text-white/70 text-sm mb-6 max-w-sm">
-            Need specific data? Use the Report Builder to extract and export metrics across all LoksewaAI modules.
+            Detailed reporting pipelines are currently pending backend implementation.
           </p>
-          <a href="/admin-dashboard/analytics/reports" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0B2545] font-bold py-2 px-6 rounded-lg transition-colors">
-            Open Report Builder
-          </a>
+          <button disabled className="bg-slate-700 text-slate-400 font-bold py-2 px-6 rounded-lg cursor-not-allowed">
+            Report Builder (Unavailable)
+          </button>
         </div>
       </div>
       

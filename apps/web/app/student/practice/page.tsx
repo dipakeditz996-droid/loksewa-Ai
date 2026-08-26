@@ -1,20 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
   BookOpen, Play, Calendar, Zap, RefreshCw, Bookmark,
   Target, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { syllabusApi, Exam } from "@/lib/api/syllabus";
+import { useRouter } from "next/navigation";
 
 export default function PracticeSetupPage() {
-  const [exam, setExam] = useState("section-officer");
+  const router = useRouter();
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [exam, setExam] = useState("all");
   const [subject, setSubject] = useState("all");
   const [topic, setTopic] = useState("all");
   const [difficulty, setDifficulty] = useState("all");
   const [questions, setQuestions] = useState("20");
   const [mode, setMode] = useState("flexible");
+
+  useEffect(() => {
+    syllabusApi.getExams().then(data => {
+      setExams(data);
+      if (data.length > 0 && data[0]?.id) setExam(data[0].id.toString());
+      setLoading(false);
+    }).catch(e => {
+      console.error(e);
+      setLoading(false);
+    });
+  }, []);
+
+  const activeExam = useMemo(() => exams.find(e => e.id.toString() === exam), [exam, exams]);
+  const activeSubject = useMemo(() => activeExam?.subjects?.find(s => s.id.toString() === subject), [activeExam, subject]);
+
+  const allTopics = useMemo(() => {
+    if (!activeSubject) return [];
+    return activeSubject.units?.flatMap(u => u.topics) || [];
+  }, [activeSubject]);
 
   const quickStarts = [
     { id: "daily", label: "Daily Practice", icon: Calendar, color: "text-[#D4A72C]", bg: "bg-[#D4A72C]/10" },
@@ -54,9 +79,9 @@ export default function PracticeSetupPage() {
                     className="w-full h-12 px-3 bg-slate-50 border border-slate-200 rounded-[10px] text-[15px] font-medium text-[#0B2545] outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                   >
                     <option value="all">All Exams</option>
-                    <option value="1">Section Officer</option>
-                    <option value="2">Nayab Subba</option>
-                    <option value="3">Kharidar</option>
+                    {exams.map(e => (
+                      <option key={e.id} value={e.id}>{e.title}</option>
+                    ))}
                   </select>
                 </div>
                 
@@ -66,11 +91,12 @@ export default function PracticeSetupPage() {
                     value={subject} 
                     onChange={(e) => { setSubject(e.target.value); setTopic("all"); }}
                     className="w-full h-12 px-3 bg-slate-50 border border-slate-200 rounded-[10px] text-[15px] font-medium text-[#0B2545] outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+                    disabled={!activeExam}
                   >
                     <option value="all">All Subjects</option>
-                    <option value="1">Public Administration</option>
-                    <option value="2">Constitution of Nepal</option>
-                    <option value="3">Current Affairs</option>
+                    {activeExam?.subjects?.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -83,10 +109,12 @@ export default function PracticeSetupPage() {
                     value={topic} 
                     onChange={(e) => setTopic(e.target.value)}
                     className="w-full h-12 px-3 bg-slate-50 border border-slate-200 rounded-[10px] text-[15px] font-medium text-[#0B2545] outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+                    disabled={!activeSubject}
                   >
                     <option value="all">All Topics</option>
-                    <option value="1">Concept and Scope</option>
-                    <option value="9">Early Constitutional Developments</option>
+                    {allTopics.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
                   </select>
                 </div>
                 
@@ -166,9 +194,9 @@ export default function PracticeSetupPage() {
             </div>
           </div>
 
-          <Link href={`/practice/session?exam=${exam}&subject=${subject}&topic=${topic}&diff=${difficulty}&q=${questions}&mode=${mode}`} className="block">
-            <Button className="w-full h-14 rounded-[12px] bg-[#0B2545] hover:bg-[#163E6B] text-white font-bold text-[16px] shadow-[0_8px_20px_rgba(11,37,69,0.2)] transition-all hover:-translate-y-0.5 group">
-              Start Practice 
+          <Link href={`/student/practice/session?exam=${exam}&subject=${subject}&topic=${topic}&diff=${difficulty}&q=${questions}&mode=${mode}`} className="block">
+            <Button disabled={loading} className="w-full h-14 rounded-[12px] bg-[#0B2545] hover:bg-[#163E6B] text-white font-bold text-[16px] shadow-[0_8px_20px_rgba(11,37,69,0.2)] transition-all hover:-translate-y-0.5 group">
+              {loading ? "Loading..." : "Start Practice"} 
               <Play className="w-5 h-5 ml-2 fill-white/20 group-hover:translate-x-1 transition-transform" />
             </Button>
           </Link>

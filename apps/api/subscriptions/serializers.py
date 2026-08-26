@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import SubscriptionPlan, Subscription, SubscriptionPayment, Notification, Invoice
+from .models import SubscriptionPlan, Subscription, SubscriptionPayment, Invoice
+from core.models import Notification
 from marketplace.serializers import PaymentMethodSerializer
 from core.models import User
 

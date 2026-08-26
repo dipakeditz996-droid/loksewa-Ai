@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import SubscriptionPlan, Subscription, SubscriptionPayment, Notification, Invoice
+from .models import SubscriptionPlan, Subscription, SubscriptionPayment, Invoice
+from core.models import Notification
 
 admin.site.register(SubscriptionPlan)
 admin.site.register(Subscription)

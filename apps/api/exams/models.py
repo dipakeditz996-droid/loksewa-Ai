@@ -41,8 +41,6 @@ class Paper(models.Model):
 
 class Subject(models.Model):
     paper = models.ForeignKey(Paper, on_delete=models.CASCADE, related_name='subjects', null=True)
-    # Temporary legacy field for data migration
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='legacy_subjects', null=True, blank=True)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, blank=True)
     description = models.TextField(blank=True)
@@ -52,7 +50,7 @@ class Subject(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.name} ({self.exam.name})"
+        return f"{self.name} ({self.paper.name if self.paper else 'No Paper'})"
 
 class Chapter(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='chapters')
@@ -338,6 +336,11 @@ class Bookmark(models.Model):
         unique_together = ('user', 'question')
 
 class ModelExam(models.Model):
+    """
+    [LEGACY - DEPRECATED]
+    This model is being replaced by `Examination`.
+    Do not use for new implementations.
+    """
     STATUS_CHOICES = (
         ('draft', 'Draft'),
         ('published', 'Published'),
@@ -359,6 +362,11 @@ class ModelExam(models.Model):
         return self.title
 
 class ModelExamAttempt(models.Model):
+    """
+    [LEGACY - DEPRECATED]
+    This model is being replaced by `ExaminationAttempt`.
+    Do not use for new implementations.
+    """
     STATUS_CHOICES = (
         ('in-progress', 'In Progress'),
         ('submitted', 'Submitted'),
@@ -383,6 +391,11 @@ class ModelExamAttempt(models.Model):
         return f"{self.student.username} - {self.model_exam.title} ({self.status})"
 
 class ModelExamAttemptAnswer(models.Model):
+    """
+    [LEGACY - DEPRECATED]
+    This model is being replaced by `StudentAnswer`.
+    Do not use for new implementations.
+    """
     attempt = models.ForeignKey(ModelExamAttempt, on_delete=models.CASCADE, related_name='answers')
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     selected_option = models.CharField(max_length=1, blank=True, null=True)
@@ -416,6 +429,10 @@ class SubjectivePracticeSet(models.Model):
         return self.title
 
 class SubjectiveModelExam(models.Model):
+    """
+    [LEGACY - DEPRECATED]
+    This model is being deprecated as part of the Mock Exam consolidation.
+    """
     STATUS_CHOICES = (
         ('draft', 'Draft'),
         ('published', 'Published'),
@@ -522,6 +539,7 @@ class Examination(models.Model):
         ('position', 'Position-Based Exam'),
         ('subject', 'Subject Test'),
         ('custom', 'Custom Exam'),
+        ('subjective', 'Subjective Exam'),
     )
     STATUS_CHOICES = (
         ('draft', 'Draft'),
@@ -537,6 +555,7 @@ class Examination(models.Model):
     exam_type = models.CharField(max_length=20, choices=EXAM_TYPES, default='mock')
     category = models.ForeignKey(ExamCategory, on_delete=models.CASCADE, related_name='examinations')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='examinations', help_text="Position / Level")
+    course = models.ForeignKey('courses.Course', on_delete=models.SET_NULL, null=True, blank=True, related_name='examinations', help_text="Specific course this mock exam belongs to")
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='examinations', null=True, blank=True)
     
     question_set = models.ForeignKey(QuestionSet, on_delete=models.SET_NULL, null=True, blank=True, related_name='examinations')
@@ -648,3 +667,16 @@ class StudentAnswer(models.Model):
         
     def __str__(self):
         return f"Answer to Q{self.question_id} by {self.attempt.student.username}"
+
+class LegacyModelExamMigration(models.Model):
+    """
+    Mapping table to ensure idempotency when migrating ModelExam records 
+    to the canonical Examination architecture.
+    """
+    legacy_model_exam = models.ForeignKey(ModelExam, on_delete=models.CASCADE, related_name='migrations')
+    examination = models.ForeignKey(Examination, on_delete=models.CASCADE, related_name='legacy_migrations')
+    migrated_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('legacy_model_exam', 'examination')
+

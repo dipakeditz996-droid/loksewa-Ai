@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { CheckCircle2, XCircle, Clock, Eye, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { apiClient } from "@/lib/api/client";
 
 interface Payment {
   id: number;
@@ -33,15 +34,8 @@ export default function AdminSubscriptionPaymentsPage() {
   const fetchPayments = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/subscriptions/payments/", {
-        headers: {
-          'Authorization': 'Bearer test-token' // Placeholder
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setPayments(data);
-      }
+      const data = await apiClient<Payment[]>("/subscriptions/payments/");
+      setPayments(data);
     } catch (error) {
       console.error("Error fetching payments:", error);
     } finally {

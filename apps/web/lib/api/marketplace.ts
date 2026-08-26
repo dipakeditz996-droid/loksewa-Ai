@@ -142,4 +142,9 @@ export const marketplaceApi = {
   adminGetPurchases: async () => {
     return apiClient<Purchase[]>("/marketplace/admin/purchases/");
   },
+  
+  // Admin - Overview
+  adminGetOverview: async () => {
+    return apiClient<any>("/marketplace/admin/");
+  },
 };

@@ -15,6 +15,7 @@ from .models import (
 )
 from .serializers import (
     StudentProfileSerializer, ChangePasswordSerializer,
+    FocusModePreferenceSerializer,
     NotificationPreferenceSerializer,
     SupportTicketListSerializer, SupportTicketCreateSerializer,
     SupportTicketDetailSerializer,
@@ -55,6 +56,35 @@ class StudentProfileView(APIView):
         return Response(serializer.data)
 
 
+class FocusModePreferenceView(APIView):
+    """
+    The student's persistent Focus Mode ("Do Not Disturb") preference.
+
+    GET   -> {"focus_mode_enabled": bool}
+    PATCH -> {"focus_mode_enabled": bool}
+
+    Scoped to request.user, defaulting to False for a student who has never
+    touched the toggle (StudentProfile is auto-created on first read).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_or_create_profile(request.user)
+        return Response(FocusModePreferenceSerializer(profile).data)
+
+    def patch(self, request):
+        profile = get_or_create_profile(request.user)
+        serializer = FocusModePreferenceSerializer(
+            profile, data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def put(self, request):
+        return self.patch(request)
+
+
 class ProfilePhotoView(APIView):
     """
     POST — Upload a new profile photo. Accepts multipart/form-data with a 'photo' field.
@@ -86,24 +116,25 @@ class ProfilePhotoView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # For now, store as a data URL or a simple path.
-        # In production this would go to S3/cloud storage.
-        # Using Django's default file storage for simplicity.
-        import os
+        from django.core.files.storage import default_storage
         from django.conf import settings as django_settings
-        upload_dir = os.path.join(django_settings.BASE_DIR, 'media', 'avatars')
-        os.makedirs(upload_dir, exist_ok=True)
-
+        import os
+        
         ext = photo.name.rsplit('.', 1)[-1] if '.' in photo.name else 'jpg'
-        filename = f"avatar_{request.user.id}.{ext}"
-        filepath = os.path.join(upload_dir, filename)
-
-        with open(filepath, 'wb') as f:
-            for chunk in photo.chunks():
-                f.write(chunk)
-
-        # Store relative URL
-        avatar_url = f"/media/avatars/{filename}"
+        filename = f"avatars/avatar_{request.user.id}.{ext}"
+        
+        # Delete existing avatar if needed to save space
+        if request.user.avatar:
+            old_path = request.user.avatar.replace(django_settings.MEDIA_URL, "")
+            if default_storage.exists(old_path):
+                default_storage.delete(old_path)
+                
+        # Save new avatar to storage (will use R2 if configured, local otherwise)
+        saved_path = default_storage.save(filename, photo)
+        
+        # Build URL for the saved file
+        avatar_url = request.build_absolute_uri(default_storage.url(saved_path))
+        
         request.user.avatar = avatar_url
         request.user.save(update_fields=['avatar'])
 

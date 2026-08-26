@@ -9,27 +9,27 @@ class TopicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Topic
-        fields = ['id', 'title', 'status', 'progress', 'accuracy']
+        fields = ['id', 'title', 'name', 'status', 'progress', 'accuracy']
 
     def get_status(self, obj):
-        user = self.context['request'].user
-        if not user.is_authenticated:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
             return 'not-started'
-        progress = UserTopicProgress.objects.filter(user=user, topic=obj).first()
+        progress = UserTopicProgress.objects.filter(user=request.user, topic=obj).first()
         return progress.status if progress else 'not-started'
 
     def get_progress(self, obj):
-        user = self.context['request'].user
-        if not user.is_authenticated:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
             return 0
-        progress = UserTopicProgress.objects.filter(user=user, topic=obj).first()
+        progress = UserTopicProgress.objects.filter(user=request.user, topic=obj).first()
         return progress.progress if progress else 0
 
     def get_accuracy(self, obj):
-        user = self.context['request'].user
-        if not user.is_authenticated:
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
             return None
-        progress = UserTopicProgress.objects.filter(user=user, topic=obj).first()
+        progress = UserTopicProgress.objects.filter(user=request.user, topic=obj).first()
         return progress.accuracy if progress else None
 
 class ChapterSerializer(serializers.ModelSerializer):
@@ -41,13 +41,14 @@ class ChapterSerializer(serializers.ModelSerializer):
 
 class SubjectSerializer(serializers.ModelSerializer):
     chapters = ChapterSerializer(many=True, read_only=True)
+    units = ChapterSerializer(source='chapters', many=True, read_only=True)
     progress = serializers.SerializerMethodField()
     description = serializers.SerializerMethodField()
     title = serializers.CharField(source='name')
     
     class Meta:
         model = Subject
-        fields = ['id', 'title', 'code', 'progress', 'description', 'chapters']
+        fields = ['id', 'title', 'name', 'code', 'progress', 'description', 'chapters', 'units']
 
     def get_progress(self, obj):
         # Calculate subject progress based on topics (Mocking 0 for now unless fully implemented)
@@ -60,12 +61,18 @@ class SubjectSerializer(serializers.ModelSerializer):
         return f"Study materials for {obj.name}"
 
 class ExamSerializer(serializers.ModelSerializer):
-    subjects = SubjectSerializer(many=True, read_only=True)
+    subjects = serializers.SerializerMethodField()
     title = serializers.CharField(source='name') # map name to title
     
     class Meta:
         model = Exam
         fields = ['id', 'title', 'description', 'subjects']
+
+    def get_subjects(self, obj):
+        from django.db.models import Q
+        from .models import Subject
+        subjects = Subject.objects.filter(paper__exam=obj).distinct()
+        return SubjectSerializer(subjects, many=True, context=self.context).data
 
 class QuestionFullSerializer(serializers.ModelSerializer):
     class Meta:
@@ -163,18 +170,38 @@ class BookmarkSerializer(serializers.ModelSerializer):
         fields = ['id', 'question', 'created_at']
         read_only_fields = ['id', 'created_at']
 class ModelExamSerializer(serializers.ModelSerializer):
+    duration_minutes = serializers.IntegerField(source='time_limit')
+    negative_marking = serializers.FloatField(source='negative_marking_value')
+
     class Meta:
-        from .models import ModelExam
-        model = ModelExam
+        from .models import Examination
+        model = Examination
         fields = ['id', 'title', 'description', 'exam', 'duration_minutes', 'total_questions', 'total_marks', 'passing_marks', 'negative_marking', 'status']
 
 class ModelExamAttemptSerializer(serializers.ModelSerializer):
-    model_exam = ModelExamSerializer(read_only=True)
+    model_exam = ModelExamSerializer(source='examination', read_only=True)
+    correct_count = serializers.SerializerMethodField()
+    incorrect_count = serializers.SerializerMethodField()
+    unanswered_count = serializers.SerializerMethodField()
+    accuracy = serializers.SerializerMethodField()
+    
     class Meta:
-        from .models import ModelExamAttempt
-        model = ModelExamAttempt
+        from .models import ExaminationAttempt
+        model = ExaminationAttempt
         fields = ['id', 'student', 'model_exam', 'started_at', 'submitted_at', 'status', 'score', 'accuracy', 'correct_count', 'incorrect_count', 'unanswered_count', 'time_taken_seconds']
         read_only_fields = ['student', 'started_at']
+
+    def get_correct_count(self, obj):
+        return obj.answers.filter(is_correct=True).count()
+        
+    def get_incorrect_count(self, obj):
+        return obj.answers.filter(is_correct=False, selected_option__isnull=False).count()
+        
+    def get_unanswered_count(self, obj):
+        return obj.answers.filter(selected_option__isnull=True).count()
+        
+    def get_accuracy(self, obj):
+        return obj.percentage
 
 # ============================================================
 # SUBJECTIVE SERIALIZERS
@@ -228,10 +255,11 @@ class SubjectivePracticeSetSerializer(serializers.ModelSerializer):
 
 class SubjectiveModelExamSerializer(serializers.ModelSerializer):
     question_count = serializers.SerializerMethodField()
+    duration_minutes = serializers.IntegerField(source='time_limit')
 
     class Meta:
-        from .models import SubjectiveModelExam
-        model = SubjectiveModelExam
+        from .models import Examination
+        model = Examination
         fields = ['id', 'title', 'description', 'exam', 'duration_minutes', 'total_marks', 'passing_marks', 'status', 'question_count']
 
     def get_question_count(self, obj):

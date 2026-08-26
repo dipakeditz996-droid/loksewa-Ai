@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ChevronRight, ChevronDown, Folder, FileText, CheckSquare, 
   BookOpen, Layers, Plus, Settings
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { mockExamCategories, mockPositions, mockSubjects, mockChapters, mockTopics } from "@/lib/mock/admin-academic";
+import { adminAcademicApi } from "@/lib/api/admin-academic-api";
+import { toast } from "sonner";
 
 // Very basic custom tree view
 const TreeItem = ({ 
@@ -43,12 +44,36 @@ const TreeItem = ({
 };
 
 export default function SyllabusBuilderPage() {
+  const [treeData, setTreeData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  
   // Store expanded state for IDs
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    'cat1': true,
-    'pos1': true
-  });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [selectedNode, setSelectedNode] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchTree = async () => {
+      try {
+        const data = await adminAcademicApi.getTree();
+        setTreeData(data);
+        
+        // Auto-expand first few nodes to make it look nice
+        const initialExpanded: Record<string, boolean> = {};
+        if (data.length > 0) {
+          initialExpanded[`cat-${data[0].id}`] = true;
+          if (data[0].positions && data[0].positions.length > 0) {
+            initialExpanded[`pos-${data[0].positions[0].id}`] = true;
+          }
+        }
+        setExpanded(initialExpanded);
+      } catch (error) {
+        toast.error("Failed to load syllabus tree");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTree();
+  }, []);
 
   const toggleExpand = (id: string) => {
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -76,73 +101,88 @@ export default function SyllabusBuilderPage() {
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
-            {mockExamCategories.map(cat => (
-              <TreeItem 
-                key={cat.id} 
-                label={cat.shortName} 
-                icon={CheckSquare}
-                level={0}
-                isExpanded={expanded[cat.id]}
-                isSelected={selectedNode?.id === cat.id}
-                onToggle={() => toggleExpand(cat.id)}
-                onClick={() => handleSelect({...cat, type: 'category'})}
-              >
-                {mockPositions.filter(p => p.categoryId === cat.id).map(pos => (
-                  <TreeItem 
-                    key={pos.id} 
-                    label={pos.name} 
-                    icon={FileText}
-                    level={1}
-                    isExpanded={expanded[pos.id]}
-                    isSelected={selectedNode?.id === pos.id}
-                    onToggle={() => toggleExpand(pos.id)}
-                    onClick={() => handleSelect({...pos, type: 'position'})}
-                  >
-                    {pos.requiredSubjects.map(subId => {
-                      const subject = mockSubjects.find(s => s.id === subId);
-                      if (!subject) return null;
-                      return (
+            {loading ? (
+              <div className="p-4 text-sm text-slate-500">Loading tree structure...</div>
+            ) : treeData.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">No syllabus data available.</div>
+            ) : (
+              treeData.map((cat: any) => (
+                <TreeItem 
+                  key={`cat-${cat.id}`} 
+                  label={cat.name} 
+                  icon={CheckSquare}
+                  level={0}
+                  isExpanded={expanded[`cat-${cat.id}`]}
+                  isSelected={selectedNode?.type === 'category' && selectedNode?.id === cat.id}
+                  onToggle={() => toggleExpand(`cat-${cat.id}`)}
+                  onClick={() => handleSelect({...cat, type: 'category'})}
+                >
+                  {cat.positions?.map((pos: any) => (
+                    <TreeItem 
+                      key={`pos-${pos.id}`} 
+                      label={pos.name} 
+                      icon={FileText}
+                      level={1}
+                      isExpanded={expanded[`pos-${pos.id}`]}
+                      isSelected={selectedNode?.type === 'position' && selectedNode?.id === pos.id}
+                      onToggle={() => toggleExpand(`pos-${pos.id}`)}
+                      onClick={() => handleSelect({...pos, type: 'position'})}
+                    >
+                      {pos.papers?.map((paper: any) => (
                         <TreeItem 
-                          key={subject.id} 
-                          label={subject.name} 
+                          key={`paper-${paper.id}`} 
+                          label={paper.name} 
                           icon={BookOpen}
                           level={2}
-                          isExpanded={expanded[`${pos.id}-${subject.id}`]}
-                          isSelected={selectedNode?.id === subject.id}
-                          onToggle={() => toggleExpand(`${pos.id}-${subject.id}`)}
-                          onClick={() => handleSelect({...subject, type: 'subject'})}
+                          isExpanded={expanded[`paper-${paper.id}`]}
+                          isSelected={selectedNode?.type === 'paper' && selectedNode?.id === paper.id}
+                          onToggle={() => toggleExpand(`paper-${paper.id}`)}
+                          onClick={() => handleSelect({...paper, type: 'paper'})}
                         >
-                          {mockChapters.filter(c => c.subjectId === subject.id).map(chap => (
+                          {paper.subjects?.map((sub: any) => (
                             <TreeItem 
-                              key={chap.id} 
-                              label={chap.name} 
+                              key={`sub-${sub.id}`} 
+                              label={sub.name} 
                               icon={Layers}
                               level={3}
-                              isExpanded={expanded[`${pos.id}-${subject.id}-${chap.id}`]}
-                              isSelected={selectedNode?.id === chap.id}
-                              onToggle={() => toggleExpand(`${pos.id}-${subject.id}-${chap.id}`)}
-                              onClick={() => handleSelect({...chap, type: 'chapter'})}
+                              isExpanded={expanded[`sub-${sub.id}`]}
+                              isSelected={selectedNode?.type === 'subject' && selectedNode?.id === sub.id}
+                              onToggle={() => toggleExpand(`sub-${sub.id}`)}
+                              onClick={() => handleSelect({...sub, type: 'subject'})}
                             >
-                              {mockTopics.filter(t => t.chapterId === chap.id).map(topic => (
+                              {sub.chapters?.map((chap: any) => (
                                 <TreeItem 
-                                  key={topic.id} 
-                                  label={topic.name} 
-                                  icon={FileText}
+                                  key={`chap-${chap.id}`} 
+                                  label={chap.title} 
+                                  icon={Folder}
                                   level={4}
-                                  isSelected={selectedNode?.id === topic.id}
-                                  onToggle={() => {}}
-                                  onClick={() => handleSelect({...topic, type: 'topic'})}
-                                />
+                                  isExpanded={expanded[`chap-${chap.id}`]}
+                                  isSelected={selectedNode?.type === 'chapter' && selectedNode?.id === chap.id}
+                                  onToggle={() => toggleExpand(`chap-${chap.id}`)}
+                                  onClick={() => handleSelect({...chap, type: 'chapter'})}
+                                >
+                                  {chap.topics?.map((topic: any) => (
+                                    <TreeItem 
+                                      key={`topic-${topic.id}`} 
+                                      label={topic.name} 
+                                      icon={FileText}
+                                      level={5}
+                                      isSelected={selectedNode?.type === 'topic' && selectedNode?.id === topic.id}
+                                      onToggle={() => {}}
+                                      onClick={() => handleSelect({...topic, type: 'topic'})}
+                                    />
+                                  ))}
+                                </TreeItem>
                               ))}
                             </TreeItem>
                           ))}
                         </TreeItem>
-                      );
-                    })}
-                  </TreeItem>
-                ))}
-              </TreeItem>
-            ))}
+                      ))}
+                    </TreeItem>
+                  ))}
+                </TreeItem>
+              ))
+            )}
           </div>
         </div>
 
@@ -158,7 +198,7 @@ export default function SyllabusBuilderPage() {
               <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
                 <div>
                   <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{selectedNode.type}</p>
-                  <h3 className="text-2xl font-bold text-[#0B2545]">{selectedNode.name}</h3>
+                  <h3 className="text-2xl font-bold text-[#0B2545]">{selectedNode.name || selectedNode.title}</h3>
                 </div>
                 <Button variant="outline" size="sm" className="gap-2">
                   <Settings className="w-4 h-4" /> Edit
@@ -177,22 +217,16 @@ export default function SyllabusBuilderPage() {
                   {selectedNode.type === 'subject' && (
                     <div className="p-4 border border-slate-100 rounded-lg">
                       <p className="text-xs text-slate-500 mb-1">Subject Code</p>
-                      <p className="font-medium text-slate-900">{selectedNode.code}</p>
+                      <p className="font-medium text-slate-900">{selectedNode.code || "N/A"}</p>
                     </div>
                   )}
-                  {selectedNode.type === 'position' && (
-                    <div className="p-4 border border-slate-100 rounded-lg">
-                      <p className="text-xs text-slate-500 mb-1">Level</p>
-                      <p className="font-medium text-slate-900">{selectedNode.level}</p>
-                    </div>
-                  )}
-                  {selectedNode.status && (
+                  {selectedNode.is_active !== undefined && (
                     <div className="p-4 border border-slate-100 rounded-lg">
                       <p className="text-xs text-slate-500 mb-1">Status</p>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                        selectedNode.status === 'Active' ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 bg-slate-100'
+                        selectedNode.is_active ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 bg-slate-100'
                       }`}>
-                        {selectedNode.status}
+                        {selectedNode.is_active ? "Active" : "Inactive"}
                       </span>
                     </div>
                   )}
@@ -203,10 +237,13 @@ export default function SyllabusBuilderPage() {
                   <h4 className="text-sm font-medium text-slate-900 mb-4">Quick Actions</h4>
                   <div className="flex flex-wrap gap-3">
                     {selectedNode.type === 'category' && (
-                      <Button variant="secondary" className="gap-2 text-sm"><Plus className="w-4 h-4" /> Add Position</Button>
+                      <Button variant="secondary" className="gap-2 text-sm"><Plus className="w-4 h-4" /> Add Exam (Position)</Button>
                     )}
                     {selectedNode.type === 'position' && (
-                      <Button variant="secondary" className="gap-2 text-sm"><Plus className="w-4 h-4" /> Link Subject</Button>
+                      <Button variant="secondary" className="gap-2 text-sm"><Plus className="w-4 h-4" /> Add Paper</Button>
+                    )}
+                    {selectedNode.type === 'paper' && (
+                      <Button variant="secondary" className="gap-2 text-sm"><Plus className="w-4 h-4" /> Add Subject</Button>
                     )}
                     {selectedNode.type === 'subject' && (
                       <Button variant="secondary" className="gap-2 text-sm"><Plus className="w-4 h-4" /> Add Chapter</Button>

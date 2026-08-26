@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db.models import Q
+from django.core.paginator import Paginator
 import random
 from datetime import timedelta
 
@@ -10,9 +11,12 @@ from .models import (
     GameMatch, GameQuestion, GameAnswer, SurvivalGame, SurvivalAnswer, GameProfile, generate_invite_code
 )
 from .serializers import (
-    GameMatchSerializer, GameQuestionSerializer, SurvivalGameSerializer, ActiveSurvivalSerializer, GameProfileSerializer
+    GameMatchSerializer, GameQuestionSerializer, SurvivalGameSerializer, ActiveSurvivalSerializer, GameProfileSerializer,
+    AdminGameMatchSerializer, AdminSurvivalGameSerializer
 )
 from exams.models import Question
+from exams.selection_service import QuestionSelectionService
+from administration.permissions import IsAdminUser
 
 # Configuration
 MATCH_QUESTIONS_COUNT = 10
@@ -23,9 +27,25 @@ def get_or_create_profile(user):
     profile, _ = GameProfile.objects.get_or_create(user=user)
     return profile
 
-def assign_random_questions(match):
-    # Fetch random questions (hardcoded to 10 for 1v1)
-    questions = list(Question.objects.order_by('?')[:MATCH_QUESTIONS_COUNT])
+def assign_random_questions(match, exam_id=None, subject_id=None, topic_id=None, question_type='mcq'):
+    """
+    Selects approved questions from the Master Question Bank for a 1v1 match.
+    All randomization happens server-side.
+    """
+    service = QuestionSelectionService()
+    result = service.select(
+        exam_id=exam_id,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        question_type=question_type,
+        count=MATCH_QUESTIONS_COUNT,
+        randomize=True,
+    )
+    questions = result['questions']
+    if not questions:
+        # Fallback: any approved question if filters yield nothing
+        result = service.select(count=MATCH_QUESTIONS_COUNT, randomize=True)
+        questions = result['questions']
     for idx, q in enumerate(questions):
         GameQuestion.objects.create(
             match=match,
@@ -232,8 +252,12 @@ class MatchAnswerView(views.APIView):
 # SOLO SURVIVAL
 # ==========================================
 
-def get_survival_question(survived_count):
-    # Determine difficulty
+def get_survival_question(survived_count, exam_id=None, subject_id=None, topic_id=None):
+    """
+    Returns the next survival question using the Master Question Bank.
+    Difficulty escalates as the player survives more questions.
+    Only approved questions are considered.
+    """
     if survived_count < 5:
         diff = 'easy'
         points = 10
@@ -247,14 +271,25 @@ def get_survival_question(survived_count):
         points = 30
         time = 10
     else:
-        diff = 'hard' # Max difficulty in DB
+        diff = 'hard'
         points = 50
         time = 8
-        
-    question = Question.objects.filter(difficulty=diff).order_by('?').first()
-    if not question:
-        question = Question.objects.order_by('?').first()
-        
+
+    service = QuestionSelectionService()
+    result = service.select(
+        exam_id=exam_id,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        difficulty_distribution={diff: 1},
+        randomize=True,
+    )
+    if result['questions']:
+        question = result['questions'][0]
+    else:
+        # Fallback: any approved question
+        fallback = service.select(count=1, randomize=True)
+        question = fallback['questions'][0] if fallback['questions'] else None
+
     return question, points, time
 
 class SurvivalStartView(views.APIView):
@@ -363,8 +398,120 @@ class LeaderboardView(views.APIView):
         top_1v1 = GameProfile.objects.order_by('-total_1v1_wins')[:10]
         # Survival
         top_survival = GameProfile.objects.order_by('-best_survival_score')[:10]
-        
+
         return Response({
             'top_1v1': GameProfileSerializer(top_1v1, many=True).data,
             'top_survival': GameProfileSerializer(top_survival, many=True).data
+        })
+
+# ==========================================
+# ADMIN VIEWS
+# ==========================================
+
+class AdminGameMatchesView(views.APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        search = request.query_params.get('search', '').strip()
+        status_filter = request.query_params.get('status', '').strip()
+        order_by = request.query_params.get('order_by', '-created_at')
+
+        # Build queryset with select_related to avoid N+1 queries
+        qs = GameMatch.objects.select_related('player1', 'player2', 'winner')
+
+        # Apply search filter
+        if search:
+            qs = qs.filter(
+                Q(player1__username__icontains=search) |
+                Q(player1__email__icontains=search) |
+                Q(player2__username__icontains=search) |
+                Q(player2__email__icontains=search) |
+                Q(id__icontains=search)
+            )
+
+        # Apply status filter
+        if status_filter and status_filter in dict(GameMatch.STATUS_CHOICES):
+            qs = qs.filter(status=status_filter)
+
+        # Ensure valid ordering
+        valid_orders = ['created_at', '-created_at', 'started_at', '-started_at', 'player1_score', '-player1_score']
+        if order_by in valid_orders:
+            qs = qs.order_by(order_by)
+        else:
+            qs = qs.order_by('-created_at')
+
+        # Get total count before pagination
+        total = qs.count()
+
+        # Paginate
+        paginator = Paginator(qs, page_size)
+        try:
+            page_obj = paginator.page(page)
+        except:
+            page_obj = paginator.page(1)
+
+        serializer = AdminGameMatchSerializer(page_obj.object_list, many=True)
+
+        return Response({
+            'results': serializer.data,
+            'page': page,
+            'page_size': page_size,
+            'total': total,
+            'total_pages': paginator.num_pages
+        })
+
+class AdminSurvivalGamesView(views.APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # Get query parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        search = request.query_params.get('search', '').strip()
+        status_filter = request.query_params.get('status', '').strip()
+        order_by = request.query_params.get('order_by', '-created_at')
+
+        # Build queryset with select_related to avoid N+1 queries
+        qs = SurvivalGame.objects.select_related('player').prefetch_related('answers')
+
+        # Apply search filter
+        if search:
+            qs = qs.filter(
+                Q(player__username__icontains=search) |
+                Q(player__email__icontains=search) |
+                Q(id__icontains=search)
+            )
+
+        # Apply status filter
+        if status_filter and status_filter in dict(SurvivalGame.STATUS_CHOICES):
+            qs = qs.filter(status=status_filter)
+
+        # Ensure valid ordering
+        valid_orders = ['created_at', '-created_at', 'score', '-score', 'questions_survived', '-questions_survived']
+        if order_by in valid_orders:
+            qs = qs.order_by(order_by)
+        else:
+            qs = qs.order_by('-created_at')
+
+        # Get total count before pagination
+        total = qs.count()
+
+        # Paginate
+        paginator = Paginator(qs, page_size)
+        try:
+            page_obj = paginator.page(page)
+        except:
+            page_obj = paginator.page(1)
+
+        serializer = AdminSurvivalGameSerializer(page_obj.object_list, many=True)
+
+        return Response({
+            'results': serializer.data,
+            'page': page,
+            'page_size': page_size,
+            'total': total,
+            'total_pages': paginator.num_pages
         })

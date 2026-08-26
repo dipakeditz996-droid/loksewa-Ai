@@ -9,7 +9,7 @@ interface StatCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  icon: React.ElementType;
+  icon: any;
   iconColor?: string;
   iconBg?: string;
   trend?: number; // positive = up, negative = down, 0 = neutral

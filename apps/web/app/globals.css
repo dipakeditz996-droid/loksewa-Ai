@@ -43,6 +43,8 @@
   /* Font family */
   --font-sans: "Inter", "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  /* Headings / KPI numbers only — body copy stays on --font-sans (Inter) */
+  --font-heading: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 /* ===== shadcn/ui CSS variables ===== */
@@ -252,6 +254,17 @@ body {
   animation: float 12s ease-in-out infinite;
 }
 
+@keyframes hero-idle-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--float-range, 4px) * -1)); }
+}
+
+/* Subtler, per-card-tunable idle float for the hero's depth-tiered floating
+   cards — range/duration set per instance via --float-range/--float-duration. */
+.animate-hero-float {
+  animation: hero-idle-float var(--float-duration, 5s) ease-in-out infinite;
+}
+
 .animate-pulse-glow {
   animation: pulse-glow 3s ease-in-out infinite;
 }
@@ -432,13 +445,106 @@ body {
 
 /* ===== PREMIUM CARD HOVER ===== */
 .card-hover {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.3s ease,
-              border-color 0.3s ease;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.35s ease;
 }
 
 .card-hover:hover {
-  transform: translateY(-4px);
+  transform: translateY(-6px);
+  box-shadow: 0 28px 54px -16px rgba(11, 37, 69, 0.18), 0 10px 24px -10px rgba(11, 37, 69, 0.1);
+  border-color: rgba(212, 167, 44, 0.35);
+}
+
+.dark .card-hover:hover {
+  box-shadow: 0 28px 64px -16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(212, 167, 44, 0.08);
+}
+
+/* ===== UNIFIED GOLD GRADIENT (single source of truth for every gold CTA) ===== */
+.btn-gold-gradient {
+  background: linear-gradient(120deg, #C29322 0%, #E6BA3D 55%, #D4A72C 100%);
+  background-size: 180% 180%;
+  background-position: 0% 50%;
+  transition: background-position 0.5s ease, box-shadow 0.35s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-gold-gradient:hover {
+  background-position: 100% 50%;
+  box-shadow: 0 16px 38px -10px rgba(212, 167, 44, 0.5);
+  transform: translateY(-2px);
+}
+
+/* ===== AURORA WASH ===== */
+/* A quiet, page-level gradient wash that replaces flat single-color section
+   backgrounds with subtle depth — meant to sit behind content, not compete
+   with it. */
+.bg-aurora {
+  background-image:
+    radial-gradient(1100px circle at 12% -10%, rgba(212, 167, 44, 0.07), transparent 55%),
+    radial-gradient(900px circle at 92% 8%, rgba(37, 99, 235, 0.06), transparent 50%),
+    radial-gradient(800px circle at 50% 100%, rgba(139, 92, 246, 0.04), transparent 60%);
+}
+
+.dark .bg-aurora {
+  background-image:
+    radial-gradient(1100px circle at 12% -10%, rgba(212, 167, 44, 0.1), transparent 55%),
+    radial-gradient(900px circle at 92% 8%, rgba(37, 99, 235, 0.14), transparent 50%),
+    radial-gradient(800px circle at 50% 100%, rgba(139, 92, 246, 0.08), transparent 60%);
+}
+
+/* ===== FILM GRAIN ===== */
+/* A very fine noise overlay. Real surfaces are never perfectly flat, and a
+   trace of grain is what keeps large gradient fields from looking like plastic.
+   Kept extremely low-opacity — it should be felt, not seen. */
+.bg-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.dark .bg-grain::after {
+  opacity: 0.06;
+}
+
+/* ===== HERO GRID ===== */
+/* Perspective grid that fades out radially, so it reads as depth rather than
+   as graph paper laid over the whole section. */
+.hero-grid {
+  background-image:
+    linear-gradient(to right, rgba(11, 37, 69, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(11, 37, 69, 0.055) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 20%, transparent 78%);
+  mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 20%, transparent 78%);
+}
+
+.dark .hero-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+/* ===== GOLD TEXT GRADIENT (dark-mode brightened) ===== */
+/* The default .text-gradient-gold is tuned for light backgrounds; on a dark
+   field those mid-tones go muddy, so lift the whole ramp. */
+.dark .text-gradient-gold {
+  background: linear-gradient(135deg, #E6BA3D 0%, #FFD976 50%, #E0AE33 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* ===== EYEBROW / SECTION BADGE ===== */
+/* Standardizes the small pill labels used at the top of most sections
+   ("Courses", "Simple Pricing", etc.) so they share one hover behaviour. */
+.eyebrow-pill {
+  transition: border-color 0.3s ease, background-color 0.3s ease, transform 0.3s ease;
+}
+
+.eyebrow-pill:hover {
+  transform: translateY(-1px);
 }
 
 /* ===== REDUCED MOTION OVERRIDES ===== */
@@ -446,6 +552,7 @@ body {
   .animate-float,
   .animate-float-reverse,
   .animate-float-slow,
+  .animate-hero-float,
   .animate-pulse-glow,
   .animate-pulse-gold,
   .animate-spin-slow,
@@ -463,4 +570,39 @@ body {
     transform: none !important;
     transition: none !important;
   }
+}
+
+/* ===== FOCUS MODE =====
+   Application-level distraction reduction. These rules only quiet LoksewaAI's
+   own UI - they have no effect on the operating system's notification centre,
+   which no web page can control. */
+
+:root[data-focus-mode="on"] [data-focus-hide],
+:root[data-exam-focus="on"] [data-exam-hide] {
+  display: none !important;
+}
+
+/* Calm the motion. Spinners stay - they carry meaning. */
+:root[data-focus-mode="on"] .animate-pulse,
+:root[data-focus-mode="on"] .animate-bounce,
+:root[data-focus-mode="on"] .animate-ping,
+:root[data-focus-mode="on"] .animate-in,
+:root[data-focus-mode="on"] .animate-float,
+:root[data-focus-mode="on"] .animate-float-slow,
+:root[data-focus-mode="on"] .animate-hero-float,
+:root[data-focus-mode="on"] .animate-pulse-glow,
+:root[data-focus-mode="on"] .animate-pulse-gold,
+:root[data-focus-mode="on"] .animate-shimmer,
+:root[data-focus-mode="on"] .animate-gradient-shift {
+  animation: none !important;
+}
+
+/* Soften attention-grabbing chrome without hiding information. */
+:root[data-focus-mode="on"] [data-focus-dim] {
+  opacity: 0.7;
+  filter: saturate(0.85);
+}
+
+:root[data-exam-focus="on"] body {
+  overscroll-behavior: contain;
 }

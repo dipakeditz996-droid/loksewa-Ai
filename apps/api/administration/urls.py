@@ -20,6 +20,7 @@ from .views import (
     AdminCourseApplicationDetailView,
     AdminEvaluationsView,
     AdminStudyMaterialsView,
+    AdminStudyPlansView,
 )
 from .syllabus_views import (
     ExamCategoryViewSet, ExamViewSet, PaperViewSet, SubjectViewSet, 
@@ -73,6 +74,8 @@ urlpatterns = [
     path('evaluations/', AdminEvaluationsView.as_view(), name='admin-evaluations'),
     # Study materials
     path('study-materials/', AdminStudyMaterialsView.as_view(), name='admin-study-materials'),
+    # Study plans
+    path('study-plans/', AdminStudyPlansView.as_view(), name='admin-study-plans'),
     # Course applications / enrollment management
     path('course-applications/', AdminCourseApplicationView.as_view(), name='admin-course-applications'),
     path('course-applications/<int:pk>/', AdminCourseApplicationDetailView.as_view(), name='admin-course-application-detail'),

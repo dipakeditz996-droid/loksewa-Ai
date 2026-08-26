@@ -1238,3 +1238,69 @@ class AdminStudyMaterialsView(APIView):
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
         })
+
+
+# ============================================================
+# STUDY PLANS MANAGEMENT VIEW
+# ============================================================
+
+class AdminStudyPlansView(APIView):
+    """List study plans with pagination and filtering."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from study_plan.models import StudyPlan
+
+        search = request.query_params.get('search', '')
+        level_filter = request.query_params.get('level', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Start with all study plans ordered by creation date
+        qs = StudyPlan.objects.select_related(
+            'student', 'exam', 'template'
+        ).order_by('-created_at')
+
+        if level_filter:
+            qs = qs.filter(level=level_filter)
+
+        if search:
+            qs = qs.filter(
+                Q(student__username__icontains=search) |
+                Q(student__email__icontains=search) |
+                Q(student__first_name__icontains=search) |
+                Q(student__last_name__icontains=search) |
+                Q(exam__name__icontains=search)
+            )
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        study_plans = qs[start:start + page_size]
+
+        data = []
+        for plan in study_plans:
+            data.append({
+                "id": plan.id,
+                "student": plan.student.get_full_name() or plan.student.username,
+                "studentId": plan.student.id,
+                "email": plan.student.email,
+                "exam": plan.exam.name if plan.exam else 'N/A',
+                "examId": plan.exam.id if plan.exam else None,
+                "template": plan.template.name if plan.template else None,
+                "targetDate": plan.target_date.isoformat(),
+                "dailyMinutes": plan.daily_minutes,
+                "level": plan.level,
+                "isPaused": plan.is_paused,
+                "studyDays": plan.study_days,
+                "preferredTime": plan.preferred_time,
+                "createdAt": plan.created_at.isoformat(),
+                "updatedAt": plan.updated_at.isoformat(),
+            })
+
+        return Response({
+            "plans": data,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+            "totalPages": (total + page_size - 1) // page_size,
+        })

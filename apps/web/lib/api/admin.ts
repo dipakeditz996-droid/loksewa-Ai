@@ -221,6 +221,32 @@ export interface AdminChaptersResponse {
   results: AdminChapter[];
 }
 
+export interface AdminStudyPlan {
+  id: number;
+  student: string;
+  studentId: number;
+  email: string;
+  exam: string;
+  examId: number | null;
+  template: string | null;
+  targetDate: string;
+  dailyMinutes: number;
+  level: string;
+  isPaused: boolean;
+  studyDays: string[];
+  preferredTime: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminStudyPlansResponse {
+  plans: AdminStudyPlan[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 // ===== API FUNCTIONS =====
 
 export const adminApi = {
@@ -326,5 +352,19 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<any>(`/admin/syllabus/subjects/?${query.toString()}`);
+  },
+
+  getStudyPlans: async (params?: {
+    level?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminStudyPlansResponse> => {
+    const query = new URLSearchParams();
+    if (params?.level) query.set("level", params.level);
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminStudyPlansResponse>(`/admin/study-plans/?${query.toString()}`);
   },
 };

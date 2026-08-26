@@ -1,36 +1,290 @@
 "use client";
 
-import React from "react";
-import { AlertCircle, CalendarDays } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+  Calendar, Search, Plus, MoreVertical, Eye, Edit,
+  Loader2, Clock, Pause, Play
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuLabel
+} from "@/components/ui/dropdown-menu";
+import { adminApi, AdminStudyPlan } from "@/lib/api/admin";
 
-export default function StudyPlansOverviewPage() {
+export default function StudyPlansPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [levelFilter, setLevelFilter] = useState("");
+  const [plans, setPlans] = useState<AdminStudyPlan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [totalPlans, setTotalPlans] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const fetchPlans = async () => {
+    setIsLoading(true);
+    try {
+      const data = await adminApi.getStudyPlans({
+        level: levelFilter || undefined,
+        search: searchTerm || undefined,
+        page: currentPage,
+        pageSize: 20,
+      });
+      setPlans(data.plans);
+      setTotalPlans(data.total);
+    } catch (error) {
+      console.error("Failed to fetch study plans", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, levelFilter]);
+
+  useEffect(() => {
+    fetchPlans();
+  }, [currentPage, searchTerm, levelFilter]);
+
+  const activePlans = plans.filter(p => !p.isPaused).length;
+  const pausedPlans = plans.filter(p => p.isPaused).length;
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'BEGINNER':
+        return 'bg-green-900 text-green-300';
+      case 'INTERMEDIATE':
+        return 'bg-yellow-900 text-yellow-300';
+      case 'ADVANCED':
+        return 'bg-red-900 text-red-300';
+      default:
+        return 'bg-slate-700 text-slate-300';
+    }
+  };
+
+  const getStatusColor = (isPaused: boolean) => {
+    return isPaused
+      ? 'bg-slate-700 text-slate-300'
+      : 'bg-emerald-900 text-emerald-300';
+  };
+
+  const getTimeColor = (time: string | null) => {
+    switch (time) {
+      case 'MORNING':
+        return 'text-yellow-400';
+      case 'AFTERNOON':
+        return 'text-orange-400';
+      case 'EVENING':
+        return 'text-blue-400';
+      case 'NIGHT':
+        return 'text-purple-400';
+      default:
+        return 'text-slate-400';
+    }
+  };
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <h2 className="text-xl font-bold text-[#0B2545] hidden sm:block">Plan Overview</h2>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Link href="/admin-dashboard/study-plans/templates">
-            <Button className="w-full bg-[#0B2545] hover:bg-[#0B2545]/90 text-white font-semibold">
-              View Templates
-            </Button>
-          </Link>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-[#D4A72C]" />
+            Study Plans
+          </h1>
+          <p className="text-slate-400 text-sm mt-1">Monitor and manage student study plans.</p>
         </div>
       </div>
-      <div className="bg-white border border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center text-center">
-        <div className="bg-slate-100 p-4 rounded-full mb-4">
-          <CalendarDays className="w-8 h-8 text-slate-500" />
+
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm">
+          <p className="text-slate-400 text-sm font-medium mb-1">Total Plans</p>
+          <p className="text-2xl font-bold text-white">{totalPlans.toLocaleString()}</p>
         </div>
-        <h2 className="text-xl font-bold text-[#0B2545] mb-2">Feature Pending API Integration</h2>
-        <p className="text-slate-500 max-w-md mb-6">
-          The backend API does not currently support listing or managing individual student study plans from the admin dashboard. This module is marked as a backend gap and will be implemented in a future release.
-        </p>
-        <div className="flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-2 rounded-lg border border-amber-200">
-          <AlertCircle className="w-4 h-4" />
-          <span className="text-sm font-medium">Pending Backend Integration</span>
+        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-emerald-500">
+          <p className="text-slate-400 text-sm font-medium mb-1">Active</p>
+          <p className="text-2xl font-bold text-emerald-400">{activePlans}</p>
+        </div>
+        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-slate-600">
+          <p className="text-slate-400 text-sm font-medium mb-1">Paused</p>
+          <p className="text-2xl font-bold text-slate-400">{pausedPlans}</p>
+        </div>
+        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-blue-500">
+          <p className="text-slate-400 text-sm font-medium mb-1">Avg Daily Minutes</p>
+          <p className="text-2xl font-bold text-blue-400">
+            {plans.length > 0
+              ? Math.round(plans.reduce((sum, p) => sum + p.dailyMinutes, 0) / plans.length)
+              : 0}
+          </p>
         </div>
       </div>
+
+      {/* Filters */}
+      <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-sm space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
+            <Input
+              placeholder="Search by student name or email..."
+              className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <select
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value)}
+            className="px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
+          >
+            <option value="">All Levels</option>
+            <option value="BEGINNER">Beginner</option>
+            <option value="INTERMEDIATE">Intermediate</option>
+            <option value="ADVANCED">Advanced</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Plans Table */}
+      <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-800 hover:bg-slate-800">
+                <TableHead className="text-white">Student</TableHead>
+                <TableHead className="text-white">Exam</TableHead>
+                <TableHead className="text-white">Level</TableHead>
+                <TableHead className="text-white">Daily Minutes</TableHead>
+                <TableHead className="text-white">Target Date</TableHead>
+                <TableHead className="text-white">Preferred Time</TableHead>
+                <TableHead className="text-white">Status</TableHead>
+                <TableHead className="text-right text-white">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-32 text-center bg-slate-900">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-600" />
+                  </TableCell>
+                </TableRow>
+              ) : plans.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-32 text-center text-slate-500 bg-slate-900">
+                    No study plans found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                plans.map((plan) => (
+                  <TableRow key={plan.id} className="hover:bg-slate-800/50 border-b border-slate-700">
+                    <TableCell>
+                      <div>
+                        <p className="font-semibold text-white">{plan.student}</p>
+                        <p className="text-xs text-slate-500">{plan.email}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-slate-400">{plan.exam}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${getLevelColor(plan.level)}`}>
+                        {plan.level}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-slate-400 flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {plan.dailyMinutes}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-slate-400">
+                        {new Date(plan.targetDate).toLocaleDateString()}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-sm font-medium ${getTimeColor(plan.preferredTime)}`}>
+                        {plan.preferredTime ? plan.preferredTime.charAt(0) + plan.preferredTime.slice(1).toLowerCase() : 'N/A'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded flex items-center gap-1 w-fit ${getStatusColor(plan.isPaused)}`}>
+                        {plan.isPaused ? (
+                          <>
+                            <Pause className="w-3 h-3" />
+                            Paused
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3" />
+                            Active
+                          </>
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-700">
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4 text-slate-500" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
+                          <DropdownMenuLabel className="text-slate-300">Actions</DropdownMenuLabel>
+                          <DropdownMenuItem className="cursor-pointer text-slate-300 hover:bg-slate-700">
+                            <Eye className="w-4 h-4 mr-2" /> View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="cursor-pointer text-slate-300 hover:bg-slate-700">
+                            <Edit className="w-4 h-4 mr-2" /> Edit
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {!isLoading && totalPlans > 0 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-slate-400">
+            Page {currentPage} of {Math.ceil(totalPlans / 20)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={currentPage >= Math.ceil(totalPlans / 20)}
+            onClick={() => setCurrentPage(p => p + 1)}
+            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
+          >
+            Next
+          </Button>
+        </div>
+      )}
+
     </div>
   );
 }

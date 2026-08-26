@@ -21,6 +21,7 @@ from .views import (
     AdminEvaluationsView,
     AdminStudyMaterialsView,
     AdminStudyPlansView,
+    AdminAuditLogsView,
 )
 from .syllabus_views import (
     ExamCategoryViewSet, ExamViewSet, PaperViewSet, SubjectViewSet, 
@@ -76,6 +77,8 @@ urlpatterns = [
     path('study-materials/', AdminStudyMaterialsView.as_view(), name='admin-study-materials'),
     # Study plans
     path('study-plans/', AdminStudyPlansView.as_view(), name='admin-study-plans'),
+    # Audit logs
+    path('audit-logs/', AdminAuditLogsView.as_view(), name='admin-audit-logs'),
     # Course applications / enrollment management
     path('course-applications/', AdminCourseApplicationView.as_view(), name='admin-course-applications'),
     path('course-applications/<int:pk>/', AdminCourseApplicationDetailView.as_view(), name='admin-course-application-detail'),

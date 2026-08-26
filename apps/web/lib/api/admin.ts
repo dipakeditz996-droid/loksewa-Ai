@@ -247,6 +247,24 @@ export interface AdminStudyPlansResponse {
   totalPages: number;
 }
 
+export interface AdminAuditLog {
+  timestamp: string;
+  action: string;
+  actionLabel: string;
+  user: string;
+  email: string;
+  details: string;
+  severity: "info" | "warning" | "error" | "success";
+}
+
+export interface AdminAuditLogsResponse {
+  logs: AdminAuditLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 // ===== API FUNCTIONS =====
 
 export const adminApi = {
@@ -366,5 +384,19 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminStudyPlansResponse>(`/admin/study-plans/?${query.toString()}`);
+  },
+
+  getAuditLogs: async (params?: {
+    action?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminAuditLogsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.action) query.set("action", params.action);
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminAuditLogsResponse>(`/admin/audit-logs/?${query.toString()}`);
   },
 };

@@ -1304,3 +1304,106 @@ class AdminStudyPlansView(APIView):
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
         })
+
+
+# ============================================================
+# AUDIT LOGS MANAGEMENT VIEW
+# ============================================================
+
+class AdminAuditLogsView(APIView):
+    """Aggregate audit logs from system activities."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from exams.models import Question, Evaluation, SubjectiveAnswer
+
+        action_filter = request.query_params.get('action', '')  # 'user', 'content', 'evaluation', 'all'
+        search = request.query_params.get('search', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Collect audit events from various sources
+        events = []
+
+        # User registration events
+        if action_filter in ('user', 'all', ''):
+            users = User.objects.all().order_by('-date_joined')[:100]
+            for user in users:
+                events.append({
+                    'timestamp': user.date_joined,
+                    'action': 'user_registration',
+                    'actionLabel': 'User Registration',
+                    'user': user.get_full_name() or user.username,
+                    'email': user.email,
+                    'details': f'{user.get_full_name() or user.username} ({user.role}) registered',
+                    'severity': 'info',
+                })
+
+        # Question creation/modification events
+        if action_filter in ('content', 'all', ''):
+            questions = Question.objects.all().order_by('-created_at')[:50]
+            for q in questions:
+                creator = q.created_by.get_full_name() or q.created_by.username if q.created_by else 'Unknown'
+                events.append({
+                    'timestamp': q.created_at,
+                    'action': 'content_created',
+                    'actionLabel': 'Content Created',
+                    'user': creator,
+                    'email': q.created_by.email if q.created_by else 'N/A',
+                    'details': f'Question "{q.text[:50]}..." created by {creator}',
+                    'severity': 'info',
+                })
+
+        # Evaluation events
+        if action_filter in ('evaluation', 'all', ''):
+            evaluations = Evaluation.objects.select_related(
+                'evaluator', 'answer__attempt__student'
+            ).order_by('-evaluated_at')[:50]
+            for eval in evaluations:
+                student = eval.answer.attempt.student
+                evaluator = eval.evaluator.get_full_name() or eval.evaluator.username if eval.evaluator else 'Unknown'
+                events.append({
+                    'timestamp': eval.evaluated_at,
+                    'action': 'evaluation_submitted',
+                    'actionLabel': 'Evaluation Submitted',
+                    'user': evaluator,
+                    'email': eval.evaluator.email if eval.evaluator else 'N/A',
+                    'details': f'Answer by {student.get_full_name() or student.username} evaluated with {eval.marks_obtained} marks',
+                    'severity': 'info',
+                })
+
+        # Sort all events by timestamp descending
+        events.sort(key=lambda e: e['timestamp'], reverse=True)
+
+        # Apply search filter
+        if search:
+            events = [e for e in events if (
+                search.lower() in e['user'].lower() or
+                search.lower() in e['email'].lower() or
+                search.lower() in e['details'].lower()
+            )]
+
+        total = len(events)
+        start = (page - 1) * page_size
+        paginated_events = events[start:start + page_size]
+
+        # Format for response
+        data = []
+        for event in paginated_events:
+            data.append({
+                "timestamp": event['timestamp'].isoformat(),
+                "action": event['action'],
+                "actionLabel": event['actionLabel'],
+                "user": event['user'],
+                "email": event['email'],
+                "details": event['details'],
+                "severity": event['severity'],
+            })
+
+        return Response({
+            "logs": data,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+            "totalPages": (total + page_size - 1) // page_size,
+        })

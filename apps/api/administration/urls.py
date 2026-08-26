@@ -7,6 +7,7 @@ from .views import (
     AdminUserDetailView,
     AdminAdministratorsView,
     AdminRolesView,
+    AdminPermissionsView,
     AdminExamsOverviewView,
     AdminAITutorOverviewView,
     AdminMarketplaceOverviewView,
@@ -22,6 +23,14 @@ from .views import (
     AdminStudyMaterialsView,
     AdminStudyPlansView,
     AdminAuditLogsView,
+    AdminNotificationsListView,
+    AdminNotificationsCreateView,
+    AdminNotificationsDeleteView,
+    AdminSupportTicketsView,
+    AdminTicketDetailView,
+    AdminTicketReplyView,
+    AdminTicketUpdateStatusView,
+    AdminSettingsView,
 )
 from .syllabus_views import (
     ExamCategoryViewSet, ExamViewSet, PaperViewSet, SubjectViewSet, 
@@ -59,6 +68,7 @@ urlpatterns = [
     path('users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('admins/', AdminAdministratorsView.as_view(), name='admin-administrators'),
     path('roles/', AdminRolesView.as_view(), name='admin-roles'),
+    path('permissions/', AdminPermissionsView.as_view(), name='admin-permissions'),
     path('exams-overview/', AdminExamsOverviewView.as_view(), name='admin-exams-overview'),
     path('ai-tutor/', AdminAITutorOverviewView.as_view(), name='admin-ai-tutor'),
     path('ai-tutor/generate-bulk-content/', AIBulkGenerateContentView.as_view(), name='admin-ai-bulk-generate'),
@@ -79,6 +89,17 @@ urlpatterns = [
     path('study-plans/', AdminStudyPlansView.as_view(), name='admin-study-plans'),
     # Audit logs
     path('audit-logs/', AdminAuditLogsView.as_view(), name='admin-audit-logs'),
+    # Notifications
+    path('notifications/', AdminNotificationsListView.as_view(), name='admin-notifications-list'),
+    path('notifications/create/', AdminNotificationsCreateView.as_view(), name='admin-notifications-create'),
+    path('notifications/<int:pk>/delete/', AdminNotificationsDeleteView.as_view(), name='admin-notifications-delete'),
+    # Support Tickets
+    path('support/tickets/', AdminSupportTicketsView.as_view(), name='admin-support-tickets'),
+    path('support/tickets/<int:pk>/', AdminTicketDetailView.as_view(), name='admin-ticket-detail'),
+    path('support/tickets/<int:pk>/reply/', AdminTicketReplyView.as_view(), name='admin-ticket-reply'),
+    path('support/tickets/<int:pk>/status/', AdminTicketUpdateStatusView.as_view(), name='admin-ticket-status'),
+    # Settings
+    path('settings/', AdminSettingsView.as_view(), name='admin-settings'),
     # Course applications / enrollment management
     path('course-applications/', AdminCourseApplicationView.as_view(), name='admin-course-applications'),
     path('course-applications/<int:pk>/', AdminCourseApplicationDetailView.as_view(), name='admin-course-application-detail'),

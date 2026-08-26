@@ -265,6 +265,142 @@ export interface AdminAuditLogsResponse {
   totalPages: number;
 }
 
+export interface AdminNotification {
+  id: number;
+  title: string;
+  content: string;
+  type: "alert" | "announcement" | "system";
+  status: "draft" | "scheduled" | "sent" | "failed";
+  recipientCount: number;
+  sentAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminNotificationsResponse {
+  notifications: AdminNotification[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminSupportTicket {
+  id: number;
+  ticketNumber: string;
+  subject: string;
+  studentName: string;
+  studentEmail: string;
+  category: string;
+  priority: "low" | "normal" | "high" | "urgent";
+  status: "open" | "in_progress" | "waiting_student" | "resolved" | "closed";
+  messageCount: number;
+  lastUpdated: string;
+  createdAt: string;
+}
+
+export interface AdminSupportTicketDetail {
+  ticket: {
+    id: number;
+    ticketNumber: string;
+    subject: string;
+    studentName: string;
+    studentEmail: string;
+    category: string;
+    priority: "low" | "normal" | "high" | "urgent";
+    status: "open" | "in_progress" | "waiting_student" | "resolved" | "closed";
+    relatedExam: string;
+    relatedQuestion: string;
+    relatedPage: string;
+    createdAt: string;
+    updatedAt: string;
+    closedAt: string | null;
+  };
+  messages: Array<{
+    id: number;
+    sender: string;
+    senderEmail: string;
+    isStaffReply: boolean;
+    message: string;
+    createdAt: string;
+  }>;
+}
+
+export interface AdminSupportTicketsResponse {
+  tickets: AdminSupportTicket[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminSettingsData {
+  platform: {
+    name: string;
+    logoUrl: string | null;
+    description: string;
+    timezone: string;
+    language: string;
+  };
+  email: {
+    smtpHost: string;
+    smtpPort: number | null;
+    smtpUser: string;
+    fromAddress: string;
+    fromName: string;
+  };
+  notifications: {
+    enabled: boolean;
+    enableEmail: boolean;
+    enableInApp: boolean;
+    enablePush: boolean;
+  };
+  security: {
+    passwordMinLength: number;
+    passwordRequireUppercase: boolean;
+    passwordRequireNumbers: boolean;
+    passwordRequireSpecialChars: boolean;
+    sessionTimeoutMinutes: number;
+    enableTwoFactorAuth: boolean;
+    maxLoginAttempts: number;
+  };
+  features: {
+    enableAiTutor: boolean;
+    enableMarketplace: boolean;
+    enableGamification: boolean;
+    enableStudyPlans: boolean;
+  };
+}
+
+export interface AdminSettingsResponse {
+  settings: AdminSettingsData;
+  updatedAt: string;
+}
+
+export interface Permission {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+}
+
+export interface RolePermissions {
+  id: string;
+  name: string;
+  description: string;
+  isCustom: boolean;
+  permissionCount: number;
+  permissions: Permission[];
+}
+
+export interface PermissionsResponse {
+  roles: RolePermissions[];
+  totalRoles: number;
+  totalPermissions: number;
+  categories: string[];
+}
+
 // ===== API FUNCTIONS =====
 
 export const adminApi = {
@@ -316,6 +452,10 @@ export const adminApi = {
 
   getRoles: async (): Promise<AdminRolesResponse> => {
     return apiClient<AdminRolesResponse>("/admin/roles/");
+  },
+
+  getPermissions: async (): Promise<PermissionsResponse> => {
+    return apiClient<PermissionsResponse>("/admin/permissions/");
   },
 
   getEvaluations: async (params?: {
@@ -398,5 +538,93 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminAuditLogsResponse>(`/admin/audit-logs/?${query.toString()}`);
+  },
+
+  getNotifications: async (params?: {
+    status?: string;
+    type?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminNotificationsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.type) query.set("type", params.type);
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminNotificationsResponse>(`/admin/notifications/?${query.toString()}`);
+  },
+
+  createNotification: async (data: {
+    title: string;
+    content: string;
+    type: "alert" | "announcement" | "system";
+    targetRole?: string;
+    scheduledFor?: string;
+  }): Promise<AdminNotification> => {
+    return apiClient<AdminNotification>("/admin/notifications/create/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteNotification: async (id: number): Promise<void> => {
+    return apiClient<void>(`/admin/notifications/${id}/delete/`, {
+      method: "DELETE",
+    });
+  },
+
+  getSupportTickets: async (params?: {
+    status?: string;
+    priority?: string;
+    category?: string;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminSupportTicketsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.priority) query.set("priority", params.priority);
+    if (params?.category) query.set("category", params.category);
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminSupportTicketsResponse>(`/admin/support/tickets/?${query.toString()}`);
+  },
+
+  getSupportTicketDetail: async (id: number): Promise<AdminSupportTicketDetail> => {
+    return apiClient<AdminSupportTicketDetail>(`/admin/support/tickets/${id}/`);
+  },
+
+  replyToSupportTicket: async (id: number, message: string): Promise<any> => {
+    return apiClient<any>(`/admin/support/tickets/${id}/reply/`, {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    });
+  },
+
+  updateSupportTicketStatus: async (id: number, status: string): Promise<any> => {
+    return apiClient<any>(`/admin/support/tickets/${id}/status/`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  getSettings: async (): Promise<AdminSettingsResponse> => {
+    return apiClient<AdminSettingsResponse>("/admin/settings/");
+  },
+
+  updateSettings: async (data: {
+    platform?: Partial<AdminSettingsData["platform"]>;
+    email?: Partial<AdminSettingsData["email"]>;
+    notifications?: Partial<AdminSettingsData["notifications"]>;
+    security?: Partial<AdminSettingsData["security"]>;
+    features?: Partial<AdminSettingsData["features"]>;
+  }): Promise<any> => {
+    return apiClient<any>("/admin/settings/", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
   },
 };

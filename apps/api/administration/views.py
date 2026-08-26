@@ -1407,3 +1407,560 @@ class AdminAuditLogsView(APIView):
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
         })
+
+
+class AdminNotificationsListView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from core.models import AdminNotification
+
+        # Get filter parameters
+        status_filter = request.query_params.get('status', '')
+        type_filter = request.query_params.get('type', '')
+        search = request.query_params.get('search', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Build query
+        query = AdminNotification.objects.all()
+
+        if status_filter:
+            query = query.filter(status=status_filter)
+        if type_filter:
+            query = query.filter(type=type_filter)
+        if search:
+            query = query.filter(Q(title__icontains=search) | Q(content__icontains=search))
+
+        total = query.count()
+        start = (page - 1) * page_size
+        notifications = query[start:start + page_size]
+
+        data = []
+        for notif in notifications:
+            data.append({
+                'id': notif.id,
+                'title': notif.title,
+                'content': notif.content,
+                'type': notif.type,
+                'status': notif.status,
+                'recipientCount': notif.recipient_count,
+                'sentAt': notif.sent_at.isoformat() if notif.sent_at else None,
+                'createdBy': notif.created_by.get_full_name() or notif.created_by.username if notif.created_by else 'N/A',
+                'createdAt': notif.created_at.isoformat(),
+                'updatedAt': notif.updated_at.isoformat(),
+            })
+
+        return Response({
+            'notifications': data,
+            'total': total,
+            'page': page,
+            'pageSize': page_size,
+            'totalPages': (total + page_size - 1) // page_size,
+        })
+
+
+class AdminNotificationsCreateView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        from core.models import AdminNotification
+
+        try:
+            title = request.data.get('title', '').strip()
+            content = request.data.get('content', '').strip()
+            notif_type = request.data.get('type', 'announcement')
+            target_role = request.data.get('targetRole', 'all')
+            scheduled_for = request.data.get('scheduledFor')
+
+            if not title or not content:
+                return Response(
+                    {'error': 'Title and content are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            notification = AdminNotification.objects.create(
+                title=title,
+                content=content,
+                type=notif_type,
+                target_role=target_role,
+                scheduled_for=scheduled_for,
+                created_by=request.user,
+                status='draft',
+            )
+
+            return Response({
+                'id': notification.id,
+                'title': notification.title,
+                'content': notification.content,
+                'type': notification.type,
+                'status': notification.status,
+                'message': 'Notification created successfully',
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class AdminNotificationsDeleteView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, pk):
+        from core.models import AdminNotification
+
+        try:
+            notification = AdminNotification.objects.get(id=pk)
+            notification.delete()
+            return Response(
+                {'message': 'Notification deleted successfully'},
+                status=status.HTTP_204_NO_CONTENT
+            )
+        except AdminNotification.DoesNotExist:
+            return Response(
+                {'error': 'Notification not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class AdminSupportTicketsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from support.models import SupportTicket
+
+        # Get filter parameters
+        status_filter = request.query_params.get('status', '')
+        priority_filter = request.query_params.get('priority', '')
+        category_filter = request.query_params.get('category', '')
+        search = request.query_params.get('search', '')
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+
+        # Build query
+        query = SupportTicket.objects.select_related('student').all()
+
+        if status_filter:
+            query = query.filter(status=status_filter)
+        if priority_filter:
+            query = query.filter(priority=priority_filter)
+        if category_filter:
+            query = query.filter(category=category_filter)
+        if search:
+            query = query.filter(
+                Q(ticket_number__icontains=search) |
+                Q(student__email__icontains=search) |
+                Q(subject__icontains=search)
+            )
+
+        total = query.count()
+        start = (page - 1) * page_size
+        tickets = query.order_by('-updated_at')[start:start + page_size]
+
+        data = []
+        for ticket in tickets:
+            message_count = ticket.messages.count()
+            data.append({
+                'id': ticket.id,
+                'ticketNumber': ticket.ticket_number,
+                'subject': ticket.subject,
+                'studentName': ticket.student.get_full_name() or ticket.student.username,
+                'studentEmail': ticket.student.email,
+                'category': ticket.category,
+                'priority': ticket.priority,
+                'status': ticket.status,
+                'messageCount': message_count,
+                'lastUpdated': ticket.updated_at.isoformat(),
+                'createdAt': ticket.created_at.isoformat(),
+            })
+
+        return Response({
+            'tickets': data,
+            'total': total,
+            'page': page,
+            'pageSize': page_size,
+            'totalPages': (total + page_size - 1) // page_size,
+        })
+
+
+class AdminTicketDetailView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        from support.models import SupportTicket, SupportMessage
+
+        try:
+            ticket = SupportTicket.objects.select_related('student').get(id=pk)
+            messages = SupportMessage.objects.select_related('sender').filter(
+                ticket=ticket
+            ).order_by('created_at')
+
+            messages_data = []
+            for msg in messages:
+                messages_data.append({
+                    'id': msg.id,
+                    'sender': msg.sender.get_full_name() or msg.sender.username,
+                    'senderEmail': msg.sender.email,
+                    'isStaffReply': msg.is_staff_reply,
+                    'message': msg.message,
+                    'createdAt': msg.created_at.isoformat(),
+                })
+
+            return Response({
+                'ticket': {
+                    'id': ticket.id,
+                    'ticketNumber': ticket.ticket_number,
+                    'subject': ticket.subject,
+                    'studentName': ticket.student.get_full_name() or ticket.student.username,
+                    'studentEmail': ticket.student.email,
+                    'category': ticket.category,
+                    'priority': ticket.priority,
+                    'status': ticket.status,
+                    'relatedExam': ticket.related_exam or '',
+                    'relatedQuestion': ticket.related_question or '',
+                    'relatedPage': ticket.related_page or '',
+                    'createdAt': ticket.created_at.isoformat(),
+                    'updatedAt': ticket.updated_at.isoformat(),
+                    'closedAt': ticket.closed_at.isoformat() if ticket.closed_at else None,
+                },
+                'messages': messages_data,
+            })
+        except SupportTicket.DoesNotExist:
+            return Response(
+                {'error': 'Ticket not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class AdminTicketReplyView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        from support.models import SupportTicket, SupportMessage
+
+        try:
+            ticket = SupportTicket.objects.get(id=pk)
+            message_text = request.data.get('message', '').strip()
+
+            if not message_text:
+                return Response(
+                    {'error': 'Message cannot be empty'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            message = SupportMessage.objects.create(
+                ticket=ticket,
+                sender=request.user,
+                message=message_text,
+                is_staff_reply=True,
+            )
+
+            return Response({
+                'id': message.id,
+                'message': message.message,
+                'createdAt': message.created_at.isoformat(),
+                'message': 'Reply added successfully',
+            }, status=status.HTTP_201_CREATED)
+
+        except SupportTicket.DoesNotExist:
+            return Response(
+                {'error': 'Ticket not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class AdminTicketUpdateStatusView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        from support.models import SupportTicket
+
+        try:
+            ticket = SupportTicket.objects.get(id=pk)
+            new_status = request.data.get('status')
+
+            if new_status not in dict(SupportTicket.STATUS_CHOICES):
+                return Response(
+                    {'error': 'Invalid status'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            ticket.status = new_status
+
+            if new_status == 'closed' and not ticket.closed_at:
+                ticket.closed_at = timezone.now()
+
+            ticket.save()
+
+            return Response({
+                'id': ticket.id,
+                'status': ticket.status,
+                'message': 'Ticket status updated successfully',
+            })
+
+        except SupportTicket.DoesNotExist:
+            return Response(
+                {'error': 'Ticket not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class AdminPermissionsView(APIView):
+    """Get all roles with their permissions (RBAC)."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        # Define permission structure for each role
+        permissions_structure = {
+            'super-admin': {
+                'id': 'super-admin',
+                'name': 'Super Administrator',
+                'description': 'Full platform access with all permissions',
+                'isCustom': False,
+                'permissionCount': 0,  # Will calculate below
+                'permissions': [
+                    # Users Management
+                    {'id': 'users_create', 'name': 'Create User', 'category': 'Users Management', 'description': 'Create new users'},
+                    {'id': 'users_edit', 'name': 'Edit User', 'category': 'Users Management', 'description': 'Edit user information'},
+                    {'id': 'users_delete', 'name': 'Delete User', 'category': 'Users Management', 'description': 'Delete user accounts'},
+                    {'id': 'users_view', 'name': 'View Users', 'category': 'Users Management', 'description': 'View all users'},
+                    {'id': 'users_export', 'name': 'Export Users', 'category': 'Users Management', 'description': 'Export user data'},
+                    # Academic Management
+                    {'id': 'academic_create_exam', 'name': 'Create Exam', 'category': 'Academic Management', 'description': 'Create new exams'},
+                    {'id': 'academic_edit_exam', 'name': 'Edit Exam', 'category': 'Academic Management', 'description': 'Edit exam details'},
+                    {'id': 'academic_publish_exam', 'name': 'Publish Exam', 'category': 'Academic Management', 'description': 'Publish exams for students'},
+                    {'id': 'academic_delete_exam', 'name': 'Delete Exam', 'category': 'Academic Management', 'description': 'Delete exams'},
+                    {'id': 'academic_manage_questions', 'name': 'Manage Questions', 'category': 'Academic Management', 'description': 'Create, edit, delete questions'},
+                    # Evaluations
+                    {'id': 'eval_view', 'name': 'View Evaluations', 'category': 'Evaluations', 'description': 'View all evaluations'},
+                    {'id': 'eval_assign', 'name': 'Assign Evaluator', 'category': 'Evaluations', 'description': 'Assign evaluators to submissions'},
+                    {'id': 'eval_approve', 'name': 'Approve Evaluation', 'category': 'Evaluations', 'description': 'Approve evaluation results'},
+                    {'id': 'eval_reject', 'name': 'Reject Evaluation', 'category': 'Evaluations', 'description': 'Reject evaluation results'},
+                    # Marketplace
+                    {'id': 'market_view_products', 'name': 'View Products', 'category': 'Marketplace', 'description': 'View all marketplace products'},
+                    {'id': 'market_approve_product', 'name': 'Approve Product', 'category': 'Marketplace', 'description': 'Approve products for listing'},
+                    {'id': 'market_remove_product', 'name': 'Remove Product', 'category': 'Marketplace', 'description': 'Remove products from marketplace'},
+                    {'id': 'market_view_orders', 'name': 'View Orders', 'category': 'Marketplace', 'description': 'View all orders'},
+                    {'id': 'market_process_payment', 'name': 'Process Payment', 'category': 'Marketplace', 'description': 'Process payments and refunds'},
+                    # Analytics
+                    {'id': 'analytics_view', 'name': 'View Analytics', 'category': 'Analytics', 'description': 'View platform analytics'},
+                    {'id': 'analytics_export', 'name': 'Export Reports', 'category': 'Analytics', 'description': 'Export analytics reports'},
+                    {'id': 'analytics_audit_logs', 'name': 'View Audit Logs', 'category': 'Analytics', 'description': 'View system audit logs'},
+                    # Settings
+                    {'id': 'settings_view', 'name': 'View Settings', 'category': 'Settings', 'description': 'View system settings'},
+                    {'id': 'settings_modify', 'name': 'Modify Settings', 'category': 'Settings', 'description': 'Modify system settings'},
+                    {'id': 'settings_manage_notif', 'name': 'Manage Notifications', 'category': 'Settings', 'description': 'Manage system notifications'},
+                    # Administrators
+                    {'id': 'admin_create', 'name': 'Create Admin', 'category': 'Administrators', 'description': 'Create new admin users'},
+                    {'id': 'admin_edit', 'name': 'Edit Admin', 'category': 'Administrators', 'description': 'Edit admin information'},
+                    {'id': 'admin_delete', 'name': 'Delete Admin', 'category': 'Administrators', 'description': 'Delete admin accounts'},
+                    {'id': 'admin_assign_roles', 'name': 'Assign Roles', 'category': 'Administrators', 'description': 'Assign roles to users'},
+                    # Support
+                    {'id': 'support_view_tickets', 'name': 'View Tickets', 'category': 'Support', 'description': 'View support tickets'},
+                    {'id': 'support_assign_ticket', 'name': 'Assign Ticket', 'category': 'Support', 'description': 'Assign tickets to staff'},
+                    {'id': 'support_close_ticket', 'name': 'Close Ticket', 'category': 'Support', 'description': 'Close support tickets'},
+                    {'id': 'support_respond', 'name': 'Respond to Ticket', 'category': 'Support', 'description': 'Respond to ticket messages'},
+                ]
+            },
+            'admin': {
+                'id': 'admin',
+                'name': 'Administrator',
+                'description': 'Can manage users, content, and settings',
+                'isCustom': False,
+                'permissionCount': 0,  # Will calculate below
+                'permissions': [
+                    # Users Management
+                    {'id': 'users_create', 'name': 'Create User', 'category': 'Users Management', 'description': 'Create new users'},
+                    {'id': 'users_edit', 'name': 'Edit User', 'category': 'Users Management', 'description': 'Edit user information'},
+                    {'id': 'users_delete', 'name': 'Delete User', 'category': 'Users Management', 'description': 'Delete user accounts'},
+                    {'id': 'users_view', 'name': 'View Users', 'category': 'Users Management', 'description': 'View all users'},
+                    # Academic Management
+                    {'id': 'academic_create_exam', 'name': 'Create Exam', 'category': 'Academic Management', 'description': 'Create new exams'},
+                    {'id': 'academic_edit_exam', 'name': 'Edit Exam', 'category': 'Academic Management', 'description': 'Edit exam details'},
+                    {'id': 'academic_manage_questions', 'name': 'Manage Questions', 'category': 'Academic Management', 'description': 'Create, edit, delete questions'},
+                    # Evaluations
+                    {'id': 'eval_view', 'name': 'View Evaluations', 'category': 'Evaluations', 'description': 'View all evaluations'},
+                    {'id': 'eval_assign', 'name': 'Assign Evaluator', 'category': 'Evaluations', 'description': 'Assign evaluators to submissions'},
+                    # Marketplace
+                    {'id': 'market_view_products', 'name': 'View Products', 'category': 'Marketplace', 'description': 'View all marketplace products'},
+                    {'id': 'market_approve_product', 'name': 'Approve Product', 'category': 'Marketplace', 'description': 'Approve products for listing'},
+                    {'id': 'market_view_orders', 'name': 'View Orders', 'category': 'Marketplace', 'description': 'View all orders'},
+                    # Analytics
+                    {'id': 'analytics_view', 'name': 'View Analytics', 'category': 'Analytics', 'description': 'View platform analytics'},
+                    # Settings
+                    {'id': 'settings_view', 'name': 'View Settings', 'category': 'Settings', 'description': 'View system settings'},
+                    # Support
+                    {'id': 'support_view_tickets', 'name': 'View Tickets', 'category': 'Support', 'description': 'View support tickets'},
+                    {'id': 'support_respond', 'name': 'Respond to Ticket', 'category': 'Support', 'description': 'Respond to ticket messages'},
+                ]
+            },
+            'teacher': {
+                'id': 'teacher',
+                'name': 'Teacher',
+                'description': 'Can create content and manage students',
+                'isCustom': False,
+                'permissionCount': 0,  # Will calculate below
+                'permissions': [
+                    # Academic Management
+                    {'id': 'academic_create_exam', 'name': 'Create Exam', 'category': 'Academic Management', 'description': 'Create new exams'},
+                    {'id': 'academic_edit_exam', 'name': 'Edit Exam', 'category': 'Academic Management', 'description': 'Edit exam details'},
+                    {'id': 'academic_manage_questions', 'name': 'Manage Questions', 'category': 'Academic Management', 'description': 'Create, edit, delete questions'},
+                    # Evaluations
+                    {'id': 'eval_view', 'name': 'View Evaluations', 'category': 'Evaluations', 'description': 'View all evaluations'},
+                ]
+            },
+            'student': {
+                'id': 'student',
+                'name': 'Student',
+                'description': 'Can access learning materials and take exams',
+                'isCustom': False,
+                'permissionCount': 0,  # Will calculate below
+                'permissions': [
+                    # Academic Management (view only)
+                    {'id': 'academic_view_exam', 'name': 'View Exam', 'category': 'Academic Management', 'description': 'View available exams'},
+                    {'id': 'academic_take_exam', 'name': 'Take Exam', 'category': 'Academic Management', 'description': 'Take exams'},
+                ]
+            }
+        }
+
+        # Calculate permission counts
+        for role_key in permissions_structure:
+            permissions_structure[role_key]['permissionCount'] = len(permissions_structure[role_key]['permissions'])
+
+        # Get all permission categories
+        categories = set()
+        for role_key in permissions_structure:
+            for perm in permissions_structure[role_key]['permissions']:
+                categories.add(perm['category'])
+
+        roles = list(permissions_structure.values())
+
+        return Response({
+            'roles': roles,
+            'totalRoles': len(roles),
+            'totalPermissions': sum(r['permissionCount'] for r in roles),
+            'categories': sorted(list(categories)),
+        })
+
+
+class AdminSettingsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from core.models import AdminSettings
+
+        try:
+            settings = AdminSettings.get_settings()
+
+            return Response({
+                'settings': {
+                    'platform': {
+                        'name': settings.platform_name,
+                        'logoUrl': settings.platform_logo_url,
+                        'description': settings.platform_description,
+                        'timezone': settings.timezone,
+                        'language': settings.language,
+                    },
+                    'email': {
+                        'smtpHost': settings.email_smtp_host,
+                        'smtpPort': settings.email_smtp_port,
+                        'smtpUser': settings.email_smtp_user,
+                        'fromAddress': settings.email_from_address,
+                        'fromName': settings.email_from_name,
+                    },
+                    'notifications': {
+                        'enabled': settings.notifications_enabled,
+                        'enableEmail': settings.enable_email_notifications,
+                        'enableInApp': settings.enable_in_app_notifications,
+                        'enablePush': settings.enable_push_notifications,
+                    },
+                    'security': {
+                        'passwordMinLength': settings.password_min_length,
+                        'passwordRequireUppercase': settings.password_require_uppercase,
+                        'passwordRequireNumbers': settings.password_require_numbers,
+                        'passwordRequireSpecialChars': settings.password_require_special_chars,
+                        'sessionTimeoutMinutes': settings.session_timeout_minutes,
+                        'enableTwoFactorAuth': settings.enable_two_factor_auth,
+                        'maxLoginAttempts': settings.max_login_attempts,
+                    },
+                    'features': {
+                        'enableAiTutor': settings.enable_ai_tutor,
+                        'enableMarketplace': settings.enable_marketplace,
+                        'enableGamification': settings.enable_gamification,
+                        'enableStudyPlans': settings.enable_study_plans,
+                    },
+                },
+                'updatedAt': settings.updated_at.isoformat(),
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def put(self, request):
+        from core.models import AdminSettings
+
+        try:
+            settings = AdminSettings.get_settings()
+
+            # Platform settings
+            if 'platform' in request.data:
+                platform = request.data['platform']
+                settings.platform_name = platform.get('name', settings.platform_name)
+                settings.platform_logo_url = platform.get('logoUrl', settings.platform_logo_url)
+                settings.platform_description = platform.get('description', settings.platform_description)
+                settings.timezone = platform.get('timezone', settings.timezone)
+                settings.language = platform.get('language', settings.language)
+
+            # Email settings
+            if 'email' in request.data:
+                email = request.data['email']
+                settings.email_smtp_host = email.get('smtpHost', settings.email_smtp_host)
+                settings.email_smtp_port = email.get('smtpPort', settings.email_smtp_port)
+                settings.email_smtp_user = email.get('smtpUser', settings.email_smtp_user)
+                settings.email_from_address = email.get('fromAddress', settings.email_from_address)
+                settings.email_from_name = email.get('fromName', settings.email_from_name)
+
+            # Notification settings
+            if 'notifications' in request.data:
+                notif = request.data['notifications']
+                settings.notifications_enabled = notif.get('enabled', settings.notifications_enabled)
+                settings.enable_email_notifications = notif.get('enableEmail', settings.enable_email_notifications)
+                settings.enable_in_app_notifications = notif.get('enableInApp', settings.enable_in_app_notifications)
+                settings.enable_push_notifications = notif.get('enablePush', settings.enable_push_notifications)
+
+            # Security settings
+            if 'security' in request.data:
+                security = request.data['security']
+                settings.password_min_length = security.get('passwordMinLength', settings.password_min_length)
+                settings.password_require_uppercase = security.get('passwordRequireUppercase', settings.password_require_uppercase)
+                settings.password_require_numbers = security.get('passwordRequireNumbers', settings.password_require_numbers)
+                settings.password_require_special_chars = security.get('passwordRequireSpecialChars', settings.password_require_special_chars)
+                settings.session_timeout_minutes = security.get('sessionTimeoutMinutes', settings.session_timeout_minutes)
+                settings.enable_two_factor_auth = security.get('enableTwoFactorAuth', settings.enable_two_factor_auth)
+                settings.max_login_attempts = security.get('maxLoginAttempts', settings.max_login_attempts)
+
+            # Feature flags
+            if 'features' in request.data:
+                features = request.data['features']
+                settings.enable_ai_tutor = features.get('enableAiTutor', settings.enable_ai_tutor)
+                settings.enable_marketplace = features.get('enableMarketplace', settings.enable_marketplace)
+                settings.enable_gamification = features.get('enableGamification', settings.enable_gamification)
+                settings.enable_study_plans = features.get('enableStudyPlans', settings.enable_study_plans)
+
+            settings.updated_by = request.user
+            settings.save()
+
+            return Response({
+                'message': 'Settings updated successfully',
+                'updatedAt': settings.updated_at.isoformat(),
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )

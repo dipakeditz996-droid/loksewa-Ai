@@ -302,4 +302,144 @@ export const adminExamApi = {
       `/admin/exams/${id}/results/${buildQueryString(params)}`
     );
   },
+
+  // ===== Step 3: Question Selection =====
+  // All of these read from the canonical Master Question Bank and write through
+  // ExaminationQuestion. Random selection runs server-side in
+  // QuestionSelectionService — never in the browser.
+
+  getAvailableQuestions: async (id: number, params?: BankQueryParams) => {
+    return apiClient<PaginatedBank>(
+      `/admin/exams/${id}/available-questions/${buildQueryString(params)}`
+    );
+  },
+
+  getQuestionAvailability: async (id: number, params?: BankScopeParams) => {
+    return apiClient<QuestionAvailability>(
+      `/admin/exams/${id}/question-availability/${buildQueryString(params)}`
+    );
+  },
+
+  getExamQuestions: async (id: number) => {
+    return apiClient<{ results: AssignedQuestion[]; count: number; total_marks: number }>(
+      `/admin/exams/${id}/questions/`
+    );
+  },
+
+  addQuestions: async (id: number, question_ids: number[]) => {
+    return apiClient<AddQuestionsResult>(`/admin/exams/${id}/add-questions/`, {
+      method: 'POST',
+      body: JSON.stringify({ question_ids }),
+    });
+  },
+
+  removeQuestions: async (id: number, question_ids: number[]) => {
+    return apiClient<{ removed_count: number; total_questions: number; total_marks: number }>(
+      `/admin/exams/${id}/remove-questions/`,
+      { method: 'POST', body: JSON.stringify({ question_ids }) }
+    );
+  },
+
+  reorderQuestions: async (id: number, order_data: { question_id: number; order: number }[]) => {
+    return apiClient<{ success: boolean; reordered_count: number }>(
+      `/admin/exams/${id}/reorder-questions/`,
+      { method: 'POST', body: JSON.stringify({ order_data }) }
+    );
+  },
+
+  generateQuestions: async (id: number, payload: GenerateQuestionsPayload) => {
+    return apiClient<GenerateQuestionsResult>(`/admin/exams/${id}/generate-questions/`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
+
+// ===== Question selection types =====
+
+export interface BankScopeParams {
+  exam?: number;
+  paper?: number;
+  subject?: number;
+  chapter?: number;
+  topic?: number;
+  question_type?: string;
+  tags?: string;
+}
+
+export interface BankQueryParams extends BankScopeParams {
+  search?: string;
+  difficulty?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface BankQuestion {
+  id: number;
+  question_id: string | null;
+  text: string;
+  question_type: string;
+  difficulty: string;
+  status: string;
+  marks: number;
+  subject_name: string | null;
+  chapter_name: string | null;
+  topic_name: string | null;
+}
+
+export interface AssignedQuestion extends BankQuestion {
+  order: number;
+  exam_marks: number;
+}
+
+export interface PaginatedBank {
+  results: BankQuestion[];
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface QuestionAvailability {
+  /** Size of the scope regardless of what this exam already holds. */
+  total_in_scope: number;
+  /** What remains addable, i.e. scope minus already-assigned. */
+  total_available: number;
+  by_difficulty: { easy: number; medium: number; hard: number };
+  by_type: { mcq: number; true_false: number; subjective: number };
+  selected: number;
+  remaining_to_target: number;
+}
+
+export interface AddQuestionsResult {
+  success: boolean;
+  added_count: number;
+  skipped_duplicates: number;
+  not_approved_or_missing: number[];
+  total_questions: number;
+  total_marks: number;
+}
+
+export interface GenerateQuestionsPayload extends BankScopeParams {
+  count?: number;
+  difficulty_distribution?: { easy?: number; medium?: number; hard?: number };
+  /** Report what would be selected without writing anything. */
+  preview?: boolean;
+  /** Clear the current selection first (Regenerate). */
+  replace?: boolean;
+}
+
+export interface GenerateQuestionsResult {
+  requested: number;
+  selected: number;
+  available: number;
+  satisfied: boolean;
+  warnings: string[];
+  preview: boolean;
+  questions: BankQuestion[];
+  error?: string;
+  total_questions?: number;
+  total_marks?: number;
+}

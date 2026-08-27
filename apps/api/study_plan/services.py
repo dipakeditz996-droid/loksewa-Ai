@@ -76,10 +76,14 @@ def generate_study_plan_tasks(study_plan, regenerate_future=False):
         StudyTask.objects.bulk_create(tasks_to_create)
         return
 
-    # Fallback to legacy random generation if no template
-    subjects = Subject.objects.filter(exam=study_plan.exam)
-    topics = Topic.objects.filter(subject__in=subjects)
-    
+    # Fallback to legacy random generation if no template.
+    # A Subject hangs off a Paper (not the Exam directly), and a Topic hangs off
+    # a Chapter, so both lookups have to walk the full path.
+    subjects = Subject.objects.filter(paper__exam=study_plan.exam)
+    topics = Topic.objects.filter(chapter__subject__in=subjects).select_related(
+        'chapter', 'chapter__subject'
+    )
+
     if not topics.exists():
         return
 
@@ -106,22 +110,25 @@ def generate_study_plan_tasks(study_plan, regenerate_future=False):
                 topic = topics_list[topic_index % len(topics_list)]
                 task_type = task_types[(topic_index + days_generated) % len(task_types)]
                 
+                # Topic names live on `name`, and the owning Subject is reached
+                # through the Chapter.
+                topic_subject = topic.chapter.subject
                 title_map = {
-                    'STUDY_NOTE': f"Study Note: {topic.title}",
-                    'PRACTICE': f"Practice MCQs: {topic.title}",
-                    'MODEL_EXAM': f"Take Model Exam for {topic.subject.name}",
-                    'SUBJECTIVE_PRACTICE': f"Subjective Practice: {topic.title}",
-                    'REVIEW_MISTAKES': f"Review Past Mistakes in {topic.subject.name}",
-                    'REVISION': f"Quick Revision: {topic.title}",
+                    'STUDY_NOTE': f"Study Note: {topic.name}",
+                    'PRACTICE': f"Practice MCQs: {topic.name}",
+                    'MODEL_EXAM': f"Take Model Exam for {topic_subject.name}",
+                    'SUBJECTIVE_PRACTICE': f"Subjective Practice: {topic.name}",
+                    'REVIEW_MISTAKES': f"Review Past Mistakes in {topic_subject.name}",
+                    'REVISION': f"Quick Revision: {topic.name}",
                 }
-                title = title_map.get(task_type, f"Study {topic.title}")
-                
+                title = title_map.get(task_type, f"Study {topic.name}")
+
                 StudyTask.objects.create(
                     study_plan=study_plan,
                     date=current_date,
                     title=title,
                     task_type=task_type,
-                    subject=topic.subject,
+                    subject=topic_subject,
                     topic=topic,
                     duration_minutes=task_duration,
                     status='PENDING'

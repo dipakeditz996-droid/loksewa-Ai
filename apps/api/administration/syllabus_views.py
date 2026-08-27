@@ -76,6 +76,11 @@ class SubjectViewSet(BaseSyllabusViewSet):
         paper_id = self.request.query_params.get('paper', None)
         if paper_id:
             queryset = queryset.filter(paper_id=paper_id)
+        # A Subject belongs to an Exam through its Paper. The UI calls an Exam a
+        # "Position", so allow narrowing straight to one without picking a Paper.
+        exam_id = self.request.query_params.get('exam', None)
+        if exam_id:
+            queryset = queryset.filter(paper__exam_id=exam_id)
         return queryset
 
     def destroy(self, request, *args, **kwargs):

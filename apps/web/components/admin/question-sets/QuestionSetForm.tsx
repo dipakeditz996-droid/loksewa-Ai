@@ -126,7 +126,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
               type="text"
               value={data.name || ''}
               onChange={e => handleChange('name', e.target.value)}
-              className={`w-full p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 ${errors.name ? 'border-red-500' : 'border-gray-200'}`}
+              className={`w-full p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium ${errors.name ? 'border-red-500' : 'border-gray-200'}`}
               placeholder="e.g. Section Officer Model Exam Set 1"
             />
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
@@ -137,7 +137,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
             <textarea
               value={data.description || ''}
               onChange={e => handleChange('description', e.target.value)}
-              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 h-24"
+              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 h-24 bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
               placeholder="Optional description or instructions for this set"
             />
           </div>
@@ -201,7 +201,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
                     placeholder="0"
                     value={data.subject_distribution?.[s.id.toString()] || ''}
                     onChange={(e) => handleSubjectDistChange(s.id, parseInt(e.target.value) || 0)}
-                    className="w-24 p-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#0B2545]"
+                    className="w-24 p-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-[#0B2545] bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
                   />
                 </div>
               ))}
@@ -225,7 +225,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
               min="1"
               value={data.total_questions || ''}
               onChange={e => handleChange('total_questions', Number(e.target.value))}
-              className={`w-full p-2.5 border rounded-lg focus:outline-none ${errors.total_questions ? 'border-red-500' : 'border-gray-200'}`}
+              className={`w-full p-2.5 border rounded-lg focus:outline-none bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium ${errors.total_questions ? 'border-red-500' : 'border-gray-200'}`}
             />
           </div>
           <div>
@@ -235,7 +235,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
               min="1"
               value={data.time_limit || ''}
               onChange={e => handleChange('time_limit', Number(e.target.value))}
-              className={`w-full p-2.5 border rounded-lg focus:outline-none ${errors.time_limit ? 'border-red-500' : 'border-gray-200'}`}
+              className={`w-full p-2.5 border rounded-lg focus:outline-none bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium ${errors.time_limit ? 'border-red-500' : 'border-gray-200'}`}
             />
           </div>
           <div>
@@ -246,7 +246,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
               step="0.5"
               value={data.total_marks || ''}
               onChange={e => handleChange('total_marks', Number(e.target.value))}
-              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none"
+              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
             />
           </div>
           <div>
@@ -257,7 +257,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
               step="0.5"
               value={data.passing_marks || ''}
               onChange={e => handleChange('passing_marks', Number(e.target.value))}
-              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none"
+              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
             />
           </div>
           <div>
@@ -268,7 +268,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
               step="0.1"
               value={data.marks_per_question || ''}
               onChange={e => handleChange('marks_per_question', Number(e.target.value))}
-              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none"
+              className="w-full p-2.5 border border-gray-200 rounded-lg focus:outline-none bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
             />
           </div>
           <div>
@@ -280,7 +280,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
                 max="100"
                 value={data.difficulty_distribution?.easy ?? 20}
                 onChange={e => handleDifficultyChange('easy', Number(e.target.value))}
-                className="w-full p-2.5 border border-gray-200 rounded-lg text-center"
+                className="w-full p-2.5 border border-gray-200 rounded-lg text-center bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
                 title="Easy %"
               />
               <input
@@ -289,7 +289,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
                 max="100"
                 value={data.difficulty_distribution?.medium ?? 50}
                 onChange={e => handleDifficultyChange('medium', Number(e.target.value))}
-                className="w-full p-2.5 border border-gray-200 rounded-lg text-center"
+                className="w-full p-2.5 border border-gray-200 rounded-lg text-center bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
                 title="Medium %"
               />
               <input
@@ -298,7 +298,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
                 max="100"
                 value={data.difficulty_distribution?.hard ?? 30}
                 onChange={e => handleDifficultyChange('hard', Number(e.target.value))}
-                className="w-full p-2.5 border border-gray-200 rounded-lg text-center"
+                className="w-full p-2.5 border border-gray-200 rounded-lg text-center bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
                 title="Hard %"
               />
             </div>
@@ -329,7 +329,7 @@ export function QuestionSetForm({ initialData, onChange, errors = {} }: Question
                   step="0.01"
                   value={data.negative_marking_value || ''}
                   onChange={e => handleChange('negative_marking_value', Number(e.target.value))}
-                  className="w-32 p-2 border border-gray-200 rounded-lg text-sm"
+                  className="w-32 p-2 border border-gray-200 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-600 placeholder:font-medium"
                 />
               </div>
             )}

@@ -56,11 +56,11 @@ class ChapterSerializer(serializers.ModelSerializer):
         return obj.topics.count()
 
 class TopicSerializer(serializers.ModelSerializer):
-    chapter_name = serializers.CharField(source='Chapter.title', read_only=True)
+    chapter_name = serializers.CharField(source='chapter.title', read_only=True)
 
     class Meta:
         model = Topic
-        fields = ['id', 'Chapter', 'chapter_name', 'name', 'description', 'is_active', 'order', 'created_at', 'updated_at']
+        fields = ['id', 'chapter', 'chapter_name', 'name', 'description', 'is_active', 'order', 'created_at', 'updated_at']
 
 class ReorderSerializer(serializers.Serializer):
     id = serializers.IntegerField()

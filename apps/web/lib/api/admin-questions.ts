@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, downloadFile } from './client';
 import { QuestionData, PaginatedResponse } from './teacher-questions';
 
 export interface AdminQuestion {
@@ -17,6 +17,40 @@ export interface AdminQuestion {
   collections?: { id: number, name: string }[];
   ai_status?: string;
   [key: string]: any;
+}
+
+/** Where an imported CSV lands. Chosen in the UI, applied to every row. */
+export interface ImportTarget {
+  topic: number;
+  question_type: 'mcq' | 'true_false' | 'subjective';
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export type ImportRowStatus = 'valid' | 'incomplete' | 'duplicate' | 'error';
+
+export interface ImportRow {
+  row_index: number;
+  status: ImportRowStatus;
+  /** Blocking problems: the row can never be imported as-is. */
+  errors: string[];
+  /** Gaps the AI can fill, e.g. 'options', 'correct_answer', 'explanation'. */
+  missing: string[];
+  /** Set once the AI has filled this row, listing what it supplied. */
+  ai_filled?: string[];
+  data: Record<string, string>;
+}
+
+export interface ImportReport {
+  import_id: number;
+  topic_id: number | null;
+  question_type: string;
+  difficulty: string;
+  total_rows: number;
+  valid_rows: number;
+  incomplete_rows: number;
+  duplicate_rows: number;
+  error_rows: number;
+  report_data: ImportRow[];
 }
 
 export interface QuestionStats {
@@ -45,16 +79,23 @@ export const adminQuestionApi = {
     method: 'POST',
     body: JSON.stringify({ action, ids, collection_ids: collectionIds }),
   }),
-  uploadCSV: async (file: File) => {
+  uploadCSV: async (file: File, target: ImportTarget) => {
     const formData = new FormData();
     formData.append('file', file);
-    return apiClient<any>('/admin/questions/import/', { 
-      method: 'POST', 
-      body: formData as any, 
-      headers: { 'Content-Type': 'multipart/form-data' } 
+    formData.append('topic', String(target.topic));
+    formData.append('question_type', target.question_type);
+    formData.append('difficulty', target.difficulty);
+    // No Content-Type header: the browser must set it so the multipart
+    // boundary is included.
+    return apiClient<ImportReport>('/admin/questions/import/upload/', {
+      method: 'POST',
+      body: formData as any,
     });
   },
-  commitCSV: async (importId: string) => apiClient<any>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
+  aiFillImport: async (importId: number | string) =>
+    apiClient<ImportReport>(`/admin/questions/import/${importId}/ai-fill/`, { method: 'POST' }),
+  commitCSV: async (importId: number | string) => apiClient<{ success: boolean; imported_count: number }>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
+  downloadTemplate: async () => downloadFile('/admin/questions/import/template/', 'question_import_template.csv'),
   generateOptions: async (id: number) => apiClient<any>(`/admin/questions/${id}/generate-options/`, { method: 'POST' }),
   approveOptions: async (id: number, aiOptions: any) => apiClient<any>(`/admin/questions/${id}/approve-options/`, { method: 'POST', body: JSON.stringify(aiOptions) }),
   generateBulkAIContent: async (data: any) => apiClient<any>('/admin/questions/bulk-ai-generate/', { method: 'POST', body: JSON.stringify(data) }),

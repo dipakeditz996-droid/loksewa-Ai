@@ -63,7 +63,18 @@ export const adminQuestionSetApi = {
         queryString = `?${queryStr}`;
       }
     }
-    return apiClient<{ count: number; next: string | null; previous: string | null; results: QuestionSet[] }>(`/admin/question-sets/${queryString}`);
+    // The endpoint returns a bare array when pagination is off and a paginated
+    // envelope when it is on. Normalise so callers can always read `.results`.
+    const res = await apiClient<any>(`/admin/question-sets/${queryString}`);
+    if (Array.isArray(res)) {
+      return { count: res.length, next: null, previous: null, results: res as QuestionSet[] };
+    }
+    return {
+      count: res?.count ?? (res?.results?.length ?? 0),
+      next: res?.next ?? null,
+      previous: res?.previous ?? null,
+      results: (res?.results ?? []) as QuestionSet[],
+    };
   },
 
   getQuestionSet: async (id: number) => {

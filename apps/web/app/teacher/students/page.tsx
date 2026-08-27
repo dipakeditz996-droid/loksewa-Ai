@@ -67,8 +67,12 @@ export default function TeacherStudentsPage() {
     }
   };
 
-  const handleExport = () => {
-    window.open(teacherStudentsApi.exportStudentsUrl(), "_blank");
+  const handleExport = async () => {
+    try {
+      await teacherStudentsApi.exportStudents();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to export students");
+    }
   };
 
   const filteredStudents = students.filter(student => {

@@ -71,10 +71,10 @@ class QuestionSelectionService:
     ) -> QuerySet:
         """Apply academic-hierarchy and metadata filters to a queryset."""
         if exam_id:
-            qs = qs.filter(
-                Q(topic__chapter__subject__paper__exam_id=exam_id) |
-                Q(topic__chapter__subject__exam_id=exam_id)
-            )
+            # A Question reaches its Exam through topic → chapter → subject →
+            # paper → exam. Subject has no direct `exam` FK, so that is the only
+            # valid path; filtering on `subject__exam_id` raises FieldError.
+            qs = qs.filter(topic__chapter__subject__paper__exam_id=exam_id)
         if paper_id:
             qs = qs.filter(topic__chapter__subject__paper_id=paper_id)
         if subject_id:

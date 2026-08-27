@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { 
-  ArrowLeft, CheckCircle2, ChevronRight, Save, PlayCircle, Settings, FileText, 
-  Target, LayoutList, GripVertical, Shuffle, PlusCircle, Filter, HelpCircle, Eye, Lock
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ArrowLeft, ChevronRight, FileText, Target, LayoutList, Settings,
+  Check, Loader2, AlertCircle, Save, Rocket,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import { QuestionSelectionWorkspace } from "@/components/admin/exams/QuestionSelectionWorkspace";
+import { adminExamApi, Examination, ExaminationType } from "@/lib/api/admin-exams";
+import { adminSyllabusApi } from "@/lib/api/admin-syllabus";
+import toast from "react-hot-toast";
 
 const STEPS = [
   { id: 1, title: "Basic Information", icon: FileText },
@@ -19,539 +19,558 @@ const STEPS = [
   { id: 4, title: "Configuration", icon: Settings },
 ];
 
+const EXAM_TYPES: { value: ExaminationType; label: string }[] = [
+  { value: "mock", label: "Mock Test" },
+  { value: "practice", label: "Practice Test" },
+  { value: "full", label: "Full-Length Exam" },
+  { value: "position", label: "Position-Based Exam" },
+  { value: "subject", label: "Subject Test" },
+  { value: "custom", label: "Custom Exam" },
+  { value: "subjective", label: "Subjective Exam" },
+];
+
+/** Django accepts ISO-8601; <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm". */
+const toIso = (local: string) => (local ? new Date(local).toISOString() : null);
+const toLocal = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 export default function CreateExamPage() {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [isSaving, setIsSaving] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const draftParam = searchParams?.get("draft");
 
-  // Mock Form States
-  const [access, setAccess] = useState("Free");
+  const [step, setStep] = useState(1);
+  const [examId, setExamId] = useState<number | null>(draftParam ? Number(draftParam) : null);
+  const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [loadingDraft, setLoadingDraft] = useState(Boolean(draftParam));
+  const [publishErrors, setPublishErrors] = useState<string[]>([]);
+  const [selection, setSelection] = useState({ count: 0, marks: 0 });
+
+  // ── Step 1
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [examType, setExamType] = useState<ExaminationType>("mock");
+  const [instructions, setInstructions] = useState("");
+
+  // ── Step 2 (canonical hierarchy: ExamCategory → Exam → Subject)
+  const [categoryId, setCategoryId] = useState<number | undefined>();
+  const [positionId, setPositionId] = useState<number | undefined>();
+  const [subjectId, setSubjectId] = useState<number | undefined>();
+  const [categories, setCategories] = useState<any[]>([]);
+  const [positions, setPositions] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+
+  // ── Step 4
+  const [timeLimit, setTimeLimit] = useState(60);
+  const [passingMarks, setPassingMarks] = useState(0);
+  const [marksPerQuestion, setMarksPerQuestion] = useState(1);
   const [negativeMarking, setNegativeMarking] = useState(false);
-  const [durationLimited, setDurationLimited] = useState(true);
+  const [negativeValue, setNegativeValue] = useState(0.25);
+  const [maxAttempts, setMaxAttempts] = useState(1);
+  const [allowResume, setAllowResume] = useState(true);
+  const [autoSubmit, setAutoSubmit] = useState(true);
+  const [resultVisibility, setResultVisibility] = useState<Examination["result_visibility"]>("immediate");
+  const [showAnswers, setShowAnswers] = useState(false);
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [randomizeOptions, setRandomizeOptions] = useState(false);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
 
-  const handleNext = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
+  const applyExam = useCallback((e: Examination) => {
+    setTitle(e.title || "");
+    setDescription(e.description || "");
+    setExamType(e.exam_type);
+    setInstructions(e.instructions || "");
+    setCategoryId(e.category || undefined);
+    setPositionId(e.exam || undefined);
+    setSubjectId(e.subject || undefined);
+    setTimeLimit(e.time_limit ?? 60);
+    setPassingMarks(e.passing_marks ?? 0);
+    setMarksPerQuestion(e.marks_per_question ?? 1);
+    setNegativeMarking(Boolean(e.negative_marking));
+    setNegativeValue(e.negative_marking_value ?? 0.25);
+    setMaxAttempts(e.max_attempts ?? 1);
+    setAllowResume(Boolean(e.allow_resume));
+    setAutoSubmit(Boolean(e.auto_submit));
+    setResultVisibility(e.result_visibility || "immediate");
+    setShowAnswers(Boolean(e.show_correct_answers));
+    setRandomizeQuestions(Boolean(e.randomize_questions));
+    setRandomizeOptions(Boolean(e.randomize_options));
+    setStartTime(toLocal(e.start_time));
+    setEndTime(toLocal(e.end_time));
+    setSelection({ count: e.total_questions ?? 0, marks: e.total_marks ?? 0 });
+  }, []);
+
+  // Recover an existing draft after a refresh.
+  useEffect(() => {
+    if (!draftParam) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const e = await adminExamApi.getExam(Number(draftParam));
+        if (!cancelled) applyExam(e);
+      } catch {
+        if (!cancelled) toast.error("Could not recover that draft.");
+      } finally {
+        if (!cancelled) setLoadingDraft(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [draftParam, applyExam]);
+
+  // ── Dependent academic dropdowns, straight from the admin academic APIs ───
+  useEffect(() => {
+    adminSyllabusApi.getCategories()
+      .then(r => setCategories(Array.isArray(r) ? r : []))
+      .catch(() => toast.error("Could not load exam categories."));
+  }, []);
+
+  useEffect(() => {
+    setPositions([]);
+    if (!categoryId) return;
+    adminSyllabusApi.getPositions(categoryId)
+      .then(r => setPositions(Array.isArray(r) ? r : []))
+      .catch(() => {});
+  }, [categoryId]);
+
+  useEffect(() => {
+    setSubjects([]);
+    if (!positionId) return;
+    adminSyllabusApi.getSubjects(positionId)
+      .then(r => setSubjects(Array.isArray(r) ? r : []))
+      .catch(() => {});
+  }, [positionId]);
+
+  const buildPayload = () => ({
+    title: title.trim(),
+    description,
+    exam_type: examType,
+    instructions,
+    category: categoryId,
+    exam: positionId,
+    subject: subjectId ?? null,
+    time_limit: timeLimit,
+    passing_marks: passingMarks,
+    marks_per_question: marksPerQuestion,
+    negative_marking: negativeMarking,
+    negative_marking_value: negativeValue,
+    max_attempts: maxAttempts,
+    allow_resume: allowResume,
+    auto_submit: autoSubmit,
+    result_visibility: resultVisibility,
+    show_correct_answers: showAnswers,
+    randomize_questions: randomizeQuestions,
+    randomize_options: randomizeOptions,
+    start_time: toIso(startTime),
+    end_time: toIso(endTime),
+  });
+
+  /** Creates the Examination on first save, then PATCHes. Returns its id. */
+  const persist = async (opts: { silent?: boolean } = {}): Promise<number | null> => {
+    if (!title.trim()) { toast.error("The exam needs a title."); setStep(1); return null; }
+    if (!categoryId || !positionId) {
+      toast.error("Choose a category and a position first.");
+      setStep(2);
+      return null;
+    }
+
+    setSaving(true);
+    try {
+      const payload = buildPayload() as Partial<Examination>;
+      if (examId) {
+        await adminExamApi.updateExam(examId, payload);
+        if (!opts.silent) toast.success("Draft saved");
+        return examId;
+      }
+      const created = await adminExamApi.createExam(payload);
+      setExamId(created.id);
+      // Put the id in the URL so a refresh recovers the draft.
+      router.replace(`/admin-dashboard/exams/new?draft=${created.id}`);
+      if (!opts.silent) toast.success("Draft saved");
+      return created.id;
+    } catch (error: any) {
+      const data = error?.data;
+      const firstField = data && typeof data === "object" ? Object.keys(data)[0] : null;
+      const msg =
+        data?.error ||
+        data?.detail ||
+        (firstField ? `${firstField}: ${Array.isArray(data[firstField]) ? data[firstField][0] : data[firstField]}` : null) ||
+        "Could not save the exam.";
+      toast.error(msg);
+      return null;
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handlePrev = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  const goNext = async () => {
+    // Step 3 needs a real Examination to attach questions to.
+    if (step === 2 && !examId) {
+      const id = await persist({ silent: true });
+      if (!id) return;
+    }
+    if (step === 2 && examId) await persist({ silent: true });
+    setStep(s => Math.min(4, s + 1));
   };
 
-  const simulateAutoSave = () => {
-    setIsSaving(true);
-    setTimeout(() => setIsSaving(false), 1000);
+  const publish = async () => {
+    setPublishErrors([]);
+    const id = await persist({ silent: true });
+    if (!id) return;
+
+    setPublishing(true);
+    try {
+      await adminExamApi.publishExam(id);
+      toast.success("Exam published");
+      router.push(`/admin-dashboard/exams/${id}`);
+    } catch (error: any) {
+      const data = error?.data;
+      if (Array.isArray(data?.details)) {
+        setPublishErrors(data.details);
+        toast.error("Exam cannot be published. Please complete the required configuration.");
+      } else {
+        toast.error(data?.error || data?.detail || "Publishing failed.");
+      }
+    } finally {
+      setPublishing(false);
+    }
   };
+
+  const handleSelectionChange = useCallback((count: number, marks: number) => {
+    setSelection({ count, marks });
+  }, []);
+
+  const field = "w-full p-2.5 border border-slate-200 rounded-lg bg-white text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20";
+  const label = "block text-sm font-medium text-slate-700 mb-1.5";
+
+  if (loadingDraft) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
+        <Loader2 className="w-7 h-7 animate-spin text-[#0B2545]" />
+        <p className="text-sm text-slate-500">Recovering draft...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-20">
-      
+    <div className="space-y-6 pb-20">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
-          <Link href="/admin-dashboard/exams">
-            <Button variant="ghost" size="icon" className="text-slate-500 hover:text-[#0B2545] hover:bg-slate-200">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
+          <Link
+            href="/admin-dashboard/exams"
+            className="p-2 rounded-full text-slate-500 hover:text-[#0B2545] hover:bg-slate-100 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-[#0B2545]">Create New Exam</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className="bg-slate-100 text-slate-700">Draft</Badge>
-              <span className="text-xs text-slate-500 flex items-center gap-1">
-                {isSaving ? (
-                  <span className="animate-pulse">Saving...</span>
-                ) : (
-                  <><CheckCircle2 className="w-3 h-3 text-emerald-500" /> Saved</>
-                )}
-              </span>
-            </div>
+            <h1 className="text-2xl font-bold text-[#0B2545]">
+              {examId ? "Edit Exam Draft" : "Create Exam"}
+            </h1>
+            <p className="text-slate-500 text-sm mt-0.5">
+              {examId
+                ? `Draft #${examId} — changes are saved to the server.`
+                : "The draft is created on the server once you reach Question Selection."}
+            </p>
           </div>
         </div>
-        
-        <div className="flex gap-2">
-          <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50">
-            <PlayCircle className="w-4 h-4 mr-2" /> Preview
-          </Button>
-          <Button className="bg-[#0B2545] hover:bg-[#163E6C] text-white">
-            <Save className="w-4 h-4 mr-2" /> Publish Exam
-          </Button>
-        </div>
+        {saving && (
+          <span className="text-xs text-slate-500 flex items-center gap-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving...
+          </span>
+        )}
       </div>
 
       {/* Stepper */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative">
-          <div className="hidden md:block absolute top-1/2 left-0 right-0 h-0.5 bg-slate-100 -z-10 -translate-y-1/2"></div>
-          
-          {STEPS.map((step, idx) => {
-            const isActive = currentStep === step.id;
-            const isCompleted = currentStep > step.id;
-            
+      <div className="bg-white border border-slate-200 rounded-xl p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          {STEPS.map((s, i) => {
+            const active = step === s.id;
+            const done = step > s.id;
+            // Step 3 is unreachable until a draft exists to attach questions to.
+            const locked = s.id === 3 && !examId;
             return (
-              <div key={step.id} className="flex items-center gap-3 bg-white pr-4 z-10" onClick={() => { setCurrentStep(step.id); simulateAutoSave(); }}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors cursor-pointer
-                  ${isActive ? 'border-blue-600 bg-blue-50 text-blue-600' : 
-                    isCompleted ? 'border-emerald-500 bg-emerald-50 text-emerald-500' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
-                  {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <step.icon className="w-4 h-4" />}
-                </div>
-                <div className="cursor-pointer">
-                  <p className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-blue-600' : isCompleted ? 'text-emerald-600' : 'text-slate-400'}`}>Step {step.id}</p>
-                  <p className={`font-semibold ${isActive || isCompleted ? 'text-[#0B2545]' : 'text-slate-500'}`}>{step.title}</p>
-                </div>
-              </div>
+              <React.Fragment key={s.id}>
+                <button
+                  onClick={() => !locked && setStep(s.id)}
+                  disabled={locked}
+                  className={`flex items-center gap-2.5 disabled:cursor-not-allowed ${locked ? "opacity-40" : ""}`}
+                >
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                    active ? "bg-[#0B2545] text-white"
+                      : done ? "bg-emerald-500 text-white"
+                      : "bg-slate-100 text-slate-400"
+                  }`}>
+                    {done ? <Check className="w-4 h-4" /> : s.id}
+                  </span>
+                  <span className="text-left hidden sm:block">
+                    <span className={`block text-[10px] font-bold uppercase tracking-wider ${
+                      active ? "text-[#0B2545]" : done ? "text-emerald-600" : "text-slate-400"
+                    }`}>Step {s.id}</span>
+                    <span className={`block text-sm font-medium ${active ? "text-slate-900" : "text-slate-500"}`}>
+                      {s.title}
+                    </span>
+                  </span>
+                </button>
+                {i < STEPS.length - 1 && <div className="flex-1 h-px bg-slate-200 min-w-[12px]" />}
+              </React.Fragment>
             );
           })}
         </div>
       </div>
 
-      {/* Builder Content Area */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        
-        {/* STEP 1: Basic Information */}
-        {currentStep === 1 && (
-          <div className="animate-in fade-in">
-            <div className="p-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="font-bold text-[#0B2545]">Basic Information</h2>
-              <p className="text-xs text-slate-500">Define the core identity of this exam.</p>
+      {publishErrors.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="font-semibold text-red-800 flex items-center gap-2 mb-2">
+            <AlertCircle className="w-4 h-4" /> Exam cannot be published
+          </p>
+          <ul className="list-disc list-inside text-sm text-red-700 space-y-0.5">
+            {publishErrors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* ── Step 1 ─────────────────────────────────────────────────────────── */}
+      {step === 1 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+          <h2 className="font-bold text-[#0B2545]">Basic Information</h2>
+          <div>
+            <label className={label}>Exam Title *</label>
+            <input value={title} onChange={e => setTitle(e.target.value)} className={field}
+              placeholder="e.g. Loksewa Section Officer — Full Mock Test 1" />
+          </div>
+          <div>
+            <label className={label}>Exam Type *</label>
+            <select value={examType} onChange={e => setExamType(e.target.value as ExaminationType)} className={field}>
+              {EXAM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={label}>Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+              className={`${field} resize-y`} placeholder="Shown to students in the exam list." />
+          </div>
+          <div>
+            <label className={label}>Instructions</label>
+            <textarea value={instructions} onChange={e => setInstructions(e.target.value)} rows={4}
+              className={`${field} resize-y`} placeholder="Rules shown before the exam starts." />
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 2 ─────────────────────────────────────────────────────────── */}
+      {step === 2 && (
+        <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+          <div>
+            <h2 className="font-bold text-[#0B2545]">Academic Targeting</h2>
+            <p className="text-sm text-slate-500 mt-0.5">
+              This scopes the Master Question Bank in the next step.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label className={label}>Exam Category *</label>
+              <select
+                value={categoryId ?? ""}
+                onChange={e => {
+                  setCategoryId(e.target.value ? Number(e.target.value) : undefined);
+                  setPositionId(undefined); setSubjectId(undefined);
+                }}
+                className={field}
+              >
+                <option value="">Select category</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
-            <div className="p-6 lg:p-8 space-y-6 max-w-4xl">
-              <div className="space-y-2">
-                <Label>Exam Name <span className="text-red-500">*</span></Label>
-                <Input placeholder="e.g. Loksewa Section Officer - Full Mock Test 1" onChange={simulateAutoSave} />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea placeholder="Brief instructions or summary about what this exam covers..." className="h-24" onChange={simulateAutoSave} />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Exam Category <span className="text-red-500">*</span></Label>
-                  <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" onChange={simulateAutoSave}>
-                    <option>Select Category...</option>
-                    <option>Section Officer Prep</option>
-                    <option>Nayab Subba Tests</option>
-                  </select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Target Position <span className="text-red-500">*</span></Label>
-                  <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" onChange={simulateAutoSave}>
-                    <option>Select Target...</option>
-                    <option>Section Officer</option>
-                    <option>Nayab Subba</option>
-                    <option>Kharidar</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Exam Type <span className="text-red-500">*</span></Label>
-                  <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" onChange={simulateAutoSave}>
-                    <option>Mock Test</option>
-                    <option>Full-Length Test</option>
-                    <option>Chapter Test</option>
-                    <option>Previous Year Test</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Difficulty Level</Label>
-                  <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" onChange={simulateAutoSave}>
-                    <option>Mixed (Standard)</option>
-                    <option>Easy</option>
-                    <option>Medium</option>
-                    <option>Hard</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-2 pt-4">
-                <Label>Tags (Optional)</Label>
-                <Input placeholder="e.g. gk, constitution, 2080" onChange={simulateAutoSave} />
-                <p className="text-xs text-slate-400">Comma separated.</p>
-              </div>
+            <div>
+              <label className={label}>Position / Level *</label>
+              <select
+                value={positionId ?? ""}
+                onChange={e => { setPositionId(e.target.value ? Number(e.target.value) : undefined); setSubjectId(undefined); }}
+                disabled={!categoryId}
+                className={`${field} disabled:bg-slate-50`}
+              >
+                <option value="">Select position</option>
+                {positions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={label}>Subject</label>
+              <select
+                value={subjectId ?? ""}
+                onChange={e => setSubjectId(e.target.value ? Number(e.target.value) : undefined)}
+                disabled={!positionId}
+                className={`${field} disabled:bg-slate-50`}
+              >
+                <option value="">All subjects</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* STEP 2: Academic Targeting */}
-        {currentStep === 2 && (
-          <div className="animate-in fade-in">
-             <div className="p-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="font-bold text-[#0B2545]">Academic Targeting</h2>
-              <p className="text-xs text-slate-500">Map this exam to the syllabus structure to enable deep analytics.</p>
-            </div>
-            <div className="p-6 lg:p-8 space-y-8 max-w-4xl">
-              
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex gap-3">
-                <Target className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-blue-900 text-sm">Why target academics?</h4>
-                  <p className="text-xs text-blue-800 mt-1">Linking an exam to specific Subjects and Chapters helps generate accurate "Topic Weakness" analytics for students after they finish the test.</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-base font-bold text-[#0B2545]">Target Subjects</Label>
-                    <span className="text-xs text-blue-600 cursor-pointer hover:underline">Select All</span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    <label className="flex items-center gap-2 p-3 border border-blue-500 bg-blue-50 rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded text-blue-600" defaultChecked />
-                      <span className="text-sm font-medium text-blue-900">General Knowledge</span>
-                    </label>
-                    <label className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                      <input type="checkbox" className="w-4 h-4 rounded" />
-                      <span className="text-sm font-medium text-slate-700">IQ & Reasoning</span>
-                    </label>
-                    <label className="flex items-center gap-2 p-3 border border-blue-500 bg-blue-50 rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded text-blue-600" defaultChecked />
-                      <span className="text-sm font-medium text-blue-900">Constitution</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-base font-bold text-[#0B2545]">Target Chapters (Filtered by selected subjects)</Label>
-                    <span className="text-xs text-blue-600 cursor-pointer hover:underline">Select All</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2">
-                    <label className="flex items-start gap-2 p-3 border border-blue-500 bg-blue-50 rounded-lg cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded text-blue-600 mt-0.5" defaultChecked />
-                      <div>
-                        <span className="text-sm font-medium text-blue-900 block">Geography of Nepal</span>
-                        <span className="text-xs text-blue-700">General Knowledge</span>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                      <input type="checkbox" className="w-4 h-4 rounded mt-0.5" />
-                      <div>
-                        <span className="text-sm font-medium text-slate-700 block">History of Nepal</span>
-                        <span className="text-xs text-slate-500">General Knowledge</span>
-                      </div>
-                    </label>
-                    <label className="flex items-start gap-2 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                      <input type="checkbox" className="w-4 h-4 rounded mt-0.5" />
-                      <div>
-                        <span className="text-sm font-medium text-slate-700 block">Fundamental Rights</span>
-                        <span className="text-xs text-slate-500">Constitution</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
+      {/* ── Step 3 ─────────────────────────────────────────────────────────── */}
+      {step === 3 && (
+        examId ? (
+          <QuestionSelectionWorkspace
+            examinationId={examId}
+            defaultSubjectId={subjectId ?? null}
+            onSelectionChange={handleSelectionChange}
+          />
+        ) : (
+          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
+            <p className="font-semibold text-slate-700">Save the draft first.</p>
+            <p className="text-sm text-slate-500 mt-1">
+              Questions attach to a real examination record, so complete steps 1 and 2.
+            </p>
           </div>
-        )}
+        )
+      )}
 
-        {/* STEP 3: Question Selection */}
-        {currentStep === 3 && (
-          <div className="animate-in fade-in flex flex-col lg:flex-row h-full min-h-[600px]">
-             
-            {/* Left Column: Bank Selection */}
-            <div className="w-full lg:w-1/2 border-r border-slate-200 flex flex-col bg-slate-50">
-              <div className="p-4 border-b border-slate-200 bg-white">
-                <h2 className="font-bold text-[#0B2545]">Master Question Bank</h2>
-                <div className="flex items-center gap-2 mt-3">
-                  <Input placeholder="Search questions..." className="h-8" />
-                  <Button variant="outline" size="icon" className="h-8 w-8 shrink-0"><Filter className="w-4 h-4" /></Button>
-                </div>
+      {/* ── Step 4 ─────────────────────────────────────────────────────────── */}
+      {step === 4 && (
+        <div className="space-y-5">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+            <h2 className="font-bold text-[#0B2545]">Scoring &amp; Timing</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div>
+                <label className={label}>Time Limit (minutes) *</label>
+                <input type="number" min={1} value={timeLimit}
+                  onChange={e => setTimeLimit(Math.max(1, Number(e.target.value) || 1))} className={field} />
               </div>
-              
-              <div className="p-4 flex-1 overflow-y-auto space-y-3">
-                <div className="bg-white border border-slate-200 rounded-lg p-3 hover:border-blue-400 cursor-pointer transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <Badge variant="secondary" className="text-[10px]">MCQ</Badge>
-                    <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200 bg-emerald-50">Easy</Badge>
-                  </div>
-                  <p className="text-sm font-medium text-slate-800 line-clamp-2">When was the current Constitution of Nepal promulgated?</p>
-                  <p className="text-xs text-slate-500 mt-2">Constitution • History</p>
-                  <Button size="sm" variant="outline" className="w-full mt-3 h-7 text-xs text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100">
-                    <PlusCircle className="w-3 h-3 mr-1" /> Add to Exam
-                  </Button>
-                </div>
-
-                <div className="bg-white border border-slate-200 rounded-lg p-3 hover:border-blue-400 cursor-pointer transition-colors">
-                  <div className="flex justify-between items-start mb-2">
-                    <Badge variant="secondary" className="text-[10px]">MCQ</Badge>
-                    <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 bg-amber-50">Medium</Badge>
-                  </div>
-                  <p className="text-sm font-medium text-slate-800 line-clamp-2">Which part of the constitution contains Fundamental Rights?</p>
-                  <p className="text-xs text-slate-500 mt-2">Constitution • Fundamental Rights</p>
-                  <Button size="sm" variant="outline" className="w-full mt-3 h-7 text-xs text-blue-600 border-blue-200 bg-blue-50 hover:bg-blue-100">
-                    <PlusCircle className="w-3 h-3 mr-1" /> Add to Exam
-                  </Button>
-                </div>
+              <div>
+                <label className={label}>Marks Per Question</label>
+                <input type="number" min={0.5} step={0.5} value={marksPerQuestion}
+                  onChange={e => setMarksPerQuestion(Number(e.target.value) || 1)} className={field} />
               </div>
-
-              <div className="p-4 border-t border-slate-200 bg-white">
-                <Button variant="outline" className="w-full text-slate-600">
-                  <Shuffle className="w-4 h-4 mr-2" /> Generate Random Set
-                </Button>
+              <div>
+                <label className={label}>Passing Marks</label>
+                <input type="number" min={0} value={passingMarks}
+                  onChange={e => setPassingMarks(Number(e.target.value) || 0)} className={field} />
               </div>
             </div>
-
-            {/* Right Column: Exam Builder */}
-            <div className="w-full lg:w-1/2 flex flex-col bg-white">
-              <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                <div>
-                  <h2 className="font-bold text-[#0B2545]">Exam Questions</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">2 Selected • Total 2 Marks</p>
-                </div>
-                <Button variant="ghost" size="sm" className="text-slate-500 hover:text-red-600">Clear All</Button>
-              </div>
-              
-              <div className="p-4 flex-1 overflow-y-auto space-y-2">
-                
-                {/* Selected Question Row 1 */}
-                <div className="border border-slate-200 rounded-md p-3 flex items-start gap-3 bg-white group hover:shadow-sm transition-all">
-                  <div className="cursor-grab mt-1 opacity-40 group-hover:opacity-100">
-                    <GripVertical className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Q1</span>
-                      <div className="flex items-center gap-2">
-                        <Input type="number" defaultValue="1" className="w-14 h-6 text-xs text-center px-1" />
-                        <span className="text-xs text-slate-500">Marks</span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-slate-800 mt-1 line-clamp-2">What is the height of Mt. Everest?</p>
-                    <div className="flex justify-between items-center mt-3">
-                      <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">Geography</span>
-                      <span className="text-[10px] text-red-500 cursor-pointer hover:underline">Remove</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Selected Question Row 2 */}
-                <div className="border border-slate-200 rounded-md p-3 flex items-start gap-3 bg-white group hover:shadow-sm transition-all">
-                  <div className="cursor-grab mt-1 opacity-40 group-hover:opacity-100">
-                    <GripVertical className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Q2</span>
-                      <div className="flex items-center gap-2">
-                        <Input type="number" defaultValue="1" className="w-14 h-6 text-xs text-center px-1" />
-                        <span className="text-xs text-slate-500">Marks</span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-slate-800 mt-1 line-clamp-2">Who was the first elected Prime Minister of Nepal?</p>
-                    <div className="flex justify-between items-center mt-3">
-                      <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">History</span>
-                      <span className="text-[10px] text-red-500 cursor-pointer hover:underline">Remove</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
+            <p className="text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+              {selection.count} question(s) assigned · <strong>{selection.marks}</strong> total marks.
+              Totals come from the questions on the exam and are recalculated server-side.
+            </p>
           </div>
-        )}
 
-        {/* STEP 4: Configuration */}
-        {currentStep === 4 && (
-          <div className="animate-in fade-in">
-             <div className="p-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="font-bold text-[#0B2545]">Exam Configuration</h2>
-              <p className="text-xs text-slate-500">Set rules for duration, scoring, behavior, and access.</p>
-            </div>
-            
-            <div className="p-6 lg:p-8 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl">
-              
-              {/* Settings Column 1 */}
-              <div className="space-y-8">
-                
-                {/* Scoring & Duration */}
-                <div className="space-y-4">
-                  <h3 className="font-bold border-b pb-2 flex items-center gap-2"><Settings className="w-4 h-4 text-slate-400" /> Scoring & Duration</h3>
-                  
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
-                    <div>
-                      <p className="font-medium text-sm">Time Limit</p>
-                      <p className="text-xs text-slate-500">Should this exam have a countdown timer?</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={durationLimited} onChange={(e) => setDurationLimited(e.target.checked)} className="sr-only peer" />
-                      <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-                  
-                  {durationLimited && (
-                    <div className="pl-4 border-l-2 border-blue-200 space-y-2">
-                      <Label>Duration (Minutes)</Label>
-                      <Input type="number" defaultValue="60" className="w-32" />
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
-                    <div>
-                      <p className="font-medium text-sm">Negative Marking</p>
-                      <p className="text-xs text-slate-500">Deduct marks for incorrect answers.</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" checked={negativeMarking} onChange={(e) => setNegativeMarking(e.target.checked)} className="sr-only peer" />
-                      <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                    </label>
-                  </div>
-
-                  {negativeMarking && (
-                    <div className="pl-4 border-l-2 border-blue-200 space-y-2">
-                      <Label>Deduction per incorrect answer (e.g. 0.25)</Label>
-                      <Input type="number" step="0.1" defaultValue="0.25" className="w-32" />
-                      <p className="text-xs text-slate-500 flex items-center gap-1"><HelpCircle className="w-3 h-3" /> Correct: +1, Incorrect: -0.25</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Attempt Settings */}
-                <div className="space-y-4">
-                  <h3 className="font-bold border-b pb-2 flex items-center gap-2"><Target className="w-4 h-4 text-slate-400" /> Attempt Settings</h3>
-                  
-                  <div className="space-y-2">
-                    <Label>Maximum Attempts per Student</Label>
-                    <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
-                      <option>1 (Strict Test)</option>
-                      <option>2</option>
-                      <option>3</option>
-                      <option>Unlimited (Practice Mode)</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Retake Delay</Label>
-                    <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
-                      <option>No Delay</option>
-                      <option>24 Hours</option>
-                      <option>1 Week</option>
-                    </select>
-                  </div>
-                </div>
-
+          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+            <h2 className="font-bold text-[#0B2545]">Attempt Rules</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className={label}>Max Attempts <span className="text-slate-400">(0 = unlimited)</span></label>
+                <input type="number" min={0} value={maxAttempts}
+                  onChange={e => setMaxAttempts(Math.max(0, Number(e.target.value) || 0))} className={field} />
               </div>
-
-              {/* Settings Column 2 */}
-              <div className="space-y-8">
-                
-                {/* Result & Behavior Settings */}
-                <div className="space-y-4">
-                  <h3 className="font-bold border-b pb-2 flex items-center gap-2"><Eye className="w-4 h-4 text-slate-400" /> Behavior & Results</h3>
-                  
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded" defaultChecked />
-                      <div>
-                        <span className="text-sm font-medium text-slate-800 block">Randomize Question Order</span>
-                        <span className="text-xs text-slate-500">Each student gets a different sequence.</span>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded" defaultChecked />
-                      <div>
-                        <span className="text-sm font-medium text-slate-800 block">Show Result Immediately</span>
-                        <span className="text-xs text-slate-500">Uncheck to withhold results until manually published.</span>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded" defaultChecked />
-                      <div>
-                        <span className="text-sm font-medium text-slate-800 block">Show Correct Answers & Explanations</span>
-                        <span className="text-xs text-slate-500">Students can review their mistakes after submission.</span>
-                      </div>
-                    </label>
-                    <label className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                      <input type="checkbox" className="w-4 h-4 rounded" defaultChecked />
-                      <div>
-                        <span className="text-sm font-medium text-slate-800 block">Calculate Rank & Percentile</span>
-                        <span className="text-xs text-slate-500">Enables leaderboard features.</span>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                {/* Access & Scheduling */}
-                <div className="space-y-4">
-                  <h3 className="font-bold border-b pb-2 flex items-center gap-2"><Lock className="w-4 h-4 text-slate-400" /> Access & Schedule</h3>
-                  
-                  <div className="space-y-2">
-                    <Label>Access Type</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div 
-                        className={`border rounded-lg p-3 cursor-pointer transition-colors ${access === 'Free' ? 'border-emerald-500 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`}
-                        onClick={() => setAccess("Free")}
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-[#0B2545]">Free</span>
-                          {access === 'Free' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
-                        </div>
-                      </div>
-                      <div 
-                        className={`border rounded-lg p-3 cursor-pointer transition-colors ${access === 'Premium' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
-                        onClick={() => setAccess("Premium")}
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-bold text-[#0B2545]">Premium</span>
-                          {access === 'Premium' && <CheckCircle2 className="w-4 h-4 text-amber-600" />}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {access === "Premium" && (
-                    <div className="space-y-2 pt-2">
-                      <Label>Linked Marketplace Product</Label>
-                      <select className="flex h-10 w-full rounded-md border border-slate-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 border-amber-200">
-                        <option>Select Product...</option>
-                        <option>Section Officer Mega Test Series</option>
-                      </select>
-                      <p className="text-xs text-amber-700">Students must purchase this product to access the exam.</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-2 pt-4">
-                    <Label>Schedule (Optional)</Label>
-                    <div className="flex gap-2">
-                      <Input type="datetime-local" className="text-sm" />
-                      <span className="py-2 text-slate-400">to</span>
-                      <Input type="datetime-local" className="text-sm" />
-                    </div>
-                    <p className="text-xs text-slate-500">Leave blank to make available immediately upon publishing.</p>
-                  </div>
-
-                </div>
-
+              <div>
+                <label className={label}>Result Visibility</label>
+                <select value={resultVisibility}
+                  onChange={e => setResultVisibility(e.target.value as Examination["result_visibility"])}
+                  className={field}>
+                  <option value="immediate">Immediately</option>
+                  <option value="after_end">After exam ends</option>
+                  <option value="manual">After manual review</option>
+                </select>
               </div>
-
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {([
+                ["Allow resume", allowResume, setAllowResume],
+                ["Auto-submit on timeout", autoSubmit, setAutoSubmit],
+                ["Show correct answers", showAnswers, setShowAnswers],
+                ["Randomize question order", randomizeQuestions, setRandomizeQuestions],
+                ["Randomize MCQ options", randomizeOptions, setRandomizeOptions],
+                ["Negative marking", negativeMarking, setNegativeMarking],
+              ] as [string, boolean, (v: boolean) => void][]).map(([text, value, setter]) => (
+                <label key={text} className="flex items-center gap-3 cursor-pointer text-sm text-slate-700">
+                  <input type="checkbox" checked={value} onChange={e => setter(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#0B2545]" />
+                  {text}
+                </label>
+              ))}
+            </div>
+            {negativeMarking && (
+              <div className="pt-1">
+                <label className={label}>Negative Marking Value</label>
+                <input type="number" min={0} step={0.05} value={negativeValue}
+                  onChange={e => setNegativeValue(Number(e.target.value) || 0)}
+                  className={`${field} md:w-48`} />
+              </div>
+            )}
           </div>
-        )}
 
-      </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
+            <h2 className="font-bold text-[#0B2545]">Availability</h2>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className={label}>Opens</label>
+                <input type="datetime-local" value={startTime}
+                  onChange={e => setStartTime(e.target.value)} className={field} />
+              </div>
+              <span className="text-slate-400 pb-3">to</span>
+              <div>
+                <label className={label}>Closes</label>
+                <input type="datetime-local" value={endTime}
+                  onChange={e => setEndTime(e.target.value)} className={field} />
+              </div>
+            </div>
+            {startTime && endTime && new Date(endTime) <= new Date(startTime) && (
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4" /> The closing time must be after the opening time.
+              </p>
+            )}
+            <p className="text-xs text-slate-500">
+              Leave both blank to make the exam available as soon as it is published.
+            </p>
+          </div>
+        </div>
+      )}
 
-      {/* Footer Navigation */}
-      <div className="flex items-center justify-between mt-6 pt-6 border-t border-slate-200">
-        <Button variant="outline" onClick={handlePrev} disabled={currentStep === 1} className="w-24">
+      {/* Footer */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-5 border-t border-slate-200">
+        <button
+          onClick={() => setStep(s => Math.max(1, s - 1))}
+          disabled={step === 1}
+          className="px-5 py-2.5 border border-slate-200 rounded-lg font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+        >
           Back
-        </Button>
-        <div className="flex gap-3">
-          <Button variant="ghost" className="text-slate-500" onClick={simulateAutoSave}>Save Draft</Button>
-          {currentStep < 4 ? (
-            <Button onClick={handleNext} className="w-32 bg-[#0B2545] hover:bg-[#163E6C] text-white">
-              Next Step <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
+        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => persist()}
+            disabled={saving || publishing}
+            className="px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg font-medium disabled:opacity-50 flex items-center gap-2"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Save Draft
+          </button>
+          {step < 4 ? (
+            <button
+              onClick={goNext}
+              disabled={saving}
+              className="px-6 py-2.5 bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-50 text-white rounded-lg font-medium flex items-center gap-1"
+            >
+              Next Step <ChevronRight className="w-4 h-4" />
+            </button>
           ) : (
-            <Button className="w-32 bg-emerald-600 hover:bg-emerald-700 text-white">
+            <button
+              onClick={publish}
+              disabled={publishing || saving}
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg font-medium flex items-center gap-2"
+            >
+              {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Rocket className="w-4 h-4" />}
               Publish Exam
-            </Button>
+            </button>
           )}
         </div>
       </div>
-
     </div>
   );
 }

@@ -117,3 +117,60 @@ export async function apiClient<T>(
 
   return response.json();
 }
+
+/**
+ * Downloads a file from an authenticated endpoint and saves it via the browser.
+ *
+ * A plain link or window.open() navigates without the Authorization header, so
+ * protected downloads come back as a 401 page. This fetches the bytes with the
+ * bearer token (retrying once after a refresh, like apiClient) and hands the
+ * resulting blob to a temporary object URL.
+ */
+export async function downloadFile(
+  endpoint: string,
+  fallbackFilename: string
+): Promise<void> {
+  const url = `${API_URL}${endpoint}`;
+  const token = getAuthToken();
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response = await fetch(url, { headers });
+
+  if (response.status === 401 && token) {
+    const newToken = await refreshToken();
+    if (newToken) {
+      headers.set("Authorization", `Bearer ${newToken}`);
+      response = await fetch(url, { headers });
+    }
+  }
+
+  if (!response.ok) {
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = { detail: response.statusText };
+    }
+    throw new ApiError(response.status, errorData);
+  }
+
+  // Prefer the server's filename from Content-Disposition when it sends one.
+  let filename = fallbackFilename;
+  const disposition = response.headers.get("Content-Disposition");
+  const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (match?.[1]) filename = decodeURIComponent(match[1]);
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}

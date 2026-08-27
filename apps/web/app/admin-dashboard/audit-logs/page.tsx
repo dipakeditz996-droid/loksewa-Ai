@@ -99,42 +99,42 @@ export default function AuditLogsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
             <ShieldAlert className="w-6 h-6 text-[#D4A72C]" />
             Audit Logs
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Monitor system activity and track administrative actions.</p>
+          <p className="text-slate-500 text-sm mt-1">Monitor system activity and track administrative actions.</p>
         </div>
       </div>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm">
-          <p className="text-slate-400 text-sm font-medium mb-1">Total Events</p>
-          <p className="text-2xl font-bold text-white">{totalLogs.toLocaleString()}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-slate-600 text-sm font-medium mb-1">Total Events</p>
+          <p className="text-2xl font-bold text-[#0B2545]">{totalLogs.toLocaleString()}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-blue-500">
-          <p className="text-slate-400 text-sm font-medium mb-1">User Activities</p>
-          <p className="text-2xl font-bold text-blue-400">{userRegistrationCount}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">User Activities</p>
+          <p className="text-2xl font-bold text-blue-600">{userRegistrationCount}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-purple-500">
-          <p className="text-slate-400 text-sm font-medium mb-1">Content Activities</p>
-          <p className="text-2xl font-bold text-purple-400">{contentCreatedCount}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-purple-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">Content Activities</p>
+          <p className="text-2xl font-bold text-purple-600">{contentCreatedCount}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-emerald-500">
-          <p className="text-slate-400 text-sm font-medium mb-1">Evaluations</p>
-          <p className="text-2xl font-bold text-emerald-400">{evaluationCount}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">Evaluations</p>
+          <p className="text-2xl font-bold text-emerald-600">{evaluationCount}</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-sm space-y-4">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Search by user, email, or action details..."
-              className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600"
+              className="pl-9 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-600"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -142,7 +142,7 @@ export default function AuditLogsPage() {
           <select
             value={actionFilter}
             onChange={(e) => setActionFilter(e.target.value)}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
           >
             {actionOptions.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -152,54 +152,54 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Audit Logs Table */}
-      <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-700 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-800 hover:bg-slate-800">
-                <TableHead className="text-white">Timestamp</TableHead>
-                <TableHead className="text-white">Action</TableHead>
-                <TableHead className="text-white">User</TableHead>
-                <TableHead className="text-white">Details</TableHead>
-                <TableHead className="text-white">Severity</TableHead>
-                <TableHead className="text-right text-white">Actions</TableHead>
+              <TableRow className="bg-slate-50 hover:bg-slate-50">
+                <TableHead className="text-slate-700">Timestamp</TableHead>
+                <TableHead className="text-slate-700">Action</TableHead>
+                <TableHead className="text-slate-700">User</TableHead>
+                <TableHead className="text-slate-700">Details</TableHead>
+                <TableHead className="text-slate-700">Severity</TableHead>
+                <TableHead className="text-right text-slate-700">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center bg-slate-900">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-600" />
+                  <TableCell colSpan={6} className="h-32 text-center bg-white">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
                   </TableCell>
                 </TableRow>
               ) : logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-slate-500 bg-slate-900">
+                  <TableCell colSpan={6} className="h-32 text-center text-slate-500 bg-white">
                     No audit logs found.
                   </TableCell>
                 </TableRow>
               ) : (
                 logs.map((log, idx) => (
-                  <TableRow key={idx} className="hover:bg-slate-800/50 border-b border-slate-700">
+                  <TableRow key={idx} className="hover:bg-slate-50/50 border-b border-slate-200">
                     <TableCell>
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-slate-600">
                         {new Date(log.timestamp).toLocaleString()}
                       </span>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {getActionIcon(log.action)}
-                        <span className="text-sm text-white font-medium">{log.actionLabel}</span>
+                        <span className="text-sm text-slate-700 font-medium">{log.actionLabel}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="font-semibold text-white">{log.user}</p>
-                        <p className="text-xs text-slate-500">{log.email}</p>
+                        <p className="font-semibold text-[#0B2545]">{log.user}</p>
+                        <p className="text-xs text-slate-600">{log.email}</p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <p className="text-sm text-slate-400 max-w-xs truncate">
+                      <p className="text-sm text-slate-600 max-w-xs truncate">
                         {log.details}
                       </p>
                     </TableCell>
@@ -211,14 +211,14 @@ export default function AuditLogsPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-700">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100">
                             <span className="sr-only">Open menu</span>
                             <MoreVertical className="h-4 w-4 text-slate-500" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
-                          <DropdownMenuLabel className="text-slate-300">Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer text-slate-300 hover:bg-slate-700">
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem className="cursor-pointer">
                             <Eye className="w-4 h-4 mr-2" /> View Details
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -240,11 +240,10 @@ export default function AuditLogsPage() {
             size="sm"
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
           >
             Previous
           </Button>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-slate-600">
             Page {currentPage} of {Math.ceil(totalLogs / 20)}
           </span>
           <Button
@@ -252,7 +251,6 @@ export default function AuditLogsPage() {
             size="sm"
             disabled={currentPage >= Math.ceil(totalLogs / 20)}
             onClick={() => setCurrentPage(p => p + 1)}
-            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
           >
             Next
           </Button>
@@ -260,9 +258,9 @@ export default function AuditLogsPage() {
       )}
 
       {/* Info Banner */}
-      <div className="bg-blue-900 border border-blue-800 rounded-xl p-4 text-sm text-blue-300 space-y-2">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700 space-y-2">
         <p className="font-semibold">About Audit Logs</p>
-        <p className="text-blue-400">
+        <p className="text-blue-700">
           This audit log aggregates system activities including user registrations, content creation, and evaluation actions.
           Events are collected from multiple sources and displayed in chronological order for security and compliance purposes.
         </p>

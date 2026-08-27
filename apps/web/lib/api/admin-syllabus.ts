@@ -93,16 +93,20 @@ export const adminSyllabusApi = {
   deleteCategory: (id: number) => apiClient(`${SYLLABUS_BASE}/categories/${id}/`, { method: "DELETE" }),
   reorderCategories: (data: ReorderItem[]) => apiClient(`${SYLLABUS_BASE}/categories/reorder/`, { method: "PATCH", body: JSON.stringify(data) }),
 
-  // Positions
-  getPositions: (categoryId?: number) => apiClient<AdminPosition[]>(`${SYLLABUS_BASE}/positions/${categoryId ? `?category=${categoryId}` : ''}`),
-  getPosition: (id: number) => apiClient<AdminPosition>(`${SYLLABUS_BASE}/positions/${id}/`),
-  createPosition: (data: Partial<AdminPosition>) => apiClient<AdminPosition>(`${SYLLABUS_BASE}/positions/`, { method: "POST", body: JSON.stringify(data) }),
-  updatePosition: (id: number, data: Partial<AdminPosition>) => apiClient<AdminPosition>(`${SYLLABUS_BASE}/positions/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
-  deletePosition: (id: number) => apiClient(`${SYLLABUS_BASE}/positions/${id}/`, { method: "DELETE" }),
-  reorderPositions: (data: ReorderItem[]) => apiClient(`${SYLLABUS_BASE}/positions/reorder/`, { method: "PATCH", body: JSON.stringify(data) }),
+  // Positions.
+  // A "Position / Level" in the syllabus tree is the Exam model, which lives at
+  // /syllabus/exams/. Do not point these at /syllabus/positions/ — that serves
+  // the standalone Position list used by the Positions admin page, and its ids
+  // are not valid for the `exam` field on question sets or exams.
+  getPositions: (categoryId?: number) => apiClient<AdminPosition[]>(`${SYLLABUS_BASE}/exams/${categoryId ? `?category=${categoryId}` : ''}`),
+  getPosition: (id: number) => apiClient<AdminPosition>(`${SYLLABUS_BASE}/exams/${id}/`),
+  createPosition: (data: Partial<AdminPosition>) => apiClient<AdminPosition>(`${SYLLABUS_BASE}/exams/`, { method: "POST", body: JSON.stringify(data) }),
+  updatePosition: (id: number, data: Partial<AdminPosition>) => apiClient<AdminPosition>(`${SYLLABUS_BASE}/exams/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
+  deletePosition: (id: number) => apiClient(`${SYLLABUS_BASE}/exams/${id}/`, { method: "DELETE" }),
+  reorderPositions: (data: ReorderItem[]) => apiClient(`${SYLLABUS_BASE}/exams/reorder/`, { method: "PATCH", body: JSON.stringify(data) }),
 
   // Subjects
-  getSubjects: (positionId?: number) => apiClient<AdminSubject[]>(`${SYLLABUS_BASE}/subjects/${positionId ? `?position=${positionId}` : ''}`),
+  getSubjects: (positionId?: number) => apiClient<AdminSubject[]>(`${SYLLABUS_BASE}/subjects/${positionId ? `?exam=${positionId}` : ''}`),
   getSubject: (id: number) => apiClient<AdminSubject>(`${SYLLABUS_BASE}/subjects/${id}/`),
   createSubject: (data: Partial<AdminSubject>) => apiClient<AdminSubject>(`${SYLLABUS_BASE}/subjects/`, { method: "POST", body: JSON.stringify(data) }),
   updateSubject: (id: number, data: Partial<AdminSubject>) => apiClient<AdminSubject>(`${SYLLABUS_BASE}/subjects/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),

@@ -2,6 +2,60 @@ from django.db import models
 from core.models import User
 from exams.models import Exam, Subject, Topic
 
+
+class MaterialCategory(models.Model):
+    """A reusable label for study materials, e.g. "Current Affairs".
+
+    Sits alongside the exam/subject/topic hierarchy rather than replacing it:
+    the hierarchy says where a material belongs in the syllabus, a category says
+    what kind of resource it is.
+    """
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(max_length=140, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    color = models.CharField(max_length=20, blank=True, help_text="Hex code, e.g. #0B2545")
+    is_active = models.BooleanField(default=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name_plural = 'Material categories'
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
+
+
+class MaterialCollection(models.Model):
+    """A hand-curated bundle of study materials, e.g. a revision pack."""
+    name = models.CharField(max_length=180)
+    description = models.TextField(blank=True)
+    color = models.CharField(max_length=20, blank=True, help_text="Hex code, e.g. #D4A72C")
+    materials = models.ManyToManyField(
+        'StudyMaterial', related_name='collections', blank=True
+    )
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='created_material_collections',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return self.name
+
+
 class StudyMaterial(models.Model):
     MATERIAL_TYPES = (
         ('notes', 'Notes'),
@@ -38,7 +92,11 @@ class StudyMaterial(models.Model):
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='materials')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='materials')
     topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True, related_name='materials')
-    
+    category = models.ForeignKey(
+        MaterialCategory, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='materials',
+    )
+
     description = models.TextField(blank=True, help_text="Short description for the list view")
     content = models.TextField(blank=True, help_text="Rich text content (HTML/Markdown)")
     

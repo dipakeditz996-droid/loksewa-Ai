@@ -8,6 +8,7 @@ import {
   CheckSquare, Zap, RefreshCw, Search, AlertTriangle
 } from 'lucide-react';
 import { adminCollectionsApi, QuestionCollection, CollectionQuestion } from '@/lib/api/admin-collections';
+import { adminQuestionApi } from '@/lib/api/admin-questions';
 import { toast } from 'react-hot-toast';
 
 // ---- Mini Add Questions Modal ----
@@ -25,11 +26,9 @@ function AddQuestionsModal({ collectionId, onDone, onClose }: AddQuestionsModalP
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch('/api/admin/questions/?page_size=200', {
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access')}` },
-    })
-      .then(r => r.json())
-      .then(d => setQuestions(d.results || d))
+    adminQuestionApi
+      .getQuestions({ page_size: 200 })
+      .then(d => setQuestions(Array.isArray(d) ? d : (d.results || [])))
       .catch(() => toast.error('Failed to load questions'))
       .finally(() => setLoading(false));
   }, []);

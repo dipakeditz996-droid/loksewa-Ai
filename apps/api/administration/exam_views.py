@@ -8,8 +8,9 @@ import copy
 
 from exams.models import Examination, ExaminationAttempt, QuestionSet
 from .exam_serializers import ExaminationSerializer, ExaminationAttemptSerializer
+from .examination_question_views import ExaminationQuestionMixin
 
-class ExaminationViewSet(viewsets.ModelViewSet):
+class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
     queryset = Examination.objects.all().select_related('category', 'exam', 'subject', 'question_set').order_by('-created_at')
     serializer_class = ExaminationSerializer
     permission_classes = [IsAdminUser]
@@ -40,40 +41,42 @@ class ExaminationViewSet(viewsets.ModelViewSet):
     def publish(self, request, pk=None):
         exam = self.get_object()
         
-        # Validation
+        # Questions come from the canonical ExaminationQuestion assignment, not
+        # from a QuestionSet — the builder attaches them directly.
+        assigned = exam.examination_questions.count()
+
         errors = []
-        if not exam.question_set:
-            errors.append("A Question Set must be selected.")
-        if exam.total_questions < 1:
-            errors.append("Total Questions must be greater than 0.")
+        if not exam.title or not exam.title.strip():
+            errors.append("The exam needs a title.")
+        if not exam.category_id or not exam.exam_id:
+            errors.append("Academic targeting is incomplete: choose a category and a position.")
+        if assigned < 1:
+            errors.append("Add at least one question before publishing.")
         if exam.time_limit < 1:
             errors.append("Time Limit must be greater than 0.")
         if exam.total_marks < 1:
             errors.append("Total Marks must be greater than 0.")
-            
-        if exam.question_set and exam.question_set.question_set_questions.count() < exam.total_questions:
-            errors.append(f"The selected Question Set only has {exam.question_set.question_set_questions.count()} questions, but {exam.total_questions} are required.")
-            
+        if exam.passing_marks and exam.passing_marks > exam.total_marks:
+            errors.append("Passing Marks cannot exceed Total Marks.")
+        if exam.start_time and exam.end_time and exam.end_time <= exam.start_time:
+            errors.append("The end time must come after the start time.")
+        if exam.total_questions and assigned < exam.total_questions:
+            errors.append(
+                f"This exam targets {exam.total_questions} question(s) but only {assigned} "
+                f"are assigned."
+            )
+
         if errors:
-            return Response({"error": "Cannot publish exam.", "details": errors}, status=status.HTTP_400_BAD_REQUEST)
-            
+            return Response(
+                {"error": "Cannot publish exam.", "details": errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 'published' is the only valid published state in Examination.STATUS_CHOICES;
+        # scheduling is expressed by start_time/end_time, not by extra statuses.
         exam.status = 'published'
-        exam.save()
-        
-        # If start_time is set, determine if it should be 'scheduled' or 'live'
-        # But wait, the choices are draft, scheduled, live, completed, archived.
-        if exam.start_time:
-            if exam.start_time > timezone.now():
-                exam.status = 'scheduled'
-            elif exam.end_time and exam.end_time < timezone.now():
-                exam.status = 'completed'
-            else:
-                exam.status = 'live'
-        else:
-            exam.status = 'live'
-            
-        exam.save()
-        
+        exam.save(update_fields=['status', 'updated_at'])
+
         serializer = self.get_serializer(exam)
         return Response(serializer.data)
 
@@ -87,35 +90,39 @@ class ExaminationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'])
     def preview(self, request, pk=None):
+        """Student's-eye view of the exam, built from its assigned questions."""
         exam = self.get_object()
-        if not exam.question_set:
-            return Response({"error": "No Question Set attached."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        # Serialize questions for preview without correct options
-        questions = []
-        for qsq in exam.question_set.question_set_questions.select_related('question').all():
-            q = qsq.question
-            q_data = {
-                'id': q.id,
-                'text': q.text,
-                'question_type': q.question_type,
-                'option_a': q.option_a,
-                'option_b': q.option_b,
-                'option_c': q.option_c,
-                'option_d': q.option_d,
-                'marks': qsq.marks,
-            }
-            questions.append(q_data)
-            
-        data = {
+
+        rows = exam.examination_questions.select_related('question').order_by('order', 'id')
+        if not rows.exists():
+            return Response(
+                {"error": "This exam has no questions assigned yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Correct answers are deliberately omitted — this mirrors what a student sees.
+        questions = [{
+            'id': row.question.id,
+            'question_id': row.question.question_id,
+            'text': row.question.text,
+            'question_type': row.question.question_type,
+            'difficulty': row.question.difficulty,
+            'option_a': row.question.option_a,
+            'option_b': row.question.option_b,
+            'option_c': row.question.option_c,
+            'option_d': row.question.option_d,
+            'marks': row.marks,
+            'order': row.order,
+        } for row in rows]
+
+        return Response({
             'title': exam.title,
             'instructions': exam.instructions,
             'time_limit': exam.time_limit,
             'total_marks': exam.total_marks,
-            'total_questions': exam.total_questions,
-            'questions': questions
-        }
-        return Response(data)
+            'total_questions': len(questions),
+            'questions': questions,
+        })
 
 
     @action(detail=True, methods=['get'])

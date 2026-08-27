@@ -22,6 +22,14 @@ class CSVImport(models.Model):
     admin = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
     file_name = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    # Syllabus placement and defaults are chosen in the UI, not in the CSV, and
+    # apply to every row of the file.
+    topic = models.ForeignKey(
+        'exams.Topic', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='csv_imports',
+    )
+    question_type = models.CharField(max_length=20, default='mcq')
+    difficulty = models.CharField(max_length=10, default='medium')
     total_rows = models.IntegerField(default=0)
     valid_rows = models.IntegerField(default=0)
     duplicate_rows = models.IntegerField(default=0)

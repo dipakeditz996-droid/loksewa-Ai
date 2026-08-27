@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Toaster } from "react-hot-toast";
 import {
   LayoutDashboard,
   Users,
@@ -410,6 +411,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {children}
         </main>
       </div>
+
+      {/* Admin pages call toast.success/toast.error throughout; without this
+          mount those calls render nothing and failures look like silence. */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: { background: "#0B2545", color: "#fff", fontSize: "14px" },
+          success: { iconTheme: { primary: "#D4A72C", secondary: "#0B2545" } },
+          error: { duration: 6000, style: { background: "#991B1B", color: "#fff", fontSize: "14px" } },
+        }}
+      />
     </div>
   );
 }

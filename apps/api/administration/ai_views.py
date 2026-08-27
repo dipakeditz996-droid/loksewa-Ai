@@ -17,8 +17,8 @@ class AIGenerateOptionsView(views.APIView):
             return Response({"error": "Can only generate options for MCQ questions"}, status=400)
 
         subject = "General"
-        if question.topic and question.topic.Chapter and question.topic.Chapter.subject:
-            subject = question.topic.Chapter.subject.name
+        if question.topic and question.topic.chapter and question.topic.chapter.subject:
+            subject = question.topic.chapter.subject.name
 
         ai_logic = AdminAILogic()
         generated_options = ai_logic.generate_options(question.text, subject)

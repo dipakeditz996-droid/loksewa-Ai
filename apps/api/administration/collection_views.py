@@ -54,12 +54,34 @@ class QuestionCollectionSerializer(serializers.ModelSerializer):
 
 class CollectionQuestionSerializer(serializers.ModelSerializer):
     """Lightweight question serializer for listing questions in a collection."""
-    subject_name = serializers.CharField(source='subject.name', default='', read_only=True)
-    chapter_name = serializers.CharField(source='chapter.name', default='', read_only=True)
+    # A Question reaches its subject through topic -> chapter -> subject, and
+    # Chapter titles live on `title`, so both need resolving by hand.
+    subject_name = serializers.SerializerMethodField()
+    chapter_name = serializers.SerializerMethodField()
+    topic_name = serializers.SerializerMethodField()
+
+    def get_subject_name(self, obj):
+        try:
+            return obj.topic.chapter.subject.name
+        except AttributeError:
+            return ''
+
+    def get_chapter_name(self, obj):
+        try:
+            return obj.topic.chapter.title
+        except AttributeError:
+            return ''
+
+    def get_topic_name(self, obj):
+        try:
+            return obj.topic.name
+        except AttributeError:
+            return ''
 
     class Meta:
         model = Question
-        fields = ['id', 'question_id', 'text', 'question_type', 'difficulty', 'subject_name', 'chapter_name', 'status']
+        fields = ['id', 'question_id', 'text', 'question_type', 'difficulty',
+                  'subject_name', 'chapter_name', 'topic_name', 'status']
 
 
 class QuestionCollectionViewSet(viewsets.ModelViewSet):
@@ -74,7 +96,9 @@ class QuestionCollectionViewSet(viewsets.ModelViewSet):
     def questions(self, request, pk=None):
         """Return all questions in this collection."""
         collection = self.get_object()
-        questions = collection.questions.all()
+        questions = collection.questions.select_related(
+            'topic', 'topic__chapter', 'topic__chapter__subject'
+        ).all()
         serializer = CollectionQuestionSerializer(questions, many=True)
         return Response(serializer.data)
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { adminQuestionApi, AdminQuestion, QuestionStats } from '@/lib/api/admin-questions';
 import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
 import Link from 'next/link';
@@ -37,6 +37,9 @@ export default function QuestionBankPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
 
+  // Guards against a slow earlier fetch overwriting a newer one's results.
+  const latestRequestId = useRef(0);
+
   useEffect(() => {
     fetchStats();
     fetchCollections();
@@ -44,7 +47,7 @@ export default function QuestionBankPage() {
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus]);
+  }, [page, search, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus]);
 
   const fetchStats = async () => {
     try {
@@ -65,6 +68,7 @@ export default function QuestionBankPage() {
   };
 
   const fetchQuestions = async () => {
+    const requestId = ++latestRequestId.current;
     setLoading(true);
     try {
       const data = await adminQuestionApi.getQuestions({
@@ -74,14 +78,17 @@ export default function QuestionBankPage() {
         difficulty: selectedDifficulty || undefined,
         ai_status: selectedAiStatus || undefined,
       });
+      // A slower earlier request must not overwrite a newer one's results.
+      if (requestId !== latestRequestId.current) return;
       const results = Array.isArray(data) ? data : (data.results || []);
       setQuestions(results);
       setHasMore(!Array.isArray(data) && !!data.next);
       setSelectedIds(new Set()); // clear selection on reload
     } catch (error) {
+      if (requestId !== latestRequestId.current) return;
       toast.error('Failed to load questions');
     } finally {
-      setLoading(false);
+      if (requestId === latestRequestId.current) setLoading(false);
     }
   };
 
@@ -268,14 +275,18 @@ export default function QuestionBankPage() {
             <option value="subjective">Subjective</option>
             <option value="true_false">True / False</option>
           </select>
-          <select 
-            value={selectedStatus} 
+          <select
+            value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-navy-500"
           >
             <option value="">All Statuses</option>
-            <option value="published">Published</option>
             <option value="draft">Draft</option>
+            <option value="pending_review">Pending Review</option>
+            <option value="approved">Approved</option>
+            <option value="changes_requested">Changes Requested</option>
+            <option value="rejected">Rejected</option>
+            <option value="archived">Archived</option>
           </select>
         </div>
       </div>

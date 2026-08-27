@@ -9,12 +9,14 @@ from .question_serializers import AdminQuestionSerializer
 
 class AdminQuestionViewSet(viewsets.ModelViewSet):
     queryset = Question.objects.select_related(
-        'topic', 'topic__unit', 'topic__unit__subject', 'topic__unit__subject__exam', 'topic__unit__subject__exam__category'
+        'topic', 'topic__chapter', 'topic__chapter__subject',
+        'topic__chapter__subject__paper', 'topic__chapter__subject__paper__exam',
+        'topic__chapter__subject__paper__exam__category',
     ).all().order_by('-created_at')
     serializer_class = AdminQuestionSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    
+
     # Enable filtering by syllabus hierarchy and collections
     filterset_fields = {
         'question_type': ['exact'],
@@ -23,13 +25,18 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
         'difficulty': ['exact'],
         'topic': ['exact'],
         'collections': ['exact'],
-        'topic__unit': ['exact'],
-        'topic__unit__subject': ['exact'],
-        'topic__unit__subject__exam': ['exact'],
-        'topic__unit__subject__exam__category': ['exact'],
+        'topic__chapter': ['exact'],
+        'topic__chapter__subject': ['exact'],
+        'topic__chapter__subject__paper': ['exact'],
+        'topic__chapter__subject__paper__exam': ['exact'],
+        'topic__chapter__subject__paper__exam__category': ['exact'],
     }
     search_fields = ['text', 'explanation', 'model_answer']
     ordering_fields = ['created_at', 'marks', 'difficulty']
+
+    def perform_create(self, serializer):
+        """Override create to set default values if needed."""
+        serializer.save()
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -41,7 +48,7 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
         total = qs.count()
         mcq_count = qs.filter(question_type='mcq').count()
         subjective_count = qs.filter(question_type='subjective').count()
-        active_count = qs.filter(status='published').count()
+        active_count = qs.filter(status__in=['approved', 'pending_review']).count()
         draft_count = qs.filter(status='draft').count()
         ai_pending_count = qs.filter(ai_status='pending').count()
         
@@ -93,19 +100,19 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     def bulk_action(self, request):
         """
         Perform a bulk action on a list of question IDs.
-        Payload: { action: 'publish'|'draft'|'archive'|'delete'|'add_to_collection'|'remove_from_collection', ids: [1, 2, 3], collection_ids: [1,2] }
+        Payload: { action: 'approve'|'draft'|'archive'|'delete'|'add_to_collection'|'remove_from_collection', ids: [1, 2, 3], collection_ids: [1,2] }
         """
         action_type = request.data.get('action')
         ids = request.data.get('ids', [])
-        
+
         if not action_type or not ids:
             return Response({"error": "action and ids are required"}, status=400)
-            
+
         questions = Question.objects.filter(id__in=ids)
         count = questions.count()
-        
+
         from administration.models import AuditLog
-        
+
         if action_type == 'delete':
             # Check usage before bulk delete
             for q in questions:
@@ -116,17 +123,18 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
                 actor=request.user, action='BULK_DELETE', entity_type='Question', entity_id=None,
                 details={"ids": ids, "count": count}
             )
-        elif action_type in ['publish', 'draft', 'archive']:
-            if action_type == 'publish':
+        elif action_type in ['approve', 'draft', 'archive']:
+            if action_type == 'approve':
                 for q in questions:
                     if q.created_by == request.user:
                         return Response({"error": "You cannot approve your own question."}, status=403)
-                        
-            status_map = {'publish': 'published', 'draft': 'draft', 'archive': 'archived'}
-            questions.update(status=status_map[action_type])
+
+            status_map = {'approve': 'approved', 'draft': 'draft', 'archive': 'archived'}
+            new_status = status_map[action_type]
+            questions.update(status=new_status)
             AuditLog.objects.create(
                 actor=request.user, action=f'BULK_{action_type.upper()}', entity_type='Question', entity_id=None,
-                details={"ids": ids, "count": count}
+                details={"ids": ids, "count": count, "new_status": new_status}
             )
         elif action_type in ['add_to_collection', 'remove_from_collection']:
             collection_ids = request.data.get('collection_ids', [])

@@ -274,12 +274,14 @@ export default function EditQuestionSetPage() {
               <button onClick={() => setShowManualModal(false)} className="text-gray-500 hover:text-gray-700 font-bold">×</button>
             </div>
             <div className="flex-1 overflow-hidden p-4">
-              <QuestionSelector 
-                onAdd={handleAddQuestions} 
-                existingIds={(data.questions_list || []).map(q => q.question)} 
+              <QuestionSelector
+                onAdd={handleAddQuestions}
+                existingIds={(data.questions_list || []).map(q => q.question)}
                 subjectId={data.subject}
                 unitId={data.unit}
                 topicId={data.topic}
+                totalQuestions={data.total_questions}
+                scopeLabel={data.topic_name || data.unit_name || data.subject_name}
               />
             </div>
           </div>

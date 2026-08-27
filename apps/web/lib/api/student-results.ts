@@ -257,8 +257,6 @@ export const leaderboardService = {
   },
 };
 
-export const rankingService = {
-  async getAdminRankings(): Promise<any> {
-    return apiClient<any>('/admin/rankings/');
-  }
-};
+// The admin ranking wrapper that used to live here pointed at /admin/rankings/,
+// a route that was never implemented, so every call 404'd. Admin rankings now
+// go through adminLeaderboardApi in lib/api/admin-leaderboard.ts.

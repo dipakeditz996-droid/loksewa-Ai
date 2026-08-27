@@ -7,13 +7,32 @@ import { Save, FileText, Wand2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
 
+/** Pulls the most useful message out of a DRF error body, which may be
+ *  { detail }, { non_field_errors: [...] }, or { <field>: [...] }. */
+function extractApiError(error: any, fallback: string): string {
+  const data = error?.data;
+  if (!data) return error?.message || fallback;
+  if (typeof data === 'string') return data;
+  if (data.detail) return data.detail;
+  if (Array.isArray(data.non_field_errors) && data.non_field_errors.length) {
+    return data.non_field_errors[0];
+  }
+  const firstField = Object.keys(data)[0];
+  if (firstField) {
+    const value = data[firstField];
+    const message = Array.isArray(value) ? value[0] : value;
+    return `${firstField}: ${message}`;
+  }
+  return fallback;
+}
+
 export function SingleQuestionForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
   // Form State
   const [qType, setQType] = useState<'mcq' | 'subjective' | 'true_false'>('mcq');
-  const [status, setStatus] = useState<'draft' | 'published'>('published');
+  const [status, setStatus] = useState<'draft' | 'pending_review' | 'approved' | 'rejected'>('draft');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [text, setText] = useState('');
   const [marks, setMarks] = useState(1);
@@ -64,17 +83,28 @@ export function SingleQuestionForm() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!text.trim()) {
+      toast.error('Question text is required.');
+      return;
+    }
+
     if (!selTopic) {
       toast.error('Please select a specific topic in the syllabus hierarchy.');
       return;
     }
-    
+
     if (qType === 'mcq' && !aiGenerate && (!correctOption || !options.A || !options.B || !options.C || !options.D)) {
-      toast.error('MCQ requires 4 options and a correct option.');
+      toast.error('MCQ requires all 4 options (A, B, C, D) and a correct option selected.');
       return;
     }
-    
-    if (qType === 'subjective' && !modelAnswer) {
+
+    if (qType === 'true_false' && !correctOption) {
+      toast.error('Please select the correct answer for True/False question.');
+      return;
+    }
+
+    if (qType === 'subjective' && !modelAnswer.trim()) {
       toast.error('Subjective questions require a model answer.');
       return;
     }
@@ -115,8 +145,8 @@ export function SingleQuestionForm() {
       toast.success('Question created successfully!');
       router.push('/admin-dashboard/academic/questions');
     } catch (error: any) {
-      console.error(error);
-      toast.error(error.response?.data?.detail || 'Failed to create question');
+      console.error('Failed to create question', error);
+      toast.error(extractApiError(error, 'Failed to create question'));
     } finally {
       setLoading(false);
     }
@@ -144,7 +174,9 @@ export function SingleQuestionForm() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
             <select value={status} onChange={(e: any) => setStatus(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2">
               <option value="draft">Draft</option>
-              <option value="published">Published</option>
+              <option value="pending_review">Pending Review</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
             </select>
           </div>
           <div>

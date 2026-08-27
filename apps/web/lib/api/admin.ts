@@ -270,8 +270,12 @@ export interface AdminNotification {
   title: string;
   content: string;
   type: "alert" | "announcement" | "system";
+  targetRole: NotificationAudience;
   status: "draft" | "scheduled" | "sent" | "failed";
   recipientCount: number;
+  readCount: number;
+  unreadCount: number;
+  scheduledFor: string | null;
   sentAt: string | null;
   createdBy: string;
   createdAt: string;
@@ -284,6 +288,53 @@ export interface AdminNotificationsResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+  /** Status counts across every campaign, not just the current page. */
+  summary: {
+    total: number;
+    sent: number;
+    draft: number;
+    scheduled: number;
+    failed: number;
+  };
+}
+
+/** Audiences the backend can resolve into real recipients. */
+export type NotificationAudience =
+  | "all" | "students" | "teachers" | "admins" | "course" | "individual";
+
+export interface CreateNotificationResult {
+  id: number;
+  title: string;
+  content: string;
+  type: string;
+  targetRole: NotificationAudience;
+  status: "draft" | "scheduled" | "sent" | "failed";
+  scheduledFor: string | null;
+  recipientCount: number;
+  /** The record was stored. Separate from whether anyone received it. */
+  created: boolean;
+  /** How many delivery rows were actually written. 0 for draft/scheduled. */
+  delivered: number;
+  /** How many recipients the chosen audience currently resolves to. */
+  audiencePreview: number;
+}
+
+export interface NotificationDetail {
+  id: number;
+  title: string;
+  content: string;
+  type: string;
+  targetRole: NotificationAudience;
+  status: string;
+  scheduledFor: string | null;
+  sentAt: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  recipient_count: number;
+  read_count: number;
+  unread_count: number;
+  read_rate: number;
 }
 
 export interface AdminSupportTicket {
@@ -329,6 +380,14 @@ export interface AdminSupportTicketDetail {
 
 export interface AdminSupportTicketsResponse {
   tickets: AdminSupportTicket[];
+  summary: {
+    total: number;
+    open: number;
+    in_progress: number;
+    resolved: number;
+    closed: number;
+    high_priority: number;
+  };
   total: number;
   page: number;
   pageSize: number;
@@ -399,6 +458,43 @@ export interface PermissionsResponse {
   totalRoles: number;
   totalPermissions: number;
   categories: string[];
+}
+
+export interface AdminPosition {
+  id: number;
+  name: string;
+  code?: string;
+  description?: string;
+  category?: string;
+  order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminPositionsResponse {
+  results: AdminPosition[];
+  count: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AdminTag {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  color: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminTagsResponse {
+  results: AdminTag[];
+  count: number;
+  page: number;
+  page_size: number;
 }
 
 // ===== API FUNCTIONS =====
@@ -560,13 +656,36 @@ export const adminApi = {
     title: string;
     content: string;
     type: "alert" | "announcement" | "system";
-    targetRole?: string;
+    /** Audience key resolved server-side; recipients are never picked in React. */
+    targetRole?: NotificationAudience;
+    /** 'now' delivers immediately; 'schedule' and 'draft' only persist. */
+    delivery?: "now" | "schedule" | "draft";
     scheduledFor?: string;
-  }): Promise<AdminNotification> => {
-    return apiClient<AdminNotification>("/admin/notifications/create/", {
+    courseId?: number;
+    userIds?: number[];
+  }): Promise<CreateNotificationResult> => {
+    return apiClient<CreateNotificationResult>("/admin/notifications/create/", {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+
+  getNotificationDetail: async (id: number): Promise<NotificationDetail> => {
+    return apiClient<NotificationDetail>(`/admin/notifications/${id}/`);
+  },
+
+  sendNotification: async (id: number, data?: { courseId?: number; userIds?: number[] }) => {
+    return apiClient<{ id: number; status: string; delivered: number; recipientCount: number; sentAt: string | null }>(
+      `/admin/notifications/${id}/send/`,
+      { method: "POST", body: JSON.stringify(data ?? {}) }
+    );
+  },
+
+  cancelScheduledNotification: async (id: number) => {
+    return apiClient<{ id: number; status: string }>(
+      `/admin/notifications/${id}/cancel/`,
+      { method: "POST" }
+    );
   },
 
   deleteNotification: async (id: number): Promise<void> => {
@@ -604,10 +723,10 @@ export const adminApi = {
     });
   },
 
-  updateSupportTicketStatus: async (id: number, status: string): Promise<any> => {
+  updateSupportTicketStatus: async (id: number, data: { status?: string; priority?: string }): Promise<any> => {
     return apiClient<any>(`/admin/support/tickets/${id}/status/`, {
       method: "PATCH",
-      body: JSON.stringify({ status }),
+      body: JSON.stringify(data),
     });
   },
 
@@ -624,6 +743,52 @@ export const adminApi = {
   }): Promise<any> => {
     return apiClient<any>("/admin/settings/", {
       method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  getPositions: async (params?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminPositionsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminPositionsResponse>(`/admin/syllabus/positions/?${query.toString()}`);
+  },
+
+  getTags: async (params?: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminTagsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminTagsResponse>(`/admin/syllabus/tags/?${query.toString()}`);
+  },
+
+  createPosition: async (data: {
+    name: string;
+    code?: string;
+    category?: string;
+    order?: number;
+  }): Promise<AdminPosition> => {
+    return apiClient<AdminPosition>("/admin/syllabus/positions/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  createTag: async (data: {
+    name: string;
+    color?: string;
+  }): Promise<AdminTag> => {
+    return apiClient<AdminTag>("/admin/syllabus/tags/", {
+      method: "POST",
       body: JSON.stringify(data),
     });
   },

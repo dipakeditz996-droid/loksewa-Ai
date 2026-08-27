@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, downloadFile } from './client';
 
 export interface TeacherStudentList {
   id: number;
@@ -137,6 +137,5 @@ export const teacherStudentsApi = {
       body: JSON.stringify({ recipient: recipientId, subject, body }),
     }),
 
-  exportStudentsUrl: () => 
-    `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/teacher/students/export/`
+  exportStudents: () => downloadFile('/teacher/students/export/', 'students.csv')
 };

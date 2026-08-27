@@ -3,13 +3,17 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Count, Sum, Q
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime
+from django.db import transaction
+from django.core.paginator import Paginator
 from datetime import timedelta, date
-from core.models import User
+from core.models import User, Position, Tag
 from exams.models import Exam, Question, ModelExam, ModelExamAttempt, PracticeSession, ExaminationAttempt
 from notes.models import StudyMaterial
 from marketplace.models import Product, PaymentSubmission, Purchase
 from games.models import GameMatch, SurvivalGame
 from ai_tutor.models import Conversation, TutorUsage
+from .models import AuditLog
 from .permissions import IsAdminUser
 
 
@@ -1239,6 +1243,222 @@ class AdminStudyMaterialsView(APIView):
             "totalPages": (total + page_size - 1) // page_size,
         })
 
+    def post(self, request):
+        """Create a study material.
+
+        Accepts JSON or multipart (when an actual file is attached).
+        """
+        from notes.models import StudyMaterial
+
+        title = (request.data.get('title') or '').strip()
+        exam_id = request.data.get('exam')
+        subject_id = request.data.get('subject')
+
+        missing = [f for f, v in (
+            ('title', title), ('exam', exam_id), ('subject', subject_id)
+        ) if not v]
+        if missing:
+            return Response(
+                {"error": f"Missing required field(s): {', '.join(missing)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            exam = Exam.objects.get(pk=exam_id)
+        except (Exam.DoesNotExist, ValueError, TypeError):
+            return Response({"error": "That exam does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from exams.models import Subject as SubjectModel, Topic as TopicModel
+        try:
+            subject = SubjectModel.objects.get(pk=subject_id)
+        except (SubjectModel.DoesNotExist, ValueError, TypeError):
+            return Response({"error": "That subject does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        topic = None
+        topic_id = request.data.get('topic')
+        if topic_id:
+            try:
+                topic = TopicModel.objects.get(pk=topic_id)
+            except (TopicModel.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "That topic does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        material_type = (request.data.get('material_type') or 'notes').strip().lower()
+        if material_type not in dict(StudyMaterial.MATERIAL_TYPES):
+            return Response({"error": f"Unsupported material_type: {material_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        difficulty = (request.data.get('difficulty') or 'beginner').strip().lower()
+        if difficulty not in dict(StudyMaterial.DIFFICULTY_CHOICES):
+            return Response({"error": f"Unsupported difficulty: {difficulty}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        access_type = (request.data.get('access_type') or 'free').strip().lower()
+        if access_type not in dict(StudyMaterial.ACCESS_TYPES):
+            return Response({"error": f"Unsupported access_type: {access_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        material_status = (request.data.get('status') or 'draft').strip().lower()
+        if material_status not in dict(StudyMaterial.STATUS_CHOICES):
+            return Response({"error": f"Unsupported status: {material_status}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            reading_time = int(request.data.get('estimated_reading_time', 10))
+        except (TypeError, ValueError):
+            return Response({"error": "estimated_reading_time must be a number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # A material has to carry something a student can actually open.
+        upload = request.FILES.get('file')
+        external_url = (request.data.get('external_url') or '').strip()
+        content = request.data.get('content') or ''
+        if not upload and not external_url and not content.strip():
+            return Response(
+                {"error": "Add file content, an external link, or written content."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from notes.models import MaterialCategory
+        category = None
+        category_id = request.data.get('category')
+        if category_id:
+            try:
+                category = MaterialCategory.objects.get(pk=category_id)
+            except (MaterialCategory.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "That category does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        material = StudyMaterial.objects.create(
+            title=title,
+            teacher=request.user,
+            exam=exam,
+            subject=subject,
+            topic=topic,
+            category=category,
+            description=request.data.get('description') or '',
+            content=content,
+            material_type=material_type,
+            difficulty=difficulty,
+            access_type=access_type,
+            status=material_status,
+            external_url=external_url or None,
+            estimated_reading_time=reading_time,
+        )
+        if upload:
+            material.file = upload
+            material.save(update_fields=['file'])
+
+        AuditLog.objects.create(
+            actor=request.user, action='CREATE_STUDY_MATERIAL',
+            entity_type='StudyMaterial', entity_id=str(material.id),
+            details={"title": material.title, "status": material.status},
+        )
+
+        return Response({
+            "id": material.id,
+            "title": material.title,
+            "slug": material.slug,
+            "status": material.status,
+            "materialType": material.material_type,
+            "subject": subject.name,
+            "exam": exam.name,
+        }, status=status.HTTP_201_CREATED)
+
+
+class AdminStudyMaterialDetailView(APIView):
+    """Retrieve, update or delete a single study material."""
+    permission_classes = [IsAdminUser]
+
+    def _get(self, pk):
+        from notes.models import StudyMaterial
+        return StudyMaterial.objects.select_related(
+            'teacher', 'subject', 'exam', 'topic'
+        ).filter(pk=pk).first()
+
+    def get(self, request, pk):
+        material = self._get(pk)
+        if not material:
+            return Response({"error": "Study material not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({
+            "id": material.id,
+            "title": material.title,
+            "slug": material.slug,
+            "description": material.description,
+            "content": material.content,
+            "teacher": (material.teacher.get_full_name() or material.teacher.username) if material.teacher else None,
+            "exam": material.exam.name if material.exam else None,
+            "examId": material.exam_id,
+            "subject": material.subject.name if material.subject else None,
+            "subjectId": material.subject_id,
+            "topic": material.topic.name if material.topic else None,
+            "topicId": material.topic_id,
+            "materialType": material.material_type,
+            "difficulty": material.difficulty,
+            "accessType": material.access_type,
+            "status": material.status,
+            "reviewNote": material.review_note,
+            "externalUrl": material.external_url,
+            "fileUrl": material.file.url if material.file else None,
+            "estimatedReadingTime": material.estimated_reading_time,
+            "createdAt": material.created_at.isoformat(),
+            "updatedAt": material.updated_at.isoformat(),
+        })
+
+    def patch(self, request, pk):
+        from notes.models import StudyMaterial
+
+        material = self._get(pk)
+        if not material:
+            return Response({"error": "Study material not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        simple_fields = ['title', 'description', 'content', 'review_note']
+        for field in simple_fields:
+            if field in request.data:
+                setattr(material, field, request.data[field] or '')
+
+        choice_fields = {
+            'material_type': StudyMaterial.MATERIAL_TYPES,
+            'difficulty': StudyMaterial.DIFFICULTY_CHOICES,
+            'access_type': StudyMaterial.ACCESS_TYPES,
+            'status': StudyMaterial.STATUS_CHOICES,
+        }
+        for field, choices in choice_fields.items():
+            if field in request.data:
+                value = str(request.data[field]).strip().lower()
+                if value not in dict(choices):
+                    return Response({"error": f"Unsupported {field}: {value}"}, status=status.HTTP_400_BAD_REQUEST)
+                setattr(material, field, value)
+
+        if 'estimated_reading_time' in request.data:
+            try:
+                material.estimated_reading_time = int(request.data['estimated_reading_time'])
+            except (TypeError, ValueError):
+                return Response({"error": "estimated_reading_time must be a number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if 'external_url' in request.data:
+            material.external_url = (request.data['external_url'] or '').strip() or None
+
+        if request.FILES.get('file'):
+            material.file = request.FILES['file']
+
+        material.save()
+
+        AuditLog.objects.create(
+            actor=request.user, action='UPDATE_STUDY_MATERIAL',
+            entity_type='StudyMaterial', entity_id=str(material.id),
+            details={"title": material.title, "status": material.status},
+        )
+        return Response({"success": True, "id": material.id, "status": material.status})
+
+    def delete(self, request, pk):
+        material = self._get(pk)
+        if not material:
+            return Response({"error": "Study material not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        title = material.title
+        material.delete()
+        AuditLog.objects.create(
+            actor=request.user, action='DELETE_STUDY_MATERIAL',
+            entity_type='StudyMaterial', entity_id=str(pk),
+            details={"title": title},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 # ============================================================
 # STUDY PLANS MANAGEMENT VIEW
@@ -1304,6 +1524,245 @@ class AdminStudyPlansView(APIView):
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
         })
+
+    def post(self, request):
+        """Create study plans for one or more students and generate their tasks.
+
+        Accepts either `student` (a single id) or `students` (a list). Students
+        who already hold a plan are reported as skipped rather than failing the
+        whole batch, so assigning to "all students" stays useful as the roster
+        grows.
+        """
+        from study_plan.models import StudyPlan, StudyPlanTemplate
+        from study_plan.services import generate_study_plan_tasks
+
+        raw_students = request.data.get('students')
+        if raw_students is None:
+            single = request.data.get('student')
+            raw_students = [single] if single else []
+        if not isinstance(raw_students, list):
+            return Response({"error": "students must be a list of student ids."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        exam_id = request.data.get('exam')
+        target_date = request.data.get('target_date')
+
+        missing = [f for f, v in (
+            ('students', raw_students), ('exam', exam_id), ('target_date', target_date)
+        ) if not v]
+        if missing:
+            return Response(
+                {"error": f"Missing required field(s): {', '.join(missing)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            exam = Exam.objects.get(pk=exam_id)
+        except (Exam.DoesNotExist, ValueError, TypeError):
+            return Response({"error": "That exam does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        template = None
+        template_id = request.data.get('template')
+        if template_id:
+            try:
+                template = StudyPlanTemplate.objects.get(pk=template_id)
+            except (StudyPlanTemplate.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "That template does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        parsed_date = parse_date(str(target_date))
+        if not parsed_date:
+            return Response({"error": "target_date must be in YYYY-MM-DD format."}, status=status.HTTP_400_BAD_REQUEST)
+        if parsed_date <= timezone.now().date():
+            return Response({"error": "target_date must be in the future."}, status=status.HTTP_400_BAD_REQUEST)
+
+        level = (request.data.get('level') or 'BEGINNER').upper()
+        if level not in dict(StudyPlan.LEVEL_CHOICES):
+            return Response({"error": f"Unsupported level: {level}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        preferred_time = request.data.get('preferred_time') or None
+        if preferred_time:
+            preferred_time = preferred_time.upper()
+            if preferred_time not in dict(StudyPlan.TIME_CHOICES):
+                return Response({"error": f"Unsupported preferred_time: {preferred_time}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        study_days = request.data.get('study_days') or []
+        if not isinstance(study_days, list):
+            return Response({"error": "study_days must be a list of day names."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            daily_minutes = int(request.data.get('daily_minutes', 120))
+        except (TypeError, ValueError):
+            return Response({"error": "daily_minutes must be a number."}, status=status.HTTP_400_BAD_REQUEST)
+        if daily_minutes < 1:
+            return Response({"error": "daily_minutes must be greater than 0."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Resolve every requested student up front, then walk the list in the
+        # order it was given so the report lines up with what the admin picked.
+        found = {u.pk: u for u in User.objects.filter(pk__in=[
+            s for s in raw_students if str(s).isdigit()
+        ])}
+        already_planned = set(
+            StudyPlan.objects.filter(student_id__in=found.keys())
+            .values_list('student_id', flat=True)
+        )
+
+        created, skipped, warnings = [], [], []
+
+        for raw_id in raw_students:
+            student = found.get(int(raw_id)) if str(raw_id).isdigit() else None
+            if not student:
+                skipped.append({"student": str(raw_id), "reason": "Student not found."})
+                continue
+
+            # StudyPlan.student is a OneToOneField, so a student can only ever
+            # hold one plan.
+            if student.pk in already_planned:
+                skipped.append({
+                    "student": student.get_full_name() or student.username,
+                    "reason": "Already has a study plan.",
+                })
+                continue
+
+            plan = StudyPlan.objects.create(
+                student=student,
+                exam=exam,
+                template=template,
+                target_date=parsed_date,
+                daily_minutes=daily_minutes,
+                study_days=study_days,
+                preferred_time=preferred_time,
+                level=level,
+            )
+
+            # Fill the calendar straight away so the plan is usable on creation.
+            task_count = 0
+            try:
+                generate_study_plan_tasks(plan)
+                task_count = plan.tasks.count()
+            except Exception as exc:  # A generation failure must not lose the plan.
+                warnings.append(
+                    f"{student.get_full_name() or student.username}: tasks could not be generated ({exc})."
+                )
+
+            created.append({
+                "id": plan.id,
+                "student": plan.student.get_full_name() or plan.student.username,
+                "task_count": task_count,
+            })
+
+        payload = {
+            "created": created,
+            "skipped": skipped,
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+            "task_count": sum(c["task_count"] for c in created),
+            "exam": exam.name,
+            "targetDate": parsed_date.isoformat(),
+        }
+        if warnings:
+            payload["warning"] = " ".join(warnings)
+
+        if not created:
+            # Nothing was created, so tell the caller why rather than reporting
+            # a hollow success.
+            reasons = "; ".join(f"{s['student']} — {s['reason']}" for s in skipped)
+            payload["error"] = reasons or "No study plans could be created."
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class AdminStudyPlanDetailView(APIView):
+    """Retrieve, update or delete a single study plan."""
+    permission_classes = [IsAdminUser]
+
+    def _get(self, pk):
+        from study_plan.models import StudyPlan
+        return StudyPlan.objects.select_related('student', 'exam', 'template').filter(pk=pk).first()
+
+    def get(self, request, pk):
+        plan = self._get(pk)
+        if not plan:
+            return Response({"error": "Study plan not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        tasks = plan.tasks.order_by('date', 'id')
+        return Response({
+            "id": plan.id,
+            "student": plan.student.get_full_name() or plan.student.username,
+            "studentId": plan.student.id,
+            "email": plan.student.email,
+            "exam": plan.exam.name if plan.exam else None,
+            "examId": plan.exam_id,
+            "template": plan.template.name if plan.template else None,
+            "templateId": plan.template_id,
+            "targetDate": plan.target_date.isoformat(),
+            "dailyMinutes": plan.daily_minutes,
+            "studyDays": plan.study_days,
+            "preferredTime": plan.preferred_time,
+            "level": plan.level,
+            "isPaused": plan.is_paused,
+            "taskCount": tasks.count(),
+            "completedTasks": tasks.filter(status='COMPLETED').count(),
+            "tasks": [{
+                "id": t.id,
+                "date": t.date.isoformat(),
+                "title": t.title,
+                "taskType": t.task_type,
+                "durationMinutes": t.duration_minutes,
+                "status": t.status,
+            } for t in tasks[:200]],
+        })
+
+    def patch(self, request, pk):
+        from study_plan.models import StudyPlan
+
+        plan = self._get(pk)
+        if not plan:
+            return Response({"error": "Study plan not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'target_date' in request.data:
+            parsed = parse_date(str(request.data['target_date']))
+            if not parsed:
+                return Response({"error": "target_date must be in YYYY-MM-DD format."}, status=status.HTTP_400_BAD_REQUEST)
+            plan.target_date = parsed
+
+        if 'daily_minutes' in request.data:
+            try:
+                plan.daily_minutes = int(request.data['daily_minutes'])
+            except (TypeError, ValueError):
+                return Response({"error": "daily_minutes must be a number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if 'level' in request.data:
+            level = str(request.data['level']).upper()
+            if level not in dict(StudyPlan.LEVEL_CHOICES):
+                return Response({"error": f"Unsupported level: {level}"}, status=status.HTTP_400_BAD_REQUEST)
+            plan.level = level
+
+        if 'preferred_time' in request.data:
+            value = request.data['preferred_time']
+            if value:
+                value = str(value).upper()
+                if value not in dict(StudyPlan.TIME_CHOICES):
+                    return Response({"error": f"Unsupported preferred_time: {value}"}, status=status.HTTP_400_BAD_REQUEST)
+            plan.preferred_time = value or None
+
+        if 'study_days' in request.data:
+            if not isinstance(request.data['study_days'], list):
+                return Response({"error": "study_days must be a list of day names."}, status=status.HTTP_400_BAD_REQUEST)
+            plan.study_days = request.data['study_days']
+
+        if 'is_paused' in request.data:
+            plan.is_paused = bool(request.data['is_paused'])
+
+        plan.save()
+        return Response({"success": True, "id": plan.id})
+
+    def delete(self, request, pk):
+        plan = self._get(pk)
+        if not plan:
+            return Response({"error": "Study plan not found."}, status=status.HTTP_404_NOT_FOUND)
+        plan.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ============================================================
@@ -1422,13 +1881,27 @@ class AdminNotificationsListView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 20))
 
-        # Build query
-        query = AdminNotification.objects.all()
+        audience_filter = request.query_params.get('audience', '')
+        date_from = request.query_params.get('date_from', '')
+        date_to = request.query_params.get('date_to', '')
+
+        # Read counts come from the delivery rows, annotated so the list stays
+        # a single query no matter how many campaigns are shown.
+        query = AdminNotification.objects.select_related('created_by').annotate(
+            delivered_count=Count('deliveries', distinct=True),
+            read_total=Count('deliveries', filter=Q(deliveries__is_read=True), distinct=True),
+        )
 
         if status_filter:
             query = query.filter(status=status_filter)
         if type_filter:
             query = query.filter(type=type_filter)
+        if audience_filter:
+            query = query.filter(target_role=audience_filter)
+        if date_from:
+            query = query.filter(created_at__date__gte=date_from)
+        if date_to:
+            query = query.filter(created_at__date__lte=date_to)
         if search:
             query = query.filter(Q(title__icontains=search) | Q(content__icontains=search))
 
@@ -1443,13 +1916,24 @@ class AdminNotificationsListView(APIView):
                 'title': notif.title,
                 'content': notif.content,
                 'type': notif.type,
+                'targetRole': notif.target_role,
                 'status': notif.status,
-                'recipientCount': notif.recipient_count,
+                'recipientCount': notif.delivered_count,
+                'readCount': notif.read_total,
+                'unreadCount': max(0, notif.delivered_count - notif.read_total),
+                'scheduledFor': notif.scheduled_for.isoformat() if notif.scheduled_for else None,
                 'sentAt': notif.sent_at.isoformat() if notif.sent_at else None,
                 'createdBy': notif.created_by.get_full_name() or notif.created_by.username if notif.created_by else 'N/A',
                 'createdAt': notif.created_at.isoformat(),
                 'updatedAt': notif.updated_at.isoformat(),
             })
+
+        # Status counts span every campaign, not just this page — deriving them
+        # from the page would understate them as soon as pagination kicks in.
+        status_counts = dict(
+            AdminNotification.objects.values_list('status')
+            .annotate(n=Count('id')).values_list('status', 'n')
+        )
 
         return Response({
             'notifications': data,
@@ -1457,6 +1941,13 @@ class AdminNotificationsListView(APIView):
             'page': page,
             'pageSize': page_size,
             'totalPages': (total + page_size - 1) // page_size,
+            'summary': {
+                'total': AdminNotification.objects.count(),
+                'sent': status_counts.get('sent', 0),
+                'draft': status_counts.get('draft', 0),
+                'scheduled': status_counts.get('scheduled', 0),
+                'failed': status_counts.get('failed', 0),
+            },
         })
 
 
@@ -1464,45 +1955,106 @@ class AdminNotificationsCreateView(APIView):
     permission_classes = [IsAdminUser]
 
     def post(self, request):
+        """Create an admin notification and, for send-now, deliver it.
+
+        delivery = 'now'      → fan out to recipients, status becomes 'sent'
+        delivery = 'schedule' → stored with scheduled_for, status 'scheduled'
+        delivery = 'draft'    → stored only
+        """
         from core.models import AdminNotification
+        from core.notification_service import (
+            AUDIENCE_CHOICES, NotificationBroadcastError,
+            broadcast_admin_notification, resolve_audience,
+        )
 
+        title = (request.data.get('title') or '').strip()
+        content = (request.data.get('content') or '').strip()
+        notif_type = (request.data.get('type') or 'announcement').strip().lower()
+        audience = (request.data.get('targetRole') or 'all').strip().lower()
+        delivery = (request.data.get('delivery') or 'draft').strip().lower()
+        scheduled_for = request.data.get('scheduledFor')
+        course_id = request.data.get('courseId')
+        user_ids = request.data.get('userIds') or []
+
+        errors = {}
+        if not title:
+            errors['title'] = 'Title is required.'
+        if not content:
+            errors['content'] = 'Message is required.'
+        if notif_type not in dict(AdminNotification.TYPE_CHOICES):
+            errors['type'] = f'Unsupported type: {notif_type}'
+        if audience not in dict(AUDIENCE_CHOICES):
+            errors['targetRole'] = f'Unsupported audience: {audience}'
+        if delivery not in ('now', 'schedule', 'draft'):
+            errors['delivery'] = f'Unsupported delivery: {delivery}'
+        if delivery == 'schedule':
+            if not scheduled_for:
+                errors['scheduledFor'] = 'Pick a date and time to schedule for.'
+            else:
+                parsed = parse_datetime(str(scheduled_for))
+                if not parsed:
+                    errors['scheduledFor'] = 'scheduledFor must be an ISO-8601 datetime.'
+                elif parsed <= timezone.now():
+                    errors['scheduledFor'] = 'The scheduled time must be in the future.'
+        if user_ids and not isinstance(user_ids, list):
+            errors['userIds'] = 'userIds must be a list.'
+
+        if errors:
+            return Response({'error': 'Validation failed.', 'details': errors},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        # Confirm the audience resolves before writing anything.
         try:
-            title = request.data.get('title', '').strip()
-            content = request.data.get('content', '').strip()
-            notif_type = request.data.get('type', 'announcement')
-            target_role = request.data.get('targetRole', 'all')
-            scheduled_for = request.data.get('scheduledFor')
+            recipients = resolve_audience(audience, course_id=course_id, user_ids=user_ids)
+            recipient_preview = recipients.count()
+        except NotificationBroadcastError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not title or not content:
-                return Response(
-                    {'error': 'Title and content are required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        if delivery == 'now' and recipient_preview == 0:
+            return Response(
+                {'error': 'That audience currently has no active recipients.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
+        with transaction.atomic():
             notification = AdminNotification.objects.create(
                 title=title,
                 content=content,
                 type=notif_type,
-                target_role=target_role,
-                scheduled_for=scheduled_for,
+                target_role=audience,
+                scheduled_for=parse_datetime(str(scheduled_for)) if scheduled_for else None,
                 created_by=request.user,
-                status='draft',
+                status='scheduled' if delivery == 'schedule' else 'draft',
             )
 
-            return Response({
-                'id': notification.id,
-                'title': notification.title,
-                'content': notification.content,
-                'type': notification.type,
-                'status': notification.status,
-                'message': 'Notification created successfully',
-            }, status=status.HTTP_201_CREATED)
+            delivered = 0
+            if delivery == 'now':
+                delivered = broadcast_admin_notification(
+                    notification, course_id=course_id, user_ids=user_ids
+                )
 
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        AuditLog.objects.create(
+            actor=request.user, action='CREATE_NOTIFICATION',
+            entity_type='AdminNotification', entity_id=str(notification.id),
+            details={'title': title, 'audience': audience, 'delivery': delivery,
+                     'delivered': delivered},
+        )
+
+        return Response({
+            'id': notification.id,
+            'title': notification.title,
+            'content': notification.content,
+            'type': notification.type,
+            'targetRole': notification.target_role,
+            'status': notification.status,
+            'scheduledFor': notification.scheduled_for.isoformat() if notification.scheduled_for else None,
+            'recipientCount': notification.recipient_count,
+            # 'created' and 'delivered' are reported separately on purpose — a
+            # draft or scheduled notification has been stored, not delivered.
+            'created': True,
+            'delivered': delivered,
+            'audiencePreview': recipient_preview,
+        }, status=status.HTTP_201_CREATED)
 
 
 class AdminNotificationsDeleteView(APIView):
@@ -1511,18 +2063,124 @@ class AdminNotificationsDeleteView(APIView):
     def delete(self, request, pk):
         from core.models import AdminNotification
 
+        notification = AdminNotification.objects.filter(id=pk).first()
+        if not notification:
+            return Response({'error': 'Notification not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        # A sent notification is a historical record: students already have it
+        # in their feed, so deleting the campaign would misrepresent what
+        # happened. Drafts and scheduled ones are still safe to remove.
+        if notification.status == 'sent':
+            return Response(
+                {'error': 'A sent notification cannot be deleted. Students have already received it.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        title = notification.title
+        notification.delete()
+        AuditLog.objects.create(
+            actor=request.user, action='DELETE_NOTIFICATION',
+            entity_type='AdminNotification', entity_id=str(pk),
+            details={'title': title},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminNotificationDetailView(APIView):
+    """GET /api/admin/notifications/{id}/ — campaign detail with real read stats."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        from core.models import AdminNotification
+        from core.notification_service import delivery_stats
+
+        notification = AdminNotification.objects.select_related('created_by').filter(pk=pk).first()
+        if not notification:
+            return Response({'error': 'Notification not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        stats = delivery_stats(notification)
+        return Response({
+            'id': notification.id,
+            'title': notification.title,
+            'content': notification.content,
+            'type': notification.type,
+            'targetRole': notification.target_role,
+            'status': notification.status,
+            'scheduledFor': notification.scheduled_for.isoformat() if notification.scheduled_for else None,
+            'sentAt': notification.sent_at.isoformat() if notification.sent_at else None,
+            'createdBy': (
+                notification.created_by.get_full_name() or notification.created_by.username
+            ) if notification.created_by else None,
+            'createdAt': notification.created_at.isoformat(),
+            'updatedAt': notification.updated_at.isoformat(),
+            **stats,
+        })
+
+
+class AdminNotificationSendView(APIView):
+    """POST /api/admin/notifications/{id}/send/ — deliver a draft or scheduled campaign."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        from core.models import AdminNotification
+        from core.notification_service import (
+            NotificationBroadcastError, broadcast_admin_notification,
+        )
+
+        notification = AdminNotification.objects.filter(pk=pk).first()
+        if not notification:
+            return Response({'error': 'Notification not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+        if notification.status == 'sent':
+            return Response({'error': 'This notification has already been sent.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            notification = AdminNotification.objects.get(id=pk)
-            notification.delete()
-            return Response(
-                {'message': 'Notification deleted successfully'},
-                status=status.HTTP_204_NO_CONTENT
+            delivered = broadcast_admin_notification(
+                notification,
+                course_id=request.data.get('courseId'),
+                user_ids=request.data.get('userIds') or [],
             )
-        except AdminNotification.DoesNotExist:
+        except NotificationBroadcastError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        AuditLog.objects.create(
+            actor=request.user, action='SEND_NOTIFICATION',
+            entity_type='AdminNotification', entity_id=str(notification.id),
+            details={'title': notification.title, 'delivered': delivered},
+        )
+        return Response({
+            'id': notification.id,
+            'status': notification.status,
+            'delivered': delivered,
+            'recipientCount': notification.recipient_count,
+            'sentAt': notification.sent_at.isoformat() if notification.sent_at else None,
+        })
+
+
+class AdminNotificationCancelView(APIView):
+    """POST /api/admin/notifications/{id}/cancel/ — revert a scheduled campaign to draft."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        from core.models import AdminNotification
+
+        notification = AdminNotification.objects.filter(pk=pk).first()
+        if not notification:
+            return Response({'error': 'Notification not found'},
+                            status=status.HTTP_404_NOT_FOUND)
+        if notification.status != 'scheduled':
             return Response(
-                {'error': 'Notification not found'},
-                status=status.HTTP_404_NOT_FOUND
+                {'error': 'Only a scheduled notification can be cancelled.'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+
+        notification.status = 'draft'
+        notification.scheduled_for = None
+        notification.save(update_fields=['status', 'scheduled_for', 'updated_at'])
+        return Response({'id': notification.id, 'status': notification.status})
 
 
 class AdminSupportTicketsView(APIView):
@@ -1530,6 +2188,7 @@ class AdminSupportTicketsView(APIView):
 
     def get(self, request):
         from support.models import SupportTicket
+        from django.db.models import Q
 
         # Get filter parameters
         status_filter = request.query_params.get('status', '')
@@ -1539,8 +2198,20 @@ class AdminSupportTicketsView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 20))
 
+        base_query = SupportTicket.objects.select_related('student').all()
+
+        # Calculate global summary metrics before filtering
+        summary = {
+            'total': base_query.count(),
+            'open': base_query.filter(status='open').count(),
+            'in_progress': base_query.filter(status='in_progress').count(),
+            'resolved': base_query.filter(status='resolved').count(),
+            'closed': base_query.filter(status='closed').count(),
+            'high_priority': base_query.filter(priority__in=['high', 'urgent']).count(),
+        }
+
         # Build query
-        query = SupportTicket.objects.select_related('student').all()
+        query = base_query
 
         if status_filter:
             query = query.filter(status=status_filter)
@@ -1578,6 +2249,7 @@ class AdminSupportTicketsView(APIView):
 
         return Response({
             'tickets': data,
+            'summary': summary,
             'total': total,
             'page': page,
             'pageSize': page_size,
@@ -1680,24 +2352,37 @@ class AdminTicketUpdateStatusView(APIView):
         try:
             ticket = SupportTicket.objects.get(id=pk)
             new_status = request.data.get('status')
+            new_priority = request.data.get('priority')
+            updated = False
 
-            if new_status not in dict(SupportTicket.STATUS_CHOICES):
-                return Response(
-                    {'error': 'Invalid status'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            if new_status:
+                if new_status not in dict(SupportTicket.STATUS_CHOICES):
+                    return Response(
+                        {'error': 'Invalid status'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                ticket.status = new_status
+                updated = True
+                if new_status == 'closed' and not ticket.closed_at:
+                    ticket.closed_at = timezone.now()
 
-            ticket.status = new_status
+            if new_priority:
+                if new_priority not in dict(SupportTicket.PRIORITY_CHOICES):
+                    return Response(
+                        {'error': 'Invalid priority'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                ticket.priority = new_priority
+                updated = True
 
-            if new_status == 'closed' and not ticket.closed_at:
-                ticket.closed_at = timezone.now()
-
-            ticket.save()
+            if updated:
+                ticket.save()
 
             return Response({
                 'id': ticket.id,
                 'status': ticket.status,
-                'message': 'Ticket status updated successfully',
+                'priority': ticket.priority,
+                'message': 'Ticket updated successfully',
             })
 
         except SupportTicket.DoesNotExist:
@@ -1959,6 +2644,133 @@ class AdminSettingsView(APIView):
                 'updatedAt': settings.updated_at.isoformat(),
             })
 
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class AdminPositionsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        try:
+            positions = Position.objects.filter(is_active=True).values(
+                'id', 'name', 'code', 'description', 'category', 'order', 'is_active', 'created_at', 'updated_at'
+            ).order_by('order', 'name')
+
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+            search = request.query_params.get('search', '')
+
+            if search:
+                positions = positions.filter(
+                    Q(name__icontains=search) | Q(code__icontains=search) | Q(category__icontains=search)
+                )
+
+            paginator = Paginator(list(positions), page_size)
+            page_obj = paginator.get_page(page)
+
+            return Response({
+                'results': list(page_obj.object_list),
+                'count': paginator.count,
+                'page': page,
+                'page_size': page_size,
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def post(self, request):
+        try:
+            name = request.data.get('name', '').strip()
+            if not name:
+                return Response({'error': 'Name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            position = Position.objects.create(
+                name=name,
+                code=request.data.get('code', '').strip(),
+                category=request.data.get('category', '').strip(),
+                order=int(request.data.get('order', 0)),
+                is_active=True
+            )
+
+            return Response({
+                'id': position.id,
+                'name': position.name,
+                'code': position.code,
+                'category': position.category,
+                'order': position.order,
+                'is_active': position.is_active,
+                'created_at': position.created_at,
+                'updated_at': position.updated_at,
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class AdminTagsView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        try:
+            tags = Tag.objects.filter(is_active=True).values(
+                'id', 'name', 'slug', 'description', 'color', 'is_active', 'created_at', 'updated_at'
+            ).order_by('name')
+
+            page = int(request.query_params.get('page', 1))
+            page_size = int(request.query_params.get('page_size', 20))
+            search = request.query_params.get('search', '')
+
+            if search:
+                tags = tags.filter(
+                    Q(name__icontains=search) | Q(slug__icontains=search)
+                )
+
+            paginator = Paginator(list(tags), page_size)
+            page_obj = paginator.get_page(page)
+
+            return Response({
+                'results': list(page_obj.object_list),
+                'count': paginator.count,
+                'page': page,
+                'page_size': page_size,
+            })
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def post(self, request):
+        try:
+            from django.utils.text import slugify
+            name = request.data.get('name', '').strip()
+            if not name:
+                return Response({'error': 'Name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            tag = Tag.objects.create(
+                name=name,
+                slug=slugify(name),
+                color=request.data.get('color', '#6366f1'),
+                is_active=True
+            )
+
+            return Response({
+                'id': tag.id,
+                'name': tag.name,
+                'slug': tag.slug,
+                'color': tag.color,
+                'is_active': tag.is_active,
+                'created_at': tag.created_at,
+                'updated_at': tag.updated_at,
+            }, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response(
                 {'error': str(e)},

@@ -92,42 +92,42 @@ export default function EvaluationsPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-[#D4A72C]" />
             Evaluations
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Review and evaluate student subjective answers.</p>
+          <p className="text-slate-500 text-sm mt-1">Review and evaluate student subjective answers.</p>
         </div>
       </div>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm">
-          <p className="text-slate-400 text-sm font-medium mb-1">Total Pending</p>
-          <p className="text-2xl font-bold text-white">{totalEvaluations.toLocaleString()}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+          <p className="text-slate-600 text-sm font-medium mb-1">Total Pending</p>
+          <p className="text-2xl font-bold text-[#0B2545]">{totalEvaluations.toLocaleString()}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-blue-500">
-          <p className="text-slate-400 text-sm font-medium mb-1">Submitted</p>
-          <p className="text-2xl font-bold text-blue-400">{pendingCount}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">Submitted</p>
+          <p className="text-2xl font-bold text-blue-600">{pendingCount}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-yellow-500">
-          <p className="text-slate-400 text-sm font-medium mb-1">Under Review</p>
-          <p className="text-2xl font-bold text-yellow-400">{underReviewCount}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-yellow-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">Under Review</p>
+          <p className="text-2xl font-bold text-yellow-600">{underReviewCount}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-xl border border-slate-700 shadow-sm border-l-4 border-l-emerald-500">
-          <p className="text-slate-400 text-sm font-medium mb-1">Evaluated</p>
-          <p className="text-2xl font-bold text-emerald-400">{evaluatedCount}</p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">Evaluated</p>
+          <p className="text-2xl font-bold text-emerald-600">{evaluatedCount}</p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-slate-900 p-4 rounded-xl border border-slate-700 shadow-sm space-y-4">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-600" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Search student name, email, or question..."
-              className="pl-9 bg-slate-800 border-slate-700 text-white placeholder:text-slate-600"
+              className="pl-9 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-600"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -135,7 +135,7 @@ export default function EvaluationsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
           >
             <option value="submitted">Submitted</option>
             <option value="under-review">Under Review</option>
@@ -146,49 +146,49 @@ export default function EvaluationsPage() {
       </div>
 
       {/* Evaluations Table */}
-      <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-700 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-800 hover:bg-slate-800">
-                <TableHead className="text-white">Student</TableHead>
-                <TableHead className="text-white">Question</TableHead>
-                <TableHead className="text-white">Marks</TableHead>
-                <TableHead className="text-white">Status</TableHead>
-                <TableHead className="text-white">Submitted</TableHead>
-                <TableHead className="text-white">Evaluator</TableHead>
-                <TableHead className="text-right text-white">Actions</TableHead>
+              <TableRow className="bg-slate-50 hover:bg-slate-50">
+                <TableHead className="text-slate-700">Student</TableHead>
+                <TableHead className="text-slate-700">Question</TableHead>
+                <TableHead className="text-slate-700">Marks</TableHead>
+                <TableHead className="text-slate-700">Status</TableHead>
+                <TableHead className="text-slate-700">Submitted</TableHead>
+                <TableHead className="text-slate-700">Evaluator</TableHead>
+                <TableHead className="text-right text-slate-700">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center bg-slate-900">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-600" />
+                  <TableCell colSpan={7} className="h-32 text-center bg-white">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
                   </TableCell>
                 </TableRow>
               ) : evaluations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-slate-500 bg-slate-900">
+                  <TableCell colSpan={7} className="h-32 text-center text-slate-500 bg-white">
                     No evaluations found.
                   </TableCell>
                 </TableRow>
               ) : (
                 evaluations.map((evaluation) => (
-                  <TableRow key={evaluation.id} className="hover:bg-slate-800/50 border-b border-slate-700">
+                  <TableRow key={evaluation.id} className="hover:bg-slate-50/50 border-b border-slate-200">
                     <TableCell>
                       <div>
-                        <p className="font-semibold text-white">{evaluation.student}</p>
-                        <p className="text-xs text-slate-500">{evaluation.email}</p>
+                        <p className="font-semibold text-[#0B2545]">{evaluation.student}</p>
+                        <p className="text-xs text-slate-600">{evaluation.email}</p>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="max-w-xs">
-                        <p className="text-sm text-white truncate">{evaluation.question}</p>
+                        <p className="text-sm text-slate-700 truncate">{evaluation.question}</p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-white font-medium">{evaluation.marks}</span>
+                      <span className="text-sm text-slate-700 font-medium">{evaluation.marks}</span>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -198,29 +198,29 @@ export default function EvaluationsPage() {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-slate-400">
+                    <TableCell className="text-sm text-slate-600">
                       {evaluation.submittedAt ? new Date(evaluation.submittedAt).toLocaleDateString() : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-slate-400">
+                      <span className="text-sm text-slate-600">
                         {evaluation.evaluator || 'Pending'}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-700">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100">
                             <span className="sr-only">Open menu</span>
                             <MoreVertical className="h-4 w-4 text-slate-500" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
-                          <DropdownMenuLabel className="text-slate-300">Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer text-slate-300 hover:bg-slate-700">
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem className="cursor-pointer">
                             <Eye className="w-4 h-4 mr-2" /> View Answer
                           </DropdownMenuItem>
                           {evaluation.status === 'submitted' && (
-                            <DropdownMenuItem className="cursor-pointer text-slate-300 hover:bg-slate-700">
+                            <DropdownMenuItem className="cursor-pointer">
                               Assign for Evaluation
                             </DropdownMenuItem>
                           )}
@@ -243,11 +243,10 @@ export default function EvaluationsPage() {
             size="sm"
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
           >
             Previous
           </Button>
-          <span className="text-sm text-slate-400">
+          <span className="text-sm text-slate-600">
             Page {currentPage} of {Math.ceil(totalEvaluations / 20)}
           </span>
           <Button
@@ -255,7 +254,6 @@ export default function EvaluationsPage() {
             size="sm"
             disabled={currentPage >= Math.ceil(totalEvaluations / 20)}
             onClick={() => setCurrentPage(p => p + 1)}
-            className="bg-slate-800 border-slate-700 text-white hover:bg-slate-700"
           >
             Next
           </Button>

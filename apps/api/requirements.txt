@@ -39,7 +39,7 @@ Pillow==12.3.0
 
 # -- AI Tutor (Google Gemini) -------------------------------------------------
 # google-genai: directly imported in ai_tutor/services.py and
-#   administration/ai_views.py as rom google import genai.
+#   administration/ai_views.py as from google import genai.
 google-genai==2.18.1
 # google-auth: directly imported in core/social_auth.py for Google Sign-In
 #   token verification (from google.oauth2 import id_token,

@@ -1,8 +1,18 @@
-# LoksewaAI Django backend dependencies (apps/api)
+﻿# LoksewaAI Django backend — production dependencies
+# apps/api/requirements.txt
+#
+# Python 3.14  |  pinned to versions present in apps/api/venv
 # Install:  pip install -r requirements.txt
-# Pinned to the versions currently present in apps/api/venv.
+# Deploy:   gunicorn backend.wsgi --log-file -
+#
+# Rules applied:
+#   - Only packages directly imported by project source are listed.
+#   - Transitive dependencies (asgiref, botocore, s3transfer, proto-plus, etc.)
+#     are resolved automatically by pip and are NOT listed here.
+#   - Development-only tools (pytest, black, isort, mypy, ...) are excluded.
+#   - No secrets appear in this file.
 
-# --- Core framework ---
+# -- Core framework -----------------------------------------------------------
 Django==6.1
 djangorestframework==3.18.0
 djangorestframework-simplejwt==5.5.1
@@ -10,22 +20,45 @@ PyJWT==2.13.0
 django-cors-headers==4.9.0
 django-filter==26.1
 
-# --- Database ---
-# dj-database-url parses DATABASE_URL / DIRECT_URL into Django's DATABASES.
+# -- Database -----------------------------------------------------------------
+# dj-database-url: parses DATABASE_URL / DIRECT_URL into DATABASES dict.
+# Imported directly in backend/settings.py.
 dj-database-url==3.1.2
-# PostgreSQL driver for Supabase. Do not add a second driver (psycopg v3)
-# alongside this one.
+# psycopg2-binary: PostgreSQL driver for Supabase.
+# Do NOT add psycopg (v3) alongside this - they conflict.
 psycopg2-binary==2.9.12
 
-# --- Media storage (Cloudflare R2 / S3-compatible) ---
+# -- Media storage (Cloudflare R2 / S3-compatible) ----------------------------
+# settings.py uses storages.backends.s3boto3.S3Boto3Storage when S3_ENDPOINT_URL
+# is set.  Both packages are direct configuration dependencies.
 django-storages==1.14.6
 boto3==1.43.76
+# Pillow: ImageField, avatar/thumbnail processing.
+# Imported directly in apps/api/crop_images.py and administration views.
 Pillow==12.3.0
 
-# --- AI Tutor ---
+# -- AI Tutor (Google Gemini) -------------------------------------------------
+# google-genai: directly imported in ai_tutor/services.py and
+#   administration/ai_views.py as rom google import genai.
 google-genai==2.18.1
-google-api-python-client==2.198.0
+# google-auth: directly imported in core/social_auth.py for Google Sign-In
+#   token verification (from google.oauth2 import id_token,
+#   from google.auth.transport import requests).
+google-auth==2.56.3
 
-# --- Runtime support ---
-tzdata==2026.3
+# -- HTTP client --------------------------------------------------------------
+# requests: used in core/social_auth.py for Google/Facebook/Apple OAuth
+# userinfo calls, and in several admin/test scripts.
 requests==2.34.2
+
+# -- Runtime / timezone support -----------------------------------------------
+# tzdata: Windows and some minimal Linux images lack the system tz database;
+# this pure-Python package fills the gap.  Required for USE_TZ=True on Render.
+tzdata==2026.3
+
+# -- Production server --------------------------------------------------------
+# gunicorn: WSGI server.  Procfile: web: gunicorn backend.wsgi --log-file -
+gunicorn==26.2.0
+# whitenoise: serves Django static files without a separate CDN/nginx.
+# Loaded in MIDDLEWARE and STORAGES['staticfiles'] in settings.py.
+whitenoise==6.12.0

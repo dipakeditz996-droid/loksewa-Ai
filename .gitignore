@@ -51,7 +51,11 @@ db.sqlite3-journal
 
 # Django uploaded media (user-generated content, not source code)
 apps/api/media/
-media/
+# Anchored to the repo root on purpose. An unanchored `media/` also matched
+# apps/web/media/ and apps/web/public/media/, which hold frontend design assets
+# the Next.js build imports directly — leaving them untracked broke the Vercel
+# build with "module not found" on login/register.
+/media/
 
 # ─── Temporary / scratch files ────────────────────────────────────────────────
 temp_error*.html

@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     AdminProductViewSet, AdminPaymentMethodViewSet, AdminPaymentSubmissionViewSet, AdminPurchaseViewSet,
-    StudentProductViewSet, StudentPaymentMethodViewSet, StudentPaymentSubmissionViewSet, StudentPurchaseViewSet
+    StudentProductViewSet, StudentPaymentMethodViewSet, StudentPaymentSubmissionViewSet, StudentPurchaseViewSet,
+    PublicProductListView,
 )
 
 # Admin routers
@@ -20,6 +21,7 @@ student_router.register(r'payment-submissions', StudentPaymentSubmissionViewSet,
 student_router.register(r'purchases', StudentPurchaseViewSet, basename='student-purchases')
 
 urlpatterns = [
+    path('public/products/', PublicProductListView.as_view(), name='public-products'),
     path('admin/', include(admin_router.urls)),
     path('student/', include(student_router.urls)),
 ]

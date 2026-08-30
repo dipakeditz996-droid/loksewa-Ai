@@ -1,18 +1,31 @@
 "use client";
 
-import React, { useState } from "react";
-import { 
-  Users, GraduationCap, Bot, Store, Activity, 
-  CreditCard, Ticket, AlertCircle, RefreshCw, HelpCircle
+import React from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import {
+  Users, GraduationCap, Bot, Store, Activity,
+  CreditCard, AlertCircle, RefreshCw, HelpCircle, FileText
 } from "lucide-react";
-import { TrendCard, AreaChart } from "@/components/analytics/ChartComponents";
+import { TrendCard } from "@/components/analytics/ChartComponents";
 import { Area, AreaChart as RechartsAreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CustomTooltip, COLORS } from "@/components/analytics/ChartComponents";
 import { adminApi } from "@/lib/api/admin";
 import { useQuery } from "@tanstack/react-query";
+import { AnalyticsPeriod } from "@/components/analytics/DateRangeFilter";
+
+const MODULE_LINKS = [
+  { name: "Students", href: "/admin-dashboard/analytics/students", icon: Users },
+  { name: "Exams", href: "/admin-dashboard/exams", icon: FileText },
+  { name: "Questions", href: "/admin-dashboard/questions/review", icon: HelpCircle },
+  { name: "Study Plans", href: "/admin-dashboard/study-plans", icon: GraduationCap },
+  { name: "AI Tutor", href: "/admin-dashboard/ai-tutor/overview", icon: Bot },
+  { name: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },
+];
 
 export default function AnalyticsOverviewPage() {
-  const [period, setPeriod] = useState<"7d" | "30d" | "90d" | "1y">("30d");
+  const searchParams = useSearchParams();
+  const period = (searchParams.get("period") as AnalyticsPeriod) || "30d";
 
   // Fetch KPI Stats
   const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
@@ -49,24 +62,7 @@ export default function AnalyticsOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-xl font-bold text-[#0B2545] hidden sm:block">Analytics Overview</h2>
-        <div className="flex bg-white border border-slate-200 rounded-lg p-1">
-          {(["7d", "30d", "90d", "1y"] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                period === p 
-                  ? "bg-slate-100 text-[#0B2545]" 
-                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {p.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h2 className="text-xl font-bold text-[#0B2545]">Analytics Overview</h2>
       
       {/* Platform Health Scorecard (KPIs) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -171,34 +167,28 @@ export default function AnalyticsOverviewPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Module Breakdowns (Truthful Empty State) */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col justify-center items-center text-center">
-          <AlertCircle className="w-12 h-12 text-slate-300 mb-4" />
-          <h3 className="font-bold text-[#0B2545] mb-2">Detailed Module Analytics</h3>
-          <p className="text-slate-500 text-sm max-w-sm mb-4">
-            Advanced module-level analytics (Students, Exams, Marketplace) are currently pending backend API support.
-          </p>
-          <span className="text-xs font-bold px-2 py-1 rounded border text-amber-600 bg-amber-50 border-amber-200">
-            Backend Gap
-          </span>
-        </div>
-
-        {/* Quick Report Generate */}
-        <div className="bg-[#0B2545] rounded-xl shadow-sm border border-[#0B2545] p-6 text-white flex flex-col justify-center items-center text-center">
-          <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mb-4">
-            <Ticket className="w-8 h-8 text-[#D4A72C]" />
-          </div>
-          <h3 className="text-xl font-bold mb-2">Generate Custom Report</h3>
-          <p className="text-white/70 text-sm mb-6 max-w-sm">
-            Detailed reporting pipelines are currently pending backend implementation.
-          </p>
-          <button disabled className="bg-slate-700 text-slate-400 font-bold py-2 px-6 rounded-lg cursor-not-allowed">
-            Report Builder (Unavailable)
-          </button>
+      {/* Module deep-dives - each of these already has its own real,
+          backend-connected admin section, so this links out rather than
+          duplicating that page as a second thinner dashboard. */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="font-bold text-[#0B2545] mb-1">Module Deep-Dives</h3>
+        <p className="text-slate-500 text-sm mb-4">
+          Detailed, module-specific data lives in each section&apos;s own admin page.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {MODULE_LINKS.map((m) => (
+            <Link
+              key={m.href}
+              href={m.href}
+              className="flex items-center gap-2.5 p-3 rounded-lg border border-slate-200 hover:border-[#D4A72C]/50 hover:bg-slate-50 transition-colors"
+            >
+              <m.icon className="w-4 h-4 text-[#D4A72C] shrink-0" />
+              <span className="text-sm font-medium text-slate-700">{m.name}</span>
+            </Link>
+          ))}
         </div>
       </div>
-      
+
     </div>
   );
 }

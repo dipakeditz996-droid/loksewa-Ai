@@ -35,7 +35,7 @@ class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Subscription.objects.filter(recipient=self.request.user).order_by('-created_at')
+        return Subscription.objects.filter(student=self.request.user).order_by('-created_at')
 
 class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     serializer_class = SubscriptionPaymentSerializer
@@ -44,10 +44,10 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if self.request.user.role in ['admin', 'super-admin']:
             return SubscriptionPayment.objects.all().order_by('-submitted_at')
-        return SubscriptionPayment.objects.filter(recipient=self.request.user).order_by('-submitted_at')
+        return SubscriptionPayment.objects.filter(student=self.request.user).order_by('-submitted_at')
 
     def perform_create(self, serializer):
-        payment = serializer.save(recipient=self.request.user)
+        payment = serializer.save(student=self.request.user)
         # Notify user
         Notification.objects.create(
             recipient=self.request.user,
@@ -55,6 +55,14 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             title='Payment Submitted',
             message='Your payment has been submitted and is awaiting verification.',
             related_id=str(payment.id)
+        )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='payment',
+            title='New Subscription Payment Awaiting Verification',
+            message=f"{self.request.user.get_full_name() or self.request.user.username} submitted a payment of NPR {payment.amount} for '{payment.plan.name}'.",
+            action_url='/admin-dashboard/applications',
         )
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
@@ -79,7 +87,7 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             start_date = now
 
             # Check if user has active subscription to extend
-            active_sub = Subscription.objects.filter(recipient=payment.student, status='ACTIVE', expiry_date__gt=now).order_by('-expiry_date').first()
+            active_sub = Subscription.objects.filter(student=payment.student, status='ACTIVE', expiry_date__gt=now).order_by('-expiry_date').first()
             if active_sub:
                 start_date = active_sub.expiry_date
 
@@ -98,7 +106,7 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
 
             # Create subscription
             subscription = Subscription.objects.create(
-                recipient=payment.student,
+                student=payment.student,
                 plan=plan,
                 status='ACTIVE',
                 start_date=start_date,
@@ -114,7 +122,7 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                 try:
                     from courses.models import Enrollment, CourseApplication
                     enrollment, created = Enrollment.objects.get_or_create(
-                        recipient=payment.student,
+                        student=payment.student,
                         course=plan.course,
                         defaults={
                             'status': 'active',
@@ -131,7 +139,7 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
 
                     # Approve any CourseApplication linked to this payment or this student+course
                     CourseApplication.objects.filter(
-                        recipient=payment.student,
+                        student=payment.student,
                         course=plan.course,
                         status='pending'
                     ).update(
@@ -150,7 +158,7 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
 
             # Create invoice
             Invoice.objects.create(
-                recipient=payment.student,
+                student=payment.student,
                 payment=payment,
                 receipt_number=f"LKAI-{now.year}-{str(uuid.uuid4())[:8].upper()}",
                 amount=payment.amount
@@ -164,6 +172,17 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                 message=f'Your enrollment in "{enrolled_course_title}" has been activated successfully!',
                 related_id=str(payment.id)
             )
+
+        # Placed after the atomic block so it only fires once the approval
+        # (payment + subscription + enrollment + invoice) has actually
+        # committed - a rollback partway through never leaves this orphaned.
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='payment',
+            title='Subscription Payment Approved',
+            message=f"{request.user.get_full_name() or request.user.username} approved {payment.student.get_full_name() or payment.student.username}'s payment for '{plan.name}' — subscription activated.",
+            action_url='/admin-dashboard/applications',
+        )
 
         return Response({'status': 'approved'})
 
@@ -191,6 +210,14 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             title='Payment Rejected',
             message=f'Your payment was rejected. Reason: {reason}',
             related_id=str(payment.id)
+        )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='payment',
+            title='Subscription Payment Rejected',
+            message=f"{request.user.get_full_name() or request.user.username} rejected {payment.student.get_full_name() or payment.student.username}'s payment for '{payment.plan.name}'. Reason: {reason}",
+            action_url='/admin-dashboard/applications',
         )
 
         return Response({'status': 'rejected'})

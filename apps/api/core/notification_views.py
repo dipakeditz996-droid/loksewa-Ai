@@ -7,6 +7,7 @@ from django.utils import timezone
 from .models import Notification
 from support.models import NotificationPreference
 from .notification_serializers import NotificationSerializer, TeacherNotificationPreferenceSerializer
+from .notification_service import NOTIFICATION_CATEGORY_MAP
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -20,19 +21,32 @@ class NotificationListView(APIView):
     
     def get(self, request):
         queryset = Notification.objects.filter(recipient=request.user)
-        
+
         # Filtering
         filter_type = request.query_params.get('type')
         if filter_type:
             queryset = queryset.filter(type=filter_type)
-            
+
         filter_unread = request.query_params.get('unread')
         if filter_unread == 'true':
             queryset = queryset.filter(is_read=False)
-            
+
         filter_priority = request.query_params.get('priority')
         if filter_priority:
             queryset = queryset.filter(priority=filter_priority)
+
+        # Category buckets the student notification center's filter tabs use.
+        # 'important' is priority-based; everything else maps to a group of
+        # `type` values via NOTIFICATION_CATEGORY_MAP, with 'system' as the
+        # catch-all for every type not explicitly grouped elsewhere.
+        filter_category = request.query_params.get('category')
+        if filter_category == 'important':
+            queryset = queryset.filter(priority__in=['important', 'critical'])
+        elif filter_category == 'system':
+            grouped_types = [t for types in NOTIFICATION_CATEGORY_MAP.values() for t in types]
+            queryset = queryset.exclude(type__in=grouped_types)
+        elif filter_category in NOTIFICATION_CATEGORY_MAP:
+            queryset = queryset.filter(type__in=NOTIFICATION_CATEGORY_MAP[filter_category])
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(queryset, request)

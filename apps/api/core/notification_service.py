@@ -1,9 +1,14 @@
+import logging
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
 from .models import Notification
 from support.models import NotificationPreference
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -23,15 +28,87 @@ class NotificationBroadcastError(Exception):
     """Raised when an audience cannot be resolved into real recipients."""
 
 
+# Student notification center filter tabs -> the underlying Notification.type
+# values each bucket covers. Deliberately just the tabs the student UI needs
+# (All / Unread / Important / Exam / Learning / Achievement / System) rather
+# than one tab per `type` — "Important" is priority-based, not type-based,
+# and is handled separately by the view. Anything not explicitly bucketed
+# below (payment, support, announcement, feedback, account, ...) falls under
+# 'system', which doubles as the catch-all tab.
+NOTIFICATION_CATEGORY_MAP = {
+    'exam': ['exam', 'result', 'evaluation'],
+    'learning': ['practice', 'course', 'study_plan'],
+    'achievement': ['gamification'],
+}
+
+
+# notif_type -> the NotificationPreference boolean that gates it, for the
+# student-facing event types added alongside this map. Teacher-facing types
+# keep using their own preference_key argument passed explicitly, as before.
+_STUDENT_PREFERENCE_KEY = {
+    'exam': 'exam_reminders',
+    'result': 'result_published',
+    'study_plan': 'study_plan_reminders',
+    'practice': 'practice_reminders',
+    'gamification': 'daily_progress',
+}
+
+
 class NotificationService:
+    @staticmethod
+    def _student_notify_once(recipient, notif_type, related_id, title, message, action_url=None, priority='normal'):
+        """Create a student-facing notification exactly once per (recipient,
+        type, related_id) — the idempotency key event-triggered notifications
+        need so a retried request or a re-run job never duplicates a row.
+
+        Also gated on the two AdminSettings kill switches and the student's
+        own NotificationPreference for this category, same as
+        _create_if_allowed. Returns the created Notification, or None if it
+        was skipped (already exists, or the recipient opted out).
+        """
+        from .models import AdminSettings
+
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return None
+
+        related_id = str(related_id) if related_id is not None else None
+        if related_id and Notification.objects.filter(
+            recipient=recipient, type=notif_type, related_id=related_id
+        ).exists():
+            return None
+
+        preference_key = _STUDENT_PREFERENCE_KEY.get(notif_type)
+        if preference_key:
+            prefs, _ = NotificationPreference.objects.get_or_create(user=recipient)
+            if not getattr(prefs, preference_key, True):
+                return None
+
+        return Notification.objects.create(
+            recipient=recipient,
+            type=notif_type,
+            related_id=related_id,
+            title=title,
+            message=message,
+            action_url=action_url,
+            priority=priority,
+        )
+
     @staticmethod
     def _create_if_allowed(recipient, notif_type, preference_key, title, message, action_url, priority='normal'):
         """Helper to check preferences and create a notification."""
+        from .models import AdminSettings
+        admin_settings = AdminSettings.get_settings()
+
+        # Global admin kill switches, checked before the per-user preference.
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return
+
         prefs, _ = NotificationPreference.objects.get_or_create(user=recipient)
-        
+
         # Check if in-app notification is enabled for this category
         is_allowed = getattr(prefs, preference_key, True)
-        
+
         if is_allowed:
             Notification.objects.create(
                 recipient=recipient,
@@ -41,8 +118,8 @@ class NotificationService:
                 action_url=action_url,
                 priority=priority
             )
-            # In a real app, here you would also check the corresponding *_email 
-            # preference and enqueue a Celery task to send an email.
+            # Real email dispatch (gated on admin_settings.enable_email_notifications)
+            # lands with the email-sending setup - there is no email backend yet.
 
     @classmethod
     def notify_question_review(cls, teacher, question_title, status, feedback=None, action_url=None):
@@ -96,6 +173,42 @@ class NotificationService:
         )
 
     @classmethod
+    def notify_admins_schedule_change(cls, schedule, event_type="updated"):
+        """Notify administrators when an official exam schedule is published/changed."""
+        admins = User.objects.filter(is_staff=True, is_active=True)
+        title = f"Official Exam Schedule {event_type.capitalize()}"
+        message = f"Loksewa schedule '{schedule.title}' set for {schedule.exam_date} has been {event_type}."
+        for admin in admins:
+            cls._create_if_allowed(
+                recipient=admin,
+                notif_type='system',
+                preference_key='system_alerts_inapp',
+                title=title,
+                message=message,
+                action_url='/admin-dashboard/exams/schedules',
+                priority='normal'
+            )
+
+    @classmethod
+    def notify_admins_mock_exam_schedule(cls, examination, event_type="published"):
+        """Notify administrators when a mock exam schedule is updated or published."""
+        admins = User.objects.filter(is_staff=True, is_active=True)
+        title = f"Mock Exam {event_type.capitalize()}"
+        start_str = examination.start_time.strftime('%Y-%m-%d %H:%M') if examination.start_time else 'immediate'
+        message = f"Mock Exam '{examination.title}' scheduled for {start_str} has been {event_type}."
+        for admin in admins:
+            cls._create_if_allowed(
+                recipient=admin,
+                notif_type='system',
+                preference_key='system_alerts_inapp',
+                title=title,
+                message=message,
+                action_url='/admin-dashboard/exams',
+                priority='normal'
+            )
+
+
+    @classmethod
     def notify_system_alert(cls, teacher, title, message, action_url=None, priority='critical'):
         # System alerts in-app are required, no preference check for creation
         Notification.objects.create(
@@ -105,6 +218,307 @@ class NotificationService:
             message=message,
             action_url=action_url,
             priority=priority
+        )
+
+    @classmethod
+    def notify_admins(cls, notif_type, title, message, action_url=None, priority='normal', dedupe_minutes=None):
+        """Fan a real system event (a payment to verify, content to review, an
+        answer to grade...) out to every active admin. Still gated on the two
+        platform-wide kill switches, but - like system alerts - not on a
+        per-admin preference row, since these are the events an admin
+        dashboard's own "Pending" queues are built from.
+
+        dedupe_minutes: if set, skip creating this notification when an
+        identical one (same type + title) was already sent to admins within
+        that many minutes. Meant for events that can repeat on every request
+        during an outage (e.g. an external provider going down) so admins get
+        one alert per incident, not one row per failed request.
+        """
+        from .models import AdminSettings
+
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return
+
+        if dedupe_minutes is not None:
+            cutoff = timezone.now() - timedelta(minutes=dedupe_minutes)
+            already_alerted = Notification.objects.filter(
+                type=notif_type, title=title, created_at__gte=cutoff,
+                recipient__role__in=['admin', 'super-admin'],
+            ).exists()
+            if already_alerted:
+                return
+
+        admins = resolve_audience('admins')
+        Notification.objects.bulk_create([
+            Notification(
+                recipient=admin,
+                type=notif_type,
+                title=title,
+                message=message,
+                action_url=action_url,
+                priority=priority,
+            )
+            for admin in admins
+        ])
+
+    @classmethod
+    def notify_system_failure(cls, component, detail, action_url=None, priority='critical', dedupe_minutes=15):
+        """Throttled admin alert for a genuine backend/infrastructure failure
+        (a storage provider erroring out, the AI provider going down...).
+
+        Deliberately reuses notify_admins' dedupe_minutes rather than
+        introducing a queue or aggregation table: the first failure in a
+        window reaches admins immediately, repeats of the *same* failure
+        within the window are silently absorbed, and the next window's first
+        occurrence alerts again - so an ongoing outage stays visible without
+        flooding the inbox with one row per failed request.
+        """
+        title = f"{component} Failure"
+        cls.notify_admins(
+            notif_type='system',
+            title=title,
+            message=detail[:500],
+            action_url=action_url,
+            priority=priority,
+            dedupe_minutes=dedupe_minutes,
+        )
+
+    # ── Student-facing event notifications ──────────────────────────────
+    # Priority mapping note: the product spec asks for a 4-tier LOW/NORMAL/
+    # HIGH/URGENT scale, but Notification.PRIORITY_CHOICES (already used by
+    # the teacher/admin side) only has normal/important/critical. Rather than
+    # add a 4th value nothing else uses, these methods reuse the existing
+    # scale: LOW and NORMAL both map to 'normal', HIGH maps to 'important',
+    # URGENT maps to 'critical'.
+
+    EXAM_UPDATE_COPY = {
+        'published': (
+            'normal',
+            'New Mock Exam Available',
+            lambda exam: f'"{exam.title}" is now available. Test your preparation.',
+        ),
+        'cancelled': (
+            'critical',
+            'Exam Cancelled',
+            lambda exam: f'"{exam.title}" has been cancelled. We apologize for the inconvenience.',
+        ),
+        'schedule_changed': (
+            'important',
+            'Exam Schedule Changed',
+            lambda exam: (
+                f'The schedule for "{exam.title}" has changed'
+                + (f", it is now set for {exam.start_time.strftime('%Y-%m-%d %H:%M')}." if exam.start_time else '.')
+            ),
+        ),
+    }
+
+    @classmethod
+    def notify_students_exam_update(cls, examination, event_type):
+        """Notify the students an exam is relevant to that it was published,
+        cancelled, or had its schedule changed. Audience is the exam's
+        enrolled course when it has one, otherwise every active student —
+        deliberately simpler than full ExaminationEligibility resolution,
+        which the admin exam list itself doesn't consult for audience either.
+
+        One row per (student, event_type, examination) — re-publishing or a
+        retried request never duplicates a delivered notification.
+        """
+        from .models import AdminSettings
+
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return 0
+
+        copy = cls.EXAM_UPDATE_COPY.get(event_type)
+        if not copy:
+            return 0
+        priority, title, message_fn = copy
+
+        if examination.course_id:
+            students = resolve_audience('course', course_id=examination.course_id)
+        else:
+            students = resolve_audience('students')
+
+        student_ids = list(students.values_list('id', flat=True))
+        if not student_ids:
+            return 0
+
+        related_id = f'exam-{event_type}:{examination.id}'
+        if event_type == 'schedule_changed':
+            # Each distinct new start_time is its own event — a second,
+            # different reschedule must still notify students — while a
+            # retried request with the same new start_time stays deduped.
+            stamp = examination.start_time.isoformat() if examination.start_time else 'none'
+            related_id = f'{related_id}:{stamp}'
+        already = set(
+            Notification.objects.filter(
+                type='exam', related_id=related_id, recipient_id__in=student_ids
+            ).values_list('recipient_id', flat=True)
+        )
+        opted_out = set(
+            NotificationPreference.objects.filter(
+                user_id__in=student_ids, exam_reminders=False
+            ).values_list('user_id', flat=True)
+        )
+
+        rows = [
+            Notification(
+                recipient_id=sid,
+                type='exam',
+                related_id=related_id,
+                title=title,
+                message=message_fn(examination),
+                action_url=f'/student/exams/{examination.id}',
+                priority=priority,
+            )
+            for sid in student_ids
+            if sid not in already and sid not in opted_out
+        ]
+        Notification.objects.bulk_create(rows, batch_size=500)
+        return len(rows)
+
+    @classmethod
+    def notify_exams_starting_soon(cls, window_minutes=30):
+        """Periodic job: one "starting soon" notification per (student, exam)
+        for every published exam whose start_time falls within the next
+        `window_minutes`. Meant to be called every few minutes by Celery beat
+        (see exams/tasks.py) — the related_id dedupe means running it
+        repeatedly as an exam approaches never sends more than one row per
+        student per exam.
+        """
+        from .models import AdminSettings
+        from exams.models import Examination
+
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return 0
+
+        now = timezone.now()
+        soon = now + timedelta(minutes=window_minutes)
+        exams = Examination.objects.filter(
+            status='published', start_time__gt=now, start_time__lte=soon,
+        ).exclude(objective_category='old_past')
+
+        total = 0
+        for examination in exams:
+            if examination.course_id:
+                students = resolve_audience('course', course_id=examination.course_id)
+            else:
+                students = resolve_audience('students')
+            student_ids = list(students.values_list('id', flat=True))
+            if not student_ids:
+                continue
+
+            related_id = f'exam-starting-soon:{examination.id}'
+            already = set(
+                Notification.objects.filter(
+                    type='exam', related_id=related_id, recipient_id__in=student_ids
+                ).values_list('recipient_id', flat=True)
+            )
+            opted_out = set(
+                NotificationPreference.objects.filter(
+                    user_id__in=student_ids, exam_starting_soon=False
+                ).values_list('user_id', flat=True)
+            )
+            rows = [
+                Notification(
+                    recipient_id=sid,
+                    type='exam',
+                    related_id=related_id,
+                    title='Exam Starting Soon',
+                    message=(
+                        f'"{examination.title}" starts at '
+                        f'{timezone.localtime(examination.start_time).strftime("%H:%M")} today. Be ready!'
+                    ),
+                    action_url=f'/student/exams/{examination.id}',
+                    priority='important',
+                )
+                for sid in student_ids
+                if sid not in already and sid not in opted_out
+            ]
+            Notification.objects.bulk_create(rows, batch_size=500)
+            total += len(rows)
+        return total
+
+    @classmethod
+    def notify_result_published(cls, attempt):
+        """Objective exam result ready. Skipped for result_visibility='manual'
+        exams — nothing in the codebase currently transitions an
+        ExaminationAttempt to 'evaluated' (manual review isn't wired up for
+        objective exams yet), so firing here would be premature."""
+        examination = attempt.examination
+        if examination.result_visibility == 'manual':
+            return None
+
+        message = f'Your result for "{examination.title}" is ready — you scored {attempt.percentage}%.'
+        if attempt.passed:
+            message += ' Congratulations, you passed!'
+
+        return cls._student_notify_once(
+            recipient=attempt.student,
+            notif_type='result',
+            related_id=f'result:{attempt.id}',
+            title='Result Published',
+            message=message,
+            action_url=f'/student/exams/{examination.id}/result/{attempt.id}',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_subjective_evaluated(cls, evaluation):
+        """A teacher/admin finished grading one subjective answer."""
+        student = evaluation.answer.attempt.student
+        return cls._student_notify_once(
+            recipient=student,
+            notif_type='result',
+            related_id=f'subjective-eval:{evaluation.id}',
+            title='Answer Evaluated',
+            message='One of your subjective answers has been evaluated. Your feedback and marks are ready.',
+            action_url=f'/student/subjective/evaluation/{evaluation.id}',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_study_plan_created(cls, plan):
+        return cls._student_notify_once(
+            recipient=plan.student,
+            notif_type='study_plan',
+            related_id=f'plan-created:{plan.id}',
+            title='Study Plan Created',
+            message="Your personalized study plan is ready. Check today's tasks to get started.",
+            action_url='/student/study-plan',
+            priority='normal',
+        )
+
+    STREAK_MILESTONES = (3, 7, 14, 30, 60, 100, 180, 365)
+
+    @classmethod
+    def notify_streak_milestone(cls, user, streak_days):
+        """Only fires on an exact milestone value — never on every day of a
+        streak, so a 45-day streak stays silent between the 30 and 60 marks."""
+        if streak_days not in cls.STREAK_MILESTONES:
+            return None
+        return cls._student_notify_once(
+            recipient=user,
+            notif_type='gamification',
+            related_id=f'streak:{streak_days}',
+            title=f'{streak_days}-Day Streak!',
+            message=f"You've studied for {streak_days} consecutive days. Keep the momentum going!",
+            action_url='/student/study-plan',
+            priority='normal',
+        )
+
+    @classmethod
+    def notify_level_up(cls, user, level):
+        return cls._student_notify_once(
+            recipient=user,
+            notif_type='gamification',
+            related_id=f'level:{level}',
+            title='Level Up!',
+            message=f'You reached Level {level}. Keep going!',
+            action_url='/student',
+            priority='normal',
         )
 
 
@@ -213,3 +627,44 @@ def delivery_stats(admin_notification):
         'unread_count': total - read,
         'read_rate': round((read / total) * 100, 2) if total else 0.0,
     }
+
+
+def dispatch_due_scheduled_notifications():
+    """Delivers every AdminNotification whose scheduled_for time has arrived.
+
+    Scheduling one (AdminNotificationsCreateView with delivery='schedule')
+    only ever stored status='scheduled' + scheduled_for - nothing delivered
+    it automatically, so an admin had to remember to come back and press
+    "Send" themselves at the right time, which defeats the point of
+    scheduling. This is the periodic job that actually closes that loop;
+    see backend/celery.py's beat schedule and core/tasks.py for where it's
+    invoked from.
+
+    Returns a list of {id, title, delivered} for whatever it just sent, and
+    logs (not raises) anything that fails to broadcast - one bad campaign
+    must not block the rest of the batch.
+    """
+    from .models import AdminNotification
+
+    due = AdminNotification.objects.filter(
+        status='scheduled', scheduled_for__lte=timezone.now()
+    )
+
+    results = []
+    for notification in due:
+        try:
+            delivered = broadcast_admin_notification(notification)
+            results.append({'id': notification.id, 'title': notification.title, 'delivered': delivered})
+        except NotificationBroadcastError:
+            logger.exception(
+                "Scheduled notification %s could not be delivered - its audience no longer resolves.",
+                notification.id,
+            )
+            notification.status = 'failed'
+            notification.save(update_fields=['status', 'updated_at'])
+        except Exception:
+            logger.exception("Scheduled notification %s failed to send.", notification.id)
+            notification.status = 'failed'
+            notification.save(update_fields=['status', 'updated_at'])
+
+    return results

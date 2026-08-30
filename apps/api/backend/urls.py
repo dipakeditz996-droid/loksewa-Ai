@@ -10,11 +10,20 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
 from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, StudentSignupView, StudentDashboardView, SocialLoginView
+from core.media_views import drive_media_proxy
+from core.feedback_views import StudentFeedbackListView
 from core.teacher_views import (
     TeacherProfileView,
     TeacherAvatarUploadView,
     TeacherChangePasswordView,
     TeacherPreferencesView,
+)
+from core.two_factor_views import (
+    TwoFactorStatusView,
+    TwoFactorSetupView,
+    TwoFactorVerifySetupView,
+    TwoFactorDisableView,
+    TwoFactorLoginView,
 )
 
 urlpatterns = [
@@ -27,7 +36,14 @@ urlpatterns = [
     path('api/auth/admin-login/', AdminLoginView.as_view(), name='auth_admin_login'),
     path('api/auth/logout/', AuthLogoutView.as_view(), name='auth_logout'),
     path('api/auth/forgot-password/', ForgotPasswordView.as_view(), name='auth_forgot_password'),
+    path('api/auth/2fa/status/', TwoFactorStatusView.as_view(), name='auth_2fa_status'),
+    path('api/auth/2fa/setup/', TwoFactorSetupView.as_view(), name='auth_2fa_setup'),
+    path('api/auth/2fa/verify-setup/', TwoFactorVerifySetupView.as_view(), name='auth_2fa_verify_setup'),
+    path('api/auth/2fa/disable/', TwoFactorDisableView.as_view(), name='auth_2fa_disable'),
+    path('api/auth/2fa/login/', TwoFactorLoginView.as_view(), name='auth_2fa_login'),
     path('api/dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
+    path('api/media/drive/<str:file_id>/', drive_media_proxy, name='drive_media_proxy'),
+    path('api/student/feedback/', StudentFeedbackListView.as_view(), name='student_feedback_list'),
 
     # Teacher self-service settings
     path('api/auth/teacher/profile/', TeacherProfileView.as_view(), name='teacher_profile'),
@@ -49,6 +65,7 @@ urlpatterns = [
     path('api/gamification/', include('gamification.urls')),
     path('api/', include('courses.urls')),
     path('api/notifications/', include('core.notification_urls')),
+    path('api/', include('core.testimonial_urls')),
     path('api/', include('subscriptions.public_urls')),
     path('api/', include('analytics.public_urls')),
     path('api/', include('core.public_urls')),

@@ -52,9 +52,9 @@ export default function DuelSetupPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 min-h-[calc(100vh-72px)] bg-slate-50/50">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 min-h-[calc(100vh-72px)] bg-muted/50">
       <div>
-        <h1 className="text-3xl font-bold text-[#0B2545]">1 vs 1 MCQ Challenge</h1>
+        <h1 className="text-3xl font-bold text-primary dark:text-foreground">1 vs 1 MCQ Challenge</h1>
         <p className="text-muted-foreground mt-2">
           Compete against another student in a real-time MCQ battle.
         </p>
@@ -62,16 +62,16 @@ export default function DuelSetupPage() {
 
       <div className="grid md:grid-cols-2 gap-6">
         {/* Random Match */}
-        <div className="bg-white border border-slate-200 rounded-xl p-8 flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-[#0B2545]/10 rounded-full flex items-center justify-center mb-6">
-            <Swords className="w-8 h-8 text-[#0B2545]" />
+        <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center text-center">
+          <div className="w-16 h-16 bg-primary text-primary-foreground/10 rounded-full flex items-center justify-center mb-6">
+            <Swords className="w-8 h-8 text-primary dark:text-foreground" />
           </div>
-          <h2 className="text-2xl font-bold text-[#0B2545] mb-2">Random Match</h2>
-          <p className="text-slate-600 mb-8 flex-1">
+          <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">Random Match</h2>
+          <p className="text-muted-foreground mb-8 flex-1">
             Play against a random student who is also looking for a match right now.
           </p>
           <Button 
-            className="w-full bg-[#0B2545] hover:bg-[#0B2545]/90 py-6"
+            className="w-full bg-primary text-primary-foreground hover:bg-primary text-primary-foreground/90 py-6"
             onClick={handleRandomMatch}
             disabled={isSearching}
           >
@@ -82,12 +82,12 @@ export default function DuelSetupPage() {
         </div>
 
         {/* Invite Friend */}
-        <div className="bg-white border border-slate-200 rounded-xl p-8 flex flex-col items-center text-center">
+        <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center text-center">
           <div className="w-16 h-16 bg-[#D4A72C]/10 rounded-full flex items-center justify-center mb-6">
             <UserPlus className="w-8 h-8 text-[#D4A72C]" />
           </div>
-          <h2 className="text-2xl font-bold text-[#0B2545] mb-2">Invite Friend</h2>
-          <p className="text-slate-600 mb-6 flex-1">
+          <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">Invite Friend</h2>
+          <p className="text-muted-foreground mb-6 flex-1">
             Create a private challenge room or join an existing one using an invite code.
           </p>
           
@@ -102,10 +102,10 @@ export default function DuelSetupPage() {
                 Create Challenge
               </Button>
             ) : (
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <p className="text-sm text-slate-500 mb-2">Share this code with your friend:</p>
-                <div className="text-2xl font-bold text-[#0B2545] tracking-widest">{inviteCode}</div>
-                <p className="text-xs text-slate-400 mt-2">Waiting for them to join...</p>
+              <div className="bg-muted p-4 rounded-lg border border-border">
+                <p className="text-sm text-muted-foreground mb-2">Share this code with your friend:</p>
+                <div className="text-2xl font-bold text-primary dark:text-foreground tracking-widest">{inviteCode}</div>
+                <p className="text-xs text-muted-foreground mt-2">Waiting for them to join...</p>
                 <Button 
                   className="w-full mt-4" 
                   onClick={() => router.push(`/student/games/duel/${inviteCode}/wait`)}
@@ -117,7 +117,7 @@ export default function DuelSetupPage() {
             
             <div className="relative">
               <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-muted-foreground">Or join</span></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or join</span></div>
             </div>
             
             <div className="flex space-x-2">

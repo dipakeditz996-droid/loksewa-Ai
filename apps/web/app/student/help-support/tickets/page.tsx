@@ -15,12 +15,12 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any; labe
   open: { color: "text-blue-700", bg: "bg-blue-100", icon: AlertCircle, label: "Open" },
   in_progress: { color: "text-amber-700", bg: "bg-amber-100", icon: Clock, label: "In Progress" },
   waiting_student: { color: "text-purple-700", bg: "bg-purple-100", icon: MessageSquare, label: "Waiting for You" },
-  resolved: { color: "text-green-700", bg: "bg-green-100", icon: CheckCircle2, label: "Resolved" },
-  closed: { color: "text-slate-600", bg: "bg-slate-100", icon: CheckCircle2, label: "Closed" },
+  resolved: { color: "text-green-700 dark:text-green-300", bg: "bg-green-100", icon: CheckCircle2, label: "Resolved" },
+  closed: { color: "text-muted-foreground", bg: "bg-muted/80", icon: CheckCircle2, label: "Closed" },
 };
 
 const PRIORITY_COLOR: Record<string, string> = {
-  low: "text-slate-500",
+  low: "text-muted-foreground",
   normal: "text-blue-600",
   high: "text-orange-600",
   urgent: "text-red-600",
@@ -47,11 +47,11 @@ export default function TicketsListPage() {
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-[#0B2545]">My Support Tickets</h1>
-          <p className="text-sm text-slate-500 mt-1">Track and manage your support requests.</p>
+          <h1 className="text-2xl font-bold text-primary dark:text-foreground">My Support Tickets</h1>
+          <p className="text-sm text-muted-foreground mt-1">Track and manage your support requests.</p>
         </div>
         <Link href="/student/help-support/tickets/create">
-          <Button className="bg-[#0B2545] hover:bg-[#163E6B] text-white">
+          <Button className="bg-primary text-primary-foreground hover:bg-[#163E6B] text-white">
             <Plus className="h-4 w-4 mr-2" /> New Ticket
           </Button>
         </Link>
@@ -70,20 +70,20 @@ export default function TicketsListPage() {
             const StatusIcon = statusCfg.icon;
             return (
               <Link key={ticket.id} href={`/student/help-support/tickets/${ticket.id}`}>
-                <div className="bg-white rounded-xl border border-slate-200 p-5 hover:border-[#D4A72C]/40 hover:shadow-sm transition-all cursor-pointer group">
+                <div className="bg-card rounded-xl border border-border p-5 hover:border-[#D4A72C]/40 hover:shadow-sm transition-all cursor-pointer group">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-slate-400">{ticket.ticket_number}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
                         <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", statusCfg.bg, statusCfg.color)}>
                           {statusCfg.label}
                         </span>
-                        <span className={cn("text-[10px] font-medium uppercase", PRIORITY_COLOR[ticket.priority] || "text-slate-500")}>
+                        <span className={cn("text-[10px] font-medium uppercase", PRIORITY_COLOR[ticket.priority] || "text-muted-foreground")}>
                           {ticket.priority}
                         </span>
                       </div>
-                      <p className="text-[14px] font-semibold text-[#0B2545] truncate">{ticket.subject}</p>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
+                      <p className="text-[14px] font-semibold text-primary dark:text-foreground truncate">{ticket.subject}</p>
+                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                         <span className="capitalize">{ticket.category.replace(/_/g, " ")}</span>
                         <span>·</span>
                         <span>{ticket.message_count} messages</span>
@@ -99,12 +99,12 @@ export default function TicketsListPage() {
           })}
         </div>
       ) : (
-        <div className="text-center py-16 bg-white rounded-2xl border border-slate-200">
+        <div className="text-center py-16 bg-card rounded-2xl border border-border">
           <Inbox className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-          <p className="text-lg font-semibold text-slate-600">No support tickets yet</p>
-          <p className="text-sm text-slate-400 mt-1 mb-6">When you report a problem, it will appear here.</p>
+          <p className="text-lg font-semibold text-muted-foreground">No support tickets yet</p>
+          <p className="text-sm text-muted-foreground mt-1 mb-6">When you report a problem, it will appear here.</p>
           <Link href="/student/help-support/tickets/create">
-            <Button className="bg-[#0B2545] hover:bg-[#163E6B] text-white">
+            <Button className="bg-primary text-primary-foreground hover:bg-[#163E6B] text-white">
               <Plus className="h-4 w-4 mr-2" /> Create Your First Ticket
             </Button>
           </Link>

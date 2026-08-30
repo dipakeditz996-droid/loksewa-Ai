@@ -6,6 +6,7 @@ import { adminQuestionApi, AdminQuestion } from '@/lib/api/admin-questions';
 import { Save, FileText, Wand2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
+import { Button } from '@/components/ui/button';
 
 /** Pulls the most useful message out of a DRF error body, which may be
  *  { detail }, { non_field_errors: [...] }, or { <field>: [...] }. */
@@ -26,36 +27,41 @@ function extractApiError(error: any, fallback: string): string {
   return fallback;
 }
 
-export function SingleQuestionForm() {
+export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData?: any, onSaveSuccess?: () => void }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   
   // Form State
-  const [qType, setQType] = useState<'mcq' | 'subjective' | 'true_false'>('mcq');
-  const [status, setStatus] = useState<'draft' | 'pending_review' | 'approved' | 'rejected'>('draft');
-  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
-  const [text, setText] = useState('');
-  const [marks, setMarks] = useState(1);
-  const [negativeMarks, setNegativeMarks] = useState(0);
-  const [expectedTime, setExpectedTime] = useState(1);
-  const [explanation, setExplanation] = useState('');
+  const [qType, setQType] = useState<'mcq' | 'subjective' | 'true_false'>(initialData?.question_type || 'mcq');
+  const [status, setStatus] = useState<'draft' | 'pending_review' | 'approved' | 'rejected'>(initialData?.status || 'draft');
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>(initialData?.difficulty || 'medium');
+  const [text, setText] = useState(initialData?.text || '');
+  const [marks, setMarks] = useState(initialData?.marks || 1);
+  const [negativeMarks, setNegativeMarks] = useState(initialData?.negative_marks || 0);
+  const [expectedTime, setExpectedTime] = useState(initialData?.expected_time_minutes || 1);
+  const [explanation, setExplanation] = useState(initialData?.explanation || '');
   
   // AI Generation
   const [aiGenerate, setAiGenerate] = useState(false);
   
   // MCQ specifics
-  const [options, setOptions] = useState({ A: '', B: '', C: '', D: '' });
-  const [correctOption, setCorrectOption] = useState<'A'|'B'|'C'|'D'|''>('');
+  const [options, setOptions] = useState({ 
+    A: initialData?.option_a || '', 
+    B: initialData?.option_b || '', 
+    C: initialData?.option_c || '', 
+    D: initialData?.option_d || '' 
+  });
+  const [correctOption, setCorrectOption] = useState<'A'|'B'|'C'|'D'|''>(initialData?.correct_option || '');
   
   // Subjective specifics
-  const [modelAnswer, setModelAnswer] = useState('');
+  const [modelAnswer, setModelAnswer] = useState(initialData?.model_answer || '');
 
   // Syllabus Cascading
-  const [selCategory, setSelCategory] = useState('');
-  const [selPosition, setSelPosition] = useState('');
-  const [selSubject, setSelSubject] = useState('');
-  const [selChapter, setSelChapter] = useState('');
-  const [selTopic, setSelTopic] = useState('');
+  const [selCategory, setSelCategory] = useState(initialData?.category_id || '');
+  const [selPosition, setSelPosition] = useState(initialData?.position_id || '');
+  const [selSubject, setSelSubject] = useState(initialData?.subject_id || '');
+  const [selChapter, setSelChapter] = useState(initialData?.chapter_id || '');
+  const [selTopic, setSelTopic] = useState(initialData?.topic || '');
 
   const handleAcademicChange = (field: string, value: any) => {
     if (field === 'category') {
@@ -141,9 +147,19 @@ export function SingleQuestionForm() {
         payload.correct_option = correctOption as 'A'|'B';
       }
 
-      await adminQuestionApi.createQuestion(payload);
-      toast.success('Question created successfully!');
-      router.push('/admin-dashboard/academic/questions');
+      if (initialData?.id) {
+        await adminQuestionApi.updateQuestion(initialData.id, payload);
+        toast.success('Question updated successfully!');
+      } else {
+        await adminQuestionApi.createQuestion(payload);
+        toast.success('Question created successfully!');
+      }
+      
+      if (onSaveSuccess) {
+        onSaveSuccess();
+      } else {
+        router.push('/admin-dashboard/academic/questions');
+      }
     } catch (error: any) {
       console.error('Failed to create question', error);
       toast.error(extractApiError(error, 'Failed to create question'));
@@ -321,18 +337,13 @@ export function SingleQuestionForm() {
       </div>
 
       <div className="flex justify-end pt-4 pb-12">
-        <button 
-          type="submit" 
-          disabled={loading}
-          className="bg-[#0B2545] hover:bg-[#163E6C] text-white px-8 py-3 rounded-xl font-medium flex items-center gap-2 transition-colors disabled:opacity-70"
-        >
-          {loading ? 'Saving...' : (
-            <>
-              <Save className="w-5 h-5" />
-              Save Question
-            </>
-          )}
-        </button>
+        <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading} className="bg-navy-600 hover:bg-navy-700 text-white flex items-center gap-2">
+          <Save className="w-4 h-4" />
+          {loading ? 'Saving...' : (initialData ? 'Update Question' : 'Save Question')}
+        </Button>
       </div>
     </form>
   );

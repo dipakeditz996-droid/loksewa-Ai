@@ -25,6 +25,7 @@ import {
   TopicPerformance,
   QuestionReview,
 } from "@/lib/api/student-results";
+import { CelebrationModal } from "@/components/student/results/CelebrationModal";
 
 export default function FullResultPage() {
   const params = useParams();
@@ -68,7 +69,7 @@ export default function FullResultPage() {
 
   if (!result) {
     return (
-      <div className="p-8 text-center text-slate-500">
+      <div className="p-8 text-center text-muted-foreground">
         <p>Result not found.</p>
         <Button asChild variant="outline" className="mt-4">
           <Link href="/student/results">Back to Results</Link>
@@ -83,21 +84,22 @@ export default function FullResultPage() {
     return `${m}m ${s}s`;
   };
 
-  const totalCorrect = subjects.reduce((sum, s) => sum + s.correct, 0);
-  const totalIncorrect = subjects.reduce((sum, s) => sum + s.incorrect, 0);
-  const totalUnanswered = subjects.reduce((sum, s) => sum + (s.questions - s.correct - s.incorrect), 0);
-  const avgTimePerQuestion = result.timeTaken / (totalCorrect + totalIncorrect + totalUnanswered);
+  const totalCorrect = result.correctAnswers;
+  const totalIncorrect = result.incorrectAnswers;
+  const totalUnanswered = result.unanswered;
+  const totalQuestions = totalCorrect + totalIncorrect + totalUnanswered;
+  const avgTimePerQuestion = totalQuestions > 0 ? result.timeTaken / totalQuestions : 0;
 
   return (
     <div className="p-4 sm:p-8 max-w-5xl mx-auto space-y-8">
       {/* Top Nav */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <Link href="/student/results" className="inline-flex items-center text-sm text-slate-500 hover:text-[#0B2545] mb-2 transition-colors">
+          <Link href="/student/results" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary dark:text-foreground mb-2 transition-colors">
             <ChevronLeft className="w-4 h-4 mr-1" />
             Back to Results
           </Link>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#0B2545]">{result.examName}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary dark:text-foreground">{result.examName}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="hidden sm:flex">
@@ -106,11 +108,23 @@ export default function FullResultPage() {
           <Button variant="outline" size="sm" className="hidden sm:flex">
             <Download className="w-4 h-4 mr-2" /> PDF
           </Button>
-          <Button className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0B2545] font-semibold" size="sm">
+          <Button className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-primary dark:text-foreground font-semibold" size="sm">
             <FileBadge className="w-4 h-4 mr-2" /> Certificate
           </Button>
         </div>
       </div>
+
+      {/* Celebration Modal for Top Ranks */}
+      {typeof result.rank === "number" && (
+        <CelebrationModal
+          rank={result.rank}
+          score={result.score}
+          percentage={result.percentage}
+          examTitle={result.examName}
+          participants={typeof result.totalParticipants === "number" ? result.totalParticipants : undefined}
+          resultId={parseInt(result.id)}
+        />
+      )}
 
       {/* Premium Result Summary Card */}
       <div className="bg-gradient-to-br from-[#0B2545] to-[#163E6B] rounded-2xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg border border-[#1a4a7e]">
@@ -128,7 +142,7 @@ export default function FullResultPage() {
           </div>
           
           <div className="flex-1 w-full flex flex-col gap-4">
-            <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10 flex justify-between items-center">
+            <div className="bg-card/10 rounded-xl p-4 backdrop-blur-sm border border-white/10 flex justify-between items-center">
               <div>
                 <p className="text-white/60 text-xs uppercase font-semibold mb-1">Global Rank</p>
                 <div className="flex items-center gap-2">
@@ -137,7 +151,7 @@ export default function FullResultPage() {
                   <span className="text-xs text-white/50 ml-1">of {result.totalParticipants}</span>
                 </div>
               </div>
-              <Button size="sm" variant="secondary" className="bg-white/20 hover:bg-white/30 text-white border-0" asChild>
+              <Button size="sm" variant="secondary" className="bg-card/20 hover:bg-card/30 text-white border-0" asChild>
                 <Link href={`/student/leaderboard?exam=${result.examId}`}>
                   <Trophy className="w-4 h-4 mr-1.5" /> View Leaderboard
                 </Link>
@@ -145,11 +159,11 @@ export default function FullResultPage() {
             </div>
             
             <div className="flex gap-4">
-              <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10 flex-1">
+              <div className="bg-card/10 rounded-xl p-4 backdrop-blur-sm border border-white/10 flex-1">
                 <p className="text-white/60 text-xs uppercase font-semibold mb-1">Percentile</p>
                 <span className="text-xl font-bold text-emerald-400">{result.percentile}%</span>
               </div>
-              <div className="bg-white/10 rounded-xl p-4 backdrop-blur-sm border border-white/10 flex-1">
+              <div className="bg-card/10 rounded-xl p-4 backdrop-blur-sm border border-white/10 flex-1">
                 <p className="text-white/60 text-xs uppercase font-semibold mb-1">Time Taken</p>
                 <div className="flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-white/80" />
@@ -163,32 +177,32 @@ export default function FullResultPage() {
 
       {/* Performance Breakdown */}
       <div>
-        <h2 className="text-xl font-bold text-[#0B2545] mb-4">Performance Breakdown</h2>
+        <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Performance Breakdown</h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 text-center flex flex-col items-center">
+          <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">
             <CheckCircle2 className="w-6 h-6 text-green-500 mb-2" />
-            <p className="text-2xl font-bold text-[#0B2545]">{totalCorrect}</p>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Correct</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{totalCorrect}</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Correct</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 text-center flex flex-col items-center">
+          <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">
             <XCircle className="w-6 h-6 text-red-500 mb-2" />
-            <p className="text-2xl font-bold text-[#0B2545]">{totalIncorrect}</p>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Incorrect</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{totalIncorrect}</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Incorrect</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 text-center flex flex-col items-center">
-            <HelpCircle className="w-6 h-6 text-slate-400 mb-2" />
-            <p className="text-2xl font-bold text-[#0B2545]">{totalUnanswered}</p>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Unanswered</p>
+          <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">
+            <HelpCircle className="w-6 h-6 text-muted-foreground mb-2" />
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{totalUnanswered}</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Unanswered</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 text-center flex flex-col items-center">
+          <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">
             <Award className="w-6 h-6 text-[#D4A72C] mb-2" />
-            <p className="text-2xl font-bold text-[#0B2545]">{result.percentage}%</p>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Accuracy</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{result.percentage}%</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Accuracy</p>
           </div>
-          <div className="bg-white p-4 rounded-xl border border-slate-200 text-center flex flex-col items-center">
+          <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">
             <Clock className="w-6 h-6 text-blue-500 mb-2" />
-            <p className="text-2xl font-bold text-[#0B2545]">{Math.round(avgTimePerQuestion)}s</p>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mt-1">Avg Time/Q</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{Math.round(avgTimePerQuestion)}s</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Avg Time/Q</p>
           </div>
         </div>
       </div>
@@ -196,10 +210,10 @@ export default function FullResultPage() {
       <div className="grid md:grid-cols-2 gap-8">
         {/* Subject-wise Performance */}
         <div>
-          <h2 className="text-xl font-bold text-[#0B2545] mb-4">Subject-wise Performance</h2>
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Subject-wise Performance</h2>
+          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-medium">
+              <thead className="bg-muted text-muted-foreground font-medium">
                 <tr>
                   <th className="px-4 py-3">Subject</th>
                   <th className="px-4 py-3 text-center">Correct</th>
@@ -209,14 +223,14 @@ export default function FullResultPage() {
               <tbody className="divide-y divide-slate-200">
                 {subjects.map((subj, idx) => (
                   <tr key={idx}>
-                    <td className="px-4 py-3 font-medium text-[#0B2545]">{subj.subject}</td>
+                    <td className="px-4 py-3 font-medium text-primary dark:text-foreground">{subj.subject}</td>
                     <td className="px-4 py-3 text-center">
                       <span className="text-green-600 font-medium">{subj.correct}</span>
-                      <span className="text-slate-400 text-xs">/{subj.questions}</span>
+                      <span className="text-muted-foreground text-xs">/{subj.questions}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-full bg-slate-100 rounded-full h-1.5">
+                        <div className="w-full bg-muted/80 rounded-full h-1.5">
                           <div className="bg-[#D4A72C] h-1.5 rounded-full" style={{ width: `${subj.accuracy}%` }} />
                         </div>
                         <span className="text-xs font-semibold w-8 text-right">{subj.accuracy}%</span>
@@ -231,10 +245,10 @@ export default function FullResultPage() {
 
         {/* Chapter/Topic Performance */}
         <div>
-          <h2 className="text-xl font-bold text-[#0B2545] mb-4">Topic Analysis</h2>
-          <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Topic Analysis</h2>
+          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-medium">
+              <thead className="bg-muted text-muted-foreground font-medium">
                 <tr>
                   <th className="px-4 py-3">Topic</th>
                   <th className="px-4 py-3">Performance</th>
@@ -243,16 +257,16 @@ export default function FullResultPage() {
               <tbody className="divide-y divide-slate-200">
                 {topics.map((topic, idx) => (
                   <tr key={idx}>
-                    <td className="px-4 py-3 font-medium text-[#0B2545]">{topic.topic}</td>
+                    <td className="px-4 py-3 font-medium text-primary dark:text-foreground">{topic.topic}</td>
                     <td className="px-4 py-3">
                       {topic.performance === "Strong" && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700">STRONG</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:text-green-300">STRONG</span>
                       )}
                       {topic.performance === "Average" && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">AVERAGE</span>
                       )}
                       {topic.performance === "Needs Improvement" && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">NEEDS WORK</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:text-red-300">NEEDS WORK</span>
                       )}
                     </td>
                   </tr>
@@ -265,36 +279,36 @@ export default function FullResultPage() {
 
       {/* Question Review */}
       <div>
-        <h2 className="text-xl font-bold text-[#0B2545] mb-4">Review Answers</h2>
+        <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Review Answers</h2>
         <div className="space-y-4">
           {reviews.map((review, idx) => (
-            <div key={review.id} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div key={review.id} className="bg-card border border-border rounded-xl p-5 shadow-sm">
               <div className="flex gap-4 items-start mb-4">
-                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-500 font-bold text-sm">
+                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-muted/80 text-muted-foreground font-bold text-sm">
                   {idx + 1}
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-[#0B2545] leading-relaxed mb-4">
+                  <p className="font-medium text-primary dark:text-foreground leading-relaxed mb-4">
                     {review.questionText}
                   </p>
                   
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Your Answer</p>
+                    <div className="bg-muted p-3 rounded-lg border border-border/50">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Your Answer</p>
                       <div className="flex items-center gap-2">
                         {review.status === "Correct" && <CheckCircle2 className="w-4 h-4 text-green-500" />}
                         {review.status === "Incorrect" && <XCircle className="w-4 h-4 text-red-500" />}
-                        {review.status === "Unanswered" && <HelpCircle className="w-4 h-4 text-slate-400" />}
+                        {review.status === "Unanswered" && <HelpCircle className="w-4 h-4 text-muted-foreground" />}
                         <span className={
-                          review.status === "Correct" ? "text-green-700 font-medium" : 
-                          review.status === "Incorrect" ? "text-red-700 font-medium" : "text-slate-500 italic"
+                          review.status === "Correct" ? "text-green-700 dark:text-green-300 font-medium" : 
+                          review.status === "Incorrect" ? "text-red-700 dark:text-red-300 font-medium" : "text-muted-foreground italic"
                         }>
                           {review.studentAnswer || "Not answered"}
                         </span>
                       </div>
                     </div>
                     
-                    <div className="bg-green-50/50 p-3 rounded-lg border border-green-100">
+                    <div className="bg-green-50 dark:bg-green-950/30/50 p-3 rounded-lg border border-green-100">
                       <p className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-1">Correct Answer</p>
                       <span className="text-green-800 font-medium">
                         {review.correctAnswer}
@@ -302,11 +316,11 @@ export default function FullResultPage() {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <div className="mt-4 pt-4 border-t border-border/50">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1.5">
                       <BarChart3 className="w-3.5 h-3.5" /> Explanation
                     </p>
-                    <p className="text-sm text-slate-600 leading-relaxed">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       {review.explanation}
                     </p>
                   </div>
@@ -314,8 +328,8 @@ export default function FullResultPage() {
                 
                 <div className="shrink-0 text-right hidden sm:block">
                   <span className={`inline-flex px-2 py-1 rounded text-xs font-bold ${
-                    review.status === "Correct" ? "bg-green-100 text-green-700" :
-                    "bg-slate-100 text-slate-500"
+                    review.status === "Correct" ? "bg-green-100 text-green-700 dark:text-green-300" :
+                    "bg-muted/80 text-muted-foreground"
                   }`}>
                     {review.marks} / {review.maxMarks} marks
                   </span>
@@ -324,6 +338,13 @@ export default function FullResultPage() {
             </div>
           ))}
         </div>
+      </div>
+      {/* Debug Info */}
+      <div className="mt-8 p-4 bg-muted/50 rounded-lg text-xs font-mono text-muted-foreground border border-border">
+        <p className="font-semibold mb-2">Debug Info (For Developer Only)</p>
+        <p>Rank Type: {typeof result.rank} | Value: {String(result.rank)}</p>
+        <p>Total Participants Type: {typeof result.totalParticipants} | Value: {String(result.totalParticipants)}</p>
+        <p>Correct: {result.correctAnswers} | Incorrect: {result.incorrectAnswers} | Unanswered: {result.unanswered}</p>
       </div>
     </div>
   );

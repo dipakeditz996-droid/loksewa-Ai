@@ -60,7 +60,7 @@ export default function MockExamAnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-card">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
@@ -74,7 +74,7 @@ export default function MockExamAnalyticsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-card">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
@@ -88,7 +88,7 @@ export default function MockExamAnalyticsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-card">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
@@ -102,7 +102,7 @@ export default function MockExamAnalyticsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none shadow-sm bg-white">
+        <Card className="border-none shadow-sm bg-card">
           <CardContent className="p-6">
             <div className="flex justify-between items-center">
               <div>
@@ -133,7 +133,7 @@ export default function MockExamAnalyticsPage() {
                   <Bar dataKey="students" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[1px]">
+              <div className="absolute inset-0 flex items-center justify-center bg-card/50 backdrop-blur-[1px]">
                 <div className="text-center">
                   <p className="text-slate-600 font-medium">No Data Available</p>
                   <p className="text-sm text-slate-500">Waiting for students to attempt this exam.</p>

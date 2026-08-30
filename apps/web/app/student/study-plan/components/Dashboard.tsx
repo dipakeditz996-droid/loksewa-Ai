@@ -50,7 +50,7 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
       case 'MODEL_EXAM': return <LayoutTemplate className="w-5 h-5 text-purple-500" />;
       case 'SUBJECTIVE_PRACTICE': return <PenTool className="w-5 h-5 text-orange-500" />;
       case 'REVIEW_MISTAKES': return <RotateCw className="w-5 h-5 text-red-500" />;
-      default: return <BookOpen className="w-5 h-5 text-slate-500" />;
+      default: return <BookOpen className="w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -77,35 +77,35 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
     <div className="space-y-6">
       
       {motivation && (
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+        <div className="bg-gradient-to-r from-blue-50 dark:from-blue-950/40 to-indigo-50 dark:to-indigo-950/40 border border-blue-100 dark:border-blue-900/50 rounded-xl p-4 shadow-sm">
           <p className="text-blue-800 italic font-medium">"{motivation}"</p>
         </div>
       )}
 
       {/* Progress & Continue Learning Header */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-between">
+        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-6 shadow-sm flex flex-col justify-between">
           <div>
-            <h2 className="text-xl font-bold text-[#0B2545] mb-2">Your Progress</h2>
+            <h2 className="text-xl font-bold text-primary dark:text-foreground mb-2">Your Progress</h2>
             <div className="flex items-center gap-4 mb-4">
-              <div className="flex-1 bg-slate-100 h-4 rounded-full overflow-hidden">
+              <div className="flex-1 bg-muted/80 h-4 rounded-full overflow-hidden">
                 <div 
-                  className="bg-[#0B2545] h-full rounded-full transition-all duration-1000" 
+                  className="bg-primary text-primary-foreground h-full rounded-full transition-all duration-1000" 
                   style={{ width: `${progress?.overall_percentage || 0}%` }}
                 />
               </div>
-              <span className="font-bold text-lg text-[#0B2545]">{progress?.overall_percentage || 0}%</span>
+              <span className="font-bold text-lg text-primary dark:text-foreground">{progress?.overall_percentage || 0}%</span>
             </div>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-muted-foreground">
               {progress?.completed_tasks || 0} tasks completed • {(progress?.total_tasks || 0) - (progress?.completed_tasks || 0)} remaining
             </p>
           </div>
           
           {continueLearning && (
-            <div className="mt-6 pt-6 border-t border-slate-100 flex items-center justify-between">
+            <div className="mt-6 pt-6 border-t border-border/50 flex items-center justify-between">
               <div>
-                <p className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">Continue Learning</p>
-                <p className="text-[#0B2545] font-medium">{continueLearning.title}</p>
+                <p className="text-sm font-bold text-foreground uppercase tracking-wider mb-1">Continue Learning</p>
+                <p className="text-primary dark:text-foreground font-medium">{continueLearning.title}</p>
               </div>
               <Button onClick={() => router.push(continueLearning.url)} className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-white">
                 Resume <RotateCw className="w-4 h-4 ml-2" />
@@ -114,45 +114,45 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
           )}
         </div>
         
-        <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col justify-center items-center text-center">
-          <div className="w-20 h-20 bg-orange-50 rounded-full flex items-center justify-center mb-4">
+        <div className="bg-card border border-border rounded-xl p-6 shadow-sm flex flex-col justify-center items-center text-center">
+          <div className="w-20 h-20 bg-orange-50 dark:bg-orange-950/30 rounded-full flex items-center justify-center mb-4">
             <Flame className="w-10 h-10 text-orange-500" />
           </div>
-          <h2 className="text-3xl font-black text-[#0B2545]">{streak}</h2>
-          <p className="text-slate-500 font-medium mt-1">Day Study Streak</p>
+          <h2 className="text-3xl font-black text-primary dark:text-foreground">{streak}</h2>
+          <p className="text-muted-foreground font-medium mt-1">Day Study Streak</p>
         </div>
       </div>
 
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white border rounded-xl p-5 shadow-sm flex items-center justify-between">
+        <div className="bg-card border rounded-xl p-5 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm text-slate-500 font-medium">Target Exam</p>
-            <p className="text-lg font-bold text-[#0B2545]">{plan.exam_details?.title || 'Loksewa'}</p>
+            <p className="text-sm text-muted-foreground font-medium">Target Exam</p>
+            <p className="text-lg font-bold text-primary dark:text-foreground">{plan.exam_details?.title || 'Loksewa'}</p>
           </div>
           <Target className="w-8 h-8 text-slate-200" />
         </div>
         
-        <div className="bg-white border rounded-xl p-5 shadow-sm flex items-center justify-between">
+        <div className="bg-card border rounded-xl p-5 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm text-slate-500 font-medium">Days Remaining</p>
-            <p className="text-2xl font-bold text-[#D4A72C]">{Math.max(0, daysRemaining)} <span className="text-sm font-normal text-slate-500">days</span></p>
+            <p className="text-sm text-muted-foreground font-medium">Days Remaining</p>
+            <p className="text-2xl font-bold text-[#D4A72C]">{Math.max(0, daysRemaining)} <span className="text-sm font-normal text-muted-foreground">days</span></p>
           </div>
           <Calendar className="w-8 h-8 text-slate-200" />
         </div>
         
-        <div className="bg-white border rounded-xl p-5 shadow-sm flex items-center justify-between">
+        <div className="bg-card border rounded-xl p-5 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm text-slate-500 font-medium">Weekly Progress</p>
-            <p className="text-2xl font-bold text-[#0B2545]">{progress?.weekly_completed || 0} / {progress?.weekly_tasks || 0}</p>
+            <p className="text-sm text-muted-foreground font-medium">Weekly Progress</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{progress?.weekly_completed || 0} / {progress?.weekly_tasks || 0}</p>
           </div>
           <Flame className="w-8 h-8 text-orange-200" />
         </div>
         
-        <div className="bg-white border rounded-xl p-5 shadow-sm flex items-center justify-between">
+        <div className="bg-card border rounded-xl p-5 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm text-slate-500 font-medium">Today's Focus</p>
-            <p className="text-lg font-bold text-[#0B2545]">{plan.daily_minutes} mins</p>
+            <p className="text-sm text-muted-foreground font-medium">Today's Focus</p>
+            <p className="text-lg font-bold text-primary dark:text-foreground">{plan.daily_minutes} mins</p>
           </div>
           <Clock className="w-8 h-8 text-slate-200" />
         </div>
@@ -162,11 +162,11 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
         
         {/* Today's Tasks */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h2 className="text-xl font-bold text-[#0B2545]">Today's Plan</h2>
-                <p className="text-sm text-slate-500">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} • {completedToday} of {totalToday} completed</p>
+                <h2 className="text-xl font-bold text-primary dark:text-foreground">Today's Plan</h2>
+                <p className="text-sm text-muted-foreground">{new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())} • {completedToday} of {totalToday} completed</p>
               </div>
               <div className="text-right">
                 <Button variant="outline" size="sm" onClick={() => fetchDashboardData()}>Refresh</Button>
@@ -174,25 +174,29 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
             </div>
             
             {loadingTasks ? (
-              <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#0B2545]" /></div>
+              <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" /></div>
             ) : tasks.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed rounded-xl">
                 <CheckCircle2 className="w-12 h-12 text-green-300 mx-auto mb-3" />
-                <h3 className="text-lg font-bold text-[#0B2545]">No tasks for today!</h3>
-                <p className="text-slate-500 text-sm">Take a rest, or regenerate your plan if you want to study.</p>
+                <h3 className="text-lg font-bold text-primary dark:text-foreground">No tasks for today!</h3>
+                <p className="text-muted-foreground text-sm mb-5">Take a rest, or regenerate your plan if you want to study.</p>
+                <Button onClick={onRegenerate} className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-white font-medium shadow-sm">
+                  <RotateCw className="w-4 h-4 mr-2" />
+                  Regenerate Plan
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">
                 {tasks.map(task => (
-                  <div key={task.id} className={`border rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center transition-all ${task.status === 'COMPLETED' ? 'bg-slate-50 border-slate-200' : 'bg-white border-slate-200 hover:border-[#0B2545]/30'}`}>
+                  <div key={task.id} className={`border rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center transition-all ${task.status === 'COMPLETED' ? 'bg-muted border-border' : 'bg-card border-border hover:border-[#0B2545]/30'}`}>
                     
                     <div className="flex-1 flex gap-4 w-full">
                       <div className="mt-1">{getTaskIcon(task.task_type)}</div>
                       <div>
-                        <h4 className={`font-semibold ${task.status === 'COMPLETED' ? 'line-through text-slate-400' : 'text-[#0B2545]'}`}>
+                        <h4 className={`font-semibold ${task.status === 'COMPLETED' ? 'line-through text-muted-foreground' : 'text-primary dark:text-foreground'}`}>
                           {task.title}
                         </h4>
-                        <div className="flex gap-3 text-xs text-slate-500 mt-1 font-medium">
+                        <div className="flex gap-3 text-xs text-muted-foreground mt-1 font-medium">
                           {task.subject_details && <span>{task.subject_details.name}</span>}
                           <span className="flex items-center"><Clock className="w-3 h-3 mr-1" /> {task.duration_minutes} min</span>
                           {task.status === 'SKIPPED' && <span className="text-red-500">Skipped</span>}
@@ -204,8 +208,8 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
                       {task.status === 'PENDING' && (
                         <>
                           <Button size="sm" variant="outline" className="flex-1 sm:flex-none" onClick={() => handleTaskNavigation(task)}>Start</Button>
-                          <Button size="sm" variant="outline" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleTaskAction(task.id, 'skip')}>Skip</Button>
-                          <Button size="sm" className="bg-[#0B2545]" onClick={() => handleTaskAction(task.id, 'complete')}>Done</Button>
+                          <Button size="sm" variant="outline" className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:bg-red-950/30" onClick={() => handleTaskAction(task.id, 'skip')}>Skip</Button>
+                          <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => handleTaskAction(task.id, 'complete')}>Done</Button>
                         </>
                       )}
                       {task.status === 'COMPLETED' && (
@@ -226,17 +230,17 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
           
           {/* Topic Progress */}
           {topicProgress.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-[#0B2545] mb-4">Topic Progress</h2>
+            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-primary dark:text-foreground mb-4">Topic Progress</h2>
               <div className="space-y-4">
                 {topicProgress.map(tp => (
                   <div key={tp.topic_id}>
                     <div className="flex justify-between text-sm font-medium mb-1">
-                      <span className="text-slate-700 line-clamp-1">{tp.title}</span>
-                      <span className="text-[#0B2545]">{Math.round(tp.progress)}%</span>
+                      <span className="text-foreground line-clamp-1">{tp.title}</span>
+                      <span className="text-primary dark:text-foreground">{Math.round(tp.progress)}%</span>
                     </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-[#0B2545] h-full" style={{ width: `${tp.progress}%` }}></div>
+                    <div className="w-full bg-muted/80 h-2 rounded-full overflow-hidden">
+                      <div className="bg-primary text-primary-foreground h-full" style={{ width: `${tp.progress}%` }}></div>
                     </div>
                   </div>
                 ))}
@@ -245,22 +249,22 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
           )}
           
           {/* Upcoming */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-lg font-bold text-[#0B2545] mb-4">Upcoming Schedule</h2>
+          <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-primary dark:text-foreground mb-4">Upcoming Schedule</h2>
             
             {upcoming.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4">No upcoming tasks scheduled.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">No upcoming tasks scheduled.</p>
             ) : (
               <div className="space-y-4">
                 {upcoming.slice(0, 5).map(task => (
                   <div key={task.id} className="flex gap-3 items-start border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                    <div className="bg-slate-100 rounded px-2 py-1 text-center min-w-[50px]">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase">{new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(task.date))}</div>
-                      <div className="text-lg font-bold text-[#0B2545] leading-none">{new Date(task.date).getDate()}</div>
+                    <div className="bg-muted/80 rounded px-2 py-1 text-center min-w-[50px]">
+                      <div className="text-[10px] font-bold text-muted-foreground uppercase">{new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(task.date))}</div>
+                      <div className="text-lg font-bold text-primary dark:text-foreground leading-none">{new Date(task.date).getDate()}</div>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-[#0B2545] line-clamp-1">{task.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{task.duration_minutes} min</p>
+                      <p className="text-sm font-semibold text-primary dark:text-foreground line-clamp-1">{task.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{task.duration_minutes} min</p>
                     </div>
                   </div>
                 ))}
@@ -274,8 +278,8 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
 
           {/* Enrolled Courses (Course Context) */}
           {courseProgress.length > 0 && (
-            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-[#0B2545] mb-4">Your Courses</h2>
+            <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-primary dark:text-foreground mb-4">Your Courses</h2>
               <div className="space-y-3">
                 {courseProgress.map(c => (
                   <Button 
@@ -285,8 +289,8 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
                     onClick={() => router.push(`/student/courses/${c.id}`)}
                   >
                     <div>
-                      <div className="font-semibold text-slate-700">{c.title}</div>
-                      {c.duration_months > 0 && <div className="text-xs text-slate-500">{c.duration_months} Months</div>}
+                      <div className="font-semibold text-foreground">{c.title}</div>
+                      {c.duration_months > 0 && <div className="text-xs text-muted-foreground">{c.duration_months} Months</div>}
                     </div>
                   </Button>
                 ))}
@@ -295,13 +299,13 @@ export function Dashboard({ plan, onRegenerate }: { plan: StudyPlan, onRegenerat
           )}
           
           {/* Plan Settings */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">Plan Actions</h2>
+          <div className="bg-muted border border-border rounded-xl p-6 shadow-sm">
+            <h2 className="text-sm font-bold text-foreground uppercase tracking-wider mb-4">Plan Actions</h2>
             <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start text-slate-600" onClick={onRegenerate}>
+              <Button variant="outline" className="w-full justify-start text-muted-foreground" onClick={onRegenerate}>
                 <RotateCw className="w-4 h-4 mr-2" /> Regenerate Future Tasks
               </Button>
-              <Button variant="outline" className="w-full justify-start text-slate-600" onClick={() => alert("Settings modal would open here")}>
+              <Button variant="outline" className="w-full justify-start text-muted-foreground" onClick={() => alert("Settings modal would open here")}>
                 <Target className="w-4 h-4 mr-2" /> Edit Plan Settings
               </Button>
             </div>

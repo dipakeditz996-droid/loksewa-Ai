@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CheckCircle, ShoppingBag, Download, FileText, Lock } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
 
 export default function ProductDetailPage() {
@@ -82,7 +82,7 @@ export default function ProductDetailPage() {
           <div className="aspect-[4/3] w-full bg-muted rounded-2xl overflow-hidden relative border shadow-sm">
             {product.cover_image ? (
               <Image 
-                src={`${baseUrl}${product.cover_image}`} 
+                src={product.cover_image.startsWith('http') ? product.cover_image : `${baseUrl}${product.cover_image.startsWith('/') ? '' : '/'}${product.cover_image}`} 
                 alt={product.title}
                 fill
                 className="object-cover"
@@ -127,13 +127,13 @@ export default function ProductDetailPage() {
             <div>
               {hasPurchased ? (
                 <div className="space-y-3">
-                  <div className="flex items-center text-green-600 bg-green-50 p-3 rounded-lg border border-green-100">
+                  <div className="flex items-center text-green-600 bg-green-50 dark:bg-green-950/30 p-3 rounded-lg border border-green-100">
                     <CheckCircle className="mr-2 h-5 w-5" />
                     <span className="font-semibold">You own this material</span>
                   </div>
                   {product.product_file ? (
                     <Button className="w-full h-12 text-md" asChild>
-                      <a href={`${baseUrl}${product.product_file}`} target="_blank" rel="noopener noreferrer">
+                      <a href={product.product_file.startsWith('http') ? product.product_file : `${baseUrl}${product.product_file.startsWith('/') ? '' : '/'}${product.product_file}`} target="_blank" rel="noopener noreferrer">
                         <Download className="mr-2 h-5 w-5" />
                         Download / Access Material
                       </a>

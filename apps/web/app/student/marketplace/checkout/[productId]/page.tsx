@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
 import toast from "react-hot-toast";
 
@@ -118,13 +118,13 @@ export default function CheckoutPage() {
   if (success) {
     return (
       <div className="max-w-2xl mx-auto py-12 px-4">
-        <Card className="text-center p-8 border-green-200 bg-green-50/50 shadow-sm">
+        <Card className="text-center p-8 border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-green-950/30/50 shadow-sm">
           <CheckCircle2 className="mx-auto h-16 w-16 text-green-500 mb-6" />
           <h2 className="text-3xl font-bold tracking-tight mb-2">Payment Submitted Successfully</h2>
           <p className="text-muted-foreground text-lg mb-8">
             Your payment is currently <strong className="text-foreground">PENDING VERIFICATION</strong>.
           </p>
-          <div className="bg-white p-4 rounded-lg border shadow-sm text-left mb-8 max-w-sm mx-auto">
+          <div className="bg-card p-4 rounded-lg border shadow-sm text-left mb-8 max-w-sm mx-auto">
             <p className="text-sm text-muted-foreground mb-2 flex items-start gap-2">
               <Info className="h-4 w-4 shrink-0 text-blue-500" />
               Your payment is being reviewed by the administrator. You will receive access to the material immediately after approval.
@@ -165,7 +165,7 @@ export default function CheckoutPage() {
             </CardHeader>
             <CardContent>
               {methods.length === 0 ? (
-                <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md flex items-start gap-3">
+                <div className="p-4 bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-200 rounded-md flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 shrink-0" />
                   <p>No payment methods are currently configured. Please contact support.</p>
                 </div>
@@ -198,10 +198,10 @@ export default function CheckoutPage() {
               <CardContent className="pt-6 space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
                   {selectedMethod.qr_image && (
-                    <div className="flex flex-col items-center p-4 bg-white border rounded-xl shadow-sm">
+                    <div className="flex flex-col items-center p-4 bg-card border rounded-xl shadow-sm">
                       <div className="relative w-48 h-48 mb-2">
-                        <Image 
-                          src={`${baseUrl}${selectedMethod.qr_image}`}
+                        <Image
+                          src={selectedMethod.qr_image.startsWith('http') ? selectedMethod.qr_image : `${baseUrl}${selectedMethod.qr_image.startsWith('/') ? '' : '/'}${selectedMethod.qr_image}`}
                           alt={`QR for ${selectedMethod.display_name}`}
                           fill
                           className="object-contain"
@@ -244,7 +244,7 @@ export default function CheckoutPage() {
                     </div>
 
                     {selectedMethod.instructions && (
-                      <div className="text-sm text-muted-foreground bg-blue-50 p-3 rounded border border-blue-100">
+                      <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/30 p-3 rounded border border-blue-100 dark:border-blue-900/50">
                         <strong>Instructions:</strong> {selectedMethod.instructions}
                       </div>
                     )}
@@ -342,7 +342,7 @@ export default function CheckoutPage() {
                 <div className="w-20 h-20 bg-muted rounded overflow-hidden relative shrink-0 border">
                   {product.cover_image && (
                     <Image 
-                      src={`${baseUrl}${product.cover_image}`} 
+                      src={product.cover_image.startsWith('http') ? product.cover_image : `${baseUrl}${product.cover_image.startsWith('/') ? '' : '/'}${product.cover_image}`} 
                       alt={product.title}
                       fill
                       className="object-cover"

@@ -184,8 +184,8 @@ class Question(models.Model):
     def usage_count(self):
         """Helper to get how many sets/exams reference this question."""
         sets_count = self.question_sets.count()
-        mock_exams_count = self.model_exams.count()
-        return sets_count + mock_exams_count
+        exams_count = self.examinations_set.count()
+        return sets_count + exams_count
 
     def __str__(self):
         return f"[{self.question_id or 'New'}] {self.text[:50]}"
@@ -302,6 +302,12 @@ class PracticeSession(models.Model):
     MODE_CHOICES = (
         ('flexible', 'Flexible'),
         ('timed', 'Timed'),
+        # Open-ended, no-pressure browsing of a topic's full question set —
+        # no fixed count, no timer, no formal submit.
+        ('study', 'Study'),
+        # A system-assembled queue from QuestionMastery signals (due for
+        # review, repeatedly incorrect, weak topics) rather than a topic pick.
+        ('revision', 'Revision'),
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='practice_sessions')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE)
@@ -326,6 +332,56 @@ class QuestionAttempt(models.Model):
     is_correct = models.BooleanField(default=False)
     is_marked_for_review = models.BooleanField(default=False)
     time_taken_seconds = models.IntegerField(default=0)
+    # Set when the question is displayed to the student, independent of
+    # selected_option — lets Show-Answer-style viewing be distinguished from
+    # actually attempting the question (selected_option is the answer signal).
+    is_viewed = models.BooleanField(default=False)
+    viewed_at = models.DateTimeField(null=True, blank=True)
+
+class QuestionMastery(models.Model):
+    """Per-student, per-question performance history used only by Revision Mode.
+
+    Updated exclusively from real answers (a chosen option), never from a
+    question merely being viewed or its answer being revealed — viewing is
+    not evidence of knowing or not knowing a question. Bookmark/Saved
+    Questions never write here either, so saving a question can't be
+    mistaken for a weakness signal.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='question_mastery')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='mastery_records')
+    times_answered = models.IntegerField(default=0)
+    times_correct = models.IntegerField(default=0)
+    times_incorrect = models.IntegerField(default=0)
+    consecutive_correct = models.IntegerField(default=0)
+    consecutive_incorrect = models.IntegerField(default=0)
+    last_attempted_at = models.DateTimeField(null=True, blank=True)
+    # Simple Leitner-style spaced repetition: a wrong answer resets the
+    # interval to 1 day (due almost immediately); a right answer doubles it,
+    # capped at 30 days.
+    interval_days = models.IntegerField(default=1)
+    next_review_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'question')
+
+    def record_answer(self, is_correct):
+        from django.utils import timezone
+        now = timezone.now()
+        self.times_answered += 1
+        if is_correct:
+            self.times_correct += 1
+            self.consecutive_correct += 1
+            self.consecutive_incorrect = 0
+            self.interval_days = min(self.interval_days * 2, 30)
+        else:
+            self.times_incorrect += 1
+            self.consecutive_incorrect += 1
+            self.consecutive_correct = 0
+            self.interval_days = 1
+        self.last_attempted_at = now
+        self.next_review_at = now + timezone.timedelta(days=self.interval_days)
+        self.save()
 
 class Bookmark(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='bookmarks')
@@ -334,76 +390,6 @@ class Bookmark(models.Model):
 
     class Meta:
         unique_together = ('user', 'question')
-
-class ModelExam(models.Model):
-    """
-    [LEGACY - DEPRECATED]
-    This model is being replaced by `Examination`.
-    Do not use for new implementations.
-    """
-    STATUS_CHOICES = (
-        ('draft', 'Draft'),
-        ('published', 'Published'),
-    )
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='model_exams')
-    duration_minutes = models.IntegerField(default=90)
-    total_questions = models.IntegerField()
-    total_marks = models.FloatField()
-    passing_marks = models.FloatField(null=True, blank=True)
-    negative_marking = models.FloatField(default=0.2) # e.g. 0.2 means 20% negative marks per wrong answer
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
-    questions = models.ManyToManyField(Question, related_name='model_exams')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.title
-
-class ModelExamAttempt(models.Model):
-    """
-    [LEGACY - DEPRECATED]
-    This model is being replaced by `ExaminationAttempt`.
-    Do not use for new implementations.
-    """
-    STATUS_CHOICES = (
-        ('in-progress', 'In Progress'),
-        ('submitted', 'Submitted'),
-    )
-    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='model_exam_attempts')
-    model_exam = models.ForeignKey(ModelExam, on_delete=models.CASCADE, related_name='attempts')
-    started_at = models.DateTimeField(auto_now_add=True)
-    submitted_at = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='in-progress')
-    
-    score = models.FloatField(default=0)
-    accuracy = models.FloatField(default=0)
-    correct_count = models.IntegerField(default=0)
-    incorrect_count = models.IntegerField(default=0)
-    unanswered_count = models.IntegerField(default=0)
-    time_taken_seconds = models.IntegerField(default=0)
-
-    class Meta:
-        ordering = ['-started_at']
-
-    def __str__(self):
-        return f"{self.student.username} - {self.model_exam.title} ({self.status})"
-
-class ModelExamAttemptAnswer(models.Model):
-    """
-    [LEGACY - DEPRECATED]
-    This model is being replaced by `StudentAnswer`.
-    Do not use for new implementations.
-    """
-    attempt = models.ForeignKey(ModelExamAttempt, on_delete=models.CASCADE, related_name='answers')
-    question = models.ForeignKey(Question, on_delete=models.CASCADE)
-    selected_option = models.CharField(max_length=1, blank=True, null=True)
-    is_correct = models.BooleanField(default=False)
-    is_marked_for_review = models.BooleanField(default=False)
-
-    class Meta:
-        unique_together = ('attempt', 'question')
 
 # ============================================================
 # SUBJECTIVE PRACTICE SYSTEM
@@ -550,6 +536,21 @@ class Examination(models.Model):
         ('rejected', 'Rejected'),
         ('archived', 'Archived'),
     )
+    # The four finalized Objective Exam categories from the client
+    # requirements doc. Deliberately separate from `exam_type` (a content
+    # classification like mock/full/subjective) and from `category` (the
+    # admin-defined ExamCategory taxonomy, e.g. "Loksewa"). Left blank for
+    # exam_type='subjective' exams, which sit outside this scheme entirely.
+    OBJECTIVE_CATEGORIES = (
+        ('old_past', 'Old Past Exam'),
+        ('model', 'Model Exam'),
+        ('live', 'Live Exam'),
+        ('custom', 'Create Your Own Exam'),
+    )
+    objective_category = models.CharField(
+        max_length=20, choices=OBJECTIVE_CATEGORIES, null=True, blank=True
+    )
+
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     exam_type = models.CharField(max_length=20, choices=EXAM_TYPES, default='mock')
@@ -604,6 +605,35 @@ class Examination(models.Model):
     reviewed_by = models.ForeignKey(User, related_name='reviewed_mock_exams', on_delete=models.SET_NULL, null=True, blank=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def computed_status(self):
+        """
+        Calculates server-authoritative status:
+        - 'DRAFT' (if status not in ['published', 'live'])
+        - 'UPCOMING' (if status in ['published', 'live'] and start_time and timezone.now() < start_time)
+        - 'LIVE' (if status in ['published', 'live'] and (not start_time or start_time <= timezone.now()) and (not end_time or timezone.now() <= end_time))
+        - 'COMPLETED' (if status in ['published', 'live'] and end_time and timezone.now() > end_time)
+        """
+        if self.status not in ('published', 'live'):
+            return 'DRAFT'
+        now = timezone.now()
+        if self.start_time and now < self.start_time:
+            return 'UPCOMING'
+        if self.end_time and now > self.end_time:
+            return 'COMPLETED'
+        return 'LIVE'
+
+    @property
+    def effective_category(self):
+        """`objective_category`, except a Live Exam auto-promotes into the
+        Model Exams listing 48 hours after its first scheduled start. This is
+        a display-time computation (like `computed_status`) rather than a
+        stored mutation, so it never depends on a scheduled job having run."""
+        if self.objective_category == 'live' and self.start_time:
+            if timezone.now() >= self.start_time + timezone.timedelta(hours=48):
+                return 'model'
+        return self.objective_category
 
     def __str__(self):
         return self.title
@@ -668,15 +698,60 @@ class StudentAnswer(models.Model):
     def __str__(self):
         return f"Answer to Q{self.question_id} by {self.attempt.student.username}"
 
-class LegacyModelExamMigration(models.Model):
+class ExamSchedule(models.Model):
     """
-    Mapping table to ensure idempotency when migrating ModelExam records 
-    to the canonical Examination architecture.
+    Authoritative model for official Loksewa PSC exam dates, announcements,
+    application deadlines, and public countdowns.
     """
-    legacy_model_exam = models.ForeignKey(ModelExam, on_delete=models.CASCADE, related_name='migrations')
-    examination = models.ForeignKey(Examination, on_delete=models.CASCADE, related_name='legacy_migrations')
-    migrated_at = models.DateTimeField(auto_now_add=True)
-    
+    title = models.CharField(max_length=255, help_text="e.g. Loksewa Section Officer 2083 First Paper")
+    exam_category = models.ForeignKey(
+        ExamCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedules'
+    )
+    exam = models.ForeignKey(
+        Exam, on_delete=models.SET_NULL, null=True, blank=True, related_name='schedules',
+        help_text="Specific Position / Level (optional)"
+    )
+    description = models.TextField(blank=True)
+    exam_date = models.DateField(help_text="Official Exam Date (YYYY-MM-DD)")
+    exam_time = models.TimeField(null=True, blank=True, help_text="Exam start time (e.g. 08:00:00 or 11:00:00)")
+    exam_datetime = models.DateTimeField(null=True, blank=True, help_text="Timezone-aware UTC datetime calculated from exam_date and exam_time")
+    timezone = models.CharField(max_length=50, default="Asia/Kathmandu")
+    application_deadline = models.DateField(null=True, blank=True)
+    result_expected_date = models.DateField(null=True, blank=True)
+    official_notice_url = models.URLField(blank=True)
+    is_published = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, help_text="If True, this is considered the active Next Loksewa Exam")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        unique_together = ('legacy_model_exam', 'examination')
+        ordering = ['-is_active', 'exam_date', 'exam_time', '-created_at']
+
+    def save(self, *args, **kwargs):
+        from datetime import datetime, time
+        try:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo(self.timezone or "Asia/Kathmandu")
+        except Exception:
+            from datetime import timezone as dt_tz, timedelta as dt_td
+            tz = dt_tz(dt_td(hours=5, minutes=45))
+        
+        # Calculate timezone-aware exam_datetime in Asia/Kathmandu
+        if self.exam_date:
+            t = self.exam_time or time(8, 0, 0)
+            combined = datetime.combine(self.exam_date, t)
+            if hasattr(tz, 'localize'):
+                self.exam_datetime = tz.localize(combined)
+            else:
+                self.exam_datetime = combined.replace(tzinfo=tz)
+
+        # Single active constraint: If marking as active, deactivate other schedules
+        if self.is_active:
+            ExamSchedule.objects.filter(is_active=True).exclude(pk=self.pk).update(is_active=False)
+
+        super().save(*args, **kwargs)
+
+
+    def __str__(self):
+        return f"{self.title} ({self.exam_date})"
 

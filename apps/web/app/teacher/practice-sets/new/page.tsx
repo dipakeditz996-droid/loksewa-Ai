@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { teacherPracticeSetsApi, PracticeSet, QuestionSetQuestion } from "@/lib/api/teacher-practice-sets";
 import * as teacherQuestionsApi from "@/lib/api/teacher-questions";
 import { QuestionData as Question } from "@/lib/api/teacher-questions";
+import { apiClient } from "@/lib/api/client";
 import { toast } from "react-hot-toast";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -56,12 +57,18 @@ export default function CreatePracticeSetPage() {
   const [availableQuestions, setAvailableQuestions] = useState<Question[]>([]);
   const [searchQ, setSearchQ] = useState("");
   const [selectedQuestions, setSelectedQuestions] = useState<QuestionSetQuestion[]>([]);
-  
+
+  // Academic scope tree, fetched once. Each exam carries its nested subjects
+  // (and each subject its chapters/topics), so no separate per-level fetch is needed.
+  const [examTree, setExamTree] = useState<any[]>([]);
+
   // Modals
   const [showBlueprintModal, setShowBlueprintModal] = useState(false);
   const [blueprintConfig, setBlueprintConfig] = useState({ total: 10 });
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [csvContent, setCsvContent] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     // Only load approved questions for practice sets
@@ -70,8 +77,90 @@ export default function CreatePracticeSetPage() {
     }).catch(() => {});
   }, [searchQ]);
 
+  useEffect(() => {
+    apiClient<any>("/exams/").then((res) => {
+      setExamTree(Array.isArray(res) ? res : (res.results || []));
+    }).catch(() => setExamTree([]));
+  }, []);
+
+  const selectedExam = examTree.find((e) => e.id === formData.exam);
+  const subjectsForExam: any[] = selectedExam?.subjects || [];
+  const selectedSubject = subjectsForExam.find((s) => s.id === formData.subject);
+  const chaptersForSubject: any[] = selectedSubject?.units || selectedSubject?.chapters || [];
+  const selectedChapter = chaptersForSubject.find((c) => c.id === formData.chapter);
+  const topicsForChapter: any[] = selectedChapter?.topics || [];
+
   const handleChange = (field: keyof PracticeSet, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleExamChange = (value: string) => {
+    const exam = examTree.find((e) => e.id === Number(value));
+    setFormData(prev => ({
+      ...prev,
+      exam: Number(value),
+      category: exam?.category ?? prev.category,
+      subject: undefined,
+      chapter: undefined,
+      topic: undefined,
+    }));
+  };
+
+  const handleSubjectChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      subject: value === "all" ? undefined : Number(value),
+      chapter: undefined,
+      topic: undefined,
+    }));
+  };
+
+  const handleChapterChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      chapter: value === "all" ? undefined : Number(value),
+      topic: undefined,
+    }));
+  };
+
+  const handleTopicChange = (value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      topic: value === "all" ? undefined : Number(value),
+    }));
+  };
+
+  // Blueprint generation and bulk import both operate on an existing
+  // QuestionSet on the backend, so a not-yet-saved draft needs to be
+  // persisted first to get an id they can target.
+  const ensurePracticeSetId = async (): Promise<number | null> => {
+    if (formData.id) return formData.id as number;
+    if (!formData.name?.trim()) {
+      toast.error("Please enter a title in the Scope tab before adding questions.");
+      return null;
+    }
+    if (!formData.exam) {
+      toast.error("Please select an Exam / Position in the Scope tab first.");
+      return null;
+    }
+    try {
+      const payload: Partial<PracticeSet> = {
+        ...formData,
+        status: "draft",
+        total_questions: selectedQuestions.length,
+        questions_data: selectedQuestions.map(sq => ({
+          question_id: sq.question,
+          order: sq.order,
+          marks: sq.marks,
+        })),
+      };
+      const created = await teacherPracticeSetsApi.createPracticeSet(payload);
+      setFormData(prev => ({ ...prev, id: created.id }));
+      return created.id as number;
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to save the practice set draft.");
+      return null;
+    }
   };
 
   const handleSelectQuestion = (q: Question) => {
@@ -97,32 +186,82 @@ export default function CreatePracticeSetPage() {
     setSelectedQuestions(newQs);
   };
 
-  const handleGenerateBlueprint = () => {
-    if (blueprintConfig.total > availableQuestions.length) {
-      toast.error("Not enough approved questions in bank");
+  const handleGenerateBlueprint = async () => {
+    if (blueprintConfig.total <= 0) {
+      toast.error("Enter how many questions to generate.");
       return;
     }
-    const shuffled = [...availableQuestions].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, blueprintConfig.total);
-    const newSelected = selected.map((q, idx) => ({
-      question: q.id as number,
-      question_details: q,
-      order: selectedQuestions.length + idx + 1,
-      marks: formData.marks_per_question || 1
-    }));
-    setSelectedQuestions(prev => [...prev, ...newSelected]);
-    setShowBlueprintModal(false);
-    toast.success(`Added ${blueprintConfig.total} questions from blueprint`);
+    const id = await ensurePracticeSetId();
+    if (!id) return;
+
+    setIsGenerating(true);
+    try {
+      const result: any = await teacherPracticeSetsApi.generateBlueprint(id, {
+        total_questions: blueprintConfig.total,
+      });
+      if (result.questions_list) {
+        setSelectedQuestions(result.questions_list);
+      }
+      const info = result.generation_info;
+      if (info?.warnings?.length) {
+        toast.error(info.warnings.join(" "));
+      } else {
+        toast.success(`Added ${info?.selected ?? blueprintConfig.total} question(s) from the blueprint.`);
+      }
+      setShowBlueprintModal(false);
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to generate blueprint.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const handleBulkImport = () => {
+  // Parses one existing approved question ID per line (or as the first
+  // column of a CSV row) - matches the `id` / `question_id` path the
+  // backend's bulk-import action supports.
+  const parseCsvQuestionIds = (text: string): { id: number }[] => {
+    return text
+      .split(/\r?\n/)
+      .map((line) => line.split(",")[0]?.trim())
+      .filter((token): token is string => !!token && token.toLowerCase() !== "id")
+      .map((token) => ({ id: Number(token) }))
+      .filter((row) => !Number.isNaN(row.id));
+  };
+
+  const handleBulkImport = async () => {
     if (!csvContent.trim()) {
-      toast.error("Please paste CSV content");
+      toast.error("Please paste question IDs to import.");
       return;
     }
-    toast.success("Bulk import feature will be processed by backend");
-    setShowBulkImportModal(false);
-    setCsvContent("");
+    const rows = parseCsvQuestionIds(csvContent);
+    if (rows.length === 0) {
+      toast.error("No valid question IDs found. Paste one approved question ID per line.");
+      return;
+    }
+    const id = await ensurePracticeSetId();
+    if (!id) return;
+
+    setIsImporting(true);
+    try {
+      const result: any = await teacherPracticeSetsApi.bulkImportQuestions(id, rows);
+      const updated = await teacherPracticeSetsApi.getPracticeSet(id);
+      if (updated.questions_list) {
+        setSelectedQuestions(updated.questions_list);
+      }
+      const errorCount = result.errors?.length || 0;
+      toast.success(
+        `Imported ${result.added_existing || 0} question(s).${errorCount ? ` ${errorCount} row(s) failed.` : ""}`
+      );
+      if (errorCount) {
+        console.warn("Bulk import errors:", result.errors);
+      }
+      setShowBulkImportModal(false);
+      setCsvContent("");
+    } catch (error: any) {
+      toast.error(error?.data?.detail || "Failed to import questions.");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const handleSave = async (status: "draft" | "pending_review") => {
@@ -134,7 +273,11 @@ export default function CreatePracticeSetPage() {
       toast.error("You must add at least one question to submit for review");
       return;
     }
-    
+    if (!formData.exam) {
+      toast.error("Please select an Exam / Position in the Scope tab.");
+      return;
+    }
+
     try {
       setLoading(true);
       const payload: Partial<PracticeSet> = {
@@ -147,8 +290,13 @@ export default function CreatePracticeSetPage() {
           marks: sq.marks
         }))
       };
-      
-      await teacherPracticeSetsApi.createPracticeSet(payload);
+
+      // A blueprint/bulk-import run may have already created the draft.
+      if (formData.id) {
+        await teacherPracticeSetsApi.updatePracticeSet(formData.id, payload);
+      } else {
+        await teacherPracticeSetsApi.createPracticeSet(payload);
+      }
       toast.success(status === "pending_review" ? "Practice Set submitted for review!" : "Draft saved!");
       router.push("/teacher/practice-sets");
     } catch (error: any) {
@@ -177,7 +325,7 @@ export default function CreatePracticeSetPage() {
           <Button variant="outline" onClick={() => handleSave("draft")} disabled={loading}>
             Save Draft
           </Button>
-          <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => handleSave("pending_review")} disabled={loading}>
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => handleSave("pending_review")} disabled={loading}>
             <Send className="mr-2 h-4 w-4" /> Submit for Review
           </Button>
         </div>
@@ -241,22 +389,49 @@ export default function CreatePracticeSetPage() {
                 </CardHeader>
                 <CardContent className="space-y-4 pt-6">
                   <div className="space-y-2">
-                    <Label>Exam / Position</Label>
-                    <Select defaultValue="1"><SelectTrigger className="bg-muted/30"><SelectValue placeholder="Select Exam" /></SelectTrigger><SelectContent><SelectItem value="1">Section Officer</SelectItem></SelectContent></Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Paper</Label>
-                    <Select defaultValue="1"><SelectTrigger className="bg-muted/30"><SelectValue placeholder="Select Paper" /></SelectTrigger><SelectContent><SelectItem value="1">First Paper (GK & IQ)</SelectItem></SelectContent></Select>
+                    <Label>Exam / Position <span className="text-red-500">*</span></Label>
+                    <Select value={formData.exam ? String(formData.exam) : undefined} onValueChange={handleExamChange}>
+                      <SelectTrigger className="bg-muted/30"><SelectValue placeholder="Select Exam" /></SelectTrigger>
+                      <SelectContent>
+                        {examTree.map((e) => <SelectItem key={e.id} value={String(e.id)}>{e.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Subject (Optional)</Label>
-                    <Select><SelectTrigger className="bg-muted/30"><SelectValue placeholder="All Subjects" /></SelectTrigger><SelectContent><SelectItem value="all">All Subjects</SelectItem><SelectItem value="gk">General Knowledge</SelectItem></SelectContent></Select>
+                    <Select value={formData.subject ? String(formData.subject) : "all"} onValueChange={handleSubjectChange} disabled={!formData.exam}>
+                      <SelectTrigger className="bg-muted/30"><SelectValue placeholder="All Subjects" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Subjects</SelectItem>
+                        {subjectsForExam.map((s) => <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Chapter (Optional)</Label>
+                    <Select value={formData.chapter ? String(formData.chapter) : "all"} onValueChange={handleChapterChange} disabled={!formData.subject}>
+                      <SelectTrigger className="bg-muted/30"><SelectValue placeholder="All Chapters" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Chapters</SelectItem>
+                        {chaptersForSubject.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Topic (Optional)</Label>
+                    <Select value={formData.topic ? String(formData.topic) : "all"} onValueChange={handleTopicChange} disabled={!formData.chapter}>
+                      <SelectTrigger className="bg-muted/30"><SelectValue placeholder="All Topics" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Topics</SelectItem>
+                        {topicsForChapter.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.title}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>
             </div>
             <div className="flex justify-end">
-              <Button onClick={() => setActiveTab("questions")} className="bg-blue-600">Next: Build Questions</Button>
+              <Button onClick={() => setActiveTab("questions")} className="bg-blue-600 text-white">Next: Build Questions</Button>
             </div>
           </TabsContent>
 
@@ -276,7 +451,7 @@ export default function CreatePracticeSetPage() {
                     <div className="space-y-2"><Label>Total Questions to Generate</Label><Input type="number" value={blueprintConfig.total} onChange={e=>setBlueprintConfig({total: parseInt(e.target.value) || 0})} /></div>
                     <p className="text-xs text-muted-foreground">More advanced distribution options (by topic, difficulty) would appear here.</p>
                   </div>
-                  <DialogFooter><Button variant="outline" onClick={()=>setShowBlueprintModal(false)}>Cancel</Button><Button onClick={handleGenerateBlueprint} className="bg-purple-600">Generate</Button></DialogFooter>
+                  <DialogFooter><Button variant="outline" onClick={()=>setShowBlueprintModal(false)}>Cancel</Button><Button onClick={handleGenerateBlueprint} disabled={isGenerating} className="bg-purple-600 text-white">{isGenerating ? "Generating..." : "Generate"}</Button></DialogFooter>
                 </DialogContent>
               </Dialog>
 
@@ -287,9 +462,9 @@ export default function CreatePracticeSetPage() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Bulk Import Questions</DialogTitle><DialogDescription>Paste CSV data. Existing IDs will be added, new ones will go to review queue.</DialogDescription></DialogHeader>
-                  <div className="py-4"><Textarea className="min-h-[150px]" placeholder="id,text,option_a..." value={csvContent} onChange={e=>setCsvContent(e.target.value)} /></div>
-                  <DialogFooter><Button onClick={handleBulkImport}>Process Import</Button></DialogFooter>
+                  <DialogHeader><DialogTitle>Bulk Import Questions</DialogTitle><DialogDescription>Paste one approved question ID per line (or as the first column of a CSV row) to add them to this set.</DialogDescription></DialogHeader>
+                  <div className="py-4"><Textarea className="min-h-[150px]" placeholder="42&#10;57&#10;103" value={csvContent} onChange={e=>setCsvContent(e.target.value)} /></div>
+                  <DialogFooter><Button onClick={handleBulkImport} disabled={isImporting}>{isImporting ? "Importing..." : "Process Import"}</Button></DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
@@ -322,7 +497,7 @@ export default function CreatePracticeSetPage() {
                 <div className="p-4 bg-blue-50/50 dark:bg-blue-900/10 border-b border-blue-100 dark:border-blue-800/30">
                   <h3 className="font-semibold flex items-center justify-between text-blue-900 dark:text-blue-100">
                     <span>Selected Questions</span>
-                    <Badge className="bg-blue-600">{selectedQuestions.length}</Badge>
+                    <Badge className="bg-blue-600 text-white">{selectedQuestions.length}</Badge>
                   </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-muted/10">
@@ -351,7 +526,7 @@ export default function CreatePracticeSetPage() {
             </div>
             <div className="flex justify-between pt-4">
               <Button variant="outline" onClick={() => setActiveTab("details")}>Back</Button>
-              <Button onClick={() => setActiveTab("settings")} className="bg-blue-600">Next: Configuration</Button>
+              <Button onClick={() => setActiveTab("settings")} className="bg-blue-600 text-white">Next: Configuration</Button>
             </div>
           </TabsContent>
 
@@ -384,7 +559,7 @@ export default function CreatePracticeSetPage() {
             </Card>
             <div className="flex justify-between pt-4">
               <Button variant="outline" onClick={() => setActiveTab("questions")}>Back</Button>
-              <Button onClick={() => setActiveTab("preview")} className="bg-blue-600">Next: Preview</Button>
+              <Button onClick={() => setActiveTab("preview")} className="bg-blue-600 text-white">Next: Preview</Button>
             </div>
           </TabsContent>
 

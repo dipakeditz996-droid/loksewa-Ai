@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RetryImage } from "@/components/ui/retry-image";
+import { NotificationBell } from "@/components/layout/notification-bell";
 import { Toaster } from "react-hot-toast";
 import {
   LayoutDashboard,
@@ -36,6 +38,7 @@ import {
   LifeBuoy,
   ClipboardList,
   Trophy,
+  Quote,
 } from "lucide-react";
 
 // ===== Sidebar Nav Config =====
@@ -83,13 +86,16 @@ const SIDEBAR_NAV: NavSection[] = [
     title: "Exams",
     items: [
       { title: "Exams & Mock Tests", href: "/admin-dashboard/exams", icon: FileText },
+      { title: "Exam Schedule", href: "/admin-dashboard/exams/schedules", icon: CalendarDays },
       { title: "Rankings & Leaderboards", href: "/admin-dashboard/rankings", icon: Trophy },
     ],
   },
+
   {
     title: "Platform",
     items: [
       { title: "Notifications", href: "/admin-dashboard/notifications", icon: Bell },
+      { title: "Testimonials", href: "/admin-dashboard/testimonials", icon: Quote },
       { title: "Help & Support", href: "/admin-dashboard/support", icon: LifeBuoy },
       { title: "AI Tutor", href: "/admin-dashboard/ai-tutor", icon: Brain },
       { title: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },
@@ -299,10 +305,7 @@ function AdminHeader({
 
       <div className="ml-auto flex items-center gap-1.5">
         {/* Notifications */}
-        <button className="relative flex items-center justify-center h-9 w-9 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors">
-          <Bell className="h-4.5 w-4.5 h-5 w-5" />
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-[#D4A72C] rounded-full border-2 border-white" />
-        </button>
+        <NotificationBell viewAllHref="/admin-dashboard/notifications/inbox" />
 
         {/* Separator */}
         <div className="h-6 w-px bg-slate-200 mx-1" />
@@ -314,9 +317,13 @@ function AdminHeader({
             <p className="text-[11px] text-slate-400 capitalize font-medium">{user.role}</p>
           </div>
           <Avatar className="h-8 w-8 border-2 border-[#D4A72C]/30">
-            <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[12px]">
-              {initials}
-            </AvatarFallback>
+            {user.avatar ? (
+              <RetryImage src={user.avatar} alt={user.name} className="aspect-square h-full w-full object-cover" />
+            ) : (
+              <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[12px]">
+                {initials}
+              </AvatarFallback>
+            )}
           </Avatar>
 
           {/* Logout */}

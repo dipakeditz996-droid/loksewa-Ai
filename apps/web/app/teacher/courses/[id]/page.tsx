@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpen, Clock, Users, CheckCircle2, ChevronDown, ChevronRight, FileText, Video, PenTool, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Clock, Users, CheckCircle2, ChevronsDownUp, ChevronDown, ChevronRight, FileText, PenTool, LayoutDashboard, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { PremiumIcon } from "@/components/ui/premium-icon";
 import { teacherCourseService, Course } from "@/lib/api/teacher-courses";
 import { toast } from "react-hot-toast";
@@ -19,6 +25,9 @@ export default function TeacherCourseDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [expandedSubjects, setExpandedSubjects] = useState<Record<number, boolean>>({});
   const [expandedChapters, setExpandedChapters] = useState<Record<number, boolean>>({});
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ title: "", description: "" });
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (params.id) {
@@ -60,6 +69,53 @@ export default function TeacherCourseDetailPage() {
 
   const toggleChapter = (id: number) => {
     setExpandedChapters(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const allExpanded = !!course?.exam_details?.subjects?.length &&
+    course.exam_details.subjects.every((s) => expandedSubjects[s.id]) &&
+    course.exam_details.subjects.every((s) => (s.chapters || []).every((c) => expandedChapters[c.id]));
+
+  const toggleExpandAll = () => {
+    if (!course?.exam_details?.subjects) return;
+    const nextSubjects: Record<number, boolean> = {};
+    const nextChapters: Record<number, boolean> = {};
+    course.exam_details.subjects.forEach((s) => {
+      nextSubjects[s.id] = !allExpanded;
+      (s.chapters || []).forEach((c) => {
+        nextChapters[c.id] = !allExpanded;
+      });
+    });
+    setExpandedSubjects(nextSubjects);
+    setExpandedChapters(nextChapters);
+  };
+
+  const openEditModal = () => {
+    if (!course) return;
+    setEditForm({ title: course.title, description: course.description || "" });
+    setEditModalOpen(true);
+  };
+
+  const handleSaveMetadata = async () => {
+    if (!course) return;
+    if (!editForm.title.trim()) {
+      toast.error("Title is required.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const updated = await teacherCourseService.updateCourse(course.id, {
+        title: editForm.title,
+        description: editForm.description,
+      });
+      setCourse(updated);
+      toast.success("Course details updated.");
+      setEditModalOpen(false);
+    } catch (error) {
+      console.error("Failed to update course:", error);
+      toast.error("Failed to update course details.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -108,10 +164,12 @@ export default function TeacherCourseDetailPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 relative z-10 w-full md:w-auto">
-          <Button variant="outline" className="border-border/50 text-foreground">
-            View Analytics
-          </Button>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Link href={`/teacher/analytics?course=${course.id}`}>
+            <Button variant="outline" className="border-border/50 text-foreground gap-2 w-full sm:w-auto">
+              <BarChart3 className="h-4 w-4" /> View Analytics
+            </Button>
+          </Link>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={openEditModal}>
             Edit Metadata
           </Button>
         </div>
@@ -140,8 +198,9 @@ export default function TeacherCourseDetailPage() {
               </h2>
               <p className="text-sm text-muted-foreground">Manage subjects, chapters, and topics linked to this course.</p>
             </div>
-            <Button variant="outline" size="sm" className="gap-2 h-9">
-              <CheckCircle2 className="h-4 w-4" /> Expand All
+            <Button variant="outline" size="sm" className="gap-2 h-9" onClick={toggleExpandAll}>
+              {allExpanded ? <ChevronsDownUp className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+              {allExpanded ? "Collapse All" : "Expand All"}
             </Button>
           </div>
 
@@ -195,19 +254,9 @@ export default function TeacherCourseDetailPage() {
                                   <div className="p-3 pl-12 text-sm text-muted-foreground italic">No topics found.</div>
                                 ) : (
                                   chapter.topics.map((topic, tIndex) => (
-                                    <div key={topic.id} className="p-3 pl-4 sm:pl-12 flex items-center justify-between hover:bg-muted/10 group transition-colors">
-                                      <div className="flex items-center gap-3">
-                                        <FileText className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                                        <span className="text-sm">{topic.title}</span>
-                                      </div>
-                                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary">
-                                          <Video className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-primary">
-                                          <PenTool className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </div>
+                                    <div key={topic.id} className="p-3 pl-4 sm:pl-12 flex items-center gap-3 hover:bg-muted/10 transition-colors">
+                                      <FileText className="h-4 w-4 text-muted-foreground" />
+                                      <span className="text-sm">{topic.title}</span>
                                     </div>
                                   ))
                                 )}
@@ -258,6 +307,39 @@ export default function TeacherCourseDetailPage() {
         </TabsContent>
 
       </Tabs>
+
+      {/* Edit Metadata Dialog */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Course Details</DialogTitle>
+            <DialogDescription>Update the title and description shown to students.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="course-title">Title <span className="text-red-500">*</span></Label>
+              <Input
+                id="course-title"
+                value={editForm.title}
+                onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="course-description">Description</Label>
+              <Textarea
+                id="course-description"
+                rows={4}
+                value={editForm.description}
+                onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditModalOpen(false)} disabled={isSaving}>Cancel</Button>
+            <Button onClick={handleSaveMetadata} disabled={isSaving}>{isSaving ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

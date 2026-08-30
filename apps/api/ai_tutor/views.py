@@ -2,13 +2,18 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from .models import Conversation, Message, TutorUsage
 from .serializers import ConversationSerializer, ConversationDetailSerializer, MessageSerializer
 from .services import AITutorService
 import datetime
 
-# Max requests per day per user
-MAX_DAILY_REQUESTS = 20
+
+def _get_ai_tutor_settings():
+    """Fetches the singleton AdminSettings row (admin-configurable enable flag + daily limit)."""
+    from core.models import AdminSettings
+    return AdminSettings.get_settings()
+
 
 class ConversationListView(generics.ListCreateAPIView):
     serializer_class = ConversationSerializer
@@ -18,6 +23,8 @@ class ConversationListView(generics.ListCreateAPIView):
         return Conversation.objects.filter(student=self.request.user)
 
     def perform_create(self, serializer):
+        if not _get_ai_tutor_settings().enable_ai_tutor:
+            raise PermissionDenied("AI Tutor is currently disabled by the administrator.")
         serializer.save(student=self.request.user)
 
 
@@ -45,6 +52,13 @@ class SendMessageView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, conversation_id):
+        ai_tutor_settings = _get_ai_tutor_settings()
+        if not ai_tutor_settings.enable_ai_tutor:
+            return Response(
+                {"error": "AI Tutor is currently disabled by the administrator."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
         content = request.data.get('content')
         if not content:
             return Response({"error": "Content is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -54,13 +68,13 @@ class SendMessageView(APIView):
         except Conversation.DoesNotExist:
             return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Usage limiting
+        # Usage limiting (admin-configurable via AdminSettings.ai_tutor_daily_message_limit)
         today = datetime.date.today()
         usage, created = TutorUsage.objects.get_or_create(student=request.user, date=today)
-        
-        if usage.request_count >= MAX_DAILY_REQUESTS:
+
+        if usage.request_count >= ai_tutor_settings.ai_tutor_daily_message_limit:
             return Response(
-                {"error": "Daily limit reached. Please try again tomorrow."}, 
+                {"error": "Daily limit reached. Please try again tomorrow."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
@@ -84,6 +98,7 @@ class SendMessageView(APIView):
 
         # Update usage and conversation timestamp
         usage.request_count += 1
+        usage.token_usage += ai_service.last_token_count
         usage.save()
         conversation.save() # Triggers updated_at
 

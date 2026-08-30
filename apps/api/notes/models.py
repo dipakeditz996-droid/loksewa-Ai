@@ -110,7 +110,13 @@ class StudyMaterial(models.Model):
     review_note = models.TextField(blank=True, help_text="Admin feedback when changes are requested or rejected")
     
     estimated_reading_time = models.IntegerField(default=10, help_text="Estimated time in minutes")
-    
+
+    available_to_ai_tutor = models.BooleanField(
+        default=False,
+        help_text="When true and status=published, the AI Tutor may retrieve and quote this "
+                   "material's content as reference context for student questions.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

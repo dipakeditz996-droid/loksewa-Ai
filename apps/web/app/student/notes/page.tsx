@@ -52,22 +52,22 @@ function NotesContent() {
     <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Study Materials</h1>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <h1 className="text-3xl font-bold text-foreground dark:text-white">Study Materials</h1>
+          <p className="mt-2 text-sm text-muted-foreground dark:text-muted-foreground">
             Everything you need to prepare smarter for your Loksewa examination.
           </p>
         </div>
         
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+        <div className="flex bg-muted dark:bg-gray-800 p-1 rounded-lg">
           <button
             onClick={() => setShowSaved(false)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${!showSaved ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${!showSaved ? 'bg-card dark:bg-gray-700 text-foreground dark:text-white shadow-sm' : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-gray-200'}`}
           >
             All Materials
           </button>
           <button
             onClick={() => setShowSaved(true)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center ${showSaved ? 'bg-white dark:bg-gray-700 text-[#C4A45C] shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors flex items-center ${showSaved ? 'bg-card dark:bg-gray-700 text-[#C4A45C] shadow-sm' : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-gray-200'}`}
           >
             <Bookmark className="w-4 h-4 mr-1" /> My Saved
           </button>
@@ -78,11 +78,11 @@ function NotesContent() {
         <div className="flex flex-col md:flex-row gap-4 mb-8">
           <div className="flex-1 relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
+              <Search className="h-5 w-5 text-muted-foreground" />
             </div>
             <input
               type="text"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#C4A45C] focus:border-[#C4A45C] sm:text-sm"
+              className="block w-full pl-10 pr-3 py-2 border border-border rounded-md leading-5 bg-card dark:bg-gray-800 dark:border-gray-700 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#C4A45C] focus:border-[#C4A45C] sm:text-sm"
               placeholder="Search notes, subjects, topics..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -92,7 +92,7 @@ function NotesContent() {
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="block w-full md:w-48 pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-[#C4A45C] focus:border-[#C4A45C] sm:text-sm rounded-md"
+            className="block w-full md:w-48 pl-3 pr-10 py-2 text-base border-border dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-[#C4A45C] focus:border-[#C4A45C] sm:text-sm rounded-md"
           >
             <option value="">All Types</option>
             <option value="notes">Notes</option>
@@ -114,7 +114,7 @@ function NotesContent() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {materials.map((material) => (
-            <div key={material.id} className="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow flex flex-col">
+            <div key={material.id} className="bg-card dark:bg-gray-800 overflow-hidden shadow rounded-lg border border-border dark:border-gray-700 hover:shadow-md transition-shadow flex flex-col">
               <div className="px-4 py-5 sm:p-6 flex-1">
                 <div className="flex justify-between items-start">
                   <div className="flex items-center text-xs font-medium text-[#C4A45C] uppercase tracking-wider mb-2">
@@ -128,19 +128,19 @@ function NotesContent() {
                   )}
                 </div>
                 
-                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-1 line-clamp-2">
+                <h3 className="text-lg leading-6 font-medium text-foreground dark:text-white mb-1 line-clamp-2">
                   {material.title}
                 </h3>
                 
-                <div className="text-sm text-gray-500 dark:text-gray-400 mb-3 line-clamp-1">
+                <div className="text-sm text-muted-foreground dark:text-muted-foreground mb-3 line-clamp-1">
                   {material.subject_name} {material.topic_name && `• ${material.topic_name}`}
                 </div>
                 
-                <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3 mb-4">
+                <p className="text-sm text-muted-foreground dark:text-gray-300 line-clamp-3 mb-4">
                   {material.description || 'No description provided.'}
                 </p>
                 
-                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 gap-4 mt-auto">
+                <div className="flex items-center text-xs text-muted-foreground dark:text-muted-foreground gap-4 mt-auto">
                   <span className="flex items-center">
                     <Clock className="w-3.5 h-3.5 mr-1" /> {material.estimated_reading_time} min read
                   </span>
@@ -152,12 +152,12 @@ function NotesContent() {
                 </div>
                 
                 {material.progress > 0 && (
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-4">
+                  <div className="w-full bg-muted/80 dark:bg-gray-700 rounded-full h-1.5 mt-4">
                     <div className="bg-[#C4A45C] h-1.5 rounded-full" style={{ width: `${material.progress}%` }}></div>
                   </div>
                 )}
               </div>
-              <div className="bg-gray-50 dark:bg-gray-800/50 px-4 py-4 sm:px-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="bg-muted dark:bg-gray-800/50 px-4 py-4 sm:px-6 border-t border-border dark:border-gray-700">
                 <Link
                   href={`/student/notes/${material.id}`}
                   className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[#1A2E44] hover:bg-[#2a405a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#1A2E44]"
@@ -169,7 +169,7 @@ function NotesContent() {
           ))}
           
           {materials.length === 0 && (
-            <div className="col-span-full text-center py-12 text-gray-500 dark:text-gray-400">
+            <div className="col-span-full text-center py-12 text-muted-foreground dark:text-muted-foreground">
               No materials found matching your criteria.
             </div>
           )}

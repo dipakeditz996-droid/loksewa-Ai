@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { BookOpen, Target, FileText, Bookmark, PlayCircle, Clock, ChevronLeft, GraduationCap, Trophy, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RetryImage } from "@/components/ui/retry-image";
 import Link from "next/link";
 import { courseEnrollmentApi } from "@/lib/api/enrollment";
 import { Navbar } from "@/components/layout/navbar";
@@ -120,7 +121,7 @@ export default function PublicCourseDetail() {
           <div className="bg-white dark:bg-[#0B1521] rounded-[24px] border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden flex flex-col md:flex-row relative">
             {course.thumbnail ? (
               <div className="md:w-1/3 h-64 md:h-auto bg-slate-100 relative">
-                <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
+                <RetryImage src={course.thumbnail} alt={course.title} className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-6">
                   {course.exam && (
                     <span className="bg-[#D4A72C] text-[#0A1118] text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-lg">

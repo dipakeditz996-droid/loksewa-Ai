@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Search, ShoppingBag, Filter } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function MarketplacePage() {
@@ -105,7 +105,7 @@ export default function MarketplacePage() {
               <div className="aspect-video w-full bg-muted relative">
                 {product.cover_image ? (
                   <Image 
-                    src={`${baseUrl}${product.cover_image}`} 
+                    src={product.cover_image.startsWith('http') ? product.cover_image : `${baseUrl}${product.cover_image.startsWith('/') ? '' : '/'}${product.cover_image}`} 
                     alt={product.title}
                     fill
                     className="object-cover"

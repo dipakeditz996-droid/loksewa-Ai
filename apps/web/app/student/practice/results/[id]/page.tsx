@@ -33,7 +33,7 @@ export default function PracticeResultPage() {
   if (loading || !result) {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#0B2545]" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" />
       </div>
     );
   }
@@ -46,19 +46,19 @@ export default function PracticeResultPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <Link href="/student/practice" className="inline-flex items-center text-sm font-bold text-slate-400 hover:text-[#0B2545] transition-colors mb-2">
+          <Link href="/student/practice" className="inline-flex items-center text-sm font-bold text-muted-foreground hover:text-primary dark:text-foreground transition-colors mb-2">
             <ArrowLeft className="w-4 h-4 mr-1" /> Back to Practice
           </Link>
-          <h1 className="text-[28px] font-bold text-[#0B2545] tracking-tight">Practice Result</h1>
-          <p className="text-slate-500 text-sm font-medium mt-1">
+          <h1 className="text-[28px] font-bold text-primary dark:text-foreground tracking-tight">Practice Result</h1>
+          <p className="text-muted-foreground text-sm font-medium mt-1">
             Session completed on {new Date(session.created_at).toLocaleDateString()}
           </p>
         </div>
         <div className="flex gap-3">
-           <Button variant="outline" className="border-slate-200">
+           <Button variant="outline" className="border-border">
              Review Mistakes
            </Button>
-           <Button className="bg-[#0B2545] hover:bg-[#163E6B]">
+           <Button className="bg-primary text-primary-foreground hover:bg-[#163E6B]">
              Practice Again
            </Button>
         </div>
@@ -66,30 +66,30 @@ export default function PracticeResultPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-[16px] border border-slate-200 shadow-sm text-center">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Accuracy</div>
-          <div className="text-3xl font-black text-[#0B2545]">{Math.round(session.accuracy || 0)}%</div>
+        <div className="bg-card p-5 rounded-[16px] border border-border shadow-sm text-center">
+          <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">Accuracy</div>
+          <div className="text-3xl font-black text-primary dark:text-foreground">{Math.round(session.accuracy || 0)}%</div>
         </div>
-        <div className="bg-white p-5 rounded-[16px] border border-slate-200 shadow-sm text-center">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Score</div>
-          <div className="text-3xl font-black text-green-600">{session.correct_count} <span className="text-lg text-slate-400 font-medium">/ {session.total_questions}</span></div>
+        <div className="bg-card p-5 rounded-[16px] border border-border shadow-sm text-center">
+          <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">Score</div>
+          <div className="text-3xl font-black text-green-600">{session.correct_count} <span className="text-lg text-muted-foreground font-medium">/ {session.total_questions}</span></div>
         </div>
-        <div className="bg-white p-5 rounded-[16px] border border-slate-200 shadow-sm text-center">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Time Taken</div>
+        <div className="bg-card p-5 rounded-[16px] border border-border shadow-sm text-center">
+          <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">Time Taken</div>
           <div className="text-3xl font-black text-[#D4A72C]">
             {Math.floor((session.time_taken_seconds || 0) / 60)}m {(session.time_taken_seconds || 0) % 60}s
           </div>
         </div>
-        <div className="bg-white p-5 rounded-[16px] border border-slate-200 shadow-sm text-center">
-          <div className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">XP Earned</div>
+        <div className="bg-card p-5 rounded-[16px] border border-border shadow-sm text-center">
+          <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">XP Earned</div>
           <div className="text-3xl font-black text-purple-600">+{session.correct_count * 10}</div>
         </div>
       </div>
 
       {/* Detailed Review */}
-      <div className="bg-white rounded-[16px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-[#0B2545] text-lg flex items-center gap-2">
+      <div className="bg-card rounded-[16px] border border-border shadow-sm overflow-hidden">
+        <div className="px-6 py-5 border-b border-border/50 flex items-center justify-between">
+          <h3 className="font-bold text-primary dark:text-foreground text-lg flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-[#D4A72C]" /> Detailed Review
           </h3>
         </div>
@@ -99,14 +99,14 @@ export default function PracticeResultPage() {
              const isUnanswered = attempt.selected_option === null;
              
              return (
-               <div key={attempt.attempt_id} className="p-6 hover:bg-slate-50 transition-colors">
+               <div key={attempt.attempt_id} className="p-6 hover:bg-muted transition-colors">
                  <div className="flex gap-4">
                    <div className="shrink-0 mt-1">
                      {isCorrect ? (
                        <CheckCircle2 className="w-6 h-6 text-green-500" />
                      ) : isUnanswered ? (
-                       <div className="w-6 h-6 rounded-full border-2 border-slate-300 bg-slate-100 flex items-center justify-center">
-                         <div className="w-2 h-2 rounded-full bg-slate-300"></div>
+                       <div className="w-6 h-6 rounded-full border-2 border-border bg-muted/80 flex items-center justify-center">
+                         <div className="w-2 h-2 rounded-full bg-secondary"></div>
                        </div>
                      ) : (
                        <XCircle className="w-6 h-6 text-red-500" />
@@ -114,30 +114,31 @@ export default function PracticeResultPage() {
                    </div>
                    <div className="flex-1 space-y-4">
                      <div>
-                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Question {index + 1}</span>
-                       <h4 className="text-[16px] font-medium text-[#0B2545] mt-1">{attempt.question.text}</h4>
+                       <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Question {index + 1}</span>
+                       <h4 className="text-[16px] font-medium text-primary dark:text-foreground mt-1">{attempt.question.text}</h4>
                      </div>
                      
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                        {['a', 'b', 'c', 'd'].map(opt => {
                          const optText = attempt.question[`option_${opt}` as keyof typeof attempt.question];
-                         const isSelected = attempt.selected_option === opt;
-                         const isActuallyCorrect = attempt.question.correct_option === opt; // Assuming the API returned the correct option, which might require a full serializer, but typically results return it
+                         const isSelected = attempt.selected_option?.toLowerCase() === opt;
+                         // correct_option comes back uppercase from the API; selected_option and opt are lowercase.
+                         const isActuallyCorrect = attempt.question.correct_option?.toLowerCase() === opt;
                          
-                         let bg = "bg-white border-slate-200";
-                         let text = "text-slate-600";
+                         let bg = "bg-card border-border";
+                         let text = "text-muted-foreground";
                          let indicator = null;
 
                          if (isSelected && isActuallyCorrect) {
-                           bg = "bg-green-50 border-green-200";
+                           bg = "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900/50";
                            text = "text-green-800 font-medium";
                            indicator = <CheckCircle2 className="w-4 h-4 text-green-600" />;
                          } else if (isSelected && !isActuallyCorrect) {
-                           bg = "bg-red-50 border-red-200";
+                           bg = "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50";
                            text = "text-red-800 font-medium";
                            indicator = <XCircle className="w-4 h-4 text-red-600" />;
                          } else if (isActuallyCorrect) {
-                           bg = "bg-green-50 border-green-200 border-dashed";
+                           bg = "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900/50 border-dashed";
                            text = "text-green-800 font-medium";
                            indicator = <CheckCircle2 className="w-4 h-4 text-green-600" />;
                          }
@@ -155,7 +156,7 @@ export default function PracticeResultPage() {
                      </div>
                      
                      {attempt.question.explanation && (
-                       <div className="bg-blue-50 border border-blue-100 rounded-[10px] p-4 text-sm text-blue-800">
+                       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-[10px] p-4 text-sm text-blue-800">
                          <strong>Explanation:</strong> {attempt.question.explanation}
                        </div>
                      )}

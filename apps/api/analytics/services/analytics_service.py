@@ -2,15 +2,13 @@ from django.db.models import Sum, Count, Avg, F
 from django.utils import timezone
 from datetime import timedelta
 from exams.models import (
-    PracticeSession, 
-    ModelExamAttempt, 
+    PracticeSession,
     SubjectiveAttempt,
     QuestionAttempt,
     SubjectiveAnswer,
     UserTopicProgress,
     ExaminationAttempt,
     StudentAnswer,
-    ModelExamAttemptAnswer
 )
 
 class AnalyticsService:
@@ -22,14 +20,12 @@ class AnalyticsService:
 
         # Let's count from QuestionAttempt for precise objective metrics
         obj_attempts = QuestionAttempt.objects.filter(session__user=user, session__completed=True)
-        me_attempts = ModelExamAttempt.objects.filter(student=user, status='submitted')
         exam_attempts = ExaminationAttempt.objects.filter(student=user, status='submitted')
 
         obj_solved = obj_attempts.count()
-        me_solved = ModelExamAttemptAnswer.objects.filter(attempt__in=me_attempts).count()
         exam_solved = StudentAnswer.objects.filter(attempt__in=exam_attempts).count()
-        
-        total_solved = obj_solved + me_solved + exam_solved
+
+        total_solved = obj_solved + exam_solved
 
         # Subjective
         subjective_evaluated = SubjectiveAnswer.objects.filter(
@@ -109,10 +105,9 @@ class AnalyticsService:
 
         # Overall Accuracy calculation (Objective only)
         obj_correct = obj_attempts.filter(is_correct=True).count()
-        me_correct = me_attempts.aggregate(Sum('correct_count'))['correct_count__sum'] or 0
         exam_correct = StudentAnswer.objects.filter(attempt__in=exam_attempts, is_correct=True).count()
-        
-        total_correct = obj_correct + me_correct + exam_correct
+
+        total_correct = obj_correct + exam_correct
         overall_accuracy = (total_correct / total_solved * 100) if total_solved > 0 else 0
 
         # Calculate Total Available Exams
@@ -135,7 +130,7 @@ class AnalyticsService:
         return {
             "overall_accuracy": round(overall_accuracy, 1),
             "questions_solved": total_solved,
-            "model_exams_taken": me_attempts.count() + exam_attempts.count(),
+            "model_exams_taken": exam_attempts.count(),
             "subjective_evaluated": subjective_evaluated,
             "study_streak": streak,
             "best_streak": best_streak,
@@ -158,13 +153,6 @@ class AnalyticsService:
             attempts=Count('id')
         )
         
-        me_exams = ModelExamAttempt.objects.filter(
-            student=user, status='submitted', started_at__gte=start_date
-        ).extra({'date': "date(started_at)"}).values('date').annotate(
-            avg_acc=Avg('accuracy'),
-            attempts=Count('id')
-        )
-
         exams = ExaminationAttempt.objects.filter(
             student=user, status='submitted', started_at__gte=start_date
         ).extra({'date': "date(started_at)"}).values('date').annotate(
@@ -189,7 +177,6 @@ class AnalyticsService:
                     trend_dict[d]['attempts'] = total_att
 
         merge_stats(sessions)
-        merge_stats(me_exams)
         merge_stats(exams)
         
         sorted_trend = sorted(trend_dict.values(), key=lambda x: x['date'])
@@ -260,7 +247,7 @@ class AnalyticsService:
             topics.append({
                 "topic_id": p.topic.id,
                 "topic": p.topic.name,
-                "subject": p.topic.Chapter.subject.name,
+                "subject": p.topic.chapter.subject.name,
                 "accuracy": round(acc, 1),
                 "progress": p.progress,
                 "status": status

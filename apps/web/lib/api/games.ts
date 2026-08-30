@@ -193,10 +193,13 @@ export interface AdminGameMatch {
   id: number;
   status: string;
   is_invite_only: boolean;
+  player1_id: number;
   player1_username: string;
+  player2_id: number | null;
   player2_username: string | null;
   player1_score: number;
   player2_score: number;
+  winner_id: number | null;
   winner_username: string | null;
   is_draw: boolean;
   question_count: number;
@@ -215,6 +218,7 @@ export interface AdminSurvivalGamesResponse {
 
 export interface AdminSurvivalGame {
   id: number;
+  player_id: number;
   player_username: string;
   score: number;
   questions_survived: number;
@@ -224,6 +228,58 @@ export interface AdminSurvivalGame {
   duration_seconds: number | null;
   created_at: string;
   ended_at: string | null;
+}
+
+export interface AdminGameActivityEntry {
+  type: "duel" | "survival";
+  id: number;
+  description: string;
+  status: string;
+  timestamp: string;
+  playerId: number;
+  opponentId: number | null;
+}
+
+export interface AdminGameStats {
+  totalPlayers: number;
+  activePlayers: number;
+  activeWindowDays: number;
+  totalGamesPlayed: number;
+  totalDuels: number;
+  totalSurvivalRuns: number;
+  completedGames: number;
+  completedDuels: number;
+  completedSurvivalRuns: number;
+  averageDuelScore: number | null;
+  averageSurvivalScore: number | null;
+  recentActivity: AdminGameActivityEntry[];
+}
+
+export interface AdminPlayerGameActivity {
+  player: { id: number; username: string; name: string };
+  summary: {
+    duelsPlayed: number;
+    duelsWon: number;
+    duelsLost: number;
+    duelsDrawn: number;
+    duelAccuracy: number | null;
+    survivalRuns: number;
+    bestSurvivalScore: number | null;
+    survivalAccuracy: number | null;
+  };
+  recentMatches: AdminGameMatch[];
+  recentSurvivalRuns: AdminSurvivalGame[];
+}
+
+export interface AdminGameListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  status?: string;
+  player_id?: number;
+  date_from?: string;
+  date_to?: string;
+  order_by?: string;
 }
 
 export const gamesApi = {
@@ -270,24 +326,36 @@ export const gamesApi = {
   },
 
   // Admin API
-  getAdminMatches: async (params?: {page?: number, page_size?: number, search?: string, status?: string, order_by?: string}): Promise<AdminMatchesResponse> => {
+  getAdminStats: async (): Promise<AdminGameStats> => {
+    return apiClient<AdminGameStats>('/games/admin/stats/');
+  },
+  getAdminMatches: async (params?: AdminGameListParams): Promise<AdminMatchesResponse> => {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
     if (params?.page_size) query.set('page_size', String(params.page_size));
     if (params?.search) query.set('search', params.search);
     if (params?.status) query.set('status', params.status);
+    if (params?.player_id) query.set('player_id', String(params.player_id));
+    if (params?.date_from) query.set('date_from', params.date_from);
+    if (params?.date_to) query.set('date_to', params.date_to);
     if (params?.order_by) query.set('order_by', params.order_by);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return apiClient<AdminMatchesResponse>(`/games/admin/matches/${qs}`);
   },
-  getAdminSurvivalGames: async (params?: {page?: number, page_size?: number, search?: string, status?: string, order_by?: string}): Promise<AdminSurvivalGamesResponse> => {
+  getAdminSurvivalGames: async (params?: AdminGameListParams): Promise<AdminSurvivalGamesResponse> => {
     const query = new URLSearchParams();
     if (params?.page) query.set('page', String(params.page));
     if (params?.page_size) query.set('page_size', String(params.page_size));
     if (params?.search) query.set('search', params.search);
     if (params?.status) query.set('status', params.status);
+    if (params?.player_id) query.set('player_id', String(params.player_id));
+    if (params?.date_from) query.set('date_from', params.date_from);
+    if (params?.date_to) query.set('date_to', params.date_to);
     if (params?.order_by) query.set('order_by', params.order_by);
     const qs = query.toString() ? `?${query.toString()}` : '';
     return apiClient<AdminSurvivalGamesResponse>(`/games/admin/survival-games/${qs}`);
-  }
+  },
+  getAdminPlayerActivity: async (playerId: number): Promise<AdminPlayerGameActivity> => {
+    return apiClient<AdminPlayerGameActivity>(`/games/admin/players/${playerId}/activity/`);
+  },
 };

@@ -239,6 +239,9 @@ export function Footer() {
           </div>
         </div>
 
+        {/* Clears the fixed mobile bottom tab bar so this row is never hidden behind it. */}
+        <div className="h-[64px] lg:hidden" aria-hidden="true" />
+
       </div>
     </footer>
   );

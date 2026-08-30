@@ -32,9 +32,9 @@ class AdminGameMatchSerializer(serializers.ModelSerializer):
         model = GameMatch
         fields = [
             'id', 'status', 'is_invite_only',
-            'player1_username', 'player2_username',
+            'player1_id', 'player1_username', 'player2_id', 'player2_username',
             'player1_score', 'player2_score',
-            'winner_username', 'is_draw',
+            'winner_id', 'winner_username', 'is_draw',
             'question_count',
             'created_at', 'started_at', 'ended_at'
         ]
@@ -72,7 +72,7 @@ class AdminSurvivalGameSerializer(serializers.ModelSerializer):
     class Meta:
         model = SurvivalGame
         fields = [
-            'id', 'player_username', 'score',
+            'id', 'player_id', 'player_username', 'score',
             'questions_survived', 'highest_streak',
             'status', 'correct_answers', 'duration_seconds',
             'created_at', 'ended_at'

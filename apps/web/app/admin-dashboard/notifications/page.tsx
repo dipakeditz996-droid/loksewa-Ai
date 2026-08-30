@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from "react";
 import {
   Bell, Plus, Trash2, Search, Filter, AlertTriangle, Loader2,
-  Calendar, User, Clock, CheckCircle2, AlertCircle,
+  Calendar, User, Clock, CheckCircle2, AlertCircle, Eye,
 } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -360,6 +361,12 @@ export default function AdminNotificationsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/admin-dashboard/notifications/${notif.id}`} className="cursor-pointer flex items-center">
+                            <Eye className="w-4 h-4 mr-2" />
+                            View Details
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             setSelectedNotification(notif);
@@ -552,7 +559,7 @@ export default function AdminNotificationsPage() {
             <Button
               onClick={handleCreateNotification}
               disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {isSubmitting ? (
                 <>
@@ -585,7 +592,7 @@ export default function AdminNotificationsPage() {
             </Button>
             <Button
               onClick={handleDeleteNotification}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               Delete
             </Button>

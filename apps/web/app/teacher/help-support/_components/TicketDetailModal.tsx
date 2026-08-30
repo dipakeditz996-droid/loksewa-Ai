@@ -87,19 +87,19 @@ export function TicketDetailModal({ ticketId, onOpenChange }: TicketDetailModalP
 
   return (
     <Dialog open={!!ticketId} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[80vh] flex-col gap-0 rounded-2xl border-[#E7EBF3] bg-white p-0 sm:max-w-[700px]">
+      <DialogContent className="flex h-[80vh] flex-col gap-0 rounded-2xl border-border bg-card p-0 sm:max-w-[700px]">
 
         {isLoading || !ticket ? (
           <div className="flex flex-1 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-[#0B2545]" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
           <>
-            <DialogHeader className="shrink-0 border-b border-[#EEF1F6] px-6 py-4">
+            <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
               <div className="flex items-start justify-between pr-6">
                 <div>
-                  <DialogTitle className="mb-1 text-xl text-[#101828]">{ticket.subject}</DialogTitle>
-                  <div className="flex items-center gap-3 text-sm text-[#667085]">
+                  <DialogTitle className="mb-1 text-xl text-foreground">{ticket.subject}</DialogTitle>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <span className="font-medium">Ticket #{ticket.ticket_number}</span>
                     <span>•</span>
                     <span className="capitalize">{ticket.category.replace("_", " ")}</span>
@@ -113,28 +113,28 @@ export function TicketDetailModal({ ticketId, onOpenChange }: TicketDetailModalP
 
             <div
               ref={scrollRef}
-              className="flex-1 space-y-6 overflow-y-auto bg-[#F7F9FC] p-6"
+              className="flex-1 space-y-6 overflow-y-auto bg-muted p-6"
             >
               {messages.map((msg, index) => (
                 <div key={msg.id || index} className={`flex gap-4 ${!msg.is_staff_reply ? "flex-row-reverse" : ""}`}>
-                  <Avatar className="h-10 w-10 shrink-0 border border-[#E7EBF3]">
-                    <AvatarFallback className={msg.is_staff_reply ? "bg-[#EEF2F8] text-[#0B2545]" : "bg-[#EEF1F6] text-[#475467]"}>
+                  <Avatar className="h-10 w-10 shrink-0 border border-border">
+                    <AvatarFallback className={msg.is_staff_reply ? "bg-primary/10 text-primary" : "bg-[#EEF1F6] text-muted-foreground"}>
                       {msg.is_staff_reply ? "LS" : msg.sender_name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div className={`flex max-w-[80%] flex-col ${!msg.is_staff_reply ? "items-end" : "items-start"}`}>
                     <div className="mb-1 flex items-baseline gap-2">
-                      <span className="text-sm font-medium text-[#101828]">
+                      <span className="text-sm font-medium text-foreground">
                         {msg.sender_name}
                       </span>
-                      <span className="text-xs text-[#8A98AE]">
+                      <span className="text-xs text-muted-foreground">
                         {new Date(msg.created_at).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                     <div className={`whitespace-pre-wrap rounded-2xl p-4 text-sm ${
                       !msg.is_staff_reply
                         ? "rounded-tr-sm bg-[#0B2545] text-white"
-                        : "rounded-tl-sm border border-[#E7EBF3] bg-white text-[#344054] shadow-sm"
+                        : "rounded-tl-sm border border-border bg-card text-foreground shadow-sm"
                     }`}>
                       {msg.message}
                     </div>
@@ -143,9 +143,9 @@ export function TicketDetailModal({ ticketId, onOpenChange }: TicketDetailModalP
               ))}
             </div>
 
-            <div className="shrink-0 border-t border-[#EEF1F6] bg-white p-4">
+            <div className="shrink-0 border-t border-border bg-card p-4">
               {ticket.status === "closed" || ticket.status === "resolved" ? (
-                <div className="rounded-lg border border-[#EEF1F6] bg-[#F7F9FC] p-4 text-center text-sm text-[#667085]">
+                <div className="rounded-lg border border-border bg-muted p-4 text-center text-sm text-muted-foreground">
                   This ticket is {ticket.status}. No further replies can be added.
                 </div>
               ) : (
@@ -154,7 +154,7 @@ export function TicketDetailModal({ ticketId, onOpenChange }: TicketDetailModalP
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Type your reply..."
-                    className="min-h-[80px] resize-none rounded-lg border-[#D9E1EA] focus-visible:ring-[#0B2545]/30"
+                    className="min-h-[80px] resize-none rounded-lg border-border focus-visible:ring-[#0B2545]/30"
                   />
                   <Button
                     className="h-auto shrink-0 rounded-[9px] bg-[#0B2545] px-6 hover:bg-[#163E6C]"

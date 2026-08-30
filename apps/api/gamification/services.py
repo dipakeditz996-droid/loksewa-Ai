@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils import timezone
 from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction, ReferralMilestone
 
@@ -24,9 +25,15 @@ def award_xp(user, amount, reason):
     settings = ReferralSetting.get_settings()
     # Simple linear level progression: 1000 XP per level
     new_level = (profile.xp // settings.xp_per_level) + 1
+    old_level = profile.level
     profile.level = max(profile.level, new_level)
-    
+
     profile.save()
+
+    if profile.level > old_level:
+        from core.notification_service import NotificationService
+        new_level = profile.level
+        transaction.on_commit(lambda: NotificationService.notify_level_up(user, new_level))
 
 def award_coins(user, amount):
     if amount <= 0:

@@ -95,7 +95,7 @@ def finalize_attempt(attempt, auto=False):
         )
 
     attempt.save()
-    
+
     # Award XP for examination attempt completion
     try:
         from gamification.services import award_xp
@@ -104,7 +104,13 @@ def finalize_attempt(attempt, auto=False):
         award_xp(attempt.student, xp_to_award, f"Examination Attempt Completed: {attempt.examination.title}")
     except Exception:
         pass
-        
+
+    # Deferred to on_commit: finalize_attempt runs inside @transaction.atomic,
+    # so creating the notification here directly would leave an orphan row if
+    # anything above it rolled back.
+    from core.notification_service import NotificationService
+    transaction.on_commit(lambda: NotificationService.notify_result_published(attempt))
+
     return attempt
 
 

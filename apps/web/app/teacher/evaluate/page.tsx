@@ -81,7 +81,7 @@ function AnnotatableText({
     <div 
       ref={containerRef}
       onMouseUp={handleMouseUp}
-      className="whitespace-pre-wrap leading-relaxed font-serif text-[16px] text-[#101828]"
+      className="whitespace-pre-wrap leading-relaxed font-serif text-[16px] text-foreground"
     >
       {parts}
     </div>
@@ -100,6 +100,9 @@ export default function TeacherEvaluationDashboard() {
   const [feedback, setFeedback] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showModelAnswer, setShowModelAnswer] = useState(false);
 
   // Load List
   useEffect(() => {
@@ -123,6 +126,7 @@ export default function TeacherEvaluationDashboard() {
     setMarks("");
     setFeedback("");
     setYoutubeUrl("");
+    setShowModelAnswer(false);
 
     try {
       const data = await subjectiveApi.getAnswerForEvaluation(id);
@@ -206,8 +210,17 @@ export default function TeacherEvaluationDashboard() {
   };
 
 
+  const filteredAnswers = pendingAnswers.filter((ans) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      ans.student_name?.toLowerCase().includes(q) ||
+      ans.question.text?.toLowerCase().includes(q)
+    );
+  });
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#F7F9FC] h-screen overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-muted h-screen overflow-hidden">
       {/* HEADER */}
       <header className="h-16 bg-[#0B2545] text-white flex items-center px-6 shrink-0 shadow-md z-10">
         <Target className="w-5 h-5 mr-3 text-[#D4A72C]" />
@@ -217,43 +230,61 @@ export default function TeacherEvaluationDashboard() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* LEFT PANEL - LIST */}
-        <div className="w-[350px] bg-white border-r border-[#E7EBF3] flex flex-col shrink-0">
-          <div className="p-4 border-b border-[#E7EBF3] bg-[#F7F9FC] flex items-center justify-between">
-            <h2 className="font-bold text-[#0B2545] flex items-center gap-2">
-              <FileText className="w-4 h-4" /> Pending ({pendingAnswers.length})
-            </h2>
-            <Button variant="ghost" size="icon" className="w-8 h-8 rounded-full">
-              <Search className="w-4 h-4 text-[#667085]" />
-            </Button>
+        <div className="w-[350px] bg-card border-r border-border flex flex-col shrink-0">
+          <div className="p-4 border-b border-border bg-muted flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-primary flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Pending ({filteredAnswers.length})
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-8 h-8 rounded-full"
+                onClick={() => setShowSearch((prev) => !prev)}
+              >
+                <Search className="w-4 h-4 text-muted-foreground" />
+              </Button>
+            </div>
+            {showSearch && (
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by student or question..."
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20"
+              />
+            )}
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {loadingList ? (
-              <div className="p-8 text-center text-[#8A98AE]">Loading...</div>
-            ) : pendingAnswers.length === 0 ? (
-              <div className="p-8 text-center text-[#8A98AE]">No pending submissions.</div>
+              <div className="p-8 text-center text-muted-foreground">Loading...</div>
+            ) : filteredAnswers.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                {pendingAnswers.length === 0 ? "No pending submissions." : "No submissions match your search."}
+              </div>
             ) : (
-              pendingAnswers.map(ans => (
+              filteredAnswers.map(ans => (
                 <button
                   key={ans.id}
                   onClick={() => handleSelectAnswer(ans.id)}
                   className={cn(
                     "w-full text-left p-4 rounded-xl transition-all border",
                     selectedAnswer?.id === ans.id 
-                      ? "bg-[#EEF2F8] border-[#0B2545]/20 shadow-sm"
-                      : "bg-white border-transparent hover:bg-[#F7F9FC] hover:border-[#E7EBF3]"
+                      ? "bg-primary/10 border-[#0B2545]/20 shadow-sm"
+                      : "bg-card border-transparent hover:bg-muted hover:border-border"
                   )}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[13px] font-bold text-[#0B2545]">{ans.student_name}</span>
-                    <span className="text-[11px] font-medium text-[#8A98AE]">{new Date(ans.submitted_at || '').toLocaleDateString()}</span>
+                    <span className="text-[13px] font-bold text-primary">{ans.student_name}</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">{new Date(ans.submitted_at || '').toLocaleDateString()}</span>
                   </div>
-                  <div className="text-[12px] text-[#475467] truncate mb-2">
+                  <div className="text-[12px] text-muted-foreground truncate mb-2">
                     {ans.question.text}
                   </div>
                   <div className="flex justify-between items-center text-[11px] font-bold">
-                    <span className="text-[#8A98AE]">{ans.word_count} words</span>
-                    <span className="text-[#0B2545] bg-[#EEF2F8] px-2 py-0.5 rounded-full">{ans.question.marks} Marks</span>
+                    <span className="text-muted-foreground">{ans.word_count} words</span>
+                    <span className="text-primary bg-primary/10 px-2 py-0.5 rounded-full">{ans.question.marks} Marks</span>
                   </div>
                 </button>
               ))
@@ -263,13 +294,13 @@ export default function TeacherEvaluationDashboard() {
 
 
         {/* RIGHT PANEL - DETAIL */}
-        <div className="flex-1 bg-[#F7F9FC] flex overflow-hidden">
+        <div className="flex-1 bg-muted flex overflow-hidden">
           {loadingDetail ? (
              <div className="flex-1 flex justify-center items-center">
                <div className="w-8 h-8 border-4 border-[#0B2545] border-t-transparent rounded-full animate-spin"></div>
              </div>
           ) : !selectedAnswer ? (
-            <div className="flex-1 flex flex-col items-center justify-center text-[#8A98AE]">
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
               <MessageSquare className="w-12 h-12 mb-4 opacity-20" />
               <p className="font-medium">Select a submission from the queue to evaluate</p>
             </div>
@@ -281,37 +312,47 @@ export default function TeacherEvaluationDashboard() {
                 <div className="max-w-[800px] w-full mx-auto flex-1">
                   
                   {/* Question Reference */}
-                  <div className="bg-white border border-[#E7EBF3] rounded-[16px] p-6 mb-6 shadow-sm">
-                    <div className="text-[11px] font-bold text-[#8A98AE] uppercase tracking-wider mb-2">Question</div>
-                    <h3 className="text-[16px] font-bold text-[#0B2545] leading-relaxed mb-4">
+                  <div className="bg-card border border-border rounded-[16px] p-6 mb-6 shadow-sm">
+                    <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Question</div>
+                    <h3 className="text-[16px] font-bold text-primary leading-relaxed mb-4">
                       {selectedAnswer.question.text}
                     </h3>
                     <div className="flex gap-4">
-                      <span className="text-[12px] font-bold bg-[#EEF2F8] text-[#0B2545] px-3 py-1 rounded-lg border border-[#E3E9F2]">
+                      <span className="text-[12px] font-bold bg-primary/10 text-primary px-3 py-1 rounded-lg border border-[#E3E9F2]">
                         Max Marks: {selectedAnswer.question.marks}
                       </span>
                       {selectedAnswer.question.model_answer && (
-                        <span className="text-[12px] font-bold bg-[#EEF1F6] text-[#475467] px-3 py-1 rounded-lg border border-[#E7EBF3] flex items-center gap-1 cursor-pointer hover:bg-[#E3E9F2] transition-colors">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> View Model Answer
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowModelAnswer((prev) => !prev)}
+                          className="text-[12px] font-bold bg-[#EEF1F6] text-muted-foreground px-3 py-1 rounded-lg border border-border flex items-center gap-1 cursor-pointer hover:bg-[#E3E9F2] transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> {showModelAnswer ? "Hide" : "View"} Model Answer
+                        </button>
                       )}
                     </div>
+                    {showModelAnswer && selectedAnswer.question.model_answer && (
+                      <div className="mt-4 rounded-lg border border-[#F0DFAF] bg-[#946B00]/10 p-4">
+                        <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[#946B00] dark:text-[#F2C94C]">Model Answer</p>
+                        <p className="whitespace-pre-wrap text-[13px] text-[#5C4300] dark:text-[#F2C94C]">{selectedAnswer.question.model_answer}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Student Answer */}
-                  <div className="bg-white border border-[#E7EBF3] rounded-[16px] overflow-hidden shadow-sm">
-                    <div className="h-12 bg-[#F7F9FC] border-b border-[#E7EBF3] flex items-center px-6 justify-between">
+                  <div className="bg-card border border-border rounded-[16px] overflow-hidden shadow-sm">
+                    <div className="h-12 bg-muted border-b border-border flex items-center px-6 justify-between">
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-[#8A98AE]" />
-                        <span className="text-[13px] font-bold text-[#0B2545]">{selectedAnswer.student_name}'s Answer</span>
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-[13px] font-bold text-primary">{selectedAnswer.student_name}'s Answer</span>
                       </div>
-                      <div className="text-[12px] font-medium text-[#667085]">
+                      <div className="text-[12px] font-medium text-muted-foreground">
                         {selectedAnswer.word_count} words
                       </div>
                     </div>
                     
                     <div className="p-6 md:p-8 min-h-[300px]">
-                      <div className="mb-4 text-[12px] font-medium flex items-center gap-1 bg-[#FBF2DC] text-[#946B00] p-2 rounded border border-[#F0DFAF] inline-flex">
+                      <div className="mb-4 text-[12px] font-medium flex items-center gap-1 bg-[#946B00]/10 text-[#946B00] dark:text-[#F2C94C] p-2 rounded border border-[#F0DFAF] inline-flex">
                         <MessageCircle className="w-3.5 h-3.5" />
                         Highlight any text to add an annotation. (Save marks first if brand new)
                       </div>
@@ -327,20 +368,20 @@ export default function TeacherEvaluationDashboard() {
               </div>
 
               {/* Evaluation Sidebar */}
-              <div className="w-[380px] bg-white border-l border-[#E7EBF3] shrink-0 flex flex-col">
-                <div className="p-6 border-b border-[#EEF1F6]">
-                  <h3 className="text-[16px] font-bold text-[#0B2545] flex items-center gap-2 mb-1">
+              <div className="w-[380px] bg-card border-l border-border shrink-0 flex flex-col">
+                <div className="p-6 border-b border-border">
+                  <h3 className="text-[16px] font-bold text-primary flex items-center gap-2 mb-1">
                     <Target className="w-4 h-4" /> Assessment
                   </h3>
-                  <p className="text-[12px] text-[#667085]">Provide marks, feedback, and video.</p>
+                  <p className="text-[12px] text-muted-foreground">Provide marks, feedback, and video.</p>
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto space-y-6">
                   
                   {/* Marks */}
                   <div>
-                    <label className="block text-[12px] font-bold text-[#344054] uppercase tracking-wider mb-2">
-                      Marks Obtained <span className="text-[#B23A3A]">*</span>
+                    <label className="block text-[12px] font-bold text-foreground uppercase tracking-wider mb-2">
+                      Marks Obtained <span className="text-destructive">*</span>
                     </label>
                     <div className="flex items-center gap-3">
                       <input 
@@ -348,31 +389,31 @@ export default function TeacherEvaluationDashboard() {
                         min="0" max={selectedAnswer.question.marks} step="0.5"
                         value={marks}
                         onChange={(e) => setMarks(e.target.value)}
-                        className="w-24 h-12 rounded-[12px] border-2 border-[#E7EBF3] text-center font-bold text-[18px] text-[#0B2545] outline-none focus:border-[#0B2545] transition-colors"
+                        className="w-24 h-12 rounded-[12px] border-2 border-border text-center font-bold text-[18px] text-primary outline-none focus:border-[#0B2545] transition-colors"
                       />
-                      <span className="text-[16px] font-bold text-[#8A98AE]">/ {selectedAnswer.question.marks}</span>
+                      <span className="text-[16px] font-bold text-muted-foreground">/ {selectedAnswer.question.marks}</span>
                     </div>
                   </div>
 
                   {/* Feedback */}
                   <div>
-                    <label className="block text-[12px] font-bold text-[#344054] uppercase tracking-wider mb-2">
-                      Written Feedback <span className="text-[#B23A3A]">*</span>
+                    <label className="block text-[12px] font-bold text-foreground uppercase tracking-wider mb-2">
+                      Written Feedback <span className="text-destructive">*</span>
                     </label>
                     <textarea 
                       value={feedback}
                       onChange={(e) => setFeedback(e.target.value)}
                       placeholder="Provide constructive feedback here..."
-                      className="w-full h-40 rounded-[12px] border-2 border-[#E7EBF3] p-4 text-[14px] text-[#344054] outline-none focus:border-[#0B2545] transition-colors resize-none leading-relaxed"
+                      className="w-full h-40 rounded-[12px] border-2 border-border p-4 text-[14px] text-foreground outline-none focus:border-[#0B2545] transition-colors resize-none leading-relaxed"
                     />
                   </div>
 
                   {/* Video Feedback */}
                   <div>
-                    <label className="block text-[12px] font-bold text-[#344054] uppercase tracking-wider mb-2 flex items-center gap-2">
-                      <PlayCircle className="w-4 h-4 text-[#B23A3A]" /> Video Feedback (Optional)
+                    <label className="block text-[12px] font-bold text-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <PlayCircle className="w-4 h-4 text-destructive" /> Video Feedback (Optional)
                     </label>
-                    <div className="text-[11px] text-[#667085] mb-2">
+                    <div className="text-[11px] text-muted-foreground mb-2">
                       Record a short review, upload to YouTube (Unlisted), and paste the link.
                     </div>
                     <input 
@@ -380,11 +421,11 @@ export default function TeacherEvaluationDashboard() {
                       value={youtubeUrl}
                       onChange={(e) => setYoutubeUrl(e.target.value)}
                       placeholder="https://youtu.be/..."
-                      className="w-full h-12 rounded-[12px] border-2 border-[#E7EBF3] px-4 text-[14px] text-[#344054] outline-none focus:border-[#0B2545] transition-colors"
+                      className="w-full h-12 rounded-[12px] border-2 border-border px-4 text-[14px] text-foreground outline-none focus:border-[#0B2545] transition-colors"
                     />
                     
                     {selectedAnswer.evaluation?.video_feedback?.embed_url && (
-                      <div className="mt-3 aspect-video rounded-[12px] overflow-hidden bg-slate-900 border border-[#E7EBF3] relative">
+                      <div className="mt-3 aspect-video rounded-[12px] overflow-hidden bg-slate-900 border border-border relative">
                         <iframe 
                           src={selectedAnswer.evaluation.video_feedback.embed_url}
                           className="w-full h-full absolute inset-0"
@@ -396,7 +437,7 @@ export default function TeacherEvaluationDashboard() {
                   </div>
                 </div>
 
-                <div className="p-6 border-t border-[#EEF1F6] bg-[#F7F9FC] mt-auto">
+                <div className="p-6 border-t border-border bg-muted mt-auto">
                   <Button 
                     onClick={handleSaveEvaluation}
                     disabled={submitting || !marks || !feedback}

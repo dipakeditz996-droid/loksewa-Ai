@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { X, BellOff, Smartphone, Monitor, Apple, Info } from "lucide-react";
-import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useFocusMode, markDndGuideDismissed } from "@/contexts/FocusModeContext";
+import { useAuth } from "@/contexts/AuthContext";
+
 
 // ─── Platform detection ────────────────────────────────────────────────────────
 
@@ -134,17 +136,11 @@ function wasDismissed(): boolean {
   }
 }
 
-function markDismissed() {
-  try {
-    localStorage.setItem(DISMISSED_KEY, "true");
-  } catch { /* ignore */ }
-}
-
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function OsDndGuideModal() {
-  const { isFocusActive } = useFocusMode();
-  const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+  const { isDndModalOpen, closeDndGuideModal } = useFocusMode();
   const [platform, setPlatform] = useState<Platform>("unknown");
   const [dontShow, setDontShow] = useState(false);
 
@@ -153,32 +149,27 @@ export function OsDndGuideModal() {
     setPlatform(detectPlatform());
   }, []);
 
-  // Open modal when DND turns ON (unless dismissed before)
-  useEffect(() => {
-    if (isFocusActive && !wasDismissed()) {
-      setOpen(true);
-    }
-    if (!isFocusActive) {
-      setOpen(false);
-    }
-  }, [isFocusActive]);
-
   const close = useCallback(() => {
-    if (dontShow) markDismissed();
-    setOpen(false);
-  }, [dontShow]);
+    if (dontShow) {
+      markDndGuideDismissed();
+    }
+    closeDndGuideModal();
+  }, [dontShow, closeDndGuideModal]);
+
 
   // Close on Escape
   useEffect(() => {
-    if (!open) return;
+    if (!isDndModalOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, close]);
+  }, [isDndModalOpen, close]);
 
-  if (!open || !isFocusActive) return null;
+  // NEVER show if not explicitly opened, or user is not an authenticated student
+  if (!isDndModalOpen || !user || user.role !== "student") return null;
+
 
   const guide = GUIDES[platform];
 
@@ -198,15 +189,15 @@ export function OsDndGuideModal() {
         aria-labelledby="dnd-modal-title"
         className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
       >
-        <div className="pointer-events-auto w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="pointer-events-auto w-full max-w-md bg-card rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
           {/* Header gradient */}
           <div className={`bg-gradient-to-br ${guide.color} p-6 text-white relative overflow-hidden`}>
-            <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/10 blur-xl pointer-events-none" />
-            <div className="absolute -left-4 -bottom-4 w-20 h-20 rounded-full bg-white/5 blur-lg pointer-events-none" />
+            <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-card/10 blur-xl pointer-events-none" />
+            <div className="absolute -left-4 -bottom-4 w-20 h-20 rounded-full bg-card/5 blur-lg pointer-events-none" />
 
             <div className="relative flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-white/15 rounded-xl">
+                <div className="p-2.5 bg-card/15 rounded-xl">
                   <BellOff className="w-6 h-6" />
                 </div>
                 <div>
@@ -220,7 +211,7 @@ export function OsDndGuideModal() {
               </div>
               <button
                 onClick={close}
-                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white/80 hover:text-white"
+                className="p-1.5 rounded-lg hover:bg-card/20 transition-colors text-white/80 hover:text-white"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -237,30 +228,30 @@ export function OsDndGuideModal() {
           {/* Body */}
           <div className="p-6 space-y-4">
             {/* Platform badge */}
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground uppercase tracking-wider">
               {guide.icon}
               <span>{guide.label}</span>
               <span className="text-slate-300">·</span>
-              <span className="text-slate-400 font-medium normal-case">{guide.badge}</span>
+              <span className="text-muted-foreground font-medium normal-case">{guide.badge}</span>
             </div>
 
             {/* Steps */}
             <ol className="space-y-3">
               {guide.steps.map((step, i) => (
                 <li key={i} className="flex items-start gap-3">
-                  <span className="shrink-0 w-6 h-6 rounded-full bg-[#0B2545] text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground text-white text-xs font-bold flex items-center justify-center mt-0.5">
                     {i + 1}
                   </span>
-                  <span className="text-sm text-slate-700 leading-relaxed">{step}</span>
+                  <span className="text-sm text-foreground leading-relaxed">{step}</span>
                 </li>
               ))}
             </ol>
 
             {/* Shortcut pill */}
             {guide.shortcut && (
-              <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <span className="text-xs text-slate-500 font-medium">Quick shortcut:</span>
-                <kbd className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-[#0B2545] shadow-sm">
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-xl border border-border/50">
+                <span className="text-xs text-muted-foreground font-medium">Quick shortcut:</span>
+                <kbd className="px-2.5 py-1 bg-card border border-border rounded-lg text-xs font-mono font-bold text-primary dark:text-foreground shadow-sm">
                   {guide.shortcut}
                 </kbd>
               </div>
@@ -268,7 +259,7 @@ export function OsDndGuideModal() {
 
             {/* Note */}
             {guide.note && (
-              <div className="flex items-start gap-2 text-xs text-slate-500 bg-amber-50 border border-amber-100 rounded-xl p-3">
+              <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-50 border border-amber-100 rounded-xl p-3">
                 <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                 <span>{guide.note}</span>
               </div>
@@ -281,16 +272,16 @@ export function OsDndGuideModal() {
                   type="checkbox"
                   checked={dontShow}
                   onChange={(e) => setDontShow(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-[#0B2545] cursor-pointer"
+                  className="w-4 h-4 rounded border-border text-primary dark:text-foreground cursor-pointer"
                 />
-                <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors">
+                <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
                   Don't show again
                 </span>
               </label>
 
               <button
                 onClick={close}
-                className="px-5 py-2 bg-[#0B2545] hover:bg-[#163E6B] text-white text-sm font-bold rounded-xl transition-colors"
+                className="px-5 py-2 bg-primary text-primary-foreground hover:bg-[#163E6B] text-white text-sm font-bold rounded-xl transition-colors"
               >
                 Got it
               </button>

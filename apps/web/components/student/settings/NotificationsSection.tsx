@@ -20,20 +20,20 @@ function Toggle({ checked, onChange, label, description }: ToggleProps) {
   return (
     <div className="flex items-center justify-between py-3">
       <div>
-        <p className="text-[13px] font-medium text-slate-800">{label}</p>
-        {description && <p className="text-[11px] text-slate-400">{description}</p>}
+        <p className="text-[13px] font-medium text-foreground">{label}</p>
+        {description && <p className="text-[11px] text-muted-foreground">{description}</p>}
       </div>
       <button
         type="button"
         onClick={() => onChange(!checked)}
         className={cn(
           "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-          checked ? "bg-[#D4A72C]" : "bg-slate-300"
+          checked ? "bg-[#D4A72C]" : "bg-secondary"
         )}
       >
         <span
           className={cn(
-            "inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform",
+            "inline-block h-4 w-4 rounded-full bg-card shadow-sm transform transition-transform",
             checked ? "translate-x-6" : "translate-x-1"
           )}
         />
@@ -122,7 +122,7 @@ export function NotificationsSection() {
 
   if (isLoading || !form) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 space-y-4">
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8 space-y-4">
         <Skeleton className="h-6 w-48" />
         {[1, 2, 3, 4, 5].map((i) => (
           <Skeleton key={i} className="h-12" />
@@ -134,10 +134,10 @@ export function NotificationsSection() {
   return (
     <div className="space-y-6">
       {CATEGORIES.map((cat) => (
-        <div key={cat.title} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <div key={cat.title} className="bg-card rounded-2xl border border-border/80 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-lg">{cat.icon}</span>
-            <h3 className="text-[15px] font-semibold text-[#0B2545]">{cat.title}</h3>
+            <h3 className="text-[15px] font-semibold text-primary dark:text-foreground">{cat.title}</h3>
           </div>
           <div className="divide-y divide-slate-100">
             {cat.fields.map((field) => (
@@ -157,7 +157,7 @@ export function NotificationsSection() {
         <Button
           onClick={() => form && mutation.mutate(form)}
           disabled={mutation.isPending || !dirty}
-          className="bg-[#0B2545] hover:bg-[#163E6B] text-white px-6"
+          className="bg-primary text-primary-foreground hover:bg-[#163E6B] text-white px-6"
         >
           {mutation.isPending ? (
             <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>

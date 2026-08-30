@@ -90,34 +90,66 @@
 }
 
 .dark {
-  /* Keeping it professional, though primarily focused on light mode per request */
-  --background: 220 43% 11%;
-  --foreground: 216 33% 98%;
+  /* Keeping it professional, primarily focused on premium SaaS dashboard aesthetic */
+  --background: 215 64% 7%; /* #07111F Page background */
+  --foreground: 210 40% 98%; /* #F8FAFC Primary text */
   
-  --card: 212 73% 16%;
-  --card-foreground: 216 33% 98%;
+  --card: 211 53% 11%; /* #0D1B2A Primary surfaces */
+  --card-foreground: 210 40% 98%;
   
-  --popover: 212 73% 16%;
-  --popover-foreground: 216 33% 98%;
+  --popover: 211 53% 11%;
+  --popover-foreground: 210 40% 98%;
   
-  --primary: 212 73% 50%;
-  --primary-foreground: 0 0% 100%;
+  --primary: 45 90% 57%; /* #F4C430 Gold accent */
+  --primary-foreground: 215 64% 7%; /* Dark text on gold */
   
-  --secondary: 212 66% 25%;
-  --secondary-foreground: 216 33% 98%;
+  --secondary: 210 52% 16%; /* #142A40 Secondary surfaces */
+  --secondary-foreground: 213 27% 73%; /* #A8B8CC Secondary text */
   
-  --muted: 212 66% 25%;
-  --muted-foreground: 212 27% 88%;
+  --muted: 210 52% 16%; /* #142A40 Secondary surfaces / Hover */
+  --muted-foreground: 214 15% 52%; /* #71839A Muted text */
   
-  --accent: 42 63% 48%;
-  --accent-foreground: 220 43% 11%;
+  --accent: 45 90% 57%;
+  --accent-foreground: 215 64% 7%;
   
   --destructive: 0 65% 61%;
   --destructive-foreground: 0 0% 100%;
   
-  --border: 212 66% 25%;
-  --input: 212 66% 25%;
-  --ring: 212 73% 50%;
+  --border: 211 39% 23%; /* #243B53 Borders */
+  --input: 211 39% 23%;
+  --ring: 45 90% 57%;
+}
+
+/* Maps the semantic HSL tokens above (:root / .dark) to bare Tailwind
+ * utilities - bg-primary, text-foreground, border-border, etc. `inline`
+ * is required here (not the numbered brand scale's plain @theme above)
+ * because these reference runtime custom properties that change with the
+ * .dark class; a non-inline @theme would bake in the light-mode value at
+ * build time instead of following the cascade. Without this block, any
+ * bare `bg-primary`/`text-muted-foreground`/etc. class silently resolves
+ * to nothing (no matching utility exists) rather than an error - which is
+ * how e.g. a "Buy Now" button ended up with white text on a transparent
+ * background in both light and dark mode. */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
 }
 
 /* ===== BASE STYLES ===== */
@@ -405,6 +437,25 @@ body {
   background-clip: text;
 }
 
+.text-gradient-gold-shimmer {
+  background: linear-gradient(
+    110deg,
+    #C29322 0%, #D4A72C 20%, #E6BA3D 35%,
+    #FFF0B3 50%,
+    #E6BA3D 65%, #D4A72C 80%, #C29322 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gold-shimmer-sweep 4s ease-in-out infinite 2s;
+}
+
+@keyframes gold-shimmer-sweep {
+  0%, 100% { background-position: 200% center; }
+  40%, 60% { background-position: -50% center; }
+}
+
 .text-gradient-blue-violet {
   background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 50%, #8b5cf6 100%);
   -webkit-background-clip: text;
@@ -536,6 +587,19 @@ body {
   background-clip: text;
 }
 
+.dark .text-gradient-gold-shimmer {
+  background: linear-gradient(
+    110deg,
+    #E0AE33 0%, #E6BA3D 20%, #FFD976 35%,
+    #FFFBE0 50%,
+    #FFD976 65%, #E6BA3D 80%, #E0AE33 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: gold-shimmer-sweep 4s ease-in-out infinite 2s;
+}
+
 /* ===== EYEBROW / SECTION BADGE ===== */
 /* Standardizes the small pill labels used at the top of most sections
    ("Courses", "Simple Pricing", etc.) so they share one hover behaviour. */
@@ -559,7 +623,8 @@ body {
   .animate-spin-slow-reverse,
   .animate-spin-medium,
   .animate-shimmer,
-  .animate-gradient-shift {
+  .animate-gradient-shift,
+  .text-gradient-gold-shimmer {
     animation: none !important;
   }
 
@@ -593,7 +658,8 @@ body {
 :root[data-focus-mode="on"] .animate-pulse-glow,
 :root[data-focus-mode="on"] .animate-pulse-gold,
 :root[data-focus-mode="on"] .animate-shimmer,
-:root[data-focus-mode="on"] .animate-gradient-shift {
+:root[data-focus-mode="on"] .animate-gradient-shift,
+:root[data-focus-mode="on"] .text-gradient-gold-shimmer {
   animation: none !important;
 }
 

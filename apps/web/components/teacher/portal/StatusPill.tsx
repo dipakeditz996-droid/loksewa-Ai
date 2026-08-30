@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 export type PillTone = "success" | "pending" | "error" | "neutral";
 
 const TONE_CLASSES: Record<PillTone, string> = {
-  success: "bg-[#E9F6F2] text-[#0F7A69]",
-  pending: "bg-[#FBF2DC] text-[#946B00]",
-  error: "bg-[#FBEAEA] text-[#B23A3A]",
-  neutral: "bg-[#EEF1F6] text-[#667085]",
+  success: "bg-[#E9F6F2] text-[#0F7A69] dark:bg-[#0F7A69]/20 dark:text-[#4ADE9C]",
+  pending: "bg-[#FBF2DC] text-[#946B00] dark:bg-[#946B00]/20 dark:text-[#F2C94C]",
+  error: "bg-[#FBEAEA] text-[#B23A3A] dark:bg-[#B23A3A]/20 dark:text-[#F2A399]",
+  neutral: "bg-[#EEF1F6] text-[#667085] dark:bg-muted dark:text-muted-foreground",
 };
 
 /**

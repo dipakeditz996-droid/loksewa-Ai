@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { preloadImage } from "@/lib/preload-image";
 import { Camera, Save, Loader2, X } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -70,8 +71,11 @@ export function TeacherProfileSection() {
 
   const photoMutation = useMutation({
     mutationFn: (file: File) => uploadTeacherAvatar(file),
-    onSuccess: () => {
+    onSuccess: async ({ avatar_url }) => {
       toast.success("Photo updated!");
+      // Keep showing the local preview until the real Drive-hosted URL is
+      // confirmed loadable, so the user never sees a broken-image flash.
+      await preloadImage(avatar_url);
       setPhotoPreview(null);
       queryClient.invalidateQueries({ queryKey: ["teacher-profile"] });
       refreshUser();
@@ -105,7 +109,7 @@ export function TeacherProfileSection() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 space-y-6">
+      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm p-8 space-y-6">
         <Skeleton className="h-6 w-40" />
         <div className="flex items-center gap-6">
           <Skeleton className="h-20 w-20 rounded-full" />
@@ -120,12 +124,12 @@ export function TeacherProfileSection() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-[#0B2545] to-[#163E6B] px-8 py-6">
           <div className="flex items-center gap-6">
             <div className="relative group">
               <Avatar className="h-20 w-20 border-[3px] border-white/30 shadow-lg">
-                <AvatarImage src={photoPreview || profile?.avatar || undefined} />
+                <AvatarImage src={photoPreview || profile?.avatar || "/images/profile.png"} />
                 <AvatarFallback className="bg-[#D4A72C] text-white text-2xl font-bold">
                   {profile?.name?.charAt(0) || "?"}
                 </AvatarFallback>
@@ -159,7 +163,7 @@ export function TeacherProfileSection() {
         </div>
 
         <div className="p-8">
-          <h3 className="text-lg font-semibold text-[#0B2545] mb-6">Personal Information</h3>
+          <h3 className="text-lg font-semibold text-primary mb-6">Personal Information</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">

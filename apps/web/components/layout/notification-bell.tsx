@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Check, CircleAlert, FileText, HelpCircle, Users, Activity } from "lucide-react";
+import { Bell, Check, CircleAlert, FileText, HelpCircle, Users, Activity, CreditCard, ClipboardCheck, GraduationCap, UserPlus, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,7 +23,7 @@ interface NotificationData {
   created_at: string;
 }
 
-export function NotificationBell() {
+export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { viewAllHref?: string }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -75,6 +75,11 @@ export function NotificationBell() {
       case 'student_activity': return <Users className="w-4 h-4 text-sky-500" />;
       case 'support': return <HelpCircle className="w-4 h-4 text-amber-500" />;
       case 'system': return <Activity className="w-4 h-4 text-slate-500" />;
+      case 'payment': return <CreditCard className="w-4 h-4 text-green-600" />;
+      case 'evaluation': return <ClipboardCheck className="w-4 h-4 text-violet-500" />;
+      case 'course_application': return <GraduationCap className="w-4 h-4 text-blue-500" />;
+      case 'new_registration': return <UserPlus className="w-4 h-4 text-teal-500" />;
+      case 'account': return <UserCog className="w-4 h-4 text-orange-500" />;
       default: return <Bell className="w-4 h-4 text-slate-400" />;
     }
   };
@@ -190,7 +195,7 @@ export function NotificationBell() {
             className="w-full text-xs font-semibold text-[#D4A72C] hover:text-[#0B2545] hover:bg-white"
             onClick={() => {
               setIsOpen(false);
-              router.push("/teacher/notifications");
+              router.push(viewAllHref);
             }}
           >
             View all notifications &rarr;

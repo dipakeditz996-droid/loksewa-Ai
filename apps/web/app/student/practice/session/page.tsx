@@ -4,11 +4,14 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { practiceApi, PracticeSessionResponse, Question } from "@/lib/api/practice";
 import { Button } from "@/components/ui/button";
-import { Loader2, Clock, CheckCircle2, ChevronLeft, ChevronRight, Bookmark } from "lucide-react";
+import { Loader2, Clock, CheckCircle2, ChevronLeft, ChevronRight, Flag, Star } from "lucide-react";
+import { useFocusMode } from "@/contexts/FocusModeContext";
 
 function PracticeSessionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { beginExamFocus, endExamFocus } = useFocusMode();
+
 
   const exam = searchParams.get("exam");
   const subject = searchParams.get("subject");
@@ -22,6 +25,7 @@ function PracticeSessionContent() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
+  const [savedQuestions, setSavedQuestions] = useState<Record<number, boolean>>({});
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -29,9 +33,12 @@ function PracticeSessionContent() {
     async function initSession() {
       try {
         const data = await practiceApi.startSession({
-          exam: exam === "all" ? "-1" : exam || "-1",
-          subject: subject === "all" ? "-1" : subject || "-1",
-          topic: topic === "all" ? "-1" : topic || "-1",
+          // The backend treats the literal string "all" as "no filter" for
+          // exam/subject/topic — sending "-1" instead used to be filtered as
+          // a real (nonexistent) id and returned zero questions.
+          exam: exam || "all",
+          subject: subject || "all",
+          topic: topic || "all",
           difficulty: difficulty || "all",
           mode,
           total_questions: totalQuestions,
@@ -49,9 +56,34 @@ function PracticeSessionContent() {
       }
     }
     initSession();
+
+    practiceApi.listSavedQuestions().then(saved => {
+      const map: Record<number, boolean> = {};
+      saved.forEach(s => { map[s.question] = true; });
+      setSavedQuestions(map);
+    }).catch(e => console.error(e));
   }, []);
 
   useEffect(() => {
+    if (sessionData && sessionData.session?.id) {
+      beginExamFocus({ attemptId: sessionData.session.id });
+    }
+    return () => {
+      endExamFocus();
+    };
+  }, [sessionData, beginExamFocus, endExamFocus]);
+
+  // Record that the current question was displayed, independent of whether
+  // the student ends up selecting an option.
+  useEffect(() => {
+    if (!sessionData) return;
+    const q = sessionData.questions[currentIdx];
+    if (!q) return;
+    practiceApi.markViewed(sessionData.session.id, q.id).catch(e => console.error(e));
+  }, [sessionData, currentIdx]);
+
+  useEffect(() => {
+
     if (timeRemaining === null || timeRemaining <= 0) return;
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -99,6 +131,20 @@ function PracticeSessionContent() {
     }
   };
 
+  const toggleSave = async () => {
+    if (!sessionData) return;
+    const q = sessionData.questions[currentIdx];
+    if (!q) return;
+    const wasSaved = !!savedQuestions[q.id];
+    setSavedQuestions(prev => ({ ...prev, [q.id]: !wasSaved }));
+    try {
+      await practiceApi.toggleBookmark(q.id);
+    } catch (e) {
+      console.error(e);
+      setSavedQuestions(prev => ({ ...prev, [q.id]: wasSaved }));
+    }
+  };
+
   const handleSubmit = async () => {
     if (!sessionData) return;
     setSubmitting(true);
@@ -118,7 +164,7 @@ function PracticeSessionContent() {
   if (loading || !sessionData) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#0B2545]" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" />
       </div>
     );
   }
@@ -129,22 +175,28 @@ function PracticeSessionContent() {
   }
 
   return (
-    <div className="max-w-[1200px] mx-auto p-4 md:p-8 min-h-[calc(100vh-72px)] bg-slate-50/50 flex flex-col md:flex-row gap-6">
+    <div className="max-w-[1200px] mx-auto p-4 md:p-8 min-h-[calc(100vh-72px)] bg-muted/50 flex flex-col md:flex-row gap-6">
       
       {/* Main Question Area */}
       <div className="flex-1 space-y-6">
-        <div className="bg-white rounded-[16px] border border-slate-200 shadow-sm p-6 md:p-8">
+        <div className="bg-card rounded-[16px] border border-border shadow-sm p-6 md:p-8">
           <div className="flex justify-between items-center mb-6">
-            <span className="text-sm font-bold text-slate-400 tracking-widest uppercase">
+            <span className="text-sm font-bold text-muted-foreground tracking-widest uppercase">
               Question {currentIdx + 1} of {sessionData.questions.length}
             </span>
-            <Button variant="ghost" size="sm" onClick={toggleReview} className={markedForReview[currentQ.id] ? "text-orange-500" : "text-slate-400"}>
-              <Bookmark className="w-4 h-4 mr-2" /> 
-              {markedForReview[currentQ.id] ? "Marked" : "Mark for Review"}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={toggleSave} className={savedQuestions[currentQ.id] ? "text-[#D4A72C]" : "text-muted-foreground"}>
+                <Star className="w-4 h-4 mr-2" fill={savedQuestions[currentQ.id] ? "currentColor" : "none"} />
+                {savedQuestions[currentQ.id] ? "Saved" : "Save for Later"}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={toggleReview} className={markedForReview[currentQ.id] ? "text-orange-500" : "text-muted-foreground"}>
+                <Flag className="w-4 h-4 mr-2" fill={markedForReview[currentQ.id] ? "currentColor" : "none"} />
+                {markedForReview[currentQ.id] ? "Marked" : "Mark for Review"}
+              </Button>
+            </div>
           </div>
           
-          <h2 className="text-xl font-medium text-[#0B2545] leading-relaxed mb-8">
+          <h2 className="text-xl font-medium text-primary dark:text-foreground leading-relaxed mb-8">
             {currentQ.text}
           </h2>
 
@@ -158,16 +210,16 @@ function PracticeSessionContent() {
                   onClick={() => handleAnswer(opt)}
                   className={`w-full flex items-center p-4 rounded-[12px] border-2 transition-all text-left ${
                     isSelected 
-                    ? "border-[#0B2545] bg-slate-50" 
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                    ? "border-[#0B2545] bg-muted" 
+                    : "border-border bg-card hover:border-border hover:bg-muted"
                   }`}
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 font-bold text-sm shrink-0 ${
-                    isSelected ? "bg-[#0B2545] text-white" : "bg-slate-100 text-slate-500"
+                    isSelected ? "bg-primary text-primary-foreground text-white" : "bg-muted/80 text-muted-foreground"
                   }`}>
                     {opt.toUpperCase()}
                   </div>
-                  <span className={`text-[15px] font-medium ${isSelected ? "text-[#0B2545]" : "text-slate-600"}`}>
+                  <span className={`text-[15px] font-medium ${isSelected ? "text-primary dark:text-foreground" : "text-muted-foreground"}`}>
                     {optionText as string}
                   </span>
                 </button>
@@ -176,7 +228,7 @@ function PracticeSessionContent() {
           </div>
         </div>
 
-        <div className="flex justify-between items-center bg-white p-4 rounded-[16px] border border-slate-200 shadow-sm">
+        <div className="flex justify-between items-center bg-card p-4 rounded-[16px] border border-border shadow-sm">
           <Button 
             variant="outline" 
             onClick={() => setCurrentIdx(p => Math.max(0, p - 1))}
@@ -188,7 +240,7 @@ function PracticeSessionContent() {
           <Button 
             onClick={() => setCurrentIdx(p => Math.min(sessionData.questions.length - 1, p + 1))}
             disabled={currentIdx === sessionData.questions.length - 1}
-            className="h-12 px-6 rounded-[10px] bg-[#0B2545] hover:bg-[#163E6B]"
+            className="h-12 px-6 rounded-[10px] bg-primary text-primary-foreground hover:bg-[#163E6B]"
           >
             Next <ChevronRight className="w-4 h-4 ml-2" />
           </Button>
@@ -200,29 +252,29 @@ function PracticeSessionContent() {
         
         {/* Timer */}
         {mode === "timed" && timeRemaining !== null && (
-          <div className="bg-white rounded-[16px] border border-slate-200 shadow-sm p-6 text-center">
-            <Clock className="w-8 h-8 text-slate-400 mx-auto mb-2" />
-            <div className={`text-3xl font-bold font-mono tracking-wider ${timeRemaining < 60 ? 'text-red-500' : 'text-[#0B2545]'}`}>
+          <div className="bg-card rounded-[16px] border border-border shadow-sm p-6 text-center">
+            <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+            <div className={`text-3xl font-bold font-mono tracking-wider ${timeRemaining < 60 ? 'text-red-500' : 'text-primary dark:text-foreground'}`}>
               {Math.floor(timeRemaining / 60).toString().padStart(2, '0')}:
               {(timeRemaining % 60).toString().padStart(2, '0')}
             </div>
-            <p className="text-sm text-slate-500 mt-1 font-medium">Time Remaining</p>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">Time Remaining</p>
           </div>
         )}
 
         {/* Question Palette */}
-        <div className="bg-white rounded-[16px] border border-slate-200 shadow-sm p-6">
-          <h3 className="font-bold text-[#0B2545] mb-4">Question Palette</h3>
+        <div className="bg-card rounded-[16px] border border-border shadow-sm p-6">
+          <h3 className="font-bold text-primary dark:text-foreground mb-4">Question Palette</h3>
           <div className="grid grid-cols-5 gap-2">
             {sessionData.questions.map((q, i) => {
               const isAnswered = !!answers[q.id];
               const isMarked = markedForReview[q.id];
               const isCurrent = currentIdx === i;
               
-              let bg = "bg-slate-100 text-slate-500";
-              if (isCurrent) bg = "bg-[#0B2545] text-white";
-              else if (isAnswered) bg = "bg-green-100 text-green-700 border border-green-200";
-              else if (isMarked) bg = "bg-orange-100 text-orange-700 border border-orange-200";
+              let bg = "bg-muted/80 text-muted-foreground";
+              if (isCurrent) bg = "bg-primary text-primary-foreground text-white";
+              else if (isAnswered) bg = "bg-green-100 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-900/50";
+              else if (isMarked) bg = "bg-orange-100 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50";
 
               return (
                 <button
@@ -236,15 +288,15 @@ function PracticeSessionContent() {
             })}
           </div>
 
-          <div className="mt-6 pt-6 border-t border-slate-100 space-y-3 text-sm font-medium text-slate-600">
+          <div className="mt-6 pt-6 border-t border-border/50 space-y-3 text-sm font-medium text-muted-foreground">
             <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded bg-green-100 border border-green-200"></div> Answered
+              <div className="w-4 h-4 rounded bg-green-100 border border-green-200 dark:border-green-900/50"></div> Answered
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded bg-slate-100"></div> Unanswered
+              <div className="w-4 h-4 rounded bg-muted/80"></div> Unanswered
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-4 h-4 rounded bg-orange-100 border border-orange-200"></div> Marked for Review
+              <div className="w-4 h-4 rounded bg-orange-100 border border-orange-200 dark:border-orange-900/50"></div> Marked for Review
             </div>
           </div>
         </div>

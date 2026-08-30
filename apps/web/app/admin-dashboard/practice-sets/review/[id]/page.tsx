@@ -164,7 +164,7 @@ export default function PracticeSetModerationPanel({ params }: { params: { id: s
             <CardHeader className="bg-blue-50/50 border-b border-blue-100 pb-4">
               <CardTitle className="text-lg text-blue-900 flex items-center justify-between">
                 <span>Questions in this Set</span>
-                <Badge className="bg-blue-600">{practiceSet.total_questions}</Badge>
+                <Badge className="bg-blue-600 text-white">{practiceSet.total_questions}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/10">

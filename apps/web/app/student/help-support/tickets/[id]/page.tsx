@@ -20,8 +20,8 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any; labe
   open: { color: "text-blue-700", bg: "bg-blue-100", icon: AlertCircle, label: "Open" },
   in_progress: { color: "text-amber-700", bg: "bg-amber-100", icon: Clock, label: "In Progress" },
   waiting_student: { color: "text-purple-700", bg: "bg-purple-100", icon: MessageSquare, label: "Waiting for You" },
-  resolved: { color: "text-green-700", bg: "bg-green-100", icon: CheckCircle2, label: "Resolved" },
-  closed: { color: "text-slate-600", bg: "bg-slate-100", icon: CheckCircle2, label: "Closed" },
+  resolved: { color: "text-green-700 dark:text-green-300", bg: "bg-green-100", icon: CheckCircle2, label: "Resolved" },
+  closed: { color: "text-muted-foreground", bg: "bg-muted/80", icon: CheckCircle2, label: "Closed" },
 };
 
 function formatMessageTime(dateStr: string) {
@@ -94,8 +94,8 @@ export default function TicketDetailPage() {
     return (
       <div className="p-4 md:p-8 max-w-4xl mx-auto text-center">
         <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-slate-800">Ticket Not Found</h2>
-        <p className="text-slate-500 mt-2 mb-6">This ticket may have been deleted or you don't have access.</p>
+        <h2 className="text-xl font-bold text-foreground">Ticket Not Found</h2>
+        <p className="text-muted-foreground mt-2 mb-6">This ticket may have been deleted or you don't have access.</p>
         <Button onClick={() => router.push("/student/help-support/tickets")}>Back to Tickets</Button>
       </div>
     );
@@ -108,24 +108,24 @@ export default function TicketDetailPage() {
     <div className="p-4 md:p-8 max-w-4xl mx-auto h-[calc(100vh-80px)] flex flex-col">
       {/* Header Info */}
       <div className="mb-4 shrink-0">
-        <Link href="/student/help-support/tickets" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-[#0B2545] transition-colors mb-4">
+        <Link href="/student/help-support/tickets" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-primary dark:text-foreground transition-colors mb-4">
           <ArrowLeft className="h-4 w-4 mr-1" /> Back to Tickets
         </Link>
         
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
+        <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-6">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-mono text-slate-400">{ticket.ticket_number}</span>
+                <span className="text-xs font-mono text-muted-foreground">{ticket.ticket_number}</span>
                 <span className={cn("text-xs font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1", statusCfg.bg, statusCfg.color)}>
                   <statusCfg.icon className="h-3 w-3" /> {statusCfg.label}
                 </span>
-                <span className="text-[10px] font-medium uppercase text-slate-500 px-2 bg-slate-100 rounded-full">
+                <span className="text-[10px] font-medium uppercase text-muted-foreground px-2 bg-muted/80 rounded-full">
                   {ticket.priority} Priority
                 </span>
               </div>
-              <h1 className="text-xl font-bold text-[#0B2545]">{ticket.subject}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-slate-500">
+              <h1 className="text-xl font-bold text-primary dark:text-foreground">{ticket.subject}</h1>
+              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs text-muted-foreground">
                 <span className="capitalize">Category: {ticket.category.replace(/_/g, " ")}</span>
                 {ticket.related_exam && <span>· Exam: {ticket.related_exam}</span>}
                 {ticket.related_question && <span>· Q: {ticket.related_question}</span>}
@@ -143,7 +143,7 @@ export default function TicketDetailPage() {
                   }
                 }}
                 disabled={closeMutation.isPending}
-                className="text-slate-500 hover:text-slate-800"
+                className="text-muted-foreground hover:text-foreground"
               >
                 {closeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
                 Close Ticket
@@ -154,7 +154,7 @@ export default function TicketDetailPage() {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 bg-slate-50 rounded-2xl border border-slate-200/80 shadow-inner overflow-hidden flex flex-col min-h-[400px]">
+      <div className="flex-1 bg-muted rounded-2xl border border-border/80 shadow-inner overflow-hidden flex flex-col min-h-[400px]">
         {/* Messages List */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
           {loadingMessages ? (
@@ -172,7 +172,7 @@ export default function TicketDetailPage() {
                   <div className="shrink-0 pt-1">
                     <div className={cn(
                       "h-8 w-8 rounded-full flex items-center justify-center",
-                      isMe ? "bg-[#0B2545] text-white" : "bg-[#D4A72C] text-white"
+                      isMe ? "bg-primary text-primary-foreground text-white" : "bg-[#D4A72C] text-white"
                     )}>
                       {isMe ? <User className="h-4 w-4" /> : <UserCog className="h-4 w-4" />}
                     </div>
@@ -181,15 +181,15 @@ export default function TicketDetailPage() {
                   {/* Bubble */}
                   <div className="flex flex-col">
                     <div className={cn("flex items-center gap-2 mb-1", isMe ? "justify-end" : "justify-start")}>
-                      <span className="text-xs font-medium text-slate-600">{isMe ? "You" : msg.sender_name}</span>
-                      <span className="text-[10px] text-slate-400">{formatMessageTime(msg.created_at)}</span>
+                      <span className="text-xs font-medium text-muted-foreground">{isMe ? "You" : msg.sender_name}</span>
+                      <span className="text-[10px] text-muted-foreground">{formatMessageTime(msg.created_at)}</span>
                     </div>
                     
                     <div className={cn(
                       "px-4 py-3 rounded-2xl text-[14px] leading-relaxed whitespace-pre-wrap shadow-sm",
                       isMe 
-                        ? "bg-[#0B2545] text-white rounded-tr-sm" 
-                        : "bg-white border border-slate-200 text-slate-800 rounded-tl-sm"
+                        ? "bg-primary text-primary-foreground text-white rounded-tr-sm" 
+                        : "bg-card border border-border text-foreground rounded-tl-sm"
                     )}>
                       {msg.message}
                     </div>
@@ -203,12 +203,12 @@ export default function TicketDetailPage() {
         </div>
 
         {/* Reply Input */}
-        <div className="p-4 bg-white border-t border-slate-200 shrink-0">
+        <div className="p-4 bg-card border-t border-border shrink-0">
           {isClosed ? (
-            <div className="text-center p-3 bg-slate-50 rounded-xl border border-slate-100">
-              <Lock className="h-5 w-5 text-slate-400 mx-auto mb-1" />
-              <p className="text-sm font-medium text-slate-600">This ticket is closed</p>
-              <p className="text-xs text-slate-400">Replies are disabled. If you have a new issue, please open a new ticket.</p>
+            <div className="text-center p-3 bg-muted rounded-xl border border-border/50">
+              <Lock className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
+              <p className="text-sm font-medium text-muted-foreground">This ticket is closed</p>
+              <p className="text-xs text-muted-foreground">Replies are disabled. If you have a new issue, please open a new ticket.</p>
             </div>
           ) : (
             <form 
@@ -220,7 +220,7 @@ export default function TicketDetailPage() {
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   placeholder="Type your reply here..."
-                  className="min-h-[60px] max-h-[200px] resize-y bg-slate-50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                  className="min-h-[60px] max-h-[200px] resize-y bg-muted border-border focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -232,7 +232,7 @@ export default function TicketDetailPage() {
               <Button 
                 type="submit" 
                 disabled={!replyText.trim() || replyMutation.isPending}
-                className="bg-[#0B2545] hover:bg-[#163E6B] text-white h-[60px] px-6"
+                className="bg-primary text-primary-foreground hover:bg-[#163E6B] text-white h-[60px] px-6"
               >
                 {replyMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               </Button>

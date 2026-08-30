@@ -121,7 +121,7 @@ export default function TeacherQuestionsPage() {
         description="Every question here feeds Practice, Games, and Mock Exams once approved."
         action={
           <>
-            <Button variant="outline" className="gap-2 rounded-[9px] border-[#D9E1EA] text-[#344054]" asChild>
+            <Button variant="outline" className="gap-2 rounded-[9px] border-border text-foreground" asChild>
               <Link href="/teacher/questions/import">
                 <Upload className="h-4 w-4" /> Bulk Import
               </Link>
@@ -138,7 +138,7 @@ export default function TeacherQuestionsPage() {
       {/* Summary Cards with Donut Chart */}
       <div className="flex flex-col gap-4 lg:flex-row">
         {/* Donut Chart Card */}
-        <div className="flex flex-1 items-center gap-6 rounded-2xl border border-[#E7EBF3] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] lg:max-w-md">
+        <div className="flex flex-1 items-center gap-6 rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] lg:max-w-md">
           <div className="relative flex h-[100px] w-[100px] shrink-0 items-center justify-center">
             <svg className="h-full w-full -rotate-90 transform" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="40" fill="none" stroke="#EEF1F6" strokeWidth="12" />
@@ -153,13 +153,13 @@ export default function TeacherQuestionsPage() {
               )}
             </svg>
             <div className="absolute flex flex-col items-center justify-center text-center">
-              <span className="font-heading text-xl font-extrabold text-[#101828]">{stats.total}</span>
-              <span className="text-[9px] font-bold uppercase tracking-[0.05em] text-[#8A98AE]">Total</span>
+              <span className="font-heading text-xl font-extrabold text-foreground">{stats.total}</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.05em] text-muted-foreground">Total</span>
             </div>
           </div>
           <div className="flex-1 space-y-2">
-            <div className="text-[13.5px] font-bold text-[#101828]">Question Status</div>
-            <div className="grid grid-cols-2 gap-y-1.5 text-[12px] font-medium text-[#475467]">
+            <div className="text-[13.5px] font-bold text-foreground">Question Status</div>
+            <div className="grid grid-cols-2 gap-y-1.5 text-[12px] font-medium text-muted-foreground">
               <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#159A82]" /> Approved ({stats.approved})</div>
               <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#D4A72C]" /> Pending ({stats.pending})</div>
               <div className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#667085]" /> Drafts ({stats.drafts})</div>
@@ -177,23 +177,23 @@ export default function TeacherQuestionsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-        <div className="flex flex-col items-center justify-between gap-4 border-b border-[#EEF1F6] p-4 md:flex-row">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div className="flex flex-col items-center justify-between gap-4 border-b border-border p-4 md:flex-row">
           <form onSubmit={handleSearch} className="relative w-full md:w-96">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A98AE]" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search questions by text or ID..."
-              className="rounded-lg border-[#D9E1EA] bg-[#F7F9FC] pl-9"
+              className="rounded-lg border-border bg-muted pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </form>
 
           <div className="flex w-full items-center gap-2 md:w-auto">
-            <div className="flex items-center rounded-lg border border-[#D9E1EA] bg-white px-3 py-1.5 text-sm">
-              <Filter className="mr-2 h-4 w-4 text-[#8A98AE]" />
+            <div className="flex items-center rounded-lg border border-border bg-card px-3 py-1.5 text-sm">
+              <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
               <select
-                className="cursor-pointer border-none bg-transparent font-medium text-[#344054] outline-none"
+                className="cursor-pointer border-none bg-transparent font-medium text-foreground outline-none"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -212,12 +212,12 @@ export default function TeacherQuestionsPage() {
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead>
               <tr>
-                <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Question</th>
-                <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Type</th>
-                <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Marks</th>
-                <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Status</th>
-                <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Last Updated</th>
-                <th className="border-b border-[#EEF1F6] px-5 py-3 text-right text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Actions</th>
+                <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Question</th>
+                <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Type</th>
+                <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Marks</th>
+                <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Status</th>
+                <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Last Updated</th>
+                <th className="border-b border-border px-5 py-3 text-right text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -234,45 +234,45 @@ export default function TeacherQuestionsPage() {
                 ))
               ) : questions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-[#667085]">
-                    <FileQuestion className="mx-auto mb-4 h-12 w-12 text-[#D9E1EA]" />
-                    <p className="text-lg font-medium text-[#101828]">No questions found</p>
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                    <FileQuestion className="mx-auto mb-4 h-12 w-12 text-muted-foreground/40" />
+                    <p className="text-lg font-medium text-foreground">No questions found</p>
                     <p className="mt-1 text-sm">Try adjusting your filters or create a new question.</p>
                   </td>
                 </tr>
               ) : (
                 questions.map((q) => (
-                  <tr key={q.id} className="group hover:bg-[#F7F9FC]">
+                  <tr key={q.id} className="group hover:bg-muted">
                     <td className="border-b border-[#F2F4F8] px-5 py-4">
-                      <div className="line-clamp-2 max-w-md font-semibold text-[#101828]">{q.text}</div>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-[#8A98AE]">
+                      <div className="line-clamp-2 max-w-md font-semibold text-foreground">{q.text}</div>
+                      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="rounded bg-[#EEF1F6] px-1.5 font-mono">{q.question_id}</span>
                         {q.difficulty && (
                           <span className="capitalize">• {q.difficulty}</span>
                         )}
                       </div>
                     </td>
-                    <td className="border-b border-[#F2F4F8] px-5 py-4 font-medium text-[#344054]">
+                    <td className="border-b border-[#F2F4F8] px-5 py-4 font-medium text-foreground">
                       {getTypeLabel(q.question_type)}
                     </td>
-                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-[#667085]">
+                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-muted-foreground">
                       {q.marks}
                     </td>
                     <td className="border-b border-[#F2F4F8] px-5 py-4">
                       <StatusPill status={q.status} />
                       {q.status === 'changes_requested' && (
-                        <div className="mt-1 max-w-[150px] truncate text-[10px] text-[#B23A3A]" title={q.reviewer_comment}>
+                        <div className="mt-1 max-w-[150px] truncate text-[10px] text-destructive" title={q.reviewer_comment}>
                           {q.reviewer_comment}
                         </div>
                       )}
                     </td>
-                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-xs text-[#8A98AE]">
+                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-xs text-muted-foreground">
                       {new Date(q.updated_at).toLocaleDateString()}
                     </td>
                     <td className="border-b border-[#F2F4F8] px-5 py-4 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0 text-[#667085] opacity-50 transition-opacity group-hover:opacity-100">
+                          <Button variant="ghost" className="h-8 w-8 p-0 text-muted-foreground opacity-50 transition-opacity group-hover:opacity-100">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -282,17 +282,17 @@ export default function TeacherQuestionsPage() {
                             <>
                               <DropdownMenuItem asChild>
                                 <Link href={`/teacher/questions/${q.id}/edit`} className="cursor-pointer">
-                                  <Edit className="mr-2 h-4 w-4 text-[#0B2545]" /> Edit Question
+                                  <Edit className="mr-2 h-4 w-4 text-primary" /> Edit Question
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleSubmit(q.id)} className="cursor-pointer">
-                                <CheckCircle2 className="mr-2 h-4 w-4 text-[#0F7A69]" /> Submit for Review
+                                <CheckCircle2 className="mr-2 h-4 w-4 text-[#0F7A69] dark:text-[#4ADE9C]" /> Submit for Review
                               </DropdownMenuItem>
                             </>
                           ) : (
                             <DropdownMenuItem asChild>
                               <Link href={`/teacher/questions/${q.id}/edit`} className="cursor-pointer">
-                                <Eye className="mr-2 h-4 w-4 text-[#8A98AE]" /> View Question
+                                <Eye className="mr-2 h-4 w-4 text-muted-foreground" /> View Question
                               </Link>
                             </DropdownMenuItem>
                           )}
@@ -300,7 +300,7 @@ export default function TeacherQuestionsPage() {
                           <DropdownMenuSeparator />
                           {/* Can't delete/archive pending or approved */}
                           {['draft', 'changes_requested', 'rejected'].includes(q.status) && (
-                            <DropdownMenuItem className="cursor-pointer text-[#B23A3A] focus:bg-[#FBEAEA]" onClick={() => handleArchive(q.id)}>
+                            <DropdownMenuItem className="cursor-pointer text-destructive focus:bg-destructive/10" onClick={() => handleArchive(q.id)}>
                               <Trash2 className="mr-2 h-4 w-4" /> Archive
                             </DropdownMenuItem>
                           )}

@@ -63,7 +63,7 @@ export function FocusModeHeaderToggle() {
           "group inline-flex h-9 items-center gap-2 rounded-full border px-2.5 transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A72C] focus-visible:ring-offset-2",
           checked
-            ? "border-[#0B2545] bg-[#0B2545] text-white"
+            ? "border-[#0B2545] bg-primary text-primary-foreground text-white"
             : "border-border bg-transparent text-muted-foreground hover:bg-accent",
           (isLocked || isLoading) && "cursor-not-allowed opacity-80"
         )}

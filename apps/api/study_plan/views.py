@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.utils import timezone
 import datetime
 from django.db.models import Count, Q
@@ -20,6 +21,11 @@ class StudyPlanTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return StudyPlanTemplate.objects.filter(is_active=True)
 
+def _study_plans_enabled():
+    from core.models import AdminSettings
+    return AdminSettings.get_settings().enable_study_plans
+
+
 class StudyPlanViewSet(viewsets.ModelViewSet):
     serializer_class = StudyPlanSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -32,12 +38,19 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
         pass
 
     def perform_create(self, serializer):
+        if not _study_plans_enabled():
+            raise PermissionDenied("Study plans are currently disabled by the administrator.")
         plan = serializer.save(student=self.request.user)
         # Generate initial tasks
         generate_study_plan_tasks(plan, regenerate_future=False)
 
+        from core.notification_service import NotificationService
+        NotificationService.notify_study_plan_created(plan)
+
     @action(detail=True, methods=['post'])
     def generate(self, request, pk=None):
+        if not _study_plans_enabled():
+            raise PermissionDenied("Study plans are currently disabled by the administrator.")
         plan = self.get_object()
         generate_study_plan_tasks(plan, regenerate_future=True)
         return Response({"status": "Tasks regenerated successfully."})
@@ -153,6 +166,9 @@ class StudyTaskViewSet(viewsets.ModelViewSet):
             profile.save(update_fields=[
                 'study_current_streak', 'study_highest_streak', 'last_study_date'
             ])
+
+            from core.notification_service import NotificationService
+            NotificationService.notify_streak_milestone(request.user, profile.study_current_streak)
         except Exception:
             pass  # Don't fail the completion just because streak update errored
 
@@ -185,7 +201,7 @@ class DashboardView(APIView):
             })
             
         # 2. Topic Progress (Top 5 active)
-        topic_progress_qs = UserTopicProgress.objects.filter(user=user).select_related('topic').order_by('-updated_at')[:5]
+        topic_progress_qs = UserTopicProgress.objects.filter(user=user).select_related('topic').order_by('-last_updated')[:5]
         topics_data = []
         for tp in topic_progress_qs:
             topics_data.append({
@@ -253,7 +269,7 @@ class DashboardView(APIView):
             
         # 6. Continue Learning
         continue_learning = None
-        last_topic = UserTopicProgress.objects.filter(user=user, status='in-progress').order_by('-updated_at').first()
+        last_topic = UserTopicProgress.objects.filter(user=user, status='in-progress').order_by('-last_updated').first()
         if last_topic:
             continue_learning = {
                 "type": "topic",
@@ -274,7 +290,7 @@ class DashboardView(APIView):
         return Response({
             "has_plan": plan is not None,
             "plan_details": {
-                "target_exam": plan.exam.title if plan else None,
+                "target_exam": plan.exam.name if plan and plan.exam else None,
                 "target_date": plan.target_date if plan else None
             } if plan else None,
             "courses": courses_data,

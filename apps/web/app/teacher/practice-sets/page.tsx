@@ -27,12 +27,14 @@ export default function PracticeSetsPage() {
   const [sets, setSets] = useState<PracticeSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
 
   const fetchSets = async () => {
     try {
       setLoading(true);
       const data = await teacherPracticeSetsApi.getPracticeSets({
-        search: search
+        search: search,
+        ...(statusFilter ? { status: statusFilter } : {}),
       });
       setSets(data);
     } catch (error) {
@@ -54,7 +56,8 @@ export default function PracticeSetsPage() {
 
   useEffect(() => {
     fetchSets();
-  }, [search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, statusFilter]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +91,7 @@ export default function PracticeSetsPage() {
         title="Practice Sets"
         description="Build and manage question collections for student practice."
         action={
-          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C]">
+          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C] text-white">
             <Plus className="mr-2 h-4 w-4" /> Create Practice Set
           </Button>
         }
@@ -103,20 +106,35 @@ export default function PracticeSetsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-        <div className="flex flex-col gap-4 border-b border-[#EEF1F6] bg-[#F7F9FC] p-4 sm:flex-row">
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div className="flex flex-col gap-4 border-b border-border bg-muted p-4 sm:flex-row">
           <form onSubmit={handleSearch} className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A98AE]" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search practice sets by title or description..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="rounded-lg border-[#D9E1EA] bg-white pl-9"
+              className="rounded-lg border-border bg-card pl-9"
             />
           </form>
-          <Button variant="outline" className="shrink-0 rounded-[9px] border-[#D9E1EA] text-[#344054]">
-            <Filter className="mr-2 h-4 w-4" /> Filters
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="shrink-0 rounded-[9px] border-border text-foreground">
+                <Filter className="mr-2 h-4 w-4" />
+                {statusFilter ? `Status: ${statusFilter.replace("_", " ")}` : "Filters"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setStatusFilter("")}>All Statuses</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("draft")}>Draft</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("pending_review")}>Pending Review</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("changes_requested")}>Changes Requested</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("published")}>Published</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStatusFilter("rejected")}>Rejected</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -124,7 +142,7 @@ export default function PracticeSetsPage() {
       {loading ? (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white p-5">
+            <div key={i} className="overflow-hidden rounded-2xl border border-border bg-card p-5">
               <div className="space-y-3">
                 <Skeleton className="h-6 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
@@ -137,28 +155,28 @@ export default function PracticeSetsPage() {
           ))}
         </div>
       ) : sets.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#D9E1EA] bg-white p-12 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#EEF2F8] text-[#0B2545]">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
             <Trophy className="h-8 w-8" />
           </div>
-          <h3 className="mb-2 text-lg font-bold text-[#101828]">No practice sets yet</h3>
-          <p className="mb-6 max-w-sm text-[13px] text-[#667085]">
+          <h3 className="mb-2 text-lg font-bold text-foreground">No practice sets yet</h3>
+          <p className="mb-6 max-w-sm text-[13px] text-muted-foreground">
             Create a practice set by grouping questions from your Question Bank to share with your students.
           </p>
-          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]">
+          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">
             Create Your First Practice Set
           </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {sets.map((set) => (
-            <div key={set.id} className="group flex flex-col overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-shadow hover:shadow-md">
+            <div key={set.id} className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-shadow hover:shadow-md">
               <div className="flex flex-1 flex-col p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <StatusPill status={set.status} />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="-mr-2 h-8 w-8 rounded-full text-[#667085] opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button variant="ghost" size="icon" className="-mr-2 h-8 w-8 rounded-full text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -172,22 +190,22 @@ export default function PracticeSetsPage() {
                         <Copy className="mr-2 h-4 w-4" /> Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => set.id && handleArchive(set.id)} className="text-[#B23A3A]">
+                      <DropdownMenuItem onClick={() => set.id && handleArchive(set.id)} className="text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" /> Archive
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
 
-                <h3 className="mb-1 line-clamp-2 text-[15px] font-bold leading-tight text-[#101828]">
+                <h3 className="mb-1 line-clamp-2 text-[15px] font-bold leading-tight text-foreground">
                   {set.name}
                 </h3>
-                <p className="mb-4 line-clamp-2 text-[12.5px] text-[#667085]">
+                <p className="mb-4 line-clamp-2 text-[12.5px] text-muted-foreground">
                   {set.description || "No description provided."}
                 </p>
 
-                <div className="mt-auto flex flex-col gap-2 border-t border-[#EEF1F6] pt-4 text-[12.5px]">
-                  <div className="flex items-center justify-between text-[#667085]">
+                <div className="mt-auto flex flex-col gap-2 border-t border-border pt-4 text-[12.5px]">
+                  <div className="flex items-center justify-between text-muted-foreground">
                     <span className="flex items-center">
                       <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                       {set.total_questions} Questions
@@ -197,8 +215,8 @@ export default function PracticeSetsPage() {
                       {set.time_limit} mins
                     </span>
                   </div>
-                  <div className="mt-1 rounded-md bg-[#F7F9FC] p-2 text-xs text-[#667085]">
-                    <span className="font-semibold text-[#344054]">Type:</span> {set.set_type.replace('_', ' ').toUpperCase()}
+                  <div className="mt-1 rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                    <span className="font-semibold text-foreground">Type:</span> {set.set_type.replace('_', ' ').toUpperCase()}
                   </div>
                 </div>
               </div>

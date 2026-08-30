@@ -18,6 +18,20 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def perform_update(self, serializer):
+        exam = self.get_object()
+        was_published = exam.status == 'published'
+        old_start = exam.start_time
+        old_end = exam.end_time
+
+        instance = serializer.save()
+
+        if was_published and instance.status == 'published' and (
+            instance.start_time != old_start or instance.end_time != old_end
+        ):
+            from core.notification_service import NotificationService
+            NotificationService.notify_students_exam_update(instance, 'schedule_changed')
+
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):
         exam = self.get_object()
@@ -77,14 +91,27 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         exam.status = 'published'
         exam.save(update_fields=['status', 'updated_at'])
 
+        from core.notification_service import NotificationService
+        NotificationService.notify_students_exam_update(exam, 'published')
+
         serializer = self.get_serializer(exam)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def archive(self, request, pk=None):
         exam = self.get_object()
+        # Archiving a still-upcoming/live exam is a real cancellation the
+        # students it was visible to need to hear about. Archiving one that
+        # already finished is routine cleanup — computed_status is 'COMPLETED'
+        # by then, so no notification fires.
+        was_cancellation = exam.status == 'published' and exam.computed_status in ('UPCOMING', 'LIVE')
         exam.status = 'archived'
         exam.save()
+
+        if was_cancellation:
+            from core.notification_service import NotificationService
+            NotificationService.notify_students_exam_update(exam, 'cancelled')
+
         serializer = self.get_serializer(exam)
         return Response(serializer.data)
 

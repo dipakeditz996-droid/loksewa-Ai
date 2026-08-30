@@ -36,7 +36,7 @@ export default function TeacherSettingsPage() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto w-full">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#0B2545]">Settings</h1>
+        <h1 className="text-3xl font-bold text-primary">Settings</h1>
         <p className="text-slate-500 mt-2">Manage your teacher account, preferences, and platform experience.</p>
         <div className="mt-4 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
@@ -47,7 +47,7 @@ export default function TeacherSettingsPage() {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Sidebar Navigation — Desktop */}
         <aside className="hidden lg:block w-72 shrink-0">
-          <nav className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-24 pb-2">
+          <nav className="bg-card rounded-2xl border border-slate-200 shadow-sm overflow-hidden sticky top-24 pb-2">
             <div className="p-4 border-b border-slate-100">
               <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account Settings</h2>
             </div>
@@ -62,15 +62,15 @@ export default function TeacherSettingsPage() {
                     className={cn(
                       "flex items-center gap-4 w-full p-3 rounded-xl text-left transition-all",
                       isActive
-                        ? "bg-[#0B2545]/5 text-[#0B2545]"
+                        ? "bg-[#0B2545]/5 text-primary"
                         : "text-slate-600 hover:bg-slate-50"
                     )}
                   >
-                    <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg shrink-0", isActive ? "bg-white shadow-sm border border-[#0B2545]/10" : "bg-slate-100")}>
+                    <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg shrink-0", isActive ? "bg-card shadow-sm border border-[#0B2545]/10" : "bg-slate-100")}>
                       <Icon className={cn("h-4 w-4", isActive ? "text-[#D4A72C]" : "text-slate-500")} strokeWidth={isActive ? 2 : 1.5} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={cn("text-sm font-semibold truncate", isActive ? "text-[#0B2545]" : "text-slate-700")}>{tab.label}</p>
+                      <p className={cn("text-sm font-semibold truncate", isActive ? "text-primary" : "text-slate-700")}>{tab.label}</p>
                       <p className="text-xs text-slate-500 truncate">{tab.desc}</p>
                     </div>
                   </button>
@@ -100,7 +100,7 @@ export default function TeacherSettingsPage() {
           <select
             value={activeTab}
             onChange={(e) => setActiveTab(e.target.value as SettingsTab)}
-            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-medium text-[#0B2545] focus:ring-2 focus:ring-[#D4A72C]/30 focus:border-[#D4A72C] shadow-sm"
+            className="w-full bg-card border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-medium text-primary focus:ring-2 focus:ring-[#D4A72C]/30 focus:border-[#D4A72C] shadow-sm"
           >
             {SETTINGS_TABS.map((tab) => (
                <option key={tab.key} value={tab.key}>
@@ -111,7 +111,7 @@ export default function TeacherSettingsPage() {
           <div className="mt-4 pt-4 border-t border-slate-200">
             <button
                 onClick={logout}
-                className="flex items-center gap-2 w-full px-4 py-3 bg-white border border-rose-200 rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50 shadow-sm transition-colors"
+                className="flex items-center gap-2 w-full px-4 py-3 bg-card border border-rose-200 rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50 shadow-sm transition-colors"
               >
                 <LogOut className="h-4 w-4" />
                 Sign Out

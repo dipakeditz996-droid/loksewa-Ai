@@ -90,7 +90,7 @@ export default function EvaluationDetailPage() {
     return (
       <div className="flex min-h-screen flex-1 flex-col items-center justify-center p-12">
         <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-[#0B2545] border-t-transparent"></div>
-        <p className="font-medium text-[#667085]">Loading evaluation workspace...</p>
+        <p className="font-medium text-muted-foreground">Loading evaluation workspace...</p>
       </div>
     );
   }
@@ -98,10 +98,10 @@ export default function EvaluationDetailPage() {
   if (!evaluation) {
     return (
       <div className="mx-auto mt-20 flex max-w-7xl flex-col items-center p-8 text-center">
-        <h2 className="mb-2 text-2xl font-bold text-[#101828]">Evaluation Not Found</h2>
-        <p className="mb-6 text-[#667085]">This submission might have been deleted or you lack permission.</p>
+        <h2 className="mb-2 text-2xl font-bold text-foreground">Evaluation Not Found</h2>
+        <p className="mb-6 text-muted-foreground">This submission might have been deleted or you lack permission.</p>
         <Link href="/teacher/evaluations">
-          <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]">Return to List</Button>
+          <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Return to List</Button>
         </Link>
       </div>
     );
@@ -120,10 +120,10 @@ export default function EvaluationDetailPage() {
           </Link>
           <div>
             <StatusPill status={isEvaluated ? "evaluated" : "pending"} tone={isEvaluated ? "success" : "pending"} className="mb-1" />
-            <h1 className="text-2xl font-bold tracking-tight text-[#101828]">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Submission #{evaluation.id}
             </h1>
-            <p className="mt-1 text-sm text-[#667085]">
+            <p className="mt-1 text-sm text-muted-foreground">
               {evaluation.question?.topic_name ? `${evaluation.question.topic_name} - ` : ""}
               Question: {evaluation.question?.text}
             </p>
@@ -146,31 +146,31 @@ export default function EvaluationDetailPage() {
 
         {/* Student's Answer Viewer */}
         <div className="flex flex-1 flex-col">
-          <Card className="flex flex-1 flex-col overflow-hidden rounded-2xl border-[#E7EBF3] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-            <CardHeader className="flex flex-row items-center justify-between border-b border-[#EEF1F6] bg-[#F7F9FC] py-3">
-              <CardTitle className="flex items-center gap-2 text-base font-medium text-[#101828]">
-                <FileText className="h-4 w-4 text-[#0B2545]" />
+          <Card className="flex flex-1 flex-col overflow-hidden rounded-2xl border-border shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-border bg-muted py-3">
+              <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
+                <FileText className="h-4 w-4 text-primary" />
                 Submitted Answer
               </CardTitle>
             </CardHeader>
-            <CardContent className="relative min-h-[400px] flex-1 bg-white p-0">
+            <CardContent className="relative min-h-[400px] flex-1 bg-card p-0">
               <div className="absolute inset-0 overflow-y-auto p-6">
                 {evaluation.file_url ? (
                   <div className="flex h-full flex-col items-center justify-center gap-4">
-                    <p className="text-[#667085]">The student uploaded a file.</p>
+                    <p className="text-muted-foreground">The student uploaded a file.</p>
                     <a href={evaluation.file_url} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" className="gap-2 rounded-[9px] border-[#D9E1EA]">
+                      <Button variant="outline" className="gap-2 rounded-[9px] border-border">
                         <Eye className="h-4 w-4" /> View Attachment
                       </Button>
                     </a>
                   </div>
                 ) : evaluation.answer_text ? (
                   <div
-                    className="whitespace-pre-wrap font-serif text-lg leading-relaxed text-[#101828]/90"
+                    className="whitespace-pre-wrap font-serif text-lg leading-relaxed text-foreground/90"
                     dangerouslySetInnerHTML={{ __html: evaluation.answer_text }}
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center italic text-[#8A98AE]">
+                  <div className="flex h-full items-center justify-center italic text-muted-foreground">
                     No answer content provided.
                   </div>
                 )}
@@ -181,47 +181,47 @@ export default function EvaluationDetailPage() {
 
         {/* Evaluation Panel */}
         <div className="flex w-full flex-col space-y-6 lg:w-[400px]">
-          <Card className="rounded-2xl border-[#E7EBF3] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <Card className="rounded-2xl border-border shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <CardHeader>
-              <CardTitle className="text-lg text-[#101828]">Marks</CardTitle>
+              <CardTitle className="text-lg text-foreground">Marks</CardTitle>
               <CardDescription>Maximum marks for this question: {evaluation.question?.marks}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-[#344054]">Marks Obtained</label>
+                <label className="text-sm font-medium text-foreground">Marks Obtained</label>
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    className="w-24 rounded-lg border-[#D9E1EA] text-right"
+                    className="w-24 rounded-lg border-border text-right"
                     value={marks}
                     onChange={(e) => setMarks(e.target.value === "" ? "" : Number(e.target.value))}
                     max={evaluation.question?.marks}
                     min={0}
                     step={0.5}
                   />
-                  <span className="text-[#667085]">/ {evaluation.question?.marks}</span>
+                  <span className="text-muted-foreground">/ {evaluation.question?.marks}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="flex flex-1 flex-col rounded-2xl border-[#E7EBF3] shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <Card className="flex flex-1 flex-col rounded-2xl border-border shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg text-[#101828]">
-                <MessageSquare className="h-4 w-4 text-[#0B2545]" /> Overall Feedback
+              <CardTitle className="flex items-center gap-2 text-lg text-foreground">
+                <MessageSquare className="h-4 w-4 text-primary" /> Overall Feedback
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-1 flex-col">
               <Textarea
                 placeholder="Write constructive feedback for the student..."
-                className="min-h-[200px] flex-1 resize-none rounded-lg border-[#D9E1EA] bg-[#F7F9FC]"
+                className="min-h-[200px] flex-1 resize-none rounded-lg border-border bg-muted"
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
               />
             </CardContent>
             <CardFooter>
               <Button
-                className="w-full gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]"
+                className="w-full gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white"
                 onClick={handleSaveAndNext}
                 disabled={isSaving}
               >

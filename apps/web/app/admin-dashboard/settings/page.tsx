@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from "react";
 import {
   Settings, Server, Mail, Bell, Shield, Zap, Loader2, Check, X,
-  Clock, Lock, AlertCircle, Eye, EyeOff,
+  Clock, Lock, AlertCircle, Eye, EyeOff, ShieldCheck, KeyRound, Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { adminApi, AdminSettingsData } from "@/lib/api/admin";
+import { twoFactorApi } from "@/lib/api/auth";
 
 type TabType = "platform" | "email" | "notifications" | "security" | "features";
 
@@ -501,10 +502,15 @@ export default function SettingsPage() {
                     />
                     <div>
                       <p className="font-medium text-slate-900">Two-Factor Authentication</p>
-                      <p className="text-xs text-slate-600">Require 2FA for admin accounts</p>
+                      <p className="text-xs text-slate-600">
+                        Allow admins to set up 2FA on their own accounts. This never forces 2FA on an
+                        admin who hasn't set it up — each admin opts in individually below.
+                      </p>
                     </div>
                   </label>
                 </div>
+
+                <TwoFactorSelfService platformEnabled={formData.security.enableTwoFactorAuth} />
               </div>
             )}
 
@@ -601,6 +607,203 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function TwoFactorSelfService({ platformEnabled }: { platformEnabled: boolean }) {
+  const [loading, setLoading] = useState(true);
+  const [enabled, setEnabled] = useState(false);
+  const [stage, setStage] = useState<"idle" | "setup" | "backupCodes">("idle");
+  const [secret, setSecret] = useState("");
+  const [otpauthUri, setOtpauthUri] = useState("");
+  const [verifyCode, setVerifyCode] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [disablePassword, setDisablePassword] = useState("");
+  const [showDisableForm, setShowDisableForm] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    twoFactorApi
+      .status()
+      .then((s) => setEnabled(s.enabled))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const startSetup = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const data = await twoFactorApi.setup();
+      setSecret(data.secret);
+      setOtpauthUri(data.otpauthUri);
+      setStage("setup");
+    } catch (err: any) {
+      setMessage({ type: "error", text: err?.data?.error || "Could not start 2FA setup." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmSetup = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const data = await twoFactorApi.verifySetup(verifyCode);
+      setBackupCodes(data.backupCodes);
+      setStage("backupCodes");
+      setEnabled(true);
+      setVerifyCode("");
+    } catch (err: any) {
+      setMessage({ type: "error", text: err?.data?.error || "Invalid code. Please try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable2fa = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await twoFactorApi.disable(disablePassword);
+      setEnabled(false);
+      setShowDisableForm(false);
+      setDisablePassword("");
+      setStage("idle");
+      setMessage({ type: "success", text: "Two-factor authentication disabled." });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err?.data?.error || "Incorrect password." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="pt-2">
+        <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className={`w-5 h-5 ${enabled ? "text-green-600" : "text-slate-400"}`} />
+        <p className="text-sm font-semibold text-slate-900">
+          Your Account's Two-Factor Authentication
+        </p>
+      </div>
+
+      {!platformEnabled && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+          Turn on the switch above (and save) before you can set up 2FA on your own account.
+        </p>
+      )}
+
+      {message && (
+        <p className={`text-xs rounded p-2 ${message.type === "success" ? "text-green-700 bg-green-50 border border-green-200" : "text-red-700 bg-red-50 border border-red-200"}`}>
+          {message.text}
+        </p>
+      )}
+
+      {platformEnabled && stage === "idle" && !showDisableForm && (
+        <div>
+          {enabled ? (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-slate-600">2FA is currently enabled on your account.</p>
+              <Button type="button" variant="outline" size="sm" onClick={() => setShowDisableForm(true)}>
+                Disable
+              </Button>
+            </div>
+          ) : (
+            <Button type="button" size="sm" onClick={startSetup} disabled={busy}>
+              {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <KeyRound className="w-4 h-4 mr-2" />}
+              Set Up 2FA
+            </Button>
+          )}
+        </div>
+      )}
+
+      {showDisableForm && (
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-slate-700">Confirm your password to disable 2FA</label>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={disablePassword}
+              onChange={(e) => setDisablePassword(e.target.value)}
+              className="max-w-xs"
+            />
+            <Button type="button" size="sm" variant="destructive" onClick={disable2fa} disabled={busy || !disablePassword}>
+              Confirm Disable
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setShowDisableForm(false); setDisablePassword(""); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {stage === "setup" && (
+        <div className="space-y-3">
+          <p className="text-xs text-slate-600">
+            Scan this into your authenticator app (Google Authenticator, Authy, 1Password, etc.), or
+            enter the secret manually, then confirm with the 6-digit code it generates.
+          </p>
+          <div className="p-2 bg-white border border-slate-200 rounded font-mono text-xs break-all flex items-center justify-between gap-2">
+            <span>{secret}</span>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(secret)}
+              className="shrink-0 text-slate-400 hover:text-slate-700"
+              title="Copy secret"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 break-all">{otpauthUri}</p>
+          <div className="flex gap-2 items-end">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">6-digit code</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value)}
+                className="w-32"
+                placeholder="000000"
+              />
+            </div>
+            <Button type="button" size="sm" onClick={confirmSetup} disabled={busy || verifyCode.length < 6}>
+              {busy && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Confirm
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setStage("idle"); setVerifyCode(""); }}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {stage === "backupCodes" && (
+        <div className="space-y-3">
+          <p className="text-xs text-green-700 font-medium">
+            2FA is enabled. Save these one-time backup codes somewhere safe — each works once if you
+            lose access to your authenticator app. They will not be shown again.
+          </p>
+          <div className="grid grid-cols-2 gap-2 p-3 bg-white border border-slate-200 rounded font-mono text-xs">
+            {backupCodes.map((code) => (
+              <span key={code}>{code}</span>
+            ))}
+          </div>
+          <Button type="button" size="sm" onClick={() => setStage("idle")}>
+            Done
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

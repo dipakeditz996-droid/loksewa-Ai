@@ -64,6 +64,7 @@ export interface ReferralProfile {
   coins: number;
   level: number;
   username: string;
+  study_current_streak: number;
 }
 
 export interface ReferralHistoryEntry {
@@ -95,27 +96,38 @@ export interface ReferralAnalytics {
   xp_distributed: number;
 }
 
+export interface GamificationStats {
+  rank: number;
+  streak_days: boolean[];
+  games_played: number;
+  games_won: number;
+  accuracy: number;
+  best_score: number;
+  questions_answered: number;
+}
+
 class GamificationService {
   /**
    * Fetch current player's overall statistics (Level, XP, Coins, etc.)
    */
   async getPlayerStats(): Promise<PlayerStats> {
-    const res = await apiClient<{ profile: ReferralProfile, stats: ReferralStats }>('/gamification/referrals/me/');
+    const res = await apiClient<{ profile: ReferralProfile, stats: GamificationStats }>('/gamification/referrals/me/');
     const profile = res.profile;
+    const stats = res.stats;
     return {
       level: profile.level || 1,
       xp: profile.xp || 0,
       coins: profile.coins || 0,
-      rank: res.stats?.rank || 0,
+      rank: stats?.rank || 0,
       nextLevelXp: (profile.level || 1) * 1000,
-      streak: 0,
-      streakDays: [false, false, false, false, false, false, false],
-      previousRank: res.stats?.rank || 0,
-      gamesPlayed: 0,
-      gamesWon: 0,
-      questionsAnswered: 0,
-      accuracy: 0,
-      bestScore: 0,
+      streak: profile.study_current_streak || 0,
+      streakDays: stats?.streak_days || [false, false, false, false, false, false, false],
+      previousRank: stats?.rank || 0,
+      gamesPlayed: stats?.games_played || 0,
+      gamesWon: stats?.games_won || 0,
+      questionsAnswered: stats?.questions_answered || 0,
+      accuracy: stats?.accuracy || 0,
+      bestScore: stats?.best_score || 0,
       studentName: profile.username || "Student",
       studentAvatar: undefined,
     };
@@ -140,7 +152,7 @@ class GamificationService {
    */
   async getLeaderboard(): Promise<GameLeaderboardEntry[]> {
     try {
-      const res = await apiClient<any>('/games/leaderboard/');
+      const res = await apiClient<any>('/gamification/leaderboard/');
       if (Array.isArray(res)) return res;
       if (res && Array.isArray(res.results)) return res.results;
       return [];

@@ -9,7 +9,7 @@ class TopicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Topic
-        fields = ['id', 'title', 'name', 'status', 'progress', 'accuracy']
+        fields = ['id', 'title', 'name', 'status', 'progress', 'accuracy', 'description']
 
     def get_status(self, obj):
         request = self.context.get('request')
@@ -63,10 +63,10 @@ class SubjectSerializer(serializers.ModelSerializer):
 class ExamSerializer(serializers.ModelSerializer):
     subjects = serializers.SerializerMethodField()
     title = serializers.CharField(source='name') # map name to title
-    
+
     class Meta:
         model = Exam
-        fields = ['id', 'title', 'description', 'subjects']
+        fields = ['id', 'title', 'description', 'category', 'subjects']
 
     def get_subjects(self, obj):
         from django.db.models import Q
@@ -164,44 +164,13 @@ class SecureQuestionSerializer(serializers.ModelSerializer):
         fields = ['id', 'topic', 'text', 'option_a', 'option_b', 'option_c', 'option_d', 'difficulty']
 
 class BookmarkSerializer(serializers.ModelSerializer):
+    question_detail = QuestionFullSerializer(source='question', read_only=True)
+
     class Meta:
         from .models import Bookmark
         model = Bookmark
-        fields = ['id', 'question', 'created_at']
+        fields = ['id', 'question', 'question_detail', 'created_at']
         read_only_fields = ['id', 'created_at']
-class ModelExamSerializer(serializers.ModelSerializer):
-    duration_minutes = serializers.IntegerField(source='time_limit')
-    negative_marking = serializers.FloatField(source='negative_marking_value')
-
-    class Meta:
-        from .models import Examination
-        model = Examination
-        fields = ['id', 'title', 'description', 'exam', 'duration_minutes', 'total_questions', 'total_marks', 'passing_marks', 'negative_marking', 'status']
-
-class ModelExamAttemptSerializer(serializers.ModelSerializer):
-    model_exam = ModelExamSerializer(source='examination', read_only=True)
-    correct_count = serializers.SerializerMethodField()
-    incorrect_count = serializers.SerializerMethodField()
-    unanswered_count = serializers.SerializerMethodField()
-    accuracy = serializers.SerializerMethodField()
-    
-    class Meta:
-        from .models import ExaminationAttempt
-        model = ExaminationAttempt
-        fields = ['id', 'student', 'model_exam', 'started_at', 'submitted_at', 'status', 'score', 'accuracy', 'correct_count', 'incorrect_count', 'unanswered_count', 'time_taken_seconds']
-        read_only_fields = ['student', 'started_at']
-
-    def get_correct_count(self, obj):
-        return obj.answers.filter(is_correct=True).count()
-        
-    def get_incorrect_count(self, obj):
-        return obj.answers.filter(is_correct=False, selected_option__isnull=False).count()
-        
-    def get_unanswered_count(self, obj):
-        return obj.answers.filter(selected_option__isnull=True).count()
-        
-    def get_accuracy(self, obj):
-        return obj.percentage
 
 # ============================================================
 # SUBJECTIVE SERIALIZERS
@@ -220,7 +189,7 @@ class SubjectiveQuestionSerializer(serializers.ModelSerializer):
         return obj.topic.name if obj.topic else ''
 
     def get_subject_name(self, obj):
-        return obj.topic.Chapter.subject.name if obj.topic else ''
+        return obj.topic.chapter.subject.name if obj.topic else ''
 
 class SubjectiveQuestionWithModelAnswerSerializer(serializers.ModelSerializer):
     """For evaluators - includes model answer"""
@@ -364,8 +333,8 @@ class TeacherExaminationSerializer(serializers.ModelSerializer):
         from .models import Examination
         model = Examination
         fields = [
-            'id', 'title', 'description', 'exam_type', 'category', 'category_name', 'exam', 'exam_name', 
-            'subject', 'subject_name', 'total_questions', 'time_limit', 'total_marks', 'passing_marks', 
+            'id', 'title', 'description', 'exam_type', 'objective_category', 'category', 'category_name', 'exam', 'exam_name',
+            'subject', 'subject_name', 'total_questions', 'time_limit', 'total_marks', 'passing_marks',
             'marks_per_question', 'negative_marking', 'negative_marking_value', 'max_attempts', 
             'allow_resume', 'auto_submit', 'result_visibility', 'show_correct_answers', 'randomize_questions', 
             'randomize_options', 'start_time', 'end_time', 'status', 'reviewer_comment', 'reviewed_by', 

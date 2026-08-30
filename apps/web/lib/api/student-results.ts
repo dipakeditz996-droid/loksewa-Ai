@@ -5,14 +5,17 @@ export interface StudentResult {
   id: string;
   examId: string;
   examName: string;
-  date: string;
   score: number;
   totalMarks: number;
   percentage: number;
+  timeTaken: number;
   rank: number | string;
   totalParticipants: number | string;
   percentile: number | string;
-  timeTaken: number;
+  date: string;
+  correctAnswers: number;
+  incorrectAnswers: number;
+  unanswered: number;
 }
 
 export interface SubjectPerformance {
@@ -76,49 +79,62 @@ export const studentResultService = {
       rank: 'N/A',
       totalParticipants: 'N/A',
       percentile: 'N/A',
-      timeTaken: a.time_taken_seconds || 0
+      timeTaken: a.time_taken_seconds || 0,
+      correctAnswers: 0,
+      incorrectAnswers: 0,
+      unanswered: 0
     }));
   },
 
   async getStudentResult(id: string): Promise<StudentResult | undefined> {
     try {
-      const attempt = await studentExamsApi.getResult(parseInt(id));
+      const attempt: any = await studentExamsApi.getResult(parseInt(id));
+      console.log("[getStudentResult] Backend attempt response:", attempt);
       
-      let totalParticipants: number | string = 'N/A';
-      let rank: number | string = 'N/A';
+      const rank = attempt.rank ?? 'N/A';
+      const totalParticipants = attempt.total_participants ?? 'N/A';
+      console.log("[getStudentResult] Extracted rank:", rank, "total:", totalParticipants);
+      
       let percentile: number | string = 'N/A';
-      
-      try {
-        const stats = await leaderboardService.getLeaderboardStats('all', 'overall', attempt.examination.toString());
-        totalParticipants = stats.totalParticipants || 1;
-        const myRank = await leaderboardService.getMyRank('all', 'overall', attempt.examination.toString());
-        if (myRank) {
-          rank = myRank.rank;
-          percentile = Math.round(((Number(totalParticipants) - rank) / Number(totalParticipants)) * 100);
-        }
-      } catch (e) {
-        // Ignored, rank APIs might fail or be unavailable
+      if (typeof rank === 'number' && typeof totalParticipants === 'number' && totalParticipants > 0) {
+        percentile = Math.round(((totalParticipants - rank) / totalParticipants) * 100);
       }
       
-      let totalMarks = 0;
-      if (attempt.answers && attempt.answers.length > 0) {
-          totalMarks = attempt.answers.length; // rough fallback, assume 1 mark each if no max_marks provided
-      }
+      let correct = 0;
+      let incorrect = 0;
+      let unanswered = 0;
       
-      return {
+      if (attempt.answers && Array.isArray(attempt.answers)) {
+        attempt.answers.forEach((ans: any) => {
+          if (!ans.selected_option) {
+            unanswered++;
+          } else if (ans.is_correct) {
+            correct++;
+          } else {
+            incorrect++;
+          }
+        });
+      }
+
+      const result: StudentResult = {
         id: attempt.id.toString(),
         examId: attempt.examination.toString(),
-        examName: attempt.examination_title,
-        date: attempt.submitted_at || new Date().toISOString(),
+        examName: attempt.examination_title || 'Unknown Exam',
         score: attempt.score,
-        totalMarks: totalMarks > 0 ? totalMarks : 100,
+        totalMarks: 100, // TODO: Fetch from actual exam
         percentage: attempt.percentage,
-        rank: rank,
-        totalParticipants: totalParticipants,
+        timeTaken: attempt.time_taken_seconds || 0,
+        rank: rank !== 'N/A' ? parseInt(rank) : 'N/A',
+        totalParticipants: totalParticipants !== 'N/A' ? parseInt(totalParticipants) : 'N/A',
         percentile: percentile,
-        timeTaken: attempt.time_taken_seconds
+        date: new Date(attempt.started_at).toLocaleDateString(),
+        correctAnswers: correct,
+        incorrectAnswers: incorrect,
+        unanswered: unanswered
       };
-    } catch (e) {
+      return result;
+    } catch (error) {
+      console.error("Error fetching student result", error);
       return undefined;
     }
   },

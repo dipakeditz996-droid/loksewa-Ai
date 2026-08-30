@@ -28,8 +28,8 @@ export default function EditMockExamPage() {
   if (loading) {
     return (
       <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="flex flex-col items-center text-[#667085]">
-          <Loader2 className="w-8 h-8 animate-spin mb-4 text-[#0B2545]" />
+        <div className="flex flex-col items-center text-muted-foreground">
+          <Loader2 className="w-8 h-8 animate-spin mb-4 text-primary" />
           <p>Loading examination studio...</p>
         </div>
       </div>

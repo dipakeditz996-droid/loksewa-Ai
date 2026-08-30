@@ -11,6 +11,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { RetryImage } from "@/components/ui/retry-image";
 import { dashboardApi, DashboardData, AnalyticsOverview, DailyMotivation, QUICK_ACTIONS } from "@/lib/api/dashboard";
 import { gamificationService, ReferralProfile, ReferralStats, ReferralSettings } from "@/lib/api/gamification";
 import { courseEnrollmentApi, EnrollmentStatus } from "@/lib/api/enrollment";
@@ -37,11 +38,16 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { LoksewaExamCountdown } from "@/components/student/countdown/LoksewaExamCountdown";
+import { MockExamCountdown } from "@/components/student/countdown/MockExamCountdown";
+import { AttractiveLoader } from "@/components/ui/attractive-loader";
+
 // ─── Widget IDs ────────────────────────────────────────────────────────────────
 const FULL_WIDTH_WIDGETS = [
   "motivation",
   "quick-actions",
   "continue-study",
+
   "referral-card",
 ] as const;
 
@@ -94,17 +100,6 @@ function SortableWidget({ id, children, className }: SortableWidgetProps) {
 
   return (
     <div ref={setNodeRef} style={style} className={cn("relative group/dnd", className)}>
-      {/* Floating drag handle — only visible on hover */}
-      <button
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        className="absolute top-3 right-3 z-30 p-1.5 rounded-md bg-white/80 backdrop-blur-sm border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-white hover:border-slate-300 hover:shadow-sm cursor-grab active:cursor-grabbing transition-all opacity-0 group-hover/dnd:opacity-100 touch-none"
-        title="Drag to reorder"
-        tabIndex={-1}
-      >
-        <GripVertical className="w-4 h-4" />
-      </button>
       {children}
     </div>
   );
@@ -114,9 +109,9 @@ function SortableWidget({ id, children, className }: SortableWidgetProps) {
 // Drag overlay ghost card
 function WidgetDragGhost({ label }: { label: string }) {
   return (
-    <div className="bg-white border-2 border-blue-400 border-dashed rounded-[16px] p-6 shadow-2xl opacity-90 flex items-center gap-3">
+    <div className="bg-card border-2 border-blue-400 border-dashed rounded-[16px] p-6 shadow-2xl opacity-90 flex items-center gap-3">
       <GripVertical className="w-5 h-5 text-blue-400" />
-      <span className="text-sm font-semibold text-slate-600">{label}</span>
+      <span className="text-sm font-semibold text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -180,20 +175,17 @@ export default function StudentDashboardPage() {
     try {
       setLoading(true);
       setError(false);
-      const [res, refRes, historyRes, enrollmentRes, analyticsRes, motivationRes] = await Promise.all([
-        dashboardApi.getStudentDashboard(),
-        gamificationService.getStudentReferralDashboard().catch(() => null),
-        gamificationService.getStudentReferralHistory().catch(() => []),
-        courseEnrollmentApi.getMyEnrollment().catch(() => null),
-        dashboardApi.getAnalyticsOverview().catch(() => null),
-        dashboardApi.getDailyMotivation().catch(() => null)
-      ]);
+
+      // 1. Kick off non-critical background fetches (parallel processing without blocking)
+      gamificationService.getStudentReferralDashboard().then(res => { if (res) setReferralData(res); }).catch(() => null);
+      gamificationService.getStudentReferralHistory().then(res => { if (res) setReferralHistory(res); }).catch(() => setReferralHistory([]));
+      courseEnrollmentApi.getMyEnrollment().then(res => { if (res) setEnrollmentStatus(res); }).catch(() => null);
+      dashboardApi.getAnalyticsOverview().then(res => { if (res) setAnalytics(res); }).catch(() => null);
+      dashboardApi.getDailyMotivation().then(res => { if (res) setMotivation(res); }).catch(() => null);
+
+      // 2. Await ONLY the critical dashboard data
+      const res = await dashboardApi.getStudentDashboard();
       setData(res);
-      if (analyticsRes) setAnalytics(analyticsRes);
-      if (motivationRes) setMotivation(motivationRes);
-      if (refRes) setReferralData(refRes);
-      if (historyRes) setReferralHistory(historyRes);
-      if (enrollmentRes) setEnrollmentStatus(enrollmentRes);
     } catch (err) {
       console.error(err);
       setError(true);
@@ -204,15 +196,8 @@ export default function StudentDashboardPage() {
 
   if (loading) {
     return (
-      <div className="p-8 max-w-7xl mx-auto space-y-8 animate-pulse">
-        <div className="h-32 bg-slate-200 rounded-2xl w-full"></div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-24 bg-slate-200 rounded-xl"></div>)}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="md:col-span-2 h-96 bg-slate-200 rounded-2xl"></div>
-          <div className="h-96 bg-slate-200 rounded-2xl"></div>
-        </div>
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <AttractiveLoader />
       </div>
     );
   }
@@ -245,32 +230,32 @@ export default function StudentDashboardPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-8 bg-slate-50/50 min-h-[calc(100vh-72px)]">
+    <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-8 bg-muted/50 min-h-[calc(100vh-72px)]">
       
       {/* 1. HEADER (not draggable — always pinned at top) */}
-      <section className="bg-white p-6 md:p-8 rounded-[16px] border border-slate-200 shadow-sm flex flex-col xl:flex-row justify-between gap-8">
+      <section className="bg-card p-6 md:p-8 rounded-[16px] border border-border shadow-sm flex flex-col xl:flex-row justify-between gap-8">
         
         {/* Left Side: Avatar & Gamification */}
         <div className="flex-1 flex flex-col justify-between gap-6">
           <div className="flex gap-4 items-center">
             {data.profile.avatar ? (
-              <img src={data.profile.avatar} alt="Avatar" className="w-14 h-14 rounded-full object-cover border-2 border-slate-100 shadow-sm" />
+              <RetryImage src={data.profile.avatar} alt="Avatar" className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shadow-sm" />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0 border-2 border-slate-100 shadow-sm">
+              <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0 border-2 border-border/50 shadow-sm">
                 {data.profile.name.charAt(0)}
               </div>
             )}
               <div className="flex flex-col justify-center">
-              <h1 className="text-lg font-bold text-[#0B2545] tracking-tight leading-tight">
+              <h1 className="text-lg font-bold text-primary dark:text-foreground tracking-tight leading-tight">
                 {data.profile.name}
               </h1>
-              <p className="text-[12px] font-medium text-slate-500 mt-0.5 flex items-center gap-1.5">
-                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded flex items-center gap-1"><GraduationCap className="w-3 h-3"/> Student</span>
-                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                <span>Applied for: <span className="font-semibold text-[#0B2545]">{data.profile.targetPosition && data.profile.targetPosition !== "Student" ? data.profile.targetPosition : "Section Officer"}</span></span>
+              <p className="text-[12px] font-medium text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                <span className="bg-muted/80 text-muted-foreground px-2 py-0.5 rounded flex items-center gap-1"><GraduationCap className="w-3 h-3"/> Student</span>
+                <span className="w-1 h-1 rounded-full bg-secondary"></span>
+                <span>Applied for: <span className="font-semibold text-primary dark:text-foreground">{data.profile.targetPosition && data.profile.targetPosition !== "Student" ? data.profile.targetPosition : "Section Officer"}</span></span>
               </p>
               {referralData && (
-                <div className="mt-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 inline-flex px-2 py-0.5 rounded-md border border-blue-100 self-start">
+                <div className="mt-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/30 inline-flex px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-900/50 self-start">
                   Level {referralData.profile.level}
                 </div>
               )}
@@ -280,24 +265,24 @@ export default function StudentDashboardPage() {
           {/* Gamification Stats */}
           {referralData ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-2">
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                    <Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP
                  </div>
-                 <div className="text-xl md:text-2xl font-bold text-[#0B2545] mt-auto">
+                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
                    {referralData.profile.xp.toLocaleString()} XP
                  </div>
-                 <div className="text-[10px] text-slate-400 font-medium">All time</div>
+                 <div className="text-[10px] text-muted-foreground font-medium">All time</div>
               </div>
               
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col relative overflow-hidden">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col relative overflow-hidden">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                    <Target className="w-3.5 h-3.5 text-blue-500" /> Current Level
                  </div>
-                 <div className="text-xl md:text-2xl font-bold text-[#0B2545] mt-auto">
+                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
                    Level {referralData.profile.level}
                  </div>
-                 <div className="text-[10px] text-slate-400 font-medium z-10">
+                 <div className="text-[10px] text-muted-foreground font-medium z-10">
                    {referralData.profile.xp.toLocaleString()} / {referralData.settings?.xp_per_level ? (referralData.profile.level * referralData.settings.xp_per_level).toLocaleString() : '---'} XP
                  </div>
                  {referralData.settings?.xp_per_level && (
@@ -308,45 +293,45 @@ export default function StudentDashboardPage() {
                  )}
               </div>
 
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                    <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Day Streak
                  </div>
-                 <div className="text-xl md:text-2xl font-bold text-[#0B2545] mt-auto">
+                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
                    {data.stats.studyStreak} Days
                  </div>
-                 <div className="text-[10px] text-slate-400 font-medium">Active streak</div>
+                 <div className="text-[10px] text-muted-foreground font-medium">Active streak</div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                    <Coins className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> Coins
                  </div>
-                 <div className="text-xl md:text-2xl font-bold text-[#0B2545] mt-auto">
+                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
                    {referralData.profile.coins.toLocaleString()}
                  </div>
-                 <div className="text-[10px] text-slate-400 font-medium">Available balance</div>
+                 <div className="text-[10px] text-muted-foreground font-medium">Available balance</div>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-2">
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"><Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP</div>
-                 <div className="text-xl md:text-2xl font-bold text-slate-300 mt-auto">—</div>
-                 <div className="text-[10px] text-slate-400 font-medium">Unable to load</div>
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP</div>
+                 <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
+                 <div className="text-[10px] text-muted-foreground font-medium">Unable to load</div>
               </div>
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"><Target className="w-3.5 h-3.5 text-blue-500" /> Current Level</div>
-                 <div className="text-xl md:text-2xl font-bold text-slate-300 mt-auto">—</div>
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Target className="w-3.5 h-3.5 text-blue-500" /> Current Level</div>
+                 <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
               </div>
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"><Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Day Streak</div>
-                 <div className="text-xl md:text-2xl font-bold text-[#0B2545] mt-auto">{data.stats.studyStreak} Days</div>
-                 <div className="text-[10px] text-slate-400 font-medium">Active streak</div>
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Day Streak</div>
+                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">{data.stats.studyStreak} Days</div>
+                 <div className="text-[10px] text-muted-foreground font-medium">Active streak</div>
               </div>
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 md:p-4 flex flex-col">
-                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> Coins</div>
-                 <div className="text-xl md:text-2xl font-bold text-slate-300 mt-auto">—</div>
+              <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
+                 <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Coins className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> Coins</div>
+                 <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
               </div>
             </div>
           )}
@@ -355,19 +340,19 @@ export default function StudentDashboardPage() {
         {/* Right Side: Profile Completion and Subscription */}
         <div className="xl:w-[280px] shrink-0 self-start w-full flex flex-col gap-4">
           {data.profile.completionPercentage < 100 && (
-            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-xl">
+            <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900/50 p-4 rounded-xl">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-sm font-bold text-yellow-800">Profile Completion</span>
-                <span className="text-sm font-bold text-yellow-800">{data.profile.completionPercentage}%</span>
+                <span className="text-sm font-bold text-yellow-800 dark:text-yellow-200">Profile Completion</span>
+                <span className="text-sm font-bold text-yellow-800 dark:text-yellow-200">{data.profile.completionPercentage}%</span>
               </div>
-              <Progress value={data.profile.completionPercentage} className="h-1.5 bg-yellow-200" indicatorClassName="bg-yellow-500" />
-              <p className="text-xs text-yellow-700 mt-2">Complete your profile to get better recommendations.</p>
-              <Link href="/student/settings" className="text-xs font-bold text-yellow-800 hover:underline mt-1 inline-block">Complete Profile &rarr;</Link>
+              <Progress value={data.profile.completionPercentage} className="h-1.5 bg-yellow-200 dark:bg-yellow-900/40" indicatorClassName="bg-yellow-500" />
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-2">Complete your profile to get better recommendations.</p>
+              <Link href="/student/settings" className="text-xs font-bold text-yellow-800 dark:text-yellow-200 hover:underline mt-1 inline-block">Complete Profile &rarr;</Link>
             </div>
           )}
 
-          <div className="bg-[#0B2545] text-white p-4 rounded-xl border border-[#163E6B] shadow-md relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+          <div className="bg-primary text-primary-foreground text-white p-4 rounded-xl border border-[#163E6B] shadow-md relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-32 h-32 bg-card/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
             {enrollmentStatus?.has_active_enrollment && enrollmentStatus.enrollment ? (
               <div className="relative z-10 space-y-3">
@@ -377,18 +362,18 @@ export default function StudentDashboardPage() {
                 </div>
                 <div className="font-semibold text-white text-sm leading-snug">{enrollmentStatus.enrollment.course.title}</div>
                 {enrollmentStatus.enrollment.course.exam && (
-                  <div className="text-[11px] text-slate-400 font-medium">{enrollmentStatus.enrollment.course.exam.title}</div>
+                  <div className="text-[11px] text-muted-foreground font-medium">{enrollmentStatus.enrollment.course.exam.title}</div>
                 )}
                 {analytics && (
                   <div className="pt-2 border-t border-white/10">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs text-slate-300 font-medium">Journey Progress</span>
+                      <span className="text-xs text-muted-foreground font-medium">Journey Progress</span>
                       <span className="text-xs font-bold text-[#D4A72C]">{analytics.journey_progress}%</span>
                     </div>
-                    <Progress value={analytics.journey_progress} className="h-1.5 bg-white/20" indicatorClassName="bg-[#D4A72C]" />
+                    <Progress value={analytics.journey_progress} className="h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
                   </div>
                 )}
-                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-white/10 hover:text-white bg-transparent h-8 text-xs font-bold">
+                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-card/10 hover:text-white bg-transparent h-8 text-xs font-bold">
                   <Link href="/student/study-plan">Resume Journey</Link>
                 </Button>
               </div>
@@ -399,13 +384,13 @@ export default function StudentDashboardPage() {
                   <span className="font-bold text-lg tracking-tight">Application Pending</span>
                 </div>
                 <div className="font-semibold text-yellow-200 text-sm leading-snug">{enrollmentStatus.application.course.title}</div>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   Your application is under review. You'll be notified once it's approved.
                   {enrollmentStatus.payment?.status === 'PENDING' && (
                     <span className="block mt-1 text-yellow-300 font-medium">Payment verification in progress.</span>
                   )}
                 </p>
-                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-white/10 hover:text-white bg-transparent h-8 text-xs font-bold">
+                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-card/10 hover:text-white bg-transparent h-8 text-xs font-bold">
                   <Link href="/student/purchases">View Payment Status</Link>
                 </Button>
               </div>
@@ -418,7 +403,7 @@ export default function StudentDashboardPage() {
                 {enrollmentStatus.application.note && (
                   <p className="text-xs text-red-200 leading-relaxed">{enrollmentStatus.application.note}</p>
                 )}
-                <p className="text-xs text-slate-300 leading-relaxed">Please contact support or apply again.</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">Please contact support or apply again.</p>
                 <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold">
                   <Link href="/student/plans">Apply Again</Link>
                 </Button>
@@ -432,22 +417,22 @@ export default function StudentDashboardPage() {
                 <div className="font-semibold text-white text-sm">{analytics.active_course.name}</div>
                 <div className="pt-2 border-t border-white/10">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-slate-300 font-medium">Journey Progress</span>
+                    <span className="text-xs text-muted-foreground font-medium">Journey Progress</span>
                     <span className="text-xs font-bold text-[#D4A72C]">{analytics.journey_progress}%</span>
                   </div>
-                  <Progress value={analytics.journey_progress} className="h-1.5 bg-white/20" indicatorClassName="bg-[#D4A72C]" />
+                  <Progress value={analytics.journey_progress} className="h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
                 </div>
-                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-white/10 hover:text-white bg-transparent h-8 text-xs font-bold">
+                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-card/10 hover:text-white bg-transparent h-8 text-xs font-bold">
                   <Link href="/student/study-plan">Resume Journey</Link>
                 </Button>
               </div>
             ) : (
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-white/10 rounded-lg"><Sparkles className="w-4 h-4 text-slate-300" /></div>
+                  <div className="p-1.5 bg-card/10 rounded-lg"><Sparkles className="w-4 h-4 text-muted-foreground" /></div>
                   <span className="font-bold text-lg tracking-tight">Unlock Full Access</span>
                 </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   Get access to premium preparation tools, AI tutoring, and advanced mock exams.
                 </p>
                 <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold">
@@ -459,8 +444,15 @@ export default function StudentDashboardPage() {
         </div>
       </section>
 
+      {/* Official Loksewa Exam Countdown & Upcoming Mock Exam Banner */}
+      <section className="space-y-4">
+        <LoksewaExamCountdown />
+        <MockExamCountdown />
+      </section>
+
       {/* ─── DRAGGABLE FULL-WIDTH SECTIONS ─────────────────────────────────────── */}
       <DndContext
+
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={(e) => setActiveId(e.active.id)}
@@ -472,17 +464,17 @@ export default function StudentDashboardPage() {
               if (widgetId === "motivation" && motivation) {
                 return (
                   <SortableWidget key={widgetId} id={widgetId}>
-                    <section className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-[16px] p-6 shadow-sm relative overflow-hidden group/widget">
+                    <section className="bg-gradient-to-r from-blue-50 dark:from-blue-950/40 to-indigo-50 dark:to-indigo-950/40 border border-blue-100 dark:border-blue-900/50 rounded-[16px] p-6 shadow-sm relative overflow-hidden group/widget">
                       <div data-focus-hide className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
                         <Sparkles className="w-24 h-24 text-blue-600" />
                       </div>
                       <div className="flex items-start gap-4 relative z-10">
-                        <div className="p-3 bg-white rounded-full shadow-sm">
+                        <div className="p-3 bg-card rounded-full shadow-sm">
                           <Flame className="w-6 h-6 text-orange-500 fill-orange-500" />
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-sm font-bold text-blue-900 uppercase tracking-wider mb-1">Quote of the Day</h3>
-                          <p className="text-lg md:text-xl font-medium text-slate-800 italic">"{motivation.message}"</p>
+                          <h3 className="text-sm font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider mb-1">Quote of the Day</h3>
+                          <p className="text-lg md:text-xl font-medium text-foreground italic">"{motivation.message}"</p>
                         </div>
                       </div>
                     </section>
@@ -497,8 +489,8 @@ export default function StudentDashboardPage() {
                     <div className="relative group/widget">
                       <section className="grid grid-cols-2 md:grid-cols-6 gap-3">
                         {QUICK_ACTIONS.map((action, i) => (
-                          <Link key={i} href={action.href} className="flex flex-col items-center justify-center p-4 bg-white rounded-xl border hover:border-[#D4A72C] hover:shadow-md transition-all group text-center gap-2">
-                            <div className="p-3 rounded-full bg-slate-50 group-hover:bg-[#D4A72C]/10 transition-colors">
+                          <Link key={i} href={action.href} className="flex flex-col items-center justify-center p-4 bg-card rounded-xl border hover:border-[#D4A72C] hover:shadow-md transition-all group text-center gap-2">
+                            <div className="p-3 rounded-full bg-muted group-hover:bg-[#D4A72C]/10 transition-colors">
                               {action.icon === 'target' && <Target className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />}
                               {action.icon === 'file-text' && <FileText className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />}
                               {action.icon === 'book-open' && <BookOpen className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />}
@@ -508,7 +500,7 @@ export default function StudentDashboardPage() {
                               {action.icon === 'check-circle' && <CheckCircle2 className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />}
                               {action.icon === 'gift' && <Gift className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />}
                             </div>
-                            <span className="text-[13px] font-semibold text-slate-700 flex items-center gap-1.5">
+                            <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5">
                               {action.label}
                               {action.label === 'Invite Friends' && (
                                 <span data-focus-hide className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">New</span>
@@ -525,7 +517,7 @@ export default function StudentDashboardPage() {
               if (widgetId === "continue-study" && data.continueLearning) {
                 return (
                   <SortableWidget key={widgetId} id={widgetId}>
-                    <section className="relative overflow-hidden bg-[#0B2545] rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
+                    <section className="relative overflow-hidden bg-primary text-primary-foreground rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
                       <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#163E6B]/50 to-transparent pointer-events-none"></div>
                       <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4A72C] opacity-5 blur-[60px] pointer-events-none"></div>
                       <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 z-10">
@@ -539,12 +531,12 @@ export default function StudentDashboardPage() {
                             </div>
                             <h3 className="font-bold text-[20px] text-white tracking-tight">{data.continueLearning.title}</h3>
                             <div className="flex items-center gap-4 mt-5">
-                              <Progress value={data.continueLearning.progress} className="w-48 h-1.5 bg-white/10" indicatorClassName="bg-[#D4A72C]" />
+                              <Progress value={data.continueLearning.progress} className="w-48 h-1.5 bg-card/10" indicatorClassName="bg-[#D4A72C]" />
                               <span className="text-[13px] font-bold text-white">{data.continueLearning.progress}%</span>
                             </div>
                           </div>
                         </div>
-                        <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-[#0B2545] font-bold px-8 h-12 rounded-xl shrink-0" asChild>
+                        <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-primary dark:text-foreground font-bold px-8 h-12 rounded-xl shrink-0" asChild>
                           <Link href={data.continueLearning.url}>
                             Resume <ArrowRight className="ml-2 h-5 w-5" />
                           </Link>
@@ -570,19 +562,19 @@ export default function StudentDashboardPage() {
                           </p>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
                             <div>
-                              <div className="text-slate-400 text-xs font-medium uppercase mb-1">Referrals</div>
+                              <div className="text-muted-foreground text-xs font-medium uppercase mb-1">Referrals</div>
                               <div className="flex items-center gap-2"><Users className="w-4 h-4 text-blue-400" /><span className="font-bold">{referralData.stats.successful_referrals}</span></div>
                             </div>
                             <div>
-                              <div className="text-slate-400 text-xs font-medium uppercase mb-1">Pending</div>
+                              <div className="text-muted-foreground text-xs font-medium uppercase mb-1">Pending</div>
                               <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-orange-400" /><span className="font-bold">{referralData.stats.pending_referrals}</span></div>
                             </div>
                             <div>
-                              <div className="text-slate-400 text-xs font-medium uppercase mb-1">XP Earned</div>
+                              <div className="text-muted-foreground text-xs font-medium uppercase mb-1">XP Earned</div>
                               <div className="flex items-center gap-2"><TrendingUp className="w-4 h-4 text-purple-400" /><span className="font-bold">{referralData.stats.total_xp_earned}</span></div>
                             </div>
                             <div>
-                              <div className="text-slate-400 text-xs font-medium uppercase mb-1">Coins</div>
+                              <div className="text-muted-foreground text-xs font-medium uppercase mb-1">Coins</div>
                               <div className="flex items-center gap-2"><Coins className="w-4 h-4 text-yellow-400" /><span className="font-bold">{referralData.stats.total_coins_earned}</span></div>
                             </div>
                           </div>
@@ -591,8 +583,8 @@ export default function StudentDashboardPage() {
                               <span className="text-xs text-slate-300">Next Reward: <strong className="text-white">10 Referrals</strong></span>
                               <span className="text-xs text-slate-300 font-bold">{referralData.stats.successful_referrals} / 10</span>
                             </div>
-                            <Progress value={Math.min((referralData.stats.successful_referrals / 10) * 100, 100)} className="h-2 bg-white/10" indicatorClassName="bg-[#4ade80]" />
-                            <p className="text-[10px] text-slate-400 mt-2">
+                            <Progress value={Math.min((referralData.stats.successful_referrals / 10) * 100, 100)} className="h-2 bg-card/10" indicatorClassName="bg-[#4ade80]" />
+                            <p className="text-[10px] text-muted-foreground mt-2">
                               {Math.max(10 - referralData.stats.successful_referrals, 0)} more referrals to unlock: <strong className="text-[#D4A72C]">Referral Champion (+500 XP)</strong>
                             </p>
                           </div>
@@ -604,7 +596,7 @@ export default function StudentDashboardPage() {
                               {referralData.profile.referral_code}
                             </div>
                             <div className="flex flex-col sm:flex-row gap-2">
-                              <Button variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-0 flex-1 h-9 px-2"
+                              <Button variant="secondary" className="bg-card/10 hover:bg-card/20 text-white border-0 flex-1 h-9 px-2"
                                 onClick={() => {
                                   const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/signup?ref=${referralData.profile.referral_code}`;
                                   navigator.clipboard.writeText(link);
@@ -660,15 +652,13 @@ export default function StudentDashboardPage() {
               if (widgetId === "referrals-list") {
                 return (
                   <SortableWidget key={widgetId} id={widgetId}>
-                    <div className="bg-white border border-slate-200 shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
-                      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                        <h3 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+                    <div className="bg-card border border-border shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
+                      <div className="p-4 border-b border-border/50 bg-muted/50 flex justify-between items-center">
+                        <h3 className="text-base font-bold text-primary dark:text-foreground flex items-center gap-2">
                           <Users className="w-4 h-4 text-blue-500" /> Recent Referrals
                         </h3>
                         <div className="flex items-center gap-1">
-                          <div className="opacity-0 group-hover/widget:opacity-100 transition-opacity" title="Drag to reorder">
-                            <GripVertical className="w-4 h-4 text-slate-400 cursor-grab" />
-                          </div>
+
                           <Button variant="ghost" size="sm" className="text-xs text-blue-600 h-8 font-semibold" asChild>
                             <Link href="/student/referrals">View all</Link>
                           </Button>
@@ -678,13 +668,13 @@ export default function StudentDashboardPage() {
                         {referralHistory.length > 0 ? (
                           <div className="divide-y divide-slate-100">
                             {referralHistory.slice(0, 4).map((item, i) => (
-                              <div key={i} className="flex justify-between items-center p-4 hover:bg-slate-50 transition-colors">
-                                <span className="text-sm font-semibold text-[#0B2545]">{item.referred_username}</span>
+                              <div key={i} className="flex justify-between items-center p-4 hover:bg-muted transition-colors">
+                                <span className="text-sm font-semibold text-primary dark:text-foreground">{item.referred_username}</span>
                                 <div className="flex items-center gap-3">
                                   <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider", 
-                                    item.status === 'rewarded' ? 'bg-green-100 text-green-700' : 
+                                    item.status === 'rewarded' ? 'bg-green-100 text-green-700 dark:text-green-300' : 
                                     item.status === 'qualified' ? 'bg-blue-100 text-blue-700' : 
-                                    'bg-orange-100 text-orange-700')}>
+                                    'bg-orange-100 text-orange-700 dark:text-orange-300')}>
                                     {item.status}
                                   </span>
                                   <span className="text-xs font-bold text-[#D4A72C] w-14 text-right">
@@ -695,9 +685,9 @@ export default function StudentDashboardPage() {
                             ))}
                           </div>
                         ) : (
-                          <div className="p-8 text-center flex flex-col items-center justify-center h-full text-slate-500">
+                          <div className="p-8 text-center flex flex-col items-center justify-center h-full text-muted-foreground">
                             <Users className="w-10 h-10 text-slate-200 mb-3" />
-                            <p className="text-sm font-medium text-[#0B2545]">No referrals yet</p>
+                            <p className="text-sm font-medium text-primary dark:text-foreground">No referrals yet</p>
                             <p className="text-xs mt-1">Share your code to start earning!</p>
                           </div>
                         )}
@@ -710,16 +700,14 @@ export default function StudentDashboardPage() {
               if (widgetId === "your-progress") {
                 return (
                   <SortableWidget key={widgetId} id={widgetId}>
-                    <div className="bg-white border border-slate-200 shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
-                      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                        <h3 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+                    <div className="bg-card border border-border shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
+                      <div className="p-4 border-b border-border/50 bg-muted/50 flex justify-between items-center">
+                        <h3 className="text-base font-bold text-primary dark:text-foreground flex items-center gap-2">
                           <TrendingUp className="w-4 h-4 text-purple-500" /> Your Progress
                         </h3>
                         <div className="flex items-center gap-2">
-                          <div className="opacity-0 group-hover/widget:opacity-100 transition-opacity" title="Drag to reorder">
-                            <GripVertical className="w-4 h-4 text-slate-400 cursor-grab" />
-                          </div>
-                          <div className="text-[11px] font-bold text-slate-500 flex items-center cursor-pointer hover:text-[#0B2545] uppercase tracking-wider">
+
+                          <div className="text-[11px] font-bold text-muted-foreground flex items-center cursor-pointer hover:text-primary dark:text-foreground uppercase tracking-wider">
                             This Week <ChevronRight className="w-3 h-3 ml-0.5 rotate-90" />
                           </div>
                         </div>
@@ -727,31 +715,31 @@ export default function StudentDashboardPage() {
                       <div className="p-6 flex-1 flex flex-col justify-center gap-6">
                         <div>
                           <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-slate-600">Practice Score</span>
-                            <span className="text-sm font-bold text-[#0B2545]">{data.stats.averageScore}%</span>
+                            <span className="text-sm font-semibold text-muted-foreground">Practice Score</span>
+                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.averageScore}%</span>
                           </div>
-                          <Progress value={data.stats.averageScore} className="h-2 bg-slate-100" indicatorClassName="bg-blue-500" />
+                          <Progress value={data.stats.averageScore} className="h-2 bg-muted/80" indicatorClassName="bg-blue-500" />
                         </div>
                         <div>
                           <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-slate-600">Mock Exams</span>
-                            <span className="text-sm font-bold text-[#0B2545]">{data.stats.completedExams} / {Math.max(data.stats.completedExams, data.stats.totalExams)}</span>
+                            <span className="text-sm font-semibold text-muted-foreground">Mock Exams</span>
+                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.completedExams} / {Math.max(data.stats.completedExams, data.stats.totalExams)}</span>
                           </div>
-                          <Progress value={data.stats.totalExams > 0 ? Math.min((data.stats.completedExams / data.stats.totalExams) * 100, 100) : 0} className="h-2 bg-slate-100" indicatorClassName="bg-purple-500" />
+                          <Progress value={data.stats.totalExams > 0 ? Math.min((data.stats.completedExams / data.stats.totalExams) * 100, 100) : 0} className="h-2 bg-muted/80" indicatorClassName="bg-purple-500" />
                         </div>
                         <div>
                           <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-slate-600">Questions Solved</span>
-                            <span className="text-sm font-bold text-[#0B2545]">{data.stats.questionsAttempted}</span>
+                            <span className="text-sm font-semibold text-muted-foreground">Questions Solved</span>
+                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.questionsAttempted}</span>
                           </div>
-                          <Progress value={Math.min((data.stats.questionsAttempted / Math.max(data.stats.questionsAttempted + 50, 100)) * 100, 100)} className="h-2 bg-slate-100" indicatorClassName="bg-[#D4A72C]" />
+                          <Progress value={Math.min((data.stats.questionsAttempted / Math.max(data.stats.questionsAttempted + 50, 100)) * 100, 100)} className="h-2 bg-muted/80" indicatorClassName="bg-[#D4A72C]" />
                         </div>
                         <div>
                           <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-slate-600">Accuracy</span>
-                            <span className="text-sm font-bold text-[#0B2545]">{data.stats.accuracy}%</span>
+                            <span className="text-sm font-semibold text-muted-foreground">Accuracy</span>
+                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.accuracy}%</span>
                           </div>
-                          <Progress value={data.stats.accuracy} className="h-2 bg-slate-100" indicatorClassName="bg-green-500" />
+                          <Progress value={data.stats.accuracy} className="h-2 bg-muted/80" indicatorClassName="bg-green-500" />
                         </div>
                       </div>
                     </div>
@@ -762,15 +750,13 @@ export default function StudentDashboardPage() {
               if (widgetId === "upcoming-exams") {
                 return (
                   <SortableWidget key={widgetId} id={widgetId}>
-                    <div className="bg-white border border-slate-200 shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
-                      <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                        <h3 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+                    <div className="bg-card border border-border shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
+                      <div className="p-4 border-b border-border/50 bg-muted/50 flex justify-between items-center">
+                        <h3 className="text-base font-bold text-primary dark:text-foreground flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-orange-500" /> Upcoming
                         </h3>
                         <div className="flex items-center gap-1">
-                          <div className="opacity-0 group-hover/widget:opacity-100 transition-opacity" title="Drag to reorder">
-                            <GripVertical className="w-4 h-4 text-slate-400 cursor-grab" />
-                          </div>
+
                           <Button variant="ghost" size="sm" className="text-xs text-blue-600 h-8 font-semibold" asChild>
                             <Link href="/student/exams">View all</Link>
                           </Button>
@@ -780,13 +766,13 @@ export default function StudentDashboardPage() {
                         {data.todaysPlan.filter(p => p.type === 'exam').length > 0 ? (
                           <div className="divide-y divide-slate-100">
                             {data.todaysPlan.filter(p => p.type === 'exam').map(exam => (
-                              <div key={exam.id} className="p-5 hover:bg-slate-50 transition-colors">
+                              <div key={exam.id} className="p-5 hover:bg-muted transition-colors">
                                 <div className="flex gap-4">
                                   <div className="mt-1"><Calendar className="w-5 h-5 text-blue-500" /></div>
                                   <div className="flex-1">
-                                    <h4 className="text-sm font-bold text-[#0B2545] leading-tight mb-1">{exam.title}</h4>
-                                    <p className="text-xs text-slate-500 font-medium">Today • {exam.duration} mins</p>
-                                    <Button size="sm" variant="outline" className="w-full mt-4 text-xs font-bold border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800">
+                                    <h4 className="text-sm font-bold text-primary dark:text-foreground leading-tight mb-1">{exam.title}</h4>
+                                    <p className="text-xs text-muted-foreground font-medium">Today • {exam.duration} mins</p>
+                                    <Button size="sm" variant="outline" className="w-full mt-4 text-xs font-bold border-blue-200 text-blue-700 hover:bg-blue-50 dark:bg-blue-950/30 hover:text-blue-800">
                                       Start Now
                                     </Button>
                                   </div>
@@ -795,9 +781,9 @@ export default function StudentDashboardPage() {
                             ))}
                           </div>
                         ) : (
-                          <div className="p-8 text-center flex flex-col items-center justify-center h-full text-slate-500">
+                          <div className="p-8 text-center flex flex-col items-center justify-center h-full text-muted-foreground">
                             <Calendar className="w-10 h-10 text-slate-200 mb-3" />
-                            <p className="text-sm font-medium text-[#0B2545]">No upcoming exams</p>
+                            <p className="text-sm font-medium text-primary dark:text-foreground">No upcoming exams</p>
                             <p className="text-xs mt-1">Check back later or view past results.</p>
                           </div>
                         )}

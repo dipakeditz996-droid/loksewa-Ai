@@ -3,54 +3,51 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BookMarked, Download, Eye, FileText, ChevronRight } from "lucide-react";
-import { StudyMaterial } from "@/lib/api/notes";
+import { ArrowRight, BookMarked, Clock, FileText, BarChart3, ChevronRight } from "lucide-react";
+import { PublicNote } from "@/lib/api/public-api";
 
+// Shown only until real free published materials exist.
 const STATIC_NOTES = [
   {
-    id: 1,
+    id: -1,
     title: "Constitution of Nepal 2072 — Complete Guide",
     description: "Detailed breakdown of all parts, articles, and fundamental rights.",
-    type: "PDF",
-    size: "2.4 MB",
-    pages: 45,
-    views: "12K+",
+    material_type: "notes",
+    difficulty: "intermediate",
+    estimated_reading_time: 25,
     subject: "Constitutional Law",
   },
   {
-    id: 2,
+    id: -2,
     title: "Public Administration Principles",
     description: "Core theories, administrative behavior, and modern approaches.",
-    type: "PDF",
-    size: "1.8 MB",
-    pages: 32,
-    views: "8K+",
+    material_type: "notes",
+    difficulty: "beginner",
+    estimated_reading_time: 18,
     subject: "Public Admin",
   },
   {
-    id: 3,
+    id: -3,
     title: "Current Affairs 2080-81",
     description: "National and international events curated for Loksewa exams.",
-    type: "PDF",
-    size: "3.1 MB",
-    pages: 60,
-    views: "15K+",
+    material_type: "study_guide",
+    difficulty: "beginner",
+    estimated_reading_time: 30,
     subject: "General Knowledge",
   },
   {
-    id: 4,
+    id: -4,
     title: "Economic Survey Summary",
     description: "Key highlights and data points from the latest economic survey.",
-    type: "PDF",
-    size: "1.2 MB",
-    pages: 18,
-    views: "9K+",
+    material_type: "reference",
+    difficulty: "advanced",
+    estimated_reading_time: 12,
     subject: "Economy",
   },
 ];
 
 interface Props {
-  notes?: StudyMaterial[] | null;
+  notes?: PublicNote[] | null;
 }
 
 export function NotesSection({ notes }: Props) {
@@ -60,10 +57,9 @@ export function NotesSection({ notes }: Props) {
         id: n.id,
         title: n.title,
         description: n.description || "Comprehensive study material.",
-        type: "PDF",
-        size: "2.5 MB",
-        pages: 20,
-        views: "5K+",
+        material_type: n.material_type,
+        difficulty: n.difficulty,
+        estimated_reading_time: n.estimated_reading_time,
         subject: n.subject_name || "General Studies",
       }))
     : STATIC_NOTES;
@@ -123,10 +119,10 @@ export function NotesSection({ notes }: Props) {
                   </p>
                   
                   {/* Meta */}
-                  <div className="flex items-center gap-4 text-[11px] font-[600] text-slate-400 dark:text-slate-500">
-                    <div className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> {note.pages} Pages</div>
-                    <div className="flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> {note.size}</div>
-                    <div className="flex items-center gap-1.5"><Eye className="w-3.5 h-3.5" /> {note.views}</div>
+                  <div className="flex items-center gap-4 text-[11px] font-[600] text-slate-400 dark:text-slate-500 capitalize">
+                    <div className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> {note.material_type.replace(/_/g, " ")}</div>
+                    <div className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> {note.difficulty}</div>
+                    <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {note.estimated_reading_time} min</div>
                   </div>
                 </div>
 

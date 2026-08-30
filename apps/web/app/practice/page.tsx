@@ -1,18 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
-import { 
-  Search, SlidersHorizontal, ArrowRight, BookOpen, Layers, 
-  Trophy, History, Target, Zap, Clock, BrainCircuit, 
-  BarChart2, CheckCircle2, TrendingUp, AlertCircle, FileText, Activity 
+import {
+  Search, SlidersHorizontal, ArrowRight, BookOpen, Layers,
+  Trophy, History, Target, Zap, Clock, BrainCircuit,
+  BarChart2, CheckCircle2, TrendingUp, AlertCircle, FileText, Activity, Loader2
 } from "lucide-react";
+import { publicApi, type PublicPracticeSubject, type PublicPracticeSet } from "@/lib/api/public-api";
 
 export default function PracticePage() {
   const [activeFilter, setActiveFilter] = useState("All");
+  const [subjects, setSubjects] = useState<PublicPracticeSubject[]>([]);
+  const [practiceSets, setPracticeSets] = useState<PublicPracticeSet[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([publicApi.getPracticeSubjects(), publicApi.getPracticeSets()]).then(([subjectsData, setsData]) => {
+      if (!mounted) return;
+      setSubjects(subjectsData || []);
+      setPracticeSets(setsData || []);
+      setIsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const filteredSets = practiceSets.filter(
+    (s) => activeFilter === "All" || s.difficulty.toLowerCase() === activeFilter.toLowerCase()
+  );
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
@@ -251,106 +270,55 @@ export default function PracticePage() {
             </div>
           </div>
 
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+          ) : filteredSets.length === 0 ? (
+            <p className="text-slate-500 font-[500]">No practice sets have been published yet. Check back soon.</p>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Set 1 */}
-            <div className="p-6 rounded-[16px] bg-slate-50 dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all group">
-              <h3 className="text-lg font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
-                General Knowledge — Practice Set 01
-              </h3>
-              <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">Section Officer • Paper II</p>
-              
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Difficulty</div>
-                  <div className="text-sm font-[700] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    Medium
+            {filteredSets.map((set) => (
+              <div key={set.id} className="p-6 rounded-[16px] bg-slate-50 dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all group">
+                <h3 className="text-lg font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
+                  {set.name}
+                </h3>
+                <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">{set.exam || "General"} {set.subject ? `• ${set.subject}` : ""}</p>
+
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
+                    <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Difficulty</div>
+                    <div className={`text-sm font-[700] flex items-center gap-1 ${
+                      set.difficulty === "Easy" ? "text-emerald-600 dark:text-emerald-400" :
+                      set.difficulty === "Hard" ? "text-rose-600 dark:text-rose-400" :
+                      "text-amber-600 dark:text-amber-400"
+                    }`}>
+                      {set.difficulty}
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
+                    <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Estimated Time</div>
+                    <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" /> {set.estimatedMinutes} min
+                    </div>
+                  </div>
+                  <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5 col-span-2">
+                    <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Questions</div>
+                    <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" /> {set.questionsCount} Questions
+                    </div>
                   </div>
                 </div>
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Estimated Time</div>
-                  <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" /> 15 min
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5 col-span-2">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Questions</div>
-                  <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" /> 20 Questions
-                  </div>
-                </div>
+
+                <Link href="/login">
+                  <Button className="w-full h-12 rounded-[10px] bg-slate-900 dark:bg-white text-white dark:text-[#0A1118] font-[700] hover:bg-slate-800 dark:hover:bg-slate-200 group-hover:bg-[#163E6B] dark:group-hover:bg-[#D4A72C] transition-colors">
+                    Start Practice <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
               </div>
-
-              <Button className="w-full h-12 rounded-[10px] bg-slate-900 dark:bg-white text-white dark:text-[#0A1118] font-[700] hover:bg-slate-800 dark:hover:bg-slate-200 group-hover:bg-[#163E6B] dark:group-hover:bg-[#D4A72C] transition-colors">
-                Start Practice <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-
-            {/* Set 2 */}
-            <div className="p-6 rounded-[16px] bg-slate-50 dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all group">
-              <h3 className="text-lg font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
-                Constitution — Practice Set 02
-              </h3>
-              <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">Section Officer • Paper I</p>
-              
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Difficulty</div>
-                  <div className="text-sm font-[700] text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                    Hard
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Estimated Time</div>
-                  <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" /> 20 min
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5 col-span-2">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Questions</div>
-                  <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" /> 25 Questions
-                  </div>
-                </div>
-              </div>
-
-              <Button className="w-full h-12 rounded-[10px] bg-slate-900 dark:bg-white text-white dark:text-[#0A1118] font-[700] hover:bg-slate-800 dark:hover:bg-slate-200 group-hover:bg-[#163E6B] dark:group-hover:bg-[#D4A72C] transition-colors">
-                Start Practice <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-
-            {/* Set 3 */}
-            <div className="p-6 rounded-[16px] bg-slate-50 dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all group">
-              <h3 className="text-lg font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
-                Public Administration — Set 03
-              </h3>
-              <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">Nayab Subba • Paper II</p>
-              
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Difficulty</div>
-                  <div className="text-sm font-[700] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                    Medium
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Estimated Time</div>
-                  <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" /> 25 min
-                  </div>
-                </div>
-                <div className="bg-white dark:bg-[#0A1118] p-3 rounded-[8px] border border-slate-200 dark:border-white/5 col-span-2">
-                  <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-wider mb-1">Questions</div>
-                  <div className="text-sm font-[700] text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5" /> 30 Questions
-                  </div>
-                </div>
-              </div>
-
-              <Button className="w-full h-12 rounded-[10px] bg-slate-900 dark:bg-white text-white dark:text-[#0A1118] font-[700] hover:bg-slate-800 dark:hover:bg-slate-200 group-hover:bg-[#163E6B] dark:group-hover:bg-[#D4A72C] transition-colors">
-                Start Practice <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
+            ))}
           </div>
+          )}
         </div>
       </section>
 
@@ -361,19 +329,19 @@ export default function PracticePage() {
             
             <div className="lg:col-span-2">
               <h2 className="text-2xl font-[900] text-slate-900 dark:text-white mb-8">Practice by Subject</h2>
+              {isLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                </div>
+              ) : subjects.length === 0 ? (
+                <p className="text-slate-500 font-[500]">No subjects with published questions yet.</p>
+              ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  { name: "General Knowledge", count: "450+" },
-                  { name: "Constitution", count: "320+" },
-                  { name: "Public Administration", count: "280+" },
-                  { name: "Current Affairs", count: "350+" },
-                  { name: "Economics", count: "240+" },
-                  { name: "Geography", count: "220+" }
-                ].map((subject, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-5 rounded-[16px] bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all group cursor-pointer">
+                {subjects.map((subject) => (
+                  <div key={subject.id} className="flex items-center justify-between p-5 rounded-[16px] bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all group cursor-pointer">
                     <div>
                       <h4 className="font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">{subject.name}</h4>
-                      <p className="text-xs font-[600] text-slate-500">{subject.count} Questions</p>
+                      <p className="text-xs font-[600] text-slate-500">{subject.questionsCount} Questions</p>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] group-hover:bg-[#163E6B]/10 dark:group-hover:bg-[#D4A72C]/10 transition-all">
                       <ArrowRight className="w-4 h-4" />
@@ -381,6 +349,7 @@ export default function PracticePage() {
                   </div>
                 ))}
               </div>
+              )}
             </div>
 
             <div className="lg:col-span-1">

@@ -4,9 +4,9 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { 
-  Brain, Settings2, FileCode2, BookOpen, 
-  BarChart3, ShieldAlert
+import {
+  Brain, Settings2, FileCode2, BookOpen,
+  BarChart3, ShieldAlert, MessagesSquare
 } from "lucide-react";
 
 export default function AITutorLayout({
@@ -22,6 +22,12 @@ export default function AITutorLayout({
       href: "/admin-dashboard/ai-tutor/overview",
       icon: Brain,
       exact: true
+    },
+    {
+      name: "Conversations",
+      href: "/admin-dashboard/ai-tutor/conversations",
+      icon: MessagesSquare,
+      exact: false
     },
     {
       name: "Configuration",

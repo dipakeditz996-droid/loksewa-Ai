@@ -5,7 +5,6 @@ import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Map, ChevronRight, CheckCircle2, AlertCircle } from "lucide-react";
-import { ApiExamCategory } from "@/lib/api/admin-academic-api";
 
 const STATIC_HIERARCHY = [
   {
@@ -43,12 +42,12 @@ const STATIC_HIERARCHY = [
   },
 ];
 
-interface Props {
-  examCategories?: ApiExamCategory[] | null;
-}
-
-export function SyllabusSection({ examCategories }: Props) {
-  // Use first static example (will connect to real syllabus API progressively)
+// This section illustrates the syllabus-tracking FEATURE (per-subject
+// progress and weak/strong flags), which is inherently a personalized,
+// logged-in-student concept - there is no real "progress" for an anonymous
+// visitor to show. Real syllabus browsing lives at /syllabus (linked below);
+// this stays a static product demo like the other illustrative sections.
+export function SyllabusSection() {
   const data = STATIC_HIERARCHY[0];
 
   return (

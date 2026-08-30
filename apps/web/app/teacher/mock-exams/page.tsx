@@ -95,12 +95,12 @@ export default function MockExamsDashboard() {
         description="Create, manage and monitor timed examinations for your students."
         action={
           <div className="flex gap-2">
-            <Button disabled variant="outline" className="gap-2 rounded-[9px] border-[#D9E1EA] bg-[#F7F9FC] text-[#8A98AE] cursor-not-allowed">
+            <Button disabled variant="outline" className="gap-2 rounded-[9px] border-border bg-muted text-muted-foreground cursor-not-allowed">
               <PlusCircle className="h-4 w-4" />
               Auto-generate (Coming Soon)
             </Button>
             <Link href="/teacher/mock-exams/new">
-              <Button className="gap-2 rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C]">
+              <Button className="gap-2 rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C] text-white">
                 <PlusCircle className="h-4 w-4" />
                 New Mock Exam
               </Button>
@@ -123,19 +123,19 @@ export default function MockExamsDashboard() {
       </div>
 
       {/* TOOLBAR */}
-      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-[#E7EBF3] bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:flex-row">
+      <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:flex-row">
         <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A98AE]" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search exams..."
-            className="rounded-lg border-[#D9E1EA] bg-[#F7F9FC] pl-9"
+            className="rounded-lg border-border bg-muted pl-9"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
         <div className="flex w-full items-center gap-3 md:w-auto">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-[160px] rounded-lg border-[#D9E1EA] bg-[#F7F9FC]">
+            <SelectTrigger className="w-[160px] rounded-lg border-border bg-muted">
               <SelectValue placeholder="Filter by category" />
             </SelectTrigger>
             <SelectContent>
@@ -146,7 +146,7 @@ export default function MockExamsDashboard() {
             </SelectContent>
           </Select>
           <Select value={subjectFilter} onValueChange={setSubjectFilter}>
-            <SelectTrigger className="w-[160px] rounded-lg border-[#D9E1EA] bg-[#F7F9FC]">
+            <SelectTrigger className="w-[160px] rounded-lg border-border bg-muted">
               <SelectValue placeholder="Filter by subject" />
             </SelectTrigger>
             <SelectContent>
@@ -157,7 +157,7 @@ export default function MockExamsDashboard() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px] rounded-lg border-[#D9E1EA] bg-[#F7F9FC]">
+            <SelectTrigger className="w-[160px] rounded-lg border-border bg-muted">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -173,29 +173,29 @@ export default function MockExamsDashboard() {
 
       {/* MAIN CONTENT */}
       {loading ? (
-        <div className="py-12 text-center text-[#667085]">Loading exams...</div>
+        <div className="py-12 text-center text-muted-foreground">Loading exams...</div>
       ) : filteredExams.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#D9E1EA] bg-white p-12 text-center">
-          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#EEF2F8]">
-            <FileText className="h-10 w-10 text-[#0B2545]" />
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-12 text-center">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+            <FileText className="h-10 w-10 text-primary" />
           </div>
-          <h3 className="mb-2 text-xl font-bold text-[#101828]">Your examination workspace is ready.</h3>
-          <p className="mx-auto mb-6 max-w-md text-[13px] text-[#667085]">
+          <h3 className="mb-2 text-xl font-bold text-foreground">Your examination workspace is ready.</h3>
+          <p className="mx-auto mb-6 max-w-md text-[13px] text-muted-foreground">
             Create your first model exam and build a realistic Loksewa examination experience for your students.
           </p>
           <Link href="/teacher/mock-exams/new">
-            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]">Create Mock Exam</Button>
+            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Create Mock Exam</Button>
           </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
           {filteredExams.map((exam) => (
-            <div key={exam.id} className="group flex flex-col overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-shadow hover:shadow-md">
+            <div key={exam.id} className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-shadow hover:shadow-md">
               <div className="mb-3.5 flex items-center justify-between">
                 <StatusPill status={exam.status} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[#8A98AE] hover:text-[#344054]">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -212,43 +212,43 @@ export default function MockExamsDashboard() {
                     </DropdownMenuItem>
 
                     {(exam.status === 'draft' || exam.status === 'changes_requested' || exam.status === 'rejected') && (
-                      <DropdownMenuItem className="cursor-pointer text-[#0B2545]" onClick={() => handleSubmitReview(exam.id)}>
+                      <DropdownMenuItem className="cursor-pointer text-primary" onClick={() => handleSubmitReview(exam.id)}>
                         <Send className="mr-2 h-4 w-4" /> Submit for Review
                       </DropdownMenuItem>
                     )}
 
                     {exam.status === 'published' && (
                       <Link href={`/teacher/mock-exams/${exam.id}/analytics`}>
-                        <DropdownMenuItem className="cursor-pointer text-[#0F7A69]">
+                        <DropdownMenuItem className="cursor-pointer text-[#0F7A69] dark:text-[#4ADE9C]">
                           <BarChart className="mr-2 h-4 w-4" /> View Analytics
                         </DropdownMenuItem>
                       </Link>
                     )}
 
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="cursor-pointer text-[#B23A3A]" onClick={() => handleDelete(exam.id)}>
+                    <DropdownMenuItem className="cursor-pointer text-destructive" onClick={() => handleDelete(exam.id)}>
                       <Trash2 className="mr-2 h-4 w-4" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
 
-              <h3 className="text-[15px] font-bold text-[#101828]">{exam.title}</h3>
-              <div className="mt-1.5 flex items-center gap-2 text-xs text-[#8A98AE]">
-                <span className="rounded bg-[#EEF1F6] px-1.5 py-0.5 text-[#667085]">{exam.exam_type === 'mock' ? 'Mock Test' : 'Model Exam'}</span>
+              <h3 className="text-[15px] font-bold text-foreground">{exam.title}</h3>
+              <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded bg-[#EEF1F6] px-1.5 py-0.5 text-muted-foreground">{exam.exam_type === 'mock' ? 'Mock Test' : 'Model Exam'}</span>
                 <span>{exam.category_name}</span>
               </div>
-              <div className="mt-2.5 text-[12px] text-[#8A98AE]">
+              <div className="mt-2.5 text-[12px] text-muted-foreground">
                 {exam.total_questions} Questions &middot; {exam.time_limit} min &middot; {exam.total_marks} Marks
               </div>
 
               {exam.status === 'rejected' && exam.reviewer_comment && (
-                <p className="mt-2 max-w-[220px] truncate text-xs text-[#B23A3A]" title={exam.reviewer_comment}>
+                <p className="mt-2 max-w-[220px] truncate text-xs text-destructive" title={exam.reviewer_comment}>
                   {exam.reviewer_comment}
                 </p>
               )}
 
-              <div className="mt-4 border-t border-[#F2F4F8] pt-3.5 text-[11.5px] text-[#8A98AE]">
+              <div className="mt-4 border-t border-[#F2F4F8] pt-3.5 text-[11.5px] text-muted-foreground">
                 Updated {format(new Date(exam.updated_at), 'MMM d, yyyy')}
               </div>
             </div>
@@ -256,12 +256,12 @@ export default function MockExamsDashboard() {
 
           <Link
             href="/teacher/mock-exams/new"
-            className="flex flex-col items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-[#D9E1EA] p-5 text-center transition-colors hover:border-[#0B2545]/40 hover:bg-[#F7F9FC]"
+            className="flex flex-col items-center justify-center gap-2 rounded-2xl border-[1.5px] border-dashed border-border p-5 text-center transition-colors hover:border-[#0B2545]/40 hover:bg-muted"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#EEF2F8] text-[#0B2545]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
               <PlusCircle className="h-[18px] w-[18px]" />
             </div>
-            <span className="text-[13px] font-semibold text-[#475467]">Start a new mock exam</span>
+            <span className="text-[13px] font-semibold text-muted-foreground">Start a new mock exam</span>
           </Link>
         </div>
       )}

@@ -36,14 +36,14 @@ export default function StudentSettingsPage() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#0B2545]">Settings</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage your account, preferences, and privacy.</p>
+        <h1 className="text-2xl font-bold text-primary dark:text-foreground">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-1">Manage your account, preferences, and privacy.</p>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar Navigation — Desktop */}
         <aside className="hidden lg:block w-64 shrink-0">
-          <nav className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden sticky top-24">
+          <nav className="bg-card rounded-2xl border border-border/80 shadow-sm overflow-hidden sticky top-24">
             {SETTINGS_TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
@@ -54,11 +54,11 @@ export default function StudentSettingsPage() {
                   className={cn(
                     "flex items-center gap-3 w-full px-5 py-3.5 text-left text-[13px] font-medium transition-all border-l-[3px]",
                     isActive
-                      ? "bg-[#0B2545]/5 text-[#0B2545] border-l-[#D4A72C]"
-                      : "text-slate-600 border-l-transparent hover:bg-slate-50 hover:text-slate-800"
+                      ? "bg-primary text-primary-foreground/5 text-primary dark:text-foreground border-l-[#D4A72C]"
+                      : "text-muted-foreground border-l-transparent hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  <Icon className={cn("h-4 w-4", isActive ? "text-[#D4A72C]" : "text-slate-400")} strokeWidth={1.5} />
+                  <Icon className={cn("h-4 w-4", isActive ? "text-[#D4A72C]" : "text-muted-foreground")} strokeWidth={1.5} />
                   {tab.label}
                 </button>
               );
@@ -71,7 +71,7 @@ export default function StudentSettingsPage() {
           <select
             value={activeTab}
             onChange={(e) => setActiveTab(e.target.value as SettingsTab)}
-            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-[14px] font-medium text-[#0B2545] focus:ring-2 focus:ring-[#D4A72C]/30 focus:border-[#D4A72C]"
+            className="w-full bg-card border border-border rounded-xl px-4 py-3 text-[14px] font-medium text-primary dark:text-foreground focus:ring-2 focus:ring-[#D4A72C]/30 focus:border-[#D4A72C]"
           >
             {SETTINGS_TABS.map((tab) => (
               <option key={tab.key} value={tab.key}>

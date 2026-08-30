@@ -142,9 +142,11 @@ function RegisterForm() {
   return (
     <div className="min-h-screen relative flex font-sans overflow-hidden bg-[#0A1118] text-white">
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-cover bg-[center_top] bg-no-repeat" style={{ backgroundImage: `url(${bgImage.src})` }} />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/20 to-black/80 mix-blend-multiply" />
-        <div className="absolute inset-y-0 right-0 w-full lg:w-1/2 bg-gradient-to-l from-[#0A1118]/90 via-[#0A1118]/40 to-transparent" />
+        <div className="absolute inset-0 bg-cover bg-[25%_top] lg:bg-[center_top] bg-no-repeat" style={{ backgroundImage: `url(${bgImage.src})` }} />
+        {/* Mobile: vertical gradient suits the single-column stacked layout.
+            Desktop (lg+): original left-right gradients for the side-by-side layout. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/95 lg:bg-gradient-to-r lg:from-black/50 lg:via-black/20 lg:to-black/80 mix-blend-multiply" />
+        <div className="hidden lg:block absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-[#0A1118]/90 via-[#0A1118]/40 to-transparent" />
       </div>
 
       <div className="container relative z-10 w-full mx-auto px-6 md:px-12 py-8 flex flex-col min-h-screen">

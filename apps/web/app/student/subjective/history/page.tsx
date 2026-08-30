@@ -29,7 +29,7 @@ export default function SubjectiveHistoryPage() {
       case 'practice': return <BookOpen className="w-5 h-5 text-blue-500" />;
       case 'model_exam': return <Target className="w-5 h-5 text-purple-500" />;
       case 'topic': return <FileText className="w-5 h-5 text-green-500" />;
-      default: return <FileText className="w-5 h-5 text-slate-500" />;
+      default: return <FileText className="w-5 h-5 text-muted-foreground" />;
     }
   };
 
@@ -45,18 +45,18 @@ export default function SubjectiveHistoryPage() {
   return (
     <div className="max-w-[1200px] mx-auto space-y-8 p-4 md:p-8">
       
-      <Link href="/student/subjective" className="inline-flex items-center text-[14px] font-bold text-slate-500 hover:text-[#0B2545] transition-colors">
+      <Link href="/student/subjective" className="inline-flex items-center text-[14px] font-bold text-muted-foreground hover:text-primary dark:text-foreground transition-colors">
         <ArrowLeft className="w-4 h-4 mr-2" /> Back to Subjective Practice
       </Link>
 
-      <div className="bg-white rounded-[20px] shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-8 md:p-10 border-b border-slate-100 flex items-center gap-4">
+      <div className="bg-card rounded-[20px] shadow-sm border border-border overflow-hidden">
+        <div className="p-8 md:p-10 border-b border-border/50 flex items-center gap-4">
           <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center shrink-0">
             <History className="w-6 h-6 text-indigo-600" />
           </div>
           <div>
-            <h1 className="text-[24px] font-bold text-[#0B2545]">My Evaluations & History</h1>
-            <p className="text-slate-500">Track your subjective submissions and view teacher feedback.</p>
+            <h1 className="text-[24px] font-bold text-primary dark:text-foreground">My Evaluations & History</h1>
+            <p className="text-muted-foreground">Track your subjective submissions and view teacher feedback.</p>
           </div>
         </div>
       </div>
@@ -66,14 +66,14 @@ export default function SubjectiveHistoryPage() {
           <div className="w-8 h-8 border-4 border-[#0B2545] border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : attempts.length === 0 ? (
-        <div className="bg-white rounded-[16px] border border-slate-200 p-12 text-center">
-          <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <History className="w-8 h-8 text-slate-400" />
+        <div className="bg-card rounded-[16px] border border-border p-12 text-center">
+          <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+            <History className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="text-[18px] font-bold text-[#0B2545] mb-2">No History Yet</h3>
-          <p className="text-slate-500 mb-6">You haven't attempted any subjective practice yet.</p>
+          <h3 className="text-[18px] font-bold text-primary dark:text-foreground mb-2">No History Yet</h3>
+          <p className="text-muted-foreground mb-6">You haven't attempted any subjective practice yet.</p>
           <Link href="/student/subjective">
-            <Button className="bg-[#0B2545] text-white font-bold">Start Practicing</Button>
+            <Button className="bg-primary text-primary-foreground text-white font-bold">Start Practicing</Button>
           </Link>
         </div>
       ) : (
@@ -94,45 +94,45 @@ export default function SubjectiveHistoryPage() {
                           `${attempt.answers.length} Topic Questions`;
 
             return (
-              <div key={attempt.id} className="bg-white rounded-[16px] border border-slate-200 p-6 flex flex-col md:flex-row gap-6 shadow-sm hover:border-slate-300 transition-colors">
+              <div key={attempt.id} className="bg-card rounded-[16px] border border-border p-6 flex flex-col md:flex-row gap-6 shadow-sm hover:border-border transition-colors">
                 
-                <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center shrink-0">
                   {getModeIcon(attempt.mode)}
                 </div>
 
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">{getModeLabel(attempt.mode)}</span>
-                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                    <span className="text-[12px] font-bold text-slate-500">{date}</span>
-                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                    <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">{getModeLabel(attempt.mode)}</span>
+                    <span className="w-1 h-1 bg-secondary rounded-full"></span>
+                    <span className="text-[12px] font-bold text-muted-foreground">{date}</span>
+                    <span className="w-1 h-1 bg-secondary rounded-full"></span>
                     
                     {attempt.status === 'in-progress' ? (
                       <span className="text-[11px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase">In Progress</span>
                     ) : isFullyEvaluated ? (
-                      <span className="text-[11px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Evaluated</span>
+                      <span className="text-[11px] font-bold bg-green-100 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Evaluated</span>
                     ) : (
                       <span className="text-[11px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase flex items-center gap-1"><Clock className="w-3 h-3"/> Under Review</span>
                     )}
                   </div>
 
-                  <h3 className="text-[18px] font-bold text-[#0B2545] mb-4">
+                  <h3 className="text-[18px] font-bold text-primary dark:text-foreground mb-4">
                     {title}
                   </h3>
 
                   <div className="flex items-center gap-6">
-                    <div className="text-[14px] text-slate-600">
+                    <div className="text-[14px] text-muted-foreground">
                       <strong>{totalCount}</strong> Questions
                     </div>
                     {attempt.status === 'submitted' && (
-                      <div className="text-[14px] text-slate-600">
+                      <div className="text-[14px] text-muted-foreground">
                         <strong>{evaluatedCount} / {totalCount}</strong> Evaluated
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="shrink-0 flex items-center justify-end md:border-l border-slate-100 md:pl-6">
+                <div className="shrink-0 flex items-center justify-end md:border-l border-border/50 md:pl-6">
                   {attempt.status === 'in-progress' ? (
                     <Link href={`/subjective/answer?attempt_id=${attempt.id}`}>
                       <Button className="w-full md:w-auto h-10 bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold">
@@ -141,12 +141,12 @@ export default function SubjectiveHistoryPage() {
                     </Link>
                   ) : hasAnyEvaluation ? (
                     <Link href={`/student/subjective/evaluation/${attempt.id}`}>
-                      <Button className="w-full md:w-auto h-10 bg-[#0B2545] hover:bg-[#1a365d] text-white font-bold">
+                      <Button className="w-full md:w-auto h-10 bg-primary text-primary-foreground hover:bg-[#1a365d] text-white font-bold">
                         View Feedback <ArrowRight className="w-4 h-4 ml-2" />
                       </Button>
                     </Link>
                   ) : (
-                    <Button disabled variant="outline" className="w-full md:w-auto h-10 text-slate-400 font-bold border-slate-200">
+                    <Button disabled variant="outline" className="w-full md:w-auto h-10 text-muted-foreground font-bold border-border">
                       Pending Review
                     </Button>
                   )}

@@ -11,7 +11,9 @@ from .views import (
     GameHistoryView,
     LeaderboardView,
     AdminGameMatchesView,
-    AdminSurvivalGamesView
+    AdminSurvivalGamesView,
+    AdminGameStatsView,
+    AdminPlayerGameActivityView,
 )
 
 router = DefaultRouter()
@@ -33,6 +35,8 @@ urlpatterns = [
     path('leaderboard/', LeaderboardView.as_view(), name='game_leaderboard'),
 
     # Admin
+    path('admin/stats/', AdminGameStatsView.as_view(), name='admin_game_stats'),
     path('admin/matches/', AdminGameMatchesView.as_view(), name='admin_game_matches'),
     path('admin/survival-games/', AdminSurvivalGamesView.as_view(), name='admin_survival_games'),
+    path('admin/players/<int:player_id>/activity/', AdminPlayerGameActivityView.as_view(), name='admin_player_activity'),
 ] + router.urls

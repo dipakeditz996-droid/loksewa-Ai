@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
-from .models import Examination, ExaminationAttempt, StudentAnswer, Question, ModelExam, ModelExamAttempt
+from .models import Examination, ExaminationAttempt, StudentAnswer, Question
 from .attempt_timing import (
     attempt_remaining_seconds,
     attempt_is_expired,
@@ -15,9 +15,11 @@ from .student_serializers import (
     StudentExaminationSerializer, 
     StudentExaminationAttemptSerializer, 
     StudentExaminationResultSerializer,
+    StudentExaminationAttemptListSerializer,
     StudentSecureQuestionSerializer,
     StudentLeaderboardSerializer
 )
+from core.pagination import StandardResultsSetPagination
 from django.db.models import F, Window, Sum, Avg, Max, Count, FloatField, ExpressionWrapper
 from django.db.models.functions import DenseRank
 
@@ -37,7 +39,8 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         
         # Get published and live exams, filtering out exams that are restricted to a course the student is not enrolled in
         from django.db.models import Q
-        return Examination.objects.filter(status__in=['published', 'live']).filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
+        base_qs = Examination.objects.filter(status__in=['published', 'live']).filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
+        return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
         
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
@@ -80,10 +83,22 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                 .first()
             )
 
+            # allow_resume used to be stored but never read — leaving mid-exam
+            # and coming back always silently continued regardless of the
+            # flag. Live Exams additionally forbid resume unconditionally
+            # (the category's "no pause/restart" rule), not left to the
+            # per-exam checkbox.
+            resume_allowed = examination.allow_resume and examination.objective_category != 'live'
+
             if active_attempt:
                 # An attempt that ran out of time while the student was away is
                 # closed here rather than silently resumed.
                 if enforce_expiry(active_attempt):
+                    active_attempt = None
+                elif not resume_allowed:
+                    # Leaving mid-attempt forfeits it: score whatever was
+                    # answered so far instead of letting them continue later.
+                    finalize_attempt(active_attempt)
                     active_attempt = None
                 else:
                     serializer = StudentExaminationAttemptSerializer(active_attempt)
@@ -132,19 +147,200 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             'active_attempt': StudentExaminationAttemptSerializer(attempt).data
         })
 
+    @action(detail=False, methods=['get'], url_path='academic-hierarchy')
+    def academic_hierarchy(self, request):
+        from exams.models import ExamCategory
+        categories = ExamCategory.objects.filter(is_active=True).prefetch_related(
+            'exams', 'exams__papers', 'exams__papers__subjects', 
+            'exams__papers__subjects__chapters', 'exams__papers__subjects__chapters__topics'
+        )
+        tree = []
+        for cat in categories:
+            cat_data = {
+                'id': cat.id, 'name': cat.name, 'is_active': cat.is_active, 'exams': []
+            }
+            for exam in cat.exams.filter(is_active=True):
+                exam_data = {
+                    'id': exam.id, 'name': exam.name, 'is_active': exam.is_active, 'papers': []
+                }
+                for paper in exam.papers.filter(is_active=True):
+                    paper_data = {
+                        'id': paper.id, 'name': paper.name, 'is_active': paper.is_active, 'subjects': []
+                    }
+                    for subject in paper.subjects.filter(is_active=True):
+                        subject_data = {
+                            'id': subject.id, 'name': subject.name, 'is_active': subject.is_active, 'chapters': []
+                        }
+                        for chapter in subject.chapters.filter(is_active=True):
+                            chapter_data = {
+                                'id': chapter.id, 'title': chapter.title, 'is_active': chapter.is_active, 'topics': []
+                            }
+                            for topic in chapter.topics.filter(is_active=True):
+                                chapter_data['topics'].append({
+                                    'id': topic.id, 'name': topic.name, 'is_active': topic.is_active
+                                })
+                            subject_data['chapters'].append(chapter_data)
+                        paper_data['subjects'].append(subject_data)
+                    exam_data['papers'].append(paper_data)
+                cat_data['exams'].append(exam_data)
+            tree.append(cat_data)
+        return Response(tree)
+
+    def _build_question_filter(self, data):
+        from django.db.models import Q
+        q_filter = Q(status='approved')
+        
+        category_id = data.get('category_id')
+        exam_id = data.get('exam_id')
+        paper_id = data.get('paper_id')
+        subject_id = data.get('subject_id')
+        chapter_id = data.get('chapter_id')
+        topic_id = data.get('topic_id')
+        difficulty = data.get('difficulty', 'all')
+        question_type = data.get('question_type', 'mcq')
+
+        # Question -> topic -> chapter -> subject -> paper -> exam -> category.
+        # All multi-hop lookups below were missing the `chapter__` segment
+        # (Topic has no direct `subject` field, only via `chapter`), so any
+        # selection above chapter-level always hit "Unsupported lookup" -
+        # the custom exam builder's availability check and generation both
+        # 500'd for any exam/paper/subject-level scope.
+        #
+        # category_id is the top of the hierarchy (Central/Provincial/
+        # Institutional in the client's terms) - it deliberately has no
+        # elif chain with exam_id below it: picking a whole category means
+        # "every question under every exam in it", not narrowed to one.
+        if topic_id:
+            q_filter &= Q(topic_id=topic_id)
+        elif chapter_id:
+            q_filter &= Q(topic__chapter_id=chapter_id)
+        elif subject_id:
+            q_filter &= Q(topic__chapter__subject_id=subject_id)
+        elif paper_id:
+            q_filter &= Q(topic__chapter__subject__paper_id=paper_id)
+        elif exam_id:
+            q_filter &= Q(topic__chapter__subject__paper__exam_id=exam_id)
+        elif category_id:
+            q_filter &= Q(topic__chapter__subject__paper__exam__category_id=category_id)
+
+        if difficulty and difficulty != 'mixed' and difficulty != 'all':
+            q_filter &= Q(difficulty=difficulty)
+            
+        if question_type:
+            q_filter &= Q(question_type=question_type)
+            
+        return q_filter
+
+    @action(detail=False, methods=['post'], url_path='available-questions')
+    def available_questions(self, request):
+        from exams.models import Question
+        q_filter = self._build_question_filter(request.data)
+        count = Question.objects.filter(q_filter).count()
+        return Response({'available': count})
+
+    @action(detail=False, methods=['post'])
+    def generate_custom(self, request):
+        from exams.models import ExaminationQuestion, Question, Exam
+        from django.db import transaction
+
+        exam_id = request.data.get('exam_id')
+        category_id = request.data.get('category_id')
+        num_questions = int(request.data.get('question_count', 20))
+        random_questions = request.data.get('random_questions', True)
+
+        if not exam_id and not category_id:
+            return Response({'detail': 'exam_id or category_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        q_filter = self._build_question_filter(request.data)
+
+        try:
+            with transaction.atomic():
+                qs = Question.objects.filter(q_filter)
+                available = qs.count()
+
+                if num_questions > available:
+                    return Response({
+                        'detail': f'Only {available} questions are available for your selected criteria.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if random_questions:
+                    questions = list(qs.order_by('?')[:num_questions])
+                else:
+                    questions = list(qs.order_by('id')[:num_questions])
+
+                # Examination.exam is a required FK to one Position/Level, but
+                # a category-wide "full syllabus" exam spans every position
+                # under that category - there's no single exam to point at.
+                # Fall back to whichever exam the first selected question
+                # actually belongs to (purely for display; the real content
+                # is the ExaminationQuestion rows below). This also fixes the
+                # exam's `category` always being ExamCategory.objects.first()
+                # regardless of what was actually selected.
+                if exam_id:
+                    resolved_exam = Exam.objects.get(id=exam_id)
+                else:
+                    first_question = questions[0] if questions else None
+                    resolved_exam = (
+                        first_question.topic.chapter.subject.paper.exam
+                        if first_question else
+                        Exam.objects.filter(category_id=category_id).first()
+                    )
+                    if not resolved_exam:
+                        return Response({'detail': 'No exam found under this category.'}, status=status.HTTP_400_BAD_REQUEST)
+
+                custom_exam = Examination.objects.create(
+                    title=f"Custom Exam - {timezone.now().strftime('%Y-%m-%d %H:%M')}",
+                    exam_type='custom',
+                    objective_category='custom',
+                    category=resolved_exam.category,
+                    exam=resolved_exam,
+                    total_questions=len(questions),
+                    time_limit=len(questions),
+                    total_marks=len(questions),
+                    passing_marks=len(questions) * 0.4,
+                    status='published',
+                    created_by=request.user
+                )
+
+                exam_questions = [
+                    ExaminationQuestion(examination=custom_exam, question=q, order=i, marks=1)
+                    for i, q in enumerate(questions)
+                ]
+                ExaminationQuestion.objects.bulk_create(exam_questions)
+                
+                attempt = ExaminationAttempt.objects.create(
+                    examination=custom_exam,
+                    student=request.user,
+                    status='in-progress'
+                )
+                
+                serializer = StudentExaminationAttemptSerializer(attempt)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     """
     ViewSet for students to manage their active and past attempts.
     """
     permission_classes = [IsAuthenticated]
     serializer_class = StudentExaminationAttemptSerializer
+    pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        return ExaminationAttempt.objects.filter(
+        qs = ExaminationAttempt.objects.filter(
             student=self.request.user
-        ).select_related('examination')
+        ).select_related('examination').prefetch_related('answers')
+        
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+            
+        return qs
 
     def get_serializer_class(self):
+        if self.action == 'list':
+            return StudentExaminationAttemptListSerializer
         if self.action == 'result':
             return StudentExaminationResultSerializer
         return super().get_serializer_class()
@@ -202,12 +398,32 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         if examination.question_set:
             questions = examination.question_set.questions.all()
         else:
-            # Fallback if there's direct mapping
-            questions = Question.objects.none()
-            
-        # In a real implementation you might shuffle questions here if randomize_questions is True
-        # and store the shuffled order for this attempt.
-        
+            # Direct mapping via ExaminationQuestion, ordered the way the
+            # exam was authored (this used to unconditionally return
+            # Question.objects.none() here, so any exam built by attaching
+            # questions directly - rather than via a QuestionSet - showed
+            # "No questions found" despite having real, approved questions).
+            from .models import ExaminationQuestion
+            question_ids = list(
+                ExaminationQuestion.objects
+                .filter(examination=examination)
+                .order_by('order', 'id')
+                .values_list('question_id', flat=True)
+            )
+            questions = sorted(
+                Question.objects.filter(id__in=question_ids),
+                key=lambda q: question_ids.index(q.id),
+            )
+
+        # Old Past Exams must reproduce the original paper exactly — shuffling
+        # is hard-blocked for that category regardless of the admin flag.
+        # For everything else, shuffle deterministically per attempt (seeded
+        # on the attempt id) so the order is stable across reloads/Next
+        # navigation rather than re-randomizing on every request.
+        if examination.randomize_questions and examination.objective_category != 'old_past':
+            import random
+            random.Random(attempt.id).shuffle(questions)
+
         serializer = StudentSecureQuestionSerializer(questions, many=True)
         return Response(serializer.data)
 
@@ -296,11 +512,10 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
 
 def _build_leaderboard_data(request):
     """
-    Build a unified leaderboard from both ExaminationAttempt and ModelExamAttempt.
-    
+    Build a leaderboard from ExaminationAttempt.
+
     Strategy:
-    - ExaminationAttempt: include status 'submitted' or 'evaluated'
-    - ModelExamAttempt: include status 'submitted'
+    - Include status 'submitted' or 'evaluated'
     - Best attempt per student per exam is used
     - Returns a list of dicts with student info and ranking data
     """
@@ -333,25 +548,6 @@ def _build_leaderboard_data(request):
             student__last_name__icontains=search_query
         )
 
-    # ---- ModelExamAttempt ----
-    model_qs = ModelExamAttempt.objects.filter(status='submitted')
-    
-    if time_filter == 'year':
-        model_qs = model_qs.filter(started_at__year=now.year)
-    elif time_filter == 'month':
-        model_qs = model_qs.filter(started_at__year=now.year, started_at__month=now.month)
-    elif time_filter == 'week':
-        model_qs = model_qs.filter(started_at__gte=now - timezone.timedelta(days=7))
-    
-    if search_query:
-        model_qs = model_qs.filter(
-            student__username__icontains=search_query
-        ) | model_qs.filter(
-            student__first_name__icontains=search_query
-        ) | model_qs.filter(
-            student__last_name__icontains=search_query
-        )
-    
     # Build per-student aggregated data
     # Key: student_id -> best stats
     student_map = {}
@@ -386,32 +582,6 @@ def _build_leaderboard_data(request):
                 student_map[sid]['best_percentage'] = pct
                 student_map[sid]['best_score'] = score
 
-    # Process ModelExamAttempt
-    for attempt in model_qs.select_related('student', 'model_exam'):
-        sid = attempt.student.id
-        total_marks = attempt.model_exam.total_marks or 100
-        score = attempt.score if attempt.score is not None else 0
-        pct = round((score / total_marks) * 100, 2) if total_marks > 0 else 0
-        
-        if sid not in student_map:
-            student_map[sid] = {
-                'student_id': sid,
-                'student_name': _get_display_name(attempt.student),
-                'profile_image': attempt.student.avatar or None,
-                'best_percentage': pct,
-                'best_score': score,
-                'total_exams': 1,
-                'avg_percentage': pct,
-                'sum_percentage': pct,
-            }
-        else:
-            student_map[sid]['total_exams'] += 1
-            student_map[sid]['sum_percentage'] += pct
-            student_map[sid]['avg_percentage'] = student_map[sid]['sum_percentage'] / student_map[sid]['total_exams']
-            if pct > student_map[sid]['best_percentage']:
-                student_map[sid]['best_percentage'] = pct
-                student_map[sid]['best_score'] = score
-    
     # Determine sort key based on ranking_type
     if ranking_type == 'overall':
         # Sort by average percentage then best_score
@@ -447,8 +617,7 @@ def _build_leaderboard_data(request):
 
 class LeaderboardViewSet(viewsets.ViewSet):
     """
-    Provides leaderboard rankings for students based on exam attempts.
-    Combines ExaminationAttempt and ModelExamAttempt data.
+    Provides leaderboard rankings for students based on ExaminationAttempt data.
     """
     permission_classes = [IsAuthenticated]
 

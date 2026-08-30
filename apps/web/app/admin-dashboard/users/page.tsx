@@ -61,6 +61,7 @@ export default function UsersManagementPage() {
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState("student");
   const [createError, setCreateError] = useState("");
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
 
   const fetchUsers = async () => {
     setIsLoading(true);
@@ -131,6 +132,7 @@ export default function UsersManagementPage() {
       return;
     }
     
+    setIsCreatingUser(true);
     try {
       await apiClient('/admin/users/', {
         method: 'POST',
@@ -142,19 +144,27 @@ export default function UsersManagementPage() {
         })
       });
       setCreateUserModalOpen(false);
+      setSearchTerm("");
+      setFilterRole("All Roles");
       fetchUsers();
     } catch (error: any) {
-      setCreateError(error.error || "Failed to create user.");
+      setCreateError(error.data?.error || error.message || "Failed to create user.");
+    } finally {
+      setIsCreatingUser(false);
     }
   };
 
   const handleSuspend = async () => {
-    if (actionUserId) {
+    const ids = actionUserId ? [actionUserId] : selectedUsers;
+    if (ids.length > 0) {
       try {
-        await apiClient(`/admin/users/${actionUserId}/`, {
-          method: 'PATCH',
-          body: JSON.stringify({ is_active: false })
-        });
+        await Promise.all(ids.map((id) =>
+          apiClient(`/admin/users/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_active: false })
+          })
+        ));
+        setSelectedUsers([]);
         fetchUsers();
       } catch (error) {
         console.error(error);
@@ -164,12 +174,16 @@ export default function UsersManagementPage() {
   };
 
   const handleActivate = async () => {
-    if (actionUserId) {
+    const ids = actionUserId ? [actionUserId] : selectedUsers;
+    if (ids.length > 0) {
       try {
-        await apiClient(`/admin/users/${actionUserId}/`, {
-          method: 'PATCH',
-          body: JSON.stringify({ is_active: true })
-        });
+        await Promise.all(ids.map((id) =>
+          apiClient(`/admin/users/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_active: true })
+          })
+        ));
+        setSelectedUsers([]);
         fetchUsers();
       } catch (error) {
         console.error(error);
@@ -252,7 +266,22 @@ export default function UsersManagementPage() {
             {selectedUsers.length} user{selectedUsers.length > 1 ? 's' : ''} selected
           </span>
           <div className="flex gap-2">
-            <span className="text-xs text-blue-600 flex items-center">Bulk actions not implemented</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+              onClick={() => openActivateModal()}
+            >
+              Activate
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-white text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => openSuspendModal()}
+            >
+              Suspend
+            </Button>
           </div>
         </div>
       )}
@@ -350,15 +379,19 @@ export default function UsersManagementPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
-              <ShieldAlert className="w-5 h-5" /> Suspend User
+              <ShieldAlert className="w-5 h-5" /> Suspend {actionUserId ? "User" : `${selectedUsers.length} Users`}
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to suspend this user? User access will be restricted immediately.
+              {actionUserId
+                ? "Are you sure you want to suspend this user? User access will be restricted immediately."
+                : `Are you sure you want to suspend ${selectedUsers.length} user(s)? Their access will be restricted immediately.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setSuspendModalOpen(false)}>Cancel</Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleSuspend}>Suspend User</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleSuspend}>
+              Suspend {actionUserId ? "User" : `${selectedUsers.length} Users`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -368,15 +401,19 @@ export default function UsersManagementPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 className="w-5 h-5" /> Activate User
+              <CheckCircle2 className="w-5 h-5" /> Activate {actionUserId ? "User" : `${selectedUsers.length} Users`}
             </DialogTitle>
             <DialogDescription>
-              Activate this account? The user will regain access to the platform immediately.
+              {actionUserId
+                ? "Activate this account? The user will regain access to the platform immediately."
+                : `Activate ${selectedUsers.length} account(s)? They will regain access to the platform immediately.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setActivateModalOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleActivate}>Activate</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleActivate}>
+              Activate {actionUserId ? "User" : `${selectedUsers.length} Users`}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -399,19 +436,19 @@ export default function UsersManagementPage() {
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-bold text-white">Username *</label>
+              <label className="text-sm font-bold text-[#0B2545]">Username *</label>
               <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="e.g. johndoe" className="placeholder:text-slate-600" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-white">Email *</label>
+              <label className="text-sm font-bold text-[#0B2545]">Email *</label>
               <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="e.g. john@example.com" className="placeholder:text-slate-600" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-white">Password *</label>
+              <label className="text-sm font-bold text-[#0B2545]">Password *</label>
               <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="Temporary password" className="placeholder:text-slate-600" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-white">Role *</label>
+              <label className="text-sm font-bold text-[#0B2545]">Role *</label>
               <select
                 className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white text-[#0B2545] font-medium focus:outline-none focus:ring-2 focus:ring-[#0B2545]"
                 value={newRole}
@@ -424,8 +461,17 @@ export default function UsersManagementPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateUserModalOpen(false)}>Cancel</Button>
-            <Button className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white" onClick={handleCreateUser}>Create User</Button>
+            <Button variant="outline" onClick={() => setCreateUserModalOpen(false)} disabled={isCreatingUser}>Cancel</Button>
+            <Button className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white gap-2" onClick={handleCreateUser} disabled={isCreatingUser}>
+              {isCreatingUser ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create User"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

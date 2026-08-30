@@ -3,79 +3,69 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { BookOpen, ArrowRight, Loader2, Users, Star } from "lucide-react";
-import { ApiExamCategory } from "@/lib/api/admin-academic-api";
+import { BookOpen, ArrowRight, Users, Layers } from "lucide-react";
+import { PublicCourse } from "@/lib/api/public-api";
 
-// ── Static curated fallback ────────────────────────────────────────────────────
+// ── Static curated fallback (shown only when no published courses exist yet) ──
 const STATIC_COURSES = [
   {
-    id: 1,
+    id: -1,
     name: "Section Officer",
     description: "Comprehensive preparation for Section Officer (Sakha Adhikrit) under PSC Nepal.",
-    subjects: ["Constitutional Law", "Public Admin", "General Knowledge", "Current Affairs"],
-    questionCount: "2,400+",
-    difficulty: "Advanced",
-    students: "12K+",
-    rating: 4.9,
     accent: "from-blue-500 to-violet-600",
-    tag: "Most Popular",
+    tag: "Coming Soon",
   },
   {
-    id: 2,
+    id: -2,
     name: "Kharidar",
     description: "Complete Kharidar exam preparation with structured syllabus and practice sets.",
-    subjects: ["General Studies", "Math & Reasoning", "Current Affairs", "Nepal Knowledge"],
-    questionCount: "1,800+",
-    difficulty: "Intermediate",
-    students: "18K+",
-    rating: 4.8,
     accent: "from-emerald-500 to-cyan-500",
-    tag: "High Demand",
+    tag: "Coming Soon",
   },
   {
-    id: 3,
+    id: -3,
     name: "Nayab Subba",
     description: "Targeted preparation for Nayab Subba (Lekha Service & General) examinations.",
-    subjects: ["Accounting", "General Admin", "Nepal Laws", "Aptitude"],
-    questionCount: "1,500+",
-    difficulty: "Intermediate",
-    students: "9K+",
-    rating: 4.7,
     accent: "from-[#D4A72C] to-orange-500",
-    tag: "New Content",
+    tag: "Coming Soon",
   },
   {
-    id: 4,
+    id: -4,
     name: "Sub-Engineer",
     description: "Technical & general preparation for Sub-Engineer across various departments.",
-    subjects: ["Civil Engineering", "General Knowledge", "Aptitude", "Current Affairs"],
-    questionCount: "1,200+",
-    difficulty: "Advanced",
-    students: "6K+",
-    rating: 4.8,
     accent: "from-red-500 to-pink-600",
-    tag: "Expert Level",
+    tag: "Coming Soon",
   },
 ];
 
+const ACCENTS = [
+  "from-blue-500 to-violet-600",
+  "from-emerald-500 to-cyan-500",
+  "from-[#D4A72C] to-orange-500",
+  "from-red-500 to-pink-600",
+];
+
 interface Props {
-  examCategories?: ApiExamCategory[] | null;
+  courses?: PublicCourse[] | null;
 }
 
-export function CoursesSection({ examCategories }: Props) {
-  // Transform API data if available, otherwise use static fallback
-  const courses = (examCategories && examCategories.length > 0)
-    ? examCategories.slice(0, 4).map((cat, i) => ({
-        id: cat.id,
-        name: cat.name,
-        description: cat.description || `Comprehensive preparation for ${cat.name} under PSC Nepal.`,
-        subjects: ["Constitutional Law", "General Knowledge", "Current Affairs", "Aptitude"],
-        questionCount: "1,000+",
-        difficulty: i < 2 ? "Advanced" : "Intermediate",
-        students: `${(cat.position_count || 1) * 1000}+`,
-        rating: 4.8,
-        accent: STATIC_COURSES[i % STATIC_COURSES.length]?.accent || "from-blue-600 to-indigo-600",
-        tag: i === 0 ? "Most Popular" : i === 1 ? "High Demand" : "Available",
+export function CoursesSection({ courses: apiCourses }: Props) {
+  const hasRealCourses = !!apiCourses && apiCourses.length > 0;
+
+  // Real courses (with real subject/enrollment counts and a real starting
+  // price), or a clearly-labeled "coming soon" fallback while the catalog
+  // is still empty — never invented ratings/student counts.
+  const courses = hasRealCourses
+    ? apiCourses!.slice(0, 4).map((c, i) => ({
+        id: c.id,
+        name: c.title,
+        description: c.short_description || c.description || `Comprehensive preparation for ${c.title}.`,
+        subjectCount: c.subject_count,
+        enrolledCount: c.enrolled_count,
+        durationMonths: c.duration_months,
+        startingPrice: c.starting_price,
+        accent: ACCENTS[i % ACCENTS.length],
+        tag: c.featured ? "Featured" : null,
       }))
     : STATIC_COURSES;
 
@@ -109,7 +99,7 @@ export function CoursesSection({ examCategories }: Props) {
 
         {/* Course cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {courses.map((course) => (
+          {courses.map((course: any) => (
             <Link key={course.id} href="/courses" className="group block">
               <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[20px] overflow-hidden hover:border-slate-300 dark:hover:border-white/[0.12] shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.4)] card-hover h-full flex flex-col">
 
@@ -117,9 +107,11 @@ export function CoursesSection({ examCategories }: Props) {
                 <div className={`relative h-[110px] bg-gradient-to-br ${course.accent} flex flex-col justify-between p-4`}>
                   {/* Tag */}
                   <div className="flex justify-between items-start">
-                    <span className="text-[10px] font-[800] text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full uppercase tracking-wide">
-                      {course.tag}
-                    </span>
+                    {course.tag ? (
+                      <span className="text-[10px] font-[800] text-white/90 bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-full uppercase tracking-wide">
+                        {course.tag}
+                      </span>
+                    ) : <span />}
                     <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
                       <BookOpen className="w-4 h-4 text-white" />
                     </div>
@@ -134,41 +126,33 @@ export function CoursesSection({ examCategories }: Props) {
                     {course.description}
                   </p>
 
-                  {/* Subjects */}
-                  <div className="flex flex-wrap gap-1.5 mb-4">
-                    {course.subjects.slice(0, 3).map((s) => (
-                      <span key={s} className="text-[10px] font-[600] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-white/[0.05] px-2 py-0.5 rounded-full">
-                        {s}
-                      </span>
-                    ))}
-                    {course.subjects.length > 3 && (
-                      <span className="text-[10px] font-[600] text-slate-400 bg-slate-100 dark:bg-white/[0.05] px-2 py-0.5 rounded-full">
-                        +{course.subjects.length - 3}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Stats */}
-                  <div className="flex items-center justify-between mb-4 text-[11.5px] text-slate-500 dark:text-slate-400">
-                    <div className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      <span>{course.students}</span>
+                  {/* Real stats — subjects covered, students enrolled, duration */}
+                  {hasRealCourses && (
+                    <div className="flex items-center justify-between mb-4 text-[11.5px] text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-1" title="Subjects covered">
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>{course.subjectCount} Subjects</span>
+                      </div>
+                      {course.enrolledCount > 0 && (
+                        <div className="flex items-center gap-1" title="Students enrolled">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>{course.enrolledCount} enrolled</span>
+                        </div>
+                      )}
+                      {course.durationMonths > 0 && (
+                        <div className="font-[600] text-slate-600 dark:text-slate-300">
+                          {course.durationMonths}mo
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Star className="w-3 h-3 fill-[#D4A72C] text-[#D4A72C]" />
-                      <span className="font-[600] text-slate-700 dark:text-slate-200">{course.rating}</span>
-                    </div>
-                    <div className="font-[600] text-slate-600 dark:text-slate-300">{course.questionCount}</div>
-                  </div>
+                  )}
 
                   {/* CTA */}
                   <div className="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-white/[0.04]">
-                    <span className={`text-[11px] font-[700] px-2 py-0.5 rounded-full ${
-                      course.difficulty === "Advanced"
-                        ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10"
-                        : "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10"
-                    }`}>
-                      {course.difficulty}
+                    <span className="text-[13px] font-[700] text-slate-700 dark:text-slate-200">
+                      {hasRealCourses && course.startingPrice
+                        ? `From Rs. ${Number(course.startingPrice).toLocaleString()}`
+                        : ""}
                     </span>
                     <span className="text-[12px] font-[700] text-[#D4A72C] flex items-center gap-1 group-hover:gap-2 transition-all">
                       View Course <ArrowRight className="w-3 h-3" />

@@ -256,10 +256,17 @@ function SubjectiveAnswerContent() {
       </header>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex overflow-hidden">
-        
+      {/* Below `md` this used to stay a row: the question panel's w-full
+          claimed the entire width, leaving zero room for the answer
+          editor - it wasn't hidden, it was pushed fully off-screen, so
+          nothing below md (768px, which includes every phone and this
+          pane's own default width) could actually reach the textarea to
+          type an answer. Stacking on mobile and going side-by-side from
+          md up fixes that without changing the desktop layout at all. */}
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+
         {/* LEFT PANEL - QUESTION */}
-        <div className="w-full md:w-[400px] lg:w-[450px] bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+        <div className="w-full md:w-[400px] lg:w-[450px] bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 max-h-[50vh] md:max-h-none overflow-y-auto md:overflow-visible">
           <div className="p-6 overflow-y-auto flex-1">
             <div className="flex items-center gap-2 mb-6">
               <span className="text-[11px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
@@ -317,7 +324,7 @@ function SubjectiveAnswerContent() {
         </div>
 
         {/* RIGHT PANEL - WRITING INTERFACE */}
-        <div className="flex-1 flex flex-col bg-white">
+        <div className="flex-1 flex flex-col bg-white min-h-[400px] md:min-h-0">
           <div className="h-12 border-b border-slate-100 flex items-center px-6 justify-between bg-slate-50/50">
             <div className="flex items-center gap-2 text-slate-600">
               <AlignLeft className="w-4 h-4" />

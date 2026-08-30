@@ -16,8 +16,26 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import { adminExamApi, Examination } from "@/lib/api/admin-exams";
+import { adminExamApi, Examination, ObjectiveCategory } from "@/lib/api/admin-exams";
 import { toast } from "sonner";
+
+const CATEGORY_LABELS: Record<string, string> = {
+  old_past: "Old Past Exam",
+  model: "Model Exam",
+  live: "Live Exam",
+  custom: "Create Your Own",
+};
+
+const CategoryBadge = ({ category }: { category: ObjectiveCategory }) => {
+  if (!category) return <span className="text-xs text-slate-400 italic">Uncategorized</span>;
+  const styles: Record<string, string> = {
+    old_past: "bg-slate-100 text-slate-700 border-slate-200",
+    model: "bg-blue-50 text-blue-700 border-blue-200",
+    live: "bg-red-50 text-red-700 border-red-200",
+    custom: "bg-purple-50 text-purple-700 border-purple-200",
+  };
+  return <Badge variant="outline" className={styles[category] || ""}>{CATEGORY_LABELS[category] || category}</Badge>;
+};
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: Record<string, string> = {
@@ -35,6 +53,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export default function ExamsOverviewPage() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [exams, setExams] = useState<Examination[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
@@ -75,10 +94,12 @@ export default function ExamsOverviewPage() {
     }
   };
 
-  const filteredExams = exams.filter(e => 
-    e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (e.category_name || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredExams = exams
+    .filter(e =>
+      e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (e.category_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .filter(e => categoryFilter === "all" || e.objective_category === categoryFilter);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -128,13 +149,29 @@ export default function ExamsOverviewPage() {
         </div>
         
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-          <Button variant="outline" size="sm" className="bg-slate-50 text-slate-600 border-slate-200">
-            <Filter className="w-4 h-4 mr-2" /> Category: All
-          </Button>
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              className="h-9 pl-8 pr-3 rounded-md border border-slate-200 bg-slate-50 text-sm text-slate-600 focus:outline-none"
+            >
+              <option value="all">Type: All</option>
+              <option value="old_past">Old Past Exams</option>
+              <option value="model">Model Exams</option>
+              <option value="live">Live Exams</option>
+              <option value="custom">Create Your Own</option>
+            </select>
+          </div>
           <Button variant="outline" size="sm" className="bg-slate-50 text-slate-600 border-slate-200">
             <Filter className="w-4 h-4 mr-2" /> Status: All
           </Button>
-          <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+            onClick={() => { setSearchQuery(""); setCategoryFilter("all"); }}
+          >
             Clear
           </Button>
         </div>
@@ -147,6 +184,7 @@ export default function ExamsOverviewPage() {
             <TableHeader className="bg-slate-50">
               <TableRow>
                 <TableHead>Exam Name</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Category / Position</TableHead>
                 <TableHead>Specs</TableHead>
                 <TableHead>Performance</TableHead>
@@ -159,6 +197,7 @@ export default function ExamsOverviewPage() {
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
                     <TableCell><div className="h-10 bg-slate-100 rounded w-48 animate-pulse"></div></TableCell>
+                    <TableCell><div className="h-5 bg-slate-100 rounded-full w-20 animate-pulse"></div></TableCell>
                     <TableCell><div className="h-8 bg-slate-100 rounded w-32 animate-pulse"></div></TableCell>
                     <TableCell><div className="h-8 bg-slate-100 rounded w-24 animate-pulse"></div></TableCell>
                     <TableCell><div className="h-8 bg-slate-100 rounded w-24 animate-pulse"></div></TableCell>
@@ -168,8 +207,8 @@ export default function ExamsOverviewPage() {
                 ))
               ) : filteredExams.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-slate-500">
-                    No exams found. <button onClick={() => setSearchQuery("")} className="text-blue-600 underline">Clear filters</button>
+                  <TableCell colSpan={7} className="h-32 text-center text-slate-500">
+                    No exams found. <button onClick={() => { setSearchQuery(""); setCategoryFilter("all"); }} className="text-blue-600 underline">Clear filters</button>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -186,6 +225,10 @@ export default function ExamsOverviewPage() {
                           <span className="text-slate-500 capitalize">{exam.exam_type}</span>
                         </div>
                       </div>
+                    </TableCell>
+
+                    <TableCell className="align-top">
+                      <CategoryBadge category={exam.objective_category} />
                     </TableCell>
 
                     <TableCell className="align-top">

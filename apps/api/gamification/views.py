@@ -1,6 +1,7 @@
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from rest_framework import viewsets
 from django.db.models import Sum
 from django.utils import timezone
@@ -23,6 +24,8 @@ def validate_referral_code(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def student_referral_dashboard(request):
+    if not _gamification_enabled():
+        raise PermissionDenied("Gamification is currently disabled by the administrator.")
     profile = get_or_create_profile(request.user)
     referrals = Referral.objects.filter(referrer=request.user)
     settings = ReferralSetting.get_settings()
@@ -32,10 +35,45 @@ def student_referral_dashboard(request):
     pending_referrals = referrals.filter(status='pending').count()
     
     # Calculate XP earned from referrals
-    # In a real app we'd look for XPTransactions where reason contains 'Referral Reward'
-    # For now, let's just approximate or query the transactions
     referral_xp = XPTransaction.objects.filter(user=request.user, reason__startswith='Referral Reward').aggregate(Sum('amount'))['amount__sum'] or 0
     
+    # 1. Rank (Real DB Calculation)
+    rank = GamificationProfile.objects.filter(xp__gt=profile.xp).count() + 1
+    
+    # 2. 7-Day Streak Array Calculation
+    from datetime import timedelta
+    today = timezone.now().date()
+    streak_days = [False] * 7
+    for i in range(7):
+        day = today - timedelta(days=6 - i)
+        has_activity = XPTransaction.objects.filter(
+            user=request.user,
+            created_at__date=day
+        ).exists()
+        streak_days[i] = has_activity
+        
+    # 3. Games stats
+    games_played = 0
+    games_won = 0
+    best_score = 0
+    accuracy = 0
+    questions_answered = 0
+    
+    try:
+        from games.models import GameProfile, GameAnswer
+        game_profile = GameProfile.objects.filter(user=request.user).first()
+        if game_profile:
+            games_won = game_profile.total_1v1_wins
+            best_score = game_profile.best_survival_score
+        
+        games_played = request.user.matches_as_p1.count() + request.user.matches_as_p2.count()
+        total_ans = GameAnswer.objects.filter(player=request.user).count()
+        correct_ans = GameAnswer.objects.filter(player=request.user, is_correct=True).count()
+        accuracy = int((correct_ans / total_ans) * 100) if total_ans > 0 else 0
+        questions_answered = total_ans
+    except Exception:
+        pass
+        
     return Response({
         'profile': GamificationProfileSerializer(profile).data,
         'stats': {
@@ -43,8 +81,14 @@ def student_referral_dashboard(request):
             'successful_referrals': successful_referrals,
             'pending_referrals': pending_referrals,
             'total_xp_earned': referral_xp,
-            'total_coins_earned': successful_referrals * settings.referrer_coins_reward, # simple approx
-            'rank': 12, # Dummy rank for now
+            'total_coins_earned': successful_referrals * settings.referrer_coins_reward,
+            'rank': rank,
+            'streak_days': streak_days,
+            'games_played': games_played,
+            'games_won': games_won,
+            'accuracy': accuracy,
+            'best_score': best_score,
+            'questions_answered': questions_answered,
         },
         'settings': ReferralSettingSerializer(settings).data
     })
@@ -136,12 +180,19 @@ class MotivationAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 
+def _gamification_enabled():
+    from core.models import AdminSettings
+    return AdminSettings.get_settings().enable_gamification
+
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def leaderboard(request):
     """
     Returns the top 50 users based on XP.
     """
+    if not _gamification_enabled():
+        raise PermissionDenied("Gamification is currently disabled by the administrator.")
     top_users = GamificationProfile.objects.select_related('user').order_by('-xp', 'user__date_joined')[:50]
     
     leaderboard_data = []

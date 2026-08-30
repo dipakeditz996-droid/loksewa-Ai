@@ -4,8 +4,8 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { 
-  Bell, List, Plus, FileText, BarChart3, Settings
+import {
+  Bell, Inbox, List, Plus, FileText, BarChart3, Settings
 } from "lucide-react";
 
 export default function NotificationsLayout({
@@ -20,7 +20,13 @@ export default function NotificationsLayout({
 
   const tabs = [
     {
-      name: "All Notifications",
+      name: "Inbox",
+      href: "/admin-dashboard/notifications/inbox",
+      icon: Inbox,
+      exact: true
+    },
+    {
+      name: "Broadcasts",
       href: "/admin-dashboard/notifications",
       icon: List,
       exact: true

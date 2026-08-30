@@ -6,6 +6,7 @@ import { teacherStudentsApi } from "@/lib/api/teacher-students";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RetryImage } from "@/components/ui/retry-image";
 import {
   ArrowLeft,
   MessageSquare,
@@ -152,7 +153,7 @@ export default function StudentDetailPage() {
     return (
       <div className="flex min-h-[500px] flex-col items-center justify-center">
         <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-[#0B2545] border-t-transparent"></div>
-        <p className="text-[#667085]">Loading student profile...</p>
+        <p className="text-muted-foreground">Loading student profile...</p>
       </div>
     );
   }
@@ -173,33 +174,33 @@ export default function StudentDetailPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-[#101828]">Student Profile</h1>
+          <h1 className="text-2xl font-bold text-foreground">Student Profile</h1>
         </div>
       </div>
 
       {/* Top Section: Profile & Actions */}
-      <div className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:flex-row md:items-center">
+      <div className="flex flex-col items-start justify-between gap-6 rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)] md:flex-row md:items-center">
         <div className="flex items-center gap-5">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-[#E7EBF3] bg-[#EEF2F8]">
+          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-border bg-primary/10">
             {profile.avatar ? (
-              <img src={profile.avatar} alt={profile.first_name} className="h-full w-full object-cover" />
+              <RetryImage src={profile.avatar} alt={profile.first_name} className="h-full w-full object-cover" />
             ) : (
-              <User className="h-8 w-8 text-[#0B2545]/50" />
+              <User className="h-8 w-8 text-primary/50" />
             )}
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold text-[#101828]">
+              <h2 className="text-xl font-bold text-foreground">
                 {profile.first_name} {profile.last_name}
               </h2>
               {profile.average_score > 0 && profile.average_score < 40 && (
-                <span className="flex items-center gap-1 rounded-full bg-[#FBEAEA] px-2.5 py-1 text-xs font-bold uppercase text-[#B23A3A]">
+                <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-bold uppercase text-destructive">
                   <AlertTriangle className="h-3 w-3" /> Needs Attention
                 </span>
               )}
             </div>
-            <p className="mb-2 text-[#667085]">{profile.email}</p>
-            <div className="flex gap-4 text-sm text-[#667085]">
+            <p className="mb-2 text-muted-foreground">{profile.email}</p>
+            <div className="flex gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" /> Joined {new Date(profile.joined_date).toLocaleDateString()}
               </span>
@@ -211,10 +212,10 @@ export default function StudentDetailPage() {
         </div>
 
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" className="gap-2 rounded-[9px] border-[#D9E1EA] text-[#344054]" onClick={() => setIsNoteModalOpen(true)}>
+          <Button variant="outline" className="gap-2 rounded-[9px] border-border text-foreground" onClick={() => setIsNoteModalOpen(true)}>
             <FileText className="h-4 w-4" /> Add Note
           </Button>
-          <Button className="gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]" onClick={() => setIsMessageModalOpen(true)}>
+          <Button className="gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={() => setIsMessageModalOpen(true)}>
             <MessageSquare className="h-4 w-4" /> Send Message
           </Button>
         </div>
@@ -229,15 +230,15 @@ export default function StudentDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex border-b border-[#E7EBF3]">
+      <div className="mb-6 flex border-b border-border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             className={cn(
               "border-b-2 px-4 py-2 text-sm font-medium transition-colors",
               activeTab === tab.id
-                ? "border-[#0B2545] text-[#0B2545]"
-                : "border-transparent text-[#667085] hover:text-[#344054]"
+                ? "border-[#0B2545] text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setActiveTab(tab.id)}
           >
@@ -247,9 +248,9 @@ export default function StudentDetailPage() {
       </div>
 
       {activeTab === 'analytics' && (
-        <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <h3 className="mb-6 text-lg font-bold text-[#101828]">Advanced Analytics</h3>
-          <p className="text-[#667085]">Student performance analytics are being tracked. Advanced charts will appear here as more data is collected.</p>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <h3 className="mb-6 text-lg font-bold text-foreground">Advanced Analytics</h3>
+          <p className="text-muted-foreground">Student performance analytics are being tracked. Advanced charts will appear here as more data is collected.</p>
         </div>
       )}
 
@@ -260,8 +261,8 @@ export default function StudentDetailPage() {
           <div className="col-span-1 space-y-6 lg:col-span-2">
 
             {/* Exam Performance Chart */}
-            <div className="rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-              <h3 className="mb-6 text-lg font-bold text-[#101828]">Exam Performance Over Time</h3>
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <h3 className="mb-6 text-lg font-bold text-foreground">Exam Performance Over Time</h3>
               {analytics?.exam_timeline && analytics.exam_timeline.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">
@@ -277,28 +278,28 @@ export default function StudentDetailPage() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-[#D9E1EA] bg-[#F7F9FC] text-[#667085]">
+                <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border bg-muted text-muted-foreground">
                   No exam history available yet
                 </div>
               )}
             </div>
 
             {/* Enrolled Courses */}
-            <div className="rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-              <h3 className="mb-4 text-lg font-bold text-[#101828]">Course Progress</h3>
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <h3 className="mb-4 text-lg font-bold text-foreground">Course Progress</h3>
               <div className="space-y-4">
                 {courses.length > 0 ? courses.map((course: any) => (
-                  <div key={course.id} className="flex items-center justify-between rounded-lg border border-[#EEF1F6] p-4">
+                  <div key={course.id} className="flex items-center justify-between rounded-lg border border-border p-4">
                     <div>
-                      <h4 className="font-medium text-[#101828]">{course.name}</h4>
-                      <p className="mt-1 flex items-center gap-1 text-sm text-[#667085]">
+                      <h4 className="font-medium text-foreground">{course.name}</h4>
+                      <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                         <CheckCircle2 className="h-3.5 w-3.5" /> Enrolled: {new Date(course.enrolled_at).toLocaleDateString()}
                       </p>
                     </div>
                     <div className="w-32">
                       <div className="mb-1 flex justify-between text-xs font-medium">
-                        <span className="text-[#344054]">Progress</span>
-                        <span className="text-[#0B2545]">{course.progress}%</span>
+                        <span className="text-foreground">Progress</span>
+                        <span className="text-primary">{course.progress}%</span>
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-[#EEF1F6]">
                         <div
@@ -309,7 +310,7 @@ export default function StudentDetailPage() {
                     </div>
                   </div>
                 )) : (
-                  <p className="text-[#667085]">No courses assigned from you.</p>
+                  <p className="text-muted-foreground">No courses assigned from you.</p>
                 )}
               </div>
             </div>
@@ -319,72 +320,72 @@ export default function StudentDetailPage() {
           <div className="col-span-1 space-y-6">
 
             {/* Topic Performance */}
-            <div className="rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-              <h3 className="mb-4 text-lg font-bold text-[#101828]">Topic Performance</h3>
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <h3 className="mb-4 text-lg font-bold text-foreground">Topic Performance</h3>
 
               <div className="mb-6">
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0F7A69]">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0F7A69] dark:text-[#4ADE9C]">
                   <TrendingUp className="h-4 w-4" /> Strongest Topics
                 </h4>
                 <div className="space-y-3">
                   {performance?.strong_topics?.length > 0 ? performance.strong_topics.map((topic: any) => (
                     <div key={topic.id} className="flex items-center justify-between">
-                      <span className="truncate pr-2 text-sm text-[#344054]">{topic.name}</span>
-                      <span className="text-sm font-medium text-[#0F7A69]">{topic.accuracy.toFixed(0)}%</span>
+                      <span className="truncate pr-2 text-sm text-foreground">{topic.name}</span>
+                      <span className="text-sm font-medium text-[#0F7A69] dark:text-[#4ADE9C]">{topic.accuracy.toFixed(0)}%</span>
                     </div>
-                  )) : <span className="text-sm text-[#8A98AE]">Not enough data</span>}
+                  )) : <span className="text-sm text-muted-foreground">Not enough data</span>}
                 </div>
               </div>
 
               <div>
-                <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#B23A3A]">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-destructive">
                   <TrendingUp className="h-4 w-4 rotate-180 transform" /> Weakest Topics
                 </h4>
                 <div className="space-y-3">
                   {performance?.weak_topics?.length > 0 ? performance.weak_topics.map((topic: any) => (
                     <div key={topic.id} className="flex items-center justify-between">
-                      <span className="truncate pr-2 text-sm text-[#344054]">{topic.name}</span>
-                      <span className="text-sm font-medium text-[#B23A3A]">{topic.accuracy.toFixed(0)}%</span>
+                      <span className="truncate pr-2 text-sm text-foreground">{topic.name}</span>
+                      <span className="text-sm font-medium text-destructive">{topic.accuracy.toFixed(0)}%</span>
                     </div>
-                  )) : <span className="text-sm text-[#8A98AE]">Not enough data</span>}
+                  )) : <span className="text-sm text-muted-foreground">Not enough data</span>}
                 </div>
               </div>
             </div>
 
             {/* Private Notes */}
-            <div className="rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-[#101828]">Teacher Notes</h3>
-                <Button variant="ghost" size="sm" className="text-[#0B2545]" onClick={() => setIsNoteModalOpen(true)}>
+                <h3 className="text-lg font-bold text-foreground">Teacher Notes</h3>
+                <Button variant="ghost" size="sm" className="text-primary" onClick={() => setIsNoteModalOpen(true)}>
                   <FileText className="mr-1 h-4 w-4" /> Add
                 </Button>
               </div>
               <div className="max-h-60 space-y-4 overflow-y-auto pr-2">
                 {notes.length > 0 ? notes.map((note: any) => (
-                  <div key={note.id} className="group rounded-lg border border-[#F0DFAF] bg-[#FBF2DC] p-3">
+                  <div key={note.id} className="group rounded-lg border border-[#F0DFAF] bg-[#946B00]/10 p-3">
                     {editingNoteId === note.id ? (
                       <div className="mb-2">
                         <Textarea
                           value={editingNoteText}
                           onChange={(e) => setEditingNoteText(e.target.value)}
-                          className="mb-2 bg-white"
+                          className="mb-2 bg-card"
                           autoFocus
                         />
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setEditingNoteId(null)}>Cancel</Button>
-                          <Button size="sm" className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]" onClick={handleUpdateNote}>Save</Button>
+                          <Button size="sm" className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={handleUpdateNote}>Save</Button>
                         </div>
                       </div>
                     ) : (
                       <>
                         <div className="mb-2 flex items-start justify-between">
-                          <p className="whitespace-pre-wrap text-sm text-[#5C4300]">{note.note_text}</p>
-                          <div className="flex gap-1 rounded bg-white/60 p-1 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100">
-                            <button onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.note_text); }} className="rounded p-1 text-[#0B2545] hover:bg-white"><Pencil className="h-3.5 w-3.5" /></button>
-                            <button onClick={() => handleDeleteNote(note.id)} className="rounded p-1 text-[#B23A3A] hover:bg-white"><Trash2 className="h-3.5 w-3.5" /></button>
+                          <p className="whitespace-pre-wrap text-sm text-[#5C4300] dark:text-[#F2C94C]">{note.note_text}</p>
+                          <div className="flex gap-1 rounded bg-card/60 p-1 opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100">
+                            <button onClick={() => { setEditingNoteId(note.id); setEditingNoteText(note.note_text); }} className="rounded p-1 text-primary hover:bg-card"><Pencil className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => handleDeleteNote(note.id)} className="rounded p-1 text-destructive hover:bg-card"><Trash2 className="h-3.5 w-3.5" /></button>
                           </div>
                         </div>
-                        <p className="flex justify-between text-xs text-[#8A6E1F]">
+                        <p className="flex justify-between text-xs text-[#8A6E1F] dark:text-[#F2C94C]/80">
                           <span>{note.teacher_name}</span>
                           <span>{new Date(note.created_at).toLocaleDateString()}</span>
                         </p>
@@ -392,33 +393,33 @@ export default function StudentDetailPage() {
                     )}
                   </div>
                 )) : (
-                  <p className="text-sm italic text-[#8A98AE]">No notes added yet.</p>
+                  <p className="text-sm italic text-muted-foreground">No notes added yet.</p>
                 )}
               </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-              <h3 className="mb-4 text-lg font-bold text-[#101828]">Recent Activity</h3>
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+              <h3 className="mb-4 text-lg font-bold text-foreground">Recent Activity</h3>
               <div className="space-y-4">
                 {activity.length > 0 ? activity.map((act: any, i: number) => (
                   <div key={i} className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#EEF2F8]">
-                      {act.type === 'exam' ? <Target className="h-4 w-4 text-[#0B2545]" /> : <Brain className="h-4 w-4 text-[#946B00]" />}
+                    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+                      {act.type === 'exam' ? <Target className="h-4 w-4 text-primary" /> : <Brain className="h-4 w-4 text-[#946B00] dark:text-[#F2C94C]" />}
                     </div>
-                    <div className="min-w-0 flex-1 rounded-lg border border-[#EEF1F6] bg-white p-3 shadow-sm">
-                      <div className="text-sm font-medium text-[#101828]">{act.title}</div>
-                      <div className="mt-1 flex justify-between text-xs text-[#8A98AE]">
+                    <div className="min-w-0 flex-1 rounded-lg border border-border bg-card p-3 shadow-sm">
+                      <div className="text-sm font-medium text-foreground">{act.title}</div>
+                      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                         <span>{new Date(act.date).toLocaleDateString()}</span>
                         <span className={cn(
                           "font-semibold",
-                          act.score >= 80 ? "text-[#0F7A69]" : act.score >= 50 ? "text-[#946B00]" : "text-[#B23A3A]"
+                          act.score >= 80 ? "text-[#0F7A69] dark:text-[#4ADE9C]" : act.score >= 50 ? "text-[#946B00] dark:text-[#F2C94C]" : "text-destructive"
                         )}>Score: {act.score}%</span>
                       </div>
                     </div>
                   </div>
                 )) : (
-                  <p className="text-sm text-[#667085]">No recent activity.</p>
+                  <p className="text-sm text-muted-foreground">No recent activity.</p>
                 )}
               </div>
             </div>
@@ -426,59 +427,59 @@ export default function StudentDetailPage() {
           </div>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <div className="flex items-center justify-between border-b border-[#EEF1F6] p-6">
-            <h3 className="text-lg font-bold text-[#101828]">All Attempts History</h3>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+          <div className="flex items-center justify-between border-b border-border p-6">
+            <h3 className="text-lg font-bold text-foreground">All Attempts History</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] border-collapse text-left">
               <thead>
                 <tr>
-                  <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Date</th>
-                  <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Type</th>
-                  <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Title</th>
-                  <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Status</th>
-                  <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Score / Accuracy</th>
-                  <th className="border-b border-[#EEF1F6] px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8A98AE]">Time Taken</th>
+                  <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Date</th>
+                  <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Type</th>
+                  <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Title</th>
+                  <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Status</th>
+                  <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Score / Accuracy</th>
+                  <th className="border-b border-border px-5 py-3 text-[11px] font-bold uppercase tracking-[0.04em] text-muted-foreground">Time Taken</th>
                 </tr>
               </thead>
               <tbody>
                 {attempts?.all_attempts?.map((attempt: any) => (
-                  <tr key={attempt.id} className="hover:bg-[#F7F9FC]">
-                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-[13px] text-[#344054]">
+                  <tr key={attempt.id} className="hover:bg-muted">
+                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-[13px] text-foreground">
                       <div>{new Date(attempt.started_at).toLocaleDateString()}</div>
-                      <div className="text-xs text-[#8A98AE]">{new Date(attempt.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(attempt.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                     </td>
                     <td className="border-b border-[#F2F4F8] px-5 py-4">
                       <span className={cn(
                         "rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase",
-                        attempt.type === 'exam' ? "bg-[#EEF2F8] text-[#0B2545]" : "bg-[#FBF2DC] text-[#946B00]"
+                        attempt.type === 'exam' ? "bg-primary/10 text-primary" : "bg-[#946B00]/10 text-[#946B00] dark:text-[#F2C94C]"
                       )}>
                         {attempt.type}
                       </span>
                     </td>
-                    <td className="border-b border-[#F2F4F8] px-5 py-4 font-medium text-[#101828]">
+                    <td className="border-b border-[#F2F4F8] px-5 py-4 font-medium text-foreground">
                       {attempt.title}
                     </td>
                     <td className="border-b border-[#F2F4F8] px-5 py-4">
-                      <span className="text-sm capitalize text-[#667085]">{attempt.status}</span>
+                      <span className="text-sm capitalize text-muted-foreground">{attempt.status}</span>
                     </td>
                     <td className="border-b border-[#F2F4F8] px-5 py-4">
                       <span className={cn(
                         "font-semibold",
-                        attempt.score >= 80 ? "text-[#0F7A69]" : attempt.score >= 50 ? "text-[#946B00]" : "text-[#B23A3A]"
+                        attempt.score >= 80 ? "text-[#0F7A69] dark:text-[#4ADE9C]" : attempt.score >= 50 ? "text-[#946B00] dark:text-[#F2C94C]" : "text-destructive"
                       )}>{attempt.score?.toFixed(1) || 0}%</span>
                     </td>
-                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-sm text-[#667085]">
+                    <td className="border-b border-[#F2F4F8] px-5 py-4 text-sm text-muted-foreground">
                       {attempt.time_taken ? `${Math.floor(attempt.time_taken / 60)}m ${attempt.time_taken % 60}s` : '-'}
                     </td>
                   </tr>
                 ))}
                 {!attempts?.all_attempts?.length && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-[#667085]">
+                    <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                       <div className="mb-3 flex justify-center">
-                        <Activity className="h-8 w-8 text-[#D9E1EA]" />
+                        <Activity className="h-8 w-8 text-muted-foreground/40" />
                       </div>
                       <p>No attempts recorded yet.</p>
                     </td>
@@ -493,9 +494,9 @@ export default function StudentDetailPage() {
       {/* Note Modal */}
       {isNoteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-bold text-[#101828]">Add Private Note</h3>
-            <p className="mb-4 text-sm text-[#667085]">This note will only be visible to you and other authorized teachers.</p>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-bold text-foreground">Add Private Note</h3>
+            <p className="mb-4 text-sm text-muted-foreground">This note will only be visible to you and other authorized teachers.</p>
             <Textarea
               placeholder="e.g. Needs more practice with Constitutional Law..."
               className="mb-4 min-h-[120px]"
@@ -503,8 +504,8 @@ export default function StudentDetailPage() {
               onChange={(e) => setNewNote(e.target.value)}
             />
             <div className="flex justify-end gap-3">
-              <Button variant="outline" className="rounded-[9px] border-[#D9E1EA]" onClick={() => setIsNoteModalOpen(false)}>Cancel</Button>
-              <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]" onClick={handleAddNote}>Save Note</Button>
+              <Button variant="outline" className="rounded-[9px] border-border" onClick={() => setIsNoteModalOpen(false)}>Cancel</Button>
+              <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={handleAddNote}>Save Note</Button>
             </div>
           </div>
         </div>
@@ -513,11 +514,11 @@ export default function StudentDetailPage() {
       {/* Message Modal */}
       {isMessageModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-xl">
-            <h3 className="mb-4 text-lg font-bold text-[#101828]">Send Message</h3>
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <h3 className="mb-4 text-lg font-bold text-foreground">Send Message</h3>
             <div className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-[#344054]">Subject</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Subject</label>
                 <Input
                   placeholder="Message subject"
                   value={messageSubject}
@@ -525,7 +526,7 @@ export default function StudentDetailPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[#344054]">Message</label>
+                <label className="mb-1 block text-sm font-medium text-foreground">Message</label>
                 <Textarea
                   placeholder="Write your message here..."
                   className="min-h-[120px]"
@@ -535,8 +536,8 @@ export default function StudentDetailPage() {
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <Button variant="outline" className="rounded-[9px] border-[#D9E1EA]" onClick={() => setIsMessageModalOpen(false)}>Cancel</Button>
-              <Button onClick={handleSendMessage} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]">Send</Button>
+              <Button variant="outline" className="rounded-[9px] border-border" onClick={() => setIsMessageModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleSendMessage} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Send</Button>
             </div>
           </div>
         </div>

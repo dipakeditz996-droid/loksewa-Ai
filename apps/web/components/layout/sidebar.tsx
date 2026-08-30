@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -18,14 +19,18 @@ import {
   ShoppingBag,
   Gamepad2,
   Users,
-  Bell
+  Bell,
+  MessageSquarePlus,
+  PenTool
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RetryImage } from "@/components/ui/retry-image";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/AuthContext";
+import { platformApi, PlatformBranding } from "@/lib/api/platform";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -33,12 +38,25 @@ interface SidebarProps {
   role?: "student" | "teacher" | "admin" | "super-admin";
 }
 
+const DEFAULT_BRAND_NAME = "LoksewaAI";
+
 export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const pathname = usePathname();
   const { user: authUser } = useAuth();
-  
+
   // Use real user if available, fallback to Guest for unauthenticated renders
   const user = authUser ? { name: authUser.name ? authUser.name : authUser.username } : { name: "Guest" };
+
+  // Real platform name/logo from Admin Settings > Platform, not hardcoded.
+  const [branding, setBranding] = useState<PlatformBranding | null>(null);
+  useEffect(() => {
+    platformApi.getBranding().then(setBranding).catch(() => setBranding(null));
+  }, []);
+  const brandName = branding?.name || DEFAULT_BRAND_NAME;
+  // The gold "AI" accent is a deliberate visual treatment for the default
+  // brand name; a differently configured name renders as plain text.
+  const brandSuffix = brandName.endsWith("AI") ? "AI" : null;
+  const brandBase = brandSuffix ? brandName.slice(0, -2) : brandName;
 
   const studentLinks = [
     { href: "/student", label: "Dashboard", icon: LayoutDashboard },
@@ -49,6 +67,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
     { href: "/student/exams", label: "Mock Exams", icon: FileText },
     { href: "/student/results", label: "Results", icon: FileText },
     { href: "/student/leaderboard", label: "Leaderboard", icon: Trophy },
+    { href: "/student/feedback", label: "Feedback", icon: MessageSquarePlus },
     { href: "/student/ai-tutor", label: "AI Tutor", icon: MessageSquare },
     { href: "/student/notes", label: "Notes", icon: Bookmark },
     { href: "/student/marketplace", label: "Marketplace", icon: ShoppingBag },
@@ -86,6 +105,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
       group: "PERFORMANCE",
       links: [
         { href: "/teacher/evaluations", label: "Evaluations", icon: MessageSquare },
+        { href: "/teacher/evaluate", label: "Subjective Exam Grading", icon: PenTool },
         { href: "/teacher/analytics", label: "Analytics", icon: History },
       ]
     }
@@ -116,16 +136,23 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed top-0 left-0 z-50 flex h-screen w-72 flex-col bg-[#0B2545] border-r border-[#163E6B] transition-transform duration-300 ease-in-out lg:translate-x-0 text-white",
+          "fixed top-0 left-0 z-50 flex h-screen w-72 flex-col bg-[#0B2545] dark:bg-card border-r border-[#163E6B] dark:border-border transition-transform duration-300 ease-in-out lg:translate-x-0 text-white dark:text-foreground",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center justify-between px-6 border-b border-[#163E6B]">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-[#163E6B] dark:border-border">
           <Link href="/" className="flex items-center space-x-3">
-            <div className="bg-[#D4A72C] text-[#0A1118] p-1.5 rounded-[8px]">
-              <BookOpen className="h-5 w-5" strokeWidth={2.5} />
-            </div>
-            <span className="font-[800] text-[20px] tracking-tight">Loksewa<span className="text-[#D4A72C]">AI</span></span>
+            {branding?.logoUrl ? (
+              <RetryImage src={branding.logoUrl} alt={brandName} className="h-8 w-8 rounded-[8px] object-contain" />
+            ) : (
+              <div className="bg-[#D4A72C] text-[#0A1118] p-1.5 rounded-[8px]">
+                <BookOpen className="h-5 w-5" strokeWidth={2.5} />
+              </div>
+            )}
+            <span className="font-[800] text-[20px] tracking-tight">
+              {brandBase}
+              {brandSuffix && <span className="text-[#D4A72C]">{brandSuffix}</span>}
+            </span>
           </Link>
           <Button variant="ghost" size="icon" className="lg:hidden text-white hover:bg-white/10" onClick={() => setIsOpen(false)}>
             <X className="h-5 w-5" />
@@ -220,8 +247,8 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                     className={cn(
                       "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[14px] font-medium transition-all duration-200",
                       isActive 
-                        ? "bg-white/10 text-white shadow-[inset_2px_0_0_0_#D4A72C]" 
-                        : "text-slate-300 hover:bg-white/5 hover:text-white"
+                        ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#D4A72C]" 
+                        : "text-slate-300 dark:text-muted-foreground hover:bg-white/5 dark:hover:bg-muted/50 hover:text-white dark:hover:text-foreground"
                     )}
                   >
                     <Icon 
@@ -229,7 +256,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                         "h-[18px] w-[18px] transition-all duration-300", 
                         isActive 
                           ? "text-[#D4A72C] drop-shadow-[0_0_8px_rgba(212,167,44,0.5)] scale-110" 
-                          : "text-slate-400 group-hover:text-slate-300"
+                          : "text-slate-400 dark:text-muted-foreground group-hover:text-slate-300 dark:group-hover:text-foreground"
                       )} 
                       strokeWidth={isActive ? 2 : 1.5} 
                     />
@@ -241,35 +268,29 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
           </nav>
         </ScrollArea>
 
-        <div className="border-t border-[#163E6B] p-4 flex flex-col gap-1">
+        <div className="border-t border-[#163E6B] dark:border-border p-4 flex flex-col gap-1">
           <Link
             href={`/${role}/settings`}
-            className="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-medium text-slate-300 hover:bg-white/5 hover:text-white transition-colors"
+            className="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-medium text-slate-300 dark:text-muted-foreground hover:bg-white/5 dark:hover:bg-muted/50 hover:text-white dark:hover:text-foreground transition-colors"
           >
-            <Settings className="h-4 w-4 text-slate-400" strokeWidth={1.5} />
+            <Settings className="h-4 w-4 text-slate-400 dark:text-muted-foreground" strokeWidth={1.5} />
             Settings
           </Link>
           <Link
             href={`/${role}/help-support`}
-            className="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-medium text-slate-300 hover:bg-white/5 hover:text-white transition-colors mb-4"
+            className="flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-medium text-slate-300 dark:text-muted-foreground hover:bg-white/5 dark:hover:bg-muted/50 hover:text-white dark:hover:text-foreground transition-colors mb-4"
           >
-            <MessageSquare className="h-4 w-4 text-slate-400" strokeWidth={1.5} />
+            <MessageSquare className="h-4 w-4 text-slate-400 dark:text-muted-foreground" strokeWidth={1.5} />
             Help & Support
           </Link>
 
           <div className="flex items-center gap-3 bg-white/5 p-3 rounded-[12px] border border-white/10 mt-2">
             <Avatar className="h-10 w-10 border border-[#D4A72C]/30 bg-[#0A1118]">
-              {authUser?.avatar ? (
-                <AvatarImage src={authUser.avatar} alt={user.name} className="object-cover" />
-              ) : (
-                <AvatarFallback className="bg-transparent text-[#D4A72C] font-bold">
-                  {user.name.charAt(0)}
-                </AvatarFallback>
-              )}
+              <RetryImage src={authUser?.avatar || "/images/profile.png"} alt={user.name} className="aspect-square h-full w-full object-cover" />
             </Avatar>
             <div className="flex flex-col overflow-hidden">
-              <span className="text-[13px] font-bold text-white truncate">{user.name}</span>
-              <span className="text-[11px] font-medium text-slate-400 truncate capitalize">
+              <span className="text-[13px] font-bold text-white dark:text-foreground truncate">{user.name}</span>
+              <span className="text-[11px] font-medium text-slate-400 dark:text-muted-foreground truncate capitalize">
                 {authUser?.role?.replace("-", " ") || "User"}
               </span>
             </div>

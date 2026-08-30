@@ -42,22 +42,22 @@ export function AccountManagementSection() {
   return (
     <div className="space-y-6">
       {/* Account Info */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
-        <h3 className="text-lg font-semibold text-[#0B2545] mb-6">Account Information</h3>
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8">
+        <h3 className="text-lg font-semibold text-primary dark:text-foreground mb-6">Account Information</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
-            <Calendar className="h-5 w-5 text-slate-500" />
+          <div className="flex items-center gap-3 p-4 bg-muted rounded-xl">
+            <Calendar className="h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="text-xs text-slate-500">Account Created</p>
-              <p className="text-sm font-medium text-[#0B2545]">
+              <p className="text-xs text-muted-foreground">Account Created</p>
+              <p className="text-sm font-medium text-primary dark:text-foreground">
                 {user ? new Date(user.id as any).toLocaleDateString?.() || "—" : "—"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 p-4 bg-green-50 rounded-xl">
+          <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950/30 rounded-xl">
             <ShieldAlert className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-xs text-slate-500">Account Status</p>
+              <p className="text-xs text-muted-foreground">Account Status</p>
               <p className="text-sm font-semibold text-green-600">Active</p>
             </div>
           </div>
@@ -65,21 +65,21 @@ export function AccountManagementSection() {
       </div>
 
       {/* Danger Zone */}
-      <div className="bg-white rounded-2xl border border-red-200/80 shadow-sm p-8">
+      <div className="bg-card rounded-2xl border border-red-200 dark:border-red-900/50/80 shadow-sm p-8">
         <div className="flex items-center gap-3 mb-6">
           <AlertTriangle className="h-5 w-5 text-red-500" />
           <div>
-            <h3 className="text-lg font-semibold text-red-700">Danger Zone</h3>
+            <h3 className="text-lg font-semibold text-red-700 dark:text-red-300">Danger Zone</h3>
             <p className="text-xs text-red-400">These actions are irreversible. Proceed with caution.</p>
           </div>
         </div>
 
         <div className="space-y-4">
           {/* Deactivate */}
-          <div className="flex items-center justify-between p-5 rounded-xl border border-slate-200 bg-slate-50/50">
+          <div className="flex items-center justify-between p-5 rounded-xl border border-border bg-muted/50">
             <div>
-              <p className="text-sm font-semibold text-slate-800">Deactivate Account</p>
-              <p className="text-[12px] text-slate-500 mt-0.5">
+              <p className="text-sm font-semibold text-foreground">Deactivate Account</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5">
                 Temporarily disable your account. You can reactivate later by contacting support.
               </p>
             </div>
@@ -93,16 +93,16 @@ export function AccountManagementSection() {
           </div>
 
           {/* Delete */}
-          <div className="flex items-center justify-between p-5 rounded-xl border border-red-200 bg-red-50/30">
+          <div className="flex items-center justify-between p-5 rounded-xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30/30">
             <div>
-              <p className="text-sm font-semibold text-red-700">Delete Account Permanently</p>
+              <p className="text-sm font-semibold text-red-700 dark:text-red-300">Delete Account Permanently</p>
               <p className="text-[12px] text-red-400 mt-0.5">
                 Permanently delete your account and all associated data. This cannot be undone.
               </p>
             </div>
             <Button
               variant="outline"
-              className="border-red-300 text-red-700 hover:bg-red-50 shrink-0"
+              className="border-red-300 text-red-700 dark:text-red-300 hover:bg-red-50 dark:bg-red-950/30 shrink-0"
               onClick={() => setShowDeleteDialog(true)}
             >
               <Trash2 className="h-4 w-4 mr-1" /> Delete
@@ -150,7 +150,7 @@ export function AccountManagementSection() {
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-red-700">Delete Account Permanently</DialogTitle>
+            <DialogTitle className="text-red-700 dark:text-red-300">Delete Account Permanently</DialogTitle>
             <DialogDescription>
               This action is permanent and cannot be undone. All your data, exam history, notes, and progress will be lost forever.
             </DialogDescription>

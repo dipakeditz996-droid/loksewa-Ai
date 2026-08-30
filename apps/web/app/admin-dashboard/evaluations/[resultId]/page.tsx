@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { evaluationService } from "@/lib/api/evaluations";
 import { EvaluationDetail, ResultStatus } from "@/lib/api/evaluations-types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RetryImage } from "@/components/ui/retry-image";
 import {
   ChevronLeft,
   CheckCircle2,
@@ -144,7 +145,7 @@ export default function ResultDetailPage() {
           {/* Avatar */}
           <div className="h-24 w-24 rounded-full bg-[#0B2545] text-white flex items-center justify-center text-3xl font-bold shrink-0 shadow-lg border-4 border-white">
             {detail.studentAvatar ? (
-              <img src={detail.studentAvatar} alt={detail.studentName} className="h-full w-full object-cover rounded-full" />
+              <RetryImage src={detail.studentAvatar} alt={detail.studentName} className="h-full w-full object-cover rounded-full" />
             ) : detail.studentName.charAt(0)}
           </div>
           

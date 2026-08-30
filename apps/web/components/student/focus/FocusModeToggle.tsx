@@ -58,7 +58,7 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
     <section
       aria-labelledby={labelId}
       className={cn(
-        "bg-white border border-slate-200 shadow-sm",
+        "bg-card border border-border shadow-sm",
         variant === "bar"
           ? "rounded-[16px] px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6"
           : "rounded-2xl p-6 flex flex-col gap-4",
@@ -71,8 +71,8 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
           className={cn(
             "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition-colors",
             isFocusActive
-              ? "bg-[#0B2545] border-[#0B2545] text-[#D4A72C]"
-              : "bg-slate-50 border-slate-200 text-slate-400"
+              ? "bg-primary text-primary-foreground border-[#0B2545] text-[#D4A72C]"
+              : "bg-muted border-border text-muted-foreground"
           )}
         >
           {examFocus ? (
@@ -86,18 +86,18 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
           <div className="flex items-center gap-2 flex-wrap">
             <h2
               id={labelId}
-              className="text-[14px] font-bold text-[#0B2545] tracking-tight"
+              className="text-[14px] font-bold text-primary dark:text-foreground tracking-tight"
             >
               Focus Mode
             </h2>
             {isFocusActive && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#0B2545]/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#0B2545]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary dark:text-foreground">
                 <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
                 Active
               </span>
             )}
           </div>
-          <p id={descriptionId} className="text-[12px] text-slate-500 mt-0.5">
+          <p id={descriptionId} className="text-[12px] text-muted-foreground mt-0.5">
             {description}
           </p>
         </div>
@@ -108,7 +108,7 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
           aria-hidden="true"
           className={cn(
             "text-[11px] font-bold uppercase tracking-wider transition-colors",
-            checked ? "text-[#0B2545]" : "text-slate-400"
+            checked ? "text-primary dark:text-foreground" : "text-muted-foreground"
           )}
         >
           {checked ? "On" : "Off"}
@@ -127,22 +127,22 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
           className={cn(
             "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A72C] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-            checked ? "bg-[#0B2545]" : "bg-slate-200",
+            checked ? "bg-primary text-primary-foreground" : "bg-muted/80",
             (isLocked || isLoading) && "cursor-not-allowed opacity-70"
           )}
         >
           <span
             aria-hidden="true"
             className={cn(
-              "pointer-events-none flex h-5 w-5 items-center justify-center rounded-full bg-white shadow ring-0 transition-transform",
+              "pointer-events-none flex h-5 w-5 items-center justify-center rounded-full bg-card shadow ring-0 transition-transform",
               checked ? "translate-x-5" : "translate-x-0"
             )}
           >
             {isSaving && (
-              <Loader2 className="h-3 w-3 animate-spin text-[#0B2545]" aria-hidden="true" />
+              <Loader2 className="h-3 w-3 animate-spin text-primary dark:text-foreground" aria-hidden="true" />
             )}
             {!isSaving && examFocus && (
-              <Lock className="h-2.5 w-2.5 text-[#0B2545]" aria-hidden="true" />
+              <Lock className="h-2.5 w-2.5 text-primary dark:text-foreground" aria-hidden="true" />
             )}
           </span>
         </button>

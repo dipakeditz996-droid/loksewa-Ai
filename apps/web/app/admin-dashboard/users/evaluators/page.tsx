@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/evaluators";
 import { AddEvaluatorModal } from "@/components/admin/add-evaluator-modal";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RetryImage } from "@/components/ui/retry-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   GraduationCap,
@@ -418,9 +419,13 @@ export default function EvaluatorsPage() {
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8 border border-slate-200 shrink-0">
-                            <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[11px]">
-                              {initials}
-                            </AvatarFallback>
+                            {ev.avatar ? (
+                              <RetryImage src={ev.avatar} alt={ev.name} className="aspect-square h-full w-full object-cover" />
+                            ) : (
+                              <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[11px]">
+                                {initials}
+                              </AvatarFallback>
+                            )}
                           </Avatar>
                           <div className="min-w-0">
                             <Link

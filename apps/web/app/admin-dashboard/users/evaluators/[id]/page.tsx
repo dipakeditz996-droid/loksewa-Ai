@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { evaluatorApi, EvaluatorDetail } from "@/lib/api/evaluators";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RetryImage } from "@/components/ui/retry-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft,
@@ -196,9 +197,13 @@ export default function EvaluatorDetailPage() {
         <div className="px-6 pb-6">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 -mt-8 mb-5">
             <Avatar className="h-16 w-16 border-4 border-white shadow-md shrink-0">
-              <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[18px]">
-                {loading ? "…" : initials}
-              </AvatarFallback>
+              {!loading && data?.avatar ? (
+                <RetryImage src={data.avatar} alt={initials} className="aspect-square h-full w-full object-cover" />
+              ) : (
+                <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[18px]">
+                  {loading ? "…" : initials}
+                </AvatarFallback>
+              )}
             </Avatar>
             {!loading && data && (
               <div className="flex items-center gap-2 pb-1">

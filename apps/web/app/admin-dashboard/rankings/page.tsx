@@ -1,16 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   Trophy, Users, Search, TrendingUp, Award, Flame, AlertCircle,
-  ChevronLeft, ChevronRight, RefreshCw, Loader2,
+  ChevronLeft, ChevronRight, RefreshCw, Loader2, MessageSquarePlus,
 } from "lucide-react";
 
 import {
   adminLeaderboardApi, LeaderboardCategory, LeaderboardPeriod, LeaderboardResponse,
 } from "@/lib/api/admin-leaderboard";
 import { ApiError } from "@/lib/api/client";
+import { RetryImage } from "@/components/ui/retry-image";
+import { SendFeedbackModal } from "@/components/admin/send-feedback-modal";
 
 const CATEGORIES: { value: LeaderboardCategory; label: string; hint: string }[] = [
   { value: "overall", label: "Overall XP", hint: "Ranked by gamification XP" },
@@ -31,7 +32,6 @@ const RANK_TONE = (rank: number) =>
     : "bg-slate-100 text-slate-600";
 
 export default function AdminRankingsPage() {
-  const router = useRouter();
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +41,8 @@ export default function AdminRankingsPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  const [feedbackTarget, setFeedbackTarget] = useState<{ id: number; name: string; email: string } | null>(null);
 
   // Guards against a slow earlier request overwriting a newer one.
   const requestId = useRef(0);
@@ -205,18 +207,19 @@ export default function AdminRankingsPage() {
                 <th className="px-6 py-4 text-center">Streak</th>
                 <th className="px-6 py-4 text-center">Exams</th>
                 <th className="px-6 py-4 text-center">Avg Score</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#0B2545]" />
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <AlertCircle className="w-8 h-8 mx-auto text-red-400 mb-3" />
                     <p className="font-semibold text-slate-800">{error}</p>
                     <button
@@ -229,7 +232,7 @@ export default function AdminRankingsPage() {
                 </tr>
               ) : !data || data.results.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <Trophy className="w-8 h-8 mx-auto text-slate-300 mb-3" />
                     <p className="font-semibold text-slate-700">
                       {debouncedSearch
@@ -247,8 +250,7 @@ export default function AdminRankingsPage() {
                 data.results.map((row) => (
                   <tr
                     key={row.student.id}
-                    onClick={() => router.push(`/admin-dashboard/students/${row.student.id}`)}
-                    className="hover:bg-slate-50/60 cursor-pointer"
+                    className="hover:bg-slate-50/60"
                   >
                     <td className="px-6 py-4">
                       <span className={`w-8 h-8 rounded-full inline-flex items-center justify-center text-xs font-bold ${RANK_TONE(row.rank)}`}>
@@ -258,8 +260,7 @@ export default function AdminRankingsPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3 min-w-0">
                         {row.student.avatar ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={row.student.avatar} alt=""
+                          <RetryImage src={row.student.avatar} alt=""
                             className="w-9 h-9 rounded-full object-cover shrink-0" />
                         ) : (
                           <span className="w-9 h-9 rounded-full bg-[#0B2545] text-white text-xs font-bold flex items-center justify-center shrink-0">
@@ -292,6 +293,21 @@ export default function AdminRankingsPage() {
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() =>
+                          setFeedbackTarget({
+                            id: row.student.id,
+                            name: row.student.name,
+                            email: row.student.email,
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0B2545] border border-slate-200 rounded-lg hover:bg-slate-50"
+                      >
+                        <MessageSquarePlus className="w-3.5 h-3.5" />
+                        Feedback
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -327,6 +343,12 @@ export default function AdminRankingsPage() {
           </div>
         )}
       </div>
+
+      <SendFeedbackModal
+        open={feedbackTarget !== null}
+        student={feedbackTarget}
+        onClose={() => setFeedbackTarget(null)}
+      />
     </div>
   );
 }

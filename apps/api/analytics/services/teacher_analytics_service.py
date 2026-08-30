@@ -2,10 +2,8 @@ from django.db.models import Sum, Count, Avg, F, Q
 from django.utils import timezone
 from datetime import timedelta
 from exams.models import (
-    PracticeSession, 
-    ModelExamAttempt, 
+    PracticeSession,
     QuestionAttempt,
-    ModelExamAttemptAnswer,
     UserTopicProgress,
     ExaminationAttempt,
     StudentAnswer
@@ -34,8 +32,8 @@ class TeacherAnalyticsService:
         
         # Base queries
         practice_sessions = PracticeSession.objects.filter(user_id__in=student_ids, completed=True)
-        exam_attempts = ModelExamAttempt.objects.filter(student_id__in=student_ids, status='submitted')
-        
+        exam_attempts = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted')
+
         # Apply course filter if provided
         if course_id and course_id != 'all':
             enrollments = Enrollment.objects.filter(course_id=course_id).values_list('student_id', flat=True)
@@ -45,36 +43,30 @@ class TeacherAnalyticsService:
             total_students = len(course_student_ids)
         else:
             total_students = students.count()
-        
+
         # Apply date filter
         if days and days != 'all':
             start_date = timezone.now() - timedelta(days=int(days))
             practice_sessions = practice_sessions.filter(created_at__gte=start_date)
             exam_attempts = exam_attempts.filter(started_at__gte=start_date)
-            canonical_attempts = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted', started_at__gte=start_date)
-        else:
-            canonical_attempts = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted')
-            
+
         # Total Attempts
         total_practice_attempts = practice_sessions.count()
-        total_exam_attempts = exam_attempts.count() + canonical_attempts.count()
+        total_exam_attempts = exam_attempts.count()
         total_attempts = total_practice_attempts + total_exam_attempts
-        
+
         # Active Students (students with an attempt in the given date range, or last 30 days if no range)
         active_days = int(days) if (days and days != 'all') else 30
         active_date = timezone.now() - timedelta(days=active_days)
         active_practice_users = PracticeSession.objects.filter(
             user_id__in=student_ids, created_at__gte=active_date
         ).values_list('user_id', flat=True).distinct()
-        active_exam_users = ModelExamAttempt.objects.filter(
+        active_exam_users = ExaminationAttempt.objects.filter(
             student_id__in=student_ids, started_at__gte=active_date
         ).values_list('student_id', flat=True).distinct()
-        active_canonical_users = ExaminationAttempt.objects.filter(
-            student_id__in=student_ids, started_at__gte=active_date
-        ).values_list('student_id', flat=True).distinct()
-        
-        active_students_count = len(set(list(active_practice_users) + list(active_exam_users) + list(active_canonical_users)))
-        
+
+        active_students_count = len(set(list(active_practice_users) + list(active_exam_users)))
+
         # Average Score & Accuracy (combining practice and exam)
         practice_stats = practice_sessions.aggregate(
             avg_acc=Avg('accuracy'),
@@ -82,29 +74,18 @@ class TeacherAnalyticsService:
             correct_q=Sum('correct_count')
         )
         exam_stats = exam_attempts.aggregate(
-            avg_acc=Avg('accuracy'),
-            avg_score=Avg('score'),
-            total_q=Sum('model_exam__total_questions'),
-            correct_q=Sum('correct_count')
-        )
-        canonical_stats = canonical_attempts.aggregate(
             avg_acc=Avg('percentage'),
             avg_score=Avg('score'),
             total_q=Sum('examination__total_questions')
         )
-        canonical_correct_q = StudentAnswer.objects.filter(attempt__in=canonical_attempts, is_correct=True).count()
-        
+        exam_correct_q = StudentAnswer.objects.filter(attempt__in=exam_attempts, is_correct=True).count()
+
         avg_accuracy = 0
-        total_q = (practice_stats['total_q'] or 0) + (exam_stats['total_q'] or 0) + (canonical_stats['total_q'] or 0)
-        correct_q = (practice_stats['correct_q'] or 0) + (exam_stats['correct_q'] or 0) + canonical_correct_q
-        
-        total_e_attempts = exam_attempts.count()
-        total_c_attempts = canonical_attempts.count()
-        total_combined = total_e_attempts + total_c_attempts
-        avg_score = 0
-        if total_combined > 0:
-            avg_score = ((exam_stats['avg_score'] or 0) * total_e_attempts + (canonical_stats['avg_score'] or 0) * total_c_attempts) / total_combined
-        
+        total_q = (practice_stats['total_q'] or 0) + (exam_stats['total_q'] or 0)
+        correct_q = (practice_stats['correct_q'] or 0) + exam_correct_q
+
+        avg_score = exam_stats['avg_score'] or 0
+
         if total_q > 0:
             avg_accuracy = (correct_q / total_q) * 100
             
@@ -138,20 +119,13 @@ class TeacherAnalyticsService:
             attempts=Count('id')
         ).order_by('date')
         
-        exams = ModelExamAttempt.objects.filter(
-            student_id__in=student_ids, status='submitted', started_at__gte=start_date
-        ).extra({'date':"date(started_at)"}).values('date').annotate(
-            avg_acc=Avg('accuracy'),
-            attempts=Count('id')
-        ).order_by('date')
-
-        canonical_exams = ExaminationAttempt.objects.filter(
+        exams = ExaminationAttempt.objects.filter(
             student_id__in=student_ids, status='submitted', started_at__gte=start_date
         ).extra({'date':"date(started_at)"}).values('date').annotate(
             avg_acc=Avg('percentage'),
             attempts=Count('id')
         ).order_by('date')
-        
+
         # Combine trends (simple merging by date)
         trend_dict = {}
         def merge_stats(qs):
@@ -171,8 +145,7 @@ class TeacherAnalyticsService:
 
         merge_stats(sessions)
         merge_stats(exams)
-        merge_stats(canonical_exams)
-                
+
         sorted_trend = sorted(trend_dict.values(), key=lambda x: x['date'])
         
         for item in sorted_trend:
@@ -219,16 +192,8 @@ class TeacherAnalyticsService:
             active_count=Count('id', filter=Q(created_at__gte=active_date))
         )
         
-        # 4. Aggregate ModelExam Attempts per student
-        me_exams = ModelExamAttempt.objects.filter(student_id__in=student_ids, status='submitted').values('student_id').annotate(
-            avg_acc=Avg('accuracy'),
-            avg_score=Avg('score'),
-            total=Count('id'),
-            active_count=Count('id', filter=Q(started_at__gte=active_date))
-        )
-
-        # 5. Aggregate Canonical Examination Attempts per student
-        c_exams = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted').values('student_id').annotate(
+        # 4. Aggregate Examination Attempts per student
+        exams = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted').values('student_id').annotate(
             avg_acc=Avg('percentage'),
             avg_score=Avg('score'),
             total=Count('id'),
@@ -257,8 +222,7 @@ class TeacherAnalyticsService:
                         active_students_per_course[cid].add(uid)
 
         apply_stats(sessions, 'user_id', is_exam=False)
-        apply_stats(me_exams, 'student_id', is_exam=True)
-        apply_stats(c_exams, 'student_id', is_exam=True)
+        apply_stats(exams, 'student_id', is_exam=True)
 
         course_stats = []
         for cid, data in course_dict.items():
@@ -384,12 +348,7 @@ class TeacherAnalyticsService:
             avg_acc=Avg('accuracy'),
             attempts=Count('id')
         )
-        exams = ModelExamAttempt.objects.filter(student_id__in=student_ids, status='submitted').values('student_id').annotate(
-            avg_acc=Avg('accuracy'),
-            avg_score=Avg('score'),
-            attempts=Count('id')
-        )
-        canonical_exams = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted').values('student_id').annotate(
+        exams = ExaminationAttempt.objects.filter(student_id__in=student_ids, status='submitted').values('student_id').annotate(
             avg_acc=Avg('percentage'),
             avg_score=Avg('score'),
             attempts=Count('id')
@@ -416,7 +375,6 @@ class TeacherAnalyticsService:
                 student_stats[uid]["exam_attempts"] += e['attempts']
                 
         apply_exam_stats(exams)
-        apply_exam_stats(canonical_exams)
             
         ranking = []
         for student in students:
@@ -460,11 +418,7 @@ class TeacherAnalyticsService:
             user_id__in=student_ids, completed=True, created_at__gte=thirty_days_ago
         ).order_by('-created_at').values('user_id', 'accuracy', 'created_at')
         
-        recent_me_exams = ModelExamAttempt.objects.filter(
-            student_id__in=student_ids, status='submitted', started_at__gte=thirty_days_ago
-        ).order_by('-started_at').values('student_id', 'accuracy', 'score', 'started_at')
-        
-        recent_c_exams = ExaminationAttempt.objects.filter(
+        recent_exams_qs = ExaminationAttempt.objects.filter(
             student_id__in=student_ids, status='submitted', started_at__gte=thirty_days_ago
         ).order_by('-started_at').values('student_id', 'percentage', 'score', 'started_at')
 
@@ -473,11 +427,8 @@ class TeacherAnalyticsService:
 
         for p in recent_practices:
             student_practices[p['user_id']].append(p)
-            
-        for e in recent_me_exams:
-            student_exams[e['student_id']].append({'accuracy': e['accuracy'], 'score': e['score'], 'date': e['started_at']})
-            
-        for e in recent_c_exams:
+
+        for e in recent_exams_qs:
             student_exams[e['student_id']].append({'accuracy': e['percentage'], 'score': e['score'], 'date': e['started_at']})
             
         for uid in student_ids:
@@ -561,35 +512,16 @@ class TeacherAnalyticsService:
             "date": p.created_at.strftime('%Y-%m-%d')
         } for p in recent_practice]
         
-        recent_me_exams = list(ModelExamAttempt.objects.filter(student=student, status='submitted').order_by('-started_at')[:10])
-        recent_c_exams = list(ExaminationAttempt.objects.filter(student=student, status='submitted').order_by('-started_at')[:10])
-        
-        all_recent_exams = []
-        for e in recent_me_exams:
-            all_recent_exams.append({
-                "id": e.id,
-                "exam": e.model_exam.title,
-                "score": round(e.score, 1),
-                "percentage": round((e.score / e.model_exam.total_marks * 100) if e.model_exam.total_marks else 0, 1),
-                "passed": (e.score >= e.model_exam.passing_marks) if e.model_exam.passing_marks else None,
-                "date": e.started_at
-            })
-            
-        for e in recent_c_exams:
-            all_recent_exams.append({
-                "id": f"c_{e.id}",
-                "exam": e.examination.title,
-                "score": round(e.score, 1),
-                "percentage": round(e.percentage, 1),
-                "passed": e.passed,
-                "date": e.started_at
-            })
-            
-        # Sort combined and take top 10
-        all_recent_exams.sort(key=lambda x: x["date"], reverse=True)
-        exam_history = all_recent_exams[:10]
-        for e in exam_history:
-            e["date"] = e["date"].strftime('%Y-%m-%d')
+        recent_exams = ExaminationAttempt.objects.filter(student=student, status='submitted').order_by('-started_at')[:10]
+
+        exam_history = [{
+            "id": e.id,
+            "exam": e.examination.title,
+            "score": round(e.score, 1),
+            "percentage": round(e.percentage, 1),
+            "passed": e.passed,
+            "date": e.started_at.strftime('%Y-%m-%d'),
+        } for e in recent_exams]
             
         return {
             "student": {

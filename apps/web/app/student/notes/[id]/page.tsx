@@ -91,7 +91,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   if (!material) {
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 text-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Material not found</h2>
+        <h2 className="text-2xl font-bold text-foreground dark:text-white">Material not found</h2>
         <Link href="/student/notes" className="text-[#C4A45C] hover:underline mt-4 inline-block">
           Return to Notes
         </Link>
@@ -103,7 +103,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       {/* Navigation & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-        <Link href="/student/notes" className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 dark:hover:text-white">
+        <Link href="/student/notes" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground dark:hover:text-white">
           <ChevronLeft className="w-4 h-4 mr-1" /> Back to Notes
         </Link>
         <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
               href={material.file} 
               target="_blank" 
               rel="noreferrer"
-              className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700"
+              className="inline-flex items-center px-3 py-1.5 border border-border shadow-sm text-sm font-medium rounded text-foreground bg-card hover:bg-muted dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700"
             >
               <Download className="w-4 h-4 mr-2" /> Download PDF
             </a>
@@ -120,7 +120,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <button 
             onClick={toggleBookmark}
             disabled={bookmarking}
-            className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700 disabled:opacity-50"
+            className="inline-flex items-center px-3 py-1.5 border border-border shadow-sm text-sm font-medium rounded text-foreground bg-card hover:bg-muted dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700 disabled:opacity-50"
           >
             <Bookmark className={`w-4 h-4 mr-2 ${material.is_bookmarked ? 'fill-[#C4A45C] text-[#C4A45C]' : ''}`} /> 
             {material.is_bookmarked ? 'Saved' : 'Save Note'}
@@ -129,23 +129,23 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Header */}
-      <div className="mb-10 pb-8 border-b border-gray-200 dark:border-gray-800">
+      <div className="mb-10 pb-8 border-b border-border dark:border-gray-800">
         <div className="flex items-center gap-2 mb-4">
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1A2E44]/10 text-[#1A2E44] dark:bg-blue-900/30 dark:text-blue-200">
             {material.subject_name}
           </span>
           {material.topic_name && (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground dark:bg-gray-800 dark:text-gray-200">
               {material.topic_name}
             </span>
           )}
         </div>
         
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight mb-4">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-foreground dark:text-white tracking-tight mb-4">
           {material.title}
         </h1>
         
-        <div className="flex flex-wrap items-center text-sm text-gray-500 dark:text-gray-400 gap-x-6 gap-y-2">
+        <div className="flex flex-wrap items-center text-sm text-muted-foreground dark:text-muted-foreground gap-x-6 gap-y-2">
           <span className="flex items-center">
             <BookOpen className="w-4 h-4 mr-2" /> {material.material_type.replace('_', ' ')}
           </span>
@@ -161,7 +161,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       {/* Content */}
       <div ref={contentRef} className="prose prose-lg dark:prose-invert max-w-none prose-blue">
         {material.material_type === 'pdf' ? (
-          <div className="w-full rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800 h-[800px] flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+          <div className="w-full rounded-lg overflow-hidden border border-border dark:border-gray-800 h-[800px] flex items-center justify-center bg-muted dark:bg-gray-900">
             {material.file ? (
               <iframe 
                 src={`${material.file}#view=FitH`} 
@@ -169,7 +169,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                 title={material.title}
               />
             ) : (
-              <p className="text-gray-500">PDF file not found.</p>
+              <p className="text-muted-foreground">PDF file not found.</p>
             )}
           </div>
         ) : (
@@ -178,11 +178,11 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {/* Footer / Complete Button */}
-      <div className="mt-16 pt-8 border-t border-gray-200 dark:border-gray-800 text-center">
+      <div className="mt-16 pt-8 border-t border-border dark:border-gray-800 text-center">
         {material.progress >= 100 ? (
           <div className="inline-flex flex-col items-center">
             <CheckCircle className="w-12 h-12 text-green-500 mb-2" />
-            <span className="text-lg font-medium text-gray-900 dark:text-white">You've completed this material!</span>
+            <span className="text-lg font-medium text-foreground dark:text-white">You've completed this material!</span>
           </div>
         ) : (
           <button 

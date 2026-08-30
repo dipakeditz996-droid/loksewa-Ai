@@ -10,6 +10,7 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, TeacherProfile
+from .views import _access_token_for
 
 
 class IsTeacher:
@@ -213,7 +214,7 @@ class TeacherChangePasswordView(IsTeacher, APIView):
         new_refresh = RefreshToken.for_user(user)
         return Response({
             'detail': 'Password updated successfully.',
-            'access': str(new_refresh.access_token),
+            'access': _access_token_for(user),
             'refresh': str(new_refresh),
         }, status=status.HTTP_200_OK)
 

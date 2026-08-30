@@ -70,36 +70,36 @@ export default function AnalyticsDashboard() {
       
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-[28px] font-bold text-[#0B2545] flex items-center gap-2">
+        <h1 className="text-[28px] font-bold text-primary dark:text-foreground flex items-center gap-2">
           <BarChart className="w-8 h-8 text-[#D4A72C]" /> Your Analytics
         </h1>
-        <p className="text-slate-500 mt-2">Understand your preparation and focus on what matters most.</p>
+        <p className="text-muted-foreground mt-2">Understand your preparation and focus on what matters most.</p>
       </div>
 
       {/* OVERVIEW CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
-          <div className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+        <div className="bg-card p-5 rounded-xl border border-border shadow-sm flex flex-col justify-center">
+          <div className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
             <Target className="w-4 h-4" /> Overall Accuracy
           </div>
-          <div className="text-[28px] font-bold text-[#0B2545]">{overview.overall_accuracy}%</div>
+          <div className="text-[28px] font-bold text-primary dark:text-foreground">{overview.overall_accuracy}%</div>
         </div>
         
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
-          <div className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+        <div className="bg-card p-5 rounded-xl border border-border shadow-sm flex flex-col justify-center">
+          <div className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
             <CheckCircle className="w-4 h-4" /> Questions Solved
           </div>
-          <div className="text-[28px] font-bold text-[#0B2545]">{overview.questions_solved}</div>
+          <div className="text-[28px] font-bold text-primary dark:text-foreground">{overview.questions_solved}</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
-          <div className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+        <div className="bg-card p-5 rounded-xl border border-border shadow-sm flex flex-col justify-center">
+          <div className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1">
             <BookOpen className="w-4 h-4" /> Exams Taken
           </div>
-          <div className="text-[28px] font-bold text-[#0B2545]">{overview.model_exams_taken}</div>
+          <div className="text-[28px] font-bold text-primary dark:text-foreground">{overview.model_exams_taken}</div>
         </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center relative overflow-hidden">
+        <div className="bg-card p-5 rounded-xl border border-border shadow-sm flex flex-col justify-center relative overflow-hidden">
           <div className="text-[12px] font-bold text-orange-500 uppercase tracking-wider mb-2 flex items-center gap-1">
             <Flame className="w-4 h-4" /> Study Streak
           </div>
@@ -110,8 +110,8 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
         
         {/* TREND CHART */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-[16px] font-bold text-[#0B2545] mb-6 flex items-center gap-2">
+        <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm p-6">
+          <h2 className="text-[16px] font-bold text-primary dark:text-foreground mb-6 flex items-center gap-2">
             <Activity className="w-5 h-5" /> Performance Trend
           </h2>
           {trend.length > 1 ? (
@@ -136,14 +136,14 @@ export default function AnalyticsDashboard() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-[300px] flex items-center justify-center text-slate-400 font-medium bg-slate-50 rounded-lg">
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground font-medium bg-muted rounded-lg">
               Complete more practice sessions to see your performance trend.
             </div>
           )}
         </div>
 
         {/* AI INSIGHT */}
-        <div className="bg-[#0B2545] rounded-xl shadow-lg p-6 text-white relative overflow-hidden flex flex-col">
+        <div className="bg-primary text-primary-foreground rounded-xl shadow-lg p-6 text-white relative overflow-hidden flex flex-col">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
           
           <h2 className="text-[16px] font-bold text-blue-300 mb-6 flex items-center gap-2 relative z-10">
@@ -161,7 +161,7 @@ export default function AnalyticsDashboard() {
                 "{insight.recommendation}"
               </p>
               
-              <div className="bg-slate-900/50 rounded-lg p-4 mt-auto">
+              <div className="bg-white/10 border border-white/10 rounded-lg p-4 mt-auto">
                 <div className="text-[12px] font-bold text-blue-300 uppercase tracking-wider mb-3">Today's Recommended Plan</div>
                 <ul className="space-y-3">
                   {insight.daily_plan.map((item, idx) => (
@@ -185,35 +185,35 @@ export default function AnalyticsDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         
         {/* PRIORITY AREAS (WEAK) */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="p-5 border-b border-border flex items-center justify-between">
             <h2 className="text-[16px] font-bold text-red-600 flex items-center gap-2">
               <AlertCircle className="w-5 h-5" /> Priority Areas
             </h2>
           </div>
           <div className="p-2">
             {weakTopics.length > 0 ? weakTopics.map((topic) => (
-              <div key={topic.topic_id} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-lg border-b border-slate-100 last:border-0 transition-colors">
+              <div key={topic.topic_id} className="flex items-center justify-between p-4 hover:bg-muted rounded-lg border-b border-border/50 last:border-0 transition-colors">
                 <div>
-                  <div className="text-[14px] font-bold text-[#0B2545]">{topic.topic}</div>
-                  <div className="text-[12px] text-slate-500">{topic.subject} • {topic.accuracy}% Accuracy</div>
+                  <div className="text-[14px] font-bold text-primary dark:text-foreground">{topic.topic}</div>
+                  <div className="text-[12px] text-muted-foreground">{topic.subject} • {topic.accuracy}% Accuracy</div>
                 </div>
                 <Link href={`/student/mcq-study?topic=${topic.topic_id}`}>
-                  <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                  <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-red-200 dark:border-red-900/50 text-red-600 hover:bg-red-50 dark:bg-red-950/30 hover:text-red-700 dark:text-red-300">
                     Practice Now
                   </Button>
                 </Link>
               </div>
             )) : (
-              <div className="p-8 text-center text-slate-400">No priority areas identified yet.</div>
+              <div className="p-8 text-center text-muted-foreground">No priority areas identified yet.</div>
             )}
           </div>
         </div>
 
         {/* SUBJECT PERFORMANCE */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-5 border-b border-slate-200">
-            <h2 className="text-[16px] font-bold text-[#0B2545] flex items-center gap-2">
+        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
+          <div className="p-5 border-b border-border">
+            <h2 className="text-[16px] font-bold text-primary dark:text-foreground flex items-center gap-2">
               <BookOpen className="w-5 h-5" /> Subject Performance
             </h2>
           </div>
@@ -221,14 +221,14 @@ export default function AnalyticsDashboard() {
             {subjects.length > 0 ? subjects.map((sub, idx) => (
               <div key={idx}>
                 <div className="flex justify-between text-[14px] font-bold mb-2">
-                  <span className="text-[#0B2545]">{sub.subject}</span>
+                  <span className="text-primary dark:text-foreground">{sub.subject}</span>
                   <span className={cn(
                     sub.accuracy >= 80 ? "text-green-600" :
                     sub.accuracy >= 60 ? "text-blue-600" :
                     sub.accuracy >= 40 ? "text-orange-500" : "text-red-500"
                   )}>{sub.accuracy}%</span>
                 </div>
-                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-2 w-full bg-muted/80 rounded-full overflow-hidden">
                   <div 
                     className={cn(
                       "h-full rounded-full",
@@ -239,12 +239,12 @@ export default function AnalyticsDashboard() {
                     style={{ width: `${Math.max(sub.accuracy, 5)}%` }}
                   ></div>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1 uppercase tracking-wider text-right">
+                <div className="text-[11px] text-muted-foreground mt-1 uppercase tracking-wider text-right">
                   {sub.status}
                 </div>
               </div>
             )) : (
-              <div className="flex-1 flex items-center justify-center text-slate-400">
+              <div className="flex-1 flex items-center justify-center text-muted-foreground">
                 Not enough data across subjects.
               </div>
             )}

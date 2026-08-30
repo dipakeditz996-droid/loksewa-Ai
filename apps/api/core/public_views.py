@@ -2,34 +2,34 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
 
-class PublicTestimonialView(APIView):
+
+class PublicPlatformSettingsView(APIView):
+    """GET /api/public/platform-settings/ - the subset of AdminSettings.platform
+    safe to expose pre-login, so the app's own branding (name/logo) actually
+    reflects what an admin configures instead of being hardcoded everywhere."""
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        testimonials = [
-            {
-                "id": 1,
-                "name": "Ramesh Karki",
-                "position": "Section Officer (Recommended)",
-                "avatar": None,
-                "review": "The AI tutor feature identified exactly where I was making mistakes in GK. The mock exams are harder than the real exams, which made the actual Loksewa exam feel easy.",
-                "rating": 5
-            },
-            {
-                "id": 2,
-                "name": "Sita Sharma",
-                "position": "Nayab Subba Aspirant",
-                "avatar": None,
-                "review": "I love the leaderboard and gamification. It keeps me motivated to practice every single day. The study notes are incredibly concise and to the point.",
-                "rating": 5
-            },
-            {
-                "id": 3,
-                "name": "Prakash Thapa",
-                "position": "Kharidar",
-                "avatar": None,
-                "review": "Best platform for Loksewa preparation. I could study on my phone while commuting. The customized practice sets based on my weak chapters were game changers.",
-                "rating": 4.5
-            }
-        ]
-        return Response(testimonials)
+        from .models import AdminSettings
+        settings = AdminSettings.get_settings()
+        return Response({
+            'name': settings.platform_name,
+            'logoUrl': settings.platform_logo_url,
+            'description': settings.platform_description,
+        })
+
+
+class PublicTestimonialView(APIView):
+    """GET /api/public/testimonials/ - real, admin-authored testimonials
+    (core.Testimonial), not a hardcoded list. Returns an empty array until an
+    admin publishes at least one - the homepage falls back to curated static
+    copy in that case rather than showing nothing."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from .models import Testimonial
+        from .testimonial_serializers import PublicTestimonialSerializer
+
+        testimonials = Testimonial.objects.filter(is_published=True)
+        serializer = PublicTestimonialSerializer(testimonials, many=True)
+        return Response(serializer.data)

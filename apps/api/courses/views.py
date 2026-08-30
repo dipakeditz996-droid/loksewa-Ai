@@ -172,10 +172,14 @@ class PublicCourseListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from django.db.models import Q
+
         courses = Course.objects.filter(
             status='published',
             is_open_for_enrollment=True,
-        ).prefetch_related('exam').order_by('-featured', 'title')
+        ).select_related('exam').annotate(
+            enrolled_count=Count('enrollments', filter=Q(enrollments__status='active'))
+        ).order_by('-featured', 'title')
 
         data = []
         for c in courses:
@@ -195,10 +199,10 @@ class PublicCourseListView(APIView):
                     pass
 
             # Get associated plans
-            plans = c.subscription_plans.filter(status='ACTIVE').values(
+            plans = list(c.subscription_plans.filter(status='ACTIVE').values(
                 'id', 'name', 'price', 'original_price', 'discount',
                 'duration', 'duration_unit', 'badge', 'features'
-            )
+            ).order_by('price'))
 
             thumbnail_url = None
             if c.thumbnail:
@@ -216,9 +220,14 @@ class PublicCourseListView(APIView):
                 'thumbnail': thumbnail_url,
                 'duration_months': c.duration_months,
                 'subject_count': subject_count,
-                'exam': {'id': c.exam.id, 'title': c.exam.title} if c.exam else None,
+                'enrolled_count': c.enrolled_count,
+                # Exam is the position/level model (core.models.Exam), which has
+                # `name`, not `title` - fixes an AttributeError that fired for
+                # any course with an exam linked.
+                'exam': {'id': c.exam.id, 'title': c.exam.name} if c.exam else None,
                 'featured': c.featured,
-                'plans': list(plans),
+                'starting_price': plans[0]['price'] if plans else None,
+                'plans': plans,
             })
 
         return Response(data)
@@ -541,6 +550,14 @@ class StudentCourseApplicationView(APIView):
                 subscription_payment=pending_payment,
                 status='pending',
             )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='course_application',
+            title='New Course Application',
+            message=f"{request.user.get_full_name() or request.user.username} applied for '{course.title}'.",
+            action_url='/admin-dashboard/applications',
+        )
 
         return Response({
             'application_id': app.id,

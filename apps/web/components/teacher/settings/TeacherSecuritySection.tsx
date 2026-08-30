@@ -62,13 +62,13 @@ export function TeacherSecuritySection() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
+      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm p-8">
         <div className="flex items-center gap-3 mb-6">
           <div className="h-10 w-10 rounded-xl bg-[#0B2545]/5 flex items-center justify-center">
-            <Shield className="h-5 w-5 text-[#0B2545]" />
+            <Shield className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-[#0B2545]">Change Password</h3>
+            <h3 className="text-lg font-semibold text-primary">Change Password</h3>
             <p className="text-xs text-slate-500">Update your password regularly for better security.</p>
           </div>
         </div>
@@ -162,8 +162,8 @@ export function TeacherSecuritySection() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
-        <h3 className="text-lg font-semibold text-[#0B2545] mb-2">Active Sessions</h3>
+      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm p-8">
+        <h3 className="text-lg font-semibold text-primary mb-2">Active Sessions</h3>
         <p className="text-xs text-slate-500 mb-6">Manage where you're signed in.</p>
 
         <div className="space-y-4">
@@ -171,7 +171,7 @@ export function TeacherSecuritySection() {
             <div className="flex items-center gap-3">
               <Monitor className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-[#0B2545]">Current Session</p>
+                <p className="text-sm font-medium text-primary">Current Session</p>
                 <p className="text-xs text-slate-500">This device · Active now</p>
               </div>
             </div>

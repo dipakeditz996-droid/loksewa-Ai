@@ -40,9 +40,9 @@ export function AppearanceSection() {
   return (
     <div className="space-y-6">
       {/* Theme */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
-        <h3 className="text-lg font-semibold text-[#0B2545] mb-2">Theme</h3>
-        <p className="text-xs text-slate-500 mb-6">Choose how LoksewaAI looks for you.</p>
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8">
+        <h3 className="text-lg font-semibold text-primary dark:text-foreground mb-2">Theme</h3>
+        <p className="text-xs text-muted-foreground mb-6">Choose how LoksewaAI looks for you.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {THEMES.map((t) => {
@@ -56,7 +56,7 @@ export function AppearanceSection() {
                   "relative flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all hover:shadow-md",
                   isActive
                     ? "border-[#D4A72C] bg-[#D4A72C]/5 shadow-sm"
-                    : "border-slate-200 bg-white hover:border-slate-300"
+                    : "border-border bg-card hover:border-border"
                 )}
               >
                 {isActive && (
@@ -66,15 +66,15 @@ export function AppearanceSection() {
                 )}
                 <div className={cn(
                   "h-12 w-12 rounded-xl flex items-center justify-center",
-                  isActive ? "bg-[#D4A72C]/10" : "bg-slate-100"
+                  isActive ? "bg-[#D4A72C]/10" : "bg-muted/80"
                 )}>
-                  <Icon className={cn("h-6 w-6", isActive ? "text-[#D4A72C]" : "text-slate-500")} />
+                  <Icon className={cn("h-6 w-6", isActive ? "text-[#D4A72C]" : "text-muted-foreground")} />
                 </div>
                 <div className="text-center">
-                  <p className={cn("text-sm font-semibold", isActive ? "text-[#0B2545]" : "text-slate-700")}>
+                  <p className={cn("text-sm font-semibold", isActive ? "text-primary dark:text-foreground" : "text-foreground")}>
                     {t.label}
                   </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">{t.desc}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{t.desc}</p>
                 </div>
               </button>
             );
@@ -83,12 +83,12 @@ export function AppearanceSection() {
       </div>
 
       {/* Language */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8">
         <div className="flex items-center gap-3 mb-6">
-          <Globe className="h-5 w-5 text-[#0B2545]" />
+          <Globe className="h-5 w-5 text-primary dark:text-foreground" />
           <div>
-            <h3 className="text-lg font-semibold text-[#0B2545]">Language</h3>
-            <p className="text-xs text-slate-500">Choose your preferred language.</p>
+            <h3 className="text-lg font-semibold text-primary dark:text-foreground">Language</h3>
+            <p className="text-xs text-muted-foreground">Choose your preferred language.</p>
           </div>
         </div>
 
@@ -103,11 +103,11 @@ export function AppearanceSection() {
                   "flex items-center gap-3 p-4 rounded-xl border-2 transition-all",
                   isActive
                     ? "border-[#D4A72C] bg-[#D4A72C]/5"
-                    : "border-slate-200 hover:border-slate-300"
+                    : "border-border hover:border-border"
                 )}
               >
                 <span className="text-2xl">{lang.flag}</span>
-                <span className={cn("text-sm font-medium", isActive ? "text-[#0B2545]" : "text-slate-600")}>
+                <span className={cn("text-sm font-medium", isActive ? "text-primary dark:text-foreground" : "text-muted-foreground")}>
                   {lang.label}
                 </span>
                 {isActive && <Check className="h-4 w-4 text-[#D4A72C] ml-auto" />}
@@ -115,7 +115,7 @@ export function AppearanceSection() {
             );
           })}
         </div>
-        <p className="text-[11px] text-slate-400 mt-4">
+        <p className="text-[11px] text-muted-foreground mt-4">
           Nepali translation is coming soon. This saves your preference for when it's available.
         </p>
       </div>

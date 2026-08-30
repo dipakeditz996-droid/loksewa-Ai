@@ -34,11 +34,17 @@ export type ExaminationStatus =
   | 'live'
   | 'completed';
 
+/** Examination.OBJECTIVE_CATEGORIES in exams/models.py — the four finalized
+ * Objective Exam categories. Null/blank for non-objective exam_types like
+ * 'subjective', and for exams created before this field existed. */
+export type ObjectiveCategory = 'old_past' | 'model' | 'live' | 'custom' | null;
+
 export interface Examination {
   id: number;
   title: string;
   description: string;
   exam_type: ExaminationType;
+  objective_category: ObjectiveCategory;
   category: number;
   category_name?: string;
   exam: number;

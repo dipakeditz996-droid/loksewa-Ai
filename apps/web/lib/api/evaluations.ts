@@ -16,6 +16,12 @@ export interface StudentAttemptItem {
   percentage: number | null;
   passed: boolean | null;
   time_taken_seconds: number | null;
+  total_questions?: number;
+  correct_answers?: number;
+  wrong_answers?: number;
+  unanswered?: number;
+  rank?: number;
+  total_participants?: number;
 }
 
 export interface StudentAttemptListResponse {

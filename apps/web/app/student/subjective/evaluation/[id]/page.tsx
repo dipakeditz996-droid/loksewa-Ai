@@ -46,7 +46,7 @@ export default function SubjectiveEvaluationView() {
 
   if (!attempt) {
     return (
-      <div className="p-8 text-center bg-white rounded-lg m-8 border">
+      <div className="p-8 text-center bg-card rounded-lg m-8 border">
         <h2 className="text-xl font-bold">Attempt not found</h2>
         <Link href="/student/subjective/history">
           <Button className="mt-4">Go Back</Button>
@@ -82,7 +82,7 @@ export default function SubjectiveEvaluationView() {
           className="bg-yellow-200/60 border-b-2 border-yellow-400 cursor-help relative group"
         >
           {text.substring(ann.start_offset, ann.end_offset)}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[250px] bg-slate-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl">
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[250px] bg-popover text-popover-foreground text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl">
             <div className="font-bold text-yellow-300 mb-1">Annotation Note</div>
             {ann.comment}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
@@ -105,15 +105,15 @@ export default function SubjectiveEvaluationView() {
     <div className="min-h-screen bg-[#f8fafc] font-sans flex flex-col h-screen overflow-hidden">
       
       {/* HEADER */}
-      <header className="bg-white border-b border-slate-200 shadow-sm shrink-0 h-16 flex items-center justify-between px-4 md:px-8 z-10">
+      <header className="bg-card border-b border-border shadow-sm shrink-0 h-16 flex items-center justify-between px-4 md:px-8 z-10">
         <div className="flex items-center gap-4">
-          <Link href="/student/subjective/history" className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors">
-             <ArrowLeft className="w-5 h-5 text-slate-500" />
+          <Link href="/student/subjective/history" className="w-8 h-8 rounded-full hover:bg-muted/80 flex items-center justify-center transition-colors">
+             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
           </Link>
-          <div className="hidden md:block w-[1px] h-6 bg-slate-200"></div>
+          <div className="hidden md:block w-[1px] h-6 bg-muted/80"></div>
           <div>
-            <div className="text-[14px] font-bold text-[#0B2545]">Evaluation Report</div>
-            <div className="text-[11px] font-medium text-slate-400">
+            <div className="text-[14px] font-bold text-primary dark:text-foreground">Evaluation Report</div>
+            <div className="text-[11px] font-medium text-muted-foreground">
               {attempt.mode === 'practice' ? attempt.practice_set_detail?.title : 
                attempt.mode === 'model_exam' ? attempt.model_exam_detail?.title :
                'Topic Practice'}
@@ -121,7 +121,7 @@ export default function SubjectiveEvaluationView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 bg-green-50 px-4 py-1.5 rounded-full border border-green-200 text-green-700">
+        <div className="flex items-center gap-4 bg-green-50 dark:bg-green-950/30 px-4 py-1.5 rounded-full border border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-300">
           <Award className="w-5 h-5" />
           <span className="text-[14px] font-bold">Total Score: {totalMarksEarned} / {totalMarksPossible}</span>
         </div>
@@ -131,8 +131,8 @@ export default function SubjectiveEvaluationView() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* LEFT SIDEBAR - QUESTION NAV */}
-        <div className="w-[280px] bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 overflow-y-auto hidden md:flex">
-          <div className="p-4 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2 text-[14px] uppercase tracking-wide">
+        <div className="w-[280px] bg-muted border-r border-border flex flex-col shrink-0 overflow-y-auto hidden md:flex">
+          <div className="p-4 border-b border-border font-bold text-foreground flex items-center gap-2 text-[14px] uppercase tracking-wide">
             <FileText className="w-4 h-4" /> Questions
           </div>
           <div className="p-2 space-y-1">
@@ -145,16 +145,16 @@ export default function SubjectiveEvaluationView() {
                   onClick={() => setSelectedAnswerIndex(idx)}
                   className={cn(
                     "w-full text-left p-3 rounded-lg text-[14px] font-medium flex items-center justify-between transition-colors",
-                    isSelected ? "bg-[#0B2545] text-white" : "hover:bg-slate-200/50 text-slate-700"
+                    isSelected ? "bg-primary text-primary-foreground text-white" : "hover:bg-muted/80/50 text-foreground"
                   )}
                 >
                   <span className="truncate pr-2">Q{idx + 1}. {ans.question.text.substring(0, 30)}...</span>
                   {isEval ? (
-                    <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full", isSelected ? "bg-white/20" : "bg-green-100 text-green-700")}>
+                    <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full", isSelected ? "bg-card/20" : "bg-green-100 text-green-700 dark:text-green-300")}>
                       {ans.evaluation!.marks_obtained}/{ans.question.marks}
                     </span>
                   ) : (
-                    <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full", isSelected ? "bg-white/20" : "bg-slate-200 text-slate-500")}>
+                    <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full", isSelected ? "bg-card/20" : "bg-muted/80 text-muted-foreground")}>
                       Pending
                     </span>
                   )}
@@ -165,28 +165,28 @@ export default function SubjectiveEvaluationView() {
         </div>
 
         {/* RIGHT PANEL - CONTENT */}
-        <div className="flex-1 flex flex-col bg-white overflow-y-auto">
+        <div className="flex-1 flex flex-col bg-card overflow-y-auto">
           {selectedAnswer ? (
             <div className="p-6 md:p-10 max-w-[900px] mx-auto w-full">
               
               {/* Question Block */}
               <div className="mb-8">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">{selectedAnswer.question.subject_name}</span>
-                  <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                  <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Q{selectedAnswerIndex + 1}</span>
+                  <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">{selectedAnswer.question.subject_name}</span>
+                  <span className="w-1 h-1 bg-secondary rounded-full"></span>
+                  <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider">Q{selectedAnswerIndex + 1}</span>
                 </div>
-                <h2 className="text-[18px] md:text-[20px] font-bold text-[#0B2545] leading-relaxed mb-4">
+                <h2 className="text-[18px] md:text-[20px] font-bold text-primary dark:text-foreground leading-relaxed mb-4">
                   {selectedAnswer.question.text}
                 </h2>
-                <div className="flex items-center gap-2 text-[13px] font-bold text-slate-500">
+                <div className="flex items-center gap-2 text-[13px] font-bold text-muted-foreground">
                   <Target className="w-4 h-4" /> Max Marks: {selectedAnswer.question.marks}
                 </div>
               </div>
 
               {/* Status Header */}
               {evalData ? (
-                <div className="bg-green-50 border border-green-200 rounded-[12px] p-5 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900/50 rounded-[12px] p-5 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
                       <CheckCircle2 className="w-5 h-5 text-green-600" />
@@ -200,28 +200,28 @@ export default function SubjectiveEvaluationView() {
                   </div>
                   <div className="text-right">
                     <div className="text-[12px] font-bold text-green-600 uppercase tracking-wider mb-1">Marks Obtained</div>
-                    <div className="text-[24px] font-bold text-[#0B2545]">{evalData.marks_obtained} <span className="text-[16px] text-slate-400">/ {selectedAnswer.question.marks}</span></div>
+                    <div className="text-[24px] font-bold text-primary dark:text-foreground">{evalData.marks_obtained} <span className="text-[16px] text-muted-foreground">/ {selectedAnswer.question.marks}</span></div>
                   </div>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-[12px] p-5 mb-8 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center">
-                    <Clock className="w-5 h-5 text-slate-500" />
+                <div className="bg-muted border border-border rounded-[12px] p-5 mb-8 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-muted/80 rounded-full flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-muted-foreground" />
                   </div>
                   <div>
-                    <div className="text-[16px] font-bold text-slate-700">Pending Evaluation</div>
-                    <div className="text-[13px] text-slate-500">An expert is yet to review this answer.</div>
+                    <div className="text-[16px] font-bold text-foreground">Pending Evaluation</div>
+                    <div className="text-[13px] text-muted-foreground">An expert is yet to review this answer.</div>
                   </div>
                 </div>
               )}
 
               {/* The Answer & Annotations */}
-              <div className="bg-white border border-slate-200 shadow-sm rounded-[16px] overflow-hidden mb-8">
-                <div className="h-12 bg-slate-50 border-b border-slate-200 flex items-center px-6 justify-between">
-                  <div className="text-[13px] font-bold text-slate-600 uppercase tracking-wider">Your Answer</div>
-                  <div className="text-[12px] font-medium text-slate-400">Word Count: {selectedAnswer.word_count}</div>
+              <div className="bg-card border border-border shadow-sm rounded-[16px] overflow-hidden mb-8">
+                <div className="h-12 bg-muted border-b border-border flex items-center px-6 justify-between">
+                  <div className="text-[13px] font-bold text-muted-foreground uppercase tracking-wider">Your Answer</div>
+                  <div className="text-[12px] font-medium text-muted-foreground">Word Count: {selectedAnswer.word_count}</div>
                 </div>
-                <div className="p-6 md:p-8 text-[16px] leading-relaxed text-slate-700 font-serif">
+                <div className="p-6 md:p-8 text-[16px] leading-relaxed text-foreground font-serif">
                   {renderAnnotatedText(selectedAnswer.answer_text, evalData?.annotations || [])}
                 </div>
               </div>
@@ -230,16 +230,16 @@ export default function SubjectiveEvaluationView() {
               {evalData && (
                 <div className="space-y-6">
                   {evalData.feedback && (
-                    <div className="bg-blue-50/50 border border-blue-100 rounded-[16px] p-6 md:p-8">
+                    <div className="bg-blue-50 dark:bg-blue-950/30/50 border border-blue-100 dark:border-blue-900/50 rounded-[16px] p-6 md:p-8">
                       <div className="flex items-center gap-2 text-blue-700 font-bold mb-4">
                         <MessageSquare className="w-5 h-5" /> Evaluator's Remarks
                       </div>
-                      <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">{evalData.feedback}</p>
+                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">{evalData.feedback}</p>
                     </div>
                   )}
 
                   {evalData.video_feedback && evalData.video_feedback.embed_url && (
-                    <div className="bg-slate-900 rounded-[16px] p-6 md:p-8 overflow-hidden">
+                    <div className="bg-popover text-popover-foreground rounded-[16px] p-6 md:p-8 overflow-hidden">
                       <div className="flex items-center gap-2 text-white font-bold mb-6">
                         <PlayCircle className="w-5 h-5 text-red-500" /> Video Feedback
                       </div>
@@ -259,7 +259,7 @@ export default function SubjectiveEvaluationView() {
 
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-400 font-medium">
+            <div className="flex-1 flex items-center justify-center text-muted-foreground font-medium">
               Select a question to view details
             </div>
           )}

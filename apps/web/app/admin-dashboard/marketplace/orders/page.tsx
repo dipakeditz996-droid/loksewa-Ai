@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  Search, Filter, ShoppingCart, CheckCircle2, 
-  MoreHorizontal, Eye, Ban, Download, RotateCcw
+import {
+  Search, Filter, ShoppingCart, CheckCircle2,
+  MoreHorizontal, Eye, Ban, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,31 +11,62 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { marketplaceApi, Purchase } from "@/lib/api/marketplace";
+import { toast } from "sonner";
 
 export default function MarketplaceOrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actioningId, setActioningId] = useState<number | null>(null);
+  const [viewOrder, setViewOrder] = useState<Purchase | null>(null);
+
+  const fetchPurchases = async () => {
+    try {
+      const data = await marketplaceApi.adminGetPurchases();
+      setPurchases(data);
+    } catch (error) {
+      console.error("Failed to fetch purchases:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchPurchases = async () => {
-      try {
-        const data = await marketplaceApi.adminGetPurchases();
-        setPurchases(data);
-      } catch (error) {
-        console.error("Failed to fetch purchases:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchPurchases();
   }, []);
+
+  const handleRevoke = async (order: Purchase) => {
+    if (!confirm(`Revoke access for this order? The student will lose access to "${order.product_details?.title}".`)) return;
+    setActioningId(order.id);
+    try {
+      await marketplaceApi.adminRevokePurchase(order.id);
+      toast.success("Access revoked.");
+      await fetchPurchases();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to revoke access");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleReactivate = async (order: Purchase) => {
+    setActioningId(order.id);
+    try {
+      await marketplaceApi.adminReactivatePurchase(order.id);
+      toast.success("Access restored.");
+      await fetchPurchases();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore access");
+    } finally {
+      setActioningId(null);
+    }
+  };
 
   const filteredOrders = purchases.filter(o => {
     const studentName = o.payment_submission_details?.student_details?.first_name 
@@ -177,25 +208,28 @@ export default function MarketplaceOrdersPage() {
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-[#0B2545]">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-[#0B2545]" disabled={actioningId === order.id}>
                               <MoreHorizontal className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer">
+                            <DropdownMenuItem className="cursor-pointer" onClick={() => setViewOrder(order)}>
                               <Eye className="mr-2 h-4 w-4" /> View Order Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer">
-                              <Download className="mr-2 h-4 w-4" /> Download Invoice
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {order.status !== "ACTIVE" && (
-                              <DropdownMenuItem className="cursor-pointer text-emerald-600 focus:text-emerald-600">
-                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Active
+                              <DropdownMenuItem
+                                className="cursor-pointer text-emerald-600 focus:text-emerald-600"
+                                onClick={() => handleReactivate(order)}
+                              >
+                                <CheckCircle2 className="mr-2 h-4 w-4" /> Reactivate Access
                               </DropdownMenuItem>
                             )}
                             {order.status === "ACTIVE" && (
-                              <DropdownMenuItem className="cursor-pointer text-red-600 focus:text-red-600">
+                              <DropdownMenuItem
+                                className="cursor-pointer text-red-600 focus:text-red-600"
+                                onClick={() => handleRevoke(order)}
+                              >
                                 <Ban className="mr-2 h-4 w-4" /> Revoke Access
                               </DropdownMenuItem>
                             )}
@@ -210,6 +244,66 @@ export default function MarketplaceOrdersPage() {
           </Table>
         </div>
       </div>
+
+      {viewOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-[#0B2545]">Order #{viewOrder.id}</h3>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setViewOrder(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-6 space-y-4 text-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Product</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">{viewOrder.product_details?.title || "Unknown"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Amount Paid</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">Rs. {Number(viewOrder.amount_paid).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Order Status</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">{viewOrder.status}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Payment Status</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">
+                    {viewOrder.payment_submission_details?.status || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Created</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">
+                    {new Date(viewOrder.created_at).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-medium">Transaction ID</p>
+                  <p className="font-mono text-xs text-slate-800 mt-0.5">
+                    {viewOrder.payment_submission_details?.transaction_id || "N/A"}
+                  </p>
+                </div>
+              </div>
+              {viewOrder.payment_submission_details?.student_details && (
+                <div className="pt-4 border-t border-slate-100">
+                  <p className="text-xs text-slate-500 font-medium">Student</p>
+                  <p className="font-semibold text-slate-800 mt-0.5">
+                    {viewOrder.payment_submission_details.student_details.first_name
+                      ? `${viewOrder.payment_submission_details.student_details.first_name} ${viewOrder.payment_submission_details.student_details.last_name}`
+                      : viewOrder.payment_submission_details.student_details.username}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {viewOrder.payment_submission_details.student_details.email}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

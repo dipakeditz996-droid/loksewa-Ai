@@ -1,9 +1,40 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.db.models import Q
 from .models import StudyMaterial, StudentMaterialProgress, StudentMaterialBookmark
 from .serializers import StudyMaterialListSerializer, StudyMaterialDetailSerializer
+
+
+class PublicStudyMaterialListView(APIView):
+    """GET /api/notes/public/ - a small, anonymous-friendly preview of free
+    published study materials for the homepage. Unlike StudyMaterialViewSet,
+    this deliberately excludes premium/course-locked materials and never
+    checks enrollment, since there is no logged-in student to check it against."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        try:
+            limit = min(int(request.query_params.get('limit', 6)), 100)
+        except (TypeError, ValueError):
+            limit = 6
+        materials = StudyMaterial.objects.filter(
+            status='published', access_type='free', course__isnull=True,
+        ).select_related('subject', 'exam').order_by('-created_at')[:limit]
+
+        data = [{
+            'id': m.id,
+            'title': m.title,
+            'description': m.description,
+            'material_type': m.material_type,
+            'difficulty': m.difficulty,
+            'estimated_reading_time': m.estimated_reading_time,
+            'subject_name': m.subject.name if m.subject else None,
+            'exam_name': m.exam.name if m.exam else None,
+            'created_at': m.created_at.isoformat() if m.created_at else None,
+        } for m in materials]
+        return Response(data)
 
 class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -169,6 +200,15 @@ class TeacherStudyMaterialViewSet(viewsets.ModelViewSet):
         if material.status in ['draft', 'changes_requested', 'rejected']:
             material.status = 'pending_review'
             material.save()
+
+            from core.notification_service import NotificationService
+            NotificationService.notify_admins(
+                notif_type='material_review',
+                title='Study Material Submitted for Review',
+                message=f"{request.user.get_full_name() or request.user.username} submitted '{material.title}' for review.",
+                action_url='/admin-dashboard/study-materials',
+            )
+
             return Response({"status": "Submitted for review"})
         return Response({"error": "Invalid status for submission"}, status=status.HTTP_400_BAD_REQUEST)
 

@@ -30,7 +30,14 @@ class PaymentSubmissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentSubmission
         fields = '__all__'
-        read_only_fields = ('student', 'status', 'rejection_reason', 'submitted_at', 'verified_at', 'verified_by')
+        # expected_amount/submitted_amount are server-computed from the
+        # product's price in StudentPaymentSubmissionViewSet.perform_create -
+        # trusting client input for these would let a student claim they
+        # paid less (or were expected to pay less) than the real price.
+        read_only_fields = (
+            'student', 'status', 'rejection_reason', 'submitted_at', 'verified_at',
+            'verified_by', 'expected_amount', 'submitted_amount',
+        )
 
     def validate_transaction_id(self, value):
         value = value.strip()

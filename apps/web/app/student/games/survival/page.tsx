@@ -103,8 +103,8 @@ export default function SurvivalGamePage() {
         <div className="w-20 h-20 bg-[#D4A72C]/10 rounded-full flex items-center justify-center mb-6">
           <Heart className="w-10 h-10 text-[#D4A72C]" />
         </div>
-        <h2 className="text-2xl font-bold text-[#0B2545] mb-2">Ready to Survive?</h2>
-        <p className="text-slate-600 mb-8">
+        <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">Ready to Survive?</h2>
+        <p className="text-muted-foreground mb-8">
           You have 3 lives. Answer carefully. The difficulty will increase as you progress!
         </p>
         
@@ -126,20 +126,20 @@ export default function SurvivalGamePage() {
         <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <HeartCrack className="w-12 h-12 text-red-500" />
         </div>
-        <h1 className="text-4xl font-bold text-[#0B2545]">Game Over</h1>
+        <h1 className="text-4xl font-bold text-primary dark:text-foreground">Game Over</h1>
         
-        <div className="bg-white rounded-xl border border-slate-200 p-8 my-8">
-          <p className="text-sm text-slate-500 mb-2 uppercase tracking-wider font-medium">Final Score</p>
-          <p className="text-5xl font-bold text-[#0B2545] mb-8">{game.score}</p>
+        <div className="bg-card rounded-xl border border-border p-8 my-8">
+          <p className="text-sm text-muted-foreground mb-2 uppercase tracking-wider font-medium">Final Score</p>
+          <p className="text-5xl font-bold text-primary dark:text-foreground mb-8">{game.score}</p>
           
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 p-4 rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Questions Survived</p>
-              <p className="text-2xl font-semibold text-[#0B2545]">{game.questions_survived}</p>
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Questions Survived</p>
+              <p className="text-2xl font-semibold text-primary dark:text-foreground">{game.questions_survived}</p>
             </div>
-            <div className="bg-slate-50 p-4 rounded-lg">
-              <p className="text-xs text-slate-500 mb-1">Highest Streak</p>
-              <p className="text-2xl font-semibold text-[#0B2545]">{game.highest_streak}</p>
+            <div className="bg-muted p-4 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Highest Streak</p>
+              <p className="text-2xl font-semibold text-primary dark:text-foreground">{game.highest_streak}</p>
             </div>
           </div>
         </div>
@@ -159,22 +159,22 @@ export default function SurvivalGamePage() {
   const activeGame = game as ActiveSurvivalGame;
   
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 min-h-[calc(100vh-72px)] bg-slate-50/50">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 min-h-[calc(100vh-72px)] bg-muted/50">
       {/* Game Header */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between mb-8 shadow-sm">
+      <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between mb-8 shadow-sm">
         <div className="flex items-center space-x-6">
           {/* Score */}
           <div>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Score</p>
-            <p className="text-2xl font-bold text-[#0B2545] flex items-center">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Score</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground flex items-center">
               <Trophy className="w-5 h-5 text-[#D4A72C] mr-2" />
               {game.score}
             </p>
           </div>
           
           {/* Streak */}
-          <div className="pl-6 border-l border-slate-200">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Streak</p>
+          <div className="pl-6 border-l border-border">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Streak</p>
             <p className="text-xl font-bold text-orange-500 flex items-center">
               <Flame className="w-5 h-5 mr-1" />
               {game.current_streak}
@@ -185,7 +185,7 @@ export default function SurvivalGamePage() {
         {/* Lives & Timer */}
         <div className="flex items-center space-x-8">
           <div>
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1 text-right">Lives</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1 text-right">Lives</p>
             <div className="flex space-x-1">
               {[1, 2, 3].map((i) => (
                 <Heart 
@@ -197,8 +197,8 @@ export default function SurvivalGamePage() {
           </div>
           
           <div className="text-center">
-            <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">Time Left</p>
-            <p className={`text-2xl font-bold font-mono ${timeLeft <= 5 ? 'text-red-500' : 'text-[#0B2545]'}`}>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Time Left</p>
+            <p className={`text-2xl font-bold font-mono ${timeLeft <= 5 ? 'text-red-500' : 'text-primary dark:text-foreground'}`}>
               00:{timeLeft.toString().padStart(2, '0')}
             </p>
           </div>
@@ -206,11 +206,11 @@ export default function SurvivalGamePage() {
       </div>
       
       {/* Question */}
-      <div className="bg-white border border-slate-200 rounded-xl p-8 mb-8 shadow-sm relative overflow-hidden">
+      <div className="bg-card border border-border rounded-xl p-8 mb-8 shadow-sm relative overflow-hidden">
         
         {/* Feedback Overlay */}
         {feedback && (
-          <div className={`absolute inset-0 z-10 flex items-center justify-center bg-white/80 backdrop-blur-sm ${feedback === 'correct' ? 'text-green-500' : 'text-red-500'}`}>
+          <div className={`absolute inset-0 z-10 flex items-center justify-center bg-card/80 backdrop-blur-sm ${feedback === 'correct' ? 'text-green-500' : 'text-red-500'}`}>
             <div className="text-center animate-in zoom-in duration-300">
               <p className="text-5xl font-black uppercase tracking-widest">{feedback === 'correct' ? '+ POINTS' : '- 1 LIFE'}</p>
             </div>
@@ -218,11 +218,11 @@ export default function SurvivalGamePage() {
         )}
         
         <div className="flex items-center justify-between mb-6">
-          <span className="text-sm font-semibold text-[#0B2545] bg-[#0B2545]/10 px-3 py-1 rounded-full">
+          <span className="text-sm font-semibold text-primary dark:text-foreground bg-primary text-primary-foreground/10 px-3 py-1 rounded-full">
             Question {game.questions_survived + 1}
           </span>
           
-          <span className="text-sm font-semibold text-slate-500">
+          <span className="text-sm font-semibold text-muted-foreground">
             Difficulty: {
               game.questions_survived < 5 ? 'Easy' : 
               game.questions_survived < 10 ? 'Medium' : 
@@ -231,7 +231,7 @@ export default function SurvivalGamePage() {
           </span>
         </div>
         
-        <h2 className="text-xl font-medium text-slate-800 mb-8 leading-relaxed">
+        <h2 className="text-xl font-medium text-foreground mb-8 leading-relaxed">
           {activeGame.question_text}
         </h2>
         
@@ -248,18 +248,18 @@ export default function SurvivalGamePage() {
                 className={`
                   w-full text-left p-4 rounded-xl border-2 transition-all flex items-center
                   ${isSelected 
-                    ? 'border-[#0B2545] bg-[#0B2545]/5' 
-                    : 'border-slate-200 hover:border-[#0B2545]/30 hover:bg-slate-50'}
+                    ? 'border-[#0B2545] bg-primary text-primary-foreground/5' 
+                    : 'border-border hover:border-[#0B2545]/30 hover:bg-muted'}
                   ${(isSubmitting || feedback !== null) && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}
                 `}
               >
                 <span className={`
                   w-8 h-8 rounded-full flex items-center justify-center mr-4 font-bold
-                  ${isSelected ? 'bg-[#0B2545] text-white' : 'bg-slate-100 text-slate-500'}
+                  ${isSelected ? 'bg-primary text-primary-foreground text-white' : 'bg-muted/80 text-muted-foreground'}
                 `}>
                   {opt}
                 </span>
-                <span className="font-medium text-slate-700">{optionText}</span>
+                <span className="font-medium text-foreground">{optionText}</span>
               </button>
             );
           })}

@@ -23,9 +23,13 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   const [studyDays, setStudyDays] = useState<string[]>(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]);
   const [level, setLevel] = useState("BEGINNER");
   const [preferredTime, setPreferredTime] = useState("MORNING");
+  const [isFetchingExams, setIsFetchingExams] = useState(true);
 
   useEffect(() => {
-    syllabusApi.getExams().then(setExams).catch(console.error);
+    syllabusApi.getExams()
+      .then(setExams)
+      .catch(console.error)
+      .finally(() => setIsFetchingExams(false));
     
     // Set default target date to 3 months from now
     const d = new Date();
@@ -64,46 +68,53 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto bg-white border border-slate-200 rounded-xl p-8 shadow-sm">
+    <div className="max-w-2xl mx-auto bg-card border border-border rounded-xl p-8 shadow-sm">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-[#0B2545]">Create Your Study Plan</h2>
-          <p className="text-slate-500">Step {step} of 4</p>
+          <h2 className="text-2xl font-bold text-primary dark:text-foreground">Create Your Study Plan</h2>
+          <p className="text-muted-foreground">Step {step} of 4</p>
         </div>
         <div className="flex gap-2">
           {[1,2,3,4].map(i => (
-            <div key={i} className={`h-2 w-12 rounded-full ${i <= step ? 'bg-[#D4A72C]' : 'bg-slate-100'}`} />
+            <div key={i} className={`h-2 w-12 rounded-full ${i <= step ? 'bg-[#D4A72C]' : 'bg-muted/80'}`} />
           ))}
         </div>
       </div>
 
       {step === 1 && (
         <div className="space-y-6 animate-in slide-in-from-right-4">
-          <div className="flex items-center gap-3 text-lg font-semibold text-[#0B2545]">
+          <div className="flex items-center gap-3 text-lg font-semibold text-primary dark:text-foreground">
             <Target className="w-5 h-5 text-[#D4A72C]" />
             What is your target examination?
           </div>
           <div className="grid gap-3">
-            {exams.map(ex => (
-              <button
-                key={ex.id}
-                onClick={() => setExamId(ex.id)}
-                className={`p-4 rounded-xl border text-left flex items-center justify-between transition-colors ${
-                  examId === ex.id ? 'border-[#0B2545] bg-[#0B2545]/5' : 'border-slate-200 hover:border-[#D4A72C]'
-                }`}
-              >
-                <span className="font-medium text-[#0B2545]">{ex.title}</span>
-                {examId === ex.id && <CheckCircle2 className="w-5 h-5 text-[#0B2545]" />}
-              </button>
-            ))}
+            {isFetchingExams ? (
+              <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
+                <Loader2 className="w-8 h-8 animate-spin text-[#D4A72C] mb-4" />
+                <p className="text-sm">Loading available examinations...</p>
+              </div>
+            ) : (
+              exams.map(ex => (
+                <button
+                  key={ex.id}
+                  onClick={() => setExamId(ex.id)}
+                  className={`p-4 rounded-xl border text-left flex items-center justify-between transition-colors ${
+                    examId === ex.id ? 'border-primary bg-primary text-primary-foreground shadow-md' : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <span className={`font-medium ${examId === ex.id ? 'text-primary-foreground' : 'text-primary dark:text-foreground'}`}>{ex.title}</span>
+                  {examId === ex.id && <CheckCircle2 className="w-5 h-5 text-primary-foreground" />}
+                </button>
+              ))
+            )}
           </div>
-          <Button onClick={handleNext} disabled={!examId} className="w-full bg-[#0B2545]">Next Step</Button>
+          <Button onClick={handleNext} disabled={!examId || isFetchingExams} className="w-full bg-primary text-primary-foreground">Next Step</Button>
         </div>
       )}
 
       {step === 2 && (
         <div className="space-y-6 animate-in slide-in-from-right-4">
-          <div className="flex items-center gap-3 text-lg font-semibold text-[#0B2545]">
+          <div className="flex items-center gap-3 text-lg font-semibold text-primary dark:text-foreground">
             <Calendar className="w-5 h-5 text-[#D4A72C]" />
             When is your target examination date?
           </div>
@@ -111,12 +122,12 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
             type="date" 
             value={targetDate} 
             onChange={e => setTargetDate(e.target.value)}
-            className="h-14 text-lg px-4 border-slate-200"
+            className="h-14 text-lg px-4 border-border"
             min={new Date().toISOString().split('T')[0]}
           />
           <div className="flex gap-4 pt-4">
             <Button variant="outline" onClick={handleBack} className="flex-1">Back</Button>
-            <Button onClick={handleNext} disabled={!targetDate} className="flex-1 bg-[#0B2545]">Next Step</Button>
+            <Button onClick={handleNext} disabled={!targetDate} className="flex-1 bg-primary text-primary-foreground">Next Step</Button>
           </div>
         </div>
       )}
@@ -124,19 +135,19 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       {step === 3 && (
         <div className="space-y-8 animate-in slide-in-from-right-4">
           <div>
-            <div className="flex items-center gap-3 text-lg font-semibold text-[#0B2545] mb-4">
+            <div className="flex items-center gap-3 text-lg font-semibold text-primary dark:text-foreground mb-4">
               <Clock className="w-5 h-5 text-[#D4A72C]" />
               Daily Study Time & Days
             </div>
             
-            <p className="text-sm font-medium text-slate-500 mb-2">How much time can you study per day?</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">How much time can you study per day?</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
               {[30, 60, 120, 180, 240].map(mins => (
                 <button
                   key={mins}
                   onClick={() => setDailyMinutes(mins)}
                   className={`p-3 rounded-lg border text-sm font-medium transition-colors ${
-                    dailyMinutes === mins ? 'border-[#0B2545] bg-[#0B2545] text-white' : 'border-slate-200 text-slate-600 hover:border-[#D4A72C]'
+                    dailyMinutes === mins ? 'border-primary bg-primary text-primary-foreground shadow-md' : 'border-border text-muted-foreground hover:border-primary/50'
                   }`}
                 >
                   {mins >= 60 ? `${mins/60} hr${mins>60?'s':''}` : `${mins} min`}
@@ -144,14 +155,14 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
               ))}
             </div>
 
-            <p className="text-sm font-medium text-slate-500 mb-2">Which days will you study?</p>
+            <p className="text-sm font-medium text-muted-foreground mb-2">Which days will you study?</p>
             <div className="flex flex-wrap gap-2">
               {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(day => (
                 <button
                   key={day}
                   onClick={() => toggleDay(day)}
                   className={`px-4 py-2 rounded-full border text-sm font-medium transition-colors ${
-                    studyDays.includes(day) ? 'border-[#0B2545] bg-[#0B2545]/10 text-[#0B2545]' : 'border-slate-200 text-slate-500 hover:border-[#D4A72C]'
+                    studyDays.includes(day) ? 'border-primary bg-primary text-primary-foreground shadow-md' : 'border-border text-muted-foreground hover:border-primary/50'
                   }`}
                 >
                   {day.slice(0,3)}
@@ -161,7 +172,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
           </div>
           <div className="flex gap-4">
             <Button variant="outline" onClick={handleBack} className="flex-1">Back</Button>
-            <Button onClick={handleNext} disabled={studyDays.length === 0} className="flex-1 bg-[#0B2545]">Next Step</Button>
+            <Button onClick={handleNext} disabled={studyDays.length === 0} className="flex-1 bg-primary text-primary-foreground">Next Step</Button>
           </div>
         </div>
       )}
@@ -169,7 +180,7 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
       {step === 4 && (
         <div className="space-y-8 animate-in slide-in-from-right-4">
           <div>
-            <div className="flex items-center gap-3 text-lg font-semibold text-[#0B2545] mb-4">
+            <div className="flex items-center gap-3 text-lg font-semibold text-primary dark:text-foreground mb-4">
               <Zap className="w-5 h-5 text-[#D4A72C]" />
               Current Preparation Level
             </div>
@@ -184,11 +195,11 @@ export function SetupWizard({ onComplete }: SetupWizardProps) {
                   key={lvl.val}
                   onClick={() => setLevel(lvl.val)}
                   className={`p-4 rounded-xl border text-left transition-colors ${
-                    level === lvl.val ? 'border-[#0B2545] bg-[#0B2545]/5' : 'border-slate-200 hover:border-[#D4A72C]'
+                    level === lvl.val ? 'border-primary bg-primary text-primary-foreground shadow-md' : 'border-border hover:border-primary/50'
                   }`}
                 >
-                  <div className="font-medium text-[#0B2545]">{lvl.label}</div>
-                  <div className="text-sm text-slate-500 mt-1">{lvl.desc}</div>
+                  <div className={`font-medium ${level === lvl.val ? 'text-primary-foreground' : 'text-primary dark:text-foreground'}`}>{lvl.label}</div>
+                  <div className={`text-sm mt-1 ${level === lvl.val ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{lvl.desc}</div>
                 </button>
               ))}
             </div>

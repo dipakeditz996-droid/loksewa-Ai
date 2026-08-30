@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { teacherAnalyticsApi, StudentData } from '@/lib/api/teacher-analytics';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,74 +31,74 @@ export function StudentRanking({ courseFilter }: StudentRankingProps) {
   }, [courseFilter]);
 
   const renderRankIcon = (rank: number) => {
-    if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-400" />;
-    if (rank === 2) return <Medal className="w-5 h-5 text-slate-300" />;
-    if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
-    return <span className="text-slate-500 font-medium w-5 text-center inline-block">{rank}</span>;
+    if (rank === 1) return <Trophy className="h-5 w-5 text-[#D4A72C]" />;
+    if (rank === 2) return <Medal className="h-5 w-5 text-[#9AA4B2]" />;
+    if (rank === 3) return <Medal className="h-5 w-5 text-[#B08130]" />;
+    return <span className="inline-block w-5 text-center font-semibold text-muted-foreground">{rank}</span>;
   };
 
   return (
-    <Card className="bg-slate-900 border-slate-800">
-      <CardHeader>
-        <CardTitle className="text-white flex items-center">
-          <Trophy className="w-5 h-5 mr-2 text-yellow-400" />
+    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:shadow-none">
+      <div className="border-b border-border px-5 py-4">
+        <h2 className="flex items-center gap-2 text-[14.5px] font-bold text-card-foreground">
+          <Trophy className="h-4 w-4 text-[#D4A72C]" />
           Top Performing Students
-        </CardTitle>
-        <CardDescription>Ranked by average accuracy across attempts</CardDescription>
-      </CardHeader>
-      <CardContent>
+        </h2>
+        <p className="mt-0.5 text-[12px] text-muted-foreground">Ranked by average accuracy across attempts</p>
+      </div>
+      <div className="p-5">
         {isLoading ? (
           <div className="space-y-4">
             {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full bg-slate-800" />
+              <Skeleton key={i} className="h-12 w-full bg-muted" />
             ))}
           </div>
         ) : data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-500">
-            <AlertCircle className="w-8 h-8 mb-2 opacity-20" />
-            <p>No student data available in this scope.</p>
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+            <AlertCircle className="mb-2 h-8 w-8 opacity-40" />
+            <p className="text-[13px]">No student data available in this scope.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-slate-800 hover:bg-transparent">
-                  <TableHead className="w-16 text-center text-slate-400">Rank</TableHead>
-                  <TableHead className="text-slate-400">Student</TableHead>
-                  <TableHead className="text-slate-400">Courses</TableHead>
-                  <TableHead className="text-slate-400 text-right">Avg Score</TableHead>
-                  <TableHead className="text-slate-400 text-right">Accuracy</TableHead>
-                  <TableHead className="text-slate-400 text-right">Attempts</TableHead>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-16 text-center text-muted-foreground">Rank</TableHead>
+                  <TableHead className="text-muted-foreground">Student</TableHead>
+                  <TableHead className="text-muted-foreground">Courses</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Avg Score</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Accuracy</TableHead>
+                  <TableHead className="text-right text-muted-foreground">Attempts</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.map((student) => (
-                  <TableRow key={student.id} className="border-slate-800 hover:bg-slate-800/50 transition-colors group">
+                  <TableRow key={student.id} className="group border-border transition-colors hover:bg-muted/50">
                     <TableCell className="text-center">
                       <div className="flex justify-center">
                         {renderRankIcon(student.rank)}
                       </div>
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <Link href={`/teacher/students/${student.id}`} className="text-indigo-400 hover:text-indigo-300">
+                    <TableCell className="font-semibold">
+                      <Link href={`/teacher/students/${student.id}`} className="text-primary hover:opacity-80 transition-opacity">
                         {student.name}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-slate-400 max-w-[200px] truncate" title={student.courses}>
+                    <TableCell className="max-w-[200px] truncate text-muted-foreground" title={student.courses}>
                       {student.courses}
                     </TableCell>
-                    <TableCell className="text-right text-slate-300">
+                    <TableCell className="text-right text-muted-foreground">
                       {student.average_score > 0 ? student.average_score : '-'}
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className={`font-semibold ${
-                        student.accuracy >= 80 ? 'text-emerald-400' :
-                        student.accuracy >= 60 ? 'text-amber-400' : 'text-rose-400'
+                      <span className={`font-bold ${
+                        student.accuracy >= 80 ? 'text-[#0F7A69] dark:text-[#4ADE9C]' :
+                        student.accuracy >= 60 ? 'text-[#946B00] dark:text-[#F2C94C]' : 'text-destructive'
                       }`}>
                         {student.accuracy}%
                       </span>
                     </TableCell>
-                    <TableCell className="text-right text-slate-400">
+                    <TableCell className="text-right text-muted-foreground">
                       {student.attempts}
                     </TableCell>
                   </TableRow>
@@ -108,7 +107,7 @@ export function StudentRanking({ courseFilter }: StudentRankingProps) {
             </Table>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

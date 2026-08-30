@@ -73,6 +73,7 @@ export async function apiClient<T>(
   const config: RequestInit = {
     ...options,
     headers,
+    cache: 'no-store',
   };
 
   let response = await fetch(url, config);
@@ -115,7 +116,16 @@ export async function apiClient<T>(
     return {} as T;
   }
 
-  return response.json();
+  // A 200 with an empty body (e.g. Response(status=200) in DRF with no
+  // serializer data) is valid and common in this backend, but
+  // response.json() throws SyntaxError on empty input - read the text
+  // first so a genuinely empty success response doesn't look like a
+  // parse failure.
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
+  return JSON.parse(text);
 }
 
 /**

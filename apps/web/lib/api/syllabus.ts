@@ -1,6 +1,14 @@
 import { apiClient } from "./client";
+import { StudyMaterial } from "./notes";
 
 export type TopicStatus = "completed" | "in-progress" | "not-started";
+
+export interface TopicContentResponse {
+  id: number;
+  name: string;
+  description: string;
+  materials: StudyMaterial[];
+}
 
 export interface Topic {
   id: number;
@@ -8,6 +16,7 @@ export interface Topic {
   status: TopicStatus;
   progress: number;
   accuracy: number | null;
+  description?: string;
 }
 
 export interface Unit {
@@ -50,5 +59,9 @@ export const syllabusApi = {
         progress: status === "completed" ? 100 : status === "in-progress" ? 50 : 0
       }),
     });
+  },
+
+  getTopicContent: async (topicId: number): Promise<TopicContentResponse> => {
+    return apiClient<TopicContentResponse>(`/topics/${topicId}/content/`);
   }
 };

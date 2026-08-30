@@ -254,11 +254,10 @@ export default function StudyMaterialsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Eye className="w-4 h-4 mr-2" /> View
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Edit className="w-4 h-4 mr-2" /> Edit
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin-dashboard/study-materials/${material.id}`} className="cursor-pointer flex items-center">
+                              <Eye className="w-4 h-4 mr-2" /> View
+                            </Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

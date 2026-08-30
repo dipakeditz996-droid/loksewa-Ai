@@ -19,10 +19,16 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
     can_start = serializers.SerializerMethodField()
     start_blocked_reason = serializers.SerializerMethodField()
 
+    # The raw admin-set category, plus effective_category which auto-promotes
+    # a Live Exam into the Model Exams listing 48h after its scheduled start
+    # — the student list groups by effective_category, not the raw value.
+    effective_category = serializers.CharField(read_only=True)
+
     class Meta:
         model = Examination
         fields = [
-            'id', 'title', 'description', 'exam_type', 'category_name',
+            'id', 'title', 'description', 'exam_type', 'objective_category',
+            'effective_category', 'category_name',
             'exam_name', 'subject_name', 'instructions', 'thumbnail',
             'total_questions', 'time_limit', 'total_marks',
             'passing_marks', 'marks_per_question', 'negative_marking',
@@ -149,6 +155,29 @@ TIMING_FIELDS = [
 ]
 
 
+class RankedAttemptMixin(serializers.Serializer):
+    rank = serializers.SerializerMethodField()
+    total_participants = serializers.SerializerMethodField()
+
+    def get_rank(self, obj):
+        if obj.percentage is None or obj.status not in ['submitted', 'evaluated']:
+            return None
+        
+        # DenseRank logic: number of distinct higher percentages + 1
+        # This matches exactly how the leaderboard ranks students.
+        higher_scores_count = ExaminationAttempt.objects.filter(
+            examination=obj.examination,
+            status__in=['submitted', 'evaluated'],
+            percentage__gt=obj.percentage
+        ).values('percentage').distinct().count()
+        return higher_scores_count + 1
+
+    def get_total_participants(self, obj):
+        return ExaminationAttempt.objects.filter(
+            examination=obj.examination,
+            status__in=['submitted', 'evaluated']
+        ).values('student').distinct().count()
+
 class StudentExaminationAttemptSerializer(AttemptTimingMixin, serializers.ModelSerializer):
     examination_title = serializers.CharField(source='examination.title', read_only=True)
     answers = StudentAnswerSerializer(many=True, read_only=True)
@@ -164,7 +193,36 @@ class StudentExaminationAttemptSerializer(AttemptTimingMixin, serializers.ModelS
             'status', 'score', 'percentage', 'passed', 'time_taken_seconds'
         ]
 
-class StudentExaminationResultSerializer(AttemptTimingMixin, serializers.ModelSerializer):
+class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingMixin, serializers.ModelSerializer):
+    """Lighter serializer for list views. Computes stats instead of sending all answers."""
+    examination_title = serializers.CharField(source='examination.title', read_only=True)
+    total_questions = serializers.SerializerMethodField()
+    correct_answers = serializers.SerializerMethodField()
+    wrong_answers = serializers.SerializerMethodField()
+    unanswered = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExaminationAttempt
+        fields = [
+            'id', 'examination', 'examination_title', 'started_at', 'submitted_at',
+            'status', 'score', 'percentage', 'passed', 'time_taken_seconds',
+            'total_questions', 'correct_answers', 'wrong_answers', 'unanswered',
+            'rank', 'total_participants'
+        ] + TIMING_FIELDS
+
+    def get_total_questions(self, obj):
+        return obj.examination.total_questions
+
+    def get_correct_answers(self, obj):
+        return sum(1 for a in obj.answers.all() if a.is_correct)
+
+    def get_wrong_answers(self, obj):
+        return sum(1 for a in obj.answers.all() if not a.is_correct and a.selected_option)
+
+    def get_unanswered(self, obj):
+        return sum(1 for a in obj.answers.all() if not a.selected_option)
+
+class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin, serializers.ModelSerializer):
     """Includes correct answers and explanations for completed exams."""
     examination_title = serializers.CharField(source='examination.title', read_only=True)
     answers = StudentAnswerSerializer(many=True, read_only=True)
@@ -173,7 +231,8 @@ class StudentExaminationResultSerializer(AttemptTimingMixin, serializers.ModelSe
         model = ExaminationAttempt
         fields = [
             'id', 'examination', 'examination_title', 'started_at', 'submitted_at',
-            'status', 'score', 'percentage', 'passed', 'time_taken_seconds', 'answers'
+            'status', 'score', 'percentage', 'passed', 'time_taken_seconds', 'answers',
+            'rank', 'total_participants'
         ] + TIMING_FIELDS
 
 class StudentLeaderboardSerializer(serializers.Serializer):

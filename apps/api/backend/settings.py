@@ -81,13 +81,54 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or INSECURE_DEFAULT_SECRET_KEY
 # DJANGO_DEBUG is the canonical name; DEBUG is accepted as an alias.
 DEBUG = _env_bool('DJANGO_DEBUG', _env_bool('DEBUG', False))
 
+# --- SENTRY (unhandled exception monitoring) ---------------------------------
+# Opt-in via SENTRY_DSN: unset (the default, including every local dev
+# machine and this repo's own .env.example) means sentry_sdk.init() is never
+# called at all - no network calls, no behavior change, nothing to point at
+# a project that doesn't exist. Deliberately not gated on `not DEBUG`: a
+# blank/placeholder DSN is what actually keeps dev quiet, so this also
+# reports real errors from a `DJANGO_DEBUG=1` staging box if one is ever
+# pointed at a real Sentry project.
+SENTRY_DSN = (os.environ.get('SENTRY_DSN') or '').strip()
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            # Every logger.exception(...) call already sprinkled through this
+            # codebase (notification dispatch, exam archiving, export jobs,
+            # Google Drive storage...) becomes a real Sentry event for free.
+            LoggingIntegration(level=None, event_level='ERROR'),
+        ],
+        environment=os.environ.get('SENTRY_ENVIRONMENT', 'production' if not DEBUG else 'development'),
+        release=os.environ.get('SENTRY_RELEASE'),
+        # Fraction of *successful* requests/tasks to trace for performance
+        # monitoring, separate from error reporting (errors are always
+        # captured regardless of this). Kept low by default - raise it in an
+        # env var, not by editing this file, if perf traces are worth the
+        # extra Sentry quota.
+        traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+        send_default_pii=False,
+    )
+
 # DJANGO_ALLOWED_HOSTS is space-separated; ALLOWED_HOSTS is comma-separated.
 if (os.environ.get('DJANGO_ALLOWED_HOSTS') or '').strip():
     ALLOWED_HOSTS = os.environ['DJANGO_ALLOWED_HOSTS'].split()
 elif (os.environ.get('ALLOWED_HOSTS') or '').strip():
     ALLOWED_HOSTS = [h.strip() for h in os.environ['ALLOWED_HOSTS'].split(',') if h.strip()]
 else:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
+
+if 'testserver' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('testserver')
+
+
 
 # Fail loudly instead of shipping the development secret key to production.
 if not DEBUG and SECRET_KEY == INSECURE_DEFAULT_SECRET_KEY:
@@ -260,14 +301,20 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
+    # Minimum length and complexity are admin-configurable (Admin Settings >
+    # Security), read live from the AdminSettings singleton rather than a
+    # fixed value here - see core/validators.py.
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'NAME': 'core.validators.DynamicMinimumLengthValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
     {
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+    {
+        'NAME': 'core.validators.AdminConfiguredComplexityValidator',
     },
 ]
 
@@ -291,9 +338,16 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+# STORAGES['default'] is filled in below, once we know whether R2/S3 is
+# configured - Django 6.1 reads storage config from STORAGES only, so this
+# dict (not the legacy DEFAULT_FILE_STORAGE setting) must always have a
+# 'default' key or every FileField/ImageField access raises InvalidStorageError.
 STORAGES = {
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
     },
 }
 
@@ -333,6 +387,10 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
     # Defaults to SECRET_KEY when JWT_SECRET is not provided.
     'SIGNING_KEY': os.environ.get('JWT_SECRET') or SECRET_KEY,
+    # Without this, User.last_login is never written anywhere in the app
+    # (JWT auth bypasses Django's session login signal), which silently
+    # breaks any "active user" reporting built on it.
+    'UPDATE_LAST_LOGIN': True,
 }
 
 AUTH_USER_MODEL = 'core.User'
@@ -348,7 +406,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 S3_ENDPOINT_URL = (os.environ.get('S3_ENDPOINT') or '').strip()
 
 if S3_ENDPOINT_URL:
-    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    STORAGES['default']['BACKEND'] = 'storages.backends.s3boto3.S3Boto3Storage'
     AWS_ACCESS_KEY_ID = os.environ.get('S3_ACCESS_KEY')
     AWS_SECRET_ACCESS_KEY = os.environ.get('S3_SECRET_KEY')
     AWS_STORAGE_BUCKET_NAME = os.environ.get('S3_BUCKET')
@@ -368,6 +426,31 @@ if S3_ENDPOINT_URL:
     AWS_DEFAULT_ACL = 'public-read'
     AWS_QUERYSTRING_AUTH = False  # Disable signed URLs for public files
 
+# Google Drive replaces R2/S3 as the primary media store (chosen to avoid
+# requiring a payment card). Read directly here rather than by importing
+# core.google_drive, since settings.py loads before the app registry is
+# ready. Takes precedence over S3 above when both happen to be configured.
+GOOGLE_DRIVE_CLIENT_ID = os.environ.get('GOOGLE_DRIVE_CLIENT_ID', '').strip()
+GOOGLE_DRIVE_CLIENT_SECRET = os.environ.get('GOOGLE_DRIVE_CLIENT_SECRET', '').strip()
+GOOGLE_DRIVE_REFRESH_TOKEN = os.environ.get('GOOGLE_DRIVE_REFRESH_TOKEN', '').strip()
+GOOGLE_DRIVE_ROOT_FOLDER_ID = os.environ.get('GOOGLE_DRIVE_ROOT_FOLDER_ID', '').strip()
+
+if GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET and GOOGLE_DRIVE_REFRESH_TOKEN and GOOGLE_DRIVE_ROOT_FOLDER_ID:
+    STORAGES['default']['BACKEND'] = 'core.storage_backends.GoogleDriveStorage'
+
+# Drive-hosted files are served through our own /api/media/drive/<id>/ proxy
+# rather than linking the browser straight to drive.google.com/lh3 - Google's
+# public CDN applies an undocumented per-referer rate limit that a handful of
+# admin page loads can trip, breaking every image on the site until it clears
+# (observed directly: 429s that persisted well past initial testing). Proxying
+# through our own domain uses the OAuth Drive API instead, a separate quota
+# that isn't subject to that browser-referer throttle.
+BACKEND_PUBLIC_URL = (
+    os.environ.get('BACKEND_PUBLIC_URL')
+    or os.environ.get('RENDER_EXTERNAL_URL')
+    or ('http://localhost:8000' if DEBUG else '')
+).rstrip('/')
+
 # --- PRODUCTION SECURITY HARDENING ---
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -382,3 +465,20 @@ if not DEBUG:
     if SECURE_HSTS_SECONDS:
         SECURE_HSTS_INCLUDE_SUBDOMAINS = True
         SECURE_HSTS_PRELOAD = True
+
+# --- CELERY (background jobs: backend/celery.py) ---
+# REDIS_URL is Render's own env var name for its managed Redis add-on;
+# CELERY_BROKER_URL is accepted too for anywhere else that names it that way.
+# Falling back to localhost keeps `manage.py` commands (which don't touch
+# Celery at all) working with nothing configured - only actually running a
+# worker/beat process requires a real broker to be reachable.
+CELERY_BROKER_URL = (
+    os.environ.get('CELERY_BROKER_URL')
+    or os.environ.get('REDIS_URL')
+    or 'redis://localhost:6379/0'
+)
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+# Keep failed jobs' tracebacks in results for a day, not forever.
+CELERY_RESULT_EXPIRES = 60 * 60 * 24

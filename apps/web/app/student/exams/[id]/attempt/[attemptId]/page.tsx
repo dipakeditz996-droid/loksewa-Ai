@@ -10,10 +10,22 @@ import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { studentExamsApi } from "@/lib/api/student-exams";
+import { useFocusMode } from "@/contexts/FocusModeContext";
 import toast from "react-hot-toast";
 
-export default function ExamAttemptPage({ params }: { params: { id: string, attemptId: string } }) {
+
+export default function ExamAttemptPage() {
   const router = useRouter();
+  const { beginExamFocus, endExamFocus } = useFocusMode();
+
+  // Next.js 15 passes route params as a Promise to Server Components; in a
+  // Client Component the useParams() hook is the resolved-synchronously
+  // equivalent, and it was already imported here but unused - the previous
+  // `{ params }` prop destructuring instead read a Promise object as if it
+  // were {id, attemptId}, so Number(params.attemptId) was always NaN and
+  // every fetch on this page 404'd, showing "Exam Already Submitted" for
+  // every attempt regardless of its real status.
+  const params = useParams<{ id: string; attemptId: string }>();
   const attemptId = Number(params.attemptId);
   const examId = Number(params.id);
 
@@ -109,6 +121,16 @@ export default function ExamAttemptPage({ params }: { params: { id: string, atte
     }
   }, [attempt, exam, isSubmitting, submitMutation]);
 
+  // Activate Focus Mode / DND during exam
+  useEffect(() => {
+    if (attempt && attempt.status === 'in-progress') {
+      beginExamFocus({ attemptId, examinationId: examId });
+    }
+    return () => {
+      endExamFocus();
+    };
+  }, [attempt, attemptId, examId, beginExamFocus, endExamFocus]);
+
   // Protect against accidental closing
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -120,6 +142,7 @@ export default function ExamAttemptPage({ params }: { params: { id: string, atte
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [attempt]);
+
 
   if (isLoadingAttempt || isLoadingQuestions || isLoadingExam) {
     return (

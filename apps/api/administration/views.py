@@ -1,20 +1,27 @@
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.db.models import Count, Sum, Q
+from django.http import HttpResponse
+from django.db.models import Count, Sum, Avg, Q
+from django.contrib.auth.password_validation import validate_password as django_validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 from django.db import transaction
 from django.core.paginator import Paginator
 from datetime import timedelta, date
 from core.models import User, Position, Tag
-from exams.models import Exam, Question, ModelExam, ModelExamAttempt, PracticeSession, ExaminationAttempt
+from exams.models import Exam, Question, Examination, PracticeSession, ExaminationAttempt
 from notes.models import StudyMaterial
 from marketplace.models import Product, PaymentSubmission, Purchase
 from games.models import GameMatch, SurvivalGame
-from ai_tutor.models import Conversation, TutorUsage
+from ai_tutor.models import Conversation, Message, TutorUsage, PromptTemplate
 from .models import AuditLog
-from .permissions import IsAdminUser
+from .permissions import IsAdminUser, IsEvaluatorUser
+
+logger = logging.getLogger(__name__)
 
 
 def _format_time_ago(dt):
@@ -91,15 +98,11 @@ class AdminDashboardStatsView(APIView):
             })
             activity_id += 1
 
-        # Recent exam attempts (legacy + new)
-        legacy_attempts = list(ModelExamAttempt.objects.select_related('student', 'model_exam').order_by('-started_at')[:3])
-        new_attempts = list(ExaminationAttempt.objects.select_related('student', 'examination').order_by('-started_at')[:3])
-        
-        all_recent = sorted(legacy_attempts + new_attempts, key=lambda x: x.started_at, reverse=True)[:3]
-        
+        # Recent exam attempts
+        all_recent = ExaminationAttempt.objects.select_related('student', 'examination').order_by('-started_at')[:3]
+
         for a in all_recent:
-            is_legacy = isinstance(a, ModelExamAttempt)
-            title = a.model_exam.title if is_legacy else a.examination.title
+            title = a.examination.title
             recent_activity.append({
                 "id": activity_id,
                 "type": "exam_attempt",
@@ -157,95 +160,83 @@ class AdminDashboardStatsView(APIView):
         })
 
 
+ANALYTICS_PERIOD_DAYS = {'7d': 7, '30d': 30, '90d': 90, '1y': 365}
+
+
+def _analytics_chart_data(period):
+    """Real daily time-series (registrations, exam attempts, AI sessions,
+    practice sessions) for the given period key. Shared by the JSON view and
+    the CSV export so they can never drift apart."""
+    days = ANALYTICS_PERIOD_DAYS.get(period, 30)
+
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=days - 1)
+    date_series = [start_date + timedelta(days=i) for i in range(days)]
+
+    reg_qs = (
+        User.objects.filter(
+            role='student',
+            date_joined__date__gte=start_date,
+            date_joined__date__lte=end_date,
+        )
+        .extra(select={'day': 'DATE(date_joined)'})
+        .values('day')
+        .annotate(count=Count('id'))
+    )
+    reg_map = {str(r['day']): r['count'] for r in reg_qs}
+
+    # Exam attempts per day
+    attempts_qs = (
+        ExaminationAttempt.objects.filter(
+            started_at__date__gte=start_date,
+            started_at__date__lte=end_date,
+        )
+        .extra(select={'day': 'DATE(started_at)'})
+        .values('day')
+        .annotate(count=Count('id'))
+    )
+    attempts_map = {str(a['day']): a['count'] for a in attempts_qs}
+
+    ai_qs = (
+        TutorUsage.objects.filter(date__gte=start_date, date__lte=end_date)
+        .values('date')
+        .annotate(count=Sum('request_count'))
+    )
+    ai_map = {str(a['date']): a['count'] for a in ai_qs}
+
+    practice_qs = (
+        PracticeSession.objects.filter(
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date,
+            completed=True,
+        )
+        .extra(select={'day': 'DATE(created_at)'})
+        .values('day')
+        .annotate(count=Count('id'))
+    )
+    practice_map = {str(p['day']): p['count'] for p in practice_qs}
+
+    chart_data = []
+    for d in date_series:
+        ds = str(d)
+        chart_data.append({
+            "date": ds,
+            "registrations": reg_map.get(ds, 0),
+            "examAttempts": attempts_map.get(ds, 0),
+            "aiSessions": ai_map.get(ds, 0),
+            "practiceSessions": practice_map.get(ds, 0),
+        })
+    return days, chart_data
+
+
 class AdminAnalyticsView(APIView):
     """Time-series analytics for the admin analytics page."""
     permission_classes = [IsAdminUser]
 
     def get(self, request):
         period = request.query_params.get('period', '30d')
-        period_map = {'7d': 7, '30d': 30, '90d': 90, '1y': 365}
-        days = period_map.get(period, 30)
+        days, chart_data = _analytics_chart_data(period)
 
-        end_date = timezone.now().date()
-        start_date = end_date - timedelta(days=days - 1)
-
-        # Generate date series
-        date_series = [start_date + timedelta(days=i) for i in range(days)]
-
-        # Student registrations per day
-        reg_qs = (
-            User.objects.filter(
-                role='student',
-                date_joined__date__gte=start_date,
-                date_joined__date__lte=end_date,
-            )
-            .extra(select={'day': 'DATE(date_joined)'})
-            .values('day')
-            .annotate(count=Count('id'))
-        )
-        reg_map = {str(r['day']): r['count'] for r in reg_qs}
-
-        # Exam attempts per day (Legacy ModelExamAttempt + new ExaminationAttempt)
-        legacy_qs = (
-            ModelExamAttempt.objects.filter(
-                started_at__date__gte=start_date,
-                started_at__date__lte=end_date,
-            )
-            .extra(select={'day': 'DATE(started_at)'})
-            .values('day')
-            .annotate(count=Count('id'))
-        )
-        
-        new_qs = (
-            ExaminationAttempt.objects.filter(
-                started_at__date__gte=start_date,
-                started_at__date__lte=end_date,
-            )
-            .extra(select={'day': 'DATE(started_at)'})
-            .values('day')
-            .annotate(count=Count('id'))
-        )
-        
-        attempts_map = {}
-        for a in legacy_qs:
-            attempts_map[str(a['day'])] = attempts_map.get(str(a['day']), 0) + a['count']
-        for a in new_qs:
-            attempts_map[str(a['day'])] = attempts_map.get(str(a['day']), 0) + a['count']
-
-
-        # AI tutor usage per day
-        ai_qs = (
-            TutorUsage.objects.filter(date__gte=start_date, date__lte=end_date)
-            .values('date')
-            .annotate(count=Sum('request_count'))
-        )
-        ai_map = {str(a['date']): a['count'] for a in ai_qs}
-
-        # Practice sessions per day
-        practice_qs = (
-            PracticeSession.objects.filter(
-                created_at__date__gte=start_date,
-                created_at__date__lte=end_date,
-                completed=True,
-            )
-            .extra(select={'day': 'DATE(created_at)'})
-            .values('day')
-            .annotate(count=Count('id'))
-        )
-        practice_map = {str(p['day']): p['count'] for p in practice_qs}
-
-        chart_data = []
-        for d in date_series:
-            ds = str(d)
-            chart_data.append({
-                "date": ds,
-                "registrations": reg_map.get(ds, 0),
-                "examAttempts": attempts_map.get(ds, 0),
-                "aiSessions": ai_map.get(ds, 0),
-                "practiceSessions": practice_map.get(ds, 0),
-            })
-
-        # Summary totals
         return Response({
             "period": period,
             "days": days,
@@ -256,6 +247,95 @@ class AdminAnalyticsView(APIView):
                 "aiSessions": sum(r["aiSessions"] for r in chart_data),
                 "practiceSessions": sum(r["practiceSessions"] for r in chart_data),
             }
+        })
+
+
+class AdminAnalyticsExportView(APIView):
+    """GET /api/admin/analytics/export/ - CSV of the same real time-series
+    the Overview chart shows, for the given period."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        import csv
+
+        period = request.query_params.get('period', '30d')
+        _, chart_data = _analytics_chart_data(period)
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="analytics-{period}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Date', 'Registrations', 'Exam Attempts', 'AI Sessions', 'Practice Sessions'])
+        for row in chart_data:
+            writer.writerow([
+                row['date'], row['registrations'], row['examAttempts'],
+                row['aiSessions'], row['practiceSessions'],
+            ])
+        return response
+
+
+SCORE_BUCKETS = [(0, 20), (20, 40), (40, 60), (60, 80), (80, 101)]
+
+
+class AdminStudentsAnalyticsView(APIView):
+    """GET /api/admin/analytics/students/
+
+    Cohort-level student analytics: registration trend, score distribution,
+    top performers, and real recent-activity engagement. Distinct from
+    AdminStudentPerformanceView (per-student drill-down at
+    /api/admin/students/<id>/performance/) - this is the aggregate view.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        period = request.query_params.get('period', '30d')
+        days, chart_data = _analytics_chart_data(period)
+        registration_trend = [{'date': r['date'], 'count': r['registrations']} for r in chart_data]
+
+        students = User.objects.filter(role='student')
+        total_students = students.count()
+
+        now = timezone.now()
+        active_7d = students.filter(last_login__gte=now - timedelta(days=7)).count()
+        active_30d = students.filter(last_login__gte=now - timedelta(days=30)).count()
+        never_logged_in = students.filter(last_login__isnull=True).count()
+
+        completed = ExaminationAttempt.objects.filter(
+            student__role='student', status__in=('submitted', 'evaluated')
+        )
+
+        score_distribution = []
+        for low, high in SCORE_BUCKETS:
+            label = f"{low}-100" if high > 100 else f"{low}-{high}"
+            count = completed.filter(percentage__gte=low, percentage__lt=high).count()
+            score_distribution.append({'range': label, 'count': count})
+
+        top_performers = (
+            completed.values('student_id', 'student__username', 'student__first_name', 'student__last_name')
+            .annotate(exams_completed=Count('id'), avg_percentage=Avg('percentage'))
+            .filter(exams_completed__gte=1)
+            .order_by('-avg_percentage')[:10]
+        )
+        top_performers_data = [{
+            'id': row['student_id'],
+            'name': (f"{row['student__first_name']} {row['student__last_name']}".strip()
+                     or row['student__username']),
+            'username': row['student__username'],
+            'examsCompleted': row['exams_completed'],
+            'averagePercentage': round(row['avg_percentage'] or 0, 2),
+        } for row in top_performers]
+
+        return Response({
+            'period': period,
+            'days': days,
+            'registrationTrend': registration_trend,
+            'summary': {
+                'totalStudents': total_students,
+                'active7d': active_7d,
+                'active30d': active_30d,
+                'neverLoggedIn': never_logged_in,
+            },
+            'scoreDistribution': score_distribution,
+            'topPerformers': top_performers_data,
         })
 
 
@@ -319,9 +399,27 @@ class AdminUsersView(APIView):
             
         if User.objects.filter(email=email).exists():
             return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
+        try:
+            django_validate_password(password)
+        except DjangoValidationError as e:
+            return Response({'error': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
         user = User.objects.create_user(username=username, email=email, password=password, role=role)
-        
+
+        # Only teacher accounts are worth flagging to the rest of the admin
+        # team here - admin/super-admin creation is already covered by audit
+        # logs elsewhere, and student accounts created this way are rare and
+        # already covered by the registration flow for the normal signup path.
+        if role == 'teacher':
+            from core.notification_service import NotificationService
+            NotificationService.notify_admins(
+                notif_type='account',
+                title='New Teacher Account Created',
+                message=f"{request.user.get_full_name() or request.user.username} created a teacher account for '{username}' ({email}).",
+                action_url='/admin-dashboard/users',
+            )
+
         return Response({
             "id": user.id,
             "username": user.username,
@@ -342,15 +440,30 @@ class AdminUserDetailView(APIView):
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
             
         is_active = request.data.get('is_active')
+        was_active = user.is_active
         if is_active is not None:
             user.is_active = is_active
-            
+
         role = request.data.get('role')
         if role:
             user.role = role
-            
+
         user.save()
-        
+
+        # Deactivation is a meaningful account-status change worth an audit
+        # trail for the rest of the admin team, regardless of which admin
+        # performed it. Only fires on the True -> False transition, not on
+        # every save of an already-inactive account.
+        if was_active and not user.is_active:
+            from core.notification_service import NotificationService
+            NotificationService.notify_admins(
+                notif_type='account',
+                title='Account Deactivated',
+                message=f"{request.user.get_full_name() or request.user.username} deactivated {user.role} account '{user.username}'.",
+                action_url='/admin-dashboard/users',
+                priority='important',
+            )
+
         return Response({
             "id": user.id,
             "username": user.username,
@@ -464,12 +577,13 @@ class AdminExamsOverviewView(APIView):
         total_exams = Exam.objects.count()
         active_exams = Exam.objects.filter(is_active=True).count()
 
-        total_model_exams = ModelExam.objects.count()
-        published_model_exams = ModelExam.objects.filter(status='published').count()
-        draft_model_exams = ModelExam.objects.filter(status='draft').count()
-        total_attempts = ModelExamAttempt.objects.count()
+        model_exams_qs = Examination.objects.filter(objective_category='model')
+        total_model_exams = model_exams_qs.count()
+        published_model_exams = model_exams_qs.filter(status='published').count()
+        draft_model_exams = model_exams_qs.filter(status='draft').count()
+        total_attempts = ExaminationAttempt.objects.filter(examination__objective_category='model').count()
 
-        recent_model_exams = ModelExam.objects.select_related('exam').order_by('-created_at')[:5]
+        recent_model_exams = model_exams_qs.select_related('exam').order_by('-created_at')[:5]
         recent_data = []
         for me in recent_model_exams:
             attempt_count = me.attempts.count()
@@ -525,13 +639,252 @@ class AdminAITutorOverviewView(APIView):
         # Active students using AI tutor
         active_students = Conversation.objects.values('student').distinct().count()
 
+        # Questions asked = messages sent by students (excludes AI responses)
+        total_questions = Message.objects.filter(role='user').count()
+
         return Response({
             "totalSessions": total_sessions,
             "sessionsToday": sessions_today,
             "activeStudents": active_students,
+            "totalQuestions": total_questions,
             "topModes": top_modes,
             "trend": trend_data,
         })
+
+
+class AdminAITutorProviderStatusView(APIView):
+    """Safe AI provider configuration status for the admin dashboard.
+
+    Never returns the API key itself, and never makes a live call to the
+    provider (that would consume quota/cost on every dashboard load).
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        import os
+        configured = bool(os.environ.get('GEMINI_API_KEY', '').strip())
+        return Response({
+            "provider": "gemini",
+            "model": "gemini-2.5-flash",
+            "status": "configured" if configured else "not_configured",
+        })
+
+
+class AdminAITutorConversationsView(APIView):
+    """Paginated, searchable list of AI Tutor conversations for admin review."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        search = request.query_params.get('search', '').strip()
+        mode = request.query_params.get('mode', '').strip()
+        date_from = parse_date(request.query_params.get('date_from', '') or '')
+        date_to = parse_date(request.query_params.get('date_to', '') or '')
+        page = int(request.query_params.get('page', 1))
+        page_size = min(int(request.query_params.get('page_size', 20)), 100)
+
+        qs = Conversation.objects.select_related('student').annotate(
+            message_count=Count('messages')
+        )
+
+        if search:
+            qs = qs.filter(
+                Q(title__icontains=search) |
+                Q(student__username__icontains=search) |
+                Q(student__email__icontains=search) |
+                Q(student__first_name__icontains=search) |
+                Q(student__last_name__icontains=search)
+            )
+        if mode:
+            qs = qs.filter(mode=mode)
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+
+        qs = qs.order_by('-updated_at')
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        conversations = qs[start:start + page_size]
+
+        data = []
+        for c in conversations:
+            data.append({
+                "id": c.id,
+                "title": c.title,
+                "mode": c.mode,
+                "student": {
+                    "id": c.student.id,
+                    "name": c.student.get_full_name() or c.student.username,
+                    "email": c.student.email,
+                },
+                "messageCount": c.message_count,
+                "createdAt": c.created_at.isoformat(),
+                "updatedAt": c.updated_at.isoformat(),
+            })
+
+        return Response({
+            "conversations": data,
+            "total": total,
+            "page": page,
+            "pageSize": page_size,
+            "totalPages": (total + page_size - 1) // page_size,
+        })
+
+
+class AdminAITutorConversationDetailView(APIView):
+    """Full conversation transcript for admin review."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        try:
+            conversation = Conversation.objects.select_related('student').get(pk=pk)
+        except Conversation.DoesNotExist:
+            return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        messages = conversation.messages.order_by('created_at')
+
+        return Response({
+            "id": conversation.id,
+            "title": conversation.title,
+            "mode": conversation.mode,
+            "student": {
+                "id": conversation.student.id,
+                "name": conversation.student.get_full_name() or conversation.student.username,
+                "email": conversation.student.email,
+            },
+            "createdAt": conversation.created_at.isoformat(),
+            "updatedAt": conversation.updated_at.isoformat(),
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "createdAt": m.created_at.isoformat(),
+                }
+                for m in messages
+            ],
+        })
+
+
+class AdminAITutorUsageView(APIView):
+    """Real usage/token statistics, aggregated in the database."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        days = min(int(request.query_params.get('days', 30)), 90)
+        today = timezone.now().date()
+        start_date = today - timedelta(days=days - 1)
+
+        daily = (
+            TutorUsage.objects.filter(date__gte=start_date, date__lte=today)
+            .values('date')
+            .annotate(requests=Sum('request_count'), tokens=Sum('token_usage'))
+            .order_by('date')
+        )
+        daily_by_date = {row['date']: row for row in daily}
+
+        trend = []
+        for i in range(days - 1, -1, -1):
+            d = today - timedelta(days=i)
+            row = daily_by_date.get(d)
+            trend.append({
+                "date": str(d),
+                "requests": row['requests'] if row else 0,
+                "tokens": row['tokens'] if row else 0,
+            })
+
+        totals = TutorUsage.objects.aggregate(
+            totalRequests=Sum('request_count'),
+            totalTokens=Sum('token_usage'),
+        )
+
+        top_students = (
+            TutorUsage.objects.values('student__id', 'student__username', 'student__first_name', 'student__last_name')
+            .annotate(requests=Sum('request_count'), tokens=Sum('token_usage'))
+            .order_by('-requests')[:10]
+        )
+        top_students_data = [
+            {
+                "studentId": s['student__id'],
+                "name": (f"{s['student__first_name']} {s['student__last_name']}".strip()
+                         or s['student__username']),
+                "requests": s['requests'] or 0,
+                "tokens": s['tokens'] or 0,
+            }
+            for s in top_students
+        ]
+
+        return Response({
+            "totalRequests": totals['totalRequests'] or 0,
+            "totalTokens": totals['totalTokens'] or 0,
+            "trend": trend,
+            "topStudents": top_students_data,
+        })
+
+
+class AdminAITutorPromptsView(APIView):
+    """Admin-editable AI Tutor system prompts.
+
+    GET/PUT the exact text AITutorService.construct_system_prompt() reads
+    at request time - editing here changes real AI Tutor behaviour, it is
+    not a display-only settings screen.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from core.models import AdminSettings
+
+        settings_obj = AdminSettings.get_settings()
+        templates = PromptTemplate.get_all_seeded()
+
+        return Response({
+            "basePrompt": settings_obj.ai_tutor_base_prompt,
+            "modes": {
+                mode: {
+                    "promptText": template.prompt_text,
+                    "updatedAt": template.updated_at.isoformat(),
+                }
+                for mode, template in templates.items()
+            },
+        })
+
+    def put(self, request):
+        from core.models import AdminSettings
+
+        base_prompt = request.data.get('basePrompt')
+        if base_prompt is not None:
+            if not isinstance(base_prompt, str) or not base_prompt.strip():
+                return Response(
+                    {'error': 'basePrompt must be a non-empty string'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            settings_obj = AdminSettings.get_settings()
+            settings_obj.ai_tutor_base_prompt = base_prompt
+            settings_obj.updated_by = request.user
+            settings_obj.save()
+
+        modes = request.data.get('modes')
+        if modes:
+            valid_modes = dict(Conversation.MODE_CHOICES)
+            for mode, prompt_text in modes.items():
+                if mode not in valid_modes:
+                    return Response(
+                        {'error': f'Unknown mode: {mode}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if not isinstance(prompt_text, str) or not prompt_text.strip():
+                    return Response(
+                        {'error': f'modes.{mode} must be a non-empty string'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            for mode, prompt_text in modes.items():
+                PromptTemplate.objects.update_or_create(
+                    mode=mode,
+                    defaults={'prompt_text': prompt_text, 'updated_by': request.user},
+                )
+
+        return Response({'message': 'Prompts updated successfully'})
 
 
 class AdminMarketplaceOverviewView(APIView):
@@ -544,10 +897,42 @@ class AdminMarketplaceOverviewView(APIView):
         total_orders = PaymentSubmission.objects.count()
         pending_orders = PaymentSubmission.objects.filter(status='PENDING').count()
         completed_orders = PaymentSubmission.objects.filter(status='APPROVED').count()
-        revenue = float(
-            Purchase.objects.filter(status='ACTIVE')
+        cancelled_orders = PaymentSubmission.objects.filter(status='REJECTED').count()
+
+        active_purchases = Purchase.objects.filter(status='ACTIVE')
+        revenue = float(active_purchases.aggregate(total=Sum('amount_paid'))['total'] or 0)
+
+        today = timezone.now().date()
+        revenue_today = float(
+            active_purchases.filter(created_at__date=today)
             .aggregate(total=Sum('amount_paid'))['total'] or 0
         )
+
+        # Real revenue trend for the last 7 days (no fabricated bars).
+        revenue_trend = []
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            day_total = float(
+                active_purchases.filter(created_at__date=d)
+                .aggregate(total=Sum('amount_paid'))['total'] or 0
+            )
+            revenue_trend.append({"date": str(d), "revenue": day_total})
+
+        # Real payment-method usage breakdown, from actual submissions.
+        method_counts = (
+            PaymentSubmission.objects.values('payment_method__display_name')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        total_submissions = sum(m['count'] for m in method_counts) or 1
+        payment_method_breakdown = [
+            {
+                "method": m['payment_method__display_name'] or 'Unknown',
+                "count": m['count'],
+                "percentage": round(m['count'] / total_submissions * 100, 1),
+            }
+            for m in method_counts
+        ]
 
         recent_orders = PaymentSubmission.objects.select_related(
             'student', 'product'
@@ -571,7 +956,11 @@ class AdminMarketplaceOverviewView(APIView):
             "totalOrders": total_orders,
             "pendingOrders": pending_orders,
             "completedOrders": completed_orders,
+            "cancelledOrders": cancelled_orders,
             "revenue": revenue,
+            "revenueToday": revenue_today,
+            "revenueTrend": revenue_trend,
+            "paymentMethodBreakdown": payment_method_breakdown,
             "recentOrders": recent_data,
         })
 
@@ -739,8 +1128,13 @@ class AdminEvaluatorCreateView(APIView):
             errors['firstName'] = 'First name is required.'
         if not email:
             errors['email'] = 'Email is required.'
-        if not password or len(password) < 8:
-            errors['password'] = 'Password must be at least 8 characters.'
+        if not password:
+            errors['password'] = 'Password is required.'
+        else:
+            try:
+                django_validate_password(password)
+            except DjangoValidationError as e:
+                errors['password'] = ' '.join(e.messages)
         if User.objects.filter(email=email).exists():
             errors['email'] = 'A user with this email already exists.'
         if errors:
@@ -842,7 +1236,7 @@ class AdminEvaluationAssignmentsView(APIView):
 
         qs = SubjectiveAnswer.objects.select_related(
             'attempt__student',
-            'question__topic__unit__subject',
+            'question__topic__chapter__subject',
         ).order_by('-submitted_at')
 
         if status_filter:
@@ -860,7 +1254,7 @@ class AdminEvaluationAssignmentsView(APIView):
             student = a.attempt.student
             subject = None
             try:
-                subject = a.question.topic.Chapter.subject.name
+                subject = a.question.topic.chapter.subject.name
             except Exception:
                 pass
 
@@ -1114,22 +1508,60 @@ class AdminCourseApplicationDetailView(APIView):
 # EVALUATIONS MANAGEMENT VIEW
 # ============================================================
 
+def _evaluation_queryset():
+    """Shared base queryset for the admin evaluation list/detail endpoints.
+    select_related covers every field the serialized responses touch (the
+    student, the question, and - via the evaluation reverse OneToOne - the
+    evaluator) so paginating a page of results never issues a per-row query,
+    and pulls in the subject/exam chain each answer's attempt belongs to
+    (practice_set or the legacy model_exam) for search/filter/display."""
+    from exams.models import SubjectiveAnswer
+
+    return SubjectiveAnswer.objects.select_related(
+        'attempt__student',
+        'question__topic',
+        'evaluation__evaluator',
+        'attempt__practice_set__exam',
+        'attempt__practice_set__subject',
+        'attempt__model_exam__exam',
+    )
+
+
+def _exam_subject_context(answer):
+    """The exam/subject an answer belongs to - practice_set carries both,
+    the legacy model_exam only carries the exam."""
+    attempt = answer.attempt
+    if attempt.practice_set:
+        return {
+            'exam': attempt.practice_set.exam.name if attempt.practice_set.exam else None,
+            'subject': attempt.practice_set.subject.name if attempt.practice_set.subject else None,
+            'paper': attempt.practice_set.title,
+        }
+    if attempt.model_exam:
+        return {
+            'exam': attempt.model_exam.exam.name if attempt.model_exam.exam else None,
+            'subject': None,
+            'paper': attempt.model_exam.title,
+        }
+    return {'exam': None, 'subject': None, 'paper': None}
+
+
 class AdminEvaluationsView(APIView):
-    """List pending evaluations (submitted subjective answers) with pagination and filtering."""
-    permission_classes = [IsAdminUser]
+    """List submissions needing evaluation (subjective answers) with
+    pagination and filtering. Any authenticated evaluator (teacher, admin,
+    or super-admin) can access this - matches the same role set the rest of
+    the evaluation architecture (TeacherEvaluationViewSet) already grants
+    via IsEvaluatorUser, not admin-only."""
+    permission_classes = [IsEvaluatorUser]
 
     def get(self, request):
-        from exams.models import SubjectiveAnswer, Evaluation
-
-        status_filter = request.query_params.get('status', 'submitted')  # 'submitted', 'under-review', 'evaluated', 'all'
+        status_filter = request.query_params.get('status', 'submitted')  # 'submitted', 'under-review', 'evaluated', 'returned', 'all'
         search = request.query_params.get('search', '')
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
+        exam_id = request.query_params.get('exam', '')
+        page = max(1, int(request.query_params.get('page', 1)))
+        page_size = min(100, max(1, int(request.query_params.get('page_size', 20))))
 
-        # Start with pending evaluations
-        qs = SubjectiveAnswer.objects.select_related(
-            'attempt__student', 'question'
-        ).order_by('-submitted_at')
+        qs = _evaluation_queryset().order_by('-submitted_at')
 
         if status_filter != 'all':
             qs = qs.filter(status=status_filter)
@@ -1143,15 +1575,22 @@ class AdminEvaluationsView(APIView):
                 Q(question__text__icontains=search)
             )
 
+        if exam_id:
+            qs = qs.filter(
+                Q(attempt__practice_set__exam_id=exam_id) | Q(attempt__model_exam__exam_id=exam_id)
+            )
+
         total = qs.count()
         start = (page - 1) * page_size
-        answers = qs[start:start + page_size]
+        answers = list(qs[start:start + page_size])
 
         data = []
         for answer in answers:
-            # Check if evaluation exists for this answer
-            evaluation = Evaluation.objects.filter(answer=answer).first()
+            # select_related('evaluation__evaluator') above means this
+            # never issues a query either way.
+            evaluation = answer.evaluation if hasattr(answer, 'evaluation') else None
 
+            context = _exam_subject_context(answer)
             data.append({
                 "id": answer.id,
                 "student": answer.attempt.student.get_full_name() or answer.attempt.student.username,
@@ -1163,9 +1602,12 @@ class AdminEvaluationsView(APIView):
                 "status": answer.status,
                 "submittedAt": answer.submitted_at.isoformat() if answer.submitted_at else None,
                 "wordCount": answer.word_count,
-                "evaluator": evaluation.evaluator.get_full_name() or evaluation.evaluator.username if evaluation else None,
+                "evaluator": (evaluation.evaluator.get_full_name() or evaluation.evaluator.username) if evaluation and evaluation.evaluator else None,
                 "marksObtained": float(evaluation.marks_obtained) if evaluation else None,
                 "evaluatedAt": evaluation.evaluated_at.isoformat() if evaluation else None,
+                "exam": context['exam'],
+                "subject": context['subject'],
+                "paper": context['paper'],
             })
 
         return Response({
@@ -1175,6 +1617,108 @@ class AdminEvaluationsView(APIView):
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
         })
+
+
+class AdminEvaluationDetailView(APIView):
+    """Full detail for one subjective answer, plus the save/finalize action
+    an evaluator uses to grade it. Reuses the same SubjectiveAnswer/
+    Evaluation/Annotation models TeacherEvaluationViewSet (exams/views.py)
+    already grades against - this is a separate admin-namespaced view layer
+    over the same data, matching how AdminQuestionViewSet/TeacherQuestionViewSet
+    both already operate on the same Question model."""
+    permission_classes = [IsEvaluatorUser]
+
+    def _get_answer(self, pk):
+        from exams.models import SubjectiveAnswer
+        try:
+            return _evaluation_queryset().get(pk=pk)
+        except SubjectiveAnswer.DoesNotExist:
+            return None
+
+    def _serialize(self, answer):
+        from exams.serializers import SubjectiveQuestionWithModelAnswerSerializer, EvaluationSerializer
+
+        evaluation = answer.evaluation if hasattr(answer, 'evaluation') else None
+
+        context = _exam_subject_context(answer)
+        return {
+            "id": answer.id,
+            "student": {
+                "id": answer.attempt.student.id,
+                "name": answer.attempt.student.get_full_name() or answer.attempt.student.username,
+                "username": answer.attempt.student.username,
+                "email": answer.attempt.student.email,
+            },
+            "exam": context['exam'],
+            "subject": context['subject'],
+            "paper": context['paper'],
+            "attemptDate": answer.attempt.submitted_at.isoformat() if answer.attempt.submitted_at else None,
+            "question": SubjectiveQuestionWithModelAnswerSerializer(answer.question).data if answer.question else None,
+            "answerText": answer.answer_text,
+            "fileUrl": answer.file_url,
+            "status": answer.status,
+            "submittedAt": answer.submitted_at.isoformat() if answer.submitted_at else None,
+            "wordCount": answer.word_count,
+            "evaluation": EvaluationSerializer(evaluation).data if evaluation else None,
+        }
+
+    def get(self, request, pk):
+        answer = self._get_answer(pk)
+        if answer is None:
+            return Response({"detail": "Submission not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self._serialize(answer))
+
+    def patch(self, request, pk):
+        from exams.models import Evaluation
+
+        answer = self._get_answer(pk)
+        if answer is None:
+            return Response({"detail": "Submission not found."}, status=status.HTTP_404_NOT_FOUND)
+        if answer.question is None:
+            return Response({"detail": "This submission has no linked question to grade against."}, status=status.HTTP_400_BAD_REQUEST)
+
+        raw_marks = request.data.get('marks_obtained', None)
+        if raw_marks is None:
+            return Response({"marks_obtained": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            marks = float(raw_marks)
+        except (TypeError, ValueError):
+            return Response({"marks_obtained": ["Must be a number."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        max_marks = float(answer.question.marks)
+        if marks < 0:
+            return Response({"marks_obtained": ["Marks cannot be negative."]}, status=status.HTTP_400_BAD_REQUEST)
+        if marks > max_marks:
+            return Response({"marks_obtained": [f"Marks cannot exceed the maximum of {max_marks}."]}, status=status.HTTP_400_BAD_REQUEST)
+
+        feedback = request.data.get('feedback', '')
+        finalize = bool(request.data.get('finalize', False))
+
+        with transaction.atomic():
+            evaluation, _created = Evaluation.objects.update_or_create(
+                answer=answer,
+                defaults={
+                    'evaluator': request.user,
+                    'marks_obtained': marks,
+                    'feedback': feedback,
+                },
+            )
+            # 'under-review' for a saved-but-not-finalized evaluation,
+            # 'evaluated' once the evaluator finalizes it - both are
+            # existing SubjectiveAnswer.STATUS_CHOICES values. Re-finalizing
+            # an already-evaluated answer is allowed, matching
+            # TeacherEvaluationViewSet.evaluate()'s existing update_or_create
+            # behaviour (the backend already supports re-evaluation, so this
+            # does not block it).
+            answer.status = 'evaluated' if finalize else 'under-review'
+            answer.save(update_fields=['status'])
+
+            if finalize:
+                from core.notification_service import NotificationService
+                transaction.on_commit(lambda: NotificationService.notify_subjective_evaluated(evaluation))
+
+        answer.refresh_from_db()
+        return Response(self._serialize(answer))
 
 
 # ============================================================
@@ -1231,6 +1775,7 @@ class AdminStudyMaterialsView(APIView):
                 "status": material.status,
                 "accessType": material.access_type,
                 "estimatedReadingTime": material.estimated_reading_time,
+                "availableToAiTutor": material.available_to_ai_tutor,
                 "createdAt": material.created_at.isoformat(),
                 "updatedAt": material.updated_at.isoformat(),
             })
@@ -1395,6 +1940,7 @@ class AdminStudyMaterialDetailView(APIView):
             "externalUrl": material.external_url,
             "fileUrl": material.file.url if material.file else None,
             "estimatedReadingTime": material.estimated_reading_time,
+            "availableToAiTutor": material.available_to_ai_tutor,
             "createdAt": material.created_at.isoformat(),
             "updatedAt": material.updated_at.isoformat(),
         })
@@ -1435,6 +1981,15 @@ class AdminStudyMaterialDetailView(APIView):
 
         if request.FILES.get('file'):
             material.file = request.FILES['file']
+
+        if 'available_to_ai_tutor' in request.data:
+            value = request.data['available_to_ai_tutor']
+            if not isinstance(value, bool):
+                return Response(
+                    {"error": "available_to_ai_tutor must be a boolean."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            material.available_to_ai_tutor = value
 
         material.save()
 
@@ -1769,95 +2324,148 @@ class AdminStudyPlanDetailView(APIView):
 # AUDIT LOGS MANAGEMENT VIEW
 # ============================================================
 
+def _audit_log_severity(action):
+    """Best-effort severity from an AuditLog.action verb (e.g. BULK_DELETE,
+    STUDENT_FEEDBACK_SENT). Destructive/rejecting actions are flagged so an
+    admin scanning the log can spot them without reading every row."""
+    action_upper = (action or '').upper()
+    if any(k in action_upper for k in ('DELETE', 'REJECT', 'CANCEL', 'REMOVE', 'REVOKE')):
+        return 'warning'
+    return 'info'
+
+
+AUDIT_CATEGORIES = ('user', 'content', 'evaluation', 'admin')
+
+
+def _collect_audit_events():
+    """Real events from every source the Audit Logs page covers. Each has a
+    stable 'id' of the form '<source>:<pk>' (resolved back to its real record
+    by AdminAuditLogDetailView) and a 'category' in AUDIT_CATEGORIES.
+
+    Folds in three activity streams (registrations, content creation,
+    evaluations) that are real system activity yet were never written to
+    AuditLog - AuditLog only ever contains actions an admin/staff endpoint
+    explicitly logs (bulk actions, notification sends, feedback, exam
+    question generation, etc.), not ordinary usage.
+    """
+    from exams.models import Question, Evaluation
+
+    events = []
+
+    for user in User.objects.all().order_by('-date_joined')[:100]:
+        events.append({
+            'id': f'user:{user.id}',
+            'category': 'user',
+            'timestamp': user.date_joined,
+            'action': 'user_registration',
+            'actionLabel': 'User Registration',
+            'user': user.get_full_name() or user.username,
+            'email': user.email,
+            'details': f'{user.get_full_name() or user.username} ({user.role}) registered',
+            'severity': 'info',
+        })
+
+    for q in Question.objects.select_related('created_by').order_by('-created_at')[:50]:
+        creator = (q.created_by.get_full_name() or q.created_by.username) if q.created_by else 'Unknown'
+        events.append({
+            'id': f'question:{q.id}',
+            'category': 'content',
+            'timestamp': q.created_at,
+            'action': 'content_created',
+            'actionLabel': 'Content Created',
+            'user': creator,
+            'email': q.created_by.email if q.created_by else 'N/A',
+            'details': f'Question "{q.text[:50]}..." created by {creator}',
+            'severity': 'info',
+        })
+
+    evaluations = Evaluation.objects.select_related(
+        'evaluator', 'answer__attempt__student'
+    ).order_by('-evaluated_at')[:50]
+    for ev in evaluations:
+        student = ev.answer.attempt.student
+        evaluator = (ev.evaluator.get_full_name() or ev.evaluator.username) if ev.evaluator else 'Unknown'
+        events.append({
+            'id': f'evaluation:{ev.id}',
+            'category': 'evaluation',
+            'timestamp': ev.evaluated_at,
+            'action': 'evaluation_submitted',
+            'actionLabel': 'Evaluation Submitted',
+            'user': evaluator,
+            'email': ev.evaluator.email if ev.evaluator else 'N/A',
+            'details': f'Answer by {student.get_full_name() or student.username} evaluated with {ev.marks_obtained} marks',
+            'severity': 'info',
+        })
+
+    for log in AuditLog.objects.select_related('actor').order_by('-timestamp')[:200]:
+        actor_name = (log.actor.get_full_name() or log.actor.username) if log.actor else 'System'
+        label = log.action.replace('_', ' ').title()
+        entity = f'{log.entity_type} {log.entity_id}'.strip() if log.entity_id else log.entity_type
+        events.append({
+            'id': f'auditlog:{log.id}',
+            'category': 'admin',
+            'timestamp': log.timestamp,
+            'action': log.action.lower(),
+            'actionLabel': label,
+            'user': actor_name,
+            'email': log.actor.email if log.actor else 'N/A',
+            'details': f'{label} on {entity}',
+            'severity': _audit_log_severity(log.action),
+        })
+
+    events.sort(key=lambda e: e['timestamp'], reverse=True)
+    return events
+
+
+def _filter_by_search(events, search):
+    if not search:
+        return events
+    s = search.lower()
+    return [e for e in events if (
+        s in e['user'].lower() or s in e['email'].lower() or s in e['details'].lower()
+    )]
+
+
 class AdminAuditLogsView(APIView):
-    """Aggregate audit logs from system activities."""
+    """Aggregate audit logs from system activities, including the structured
+    AuditLog table other admin views write to (bulk actions, notification
+    sends, feedback sends, exam question generation, ...)."""
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from exams.models import Question, Evaluation, SubjectiveAnswer
-
-        action_filter = request.query_params.get('action', '')  # 'user', 'content', 'evaluation', 'all'
+        category_filter = request.query_params.get('action', '')  # 'user' | 'content' | 'evaluation' | 'admin' | 'all' | ''
         search = request.query_params.get('search', '')
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 20))
 
-        # Collect audit events from various sources
-        events = []
+        all_events = _filter_by_search(_collect_audit_events(), search)
 
-        # User registration events
-        if action_filter in ('user', 'all', ''):
-            users = User.objects.all().order_by('-date_joined')[:100]
-            for user in users:
-                events.append({
-                    'timestamp': user.date_joined,
-                    'action': 'user_registration',
-                    'actionLabel': 'User Registration',
-                    'user': user.get_full_name() or user.username,
-                    'email': user.email,
-                    'details': f'{user.get_full_name() or user.username} ({user.role}) registered',
-                    'severity': 'info',
-                })
+        # Category totals always reflect the search term but never the
+        # category filter itself, so the overview cards stay stable
+        # reference counts while a category is selected below them.
+        category_totals = {c: 0 for c in AUDIT_CATEGORIES}
+        for e in all_events:
+            category_totals[e['category']] += 1
 
-        # Question creation/modification events
-        if action_filter in ('content', 'all', ''):
-            questions = Question.objects.all().order_by('-created_at')[:50]
-            for q in questions:
-                creator = q.created_by.get_full_name() or q.created_by.username if q.created_by else 'Unknown'
-                events.append({
-                    'timestamp': q.created_at,
-                    'action': 'content_created',
-                    'actionLabel': 'Content Created',
-                    'user': creator,
-                    'email': q.created_by.email if q.created_by else 'N/A',
-                    'details': f'Question "{q.text[:50]}..." created by {creator}',
-                    'severity': 'info',
-                })
-
-        # Evaluation events
-        if action_filter in ('evaluation', 'all', ''):
-            evaluations = Evaluation.objects.select_related(
-                'evaluator', 'answer__attempt__student'
-            ).order_by('-evaluated_at')[:50]
-            for eval in evaluations:
-                student = eval.answer.attempt.student
-                evaluator = eval.evaluator.get_full_name() or eval.evaluator.username if eval.evaluator else 'Unknown'
-                events.append({
-                    'timestamp': eval.evaluated_at,
-                    'action': 'evaluation_submitted',
-                    'actionLabel': 'Evaluation Submitted',
-                    'user': evaluator,
-                    'email': eval.evaluator.email if eval.evaluator else 'N/A',
-                    'details': f'Answer by {student.get_full_name() or student.username} evaluated with {eval.marks_obtained} marks',
-                    'severity': 'info',
-                })
-
-        # Sort all events by timestamp descending
-        events.sort(key=lambda e: e['timestamp'], reverse=True)
-
-        # Apply search filter
-        if search:
-            events = [e for e in events if (
-                search.lower() in e['user'].lower() or
-                search.lower() in e['email'].lower() or
-                search.lower() in e['details'].lower()
-            )]
+        if category_filter and category_filter != 'all':
+            events = [e for e in all_events if e['category'] == category_filter]
+        else:
+            events = all_events
 
         total = len(events)
         start = (page - 1) * page_size
         paginated_events = events[start:start + page_size]
 
-        # Format for response
-        data = []
-        for event in paginated_events:
-            data.append({
-                "timestamp": event['timestamp'].isoformat(),
-                "action": event['action'],
-                "actionLabel": event['actionLabel'],
-                "user": event['user'],
-                "email": event['email'],
-                "details": event['details'],
-                "severity": event['severity'],
-            })
+        data = [{
+            "id": event['id'],
+            "timestamp": event['timestamp'].isoformat(),
+            "action": event['action'],
+            "actionLabel": event['actionLabel'],
+            "user": event['user'],
+            "email": event['email'],
+            "details": event['details'],
+            "severity": event['severity'],
+        } for event in paginated_events]
 
         return Response({
             "logs": data,
@@ -1865,7 +2473,231 @@ class AdminAuditLogsView(APIView):
             "page": page,
             "pageSize": page_size,
             "totalPages": (total + page_size - 1) // page_size,
+            "categoryTotals": {
+                "user": category_totals['user'],
+                "content": category_totals['content'],
+                "evaluation": category_totals['evaluation'],
+                "admin": category_totals['admin'],
+            },
         })
+
+
+class AdminAuditLogDetailView(APIView):
+    """GET /api/admin/audit-logs/<event_id>/ - resolves a composite
+    '<source>:<pk>' id (see _collect_audit_events) back to its real record."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, event_id):
+        from exams.models import Question, Evaluation
+
+        try:
+            source, pk = event_id.split(':', 1)
+        except ValueError:
+            return Response({'error': 'Invalid event id.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if source == 'auditlog':
+            try:
+                log = AuditLog.objects.select_related('actor').get(pk=pk)
+            except (AuditLog.DoesNotExist, ValueError):
+                return Response({'error': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({
+                'id': event_id,
+                'source': 'admin_action',
+                'actionLabel': log.action.replace('_', ' ').title(),
+                'timestamp': log.timestamp.isoformat(),
+                'actorName': (log.actor.get_full_name() or log.actor.username) if log.actor else None,
+                'actorEmail': log.actor.email if log.actor else None,
+                'entityType': log.entity_type,
+                'entityId': log.entity_id,
+                'details': log.details,
+                'severity': _audit_log_severity(log.action),
+            })
+
+        if source == 'user':
+            try:
+                u = User.objects.get(pk=pk)
+            except (User.DoesNotExist, ValueError):
+                return Response({'error': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({
+                'id': event_id,
+                'source': 'user_registration',
+                'actionLabel': 'User Registration',
+                'timestamp': u.date_joined.isoformat(),
+                'actorName': u.get_full_name() or u.username,
+                'actorEmail': u.email,
+                'entityType': 'User',
+                'entityId': str(u.id),
+                'details': {'username': u.username, 'role': u.role, 'isActive': u.is_active},
+                'severity': 'info',
+            })
+
+        if source == 'question':
+            try:
+                q = Question.objects.select_related('created_by').get(pk=pk)
+            except (Question.DoesNotExist, ValueError):
+                return Response({'error': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+            creator = (q.created_by.get_full_name() or q.created_by.username) if q.created_by else None
+            return Response({
+                'id': event_id,
+                'source': 'content_created',
+                'actionLabel': 'Content Created',
+                'timestamp': q.created_at.isoformat(),
+                'actorName': creator,
+                'actorEmail': q.created_by.email if q.created_by else None,
+                'entityType': 'Question',
+                'entityId': str(q.id),
+                'details': {'text': q.text, 'questionType': q.question_type, 'status': q.status},
+                'severity': 'info',
+            })
+
+        if source == 'evaluation':
+            try:
+                ev = Evaluation.objects.select_related('evaluator', 'answer__attempt__student').get(pk=pk)
+            except (Evaluation.DoesNotExist, ValueError):
+                return Response({'error': 'Event not found.'}, status=status.HTTP_404_NOT_FOUND)
+            student = ev.answer.attempt.student
+            evaluator = (ev.evaluator.get_full_name() or ev.evaluator.username) if ev.evaluator else None
+            return Response({
+                'id': event_id,
+                'source': 'evaluation_submitted',
+                'actionLabel': 'Evaluation Submitted',
+                'timestamp': ev.evaluated_at.isoformat(),
+                'actorName': evaluator,
+                'actorEmail': ev.evaluator.email if ev.evaluator else None,
+                'entityType': 'Evaluation',
+                'entityId': str(ev.id),
+                'details': {
+                    'student': student.get_full_name() or student.username,
+                    'marksObtained': ev.marks_obtained,
+                    'feedback': ev.feedback,
+                },
+                'severity': 'info',
+            })
+
+        return Response({'error': 'Unknown event type.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminAuditLogRetentionView(APIView):
+    """GET/POST /api/admin/audit-logs/retention/
+
+    Retention is applied immediately on save (matching the UI's own warning
+    copy), not by a background job. It only ever prunes AuditLog rows - the
+    underlying business records behind the other event sources (users,
+    questions, evaluations) are never touched by this."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from core.models import AdminSettings
+        settings_obj = AdminSettings.get_settings()
+        return Response({'retentionDays': settings_obj.audit_log_retention_days})
+
+    def post(self, request):
+        from core.models import AdminSettings
+
+        try:
+            retention_days = int(request.data.get('retentionDays'))
+        except (TypeError, ValueError):
+            return Response({'error': 'retentionDays must be a number.'}, status=status.HTTP_400_BAD_REQUEST)
+        if retention_days < 1:
+            return Response({'error': 'retentionDays must be at least 1.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        settings_obj = AdminSettings.get_settings()
+        settings_obj.audit_log_retention_days = retention_days
+        settings_obj.updated_by = request.user
+        settings_obj.save(update_fields=['audit_log_retention_days', 'updated_by', 'updated_at'])
+
+        cutoff = timezone.now() - timedelta(days=retention_days)
+        deleted_count, _ = AuditLog.objects.filter(timestamp__lt=cutoff).delete()
+
+        AuditLog.objects.create(
+            actor=request.user, action='AUDIT_RETENTION_POLICY_CHANGED', entity_type='AdminSettings',
+            entity_id=None, details={'retention_days': retention_days, 'purged_count': deleted_count},
+        )
+
+        return Response({'retentionDays': retention_days, 'purgedCount': deleted_count})
+
+
+class AdminAuditLogExportView(APIView):
+    """GET /api/admin/audit-logs/export/ - CSV of the same real events the
+    list view shows, honoring the same search/category filters."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        import csv
+
+        category_filter = request.query_params.get('action', '')
+        search = request.query_params.get('search', '')
+
+        events = _filter_by_search(_collect_audit_events(), search)
+        if category_filter and category_filter != 'all':
+            events = [e for e in events if e['category'] == category_filter]
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="audit-logs.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Timestamp', 'Action', 'User', 'Email', 'Details', 'Severity'])
+        for e in events:
+            writer.writerow([
+                e['timestamp'].isoformat(), e['actionLabel'], e['user'], e['email'], e['details'], e['severity'],
+            ])
+        return response
+
+
+class AdminAuditLogExportJobView(APIView):
+    """POST /api/admin/audit-logs/export-jobs/ - queues a background export
+    instead of building the CSV in-request (AdminAuditLogExportView above).
+    Same filters, same output - the difference is audit logs grow without
+    bound, so this returns a job id immediately and the file gets generated
+    by a Celery worker (or `manage.py run_export_job <id>` locally).
+
+    GET on the same URL lists this admin's recent export jobs so the
+    frontend can poll status and offer the download link once ready.
+    """
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        from .models import ExportJob
+        from .tasks import generate_export_job_task
+
+        filters = {
+            'action': request.data.get('action', ''),
+            'search': request.data.get('search', ''),
+        }
+        job = ExportJob.objects.create(
+            export_type='audit_logs', filters=filters, requested_by=request.user,
+        )
+
+        try:
+            generate_export_job_task.delay(job.id)
+        except Exception:
+            # No broker reachable (e.g. local dev without Redis running) -
+            # the job row still exists so `manage.py run_export_job <id>`
+            # (or a worker coming back later, if something re-queues it)
+            # can still produce it. Never fail the request just because the
+            # queue is unreachable right now.
+            logger.exception("Could not enqueue export job %s - broker unreachable.", job.id)
+
+        return Response({
+            'id': job.id,
+            'status': job.status,
+            'exportType': job.export_type,
+            'createdAt': job.created_at.isoformat(),
+        }, status=status.HTTP_202_ACCEPTED)
+
+    def get(self, request):
+        from .models import ExportJob
+
+        jobs = ExportJob.objects.filter(requested_by=request.user).order_by('-created_at')[:20]
+        return Response([{
+            'id': j.id,
+            'exportType': j.export_type,
+            'status': j.status,
+            'rowCount': j.row_count,
+            'errorMessage': j.error_message,
+            'downloadUrl': j.file.url if j.file else None,
+            'createdAt': j.created_at.isoformat(),
+            'completedAt': j.completed_at.isoformat() if j.completed_at else None,
+        } for j in jobs])
 
 
 class AdminNotificationsListView(APIView):
@@ -2576,6 +3408,9 @@ class AdminSettingsView(APIView):
                         'enableGamification': settings.enable_gamification,
                         'enableStudyPlans': settings.enable_study_plans,
                     },
+                    'aiTutor': {
+                        'dailyMessageLimit': settings.ai_tutor_daily_message_limit,
+                    },
                 },
                 'updatedAt': settings.updated_at.isoformat(),
             })
@@ -2635,6 +3470,18 @@ class AdminSettingsView(APIView):
                 settings.enable_marketplace = features.get('enableMarketplace', settings.enable_marketplace)
                 settings.enable_gamification = features.get('enableGamification', settings.enable_gamification)
                 settings.enable_study_plans = features.get('enableStudyPlans', settings.enable_study_plans)
+
+            # AI Tutor configuration
+            if 'aiTutor' in request.data:
+                ai_tutor = request.data['aiTutor']
+                if 'dailyMessageLimit' in ai_tutor:
+                    limit = ai_tutor['dailyMessageLimit']
+                    if not isinstance(limit, int) or limit < 1:
+                        return Response(
+                            {'error': 'aiTutor.dailyMessageLimit must be a positive integer'},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    settings.ai_tutor_daily_message_limit = limit
 
             settings.updated_by = request.user
             settings.save()
@@ -2776,3 +3623,53 @@ class AdminTagsView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class AdminStorageHealthView(APIView):
+    """Admin-only check of whether Google Drive media storage is configured
+    and reachable. Never returns tokens/secrets - only connection status and
+    the account's own quota numbers."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from django.conf import settings
+        from core import google_drive
+
+        if not google_drive.is_configured():
+            return Response({
+                'provider': 'google_drive',
+                'configured': False,
+                'connected': False,
+            })
+
+        try:
+            creds = google_drive.get_credentials(force_refresh=True)
+            from googleapiclient.discovery import build
+            service = build('drive', 'v3', credentials=creds, cache_discovery=False)
+            about = service.about().get(fields='user(emailAddress), storageQuota').execute()
+        except google_drive.GoogleDriveError as e:
+            return Response({
+                'provider': 'google_drive',
+                'configured': True,
+                'connected': False,
+                'error': str(e),
+            })
+        except Exception:
+            return Response({
+                'provider': 'google_drive',
+                'configured': True,
+                'connected': False,
+                'error': 'Unexpected error contacting Google Drive.',
+            })
+
+        quota = about.get('storageQuota', {})
+        return Response({
+            'provider': 'google_drive',
+            'configured': True,
+            'connected': True,
+            'root_folder': 'LoksewaAI',
+            'root_folder_id': settings.GOOGLE_DRIVE_ROOT_FOLDER_ID,
+            'account_email': about.get('user', {}).get('emailAddress'),
+            'storage_used_bytes': int(quota.get('usage', 0)),
+            'storage_limit_bytes': int(quota.get('limit', 0)) if quota.get('limit') else None,
+        })

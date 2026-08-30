@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
-  ClipboardList, Search, Filter, MoreVertical, Eye,
+  ClipboardList, Search, Eye,
   CheckCircle2, Clock, AlertCircle, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,6 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel
-} from "@/components/ui/dropdown-menu";
 import { adminApi, AdminEvaluation } from "@/lib/api/admin";
 
 export default function EvaluationsPage() {
@@ -153,6 +146,7 @@ export default function EvaluationsPage() {
               <TableRow className="bg-slate-50 hover:bg-slate-50">
                 <TableHead className="text-slate-700">Student</TableHead>
                 <TableHead className="text-slate-700">Question</TableHead>
+                <TableHead className="text-slate-700">Exam / Subject</TableHead>
                 <TableHead className="text-slate-700">Marks</TableHead>
                 <TableHead className="text-slate-700">Status</TableHead>
                 <TableHead className="text-slate-700">Submitted</TableHead>
@@ -163,13 +157,13 @@ export default function EvaluationsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center bg-white">
+                  <TableCell colSpan={8} className="h-32 text-center bg-white">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
                   </TableCell>
                 </TableRow>
               ) : evaluations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-slate-500 bg-white">
+                  <TableCell colSpan={8} className="h-32 text-center text-slate-500 bg-white">
                     No evaluations found.
                   </TableCell>
                 </TableRow>
@@ -186,6 +180,12 @@ export default function EvaluationsPage() {
                       <div className="max-w-xs">
                         <p className="text-sm text-slate-700 truncate">{evaluation.question}</p>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-sm text-slate-700">{evaluation.exam || evaluation.paper || '—'}</p>
+                      {evaluation.subject && (
+                        <p className="text-xs text-slate-500">{evaluation.subject}</p>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-slate-700 font-medium">{evaluation.marks}</span>
@@ -207,25 +207,12 @@ export default function EvaluationsPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100">
-                            <span className="sr-only">Open menu</span>
-                            <MoreVertical className="h-4 w-4 text-slate-500" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Eye className="w-4 h-4 mr-2" /> View Answer
-                          </DropdownMenuItem>
-                          {evaluation.status === 'submitted' && (
-                            <DropdownMenuItem className="cursor-pointer">
-                              Assign for Evaluation
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Link href={`/admin-dashboard/evaluations/answer/${evaluation.id}`}>
+                        <Button variant="outline" size="sm" className="bg-white gap-1.5">
+                          <Eye className="w-3.5 h-3.5" />
+                          {evaluation.status === 'evaluated' ? 'View' : 'Evaluate'}
+                        </Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))

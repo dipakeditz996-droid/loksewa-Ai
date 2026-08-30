@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { BookOpen, Eye, EyeOff, User, Lock, Trophy, BarChart2, ArrowRight } from "lucide-react";
+import { BookOpen, Eye, EyeOff, User, Lock, Trophy, BarChart2, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import bgImage from "../../media/login.png";
@@ -29,6 +29,20 @@ function LoginContent() {
   const [error, setError] = useState("");
   const router = useRouter();
   const { refreshUser } = useAuth();
+  const loginCardRef = useRef<HTMLDivElement>(null);
+
+  // On mobile the brand/hero copy stacks above the login form, so jump
+  // straight to the form instead of making the student scroll past it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+    if (isMobile && loginCardRef.current) {
+      const timer = setTimeout(() => {
+        loginCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const handleSocialSuccess = async (provider: 'google' | 'facebook' | 'apple', token: string) => {
     setIsLoading(true);
@@ -160,16 +174,26 @@ function LoginContent() {
     <div className="min-h-screen relative flex font-sans overflow-hidden bg-black text-white">
       {/* Background Image & Cinematic Overlay */}
       <div className="absolute inset-0 z-0">
-        <div 
-          className="absolute inset-0 bg-cover bg-[center_top] bg-no-repeat"
+        <div
+          className="absolute inset-0 bg-cover bg-[center_top] lg:bg-[center_top] bg-no-repeat"
           style={{ backgroundImage: `url(${bgImage.src})` }}
         ></div>
-        {/* Lighter cinematic gradient to let the image shine through */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/20 to-black/60 mix-blend-multiply"></div>
+        {/* Mobile: vertical gradient suits the stacked layout (hero copy over card).
+            Desktop (lg+): original left-right gradient for the side-by-side layout. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/70 to-black/95 lg:bg-gradient-to-r lg:from-black/80 lg:via-black/20 lg:to-black/60 mix-blend-multiply"></div>
       </div>
 
+      {/* Back to Home */}
+      <Link
+        href="/"
+        className="fixed top-4 left-4 md:top-6 md:left-6 z-20 flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-black/30 backdrop-blur-md border border-white/15 text-white/90 text-[12px] font-semibold hover:bg-black/50 hover:text-white transition-colors shadow-md"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2} />
+        Back to Home
+      </Link>
+
       <div className="container relative z-10 w-full mx-auto px-6 md:px-12 py-8 flex flex-col lg:flex-row items-center justify-between min-h-screen">
-        
+
         {/* LEFT SIDE: Brand & Copy */}
         <div className="w-full lg:w-[45%] flex flex-col pt-8 pb-8 lg:pr-8">
           
@@ -231,7 +255,7 @@ function LoginContent() {
         </div>
 
         {/* RIGHT SIDE: Login Card */}
-        <div className="w-full lg:w-[460px] flex justify-center lg:justify-end mt-10 lg:mt-0">
+        <div ref={loginCardRef} className="w-full lg:w-[460px] flex justify-center lg:justify-end mt-10 lg:mt-0 scroll-mt-6">
           <div className="w-full bg-black/20 backdrop-blur-[24px] border border-white/10 rounded-[24px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.4)] relative">
             
             {/* Subtle inner light effect */}
@@ -395,19 +419,6 @@ function LoginContent() {
                 </div>
               </form>
 
-              {/* Attribution for icons */}
-              <div className="mt-8 text-center text-[9px] text-white/30 space-y-1">
-                <p>
-                  <a href="https://www.flaticon.com/free-icons/roman" target="_blank" rel="noopener noreferrer" title="roman icons" className="hover:text-white/50 transition-colors">
-                    Roman icons created by egorpolyakov - Flaticon
-                  </a>
-                </p>
-                <p>
-                  <a href="https://www.flaticon.com/free-icons/laurels" target="_blank" rel="noopener noreferrer" title="laurels icons" className="hover:text-white/50 transition-colors">
-                    Laurels icons created by egorpolyakov - Flaticon
-                  </a>
-                </p>
-              </div>
 
             </div>
           </div>

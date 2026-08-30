@@ -1,31 +1,59 @@
 "use client";
 
-import React from "react";
+import React, { Suspense, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { 
-  BarChart3, Users, FileText, HelpCircle, GraduationCap, 
-  Bot, Store, LayoutDashboard
+import {
+  BarChart3, Users, FileText, HelpCircle, GraduationCap,
+  Bot, Store, LayoutDashboard, ExternalLink
 } from "lucide-react";
-import { DateRangeFilter } from "@/components/analytics/DateRangeFilter";
+import { DateRangeFilter, AnalyticsPeriod } from "@/components/analytics/DateRangeFilter";
+import { downloadFile } from "@/lib/api/client";
+import toast from "react-hot-toast";
 
-export default function AnalyticsLayout({
+function AnalyticsLayoutContent({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [exporting, setExporting] = useState(false);
 
+  const period = (searchParams.get("period") as AnalyticsPeriod) || "30d";
+
+  const setPeriod = (next: AnalyticsPeriod) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("period", next);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await downloadFile(`/admin/analytics/export/?period=${period}`, `analytics-${period}.csv`);
+      toast.success("Analytics exported.");
+    } catch {
+      toast.error("Failed to export analytics. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Exams/Questions/Study Plans/AI Tutor/Marketplace already have their own
+  // real, backend-connected admin sections elsewhere - these tabs link
+  // straight there instead of duplicating that work as a second, thinner
+  // "analytics" dashboard for the same data.
   const tabs = [
-    { name: "Overview", href: "/admin-dashboard/analytics", icon: LayoutDashboard, exact: true },
-    { name: "Students", href: "/admin-dashboard/analytics/students", icon: Users, exact: false },
-    { name: "Exams", href: "/admin-dashboard/analytics/exams", icon: FileText, exact: false },
-    { name: "Questions", href: "/admin-dashboard/analytics/questions", icon: HelpCircle, exact: false },
-    { name: "Study Plans", href: "/admin-dashboard/analytics/study-plans", icon: GraduationCap, exact: false },
-    { name: "AI Tutor", href: "/admin-dashboard/analytics/ai-tutor", icon: Bot, exact: false },
-    { name: "Marketplace", href: "/admin-dashboard/analytics/marketplace", icon: Store, exact: false },
-    { name: "Reports", href: "/admin-dashboard/analytics/reports", icon: BarChart3, exact: false },
+    { name: "Overview", href: "/admin-dashboard/analytics", icon: LayoutDashboard, exact: true, external: false },
+    { name: "Students", href: "/admin-dashboard/analytics/students", icon: Users, exact: false, external: false },
+    { name: "Exams", href: "/admin-dashboard/exams", icon: FileText, exact: false, external: true },
+    { name: "Questions", href: "/admin-dashboard/questions/review", icon: HelpCircle, exact: false, external: true },
+    { name: "Study Plans", href: "/admin-dashboard/study-plans", icon: GraduationCap, exact: false, external: true },
+    { name: "AI Tutor", href: "/admin-dashboard/ai-tutor/overview", icon: Bot, exact: false, external: true },
+    { name: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store, exact: false, external: true },
   ];
 
   return (
@@ -44,26 +72,27 @@ export default function AnalyticsLayout({
               </p>
             </div>
           </div>
-          
+
           <div className="flex gap-6 overflow-x-auto no-scrollbar">
             {tabs.map((tab) => {
-              const isActive = tab.exact 
-                ? pathname === tab.href 
-                : pathname.startsWith(tab.href);
-                
+              const isActive = !tab.external && (tab.exact
+                ? pathname === tab.href
+                : pathname.startsWith(tab.href));
+
               return (
                 <Link
                   key={tab.href}
-                  href={tab.href}
+                  href={tab.external ? tab.href : `${tab.href}?period=${period}`}
                   className={cn(
                     "flex items-center gap-2 pb-3 text-sm font-medium transition-colors relative whitespace-nowrap",
-                    isActive 
-                      ? "text-[#0B2545]" 
+                    isActive
+                      ? "text-[#0B2545]"
                       : "text-slate-500 hover:text-slate-900"
                   )}
                 >
                   <tab.icon className={cn("w-4 h-4", isActive ? "text-[#D4A72C]" : "text-slate-400")} />
                   {tab.name}
+                  {tab.external && <ExternalLink className="w-3 h-3 text-slate-300" />}
                   {isActive && (
                     <span className="absolute bottom-0 left-0 w-full h-0.5 bg-[#D4A72C] rounded-t-full" />
                   )}
@@ -77,10 +106,18 @@ export default function AnalyticsLayout({
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto h-full space-y-6">
-          <DateRangeFilter onExport={() => alert("Exporting report...")} />
+          <DateRangeFilter period={period} onPeriodChange={setPeriod} onExport={handleExport} exporting={exporting} />
           {children}
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AnalyticsLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading analytics…</div>}>
+      <AnalyticsLayoutContent>{children}</AnalyticsLayoutContent>
+    </Suspense>
   );
 }

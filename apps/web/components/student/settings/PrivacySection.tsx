@@ -18,22 +18,22 @@ interface ToggleCardProps {
 
 function ToggleCard({ checked, onChange, title, description }: ToggleCardProps) {
   return (
-    <div className="flex items-start justify-between p-5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors">
+    <div className="flex items-start justify-between p-5 rounded-xl border border-border bg-card hover:border-border transition-colors">
       <div className="pr-4">
-        <p className="text-[14px] font-semibold text-slate-800">{title}</p>
-        <p className="text-[12px] text-slate-500 mt-1 leading-relaxed">{description}</p>
+        <p className="text-[14px] font-semibold text-foreground">{title}</p>
+        <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">{description}</p>
       </div>
       <button
         type="button"
         onClick={() => onChange(!checked)}
         className={cn(
           "relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 mt-1",
-          checked ? "bg-[#D4A72C]" : "bg-slate-300"
+          checked ? "bg-[#D4A72C]" : "bg-secondary"
         )}
       >
         <span
           className={cn(
-            "inline-block h-4 w-4 rounded-full bg-white shadow-sm transform transition-transform",
+            "inline-block h-4 w-4 rounded-full bg-card shadow-sm transform transition-transform",
             checked ? "translate-x-6" : "translate-x-1"
           )}
         />
@@ -119,14 +119,14 @@ export function PrivacySection() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8">
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-xl bg-[#0B2545]/5 flex items-center justify-center">
-            <Eye className="h-5 w-5 text-[#0B2545]" />
+          <div className="h-10 w-10 rounded-xl bg-primary text-primary-foreground/5 flex items-center justify-center">
+            <Eye className="h-5 w-5 text-primary dark:text-foreground" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-[#0B2545]">Privacy Settings</h3>
-            <p className="text-xs text-slate-500">Control who can see your information and activity.</p>
+            <h3 className="text-lg font-semibold text-primary dark:text-foreground">Privacy Settings</h3>
+            <p className="text-xs text-muted-foreground">Control who can see your information and activity.</p>
           </div>
         </div>
 
@@ -147,7 +147,7 @@ export function PrivacySection() {
         <Button
           onClick={() => mutation.mutate(form)}
           disabled={mutation.isPending || !dirty}
-          className="bg-[#0B2545] hover:bg-[#163E6B] text-white px-6"
+          className="bg-primary text-primary-foreground hover:bg-[#163E6B] text-white px-6"
         >
           {mutation.isPending ? (
             <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>

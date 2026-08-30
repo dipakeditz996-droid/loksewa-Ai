@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
-  ShieldAlert, Search, Filter, MoreVertical, Eye,
-  Loader2, AlertCircle, CheckCircle2, Info
+  Search, MoreVertical, Eye,
+  Loader2, AlertCircle, CheckCircle2, Info, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,14 +18,18 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel
 } from "@/components/ui/dropdown-menu";
-import { adminApi, AdminAuditLog } from "@/lib/api/admin";
+import { adminApi, AdminAuditLog, AdminAuditLogsResponse } from "@/lib/api/admin";
+
+const EMPTY_TOTALS = { user: 0, content: 0, evaluation: 0, admin: 0 };
 
 export default function AuditLogsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [logs, setLogs] = useState<AdminAuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalLogs, setTotalLogs] = useState(0);
+  const [categoryTotals, setCategoryTotals] = useState<AdminAuditLogsResponse["categoryTotals"]>(EMPTY_TOTALS);
   const [currentPage, setCurrentPage] = useState(1);
 
   const fetchLogs = async () => {
@@ -38,6 +43,7 @@ export default function AuditLogsPage() {
       });
       setLogs(data.logs);
       setTotalLogs(data.total);
+      setCategoryTotals(data.categoryTotals);
     } catch (error) {
       console.error("Failed to fetch audit logs", error);
     } finally {
@@ -77,53 +83,44 @@ export default function AuditLogsPage() {
       case 'evaluation_submitted':
         return <Info className="w-4 h-4" />;
       default:
-        return <Info className="w-4 h-4" />;
+        return <ShieldCheck className="w-4 h-4" />;
     }
   };
-
-  const userRegistrationCount = logs.filter(l => l.action === 'user_registration').length;
-  const contentCreatedCount = logs.filter(l => l.action === 'content_created').length;
-  const evaluationCount = logs.filter(l => l.action === 'evaluation_submitted').length;
 
   const actionOptions = [
     { value: '', label: 'All Actions' },
     { value: 'user', label: 'User Activities' },
     { value: 'content', label: 'Content Activities' },
     { value: 'evaluation', label: 'Evaluation Activities' },
-    { value: 'all', label: 'All Activities' },
+    { value: 'admin', label: 'Admin Actions' },
   ];
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
-            <ShieldAlert className="w-6 h-6 text-[#D4A72C]" />
-            Audit Logs
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">Monitor system activity and track administrative actions.</p>
-        </div>
-      </div>
-
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Overview Cards - the 4 breakdown cards always show grand totals
+          per category (independent of which category is selected below),
+          so switching categories doesn't make the overview jump around. */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-slate-600 text-sm font-medium mb-1">Total Events</p>
           <p className="text-2xl font-bold text-[#0B2545]">{totalLogs.toLocaleString()}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
           <p className="text-slate-600 text-sm font-medium mb-1">User Activities</p>
-          <p className="text-2xl font-bold text-blue-600">{userRegistrationCount}</p>
+          <p className="text-2xl font-bold text-blue-600">{categoryTotals.user}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-purple-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Content Activities</p>
-          <p className="text-2xl font-bold text-purple-600">{contentCreatedCount}</p>
+          <p className="text-2xl font-bold text-purple-600">{categoryTotals.content}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Evaluations</p>
-          <p className="text-2xl font-bold text-emerald-600">{evaluationCount}</p>
+          <p className="text-2xl font-bold text-emerald-600">{categoryTotals.evaluation}</p>
+        </div>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-500">
+          <p className="text-slate-600 text-sm font-medium mb-1">Admin Actions</p>
+          <p className="text-2xl font-bold text-amber-600">{categoryTotals.admin}</p>
         </div>
       </div>
 
@@ -179,8 +176,8 @@ export default function AuditLogsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                logs.map((log, idx) => (
-                  <TableRow key={idx} className="hover:bg-slate-50/50 border-b border-slate-200">
+                logs.map((log) => (
+                  <TableRow key={log.id} className="hover:bg-slate-50/50 border-b border-slate-200">
                     <TableCell>
                       <span className="text-sm text-slate-600">
                         {new Date(log.timestamp).toLocaleString()}
@@ -218,7 +215,10 @@ export default function AuditLogsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer">
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={() => router.push(`/admin-dashboard/audit-logs/${encodeURIComponent(log.id)}`)}
+                          >
                             <Eye className="w-4 h-4 mr-2" /> View Details
                           </DropdownMenuItem>
                         </DropdownMenuContent>

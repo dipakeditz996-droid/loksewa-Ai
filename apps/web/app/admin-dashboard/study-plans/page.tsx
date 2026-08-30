@@ -241,11 +241,10 @@ export default function StudyPlansPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Eye className="w-4 h-4 mr-2" /> View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Edit className="w-4 h-4 mr-2" /> Edit
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin-dashboard/study-plans/${plan.id}`} className="cursor-pointer flex items-center">
+                              <Eye className="w-4 h-4 mr-2" /> View Details
+                            </Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

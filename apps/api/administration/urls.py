@@ -3,6 +3,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     AdminDashboardStatsView,
     AdminAnalyticsView,
+    AdminAnalyticsExportView,
+    AdminStudentsAnalyticsView,
     AdminUsersView,
     AdminUserDetailView,
     AdminAdministratorsView,
@@ -10,6 +12,11 @@ from .views import (
     AdminPermissionsView,
     AdminExamsOverviewView,
     AdminAITutorOverviewView,
+    AdminAITutorProviderStatusView,
+    AdminAITutorConversationsView,
+    AdminAITutorConversationDetailView,
+    AdminAITutorUsageView,
+    AdminAITutorPromptsView,
     AdminMarketplaceOverviewView,
     AdminEvaluatorListView,
     AdminEvaluatorDetailView,
@@ -20,11 +27,16 @@ from .views import (
     AdminCourseApplicationView,
     AdminCourseApplicationDetailView,
     AdminEvaluationsView,
+    AdminEvaluationDetailView,
     AdminStudyMaterialsView,
     AdminStudyMaterialDetailView,
     AdminStudyPlansView,
     AdminStudyPlanDetailView,
     AdminAuditLogsView,
+    AdminAuditLogDetailView,
+    AdminAuditLogRetentionView,
+    AdminAuditLogExportView,
+    AdminAuditLogExportJobView,
     AdminNotificationsListView,
     AdminNotificationsCreateView,
     AdminNotificationsDeleteView,
@@ -38,6 +50,7 @@ from .views import (
     AdminSettingsView,
     AdminPositionsView,
     AdminTagsView,
+    AdminStorageHealthView,
 )
 from .syllabus_views import (
     ExamCategoryViewSet, ExamViewSet, PaperViewSet, SubjectViewSet, 
@@ -51,6 +64,7 @@ from .collection_views import QuestionCollectionViewSet
 from .exam_views import ExaminationViewSet
 from .study_plan_views import AdminStudyPlanTemplateViewSet
 from .leaderboard_views import AdminLeaderboardView
+from .feedback_views import AdminStudentFeedbackView
 from .student_performance_views import (
     AdminExamAttemptReviewView, AdminStudentExamHistoryView,
     AdminStudentPerformanceView,
@@ -60,12 +74,17 @@ from .material_taxonomy_views import (
 )
 
 
+from exams.schedule_views import AdminExamScheduleViewSet
+from core.testimonial_views import AdminTestimonialViewSet
+
 router = DefaultRouter()
 router.register(r'questions', AdminQuestionViewSet, basename='admin-questions')
 router.register(r'questions/import', QuestionImportViewSet, basename='admin-question-import')
 router.register(r'question-sets', QuestionSetViewSet, basename='admin-question-set')
 router.register(r'collections', QuestionCollectionViewSet, basename='admin-collection')
 router.register(r'exams', ExaminationViewSet, basename='admin-examination')
+router.register(r'schedules', AdminExamScheduleViewSet, basename='admin-exam-schedules')
+router.register(r'testimonials', AdminTestimonialViewSet, basename='admin-testimonials')
 router.register(r'study-plan-templates', AdminStudyPlanTemplateViewSet, basename='admin-study-plan-templates')
 router.register(r'material-categories', AdminMaterialCategoryViewSet, basename='admin-material-categories')
 router.register(r'material-collections', AdminMaterialCollectionViewSet, basename='admin-material-collections')
@@ -80,7 +99,10 @@ from .ai_views import AIGenerateOptionsView, AIApproveOptionsView, AIBulkGenerat
 
 urlpatterns = [
     path('dashboard/stats/', AdminDashboardStatsView.as_view(), name='admin-dashboard-stats'),
+
     path('analytics/', AdminAnalyticsView.as_view(), name='admin-analytics'),
+    path('analytics/export/', AdminAnalyticsExportView.as_view(), name='admin-analytics-export'),
+    path('analytics/students/', AdminStudentsAnalyticsView.as_view(), name='admin-analytics-students'),
     path('users/', AdminUsersView.as_view(), name='admin-users'),
     path('users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
     path('admins/', AdminAdministratorsView.as_view(), name='admin-administrators'),
@@ -88,6 +110,11 @@ urlpatterns = [
     path('permissions/', AdminPermissionsView.as_view(), name='admin-permissions'),
     path('exams-overview/', AdminExamsOverviewView.as_view(), name='admin-exams-overview'),
     path('ai-tutor/', AdminAITutorOverviewView.as_view(), name='admin-ai-tutor'),
+    path('ai-tutor/provider-status/', AdminAITutorProviderStatusView.as_view(), name='admin-ai-tutor-provider-status'),
+    path('ai-tutor/conversations/', AdminAITutorConversationsView.as_view(), name='admin-ai-tutor-conversations'),
+    path('ai-tutor/conversations/<int:pk>/', AdminAITutorConversationDetailView.as_view(), name='admin-ai-tutor-conversation-detail'),
+    path('ai-tutor/usage/', AdminAITutorUsageView.as_view(), name='admin-ai-tutor-usage'),
+    path('ai-tutor/prompts/', AdminAITutorPromptsView.as_view(), name='admin-ai-tutor-prompts'),
     path('ai-tutor/generate-bulk-content/', AIBulkGenerateContentView.as_view(), name='admin-ai-bulk-generate'),
     path('marketplace/', AdminMarketplaceOverviewView.as_view(), name='admin-marketplace'),
     # Evaluator management
@@ -100,6 +127,7 @@ urlpatterns = [
     path('evaluator-assignments/', AdminEvaluationAssignmentsView.as_view(), name='admin-evaluator-assignments'),
     # Evaluations list
     path('evaluations/', AdminEvaluationsView.as_view(), name='admin-evaluations'),
+    path('evaluations/<int:pk>/', AdminEvaluationDetailView.as_view(), name='admin-evaluation-detail'),
     # Study materials
     path('study-materials/', AdminStudyMaterialsView.as_view(), name='admin-study-materials'),
     path('study-materials/<int:pk>/', AdminStudyMaterialDetailView.as_view(), name='admin-study-material-detail'),
@@ -108,6 +136,7 @@ urlpatterns = [
     path('study-plans/<int:pk>/', AdminStudyPlanDetailView.as_view(), name='admin-study-plan-detail'),
     # Ranking & Leaderboard
     path('gamification/leaderboard/', AdminLeaderboardView.as_view(), name='admin-leaderboard'),
+    path('students/<int:student_id>/feedback/', AdminStudentFeedbackView.as_view(), name='admin-student-feedback'),
     # Student performance & detailed exam review
     path('students/<int:pk>/performance/', AdminStudentPerformanceView.as_view(),
          name='admin-student-performance'),
@@ -117,6 +146,10 @@ urlpatterns = [
          name='admin-exam-attempt-review'),
     # Audit logs
     path('audit-logs/', AdminAuditLogsView.as_view(), name='admin-audit-logs'),
+    path('audit-logs/retention/', AdminAuditLogRetentionView.as_view(), name='admin-audit-logs-retention'),
+    path('audit-logs/export/', AdminAuditLogExportView.as_view(), name='admin-audit-logs-export'),
+    path('audit-logs/export-jobs/', AdminAuditLogExportJobView.as_view(), name='admin-audit-logs-export-jobs'),
+    path('audit-logs/<str:event_id>/', AdminAuditLogDetailView.as_view(), name='admin-audit-log-detail'),
     # Notifications
     path('notifications/', AdminNotificationsListView.as_view(), name='admin-notifications-list'),
     path('notifications/create/', AdminNotificationsCreateView.as_view(), name='admin-notifications-create'),
@@ -131,6 +164,8 @@ urlpatterns = [
     path('support/tickets/<int:pk>/status/', AdminTicketUpdateStatusView.as_view(), name='admin-ticket-status'),
     # Settings
     path('settings/', AdminSettingsView.as_view(), name='admin-settings'),
+    # Storage health check
+    path('storage/health/', AdminStorageHealthView.as_view(), name='admin-storage-health'),
     # Positions
     path('syllabus/positions/', AdminPositionsView.as_view(), name='admin-positions'),
     # Tags

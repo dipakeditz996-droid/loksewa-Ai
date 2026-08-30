@@ -1,22 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { 
-  Search, ShoppingBag, Book, FileText, PenTool, Layers, BookOpen, 
-  Brain, FileQuestion, ChevronRight, SlidersHorizontal, Lock, 
-  Heart, ShoppingCart, Star, Plus, Minus, CreditCard, ShieldCheck, 
-  Truck, ArrowRight, BookMarked, CheckCircle2
+import {
+  Search, ShoppingBag, Book, FileText, PenTool, Layers, BookOpen,
+  Brain, FileQuestion, ChevronRight, SlidersHorizontal, Lock,
+  Heart, ShoppingCart, Star, Plus, Minus, CreditCard, ShieldCheck,
+  Truck, ArrowRight, BookMarked, CheckCircle2, Video, Loader2
 } from "lucide-react";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CheckoutFlow } from "@/components/marketplace/CheckoutFlow";
-
-// ----------------------------------------------------------------------
-// MOCK DATA: Structured for future Admin Panel and eCommerce backend
-// ----------------------------------------------------------------------
+import { publicApi, type PublicProduct } from "@/lib/api/public-api";
 
 type ProductType = "Physical" | "Digital";
 
@@ -24,8 +21,8 @@ interface Product {
   id: string;
   name: string;
   description: string;
-  category: "Books" | "Study Materials" | "Stationery" | "Preparation Bundles" | "Previous Questions" | "Practice Materials";
-  exam: "Section Officer" | "Nayab Subba" | "Kharidar" | "General";
+  category: string;
+  exam: string;
   type: ProductType;
   price: number;
   originalPrice?: number;
@@ -36,147 +33,55 @@ interface Product {
   isFeatured: boolean;
   isBestSeller: boolean;
   isNewArrival: boolean;
-  imageColor: string; // Placeholder for image
+  imageColor: string; // Fallback when there's no cover image
+  coverImage: string | null;
 }
 
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: "p1",
-    name: "Loksewa Complete Preparation Guide",
-    description: "The ultimate comprehensive guide covering all fundamental topics for Loksewa examinations. Includes detailed theory, practice questions, and previous year solutions.",
-    category: "Books",
-    exam: "General",
-    type: "Physical",
-    price: 1250,
-    originalPrice: 1500,
-    discountPercentage: 17,
-    stock: "In Stock",
-    rating: 4.8,
-    reviews: 124,
-    isFeatured: true,
-    isBestSeller: true,
-    isNewArrival: false,
-    imageColor: "from-[#163E6B] to-[#0A1118]"
-  },
-  {
-    id: "p2",
-    name: "Constitution Quick Revision Notes",
-    description: "Condensed, high-yield notes focusing exclusively on the Constitution of Nepal. Perfect for last-minute revision.",
-    category: "Study Materials",
-    exam: "General",
-    type: "Digital",
-    price: 450,
-    stock: "In Stock",
-    rating: 4.7,
-    reviews: 86,
-    isFeatured: true,
-    isBestSeller: false,
-    isNewArrival: true,
-    imageColor: "from-[#D4A72C] to-[#8C6D1D]"
-  },
-  {
-    id: "p3",
-    name: "Section Officer Starter Bundle",
-    description: "Get everything you need for the Section Officer exam in one package. Includes the Preparation Book, Revision Notes, Practice Collection, and Study Planner.",
-    category: "Preparation Bundles",
-    exam: "Section Officer",
-    type: "Physical",
-    price: 2999,
-    originalPrice: 4000,
-    discountPercentage: 25,
-    stock: "In Stock",
-    rating: 4.9,
-    reviews: 215,
-    isFeatured: true,
-    isBestSeller: true,
-    isNewArrival: false,
-    imageColor: "from-emerald-700 to-emerald-900"
-  },
-  {
-    id: "p4",
-    name: "Loksewa Premium Study Planner",
-    description: "A 6-month undated planner specifically designed to help Loksewa aspirants track syllabus coverage, practice tests, and daily study hours.",
-    category: "Stationery",
-    exam: "General",
-    type: "Physical",
-    price: 350,
-    stock: "In Stock",
-    rating: 4.6,
-    reviews: 42,
-    isFeatured: true,
-    isBestSeller: false,
-    isNewArrival: false,
-    imageColor: "from-slate-700 to-slate-900"
-  },
-  {
-    id: "p5",
-    name: "Nayab Subba Question Bank 2080",
-    description: "Collection of all previous year questions for Nayab Subba with detailed step-by-step solutions and trend analysis.",
-    category: "Previous Questions",
-    exam: "Nayab Subba",
-    type: "Physical",
-    price: 850,
-    stock: "In Stock",
-    rating: 4.5,
-    reviews: 93,
-    isFeatured: false,
-    isBestSeller: false,
-    isNewArrival: true,
-    imageColor: "from-blue-700 to-blue-900"
-  },
-  {
-    id: "p6",
-    name: "Kharidar Mock Test Series Volume 1",
-    description: "15 full-length mock tests for Kharidar designed exactly as per the latest PSC syllabus and exam pattern.",
-    category: "Practice Materials",
-    exam: "Kharidar",
-    type: "Digital",
-    price: 500,
-    originalPrice: 750,
-    discountPercentage: 33,
-    stock: "In Stock",
-    rating: 4.4,
-    reviews: 57,
-    isFeatured: false,
-    isBestSeller: false,
-    isNewArrival: false,
-    imageColor: "from-purple-700 to-purple-900"
-  },
-  {
-    id: "p7",
-    name: "Current Affairs Monthly Digest (Bhadra)",
-    description: "Comprehensive coverage of national and international current affairs for the month, highly relevant for GK section.",
-    category: "Study Materials",
-    exam: "General",
-    type: "Digital",
-    price: 150,
-    stock: "In Stock",
-    rating: 4.8,
-    reviews: 312,
-    isFeatured: false,
-    isBestSeller: true,
-    isNewArrival: true,
-    imageColor: "from-orange-600 to-orange-800"
-  },
-  {
-    id: "p8",
-    name: "Nayab Subba Complete Bundle",
-    description: "Core Preparation Book, Previous Questions, Revision Materials, and Planner all in one discounted package.",
-    category: "Preparation Bundles",
-    exam: "Nayab Subba",
-    type: "Physical",
-    price: 2499,
-    originalPrice: 3200,
-    discountPercentage: 21,
-    stock: "Pre-order",
-    rating: 4.9,
-    reviews: 18,
-    isFeatured: false,
-    isBestSeller: false,
-    isNewArrival: true,
-    imageColor: "from-cyan-700 to-cyan-900"
-  }
+const CATEGORY_ICONS: Record<string, any> = {
+  "PDF": FileText,
+  "Study Material": Book,
+  "Question Collection": FileQuestion,
+  "Question Set": Layers,
+  "Video": Video,
+  "Course": BookOpen,
+  "Bundle": Layers,
+};
+
+const IMAGE_GRADIENTS = [
+  "from-[#163E6B] to-[#0A1118]",
+  "from-[#D4A72C] to-[#8C6D1D]",
+  "from-emerald-700 to-emerald-900",
+  "from-slate-700 to-slate-900",
+  "from-blue-700 to-blue-900",
+  "from-purple-700 to-purple-900",
 ];
+
+function mapProduct(p: PublicProduct, idx: number): Product {
+  const price = parseFloat(p.final_price);
+  const original = p.discount_price !== null ? parseFloat(p.price) : undefined;
+  const discountPercentage = original && original > price
+    ? Math.round(((original - price) / original) * 100)
+    : undefined;
+  return {
+    id: String(p.id),
+    name: p.title,
+    description: p.description,
+    category: p.category_display,
+    exam: p.target_exam_name || "General",
+    type: "Digital",
+    price,
+    originalPrice: original,
+    discountPercentage,
+    stock: "In Stock",
+    rating: 0,
+    reviews: 0,
+    isFeatured: idx < 4,
+    isBestSeller: false,
+    isNewArrival: false,
+    imageColor: IMAGE_GRADIENTS[idx % IMAGE_GRADIENTS.length],
+    coverImage: p.cover_image,
+  };
+}
 
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -184,7 +89,9 @@ export default function MarketplacePage() {
   const [selectedExam, setSelectedExam] = useState<string>("All Exams");
   const [selectedPrice, setSelectedPrice] = useState<string>("All Prices");
   const [sortBy, setSortBy] = useState<string>("Recommended");
-  
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   // Modals state
   const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
   const [showCart, setShowCart] = useState(false);
@@ -192,13 +99,26 @@ export default function MarketplacePage() {
   const [showWishlistPrompt, setShowWishlistPrompt] = useState(false);
   const [cartItems, setCartItems] = useState<{product: Product, quantity: number}[]>([]);
 
+  useEffect(() => {
+    let mounted = true;
+    publicApi.getProducts(24).then((data) => {
+      if (!mounted) return;
+      setProducts((data || []).map(mapProduct));
+      setIsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const CATEGORIES = useMemo(() => Array.from(new Set(products.map(p => p.category))), [products]);
+  const EXAMS = useMemo(() => ["All Exams", ...Array.from(new Set(products.map(p => p.exam)))], [products]);
+
   // Filter logic
-  const filteredProducts = MOCK_PRODUCTS.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           product.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
     const matchesExam = selectedExam === "All Exams" || product.exam === selectedExam;
-    
+
     let matchesPrice = true;
     if (selectedPrice === "Under Rs. 500") matchesPrice = product.price < 500;
     if (selectedPrice === "Rs. 500-1,000") matchesPrice = product.price >= 500 && product.price <= 1000;
@@ -209,10 +129,7 @@ export default function MarketplacePage() {
   }).sort((a, b) => {
     if (sortBy === "Price: Low to High") return a.price - b.price;
     if (sortBy === "Price: High to Low") return b.price - a.price;
-    if (sortBy === "Highest Rated") return b.rating - a.rating;
-    if (sortBy === "Newest") return a.isNewArrival === b.isNewArrival ? 0 : a.isNewArrival ? -1 : 1;
-    // Recommended/Best Selling default
-    return a.isBestSeller === b.isBestSeller ? 0 : a.isBestSeller ? -1 : 1;
+    return 0;
   });
 
   const handleAddToCart = (product: Product, e?: React.MouseEvent) => {
@@ -301,11 +218,11 @@ export default function MarketplacePage() {
             </div>
 
             <div className="flex flex-wrap justify-center gap-3">
-              {["Books", "Study Materials", "Stationery", "Bundles"].map((cat) => (
-                <button 
+              {CATEGORIES.map((cat) => (
+                <button
                   key={cat}
                   onClick={() => {
-                    setSelectedCategory(cat === "Bundles" ? "Preparation Bundles" : cat);
+                    setSelectedCategory(cat);
                     document.getElementById('marketplace-grid')?.scrollIntoView({ behavior: 'smooth' });
                   }}
                   className="px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-sm font-[600] transition-colors"
@@ -318,35 +235,32 @@ export default function MarketplacePage() {
         </section>
 
         {/* 2. CATEGORY NAVIGATION */}
+        {CATEGORIES.length > 0 && (
         <section className="py-16 bg-white dark:bg-[#060B11] border-b border-slate-200 dark:border-white/5">
           <div className="container mx-auto px-4 max-w-7xl">
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {[
-                { name: "Books", icon: Book, desc: "Reference materials" },
-                { name: "Study Materials", icon: FileText, desc: "Printed & digital notes" },
-                { name: "Stationery", icon: PenTool, desc: "Study essentials" },
-                { name: "Preparation Bundles", icon: Layers, desc: "Curated packages" },
-                { name: "Previous Questions", icon: BookOpen, desc: "Past year collections" },
-                { name: "Practice Materials", icon: Brain, desc: "Mock tests & banks" }
-              ].map((cat, idx) => (
-                <div 
-                  key={idx} 
+              {CATEGORIES.map((cat, idx) => {
+                const Icon = CATEGORY_ICONS[cat] || Book;
+                return (
+                <div
+                  key={idx}
                   onClick={() => {
-                    setSelectedCategory(cat.name);
+                    setSelectedCategory(cat);
                     document.getElementById('marketplace-grid')?.scrollIntoView({ behavior: 'smooth' });
                   }}
                   className="group flex flex-col items-center text-center p-6 rounded-[20px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:border-[#163E6B]/30 dark:hover:border-white/30 hover:bg-white dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm hover:shadow-md"
                 >
                   <div className="w-12 h-12 rounded-full bg-[#163E6B]/5 dark:bg-white/5 flex items-center justify-center mb-4 group-hover:bg-[#163E6B] dark:group-hover:bg-[#D4A72C] transition-colors">
-                    <cat.icon className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C] group-hover:text-white dark:group-hover:text-[#0A1118] transition-colors" />
+                    <Icon className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C] group-hover:text-white dark:group-hover:text-[#0A1118] transition-colors" />
                   </div>
-                  <h3 className="text-sm font-[800] text-slate-900 dark:text-white mb-1 leading-tight">{cat.name}</h3>
-                  <p className="text-xs text-slate-500 font-[500] leading-tight">{cat.desc}</p>
+                  <h3 className="text-sm font-[800] text-slate-900 dark:text-white mb-1 leading-tight">{cat}</h3>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
+        )}
 
         {/* 3. FEATURED BANNER */}
         <section className="py-16 bg-white dark:bg-[#060B11]">
@@ -412,7 +326,7 @@ export default function MarketplacePage() {
                 <div>
                   <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Category</h4>
                   <div className="space-y-2">
-                    {["All", "Books", "Study Materials", "Stationery", "Preparation Bundles", "Previous Questions", "Practice Materials"].map(cat => (
+                    {["All", ...CATEGORIES].map(cat => (
                       <label key={cat} className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                           selectedCategory === cat 
@@ -433,7 +347,7 @@ export default function MarketplacePage() {
                 <div>
                   <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Target Exam</h4>
                   <div className="space-y-2">
-                    {["All Exams", "Section Officer", "Nayab Subba", "Kharidar", "General"].map(exam => (
+                    {EXAMS.map(exam => (
                       <label key={exam} className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                           selectedExam === exam 
@@ -488,48 +402,42 @@ export default function MarketplacePage() {
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
                     >
-                      {["Recommended", "Best Selling", "Newest", "Price: Low to High", "Price: High to Low", "Highest Rated"].map(o => (
+                      {["Recommended", "Price: Low to High", "Price: High to Low"].map(o => (
                         <option key={o} value={o}>{o}</option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                {filteredProducts.length > 0 ? (
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                  </div>
+                ) : filteredProducts.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredProducts.map(product => (
-                      <div 
-                        key={product.id} 
+                      <div
+                        key={product.id}
                         className="group flex flex-col bg-white dark:bg-[#060B11] border border-slate-200 dark:border-white/10 rounded-[20px] overflow-hidden hover:shadow-xl hover:border-[#163E6B]/30 dark:hover:border-white/30 transition-all cursor-pointer h-full"
                         onClick={() => setPreviewProduct(product)}
                       >
                         {/* Product Image Area */}
-                        <div className={`relative h-48 w-full bg-gradient-to-br ${product.imageColor}`}>
-                          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:12px_12px]"></div>
-                          
-                          {/* Badges */}
-                          <div className="absolute top-3 left-3 flex flex-col gap-2">
-                            {product.isBestSeller && (
-                              <div className="px-2 py-1 bg-yellow-400 text-yellow-900 text-[10px] font-[800] uppercase tracking-wider rounded-md shadow-sm">
-                                Best Seller
-                              </div>
-                            )}
-                            {product.isNewArrival && (
-                              <div className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-[800] uppercase tracking-wider rounded-md shadow-sm">
-                                New
-                              </div>
-                            )}
-                          </div>
-                          
+                        <div className={`relative h-48 w-full ${product.coverImage ? "" : `bg-gradient-to-br ${product.imageColor}`}`}>
+                          {product.coverImage ? (
+                            <img src={product.coverImage} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:12px_12px]"></div>
+                          )}
+
                           {/* Wishlist Button */}
-                          <button 
+                          <button
                             className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
                             onClick={handleWishlist}
                           >
                             <Heart className="w-4 h-4 text-white" />
                           </button>
                         </div>
-                        
+
                         {/* Product Details */}
                         <div className="p-5 flex flex-col flex-1">
                           <div className="text-[10px] font-[800] uppercase tracking-wider text-[#163E6B] dark:text-[#D4A72C] mb-2">
@@ -538,13 +446,7 @@ export default function MarketplacePage() {
                           <h3 className="text-sm font-[800] text-slate-900 dark:text-white leading-tight mb-2 line-clamp-2 flex-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
                             {product.name}
                           </h3>
-                          
-                          <div className="flex items-center gap-1 mb-4">
-                            <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                            <span className="text-xs font-[700] text-slate-700 dark:text-slate-300">{product.rating}</span>
-                            <span className="text-xs font-[500] text-slate-400">({product.reviews})</span>
-                          </div>
-                          
+
                           <div className="flex items-end justify-between mt-auto pt-4 border-t border-slate-100 dark:border-white/5">
                             <div>
                               <div className="flex items-center gap-2">
@@ -679,8 +581,12 @@ export default function MarketplacePage() {
           {previewProduct && (
             <div className="flex flex-col md:flex-row h-full md:max-h-[600px]">
               {/* Product Image Side */}
-              <div className={`w-full md:w-2/5 h-64 md:h-auto relative bg-gradient-to-br ${previewProduct.imageColor}`}>
-                <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:12px_12px]"></div>
+              <div className={`w-full md:w-2/5 h-64 md:h-auto relative ${previewProduct.coverImage ? "" : `bg-gradient-to-br ${previewProduct.imageColor}`}`}>
+                {previewProduct.coverImage ? (
+                  <img src={previewProduct.coverImage} alt={previewProduct.name} className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:12px_12px]"></div>
+                )}
                 <div className="absolute top-4 left-4">
                   <div className="px-2.5 py-1 bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-[800] uppercase tracking-wider rounded-md">
                     {previewProduct.type} Product
@@ -693,25 +599,13 @@ export default function MarketplacePage() {
                 <div className="text-[10px] font-[800] uppercase tracking-wider text-[#163E6B] dark:text-[#D4A72C] mb-2">
                   {previewProduct.category} • {previewProduct.exam}
                 </div>
-                
+
                 <DialogTitle className="text-2xl font-[900] text-slate-900 dark:text-white leading-tight mb-4">
                   {previewProduct.name}
                 </DialogTitle>
-                
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span className="text-sm font-[700] text-slate-900 dark:text-white">{previewProduct.rating}</span>
-                    <span className="text-sm font-[500] text-slate-500">({previewProduct.reviews} reviews)</span>
-                  </div>
-                  <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-white/20"></div>
-                  <div className={`text-sm font-[700] ${previewProduct.stock === 'In Stock' ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-500'}`}>
-                    {previewProduct.stock}
-                  </div>
-                </div>
 
                 <div className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-slate-100 dark:border-white/5">
-                  <span className="text-3xl font-[900] text-slate-900 dark:text-white">Rs. {previewProduct.price}</span>
+                  <span className="text-3xl font-[900] text-slate-900 dark:text-white">{previewProduct.price === 0 ? "Free" : `Rs. ${previewProduct.price}`}</span>
                   {previewProduct.originalPrice && (
                     <span className="text-lg font-[500] text-slate-400 line-through mb-1">Rs. {previewProduct.originalPrice}</span>
                   )}
@@ -729,7 +623,7 @@ export default function MarketplacePage() {
                   </DialogDescription>
                 </div>
 
-                {previewProduct.category === "Preparation Bundles" && (
+                {previewProduct.category === "Bundle" && (
                   <div className="mb-8 p-4 bg-slate-50 dark:bg-white/5 rounded-[12px] border border-slate-100 dark:border-white/5">
                     <h4 className="text-xs font-[800] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">What's Included</h4>
                     <ul className="space-y-2">

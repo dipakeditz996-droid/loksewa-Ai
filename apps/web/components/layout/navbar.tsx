@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BookOpen, Menu, X, Moon, Sun, ArrowRight, GraduationCap,
+  Home, Target, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -37,6 +38,15 @@ export function Navbar() {
     { href: "/exams", label: "Exams" },
     { href: "/notes", label: "Notes" },
     { href: "/marketplace", label: "Marketplace" },
+  ];
+
+  // Bottom tab bar — mobile only. Four real destinations plus a "Menu" tab
+  // that reuses the existing hamburger drawer instead of duplicating it.
+  const mobileTabs = [
+    { href: "/", label: "Home", icon: Home },
+    { href: "/courses", label: "Courses", icon: BookOpen },
+    { href: "/practice", label: "Practice", icon: Target },
+    { href: "/notes", label: "Notes", icon: FileText },
   ];
 
   return (
@@ -151,6 +161,12 @@ export function Navbar() {
 
             {/* ── Mobile Hamburger ─────────────────── */}
             <div className="flex lg:hidden items-center gap-1 pr-0.5">
+              <Link
+                href="/login"
+                className="mr-0.5 px-3 py-1.5 rounded-full text-[12px] font-[700] text-slate-700 dark:text-white border border-slate-200/80 dark:border-white/15 hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
+              >
+                Login
+              </Link>
               {mounted && (
                 <button
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -241,6 +257,74 @@ export function Navbar() {
           </div>
         </div>
       </header>
+
+      {/* ── Mobile app-style bottom tab bar ──────────────────────────────── */}
+      <nav
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] bg-white/90 dark:bg-[#04080F]/92 backdrop-blur-2xl border-t border-slate-200/70 dark:border-white/[0.08] shadow-[0_-8px_30px_-12px_rgba(11,37,69,0.18)]"
+        aria-label="Primary"
+      >
+        <div className="grid grid-cols-5 h-[64px]">
+          {mobileTabs.map((tab) => {
+            const isActive = pathname === tab.href;
+            const Icon = tab.icon;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className="relative flex flex-col items-center justify-center gap-1 group"
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="mobile-tab-active"
+                    className="absolute top-1.5 w-9 h-1 rounded-full bg-[#D4A72C]"
+                    transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                  />
+                )}
+                <Icon
+                  className={`w-[21px] h-[21px] transition-colors ${
+                    isActive ? "text-[#C29322] dark:text-[#F0C95A]" : "text-slate-400 dark:text-slate-500"
+                  }`}
+                  strokeWidth={isActive ? 2.4 : 2}
+                />
+                <span
+                  className={`text-[10px] font-[700] transition-colors ${
+                    isActive ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
+                  }`}
+                >
+                  {tab.label}
+                </span>
+              </Link>
+            );
+          })}
+
+          <button
+            onClick={() => setIsMobileMenuOpen((open) => !open)}
+            className="relative flex flex-col items-center justify-center gap-1"
+            aria-label="Toggle menu"
+            aria-expanded={isMobileMenuOpen}
+          >
+            {isMobileMenuOpen && (
+              <motion.span
+                layoutId="mobile-tab-active"
+                className="absolute top-1.5 w-9 h-1 rounded-full bg-[#D4A72C]"
+                transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              />
+            )}
+            {isMobileMenuOpen ? (
+              <X className="w-[21px] h-[21px] text-[#C29322] dark:text-[#F0C95A]" strokeWidth={2.4} />
+            ) : (
+              <Menu className="w-[21px] h-[21px] text-slate-400 dark:text-slate-500" strokeWidth={2} />
+            )}
+            <span
+              className={`text-[10px] font-[700] transition-colors ${
+                isMobileMenuOpen ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
+              }`}
+            >
+              Menu
+            </span>
+          </button>
+        </div>
+      </nav>
     </>
   );
 }

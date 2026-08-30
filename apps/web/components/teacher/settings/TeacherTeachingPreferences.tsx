@@ -61,9 +61,9 @@ export function TeacherTeachingPreferences() {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-white border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
+      <Card className="bg-card border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
         <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-          <CardTitle className="text-lg font-bold text-[#0B2545]">Teaching Preferences</CardTitle>
+          <CardTitle className="text-lg font-bold text-primary">Teaching Preferences</CardTitle>
           <CardDescription>Default settings for when you create questions and materials.</CardDescription>
         </CardHeader>
         <CardContent className="p-8">

@@ -20,9 +20,9 @@ export function TeacherAccountSection() {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-white border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
+      <Card className="bg-card border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
         <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-          <CardTitle className="text-lg font-bold text-[#0B2545]">Account Information</CardTitle>
+          <CardTitle className="text-lg font-bold text-primary">Account Information</CardTitle>
           <CardDescription>View your core account details and status.</CardDescription>
         </CardHeader>
         <CardContent className="p-8">
@@ -33,7 +33,7 @@ export function TeacherAccountSection() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Email Address</p>
-                <p className="text-sm font-medium text-[#0B2545] mt-1">{user.email}</p>
+                <p className="text-sm font-medium text-primary mt-1">{user.email}</p>
                 <p className="text-xs text-slate-500 mt-1">Managed by administrator.</p>
               </div>
             </div>
@@ -44,7 +44,7 @@ export function TeacherAccountSection() {
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Username</p>
-                <p className="text-sm font-medium text-[#0B2545] mt-1">{user.username}</p>
+                <p className="text-sm font-medium text-primary mt-1">{user.username}</p>
                 <p className="text-xs text-slate-500 mt-1">Unique identifier.</p>
               </div>
             </div>
@@ -72,7 +72,7 @@ export function TeacherAccountSection() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account Status</p>
                 <div className="mt-1 flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${user.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                  <span className="text-sm font-medium text-[#0B2545]">
+                  <span className="text-sm font-medium text-primary">
                     {user.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>

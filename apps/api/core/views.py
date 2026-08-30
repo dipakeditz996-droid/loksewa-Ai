@@ -6,11 +6,27 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from django.contrib.auth import authenticate
 from django.db import transaction
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from django.contrib.auth.models import update_last_login
+from django.contrib.auth.password_validation import validate_password as django_validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
+from datetime import timedelta
 from .models import User
 
 logger = logging.getLogger(__name__)
+
+
+def _access_token_for(user):
+    """Mints an access token whose lifetime comes from
+    AdminSettings.session_timeout_minutes (Admin Settings > Security),
+    for the views here that mint tokens manually instead of going through
+    CustomTokenObtainPairSerializer."""
+    from .models import AdminSettings
+    minutes = AdminSettings.get_settings().session_timeout_minutes
+    access = AccessToken.for_user(user)
+    access.set_exp(lifetime=timedelta(minutes=minutes))
+    return str(access)
 
 class StudentSignupView(APIView):
     permission_classes = [AllowAny]
@@ -30,6 +46,11 @@ class StudentSignupView(APIView):
             return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
         if User.objects.filter(email=email).exists():
             return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            django_validate_password(password)
+        except DjangoValidationError as e:
+            return Response({'error': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate Referral Code BEFORE creating user
         if referral_code:
@@ -53,6 +74,14 @@ class StudentSignupView(APIView):
                 else:
                     from gamification.models import GamificationProfile
                     GamificationProfile.objects.create(user=user)
+
+                from core.notification_service import NotificationService
+                NotificationService.notify_admins(
+                    notif_type='new_registration',
+                    title='New Student Registered',
+                    message=f"{username} ({email}) just created a new student account.",
+                    action_url='/admin-dashboard/students',
+                )
 
                 # Process Course/Package Application if plan_id or course_id is provided.
                 if plan_id or course_id:
@@ -92,13 +121,22 @@ class StudentSignupView(APIView):
                             subscription_payment=payment,
                             status='pending'
                         )
+
+                        from core.notification_service import NotificationService
+                        NotificationService.notify_admins(
+                            notif_type='course_application',
+                            title='New Course Application',
+                            message=f"New student {username} applied for '{course.title}' during registration.",
+                            action_url='/admin-dashboard/applications',
+                        )
         except Exception as e:
             logger.exception("Failed to process registration for email=%s", email)
             return Response({'error': 'Registration failed due to an internal error. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+        update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
         return Response({
-            'access': str(refresh.access_token),
+            'access': _access_token_for(user),
             'refresh': str(refresh),
             'user': {
                 'id': user.id,
@@ -143,6 +181,18 @@ class AdminLoginView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from .account_lockout import (
+            find_user_by_username_or_email, is_locked, lockout_remaining_minutes,
+            record_failed_attempt, record_successful_login,
+        )
+
+        looked_up_user = find_user_by_username_or_email(username)
+        if is_locked(looked_up_user):
+            return Response(
+                {'detail': f'Too many failed attempts. Try again in {lockout_remaining_minutes(looked_up_user)} minute(s).'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # Allow login by email or username
         user = authenticate(request, username=username, password=password)
 
@@ -156,10 +206,14 @@ class AdminLoginView(APIView):
                 pass
 
         if user is None:
+            if looked_up_user:
+                record_failed_attempt(looked_up_user)
             return Response(
                 {'detail': 'Invalid credentials. Please check your username/email and password.'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        record_successful_login(user)
 
         if not user.is_active:
             return Response(
@@ -173,10 +227,20 @@ class AdminLoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        from .models import AdminSettings
+        if AdminSettings.get_settings().enable_two_factor_auth and user.is_2fa_enabled:
+            from .two_factor_views import TwoFactorPendingToken
+            pending = TwoFactorPendingToken.for_user(user)
+            return Response({
+                'twoFactorRequired': True,
+                'pendingToken': str(pending),
+            })
+
         # Generate JWT tokens
+        update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
         return Response({
-            'access': str(refresh.access_token),
+            'access': _access_token_for(user),
             'refresh': str(refresh),
             'user': {
                 'id': user.id,
@@ -233,6 +297,7 @@ class StudentDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        
         user = request.user
         
         has_avatar = bool(hasattr(user, 'avatar') and user.avatar)
@@ -243,7 +308,7 @@ class StudentDashboardView(APIView):
         # Profile
         profile_data = {
             "name": f"{user.first_name} {user.last_name}".strip() or user.username,
-            "avatar": user.avatar.url if has_avatar else None,
+            "avatar": user.avatar if has_avatar else None,
             "targetPosition": getattr(user, 'role', 'Student').replace("-", " ").title(),
             "completionPercentage": completion_points,
             "phone": getattr(user, 'phone_number', '') or getattr(user, 'phone', '')
@@ -300,25 +365,6 @@ class StudentDashboardView(APIView):
                     "percentage": attempt.percentage
                 })
                 
-            # Backfill with ModelExamAttempt if not enough ExaminationAttempts
-            if len(recent_exams_data) < 5:
-                from exams.models import ModelExamAttempt
-                legacy_attempts = ModelExamAttempt.objects.filter(
-                    student=user, status='submitted'
-                ).select_related('model_exam').order_by('-started_at')[:5 - len(recent_exams_data)]
-                
-                for attempt in legacy_attempts:
-                    title = "Model Exam"
-                    if hasattr(attempt, 'model_exam') and attempt.model_exam:
-                        title = getattr(attempt.model_exam, 'title', 'Model Exam')
-                    
-                    recent_exams_data.append({
-                        "id": attempt.id,
-                        "title": title,
-                        "date": attempt.started_at.isoformat() if attempt.started_at else "",
-                        "score": getattr(attempt, 'score', 0) or 0,
-                        "percentage": getattr(attempt, 'accuracy', 0) or 0
-                    })
         except Exception as e:
             logger.error(f"Error fetching recent exams for dashboard: {e}")
 
@@ -413,10 +459,11 @@ class SocialLoginView(APIView):
             user = SocialAuthService.get_or_create_social_user(provider, provider_data, additional_data)
 
             from rest_framework_simplejwt.tokens import RefreshToken
+            update_last_login(None, user)
             refresh = RefreshToken.for_user(user)
 
             return Response({
-                'access': str(refresh.access_token),
+                'access': _access_token_for(user),
                 'refresh': str(refresh),
                 'user': {
                     'id': user.id,

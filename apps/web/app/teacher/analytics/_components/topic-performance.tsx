@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { teacherAnalyticsApi, TopicResponse } from '@/lib/api/teacher-analytics';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Brain, Flame, AlertTriangle } from 'lucide-react';
+import { Flame, AlertTriangle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
 export interface TopicPerformanceProps {
@@ -33,8 +32,8 @@ export function TopicPerformance({ courseFilter }: TopicPerformanceProps) {
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2">
-        <Skeleton className="h-64 w-full bg-slate-800" />
-        <Skeleton className="h-64 w-full bg-slate-800" />
+        <Skeleton className="h-64 w-full bg-muted" />
+        <Skeleton className="h-64 w-full bg-muted" />
       </div>
     );
   }
@@ -43,61 +42,61 @@ export function TopicPerformance({ courseFilter }: TopicPerformanceProps) {
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-white flex items-center">
-            <Flame className="w-5 h-5 mr-2 text-emerald-500" />
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:shadow-none">
+        <div className="border-b border-border px-5 py-4">
+          <h2 className="flex items-center gap-2 text-[14.5px] font-bold text-card-foreground">
+            <Flame className="h-4 w-4 text-[#0F7A69] dark:text-[#4ADE9C]" />
             Strong Topics
-          </CardTitle>
-          <CardDescription>Topics where students perform well</CardDescription>
-        </CardHeader>
-        <CardContent>
+          </h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">Topics where students perform well</p>
+        </div>
+        <div className="p-5">
           {data.strong_topics.length === 0 ? (
-            <p className="text-slate-500 text-center py-4">No strong topics identified yet.</p>
+            <p className="py-4 text-center text-[13px] text-muted-foreground">No strong topics identified yet.</p>
           ) : (
             <div className="space-y-4">
               {data.strong_topics.map((topic, i) => (
                 <div key={i} className="flex items-center justify-between">
-                  <div className="flex-1 mr-4">
-                    <p className="text-sm font-medium text-slate-200 truncate">{topic.topic}</p>
-                    <Progress value={topic.accuracy} className="h-2 mt-2 bg-slate-800" indicatorClassName="bg-emerald-500" />
+                  <div className="mr-4 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-card-foreground">{topic.topic}</p>
+                    <Progress value={topic.accuracy} className="mt-2 h-2 bg-muted" indicatorClassName="bg-[#159A82]" />
                   </div>
-                  <span className="text-sm font-bold text-emerald-400 w-12 text-right">{topic.accuracy}%</span>
+                  <span className="w-12 text-right text-[13px] font-bold text-[#0F7A69] dark:text-[#4ADE9C]">{topic.accuracy}%</span>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      <Card className="bg-slate-900 border-slate-800 relative overflow-hidden">
-        {/* Subtle red glow for weak topics */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
-        <CardHeader>
-          <CardTitle className="text-white flex items-center">
-            <AlertTriangle className="w-5 h-5 mr-2 text-rose-500" />
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:shadow-none">
+        {/* Subtle warm glow for weak topics */}
+        <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-destructive/[0.08] blur-3xl" />
+        <div className="relative z-10 border-b border-border px-5 py-4">
+          <h2 className="flex items-center gap-2 text-[14.5px] font-bold text-card-foreground">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
             Needs Improvement
-          </CardTitle>
-          <CardDescription>Topics with lowest accuracy (&lt; 60%)</CardDescription>
-        </CardHeader>
-        <CardContent className="relative z-10">
+          </h2>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">Topics with lowest accuracy (&lt; 60%)</p>
+        </div>
+        <div className="relative z-10 p-5">
           {data.needs_improvement.length === 0 ? (
-            <p className="text-slate-500 text-center py-4">No weak topics identified. Great job!</p>
+            <p className="py-4 text-center text-[13px] text-muted-foreground">No weak topics identified. Great job!</p>
           ) : (
             <div className="space-y-4">
               {data.needs_improvement.map((topic, i) => (
-                <div key={i} className="flex items-center justify-between group">
-                  <div className="flex-1 mr-4">
-                    <p className="text-sm font-medium text-slate-200 truncate group-hover:text-white transition-colors">{topic.topic}</p>
-                    <Progress value={topic.accuracy} className="h-2 mt-2 bg-slate-800" indicatorClassName="bg-rose-500" />
+                <div key={i} className="group flex items-center justify-between">
+                  <div className="mr-4 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-card-foreground">{topic.topic}</p>
+                    <Progress value={topic.accuracy} className="mt-2 h-2 bg-muted" indicatorClassName="bg-destructive" />
                   </div>
-                  <span className="text-sm font-bold text-rose-400 w-12 text-right">{topic.accuracy}%</span>
+                  <span className="w-12 text-right text-[13px] font-bold text-destructive">{topic.accuracy}%</span>
                 </div>
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

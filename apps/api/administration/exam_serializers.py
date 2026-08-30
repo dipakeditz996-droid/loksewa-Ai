@@ -18,7 +18,7 @@ class ExaminationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Examination
         fields = [
-            'id', 'title', 'description', 'exam_type', 'category', 'category_name', 
+            'id', 'title', 'description', 'exam_type', 'objective_category', 'category', 'category_name',
             'exam', 'exam_name', 'subject', 'subject_name', 'question_set', 'question_set_name',
             'instructions', 'thumbnail', 'total_questions', 'time_limit', 'total_marks', 
             'passing_marks', 'marks_per_question', 'negative_marking', 'negative_marking_value',

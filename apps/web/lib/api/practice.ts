@@ -63,6 +63,42 @@ export interface SubmitSessionResponse {
   attempts: AttemptDetail[];
 }
 
+export interface SavedQuestion {
+  id: number;
+  question: number;
+  question_detail: Question & { topic: number };
+  created_at: string;
+}
+
+export interface AnswerResult {
+  status: string;
+  // Present when the mode scores immediately (study/revision) — absent for
+  // flexible/timed practice, which is only scored at final submit.
+  is_correct?: boolean;
+  correct_option?: string;
+  explanation?: string;
+}
+
+export interface RevealResult {
+  correct_option: string;
+  explanation: string;
+}
+
+export interface StudySessionResponse extends PracticeSessionResponse {
+  resume_index: number;
+  resumed: boolean;
+}
+
+export interface RevisionSummary {
+  overdue: number;
+  repeatedly_incorrect: number;
+  recent_mistakes: number;
+  weak_topics: number;
+  total_available: number;
+}
+
+export type RevisionFocus = "overdue" | "repeatedly_incorrect" | "recent_mistakes" | "weak_topics";
+
 export const practiceApi = {
   startSession: (params: StartSessionParams) => {
     return apiClient<PracticeSessionResponse>("/practice-sessions/", {
@@ -72,9 +108,41 @@ export const practiceApi = {
   },
   
   saveAnswer: (sessionId: number, params: SaveAnswerParams) => {
-    return apiClient<{status: string}>(`/practice-sessions/${sessionId}/answer/`, {
+    return apiClient<AnswerResult>(`/practice-sessions/${sessionId}/answer/`, {
       method: "POST",
       body: JSON.stringify(params),
+    });
+  },
+
+  markViewed: (sessionId: number, questionId: number) => {
+    return apiClient<{status: string}>(`/practice-sessions/${sessionId}/view/`, {
+      method: "POST",
+      body: JSON.stringify({ question_id: questionId }),
+    });
+  },
+
+  reveal: (sessionId: number, questionId: number) => {
+    return apiClient<RevealResult>(`/practice-sessions/${sessionId}/reveal/`, {
+      method: "POST",
+      body: JSON.stringify({ question_id: questionId }),
+    });
+  },
+
+  startStudy: (params: { topic: string | number; subject?: string; exam?: string; restart?: boolean }) => {
+    return apiClient<StudySessionResponse>("/practice-sessions/study/", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  },
+
+  getRevisionSummary: () => {
+    return apiClient<RevisionSummary>("/practice-sessions/revision_summary/");
+  },
+
+  startRevision: (focus?: RevisionFocus) => {
+    return apiClient<PracticeSessionResponse>("/practice-sessions/start_revision/", {
+      method: "POST",
+      body: JSON.stringify(focus ? { focus } : {}),
     });
   },
   
@@ -99,5 +167,9 @@ export const practiceApi = {
       method: "POST",
       body: JSON.stringify({ question_id: questionId }),
     });
+  },
+
+  listSavedQuestions: () => {
+    return apiClient<SavedQuestion[]>("/bookmarks/");
   },
 };

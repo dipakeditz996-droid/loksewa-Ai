@@ -33,16 +33,16 @@ export function PerformanceTrend({ courseFilter, daysFilter }: PerformanceTrendP
   if (isLoading) {
     return (
       <div className="h-[300px] w-full flex items-center justify-center">
-        <Skeleton className="h-full w-full bg-slate-100 rounded-lg" />
+        <Skeleton className="h-full w-full bg-muted rounded-lg" />
       </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="h-[300px] flex flex-col items-center justify-center text-slate-500">
-        <AlertCircle className="w-10 h-10 mb-2 opacity-40 text-slate-400" />
-        <p>Not enough historical data to display a trend.</p>
+      <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground">
+        <AlertCircle className="w-10 h-10 mb-2 opacity-40" />
+        <p className="text-[13px]">Not enough historical data to display a trend.</p>
       </div>
     );
   }
@@ -60,36 +60,36 @@ export function PerformanceTrend({ courseFilter, daysFilter }: PerformanceTrendP
     <div className="h-[300px] w-full mt-4">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 5, right: 20, left: -20, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-          <XAxis 
-            dataKey="displayDate" 
-            stroke="#64748b" 
-            fontSize={12} 
-            tickLine={false} 
-            axisLine={false} 
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+          <XAxis
+            dataKey="displayDate"
+            stroke="var(--color-muted-foreground)"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
             dy={10}
           />
-          <YAxis 
-            stroke="#64748b" 
-            fontSize={12} 
-            tickLine={false} 
-            axisLine={false} 
+          <YAxis
+            stroke="var(--color-muted-foreground)"
+            fontSize={12}
+            tickLine={false}
+            axisLine={false}
             domain={[0, 100]}
             tickFormatter={(value) => `${value}%`}
           />
-          <Tooltip 
-            contentStyle={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0', borderRadius: '8px', color: '#0f172a' }}
-            itemStyle={{ color: '#4f46e5' }}
+          <Tooltip
+            contentStyle={{ backgroundColor: 'var(--color-card)', borderColor: 'var(--color-border)', borderRadius: '10px', color: 'var(--color-card-foreground)', boxShadow: '0 4px 12px rgba(16,24,40,0.08)' }}
+            itemStyle={{ color: 'var(--color-primary)', fontWeight: 600 }}
             formatter={(value: any) => [`${value}%`, 'Accuracy']}
-            labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+            labelStyle={{ color: 'var(--color-muted-foreground)', marginBottom: '4px' }}
           />
-          <Line 
-            type="monotone" 
-            dataKey="accuracy" 
-            stroke="#4f46e5" 
+          <Line
+            type="monotone"
+            dataKey="accuracy"
+            stroke="var(--color-primary)"
             strokeWidth={3}
-            dot={{ r: 4, fill: '#4f46e5', strokeWidth: 0 }}
-            activeDot={{ r: 6, fill: '#4338ca', strokeWidth: 0 }}
+            dot={{ r: 4, fill: 'var(--color-primary)', strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: 'var(--color-accent)', strokeWidth: 0 }}
             animationDuration={1500}
           />
         </LineChart>

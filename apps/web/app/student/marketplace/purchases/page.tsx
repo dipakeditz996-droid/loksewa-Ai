@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, ShoppingBag, CheckCircle, Clock, XCircle, Download, Lock } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
-import Image from "next/image";
+import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
 
 export default function PurchasesPage() {
@@ -91,7 +91,7 @@ export default function PurchasesPage() {
                       <div className="w-24 h-24 sm:w-32 sm:h-32 bg-muted rounded-md shrink-0 relative overflow-hidden border">
                         {purchase.product_details?.cover_image && (
                           <Image
-                            src={`${baseUrl}${purchase.product_details.cover_image}`}
+                            src={purchase.product_details.cover_image.startsWith('http') ? purchase.product_details.cover_image : `${baseUrl}${purchase.product_details.cover_image.startsWith('/') ? '' : '/'}${purchase.product_details.cover_image}`}
                             alt={purchase.product_details.title}
                             fill
                             className="object-cover"
@@ -109,7 +109,7 @@ export default function PurchasesPage() {
                         
                         {purchase.product_details?.product_file ? (
                           <Button asChild size="sm" className="w-full sm:w-auto">
-                            <a href={`${baseUrl}${purchase.product_details.product_file}`} target="_blank" rel="noopener noreferrer">
+                            <a href={purchase.product_details.product_file.startsWith('http') ? purchase.product_details.product_file : `${baseUrl}${purchase.product_details.product_file.startsWith('/') ? '' : '/'}${purchase.product_details.product_file}`} target="_blank" rel="noopener noreferrer">
                               <Download className="mr-2 h-4 w-4" /> Download / Open
                             </a>
                           </Button>
@@ -168,10 +168,10 @@ export default function PurchasesPage() {
                       
                       {sub.status === 'REJECTED' && sub.rejection_reason && (
                         <div className="px-4 pb-4">
-                          <div className="bg-red-50 text-red-700 p-3 rounded-md border border-red-100 text-sm">
+                          <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 p-3 rounded-md border border-red-100 text-sm">
                             <strong>Rejection Reason:</strong> {sub.rejection_reason}
                             <div className="mt-2">
-                              <Button asChild size="sm" variant="outline" className="bg-white hover:bg-red-50 text-red-700 border-red-200">
+                              <Button asChild size="sm" variant="outline" className="bg-card hover:bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/50">
                                 <Link href={`/student/marketplace/checkout/${sub.product}`}>
                                   Resubmit Payment
                                 </Link>
@@ -183,7 +183,7 @@ export default function PurchasesPage() {
                       
                       {sub.status === 'PENDING' && (
                         <div className="px-4 pb-4">
-                          <div className="bg-yellow-50 text-yellow-800 p-3 rounded-md border border-yellow-100 text-sm">
+                          <div className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-200 p-3 rounded-md border border-yellow-100 text-sm">
                             Your payment is being reviewed by the administrator. Access will be granted automatically upon approval.
                           </div>
                         </div>

@@ -62,10 +62,10 @@ export default function StudentPlansPage() {
         <Badge variant="outline" className="bg-[#D4A72C]/10 text-[#D4A72C] border-[#D4A72C]/30 px-3 py-1">
           <Zap className="w-3.5 h-3.5 mr-1" /> Unlock Your Potential
         </Badge>
-        <h1 className="text-4xl lg:text-5xl font-[800] text-[#0B2545] tracking-tight">
+        <h1 className="text-4xl lg:text-5xl font-[800] text-primary dark:text-foreground tracking-tight">
           Choose Your Preparation Path
         </h1>
-        <p className="text-lg text-slate-500">
+        <p className="text-lg text-muted-foreground">
           Get access to premium features, AI tutoring, and comprehensive study materials designed to help you ace your Loksewa exams.
         </p>
       </div>
@@ -73,14 +73,14 @@ export default function StudentPlansPage() {
       {isLoading ? (
         <div className="grid md:grid-cols-3 gap-8">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-[500px] rounded-[24px] bg-slate-100 animate-pulse"></div>
+            <div key={i} className="h-[500px] rounded-[24px] bg-muted/80 animate-pulse"></div>
           ))}
         </div>
       ) : plans.length === 0 ? (
         <div className="text-center py-20">
           <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-[#0B2545]">No Plans Available</h3>
-          <p className="text-slate-500 mt-2">Subscription plans are currently being updated. Please check back later.</p>
+          <h3 className="text-xl font-bold text-primary dark:text-foreground">No Plans Available</h3>
+          <p className="text-muted-foreground mt-2">Subscription plans are currently being updated. Please check back later.</p>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 items-center max-w-6xl mx-auto">
@@ -92,14 +92,14 @@ export default function StudentPlansPage() {
                 key={plan.id}
                 className={`relative rounded-[24px] transition-all duration-300 ${
                   isHighlighted 
-                    ? "bg-[#0B2545] text-white shadow-2xl scale-105 border-2 border-[#D4A72C]" 
-                    : "bg-white text-[#0B2545] border border-slate-200 shadow-lg hover:shadow-xl"
+                    ? "bg-primary text-primary-foreground text-white shadow-2xl scale-105 border-2 border-[#D4A72C]" 
+                    : "bg-card text-primary dark:text-foreground border border-border shadow-lg hover:shadow-xl"
                 }`}
               >
                 {plan.badge !== 'NONE' && (
                   <div className="absolute -top-4 left-0 right-0 flex justify-center">
                     <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                      isHighlighted ? "bg-[#D4A72C] text-[#0A1118]" : "bg-[#0B2545] text-white"
+                      isHighlighted ? "bg-[#D4A72C] text-[#0A1118]" : "bg-primary text-primary-foreground text-white"
                     }`}>
                       {plan.badge.replace('_', ' ')}
                     </span>
@@ -108,10 +108,10 @@ export default function StudentPlansPage() {
                 
                 <div className="p-8 space-y-6">
                   <div className="text-center space-y-2">
-                    <h3 className={`text-2xl font-bold ${isHighlighted ? 'text-white' : 'text-[#0B2545]'}`}>
+                    <h3 className={`text-2xl font-bold ${isHighlighted ? 'text-white' : 'text-primary dark:text-foreground'}`}>
                       {plan.name}
                     </h3>
-                    <p className={isHighlighted ? 'text-slate-300' : 'text-slate-500'}>
+                    <p className={isHighlighted ? 'text-slate-300' : 'text-muted-foreground'}>
                       {plan.duration} {plan.duration_unit} Access
                     </p>
                   </div>
@@ -121,7 +121,7 @@ export default function StudentPlansPage() {
                       <span className="text-4xl font-bold">Rs. {plan.price}</span>
                     </div>
                     {plan.original_price && (
-                      <p className={`text-sm mt-1 line-through ${isHighlighted ? 'text-slate-400' : 'text-slate-400'}`}>
+                      <p className={`text-sm mt-1 line-through ${isHighlighted ? 'text-muted-foreground' : 'text-muted-foreground'}`}>
                         Rs. {plan.original_price}
                       </p>
                     )}
@@ -141,8 +141,8 @@ export default function StudentPlansPage() {
                         )}
                         <span className={`text-sm ${
                           feature.included 
-                            ? isHighlighted ? 'text-slate-200' : 'text-slate-700' 
-                            : isHighlighted ? 'text-slate-400 line-through' : 'text-slate-400 line-through'
+                            ? isHighlighted ? 'text-slate-200' : 'text-foreground' 
+                            : isHighlighted ? 'text-muted-foreground line-through' : 'text-muted-foreground line-through'
                         }`}>
                           {feature.text}
                         </span>
@@ -155,7 +155,7 @@ export default function StudentPlansPage() {
                     className={`w-full py-6 text-base font-bold rounded-xl transition-all ${
                       isHighlighted 
                         ? "bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118]" 
-                        : "bg-[#0B2545] hover:bg-[#0B2545]/90 text-white"
+                        : "bg-primary text-primary-foreground hover:bg-primary text-primary-foreground/90 text-white"
                     }`}
                   >
                     {parseFloat(plan.price) === 0 ? "Start Free" : "Choose Plan"}

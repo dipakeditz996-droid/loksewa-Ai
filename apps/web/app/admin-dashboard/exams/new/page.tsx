@@ -8,7 +8,7 @@ import {
   Check, Loader2, AlertCircle, Save, Rocket,
 } from "lucide-react";
 import { QuestionSelectionWorkspace } from "@/components/admin/exams/QuestionSelectionWorkspace";
-import { adminExamApi, Examination, ExaminationType } from "@/lib/api/admin-exams";
+import { adminExamApi, Examination, ExaminationType, ObjectiveCategory } from "@/lib/api/admin-exams";
 import { adminSyllabusApi } from "@/lib/api/admin-syllabus";
 import toast from "react-hot-toast";
 
@@ -27,6 +27,15 @@ const EXAM_TYPES: { value: ExaminationType; label: string }[] = [
   { value: "subject", label: "Subject Test" },
   { value: "custom", label: "Custom Exam" },
   { value: "subjective", label: "Subjective Exam" },
+];
+
+/** The four finalized Objective Exam categories — "Create Your Own Exam" is
+ * always system-generated from the student custom-builder, never authored
+ * here, so it's intentionally left out of this admin-facing list. */
+const OBJECTIVE_CATEGORIES: { value: Exclude<ObjectiveCategory, null | "custom">; label: string; hint: string }[] = [
+  { value: "old_past", label: "Old Past Exam", hint: "An original historical paper — questions stay fixed, never shuffled or replaced." },
+  { value: "model", label: "Model Exam", hint: "Student starts whenever they like; fixed duration and paper once started." },
+  { value: "live", label: "Live Exam", hint: "Fixed start/end window shared by every student; no pause or restart once begun." },
 ];
 
 /** Django accepts ISO-8601; <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm". */
@@ -55,6 +64,7 @@ export default function CreateExamPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [examType, setExamType] = useState<ExaminationType>("mock");
+  const [objectiveCategory, setObjectiveCategory] = useState<Exclude<ObjectiveCategory, null | "custom"> | "">("");
   const [instructions, setInstructions] = useState("");
 
   // ── Step 2 (canonical hierarchy: ExamCategory → Exam → Subject)
@@ -85,6 +95,7 @@ export default function CreateExamPage() {
     setTitle(e.title || "");
     setDescription(e.description || "");
     setExamType(e.exam_type);
+    setObjectiveCategory((e.objective_category as Exclude<ObjectiveCategory, null | "custom">) || "");
     setInstructions(e.instructions || "");
     setCategoryId(e.category || undefined);
     setPositionId(e.exam || undefined);
@@ -150,6 +161,7 @@ export default function CreateExamPage() {
     title: title.trim(),
     description,
     exam_type: examType,
+    objective_category: objectiveCategory || null,
     instructions,
     category: categoryId,
     exam: positionId,
@@ -164,7 +176,10 @@ export default function CreateExamPage() {
     auto_submit: autoSubmit,
     result_visibility: resultVisibility,
     show_correct_answers: showAnswers,
-    randomize_questions: randomizeQuestions,
+    // Hard-blocked for Old Past Exams — the backend enforces this too, but
+    // the saved value should reflect reality rather than a checkbox the UI
+    // has since disabled.
+    randomize_questions: objectiveCategory === "old_past" ? false : randomizeQuestions,
     randomize_options: randomizeOptions,
     start_time: toIso(startTime),
     end_time: toIso(endTime),
@@ -351,6 +366,22 @@ export default function CreateExamPage() {
             </select>
           </div>
           <div>
+            <label className={label}>Objective Exam Category</label>
+            <select
+              value={objectiveCategory}
+              onChange={e => setObjectiveCategory(e.target.value as typeof objectiveCategory)}
+              className={field}
+            >
+              <option value="">Not applicable (e.g. subjective exam)</option>
+              {OBJECTIVE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+            {objectiveCategory && (
+              <p className="text-xs text-slate-500 mt-1.5">
+                {OBJECTIVE_CATEGORIES.find(c => c.value === objectiveCategory)?.hint}
+              </p>
+            )}
+          </div>
+          <div>
             <label className={label}>Description</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
               className={`${field} resize-y`} placeholder="Shown to students in the exam list." />
@@ -482,17 +513,27 @@ export default function CreateExamPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
               {([
-                ["Allow resume", allowResume, setAllowResume],
-                ["Auto-submit on timeout", autoSubmit, setAutoSubmit],
-                ["Show correct answers", showAnswers, setShowAnswers],
-                ["Randomize question order", randomizeQuestions, setRandomizeQuestions],
-                ["Randomize MCQ options", randomizeOptions, setRandomizeOptions],
-                ["Negative marking", negativeMarking, setNegativeMarking],
-              ] as [string, boolean, (v: boolean) => void][]).map(([text, value, setter]) => (
-                <label key={text} className="flex items-center gap-3 cursor-pointer text-sm text-slate-700">
-                  <input type="checkbox" checked={value} onChange={e => setter(e.target.checked)}
-                    className="w-4 h-4 rounded text-[#0B2545]" />
-                  {text}
+                ["Allow resume", allowResume, setAllowResume,
+                  objectiveCategory === "live" ? "Live Exams never allow resume — leaving mid-attempt forfeits it, regardless of this setting." : null],
+                ["Auto-submit on timeout", autoSubmit, setAutoSubmit, null],
+                ["Show correct answers", showAnswers, setShowAnswers, null],
+                ["Randomize question order", randomizeQuestions, setRandomizeQuestions,
+                  objectiveCategory === "old_past" ? "Old Past Exams must keep their original, fixed question order." : null],
+                ["Randomize MCQ options", randomizeOptions, setRandomizeOptions, null],
+                ["Negative marking", negativeMarking, setNegativeMarking, null],
+              ] as [string, boolean, (v: boolean) => void, string | null][]).map(([text, value, setter, lockedNote]) => (
+                <label key={text} className={`flex items-start gap-3 text-sm text-slate-700 ${lockedNote ? "opacity-60" : "cursor-pointer"}`}>
+                  <input
+                    type="checkbox"
+                    checked={lockedNote ? false : value}
+                    disabled={!!lockedNote}
+                    onChange={e => setter(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#0B2545] mt-0.5"
+                  />
+                  <span>
+                    {text}
+                    {lockedNote && <span className="block text-xs text-slate-400 mt-0.5">{lockedNote}</span>}
+                  </span>
                 </label>
               ))}
             </div>

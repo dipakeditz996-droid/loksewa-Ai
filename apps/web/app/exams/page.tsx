@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
@@ -13,78 +13,34 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { 
-  Search, SlidersHorizontal, ArrowRight, Clock, Calendar, 
-  Target, Zap, BrainCircuit, BarChart2, CheckCircle2, AlertCircle, 
-  FileText, ShieldCheck, Trophy, Layers, PlayCircle, BookOpen, User, Sparkles, Activity
+import {
+  Search, SlidersHorizontal, ArrowRight, Clock, Calendar,
+  Target, Zap, BrainCircuit, BarChart2, CheckCircle2, AlertCircle,
+  FileText, ShieldCheck, Trophy, Layers, PlayCircle, BookOpen, User, Sparkles, Activity, Loader2
 } from "lucide-react";
+import { publicApi, type PublicExamination } from "@/lib/api/public-api";
 
-// Mock Data
-const MOCK_EXAMS = [
-  {
-    id: 1,
-    title: "Section Officer — Model Exam 01",
-    level: "Section Officer",
-    type: "Model Exam",
-    paper: "Paper I",
-    questions: 100,
-    duration: 90,
-    difficulty: "Medium",
-    subjects: ["General Knowledge", "Basic Office Skills Test (BOST)"],
-    status: "Available"
-  },
-  {
-    id: 2,
-    title: "Section Officer — Model Exam 02",
-    level: "Section Officer",
-    type: "Model Exam",
-    paper: "Paper II",
-    questions: 100,
-    duration: 90,
-    difficulty: "Hard",
-    subjects: ["Governance Systems", "Constitution", "Public Administration"],
-    status: "Available"
-  },
-  {
-    id: 3,
-    title: "Nayab Subba — Model Exam 01",
-    level: "Nayab Subba",
-    type: "Model Exam",
-    paper: "Paper I",
-    questions: 80,
-    duration: 75,
-    difficulty: "Medium",
-    subjects: ["General Knowledge", "Current Affairs", "General Aptitude Test"],
-    status: "Available"
-  },
-  {
-    id: 4,
-    title: "Kharidar — Practice Examination",
-    level: "Kharidar",
-    type: "Practice Exam",
-    paper: "Paper I",
-    questions: 50,
-    duration: 45,
-    difficulty: "Easy",
-    subjects: ["Basic Knowledge", "Mathematics", "Science"],
-    status: "Available"
-  },
-  {
-    id: 5,
-    title: "Constitution — Topic Challenge",
-    level: "All Levels",
-    type: "Topic-wise Exam",
-    paper: "Mixed",
-    questions: 30,
-    duration: 30,
-    difficulty: "Hard",
-    subjects: ["Constitution", "Fundamental Rights"],
-    status: "Locked"
-  }
-];
+const STATUS_LABELS: Record<PublicExamination["status"], string> = {
+  DRAFT: "Draft",
+  UPCOMING: "Upcoming",
+  LIVE: "Live",
+  COMPLETED: "Completed",
+};
 
 export default function ExamsPage() {
-  const [selectedExam, setSelectedExam] = useState<typeof MOCK_EXAMS[0] | null>(null);
+  const [exams, setExams] = useState<PublicExamination[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedExam, setSelectedExam] = useState<PublicExamination | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    publicApi.getExaminations().then((data) => {
+      if (!mounted) return;
+      setExams(data || []);
+      setIsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
@@ -340,29 +296,36 @@ export default function ExamsPage() {
           <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-2">Available Examinations</h2>
           <p className="text-slate-600 dark:text-slate-400 font-[500] mb-10">Choose an assessment based on your target exam and preparation level.</p>
           
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+          ) : exams.length === 0 ? (
+            <p className="text-slate-500 font-[500]">No examinations have been published yet. Check back soon.</p>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {MOCK_EXAMS.map((exam) => (
+            {exams.map((exam) => (
               <Dialog key={exam.id}>
                 <DialogTrigger asChild>
                   {/* 6. EXAM CARD DESIGN */}
                   <div className="p-6 rounded-[20px] bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/40 dark:hover:border-white/20 hover:shadow-lg transition-all group cursor-pointer flex flex-col h-full relative overflow-hidden">
-                    
+
                     <div className="flex justify-between items-start mb-4">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 text-[10px] font-[800] uppercase tracking-wider">
                         {exam.type}
                       </div>
-                      {exam.status === "Available" ? (
+                      {exam.status === "LIVE" || exam.status === "UPCOMING" ? (
                         <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                       ) : (
-                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                        <div className="w-2 h-2 rounded-full bg-slate-400"></div>
                       )}
                     </div>
 
                     <h3 className="text-lg font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors leading-tight">
                       {exam.title}
                     </h3>
-                    <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">{exam.level} • {exam.paper}</p>
-                    
+                    <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">{exam.level || "General"} • {exam.paper}</p>
+
                     <div className="grid grid-cols-2 gap-3 mb-6 mt-auto">
                       <div className="bg-slate-50 dark:bg-[#0A1118] p-3 rounded-[10px] border border-slate-100 dark:border-white/5">
                         <div className="text-[10px] font-[800] text-slate-400 uppercase tracking-wider mb-1">Questions</div>
@@ -379,26 +342,20 @@ export default function ExamsPage() {
                     </div>
 
                     <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-100 dark:border-white/5">
-                      <span className={`text-xs font-[800] px-2 py-1 rounded-[4px] 
-                        ${exam.difficulty === 'Easy' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 
-                          exam.difficulty === 'Medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' : 
-                          'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400'}`}>
-                        {exam.difficulty}
+                      <span className={`text-xs font-[800] px-2 py-1 rounded-[4px]
+                        ${exam.status === 'LIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
+                          exam.status === 'UPCOMING' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
+                          'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400'}`}>
+                        {STATUS_LABELS[exam.status]}
                       </span>
-                      
-                      {exam.status === "Locked" ? (
-                        <span className="text-sm font-[800] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                          Unlock Exam <ArrowRight className="w-4 h-4 ml-1" />
-                        </span>
-                      ) : (
-                        <span className="text-sm font-[800] text-[#163E6B] dark:text-[#D4A72C] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                          Start Exam <ArrowRight className="w-4 h-4 ml-1" />
-                        </span>
-                      )}
+
+                      <span className="text-sm font-[800] text-[#163E6B] dark:text-[#D4A72C] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        {exam.status === "COMPLETED" ? "View Details" : "Start Exam"} <ArrowRight className="w-4 h-4 ml-1" />
+                      </span>
                     </div>
                   </div>
                 </DialogTrigger>
-                
+
                 {/* 7. EXAM DETAIL PREVIEW (Modal) */}
                 <DialogContent className="max-w-2xl bg-white dark:bg-[#0B1521] border-slate-200 dark:border-white/10 rounded-[24px] p-0 overflow-hidden">
                   <div className="bg-slate-50 dark:bg-[#0A1420] p-6 md:p-8 border-b border-slate-200 dark:border-white/10 relative overflow-hidden">
@@ -408,12 +365,12 @@ export default function ExamsPage() {
                     </div>
                     <DialogTitle className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-2">{exam.title}</DialogTitle>
                     <DialogDescription className="text-slate-600 dark:text-slate-400 font-[500]">
-                      {exam.level} • {exam.type} • {exam.paper}
+                      {exam.level || "General"} • {exam.type} • {exam.paper}
                     </DialogDescription>
                   </div>
-                  
+
                   <div className="p-6 md:p-8">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
                       <div className="bg-slate-50 dark:bg-[#0A1118] p-4 rounded-[12px] border border-slate-100 dark:border-white/5 text-center">
                         <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Questions</div>
                         <div className="text-xl font-[900] text-slate-900 dark:text-white">{exam.questions}</div>
@@ -423,15 +380,12 @@ export default function ExamsPage() {
                         <div className="text-xl font-[900] text-slate-900 dark:text-white">{exam.duration}m</div>
                       </div>
                       <div className="bg-slate-50 dark:bg-[#0A1118] p-4 rounded-[12px] border border-slate-100 dark:border-white/5 text-center">
-                        <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Difficulty</div>
-                        <div className="text-xl font-[900] text-slate-900 dark:text-white">{exam.difficulty}</div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0A1118] p-4 rounded-[12px] border border-slate-100 dark:border-white/5 text-center">
-                        <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Paper</div>
-                        <div className="text-xl font-[900] text-slate-900 dark:text-white">{exam.paper.replace('Paper ', '')}</div>
+                        <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Status</div>
+                        <div className="text-xl font-[900] text-slate-900 dark:text-white">{STATUS_LABELS[exam.status]}</div>
                       </div>
                     </div>
 
+                    {exam.subjects.length > 0 && (
                     <div className="mb-8">
                       <h4 className="text-sm font-[800] text-slate-900 dark:text-white mb-3 uppercase tracking-wider">Subjects Covered</h4>
                       <div className="flex flex-wrap gap-2">
@@ -442,6 +396,7 @@ export default function ExamsPage() {
                         ))}
                       </div>
                     </div>
+                    )}
 
                     <div className="mb-8 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-[12px] p-5">
                       <h4 className="text-sm font-[800] text-amber-900 dark:text-amber-500 mb-3 uppercase tracking-wider flex items-center gap-2">
@@ -464,9 +419,11 @@ export default function ExamsPage() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <Button className="flex-1 h-14 rounded-[12px] bg-[#163E6B] dark:bg-[#D4A72C] hover:bg-[#163E6B]/90 dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[800] text-[16px]">
-                        Start Examination <ArrowRight className="w-5 h-5 ml-2" />
-                      </Button>
+                      <Link href="/login" className="flex-1">
+                        <Button className="w-full h-14 rounded-[12px] bg-[#163E6B] dark:bg-[#D4A72C] hover:bg-[#163E6B]/90 dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[800] text-[16px]">
+                          Start Examination <ArrowRight className="w-5 h-5 ml-2" />
+                        </Button>
+                      </Link>
                       <DialogTrigger asChild>
                         <Button variant="outline" className="h-14 px-8 rounded-[12px] border-slate-300 dark:border-white/20 text-slate-700 dark:text-slate-300 font-[700]">
                           Cancel
@@ -478,6 +435,7 @@ export default function ExamsPage() {
               </Dialog>
             ))}
           </div>
+          )}
         </div>
       </section>
 

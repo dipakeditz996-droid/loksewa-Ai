@@ -12,6 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { RetryImage } from "@/components/ui/retry-image";
 import { marketplaceApi, PaymentSubmission } from "@/lib/api/marketplace";
 import { toast } from "sonner";
 
@@ -264,7 +265,7 @@ export default function MarketplacePaymentsPage() {
               
               <div className="border-2 border-dashed border-slate-200 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center min-h-[300px]">
                 {selectedPayment.screenshot ? (
-                  <img src={selectedPayment.screenshot} alt="Payment Screenshot" className="max-w-full max-h-[400px] object-contain" />
+                  <RetryImage src={selectedPayment.screenshot} alt="Payment Screenshot" className="max-w-full max-h-[400px] object-contain" />
                 ) : (
                   <div className="text-center text-slate-400 p-6">
                     <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-20" />

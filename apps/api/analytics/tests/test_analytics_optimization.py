@@ -3,12 +3,9 @@ from django.utils import timezone
 from datetime import timedelta
 from exams.models import (
     PracticeSession,
-    ModelExam,
-    ModelExamAttempt,
     Examination,
     ExaminationAttempt,
     QuestionAttempt,
-    ModelExamAttemptAnswer,
     StudentAnswer,
     Question,
     ExamCategory,
@@ -50,29 +47,22 @@ class TestAnalyticsOptimization(TestCase):
         Enrollment.objects.create(student=self.student2, course=self.course, status='active')
         TeacherCourseAssignment.objects.create(teacher=self.teacher, course=self.course)
 
-        # Legacy ModelExam
-        self.legacy_exam = ModelExam.objects.create(title="Legacy 1", exam=self.exam_level, total_questions=2, total_marks=2)
-        # Canonical Examination
         self.canonical_exam = Examination.objects.create(title="Canonical 1", category=self.category, exam=self.exam_level, course=self.course)
-        
+
     def test_student_overview_combines_attempts(self):
         # Add a practice session
         ps = PracticeSession.objects.create(user=self.student, exam=self.exam_level, completed=True, total_questions=1)
         QuestionAttempt.objects.create(session=ps, question=self.q1, is_correct=True)
-        
-        # Add legacy attempt
-        mea = ModelExamAttempt.objects.create(student=self.student, model_exam=self.legacy_exam, status='submitted', correct_count=1)
-        ModelExamAttemptAnswer.objects.create(attempt=mea, question=self.q2, is_correct=True)
 
-        # Add canonical attempt
+        # Add an exam attempt
         ea = ExaminationAttempt.objects.create(student=self.student, examination=self.canonical_exam, status='submitted', score=1, percentage=50)
-        StudentAnswer.objects.create(attempt=ea, question=self.q1, is_correct=True)
+        StudentAnswer.objects.create(attempt=ea, question=self.q2, is_correct=True)
 
         overview = AnalyticsService.get_overview(self.student)
-        
-        self.assertEqual(overview['questions_solved'], 3)
-        self.assertEqual(overview['model_exams_taken'], 2) # 1 legacy, 1 canonical
-        self.assertEqual(overview['overall_accuracy'], 100.0) # 3 correct out of 3 solved
+
+        self.assertEqual(overview['questions_solved'], 2)
+        self.assertEqual(overview['model_exams_taken'], 1)
+        self.assertEqual(overview['overall_accuracy'], 100.0)  # 2 correct out of 2 solved
 
     def test_teacher_course_performance_n_plus_1(self):
         # We will test that we don't have N+1 issues

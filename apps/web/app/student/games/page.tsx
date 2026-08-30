@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { RetryImage } from "@/components/ui/retry-image";
 import { Skeleton } from "@/components/ui/skeleton";
 import { gamificationService } from "@/lib/api/gamification";
 import { 
@@ -18,6 +19,7 @@ import {
 import { gamesService, GameMode, FeaturedGame } from "@/lib/api/games";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
+import { AttractiveLoader } from "@/components/ui/attractive-loader";
 
 // --- Components ---
 
@@ -33,7 +35,7 @@ function DynamicIcon({ name, className }: { name: string, className?: string }) 
 function StatBox({ icon, label, value, highlight = false }: any) {
   return (
     <div className={cn(
-      "flex flex-col p-3 rounded-xl border border-white/10 bg-white/5 backdrop-blur-sm",
+      "flex flex-col p-3 rounded-xl border border-white/10 bg-card/5 backdrop-blur-sm",
       highlight && "bg-blue-500/10 border-blue-500/20"
     )}>
       <div className="flex items-center gap-2 mb-1">
@@ -128,18 +130,9 @@ export default function GamesArena() {
 
   if (loading || !stats) {
     return (
-      <div className="p-4 md:p-8 max-w-[1400px] mx-auto min-h-screen">
-        <Skeleton className="h-40 w-full rounded-2xl mb-8" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            <Skeleton className="h-64 w-full rounded-2xl" />
-            <Skeleton className="h-96 w-full rounded-2xl" />
-          </div>
-          <div className="space-y-8">
-            <Skeleton className="h-64 w-full rounded-2xl" />
-            <Skeleton className="h-64 w-full rounded-2xl" />
-          </div>
-        </div>
+      <div className="min-h-screen bg-[#051024] flex flex-col items-center justify-center">
+        <AttractiveLoader />
+        <p className="text-blue-200/60 font-medium text-sm mt-8 animate-pulse">Loading Games Arena...</p>
       </div>
     );
   }
@@ -166,7 +159,7 @@ export default function GamesArena() {
               <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 p-[2px] shrink-0">
                 <div className="h-full w-full bg-[#0B1A38] rounded-xl flex items-center justify-center overflow-hidden">
                   {stats.studentAvatar ? (
-                    <img src={stats.studentAvatar} alt={stats.studentName} className="h-full w-full object-cover" />
+                    <RetryImage src={stats.studentAvatar} alt={stats.studentName} className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-2xl font-black text-white">{stats.studentName.charAt(0)}</span>
                   )}
@@ -275,7 +268,7 @@ export default function GamesArena() {
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-4 mt-auto w-full">
-                      <Button onClick={() => router.push(featured.route)} className="bg-white text-indigo-900 hover:bg-blue-50 font-bold px-8 py-6 rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.3)]">
+                      <Button onClick={() => router.push(featured.route)} className="bg-card text-indigo-900 hover:bg-blue-50 dark:bg-blue-950/30 font-bold px-8 py-6 rounded-xl shadow-[0_0_20px_rgba(255,255,255,0.3)]">
                         {featured.buttonText} <ChevronRight className="ml-2 h-5 w-5" />
                       </Button>
                       <div className="flex items-center gap-4 ml-auto">
@@ -283,7 +276,7 @@ export default function GamesArena() {
                           <span className="text-xl font-black text-white">+{featured.xpReward}</span>
                           <span className="text-[11px] font-bold text-purple-300 uppercase">XP</span>
                         </div>
-                        <div className="w-px h-6 bg-white/20" />
+                        <div className="w-px h-6 bg-card/20" />
                         <div className="flex items-center gap-1.5">
                           <span className="text-xl font-black text-white">+{featured.coinReward}</span>
                           <span className="text-[11px] font-bold text-amber-300 uppercase">Coins</span>
@@ -326,7 +319,7 @@ export default function GamesArena() {
                       "px-4 py-1.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors border border-transparent",
                       activeCategory === cat 
                         ? "bg-blue-500/20 text-blue-400 border-blue-500/30" 
-                        : "bg-[#0B1A38] text-white/60 hover:text-white hover:bg-white/5 border-white/5"
+                        : "bg-[#0B1A38] text-white/60 hover:text-white hover:bg-card/5 border-white/5"
                     )}
                   >
                     {cat}
@@ -351,13 +344,13 @@ export default function GamesArena() {
                         "relative flex flex-col bg-[#0B1A38] rounded-2xl border transition-all p-5",
                         isLocked 
                           ? "border-white/5 opacity-70" 
-                          : "border-white/10 hover:border-blue-500/30 hover:bg-white/5 hover:translate-y-[-2px]"
+                          : "border-white/10 hover:border-blue-500/30 hover:bg-card/5 hover:translate-y-[-2px]"
                       )}
                     >
                       <div className="flex justify-between items-start mb-4">
                         <div className={cn(
                           "h-12 w-12 rounded-xl flex items-center justify-center",
-                          isLocked ? "bg-white/5 text-white/40" : "bg-blue-500/10 text-blue-400"
+                          isLocked ? "bg-card/5 text-white/40" : "bg-blue-500/10 text-blue-400"
                         )}>
                           <DynamicIcon name={(mode as any).icon} className="h-6 w-6" />
                         </div>
@@ -391,7 +384,7 @@ export default function GamesArena() {
                           onClick={() => !isLocked && router.push((game as any).route)}
                           className={cn(
                             "rounded-xl font-bold transition-all",
-                            isLocked ? "bg-white/5 text-white/30" :
+                            isLocked ? "bg-card/5 text-white/30" :
                             isCompleted ? "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" :
                             "bg-blue-600 hover:bg-blue-500 text-white"
                           )}
@@ -472,19 +465,21 @@ export default function GamesArena() {
               
               <div className="flex justify-between items-center px-2">
                 {stats.streakDays.map((isDone, idx) => {
-                  const days = ['M','T','W','T','F','S','S'];
-                  const isToday = idx === 6; // Mock assuming Sunday is today
+                  const dayDate = new Date();
+                  dayDate.setDate(dayDate.getDate() - (6 - idx));
+                  const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' })[0];
+                  const isToday = idx === 6;
                   return (
                     <div key={idx} className="flex flex-col items-center gap-2">
                       <div className={cn(
                         "flex items-center justify-center h-8 w-8 rounded-full border transition-colors",
                         isDone ? "bg-orange-500/20 border-orange-500/50 text-orange-400" : 
-                        isToday ? "bg-white/10 border-white/20 text-white" :
-                        "bg-white/5 border-transparent text-white/20"
+                        isToday ? "bg-card/10 border-white/20 text-white" :
+                        "bg-card/5 border-transparent text-white/20"
                       )}>
                         {isDone ? <Flame className="h-4 w-4" /> : <span className="text-[10px]">{isToday ? "●" : ""}</span>}
                       </div>
-                      <span className="text-[10px] font-bold text-white/40">{days[idx]}</span>
+                      <span className="text-[10px] font-bold text-white/40">{dayName}</span>
                     </div>
                   );
                 })}
@@ -516,9 +511,9 @@ export default function GamesArena() {
                     <div className={cn(
                       "flex items-center justify-center h-7 w-7 rounded-lg text-[11px] font-bold shrink-0",
                       lb.rank === 1 ? "bg-amber-500/20 text-amber-400" :
-                      lb.rank === 2 ? "bg-slate-300/20 text-slate-300" :
+                      lb.rank === 2 ? "bg-secondary/20 text-slate-300" :
                       lb.rank === 3 ? "bg-orange-700/20 text-orange-400" :
-                      "bg-white/5 text-white/40"
+                      "bg-card/5 text-white/40"
                     )}>
                       {lb.rank}
                     </div>
@@ -573,7 +568,7 @@ export default function GamesArena() {
                     className={cn(
                       "flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all",
                       ach.locked 
-                        ? "bg-white/5 border-transparent opacity-50 grayscale" 
+                        ? "bg-card/5 border-transparent opacity-50 grayscale" 
                         : "bg-gradient-to-b from-white/10 to-transparent border-white/10 hover:border-amber-500/30"
                     )}
                     title={ach.title}

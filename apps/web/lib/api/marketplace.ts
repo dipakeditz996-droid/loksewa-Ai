@@ -64,6 +64,39 @@ export interface Purchase {
   approved_at: string;
 }
 
+export interface MarketplaceRevenueTrendPoint {
+  date: string;
+  revenue: number;
+}
+
+export interface MarketplacePaymentMethodBreakdown {
+  method: string;
+  count: number;
+  percentage: number;
+}
+
+export interface MarketplaceOverview {
+  totalProducts: number;
+  activeProducts: number;
+  totalOrders: number;
+  pendingOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  revenue: number;
+  revenueToday: number;
+  revenueTrend: MarketplaceRevenueTrendPoint[];
+  paymentMethodBreakdown: MarketplacePaymentMethodBreakdown[];
+  recentOrders: Array<{
+    id: number;
+    product: string;
+    buyer: string;
+    seller: string;
+    price: number;
+    status: string;
+    createdAt: string;
+  }>;
+}
+
 export const marketplaceApi = {
   // Student - Products
   getProducts: async () => {
@@ -126,6 +159,15 @@ export const marketplaceApi = {
       body: isFormData ? (data as FormData) : JSON.stringify(data),
     });
   },
+  adminCreatePaymentMethod: async (data: Partial<PaymentMethod>) => {
+    return apiClient<PaymentMethod>("/marketplace/admin/payment-methods/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  adminDeletePaymentMethod: async (id: number) => {
+    return apiClient(`/marketplace/admin/payment-methods/${id}/`, { method: "DELETE" });
+  },
 
   // Admin - Payment Submissions
   adminGetSubmissions: async () => {
@@ -142,9 +184,18 @@ export const marketplaceApi = {
   adminGetPurchases: async () => {
     return apiClient<Purchase[]>("/marketplace/admin/purchases/");
   },
-  
+  adminRevokePurchase: async (id: number) => {
+    return apiClient<Purchase>(`/marketplace/admin/purchases/${id}/revoke/`, { method: "POST" });
+  },
+  adminReactivatePurchase: async (id: number) => {
+    return apiClient<Purchase>(`/marketplace/admin/purchases/${id}/reactivate/`, { method: "POST" });
+  },
+
   // Admin - Overview
+  // Real endpoint lives under /admin/marketplace/ (administration app), not
+  // /marketplace/admin/ (which is just this router's own root - previously
+  // wrong here, silently making every dashboard stat fall back to 0).
   adminGetOverview: async () => {
-    return apiClient<any>("/marketplace/admin/");
+    return apiClient<MarketplaceOverview>("/admin/marketplace/");
   },
 };

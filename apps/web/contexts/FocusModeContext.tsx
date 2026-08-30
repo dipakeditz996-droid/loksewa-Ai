@@ -61,7 +61,12 @@ interface FocusModeContextValue {
   /** The attempt currently driving exam focus, if any. */
   examSession: ExamFocusSession | null;
 
-  setPreference: (enabled: boolean) => Promise<void>;
+  /** Controls the DND OS Guide Modal (only opened when explicitly clicking DND or taking an exam). */
+  isDndModalOpen: boolean;
+  openDndGuideModal: () => void;
+  closeDndGuideModal: () => void;
+
+  setPreference: (enabled: boolean, triggeredByUser?: boolean) => Promise<void>;
   togglePreference: () => Promise<void>;
 
   /** Called by the exam UI once an attempt is confirmed active. */
@@ -87,6 +92,9 @@ const FocusModeContext = createContext<FocusModeContextValue>({
   isSaving: false,
   isUnsynced: false,
   examSession: null,
+  isDndModalOpen: false,
+  openDndGuideModal: () => {},
+  closeDndGuideModal: () => {},
   setPreference: noopAsync,
   togglePreference: noopAsync,
   beginExamFocus: () => {},
@@ -96,6 +104,7 @@ const FocusModeContext = createContext<FocusModeContextValue>({
   requestFullscreen: async () => false,
   exitFullscreen: noopAsync,
 });
+
 
 function readCachedPreference(): boolean {
   if (typeof window === "undefined") return false;
@@ -155,12 +164,33 @@ function writeCachedExamAttempt(attemptId: number | null) {
   }
 }
 
+const DISMISSED_KEY = "loksewa.focusMode.dndGuideDismissed";
+
+export function wasDndGuideDismissed(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(DISMISSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
+export function markDndGuideDismissed(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DISMISSED_KEY, "true");
+  } catch {
+    /* ignore */
+  }
+}
+
 export const FocusModeProvider = ({ children }: { children: React.ReactNode }) => {
   const { user, loading: authLoading } = useAuth();
   const isStudent = !!user && user.role === "student";
 
   const [preference, setPreferenceState] = useState(false);
   const [examSession, setExamSession] = useState<ExamFocusSession | null>(null);
+  const [isDndModalOpen, setIsDndModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUnsynced, setIsUnsynced] = useState(false);
@@ -173,6 +203,16 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
 
   const examFocus = examSession !== null;
   const isFocusActive = preference || examFocus;
+
+  const openDndGuideModal = useCallback(() => {
+    if (!wasDndGuideDismissed()) {
+      setIsDndModalOpen(true);
+    }
+  }, []);
+
+  const closeDndGuideModal = useCallback(() => {
+    setIsDndModalOpen(false);
+  }, []);
 
   /* ---------------------------------------------------------------- *
    * Preference: optimistic local cache first, then the server truth.
@@ -364,7 +404,7 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
    * Actions
    * ---------------------------------------------------------------- */
   const setPreference = useCallback(
-    async (enabled: boolean) => {
+    async (enabled: boolean, triggeredByUser: boolean = false) => {
       if (examFocus) {
         notify.exam("Focus Mode is locked during an active examination.");
         return;
@@ -372,6 +412,13 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
 
       setPreferenceState(enabled);
       writeCachedPreference(enabled);
+
+      // Open the guide ONLY if user explicitly triggered enabling it
+      if (enabled && triggeredByUser && !wasDndGuideDismissed()) {
+        setIsDndModalOpen(true);
+      } else if (!enabled) {
+        setIsDndModalOpen(false);
+      }
 
       if (!isStudent) return;
 
@@ -402,7 +449,7 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
   );
 
   const togglePreference = useCallback(
-    () => setPreference(!preference),
+    () => setPreference(!preference, true),
     [preference, setPreference]
   );
 
@@ -411,11 +458,16 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
       current && current.attemptId === session.attemptId ? current : session
     );
     writeCachedExamAttempt(session.attemptId);
+    // When student gives exam or test, show the DND guide if not dismissed
+    if (!wasDndGuideDismissed()) {
+      setIsDndModalOpen(true);
+    }
   }, []);
 
   const endExamFocus = useCallback(() => {
     setExamSession(null);
     writeCachedExamAttempt(null);
+    setIsDndModalOpen(false);
     // Leaving fullscreen is part of leaving the exam environment.
     if (typeof document !== "undefined" && document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
@@ -432,6 +484,9 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
       isSaving,
       isUnsynced,
       examSession,
+      isDndModalOpen,
+      openDndGuideModal,
+      closeDndGuideModal,
       setPreference,
       togglePreference,
       beginExamFocus,
@@ -449,6 +504,9 @@ export const FocusModeProvider = ({ children }: { children: React.ReactNode }) =
       isSaving,
       isUnsynced,
       examSession,
+      isDndModalOpen,
+      openDndGuideModal,
+      closeDndGuideModal,
       setPreference,
       togglePreference,
       beginExamFocus,

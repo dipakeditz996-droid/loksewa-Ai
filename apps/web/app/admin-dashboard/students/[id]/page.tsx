@@ -14,6 +14,7 @@ import {
   StudentPerformance, TopicPerformance,
 } from "@/lib/api/admin-student-performance";
 import { ApiError } from "@/lib/api/client";
+import { RetryImage } from "@/components/ui/retry-image";
 
 const fmtTime = (seconds: number) => {
   if (!seconds) return "—";
@@ -195,8 +196,7 @@ export default function StudentPerformancePage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         {student.avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={student.avatar} alt="" className="w-14 h-14 rounded-full object-cover" />
+          <RetryImage src={student.avatar} alt="" className="w-14 h-14 rounded-full object-cover" />
         ) : (
           <span className="w-14 h-14 rounded-full bg-[#0B2545] text-white font-bold text-lg flex items-center justify-center shrink-0">
             {student.full_name.slice(0, 2).toUpperCase()}

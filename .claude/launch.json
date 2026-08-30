@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "web", "dev"],
       "port": 3000
+    },
+    {
+      "name": "django-api",
+      "runtimeExecutable": "apps/api/venv/Scripts/python.exe",
+      "runtimeArgs": ["apps/api/manage.py", "runserver", "8000"],
+      "port": 8000
     }
   ]
 }

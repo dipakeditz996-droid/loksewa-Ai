@@ -37,15 +37,35 @@ export const authApi = {
 
   /**
    * Admin-specific login. Backend validates credentials AND role.
+   * If the account has 2FA enabled, returns { twoFactorRequired: true, pendingToken }
+   * instead of tokens — call `completeTwoFactorLogin` next.
    */
   adminLogin: async (credentials: { username: string; password: string }) => {
     const data = await apiClient<{
-      access: string;
-      refresh: string;
-      user: User;
+      access?: string;
+      refresh?: string;
+      user?: User;
+      twoFactorRequired?: boolean;
+      pendingToken?: string;
     }>("/auth/admin-login/", {
       method: "POST",
       body: JSON.stringify(credentials),
+    });
+    if (data.twoFactorRequired) {
+      return data;
+    }
+    setAuthToken(data.access!, data.refresh!);
+    return data;
+  },
+
+  /**
+   * Completes an admin login that returned twoFactorRequired, with a TOTP
+   * or backup code.
+   */
+  completeTwoFactorLogin: async (pendingToken: string, code: string) => {
+    const data = await apiClient<{ access: string; refresh: string; user: User }>("/auth/2fa/login/", {
+      method: "POST",
+      body: JSON.stringify({ pendingToken, code }),
     });
     setAuthToken(data.access, data.refresh);
     return data;
@@ -92,5 +112,26 @@ export const authApi = {
     });
     setAuthToken(data.access, data.refresh);
     return data;
+  },
+};
+
+export const twoFactorApi = {
+  status: async () => {
+    return apiClient<{ platformEnabled: boolean; enabled: boolean }>("/auth/2fa/status/");
+  },
+  setup: async () => {
+    return apiClient<{ secret: string; otpauthUri: string }>("/auth/2fa/setup/", { method: "POST" });
+  },
+  verifySetup: async (code: string) => {
+    return apiClient<{ enabled: boolean; backupCodes: string[] }>("/auth/2fa/verify-setup/", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+  },
+  disable: async (password: string) => {
+    return apiClient<{ enabled: boolean }>("/auth/2fa/disable/", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    });
   },
 };

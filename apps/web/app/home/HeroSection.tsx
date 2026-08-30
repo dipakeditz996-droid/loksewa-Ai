@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { motion, type MotionValue } from "framer-motion";
+import { motion, AnimatePresence, type MotionValue } from "framer-motion";
 import {
   ArrowRight, TrendingUp, Award, Play,
 } from "lucide-react";
@@ -70,6 +70,8 @@ const SUBJECT_MASTERY = [
 ];
 
 const EXAM_CHIPS = ["Section Officer", "Kharidar", "Nayab Subba", "Sub-Engineer"];
+
+const ACCENT_WORDS = ["upgraded.", "redefined.", "unlocked.", "perfected."];
 
 // ── Circular score gauge (pure SVG, no chart library) ──────────────────────────
 function ScoreGauge({ value, reducedMotion }: { value: number; reducedMotion: boolean }) {
@@ -259,6 +261,90 @@ function HeroShowcase() {
   );
 }
 
+// ── Compact showcase card for mobile — same data, no mouse-parallax layers ────
+function MobileHeroShowcase({ reducedMotion }: { reducedMotion: boolean }) {
+  return (
+    <motion.div
+      initial={reducedMotion ? false : { opacity: 0, y: 24, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: 0.6, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      className="lg:hidden relative w-full mt-8 mb-2"
+    >
+      {/* Glow bed */}
+      <div className="absolute -inset-6 -z-10 pointer-events-none">
+        <div className="absolute left-0 top-0 w-[220px] h-[220px] rounded-full bg-[#D4A72C]/[0.16] blur-[80px]" />
+        <div className="absolute right-0 bottom-0 w-[200px] h-[200px] rounded-full bg-blue-500/[0.12] blur-[80px]" />
+      </div>
+
+      <div className="rounded-[20px] overflow-hidden bg-white dark:bg-[#0B1524] border border-slate-200/80 dark:border-white/[0.09] shadow-[0_30px_70px_-24px_rgba(11,37,69,0.32)] dark:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]">
+        <div className="flex items-center gap-1.5 px-4 h-9 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.03]">
+          <span className="w-2 h-2 rounded-full bg-red-300 dark:bg-red-400/60" />
+          <span className="w-2 h-2 rounded-full bg-amber-300 dark:bg-amber-400/60" />
+          <span className="w-2 h-2 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
+          <span className="mx-auto text-[10px] font-[600] text-slate-400 dark:text-slate-500">
+            app.loksewaai.com
+          </span>
+        </div>
+
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3.5">
+            <span className="text-[9.5px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              AI Preparation Score
+            </span>
+            <span className="flex items-center gap-1 text-[10px] font-[700] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 rounded-full">
+              <TrendingUp className="w-3 h-3" /> +14.8%
+            </span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <ScoreGauge value={87} reducedMotion={reducedMotion} />
+            <div className="flex-1 space-y-2">
+              {SUBJECT_MASTERY.map((s, i) => (
+                <div key={s.label}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10.5px] font-[600] text-slate-600 dark:text-slate-300 truncate pr-2">{s.label}</span>
+                    <span className="text-[10.5px] font-[700] text-slate-900 dark:text-white shrink-0">{s.value}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-white/[0.08] rounded-full overflow-hidden">
+                    <motion.div
+                      className={`h-full rounded-full ${s.color}`}
+                      initial={reducedMotion ? false : { width: 0 }}
+                      animate={{ width: `${s.value}%` }}
+                      transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay: 0.7 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 mt-4 pt-3.5 border-t border-slate-100 dark:border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-[#D4A72C]/12 flex items-center justify-center">
+                <Award className="w-4 h-4 text-[#C29322] dark:text-[#F0C95A]" />
+              </div>
+              <div>
+                <div className="text-[13px] font-[900] text-slate-900 dark:text-white leading-none">#27</div>
+                <div className="text-[9px] font-[700] text-[#C29322] dark:text-[#F0C95A] mt-0.5">Top 3%</div>
+              </div>
+            </div>
+            <div className="w-px h-8 bg-slate-100 dark:bg-white/10" />
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-[10px] bg-orange-500/12 flex items-center justify-center text-base">
+                🔥
+              </div>
+              <div>
+                <div className="text-[12px] font-[900] text-slate-900 dark:text-white leading-none">7 Days</div>
+                <div className="text-[9px] font-[700] text-orange-500 mt-0.5">Streak</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 // ── Trust indicators ───────────────────────────────────────────────────────────
 const AVATAR_GRADIENTS = [
   "from-blue-400 to-blue-600",
@@ -270,55 +356,98 @@ const AVATAR_GRADIENTS = [
 
 function TrustIndicators() {
   return (
-    <div className="flex flex-wrap items-center gap-x-7 gap-y-4 pt-9">
-      <div className="flex items-center gap-3">
-        <div className="flex -space-x-2.5">
-          {AVATAR_GRADIENTS.map((g, i) => (
-            <div
-              key={i}
-              className={`w-8 h-8 rounded-full bg-gradient-to-br ${g} ring-2 ring-white dark:ring-[#070E1B] shadow-sm`}
-            />
-          ))}
+    <>
+      {/* Compact stat strip — mobile only. A single card, three equal columns,
+          so it never wraps awkwardly the way the desktop row does on narrow
+          screens. */}
+      <div className="sm:hidden grid grid-cols-3 divide-x divide-slate-200/70 dark:divide-white/10 rounded-[16px] border border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/[0.04] backdrop-blur-md w-full mt-8">
+        <div className="flex flex-col items-center justify-center py-3 px-1.5">
+          <span className="text-[15px] font-[900] text-slate-900 dark:text-white leading-none">50K+</span>
+          <span className="text-[9.5px] font-[600] text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">aspirants</span>
         </div>
+        <div className="flex flex-col items-center justify-center py-3 px-1.5">
+          <span className="flex items-center gap-0.5 text-[13px] font-[900] text-slate-900 dark:text-white leading-none">
+            <span className="text-[#D4A72C]">★</span> 4.9
+          </span>
+          <span className="text-[9.5px] font-[600] text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">rating</span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-3 px-1.5">
+          <span className="text-[15px] font-[900] text-slate-900 dark:text-white leading-none">12K+</span>
+          <span className="text-[9.5px] font-[600] text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">questions</span>
+        </div>
+      </div>
+
+      {/* Full row — sm and up. */}
+      <div className="hidden sm:flex flex-wrap items-center gap-x-7 gap-y-4 pt-9">
+        <div className="flex items-center gap-3">
+          <div className="flex -space-x-2.5">
+            {AVATAR_GRADIENTS.map((g, i) => (
+              <div
+                key={i}
+                className={`w-8 h-8 rounded-full bg-gradient-to-br ${g} ring-2 ring-white dark:ring-[#070E1B] shadow-sm`}
+              />
+            ))}
+          </div>
+          <div>
+            <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">50,000+</div>
+            <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">active aspirants</div>
+          </div>
+        </div>
+
+        <div className="block w-px h-9 bg-slate-200 dark:bg-white/10" />
+
         <div>
-          <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">50,000+</div>
-          <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">active aspirants</div>
+          <div className="flex items-center gap-1">
+            {"★★★★★".split("").map((s, i) => (
+              <span key={i} className="text-[#D4A72C] text-[13px] leading-none">{s}</span>
+            ))}
+            <span className="text-[14px] font-[800] text-slate-900 dark:text-white ml-1.5 leading-none">4.9</span>
+          </div>
+          <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 mt-1">average rating</div>
+        </div>
+
+        <div className="hidden md:block w-px h-9 bg-slate-200 dark:bg-white/10" />
+
+        <div>
+          <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">12,000+</div>
+          <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">practice questions</div>
         </div>
       </div>
-
-      <div className="hidden sm:block w-px h-9 bg-slate-200 dark:bg-white/10" />
-
-      <div>
-        <div className="flex items-center gap-1">
-          {"★★★★★".split("").map((s, i) => (
-            <span key={i} className="text-[#D4A72C] text-[13px] leading-none">{s}</span>
-          ))}
-          <span className="text-[14px] font-[800] text-slate-900 dark:text-white ml-1.5 leading-none">4.9</span>
-        </div>
-        <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 mt-1">average rating</div>
-      </div>
-
-      <div className="hidden md:block w-px h-9 bg-slate-200 dark:bg-white/10" />
-
-      <div>
-        <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">12,000+</div>
-        <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">practice questions</div>
-      </div>
-    </div>
+    </>
   );
 }
 
 // ── Headline: staggered line reveal ────────────────────────────────────────────
 const headlineContainer = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
+  visible: { transition: { staggerChildren: 0.14, delayChildren: 0.05 } },
 };
 const headlineLine = {
-  hidden: { opacity: 0, y: 26 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.65, ease: [0.16, 1, 0.3, 1] as const } },
+  hidden: { opacity: 0, y: 36, filter: "blur(10px)" },
+  visible: {
+    opacity: 1, y: 0, filter: "blur(0px)",
+    transition: { duration: 0.75, ease: [0.16, 1, 0.3, 1] as const },
+  },
 };
 
 function Headline({ reducedMotion }: { reducedMotion: boolean }) {
+  const [wordIndex, setWordIndex] = React.useState(0);
+  const [cycling, setCycling] = React.useState(false);
+
+  React.useEffect(() => {
+    if (reducedMotion) return;
+    const t = setTimeout(() => setCycling(true), 2400);
+    return () => clearTimeout(t);
+  }, [reducedMotion]);
+
+  React.useEffect(() => {
+    if (!cycling) return;
+    const id = setInterval(() => {
+      setWordIndex((i) => (i + 1) % ACCENT_WORDS.length);
+    }, 2800);
+    return () => clearInterval(id);
+  }, [cycling]);
+
   return (
     <motion.h1
       className="text-[48px] sm:text-[60px] md:text-[70px] lg:text-[82px] font-[900] tracking-[-0.035em] leading-[0.98] mb-7 text-slate-900 dark:text-white"
@@ -333,8 +462,26 @@ function Headline({ reducedMotion }: { reducedMotion: boolean }) {
         preparation,
       </motion.span>
       <motion.span variants={reducedMotion ? undefined : headlineLine} className="relative block w-fit">
-        <span className="text-gradient-gold">upgraded.</span>
-        <span className="absolute -bottom-1.5 left-0 right-0 h-[3px] rounded-full bg-gradient-to-r from-[#C29322] via-[#E6BA3D] to-transparent opacity-70" />
+        <span className="relative inline-block overflow-hidden align-bottom" style={{ height: "1.15em" }}>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={ACCENT_WORDS[wordIndex]}
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: "0%", opacity: 1 }}
+              exit={{ y: "-110%", opacity: 0 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+              className="block text-gradient-gold-shimmer"
+            >
+              {ACCENT_WORDS[wordIndex]}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+        <motion.span
+          initial={reducedMotion ? false : { scaleX: 0 }}
+          animate={{ scaleX: 1 }}
+          transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="absolute -bottom-2 left-0 right-0 h-[3.5px] rounded-full bg-gradient-to-r from-[#C29322] via-[#E6BA3D] to-transparent opacity-60 origin-left"
+        />
       </motion.span>
     </motion.h1>
   );
@@ -354,7 +501,7 @@ function MagneticCTA() {
       <Link href="/register">
         <Button className="btn-gold-gradient relative overflow-hidden text-[#0B1524] h-[56px] px-8 rounded-[14px] font-[800] text-[16px] shadow-[0_16px_40px_-12px_rgba(212,167,44,0.6)] border-none w-full sm:w-auto flex items-center justify-center gap-2.5 group">
           <span className="absolute inset-0 bg-white/25 -translate-x-full group-hover:animate-[shimmer_1.5s_ease-in-out]" />
-          Start Preparing Free
+          Start Preparing Now
           <ArrowRight className="w-4.5 h-4.5 group-hover:translate-x-1 transition-transform" />
         </Button>
       </Link>
@@ -367,7 +514,7 @@ export function HeroSection() {
   const reducedMotion = useSafeReducedMotion();
 
   return (
-    <section className="bg-grain relative min-h-screen flex items-center pt-32 pb-24 overflow-hidden bg-slate-50 dark:bg-[#070E1B]">
+    <section className="bg-grain relative min-h-screen flex items-center pt-24 pb-16 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-24 overflow-hidden bg-slate-50 dark:bg-[#070E1B]">
 
       {/* ── Background layers ──────────────────────────────────────────────── */}
 
@@ -462,6 +609,11 @@ export function HeroSection() {
                 </span>
               ))}
             </motion.div>
+
+            {/* Mobile-only product showcase — desktop gets the full parallax
+                version on the right; mobile gets this compact static card so
+                the page doesn't lose the platform's visual centerpiece. */}
+            <MobileHeroShowcase reducedMotion={reducedMotion} />
 
             {/* Trust indicators */}
             <motion.div

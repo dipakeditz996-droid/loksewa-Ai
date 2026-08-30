@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { preloadImage } from "@/lib/preload-image";
 import { Camera, Save, Loader2, X, Check } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -71,8 +72,11 @@ export function ProfileSection() {
 
   const photoMutation = useMutation({
     mutationFn: (file: File) => studentSettingsApi.uploadPhoto(file),
-    onSuccess: () => {
+    onSuccess: async ({ avatar }) => {
       toast.success("Photo updated!");
+      // Keep showing the local preview until the real Drive-hosted URL is
+      // confirmed loadable, so the user never sees a broken-image flash.
+      if (avatar) await preloadImage(avatar);
       setPhotoPreview(null);
       queryClient.invalidateQueries({ queryKey: ["student-profile"] });
       refreshUser();
@@ -115,7 +119,7 @@ export function ProfileSection() {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 space-y-6">
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8 space-y-6">
         <Skeleton className="h-6 w-40" />
         <div className="flex items-center gap-6">
           <Skeleton className="h-20 w-20 rounded-full" />
@@ -137,12 +141,12 @@ export function ProfileSection() {
   return (
     <div className="space-y-6">
       {/* Profile Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-border/80 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-[#0B2545] to-[#163E6B] px-8 py-6">
           <div className="flex items-center gap-6">
             <div className="relative group">
               <Avatar className="h-20 w-20 border-[3px] border-white/30 shadow-lg">
-                <AvatarImage src={photoPreview || profile?.avatar || undefined} />
+                <AvatarImage src={photoPreview || profile?.avatar || "/images/profile.png"} />
                 <AvatarFallback className="bg-[#D4A72C] text-white text-2xl font-bold">
                   {profile?.full_name?.charAt(0) || "?"}
                 </AvatarFallback>
@@ -177,12 +181,12 @@ export function ProfileSection() {
 
         <div className="p-8">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-[#0B2545]">Personal Information</h3>
+            <h3 className="text-lg font-semibold text-primary dark:text-foreground">Personal Information</h3>
             {profile?.avatar && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-red-500 hover:bg-red-50 text-xs"
+                className="text-red-500 hover:bg-red-50 dark:bg-red-950/30 text-xs"
                 onClick={() => removePhotoMutation.mutate()}
                 disabled={removePhotoMutation.isPending}
               >
@@ -193,58 +197,58 @@ export function ProfileSection() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">First Name</Label>
+              <Label className="text-[12px] font-semibold text-foreground">First Name</Label>
               <Input
                 value={form.first_name}
                 onChange={(e) => handleChange("first_name", e.target.value)}
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-muted/50 border-border focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Last Name</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Last Name</Label>
               <Input
                 value={form.last_name}
                 onChange={(e) => handleChange("last_name", e.target.value)}
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-muted/50 border-border focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Email</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Email</Label>
               <Input
                 value={profile?.email || ""}
                 disabled
-                className="bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                className="bg-muted/80 border-border text-muted-foreground cursor-not-allowed"
               />
-              <p className="text-[10px] text-slate-400">Contact support to change your email.</p>
+              <p className="text-[10px] text-muted-foreground">Contact support to change your email.</p>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Phone</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Phone</Label>
               <Input
                 value={form.phone}
                 onChange={(e) => handleChange("phone", e.target.value)}
                 placeholder="+977-XXXXXXXXXX"
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-muted/50 border-border focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Username</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Username</Label>
               <Input
                 value={profile?.username || ""}
                 disabled
-                className="bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                className="bg-muted/80 border-border text-muted-foreground cursor-not-allowed"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Role</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Role</Label>
               <Input
                 value={profile?.role || "student"}
                 disabled
-                className="bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed capitalize"
+                className="bg-muted/80 border-border text-muted-foreground cursor-not-allowed capitalize"
               />
             </div>
           </div>
 
-          <div className="flex justify-end mt-8 pt-6 border-t border-slate-100">
+          <div className="flex justify-end mt-8 pt-6 border-t border-border/50">
             {dirty && (
               <span className="text-[12px] text-amber-600 flex items-center mr-4">
                 You have unsaved changes
@@ -253,7 +257,7 @@ export function ProfileSection() {
             <Button
               onClick={handleSave}
               disabled={updateMutation.isPending || !dirty}
-              className="bg-[#0B2545] hover:bg-[#163E6B] text-white px-6"
+              className="bg-primary text-primary-foreground hover:bg-[#163E6B] text-white px-6"
             >
               {updateMutation.isPending ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>

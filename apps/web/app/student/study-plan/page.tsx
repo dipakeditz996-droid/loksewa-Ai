@@ -42,18 +42,18 @@ export default function StudyPlanPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#0B2545]" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 min-h-[calc(100vh-72px)] bg-slate-50/50">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 min-h-[calc(100vh-72px)] bg-muted/50">
       
       {/* Page Header */}
-      <div className="pb-6 border-b border-slate-200">
-        <h1 className="text-3xl font-bold tracking-tight text-[#0B2545]">My Study Plan</h1>
-        <p className="text-slate-500 mt-1 font-medium">Plan your preparation, stay consistent, and track your progress.</p>
+      <div className="pb-6 border-b border-border">
+        <h1 className="text-3xl font-bold tracking-tight text-primary dark:text-foreground">My Study Plan</h1>
+        <p className="text-muted-foreground mt-1 font-medium">Plan your preparation, stay consistent, and track your progress.</p>
       </div>
 
       {plan ? (

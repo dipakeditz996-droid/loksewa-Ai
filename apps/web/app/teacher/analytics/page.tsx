@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { apiClient } from '@/lib/api/client';
+import { useSearchParams } from 'next/navigation';
 import { teacherCourseService } from '@/lib/api/teacher-courses';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { TrendingUp, AlertTriangle } from 'lucide-react';
+import { PageHeader } from '@/components/teacher/portal';
 import { SummaryMetrics } from './_components/summary-metrics';
 import { PerformanceTrend } from './_components/performance-trend';
 import { CoursePerformance } from './_components/course-performance';
@@ -15,12 +15,14 @@ import { TopicPerformance } from './_components/topic-performance';
 import { StudentRanking } from './_components/student-ranking';
 import { NeedsAttention } from './_components/needs-attention';
 
+const FILTER_TRIGGER_CLASS = "border-border text-[13px] font-medium text-foreground focus:ring-primary/20";
+
 export default function TeacherAnalyticsPage() {
-  const [courseFilter, setCourseFilter] = useState<string>('all');
+  const searchParams = useSearchParams();
+  const [courseFilter, setCourseFilter] = useState<string>(searchParams.get('course') || 'all');
   const [daysFilter, setDaysFilter] = useState<string>('30');
   const [courses, setCourses] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  
+
   useEffect(() => {
     // Fetch assigned courses for filter
     const fetchCourses = async () => {
@@ -29,95 +31,97 @@ export default function TeacherAnalyticsPage() {
         setCourses(data || []);
       } catch (error) {
         console.error("Failed to fetch courses:", error);
-      } finally {
-        setIsLoading(false);
       }
     };
     fetchCourses();
   }, []);
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-2 md:space-y-0">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-[#0B2545]">Analytics & Results</h2>
-          <p className="text-slate-500 mt-1">
-            Understand student performance, identify weak areas, and track learning progress.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full md:w-auto">
-          <Select value={courseFilter} onValueChange={setCourseFilter}>
-            <SelectTrigger className="w-full sm:w-[200px]">
-              <SelectValue placeholder="All Courses" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Assigned Courses</SelectItem>
-              {courses.map((c) => (
-                <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Select value={daysFilter} onValueChange={setDaysFilter}>
-            <SelectTrigger className="w-full sm:w-[150px]">
-              <SelectValue placeholder="Timeframe" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 Days</SelectItem>
-              <SelectItem value="30">Last 30 Days</SelectItem>
-              <SelectItem value="90">Last 3 Months</SelectItem>
-              <SelectItem value="all">All Time</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-5 pb-12">
+      <PageHeader
+        title="Analytics & Results"
+        description="Understand student performance, identify weak areas, and track learning progress."
+        action={
+          <div className="flex w-full flex-col items-center gap-2 sm:w-auto sm:flex-row">
+            <Select value={courseFilter} onValueChange={setCourseFilter}>
+              <SelectTrigger className={`w-full sm:w-[200px] ${FILTER_TRIGGER_CLASS}`}>
+                <SelectValue placeholder="All Courses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Assigned Courses</SelectItem>
+                {courses.map((c) => (
+                  <SelectItem key={c.id} value={c.id.toString()}>{c.title}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={daysFilter} onValueChange={setDaysFilter}>
+              <SelectTrigger className={`w-full sm:w-[150px] ${FILTER_TRIGGER_CLASS}`}>
+                <SelectValue placeholder="Timeframe" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 Days</SelectItem>
+                <SelectItem value="30">Last 30 Days</SelectItem>
+                <SelectItem value="90">Last 3 Months</SelectItem>
+                <SelectItem value="all">All Time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        }
+      />
 
       <SummaryMetrics courseFilter={courseFilter} daysFilter={daysFilter} />
 
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="performance">Course & Subject Performance</TabsTrigger>
-          <TabsTrigger value="students">Student Analytics</TabsTrigger>
+        <TabsList className="rounded-xl border border-border bg-card p-1">
+          <TabsTrigger value="overview" className="rounded-lg text-[13px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Overview</TabsTrigger>
+          <TabsTrigger value="performance" className="rounded-lg text-[13px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Course &amp; Subject Performance</TabsTrigger>
+          <TabsTrigger value="students" className="rounded-lg text-[13px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Student Analytics</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-7">
-            <Card className="col-span-1 lg:col-span-4 bg-white border border-slate-200/80 shadow-sm rounded-2xl">
-              <CardHeader>
-                <CardTitle className="text-[#0B2545]">Performance Trend</CardTitle>
-                <CardDescription>Average accuracy across practice and exams</CardDescription>
-              </CardHeader>
-              <CardContent className="pl-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-7">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:shadow-none lg:col-span-4">
+              <div className="border-b border-border px-5 py-4">
+                <h2 className="flex items-center gap-2 text-[14.5px] font-bold text-card-foreground">
+                  <TrendingUp className="h-4 w-4 text-primary" />
+                  Performance Trend
+                </h2>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">Average accuracy across practice and exams</p>
+              </div>
+              <div className="p-5 pl-2">
                 <PerformanceTrend courseFilter={courseFilter} daysFilter={daysFilter} />
-              </CardContent>
-            </Card>
-            
-            <Card className="col-span-1 lg:col-span-3 bg-white border border-slate-200/80 shadow-sm rounded-2xl">
-              <CardHeader>
-                <CardTitle className="text-rose-600">Needs Attention</CardTitle>
-                <CardDescription>Students requiring intervention</CardDescription>
-              </CardHeader>
-              <CardContent>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] dark:shadow-none lg:col-span-3">
+              <div className="border-b border-border px-5 py-4">
+                <h2 className="flex items-center gap-2 text-[14.5px] font-bold text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  Needs Attention
+                </h2>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">Students requiring intervention</p>
+              </div>
+              <div className="p-5">
                 <NeedsAttention courseFilter={courseFilter} />
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
-          
-          <div className="grid gap-4 grid-cols-1">
+
+          <div className="grid grid-cols-1 gap-4">
             <TopicPerformance courseFilter={courseFilter} />
           </div>
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">
-          <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <CoursePerformance />
             <SubjectPerformance courseFilter={courseFilter} />
           </div>
         </TabsContent>
 
         <TabsContent value="students" className="space-y-4">
-           <StudentRanking courseFilter={courseFilter} />
+          <StudentRanking courseFilter={courseFilter} />
         </TabsContent>
       </Tabs>
     </div>

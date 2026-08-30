@@ -68,3 +68,32 @@ export const adminLeaderboardApi = {
     );
   },
 };
+
+export interface StudentFeedbackEntry {
+  id: number;
+  message: string;
+  youtube_url: string;
+  given_by: string | null;
+  created_at: string;
+}
+
+export interface StudentFeedbackListResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+  results: StudentFeedbackEntry[];
+}
+
+export const adminStudentFeedbackApi = {
+  list: async (studentId: number) =>
+    apiClient<StudentFeedbackListResponse>(`/admin/students/${studentId}/feedback/`),
+
+  send: async (studentId: number, data: { message?: string; youtube_url?: string }) =>
+    apiClient<StudentFeedbackEntry>(`/admin/students/${studentId}/feedback/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};

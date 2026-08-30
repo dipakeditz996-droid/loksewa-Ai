@@ -140,64 +140,64 @@ export default function EditStudyMaterialPage() {
   const needsUrl = ['video', 'external_link'].includes(formData.material_type);
   const isReadOnly = materialStatus === 'pending_review' || materialStatus === 'published';
 
-  const selectClass = "w-full rounded-lg border border-[#D9E1EA] bg-white px-3 py-2 text-sm text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20";
-  const labelClass = "mb-1 block text-sm font-medium text-[#344054]";
+  const selectClass = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20";
+  const labelClass = "mb-1 block text-sm font-medium text-foreground";
 
   if (initialLoading) {
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center p-8">
         <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-[#0B2545] border-t-transparent"></div>
-        <p className="text-[#667085]">Loading material...</p>
+        <p className="text-muted-foreground">Loading material...</p>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-4xl p-4 pb-12 md:p-8">
-      <Link href="/teacher/study-materials" className="mb-6 flex items-center text-[#667085] transition-colors hover:text-[#101828]">
+      <Link href="/teacher/study-materials" className="mb-6 flex items-center text-muted-foreground transition-colors hover:text-foreground">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Study Materials
       </Link>
 
       {materialStatus === 'changes_requested' && (
-        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[#F0DFAF] bg-[#FBF2DC] p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#946B00]" />
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[#946B00]/25 bg-[#946B00]/10 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#946B00] dark:text-[#F2C94C]" />
           <div>
-            <h3 className="font-semibold text-[#5C4300]">Admin Feedback</h3>
-            <p className="mt-1 text-[#8A6E1F]">{reviewNote}</p>
+            <h3 className="font-semibold text-[#5C4300] dark:text-[#F2C94C]">Admin Feedback</h3>
+            <p className="mt-1 text-[#8A6E1F] dark:text-[#F2C94C]/80">{reviewNote}</p>
           </div>
         </div>
       )}
 
       {materialStatus === 'rejected' && (
-        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[#B23A3A]/20 bg-[#FBEAEA] p-4">
-          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[#B23A3A]" />
+        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-[#B23A3A]/20 bg-destructive/10 p-4">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-destructive" />
           <div>
-            <h3 className="font-semibold text-[#8B2E2E]">Material Rejected</h3>
-            <p className="mt-1 text-[#B23A3A]">{reviewNote}</p>
+            <h3 className="font-semibold text-destructive">Material Rejected</h3>
+            <p className="mt-1 text-destructive">{reviewNote}</p>
           </div>
         </div>
       )}
 
       {isReadOnly && (
-        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-[#F0DFAF] bg-[#FBF2DC] p-4">
-          <AlertTriangle className="h-5 w-5 flex-shrink-0 text-[#946B00]" />
-          <p className="text-[#8A6E1F]">
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-[#946B00]/25 bg-[#946B00]/10 p-4">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0 text-[#946B00] dark:text-[#F2C94C]" />
+          <p className="text-[#8A6E1F] dark:text-[#F2C94C]/80">
             This material is currently <strong>{materialStatus.replace('_', ' ')}</strong> and cannot be edited.
           </p>
         </div>
       )}
 
-      <div className={`overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${isReadOnly ? 'pointer-events-none opacity-70' : ''}`}>
-        <div className="border-b border-[#EEF1F6] p-6">
-          <h1 className="font-heading text-2xl font-extrabold text-[#0B2545]">Edit Study Material</h1>
-          <p className="mt-1 text-[#667085]">Update information and resource content.</p>
+      <div className={`overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${isReadOnly ? 'pointer-events-none opacity-70' : ''}`}>
+        <div className="border-b border-border p-6">
+          <h1 className="font-heading text-2xl font-extrabold text-primary">Edit Study Material</h1>
+          <p className="mt-1 text-muted-foreground">Update information and resource content.</p>
         </div>
 
         <div className="space-y-8 p-6">
           {/* Basic Info */}
           <section>
-            <h2 className="mb-4 text-lg font-semibold text-[#101828]">1. Basic Information</h2>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">1. Basic Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="col-span-2">
                 <label className={labelClass}>Material Title *</label>
@@ -205,7 +205,7 @@ export default function EditStudyMaterialPage() {
                   name="title"
                   value={formData.title}
                   onChange={handleChange}
-                  className="rounded-lg border-[#D9E1EA]"
+                  className="rounded-lg border-border"
                 />
               </div>
 
@@ -215,7 +215,7 @@ export default function EditStudyMaterialPage() {
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
-                  className="rounded-lg border-[#D9E1EA]"
+                  className="rounded-lg border-border"
                   rows={3}
                 />
               </div>
@@ -257,7 +257,7 @@ export default function EditStudyMaterialPage() {
 
           {/* Placement */}
           <section>
-            <h2 className="mb-4 text-lg font-semibold text-[#101828]">2. Placement & Organization</h2>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">2. Placement & Organization</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <div>
                 <label className={labelClass}>Course / Exam *</label>
@@ -310,42 +310,42 @@ export default function EditStudyMaterialPage() {
 
           {/* Content */}
           <section>
-            <h2 className="mb-4 text-lg font-semibold text-[#101828]">3. Resource Content</h2>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">3. Resource Content</h2>
 
             {needsFileUpload && (
-              <div className="relative rounded-xl border-2 border-dashed border-[#D9E1EA] bg-[#F7F9FC] p-8 text-center transition-colors hover:bg-[#EEF2F8]">
+              <div className="relative rounded-xl border-2 border-dashed border-border bg-muted p-8 text-center transition-colors hover:bg-primary/10">
                 {file || existingFileUrl ? (
                   <div className="flex flex-col items-center justify-center">
-                    <FileIcon className="mb-2 h-12 w-12 text-[#0B2545]" />
-                    <span className="font-medium text-[#101828]">
+                    <FileIcon className="mb-2 h-12 w-12 text-primary" />
+                    <span className="font-medium text-foreground">
                       {file ? file.name : existingFileUrl?.split('/').pop()}
                     </span>
                     <button
                       onClick={() => { setFile(null); setExistingFileUrl(null); }}
-                      className="relative z-10 mt-4 flex items-center rounded-md bg-[#FBEAEA] px-3 py-1 text-sm text-[#B23A3A] transition-colors hover:bg-[#f5d3d3]"
+                      className="relative z-10 mt-4 flex items-center rounded-md bg-destructive/10 px-3 py-1 text-sm text-destructive transition-colors hover:bg-[#f5d3d3]"
                     >
                       <X className="mr-1 h-4 w-4" /> Replace File
                     </button>
                   </div>
                 ) : (
                   <>
-                    <Upload className="mx-auto mb-4 h-10 w-10 text-[#8A98AE]" />
-                    <p className="mb-1 font-medium text-[#344054]">Drag & drop your new file here</p>
-                    <p className="mb-4 text-sm text-[#667085]">or click to browse from your computer</p>
+                    <Upload className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+                    <p className="mb-1 font-medium text-foreground">Drag & drop your new file here</p>
+                    <p className="mb-4 text-sm text-muted-foreground">or click to browse from your computer</p>
                     <Input
                       type="file"
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                       onChange={handleFileChange}
                       accept={formData.material_type === 'pdf' ? '.pdf' : '*/*'}
                     />
-                    <Button variant="outline" className="rounded-[9px] border-[#D9E1EA]">Browse Files</Button>
+                    <Button variant="outline" className="rounded-[9px] border-border">Browse Files</Button>
                   </>
                 )}
               </div>
             )}
 
             {needsUrl && (
-              <div className="rounded-xl border border-[#E7EBF3] bg-[#F7F9FC] p-6">
+              <div className="rounded-xl border border-border bg-muted p-6">
                 <label className={labelClass}>
                   {formData.material_type === 'video' ? 'YouTube / Video URL' : 'External Resource URL'} *
                 </label>
@@ -355,7 +355,7 @@ export default function EditStudyMaterialPage() {
                   value={formData.external_url}
                   onChange={handleChange}
                   placeholder="https://"
-                  className="mb-2 rounded-lg border-[#D9E1EA] bg-white"
+                  className="mb-2 rounded-lg border-border bg-card"
                 />
               </div>
             )}
@@ -367,7 +367,7 @@ export default function EditStudyMaterialPage() {
                   name="content"
                   value={formData.content}
                   onChange={handleChange}
-                  className="rounded-lg border-[#D9E1EA]"
+                  className="rounded-lg border-border"
                   rows={8}
                 />
               </div>
@@ -376,13 +376,13 @@ export default function EditStudyMaterialPage() {
         </div>
 
         {!isReadOnly && (
-          <div className="flex items-center justify-between border-t border-[#EEF1F6] bg-[#F7F9FC] p-6">
-            <p className="text-sm text-[#667085]">Drafts are not visible to students.</p>
+          <div className="flex items-center justify-between border-t border-border bg-muted p-6">
+            <p className="text-sm text-muted-foreground">Drafts are not visible to students.</p>
             <div className="flex gap-3">
-              <Button variant="outline" className="rounded-[9px] border-[#D9E1EA]" onClick={() => handleSubmit('save')} disabled={loading}>
+              <Button variant="outline" className="rounded-[9px] border-border" onClick={() => handleSubmit('save')} disabled={loading}>
                 Save Changes
               </Button>
-              <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]" onClick={() => handleSubmit('submit')} disabled={loading}>
+              <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={() => handleSubmit('submit')} disabled={loading}>
                 {loading ? 'Saving...' : 'Submit for Review'}
               </Button>
             </div>

@@ -1,11 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Menu, Bell, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/layout/notification-bell";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { RetryImage } from "@/components/ui/retry-image";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,10 +24,48 @@ interface DashboardHeaderProps {
   role?: "student" | "teacher" | "admin" | "super-admin";
 }
 
+// The dashboard's own hero card already renders a rich time-based greeting,
+// so repeating "Good Afternoon, teacher!" up here just above it reads as a
+// glitch, not a feature. Every other teacher page shows a plain PageHeader
+// title with no greeting at all, so this slot is otherwise empty on those
+// pages too - showing the current section name instead gives it a job on
+// every page rather than colliding with one page in particular.
+const TEACHER_PAGE_TITLES: Record<string, string> = {
+  "/teacher": "Dashboard",
+  "/teacher/courses": "My Courses",
+  "/teacher/students": "Students",
+  "/teacher/questions": "Question Bank",
+  "/teacher/practice-sets": "Practice Sets",
+  "/teacher/mock-exams": "Mock Exams",
+  "/teacher/study-materials": "Study Materials",
+  "/teacher/evaluations": "Evaluations",
+  "/teacher/evaluate": "Subjective Exam Grading",
+  "/teacher/analytics": "Analytics & Results",
+  "/teacher/notifications": "Notifications",
+  "/teacher/settings": "Settings",
+  "/teacher/help-support": "Help & Support",
+};
+
+function resolveTeacherTitle(pathname: string | null): string {
+  if (!pathname) return "Teacher Portal";
+  if (TEACHER_PAGE_TITLES[pathname]) return TEACHER_PAGE_TITLES[pathname];
+  const nestedMatch = Object.keys(TEACHER_PAGE_TITLES)
+    .filter((p) => p !== "/teacher")
+    .sort((a, b) => b.length - a.length)
+    .find((p) => pathname.startsWith(p));
+  return (nestedMatch && TEACHER_PAGE_TITLES[nestedMatch]) || "Teacher Portal";
+}
+
 export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHeaderProps) {
   const { user, logout } = useAuth();
-  
+  const pathname = usePathname();
+
   if (!user) return null;
+
+  // Student and teacher each have a real notification center; admin/super-admin
+  // routes through the separate /admin-dashboard area (which passes its own
+  // viewAllHref directly to NotificationBell, bypassing this header).
+  const viewAllHref = role === "student" ? "/student/notifications" : "/teacher/notifications";
 
   const hour = new Date().getHours();
   let greeting = "Good Evening";
@@ -57,20 +97,31 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
           <span className="sr-only">Toggle sidebar</span>
         </Button>
         <div className="hidden lg:flex flex-col">
-          <span className="text-[16px] font-bold text-foreground dark:text-white flex items-center gap-1.5">
-            {greeting}, {user.name.split(" ")[0]}! <span className="text-xl">{icon}</span>
-          </span>
-          <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Welcome back! Keep up the excellent work.</span>
+          {role === "teacher" ? (
+            <>
+              <span className="text-[16px] font-bold text-foreground dark:text-white">
+                {resolveTeacherTitle(pathname)}
+              </span>
+              <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Teacher Portal</span>
+            </>
+          ) : (
+            <>
+              <span className="text-[16px] font-bold text-foreground dark:text-white flex items-center gap-1.5">
+                {greeting}, {user.name.split(" ")[0]}! <span className="text-xl">{icon}</span>
+              </span>
+              <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Welcome back! Keep up the excellent work.</span>
+            </>
+          )}
         </div>
       </div>
 
       <div className="flex items-center gap-3 sm:gap-5">
         <div className="hidden md:flex relative w-64 lg:w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground dark:text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search syllabus, notes..."
-            className="w-full bg-muted/50 dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder:text-slate-400 pl-9 focus-visible:ring-1 focus-visible:ring-primary rounded-full text-[13px] h-9"
+            placeholder={role === "teacher" ? "Search students, questions..." : "Search syllabus, notes..."}
+            className="w-full bg-muted/50 dark:bg-muted dark:text-foreground dark:border-border dark:placeholder:text-muted-foreground pl-9 focus-visible:ring-1 focus-visible:ring-primary rounded-full text-[13px] h-9"
           />
         </div>
 
@@ -79,15 +130,13 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
 
         <ThemeToggle />
 
-        <NotificationBell />
+        <NotificationBell viewAllHref={viewAllHref} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full ml-1">
               <Avatar className="h-9 w-9 border border-slate-200">
-                <AvatarFallback className="bg-[#0B2545] text-white text-xs font-bold">
-                  {user.name.charAt(0)}
-                </AvatarFallback>
+                <RetryImage src={user.avatar || "/images/profile.png"} alt={user.name} className="aspect-square h-full w-full object-cover" />
               </Avatar>
             </Button>
           </DropdownMenuTrigger>

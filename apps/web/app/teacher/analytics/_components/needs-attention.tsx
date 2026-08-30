@@ -60,9 +60,9 @@ export function NeedsAttention({ courseFilter }: NeedsAttentionProps) {
   return (
     <div className="space-y-3 mt-2 overflow-y-auto pr-2 max-h-[300px] scrollbar-thin scrollbar-thumb-slate-200">
       {data.map((student, i) => (
-        <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm">
+        <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-slate-200 bg-card hover:bg-slate-50 transition-colors shadow-sm">
           <div className="mb-2 sm:mb-0">
-            <Link href={`/teacher/students/${student.id}`} className="font-semibold text-[#0B2545] hover:text-[#D4A72C] transition-colors">
+            <Link href={`/teacher/students/${student.id}`} className="font-semibold text-primary hover:text-[#D4A72C] transition-colors">
               {student.name}
             </Link>
             <div className="flex items-center text-sm text-slate-500 mt-1">
@@ -80,7 +80,7 @@ export function NeedsAttention({ courseFilter }: NeedsAttentionProps) {
                 Active: <span className="text-slate-700 font-medium">{student.last_active}</span>
               </div>
             </div>
-            <Badge variant="outline" className="border-[#0B2545]/20 text-[#0B2545] bg-[#0B2545]/5 w-fit rounded-full px-3 font-medium">
+            <Badge variant="outline" className="border-[#0B2545]/20 text-primary bg-[#0B2545]/5 w-fit rounded-full px-3 font-medium">
               {student.recommended_action}
             </Badge>
           </div>

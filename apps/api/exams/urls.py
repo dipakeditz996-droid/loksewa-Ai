@@ -4,7 +4,6 @@ from .views import (
     TeacherMockExamViewSet, AdminExaminationReviewViewSet,
     ExamViewSet, SubjectViewSet, TopicViewSet, QuestionViewSet,
     PracticeSessionViewSet, DashboardView, UserTopicProgressViewSet, BookmarkViewSet,
-    ModelExamViewSet, ModelExamAttemptViewSet,
     SubjectivePracticeSetViewSet, SubjectiveModelExamViewSet, SubjectiveQuestionViewSet,
     SubjectiveAttemptViewSet, TeacherEvaluationViewSet, TeacherQuestionViewSet,
     TeacherQuestionSetViewSet, AdminQuestionReviewViewSet, AdminPracticeSetReviewViewSet,
@@ -20,6 +19,17 @@ from .admin_views import (
     AdminSubjectViewSet, AdminChapterViewSet, AdminTopicViewSet,
     AdminAcademicTreeAPIView
 )
+from .schedule_views import (
+    AdminExamScheduleViewSet,
+    StudentExamScheduleNextView,
+    StudentUpcomingMockExamView
+)
+from .public_views import (
+    PublicSyllabusTreeView,
+    PublicExaminationListView,
+    PublicSubjectListView,
+    PublicQuestionSetListView,
+)
 
 router = DefaultRouter()
 router.register(r'exams', ExamViewSet)
@@ -29,8 +39,6 @@ router.register(r'questions', QuestionViewSet)
 router.register(r'practice-sessions', PracticeSessionViewSet, basename='practice-session')
 router.register(r'topic-progress', UserTopicProgressViewSet, basename='topic-progress')
 router.register(r'bookmarks', BookmarkViewSet, basename='bookmark')
-router.register(r'model-exams', ModelExamViewSet, basename='model-exam')
-router.register(r'model-exam-attempts', ModelExamAttemptViewSet, basename='model-exam-attempt')
 
 # Subjective routes
 router.register(r'subjective-practice-sets', SubjectivePracticeSetViewSet, basename='subjective-practice-set')
@@ -58,10 +66,23 @@ router.register(r'admin/academic/subjects', AdminSubjectViewSet, basename='admin
 router.register(r'admin/academic/chapters', AdminChapterViewSet, basename='admin-chapter')
 router.register(r'admin/academic/topics', AdminTopicViewSet, basename='admin-topic')
 
+# Admin Exam Schedules
+router.register(r'admin/schedules', AdminExamScheduleViewSet, basename='admin-schedules')
+
 urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    # Public (no auth) — Syllabus, Exams & Practice pages
+    path('public/syllabus/', PublicSyllabusTreeView.as_view(), name='public-syllabus'),
+    path('public/exams/', PublicExaminationListView.as_view(), name='public-exam-list'),
+    path('public/subjects/', PublicSubjectListView.as_view(), name='public-subject-list'),
+    path('public/practice-sets/', PublicQuestionSetListView.as_view(), name='public-practice-sets'),
     # Master Question Bank — availability check endpoint
     path('questions/availability/', QuestionAvailabilityView.as_view(), name='question-availability'),
     path('admin/academic/tree/', AdminAcademicTreeAPIView.as_view(), name='admin-academic-tree'),
+    # Student Schedule & Countdown endpoints
+    path('schedules/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next'),
+    path('student/exam-schedule/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next-alt'),
+    path('student/mock-exams/upcoming/', StudentUpcomingMockExamView.as_view(), name='student-mock-exams-upcoming'),
     path('', include(router.urls)),
 ]
+

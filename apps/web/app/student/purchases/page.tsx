@@ -71,7 +71,7 @@ function StudentPurchasesContent() {
       case 'APPROVED':
         return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none"><CheckCircle2 className="w-3 h-3 mr-1" /> Approved</Badge>;
       case 'REJECTED':
-        return <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-none"><XCircle className="w-3 h-3 mr-1" /> Rejected</Badge>;
+        return <Badge className="bg-red-100 text-red-700 dark:text-red-300 hover:bg-red-100 border-none"><XCircle className="w-3 h-3 mr-1" /> Rejected</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -80,8 +80,8 @@ function StudentPurchasesContent() {
   return (
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-[#0B2545]">My Subscriptions</h1>
-        <p className="text-slate-500 mt-1">Manage your active plans and view payment history</p>
+        <h1 className="text-3xl font-bold text-primary dark:text-foreground">My Subscriptions</h1>
+        <p className="text-muted-foreground mt-1">Manage your active plans and view payment history</p>
       </div>
 
       {success && (
@@ -95,14 +95,14 @@ function StudentPurchasesContent() {
       )}
 
       {/* Active Plan Card */}
-      <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm p-6 lg:p-8">
-        <h2 className="text-xl font-bold text-[#0B2545] mb-6">Current Plan</h2>
+      <div className="bg-card rounded-[24px] border border-border shadow-sm p-6 lg:p-8">
+        <h2 className="text-xl font-bold text-primary dark:text-foreground mb-6">Current Plan</h2>
         
         {isLoading ? (
-          <div className="h-32 bg-slate-100 animate-pulse rounded-[16px]"></div>
+          <div className="h-32 bg-muted/80 animate-pulse rounded-[16px]"></div>
         ) : activeSubscription ? (
           <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-[#0B2545] to-[#163E6B] text-white p-6 rounded-[20px] shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-card/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
             
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-2">
@@ -125,10 +125,10 @@ function StudentPurchasesContent() {
             </div>
           </div>
         ) : (
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[20px] p-8 text-center">
+          <div className="bg-muted border-2 border-dashed border-border rounded-[20px] p-8 text-center">
             <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-[#0B2545]">No Active Subscription</h3>
-            <p className="text-slate-500 mt-2 mb-6">Unlock premium features, AI tutoring, and advanced mock exams.</p>
+            <h3 className="text-lg font-bold text-primary dark:text-foreground">No Active Subscription</h3>
+            <p className="text-muted-foreground mt-2 mb-6">Unlock premium features, AI tutoring, and advanced mock exams.</p>
             <Button 
               onClick={() => window.location.href = '/student/plans'}
               className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold"
@@ -140,15 +140,15 @@ function StudentPurchasesContent() {
       </div>
 
       {/* Payment History */}
-      <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 lg:p-8 border-b border-slate-200">
-          <h2 className="text-xl font-bold text-[#0B2545]">Payment History</h2>
+      <div className="bg-card rounded-[24px] border border-border shadow-sm overflow-hidden">
+        <div className="p-6 lg:p-8 border-b border-border">
+          <h2 className="text-xl font-bold text-primary dark:text-foreground">Payment History</h2>
         </div>
         
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-slate-50 text-left text-sm font-medium text-slate-500">
+              <tr className="bg-muted text-left text-sm font-medium text-muted-foreground">
                 <th className="px-6 py-4">Plan</th>
                 <th className="px-6 py-4">Amount</th>
                 <th className="px-6 py-4">Date Submitted</th>
@@ -159,28 +159,28 @@ function StudentPurchasesContent() {
             <tbody className="divide-y divide-slate-100 text-sm">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
                     Loading payments...
                   </td>
                 </tr>
               ) : payments.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
                     You haven't made any purchases yet.
                   </td>
                 </tr>
               ) : (
                 payments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-[#0B2545]">{payment.plan_details?.name}</td>
-                    <td className="px-6 py-4 text-slate-600 font-medium">Rs. {payment.amount}</td>
-                    <td className="px-6 py-4 text-slate-500">{new Date(payment.submitted_at).toLocaleDateString()}</td>
+                  <tr key={payment.id} className="hover:bg-muted/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-primary dark:text-foreground">{payment.plan_details?.name}</td>
+                    <td className="px-6 py-4 text-muted-foreground font-medium">Rs. {payment.amount}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{new Date(payment.submitted_at).toLocaleDateString()}</td>
                     <td className="px-6 py-4">
                       {getStatusBadge(payment.status)}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {payment.status === 'APPROVED' && (
-                        <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                        <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:bg-blue-950/30">
                           View Receipt
                         </Button>
                       )}
@@ -198,7 +198,7 @@ function StudentPurchasesContent() {
 
 export default function StudentPurchasesPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-500">Loading purchases...</div>}>
+    <Suspense fallback={<div className="p-8 text-center text-muted-foreground">Loading purchases...</div>}>
       <StudentPurchasesContent />
     </Suspense>
   );

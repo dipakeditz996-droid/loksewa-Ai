@@ -189,12 +189,12 @@ export default function AITutorPage() {
   const activeModeDetails = MODES.find(m => m.id === selectedMode) || MODES[0];
 
   return (
-    <div className="flex h-[calc(100vh-72px)] bg-slate-50 overflow-hidden">
+    <div className="flex h-[calc(100vh-72px)] bg-muted overflow-hidden">
       
       {/* Sidebar - Conversation History */}
-      <aside className="w-72 bg-white border-r border-slate-200 hidden md:flex flex-col shrink-0 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="font-bold text-[#0B2545] flex items-center gap-2">
+      <aside className="w-72 bg-card border-r border-border hidden md:flex flex-col shrink-0 overflow-hidden">
+        <div className="p-4 border-b border-border/50 flex items-center justify-between">
+          <h2 className="font-bold text-primary dark:text-foreground flex items-center gap-2">
             <MessageSquare className="w-5 h-5 text-[#D4A72C]" />
             Conversations
           </h2>
@@ -202,7 +202,7 @@ export default function AITutorPage() {
         
         <div className="p-4">
           <Button 
-            className="w-full bg-[#0B2545] hover:bg-[#1a365d] text-white flex items-center gap-2"
+            className="w-full bg-primary text-primary-foreground hover:bg-[#1a365d] text-white flex items-center gap-2"
             onClick={() => {
               setActiveConversationId(null);
               setMessages([]);
@@ -215,25 +215,25 @@ export default function AITutorPage() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
           {conversations.length === 0 && !isInitializing ? (
-            <p className="text-sm text-slate-500 text-center py-4">No previous conversations.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">No previous conversations.</p>
           ) : (
             conversations.map(conv => (
               <div 
                 key={conv.id}
                 onClick={() => setActiveConversationId(conv.id)}
-                className={`p-3 rounded-lg cursor-pointer flex items-start justify-between group transition-colors ${activeConversationId === conv.id ? 'bg-slate-100 border border-slate-200' : 'hover:bg-slate-50 border border-transparent'}`}
+                className={`p-3 rounded-lg cursor-pointer flex items-start justify-between group transition-colors ${activeConversationId === conv.id ? 'bg-muted/80 border border-border' : 'hover:bg-muted border border-transparent'}`}
               >
                 <div className="min-w-0 pr-2">
-                  <h3 className={`text-sm font-medium truncate ${activeConversationId === conv.id ? 'text-[#0B2545]' : 'text-slate-700'}`}>
+                  <h3 className={`text-sm font-medium truncate ${activeConversationId === conv.id ? 'text-primary dark:text-foreground' : 'text-foreground'}`}>
                     {conv.title}
                   </h3>
-                  <p className="text-xs text-slate-500 capitalize mt-1">
+                  <p className="text-xs text-muted-foreground capitalize mt-1">
                     {conv.mode ? conv.mode.replace('_', ' ') : 'Explain'}
                   </p>
                 </div>
                 <button 
                   onClick={(e) => handleDeleteConversation(conv.id, e)}
-                  className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                  className="text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
                   aria-label="Delete conversation"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -245,32 +245,32 @@ export default function AITutorPage() {
       </aside>
 
       {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-white relative">
+      <main className="flex-1 flex flex-col min-w-0 bg-card relative">
         
         {/* Chat Header */}
-        <header className="h-16 border-b border-slate-200 flex items-center justify-between px-6 shrink-0 bg-white z-10 shadow-sm">
+        <header className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0 bg-card z-10 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#0B2545]/10 flex items-center justify-center">
-              <Bot className="w-6 h-6 text-[#0B2545]" />
+            <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground/10 flex items-center justify-center">
+              <Bot className="w-6 h-6 text-primary dark:text-foreground" />
             </div>
             <div>
-              <h1 className="font-bold text-[#0B2545] leading-tight">AI Tutor</h1>
-              <p className="text-xs text-slate-500">Your personal Loksewa preparation assistant.</p>
+              <h1 className="font-bold text-primary dark:text-foreground leading-tight">AI Tutor</h1>
+              <p className="text-xs text-muted-foreground">Your personal Loksewa preparation assistant.</p>
             </div>
           </div>
         </header>
 
         {/* Chat Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-muted/50">
           
           {!activeConversationId && messages.length === 0 ? (
             // Empty State / Mode Selector
             <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto text-center px-4">
-              <div className="w-16 h-16 bg-[#0B2545] rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-900/20">
+              <div className="w-16 h-16 bg-primary text-primary-foreground rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-900/20">
                 <Bot className="w-8 h-8 text-white" />
               </div>
-              <h2 className="text-2xl font-bold text-[#0B2545] mb-2">How can I help with your preparation?</h2>
-              <p className="text-slate-500 mb-8 max-w-lg">Select a mode below to customize my behavior, or just start typing to ask a general question.</p>
+              <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">How can I help with your preparation?</h2>
+              <p className="text-muted-foreground mb-8 max-w-lg">Select a mode below to customize my behavior, or just start typing to ask a general question.</p>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full">
                 {MODES.map((mode) => {
@@ -279,16 +279,16 @@ export default function AITutorPage() {
                   return (
                     <Card 
                       key={mode.id} 
-                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-[#0B2545] border-transparent' : 'hover:border-slate-300'}`}
+                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-[#0B2545] border-transparent' : 'hover:border-border'}`}
                       onClick={() => setSelectedMode(mode.id)}
                     >
                       <CardContent className="p-5 flex flex-col items-center text-center gap-3">
-                        <div className={`p-3 rounded-full ${isSelected ? 'bg-[#0B2545] text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <div className={`p-3 rounded-full ${isSelected ? 'bg-primary text-primary-foreground text-white' : 'bg-muted/80 text-muted-foreground'}`}>
                           <Icon className="w-5 h-5" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-sm text-[#0B2545]">{mode.label}</h3>
-                          <p className="text-xs text-slate-500 mt-1">{mode.description}</p>
+                          <h3 className="font-semibold text-sm text-primary dark:text-foreground">{mode.label}</h3>
+                          <p className="text-xs text-muted-foreground mt-1">{mode.description}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -303,15 +303,15 @@ export default function AITutorPage() {
                 <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   
                   {msg.role === 'assistant' && (
-                    <div className="w-8 h-8 shrink-0 rounded-full bg-[#0B2545] flex items-center justify-center mt-1 shadow-sm">
+                    <div className="w-8 h-8 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center mt-1 shadow-sm">
                       <Bot className="w-4 h-4 text-white" />
                     </div>
                   )}
                   
                   <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 shadow-sm ${
                     msg.role === 'user' 
-                      ? 'bg-[#0B2545] text-white rounded-tr-sm' 
-                      : 'bg-white border border-slate-200 text-slate-800 rounded-tl-sm'
+                      ? 'bg-primary text-primary-foreground text-white rounded-tr-sm' 
+                      : 'bg-card border border-border text-foreground rounded-tl-sm'
                   }`}>
                     {msg.role === 'user' ? (
                       <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</div>
@@ -329,14 +329,14 @@ export default function AITutorPage() {
               
               {isLoading && (
                 <div className="flex gap-4 justify-start">
-                  <div className="w-8 h-8 shrink-0 rounded-full bg-[#0B2545] flex items-center justify-center mt-1">
+                  <div className="w-8 h-8 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center mt-1">
                     <Bot className="w-4 h-4 text-white" />
                   </div>
-                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 shadow-sm">
+                  <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 shadow-sm">
                     <div className="flex gap-1">
-                      <div className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-secondary animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-secondary animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 rounded-full bg-secondary animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                   </div>
                 </div>
@@ -348,19 +348,19 @@ export default function AITutorPage() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 md:p-6 bg-white border-t border-slate-200 shrink-0">
+        <div className="p-4 md:p-6 bg-card border-t border-border shrink-0">
           <div className="max-w-4xl mx-auto">
             {error && (
-              <div className="mb-3 px-4 py-2 bg-red-50 text-red-600 rounded-lg text-sm flex items-center gap-2 border border-red-100">
+              <div className="mb-3 px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-lg text-sm flex items-center gap-2 border border-red-100">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {error}
               </div>
             )}
             
             <div className="relative flex items-end gap-2">
-              <div className="relative flex-1 bg-white rounded-xl shadow-sm border border-slate-300 focus-within:border-[#0B2545] focus-within:ring-1 focus-within:ring-[#0B2545] transition-all overflow-hidden">
+              <div className="relative flex-1 bg-card rounded-xl shadow-sm border border-border focus-within:border-[#0B2545] focus-within:ring-1 focus-within:ring-[#0B2545] transition-all overflow-hidden">
                 {!activeConversationId && (
-                  <div className="absolute top-0 left-0 right-0 h-8 bg-slate-50 border-b border-slate-200 flex items-center px-3 text-xs font-medium text-slate-500">
+                  <div className="absolute top-0 left-0 right-0 h-8 bg-muted border-b border-border flex items-center px-3 text-xs font-medium text-muted-foreground">
                     <ActiveModeIcon mode={activeModeDetails.icon} />
                     <span className="ml-2">Mode: {activeModeDetails.label}</span>
                   </div>
@@ -386,8 +386,8 @@ export default function AITutorPage() {
                 disabled={!inputValue.trim() || isLoading}
                 className={`h-12 w-12 rounded-xl shrink-0 p-0 transition-all ${
                   inputValue.trim() && !isLoading 
-                    ? 'bg-[#0B2545] hover:bg-[#1a365d] text-white shadow-md' 
-                    : 'bg-slate-100 text-slate-400'
+                    ? 'bg-primary text-primary-foreground hover:bg-[#1a365d] text-white shadow-md' 
+                    : 'bg-muted/80 text-muted-foreground'
                 }`}
               >
                 {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 ml-1" />}
@@ -395,7 +395,7 @@ export default function AITutorPage() {
             </div>
             
             <div className="text-center mt-3">
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-muted-foreground">
                 AI Tutor can make mistakes. Consider verifying important facts from the official syllabus.
               </p>
             </div>

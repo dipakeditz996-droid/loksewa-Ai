@@ -56,7 +56,7 @@ function Sk({ className, style }: { className?: string; style?: React.CSSPropert
   return (
     <div
       className={cn(
-        "rounded-lg bg-white/5 animate-pulse",
+        "rounded-lg bg-card/5 animate-pulse",
         className
       )}
       style={style}
@@ -255,7 +255,7 @@ function PodiumCard({ entry, place, animate }: PodiumCardProps) {
         >
           {entry.studentName}
           {entry.isCurrentUser && (
-            <span className="ml-1 text-[9px] bg-white/10 text-white px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
+            <span className="ml-1 text-[9px] bg-card/10 text-white px-1.5 py-0.5 rounded-sm uppercase tracking-wider font-bold">
               YOU
             </span>
           )}
@@ -276,7 +276,7 @@ function PodiumCard({ entry, place, animate }: PodiumCardProps) {
           background: c.podiumGradient,
         }}
       >
-        <div className="absolute inset-0 bg-white/5" />
+        <div className="absolute inset-0 bg-card/5" />
         <span className="text-white/10 font-black text-5xl select-none">
           {place}
         </span>
@@ -331,7 +331,7 @@ function YourRankCard({ user }: { user: LeaderboardStudent }) {
           )}
         </div>
 
-        <div className="h-12 w-px bg-white/10 hidden sm:block" />
+        <div className="h-12 w-px bg-card/10 hidden sm:block" />
 
         {/* Avatar + name */}
         <div className="flex items-center gap-3">
@@ -386,7 +386,7 @@ function YourRankCard({ user }: { user: LeaderboardStudent }) {
       </div>
 
       {/* Progress mini bar */}
-      <div className="mt-3 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+      <div className="mt-3 h-1 w-full bg-card/5 rounded-full overflow-hidden">
         <div
           className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-full lb-bar-fill transition-all"
           style={{ width: `${user.percentage}%` }}
@@ -467,7 +467,7 @@ function AnalyticsPanel({ stats, trend, loading }: AnalyticsPanelProps) {
             <div
               key={r.label}
               className={cn(
-                "rounded-xl p-3 border border-white/5 bg-white/3 flex flex-col gap-1",
+                "rounded-xl p-3 border border-white/5 bg-card/3 flex flex-col gap-1",
                 r.label === "Pass Rate" ? "col-span-2" : ""
               )}
             >
@@ -547,7 +547,7 @@ function AnalyticsPanel({ stats, trend, loading }: AnalyticsPanelProps) {
         <div className="space-y-3">
           {[
             { rank: 1, icon: <Crown className="w-3.5 h-3.5 text-yellow-400" />, color: "#D4A72C" },
-            { rank: 2, icon: <Medal className="w-3.5 h-3.5 text-slate-400" />, color: "#94a3b8" },
+            { rank: 2, icon: <Medal className="w-3.5 h-3.5 text-muted-foreground" />, color: "#94a3b8" },
             { rank: 3, icon: <Award className="w-3.5 h-3.5 text-amber-600" />, color: "#cd7f32" },
           ].map(({ rank, icon, color }) => {
             // We don't have top students here — they come from the main data
@@ -600,7 +600,7 @@ function TableRow({ entry, isMe }: { entry: LeaderboardStudent; isMe: boolean })
         "transition-all duration-200 group",
         isMe
           ? "bg-yellow-400/8 border-l-2 border-yellow-400/60"
-          : "hover:bg-white/3 border-l-2 border-transparent"
+          : "hover:bg-card/3 border-l-2 border-transparent"
       )}
     >
       {/* Rank */}
@@ -676,7 +676,7 @@ function TableRow({ entry, isMe }: { entry: LeaderboardStudent; isMe: boolean })
       {/* Progress bar */}
       <td className="px-3 py-3 hidden lg:table-cell" style={{ minWidth: 120 }}>
         <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+          <div className="flex-1 h-1.5 bg-card/5 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full lb-bar-fill"
               style={{
@@ -732,12 +732,12 @@ function Pagination({ page, totalPages, totalCount, pageSize, onPage, onPageSize
           value={pageSize.toString()}
           onValueChange={(v) => onPageSize(Number(v))}
         >
-          <SelectTrigger className="h-7 w-[80px] text-xs bg-white/5 border-white/10 text-white/60">
+          <SelectTrigger className="h-7 w-[80px] text-xs bg-card/5 border-white/10 text-white/60">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="bg-[#0D1F38] border-white/10 text-white">
             {[10, 20, 50].map((n) => (
-              <SelectItem key={n} value={n.toString()} className="text-xs text-white/70 focus:bg-white/10 focus:text-white">
+              <SelectItem key={n} value={n.toString()} className="text-xs text-white/70 focus:bg-card/10 focus:text-white">
                 {n} / page
               </SelectItem>
             ))}
@@ -748,7 +748,7 @@ function Pagination({ page, totalPages, totalCount, pageSize, onPage, onPageSize
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/5 disabled:opacity-20"
+          className="h-8 w-8 text-white/40 hover:text-white hover:bg-card/5 disabled:opacity-20"
           disabled={page === 1}
           onClick={() => onPage(page - 1)}
         >
@@ -766,7 +766,7 @@ function Pagination({ page, totalPages, totalCount, pageSize, onPage, onPageSize
                 "h-8 w-8 rounded-lg text-xs font-bold transition-all",
                 p === page
                   ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/30"
-                  : "text-white/40 hover:text-white hover:bg-white/5"
+                  : "text-white/40 hover:text-white hover:bg-card/5"
               )}
             >
               {p}
@@ -777,7 +777,7 @@ function Pagination({ page, totalPages, totalCount, pageSize, onPage, onPageSize
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/5 disabled:opacity-20"
+          className="h-8 w-8 text-white/40 hover:text-white hover:bg-card/5 disabled:opacity-20"
           disabled={page === totalPages}
           onClick={() => onPage(page + 1)}
         >
@@ -805,7 +805,7 @@ function ErrorState({ message, onRetry }: { message?: string; onRetry: () => voi
       )}
       <Button
         onClick={onRetry}
-        className="bg-white/10 hover:bg-white/15 text-white border border-white/10 gap-2"
+        className="bg-card/10 hover:bg-card/15 text-white border border-white/10 gap-2"
       >
         <RefreshCw className="w-4 h-4" />
         Try Again
@@ -1015,42 +1015,42 @@ export default function LeaderboardPage() {
                   placeholder="Search students…"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-9 h-9 text-sm bg-white/5 border-white/10 text-white placeholder:text-white/25 focus:border-yellow-400/40 w-full sm:w-52"
+                  className="pl-9 h-9 text-sm bg-card/5 border-white/10 text-white placeholder:text-white/25 focus:border-yellow-400/40 w-full sm:w-52"
                 />
               </form>
 
               {/* Filters */}
               <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 flex-nowrap">
                 <Select value={examFilter} onValueChange={onFilterChange(setExamFilter)}>
-                  <SelectTrigger id="lb-exam-filter" className="h-9 w-[130px] flex-shrink-0 text-xs bg-white/5 border-white/10 text-white/70">
+                  <SelectTrigger id="lb-exam-filter" className="h-9 w-[130px] flex-shrink-0 text-xs bg-card/5 border-white/10 text-white/70">
                     <SelectValue placeholder="All Exams" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0D1F38] border-white/10 text-white">
-                    <SelectItem value="all" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">All Exams</SelectItem>
-                    <SelectItem value="loksewa" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">Loksewa</SelectItem>
-                    <SelectItem value="model" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">Model Exam</SelectItem>
+                    <SelectItem value="all" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">All Exams</SelectItem>
+                    <SelectItem value="loksewa" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Loksewa</SelectItem>
+                    <SelectItem value="model" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Model Exam</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <Select value={rankingType} onValueChange={onFilterChange(setRankingType)}>
-                  <SelectTrigger id="lb-ranking-type" className="h-9 w-[130px] flex-shrink-0 text-xs bg-white/5 border-white/10 text-white/70">
+                  <SelectTrigger id="lb-ranking-type" className="h-9 w-[130px] flex-shrink-0 text-xs bg-card/5 border-white/10 text-white/70">
                     <SelectValue placeholder="Overall" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0D1F38] border-white/10 text-white">
-                    <SelectItem value="overall" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">Overall</SelectItem>
-                    <SelectItem value="subject" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">Subject-wise</SelectItem>
-                    <SelectItem value="best" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">Best Attempt</SelectItem>
+                    <SelectItem value="overall" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Overall</SelectItem>
+                    <SelectItem value="subject" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Subject-wise</SelectItem>
+                    <SelectItem value="best" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Best Attempt</SelectItem>
                   </SelectContent>
                 </Select>
 
                 <Select value={timeFilter} onValueChange={onFilterChange((v) => setTimeFilter(v as "week" | "month" | "all"))}>
-                  <SelectTrigger id="lb-time-filter" className="h-9 w-[120px] flex-shrink-0 text-xs bg-white/5 border-white/10 text-white/70">
+                  <SelectTrigger id="lb-time-filter" className="h-9 w-[120px] flex-shrink-0 text-xs bg-card/5 border-white/10 text-white/70">
                     <SelectValue placeholder="All Time" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#0D1F38] border-white/10 text-white">
-                    <SelectItem value="all" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">All Time</SelectItem>
-                    <SelectItem value="month" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">This Month</SelectItem>
-                    <SelectItem value="week" className="text-xs text-white/70 focus:bg-white/10 focus:text-white">This Week</SelectItem>
+                    <SelectItem value="all" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">All Time</SelectItem>
+                    <SelectItem value="month" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">This Month</SelectItem>
+                    <SelectItem value="week" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">This Week</SelectItem>
                   </SelectContent>
                 </Select>
 
@@ -1058,7 +1058,7 @@ export default function LeaderboardPage() {
                   id="lb-share-btn"
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 flex-shrink-0 text-white/40 hover:text-white hover:bg-white/5 border border-white/10"
+                  className="h-9 w-9 flex-shrink-0 text-white/40 hover:text-white hover:bg-card/5 border border-white/10"
                   title="Share"
                 >
                   <Share2 className="w-4 h-4" />
@@ -1068,7 +1068,7 @@ export default function LeaderboardPage() {
                   id="lb-refresh-btn"
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 flex-shrink-0 text-white/40 hover:text-white hover:bg-white/5 border border-white/10"
+                  className="h-9 w-9 flex-shrink-0 text-white/40 hover:text-white hover:bg-card/5 border border-white/10"
                   title="Refresh"
                   onClick={handleRefresh}
                   disabled={isRefreshing}

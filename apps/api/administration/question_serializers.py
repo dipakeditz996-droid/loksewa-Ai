@@ -7,6 +7,12 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     subject_name = serializers.SerializerMethodField()
     position_name = serializers.SerializerMethodField()
     category_name = serializers.SerializerMethodField()
+    
+    chapter_id = serializers.SerializerMethodField()
+    subject_id = serializers.SerializerMethodField()
+    position_id = serializers.SerializerMethodField()
+    category_id = serializers.SerializerMethodField()
+    
     usage_count = serializers.IntegerField(read_only=True)
 
     def get_topic_name(self, obj):
@@ -50,12 +56,40 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             return exam.category.name if exam and exam.category_id else None
         except:
             return None
+
+    def get_chapter_id(self, obj):
+        try:
+            return obj.topic.chapter.id if obj.topic and obj.topic.chapter else None
+        except:
+            return None
+            
+    def get_subject_id(self, obj):
+        try:
+            return obj.topic.chapter.subject.id if obj.topic and obj.topic.chapter and obj.topic.chapter.subject else None
+        except:
+            return None
+            
+    def get_position_id(self, obj):
+        try:
+            exam = self._question_exam(obj)
+            return exam.id if exam else None
+        except:
+            return None
+            
+    def get_category_id(self, obj):
+        try:
+            exam = self._question_exam(obj)
+            return exam.category_id if exam and exam.category_id else None
+        except:
+            return None
     
     class Meta:
         model = Question
         fields = [
             'id', 'question_id', 'question_type', 'status', 'topic', 'topic_name', 'chapter_name',
-            'subject_name', 'position_name', 'category_name', 'text', 'option_a', 
+            'subject_name', 'position_name', 'category_name', 
+            'chapter_id', 'subject_id', 'position_id', 'category_id',
+            'text', 'option_a', 
             'option_b', 'option_c', 'option_d', 'correct_option', 'model_answer',
             'marks', 'negative_marks', 'expected_time_minutes', 'explanation', 
             'difficulty', 'tags', 'usage_count', 'created_at', 'updated_at'

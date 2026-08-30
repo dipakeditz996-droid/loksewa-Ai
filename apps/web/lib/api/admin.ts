@@ -61,6 +61,26 @@ export interface AdminAnalyticsData {
   };
 }
 
+export interface AdminStudentsAnalytics {
+  period: string;
+  days: number;
+  registrationTrend: { date: string; count: number }[];
+  summary: {
+    totalStudents: number;
+    active7d: number;
+    active30d: number;
+    neverLoggedIn: number;
+  };
+  scoreDistribution: { range: string; count: number }[];
+  topPerformers: {
+    id: number;
+    name: string;
+    username: string;
+    examsCompleted: number;
+    averagePercentage: number;
+  }[];
+}
+
 export interface AdminUser {
   id: number;
   name: string;
@@ -104,8 +124,83 @@ export interface AdminAITutorOverview {
   totalSessions: number;
   sessionsToday: number;
   activeStudents: number;
+  totalQuestions: number;
   topModes: Array<{ mode: string; count: number }>;
   trend: Array<{ date: string; sessions: number }>;
+}
+
+export interface AdminAITutorProviderStatus {
+  provider: string;
+  model: string;
+  status: "configured" | "not_configured";
+}
+
+export interface AdminAITutorConversationStudent {
+  id: number;
+  name: string;
+  email: string;
+}
+
+export interface AdminAITutorConversation {
+  id: number;
+  title: string;
+  mode: string;
+  student: AdminAITutorConversationStudent;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminAITutorConversationsResponse {
+  conversations: AdminAITutorConversation[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export interface AdminAITutorMessage {
+  id: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  createdAt: string;
+}
+
+export interface AdminAITutorConversationDetail {
+  id: number;
+  title: string;
+  mode: string;
+  student: AdminAITutorConversationStudent;
+  createdAt: string;
+  updatedAt: string;
+  messages: AdminAITutorMessage[];
+}
+
+export interface AdminAITutorUsageTrendPoint {
+  date: string;
+  requests: number;
+  tokens: number;
+}
+
+export interface AdminAITutorTopStudent {
+  studentId: number;
+  name: string;
+  requests: number;
+  tokens: number;
+}
+
+export interface AdminAITutorUsage {
+  totalRequests: number;
+  totalTokens: number;
+  trend: AdminAITutorUsageTrendPoint[];
+  topStudents: AdminAITutorTopStudent[];
+}
+
+export type AITutorMode = "EXPLAIN" | "PRACTICE" | "REVISION" | "EXAM_STRATEGY" | "STUDY_PLAN";
+
+export interface AdminAITutorPrompts {
+  basePrompt: string;
+  modes: Record<AITutorMode, { promptText: string; updatedAt: string }>;
 }
 
 export interface AdminRecentOrder {
@@ -157,6 +252,58 @@ export interface AdminEvaluation {
   evaluator: string | null;
   marksObtained: number | null;
   evaluatedAt: string | null;
+  exam: string | null;
+  subject: string | null;
+  paper: string | null;
+}
+
+export interface AdminEvaluationAnnotation {
+  id: number;
+  selected_text: string;
+  comment: string;
+  start_offset: number;
+  end_offset: number;
+  created_by: number | null;
+  created_at: string;
+}
+
+export interface AdminEvaluationRecord {
+  id: number;
+  answer: number;
+  evaluator: number | null;
+  evaluator_name: string;
+  marks_obtained: number;
+  feedback: string;
+  evaluated_at: string;
+  annotations: AdminEvaluationAnnotation[];
+  video_feedback: { id: number; youtube_url: string; embed_url: string; created_at: string } | null;
+}
+
+export interface AdminEvaluationQuestion {
+  id: number;
+  topic: number;
+  topic_name: string;
+  text: string;
+  marks: number;
+  expected_time_minutes: number;
+  difficulty: string;
+  model_answer: string;
+}
+
+export interface AdminEvaluationDetail {
+  id: number;
+  student: { id: number; name: string; username: string; email: string };
+  exam: string | null;
+  subject: string | null;
+  paper: string | null;
+  attemptDate: string | null;
+  question: AdminEvaluationQuestion | null;
+  answerText: string;
+  fileUrl: string | null;
+  status: string;
+  submittedAt: string | null;
+  wordCount: number;
+  evaluation: AdminEvaluationRecord | null;
 }
 
 export interface AdminEvaluationsResponse {
@@ -179,6 +326,7 @@ export interface AdminStudyMaterial {
   status: string;
   accessType: string;
   estimatedReadingTime: number;
+  availableToAiTutor: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -248,6 +396,7 @@ export interface AdminStudyPlansResponse {
 }
 
 export interface AdminAuditLog {
+  id: string;
   timestamp: string;
   action: string;
   actionLabel: string;
@@ -263,6 +412,36 @@ export interface AdminAuditLogsResponse {
   page: number;
   pageSize: number;
   totalPages: number;
+  categoryTotals: {
+    user: number;
+    content: number;
+    evaluation: number;
+    admin: number;
+  };
+}
+
+export interface AdminAuditLogDetail {
+  id: string;
+  source: string;
+  actionLabel: string;
+  timestamp: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  entityType: string;
+  entityId: string | null;
+  details: Record<string, unknown>;
+  severity: "info" | "warning" | "error" | "success";
+}
+
+export interface AdminExportJob {
+  id: number;
+  exportType: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  rowCount: number;
+  errorMessage: string;
+  downloadUrl: string | null;
+  createdAt: string;
+  completedAt: string | null;
 }
 
 export interface AdminNotification {
@@ -280,6 +459,32 @@ export interface AdminNotification {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AdminTestimonial {
+  id: number;
+  name: string;
+  role_title: string;
+  quote: string;
+  avatar_url: string;
+  rating: number;
+  is_published: boolean;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+  /** True when a student wrote this from the homepage, rather than an admin authoring it directly. */
+  submitted_by_student: boolean;
+  submitted_by_name: string | null;
+}
+
+export interface AdminTestimonialInput {
+  name: string;
+  role_title?: string;
+  quote: string;
+  avatar_url?: string;
+  rating?: number;
+  is_published?: boolean;
+  display_order?: number;
 }
 
 export interface AdminNotificationsResponse {
@@ -430,6 +635,9 @@ export interface AdminSettingsData {
     enableGamification: boolean;
     enableStudyPlans: boolean;
   };
+  aiTutor: {
+    dailyMessageLimit: number;
+  };
 }
 
 export interface AdminSettingsResponse {
@@ -508,6 +716,12 @@ export const adminApi = {
     return apiClient<AdminAnalyticsData>(`/admin/analytics/?period=${period}`);
   },
 
+  getStudentsAnalytics: async (
+    period: "7d" | "30d" | "90d" | "1y" = "30d"
+  ): Promise<AdminStudentsAnalytics> => {
+    return apiClient<AdminStudentsAnalytics>(`/admin/analytics/students/?period=${period}`);
+  },
+
   getUsers: async (params?: {
     role?: string;
     search?: string;
@@ -528,6 +742,51 @@ export const adminApi = {
 
   getAITutorOverview: async (): Promise<AdminAITutorOverview> => {
     return apiClient<AdminAITutorOverview>("/admin/ai-tutor/");
+  },
+
+  getAITutorProviderStatus: async (): Promise<AdminAITutorProviderStatus> => {
+    return apiClient<AdminAITutorProviderStatus>("/admin/ai-tutor/provider-status/");
+  },
+
+  getAITutorConversations: async (params?: {
+    search?: string;
+    mode?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminAITutorConversationsResponse> => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.mode) query.set("mode", params.mode);
+    if (params?.dateFrom) query.set("date_from", params.dateFrom);
+    if (params?.dateTo) query.set("date_to", params.dateTo);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminAITutorConversationsResponse>(`/admin/ai-tutor/conversations/?${query.toString()}`);
+  },
+
+  getAITutorConversationDetail: async (id: number): Promise<AdminAITutorConversationDetail> => {
+    return apiClient<AdminAITutorConversationDetail>(`/admin/ai-tutor/conversations/${id}/`);
+  },
+
+  getAITutorUsage: async (days?: number): Promise<AdminAITutorUsage> => {
+    const query = days ? `?days=${days}` : "";
+    return apiClient<AdminAITutorUsage>(`/admin/ai-tutor/usage/${query}`);
+  },
+
+  getAITutorPrompts: async (): Promise<AdminAITutorPrompts> => {
+    return apiClient<AdminAITutorPrompts>("/admin/ai-tutor/prompts/");
+  },
+
+  updateAITutorPrompts: async (data: {
+    basePrompt?: string;
+    modes?: Partial<Record<AITutorMode, string>>;
+  }): Promise<{ message: string }> => {
+    return apiClient<{ message: string }>("/admin/ai-tutor/prompts/", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
   },
 
   getMarketplaceOverview: async (): Promise<AdminMarketplaceOverview> => {
@@ -568,6 +827,20 @@ export const adminApi = {
     return apiClient<AdminEvaluationsResponse>(`/admin/evaluations/?${query.toString()}`);
   },
 
+  getEvaluation: async (id: number | string): Promise<AdminEvaluationDetail> => {
+    return apiClient<AdminEvaluationDetail>(`/admin/evaluations/${id}/`);
+  },
+
+  saveEvaluation: async (
+    id: number | string,
+    data: { marks_obtained: number; feedback: string; finalize: boolean }
+  ): Promise<AdminEvaluationDetail> => {
+    return apiClient<AdminEvaluationDetail>(`/admin/evaluations/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
   getStudyMaterials: async (params?: {
     status?: string;
     type?: string;
@@ -582,6 +855,13 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminStudyMaterialsResponse>(`/admin/study-materials/?${query.toString()}`);
+  },
+
+  setStudyMaterialAiTutorAvailability: async (id: number, available: boolean): Promise<{ success: boolean }> => {
+    return apiClient<{ success: boolean }>(`/admin/study-materials/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify({ available_to_ai_tutor: available }),
+    });
   },
 
   getChapters: async (params?: {
@@ -634,6 +914,39 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminAuditLogsResponse>(`/admin/audit-logs/?${query.toString()}`);
+  },
+
+  getAuditLogDetail: async (eventId: string): Promise<AdminAuditLogDetail> => {
+    return apiClient<AdminAuditLogDetail>(`/admin/audit-logs/${encodeURIComponent(eventId)}/`);
+  },
+
+  getAuditLogRetention: async (): Promise<{ retentionDays: number }> => {
+    return apiClient(`/admin/audit-logs/retention/`);
+  },
+
+  saveAuditLogRetention: async (
+    retentionDays: number
+  ): Promise<{ retentionDays: number; purgedCount: number }> => {
+    return apiClient(`/admin/audit-logs/retention/`, {
+      method: "POST",
+      body: JSON.stringify({ retentionDays }),
+    });
+  },
+
+  // Background export: same CSV as /admin/audit-logs/export/, generated by
+  // a Celery job instead of in-request, since audit logs grow unbounded.
+  createAuditLogExportJob: async (params?: {
+    action?: string;
+    search?: string;
+  }): Promise<{ id: number; status: string; exportType: string; createdAt: string }> => {
+    return apiClient(`/admin/audit-logs/export-jobs/`, {
+      method: "POST",
+      body: JSON.stringify({ action: params?.action || "", search: params?.search || "" }),
+    });
+  },
+
+  getAuditLogExportJobs: async (): Promise<AdminExportJob[]> => {
+    return apiClient<AdminExportJob[]>(`/admin/audit-logs/export-jobs/`);
   },
 
   getNotifications: async (params?: {
@@ -694,6 +1007,32 @@ export const adminApi = {
     });
   },
 
+  getTestimonials: async (search?: string): Promise<AdminTestimonial[]> => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const res = await apiClient<any>(`/admin/testimonials/${query}`);
+    return Array.isArray(res) ? res : res.results ?? [];
+  },
+
+  createTestimonial: async (data: AdminTestimonialInput): Promise<AdminTestimonial> => {
+    return apiClient<AdminTestimonial>("/admin/testimonials/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateTestimonial: async (id: number, data: Partial<AdminTestimonialInput>): Promise<AdminTestimonial> => {
+    return apiClient<AdminTestimonial>(`/admin/testimonials/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteTestimonial: async (id: number): Promise<void> => {
+    return apiClient<void>(`/admin/testimonials/${id}/`, {
+      method: "DELETE",
+    });
+  },
+
   getSupportTickets: async (params?: {
     status?: string;
     priority?: string;
@@ -740,6 +1079,7 @@ export const adminApi = {
     notifications?: Partial<AdminSettingsData["notifications"]>;
     security?: Partial<AdminSettingsData["security"]>;
     features?: Partial<AdminSettingsData["features"]>;
+    aiTutor?: Partial<AdminSettingsData["aiTutor"]>;
   }): Promise<any> => {
     return apiClient<any>("/admin/settings/", {
       method: "PUT",

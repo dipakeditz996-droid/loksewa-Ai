@@ -11,8 +11,8 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='user.username', read_only=True)
     email = serializers.EmailField(source='user.email', read_only=True)
     full_name = serializers.SerializerMethodField()
-    first_name = serializers.CharField(source='user.first_name', required=False)
-    last_name = serializers.CharField(source='user.last_name', required=False)
+    first_name = serializers.CharField(source='user.first_name', required=False, allow_blank=True)
+    last_name = serializers.CharField(source='user.last_name', required=False, allow_blank=True)
     avatar = serializers.URLField(source='user.avatar', read_only=True)
     role = serializers.CharField(source='user.role', read_only=True)
     date_joined = serializers.DateTimeField(source='user.date_joined', read_only=True)
@@ -129,6 +129,16 @@ class SupportTicketCreateSerializer(serializers.ModelSerializer):
         SupportMessage.objects.create(
             ticket=ticket, sender=user, message=description, is_staff_reply=False
         )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='support',
+            title='New Support Ticket',
+            message=f"{user.get_full_name() or user.username} opened a ticket: '{ticket.subject}'.",
+            action_url='/admin-dashboard/support',
+            priority='important' if ticket.priority in ('high', 'urgent') else 'normal',
+        )
+
         return ticket
 
 

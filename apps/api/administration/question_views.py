@@ -35,8 +35,7 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'marks', 'difficulty']
 
     def perform_create(self, serializer):
-        """Override create to set default values if needed."""
-        serializer.save()
+        serializer.save(created_by=self.request.user)
 
     @action(detail=False, methods=['get'])
     def stats(self, request):

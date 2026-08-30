@@ -1,12 +1,74 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Exam, Subject, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress
+from .models import Exam, Subject, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress, QuestionMastery
 from .serializers import (
     ExamSerializer, SubjectSerializer, TopicSerializer,
     QuestionFullSerializer, SecureQuestionSerializer, PracticeSessionSerializer, UserTopicProgressSerializer
 )
 from .selection_service import QuestionSelectionService
+
+# Minimum answered questions in a topic before its accuracy counts as a
+# "weak topic" signal — avoids flagging a topic off one unlucky guess.
+WEAK_TOPIC_MIN_ANSWERED = 3
+WEAK_TOPIC_ACCURACY_THRESHOLD = 60
+RECENT_MISTAKE_WINDOW_DAYS = 7
+REVISION_SESSION_SIZE = 20
+
+
+def _revision_buckets(user):
+    """Group the user's QuestionMastery history into the signals Revision
+    Mode is built on. Never reads Bookmark — saving a question must never
+    be mistaken for a weakness signal."""
+    from django.utils import timezone
+    from django.db.models import Sum
+
+    now = timezone.now()
+    approved_ids = QuestionSelectionService().get_base_queryset().values_list('id', flat=True)
+    mastery = QuestionMastery.objects.filter(user=user, question_id__in=approved_ids).select_related('question')
+
+    overdue = list(mastery.filter(next_review_at__lte=now).order_by('next_review_at'))
+    repeatedly_incorrect = list(
+        mastery.filter(consecutive_incorrect__gte=2).order_by('-consecutive_incorrect', '-updated_at')
+    )
+    week_ago = now - timezone.timedelta(days=RECENT_MISTAKE_WINDOW_DAYS)
+    recent_mistakes = list(
+        mastery.filter(consecutive_incorrect__gte=1, last_attempted_at__gte=week_ago).order_by('-last_attempted_at')
+    )
+
+    topic_stats = (
+        mastery.exclude(times_answered=0)
+        .values('question__topic')
+        .annotate(answered=Sum('times_answered'), correct=Sum('times_correct'))
+    )
+    weak_topic_ids = [
+        t['question__topic'] for t in topic_stats
+        if t['answered'] >= WEAK_TOPIC_MIN_ANSWERED and (t['correct'] * 100 / t['answered']) < WEAK_TOPIC_ACCURACY_THRESHOLD
+    ]
+    weak_topics = (
+        list(mastery.filter(question__topic_id__in=weak_topic_ids).order_by('question__topic'))
+        if weak_topic_ids else []
+    )
+
+    return {
+        'overdue': overdue,
+        'repeatedly_incorrect': repeatedly_incorrect,
+        'recent_mistakes': recent_mistakes,
+        'weak_topics': weak_topics,
+    }
+
+
+def _dedup_questions(mastery_records, limit=None):
+    seen = set()
+    questions = []
+    for m in mastery_records:
+        if m.question_id not in seen:
+            seen.add(m.question_id)
+            questions.append(m.question)
+            if limit and len(questions) >= limit:
+                break
+    return questions
+
 
 class ExamViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Exam.objects.filter(is_active=True)
@@ -15,12 +77,42 @@ class ExamViewSet(viewsets.ReadOnlyModelViewSet):
 class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer
-    filterset_fields = ['exam']
+
+    def get_queryset(self):
+        queryset = Subject.objects.all()
+        # Subject has no direct `exam` FK - it reaches Exam through Paper.
+        exam_id = self.request.query_params.get('exam')
+        if exam_id:
+            queryset = queryset.filter(paper__exam_id=exam_id).distinct()
+        return queryset
 
 class TopicViewSet(viewsets.ReadOnlyModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
     filterset_fields = ['subject']
+
+    @action(detail=True, methods=['get'])
+    def content(self, request, pk=None):
+        topic = self.get_object()
+        from notes.models import StudyMaterial
+        from notes.serializers import StudyMaterialDetailSerializer
+        from courses.models import Enrollment
+        from django.db.models import Q
+        
+        # Enforce Enrollment Access Control for materials
+        active_courses = Enrollment.objects.filter(student=request.user, status='active').values_list('course_id', flat=True)
+        materials = StudyMaterial.objects.filter(topic=topic, status='published')
+        materials = materials.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
+        
+        materials_data = StudyMaterialDetailSerializer(materials, many=True, context={'request': request}).data
+        
+        return Response({
+            'id': topic.id,
+            'name': topic.name,
+            'description': topic.description,
+            'materials': materials_data
+        })
 
 class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
     """Read-only, student-reachable question catalog.
@@ -152,24 +244,213 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         return Response(response_data)
 
     @action(detail=True, methods=['post'])
+    def view(self, request, pk=None):
+        """Record that a question was displayed to the student, without marking it answered."""
+        session = self.get_object()
+        question_id = request.data.get('question_id')
+
+        try:
+            attempt = QuestionAttempt.objects.get(session=session, question_id=question_id)
+            if not attempt.is_viewed:
+                from django.utils import timezone
+                attempt.is_viewed = True
+                attempt.viewed_at = timezone.now()
+                attempt.save(update_fields=['is_viewed', 'viewed_at'])
+            return Response({'status': 'success'})
+        except QuestionAttempt.DoesNotExist:
+            return Response({'detail': 'Question not found in this session.'}, status=404)
+
+    @action(detail=True, methods=['post'])
     def answer(self, request, pk=None):
         session = self.get_object()
         if session.completed:
             return Response({'detail': 'Session already completed.'}, status=400)
-            
+
         question_id = request.data.get('question_id')
         selected_option = request.data.get('selected_option')
         is_marked_for_review = request.data.get('is_marked_for_review', False)
-        
+
         try:
             attempt = QuestionAttempt.objects.get(session=session, question_id=question_id)
+            is_correct = None
             if selected_option is not None:
                 attempt.selected_option = selected_option
+                attempt.is_viewed = True
+                correct_option = attempt.question.correct_option
+                is_correct = bool(correct_option) and selected_option.upper() == correct_option.upper()
+                attempt.is_correct = is_correct
+
+                # Study/Revision are no-pressure modes without a formal
+                # submit step, so score the answer as soon as it's given —
+                # this is also the single point that feeds Revision Mode's
+                # performance signals (never fed by merely viewing a
+                # question or by Bookmark/Saved Questions).
+                if session.mode in ('study', 'revision'):
+                    from .models import QuestionMastery
+                    mastery, _ = QuestionMastery.objects.get_or_create(user=session.user, question=attempt.question)
+                    mastery.record_answer(is_correct)
+
             attempt.is_marked_for_review = is_marked_for_review
             attempt.save()
-            return Response({'status': 'success'})
+
+            response = {'status': 'success'}
+            if is_correct is not None:
+                response['is_correct'] = is_correct
+                response['correct_option'] = attempt.question.correct_option
+                response['explanation'] = attempt.question.explanation
+            return Response(response)
         except QuestionAttempt.DoesNotExist:
             return Response({'detail': 'Question not found in this session.'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def reveal(self, request, pk=None):
+        """Show the answer to a question without it counting as an attempt.
+
+        Used by Study/Revision's "Show Answer" action — marks the question
+        viewed (never answered) and returns the correct option + explanation.
+        """
+        session = self.get_object()
+        question_id = request.data.get('question_id')
+
+        try:
+            attempt = QuestionAttempt.objects.get(session=session, question_id=question_id)
+            if not attempt.is_viewed:
+                from django.utils import timezone
+                attempt.is_viewed = True
+                attempt.viewed_at = timezone.now()
+                attempt.save(update_fields=['is_viewed', 'viewed_at'])
+            return Response({
+                'correct_option': attempt.question.correct_option,
+                'explanation': attempt.question.explanation,
+            })
+        except QuestionAttempt.DoesNotExist:
+            return Response({'detail': 'Question not found in this session.'}, status=404)
+
+    @action(detail=False, methods=['post'])
+    def study(self, request):
+        """Open-ended Topicwise Study: no fixed question count, no timer.
+
+        Resumes an in-progress study session for the topic unless `restart`
+        is passed, in which case the old session (and its attempts) is
+        discarded and a fresh one is built from every approved question in
+        the topic.
+        """
+        topic_id = request.data.get('topic')
+        subject_id = request.data.get('subject')
+        exam_id = request.data.get('exam')
+        restart = bool(request.data.get('restart', False))
+
+        if not topic_id:
+            return Response({'detail': 'topic is required.'}, status=400)
+
+        existing = PracticeSession.objects.filter(
+            user=request.user, topic_id=topic_id, mode='study', completed=False
+        ).order_by('-created_at').first()
+
+        if existing and restart:
+            existing.delete()
+            existing = None
+
+        if existing:
+            session = existing
+        else:
+            service = QuestionSelectionService()
+            result = service.select(
+                exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
+                subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
+                topic_id=topic_id,
+                count=500,  # effectively "every approved question in this topic"
+                randomize=False,
+            )
+            # Subjective (free-text) questions have no options or
+            # correct_option and belong to a separate written-answer system —
+            # they can't be shown in an MCQ browsing screen.
+            questions = [q for q in result['questions'] if q.question_type != 'subjective']
+            if not questions:
+                return Response({'detail': 'No approved questions are available for this topic yet.'}, status=400)
+
+            resolved_exam_id = exam_id if exam_id and str(exam_id) != 'all' else None
+            if not resolved_exam_id:
+                first_exam = Exam.objects.first()
+                resolved_exam_id = first_exam.id if first_exam else None
+
+            session = PracticeSession.objects.create(
+                user=request.user,
+                exam_id=resolved_exam_id,
+                subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
+                topic_id=topic_id,
+                mode='study',
+                total_questions=len(questions),
+            )
+            for q in questions:
+                QuestionAttempt.objects.create(session=session, question=q)
+
+        attempts = list(QuestionAttempt.objects.filter(session=session).select_related('question').order_by('id'))
+        resume_index = next((i for i, a in enumerate(attempts) if not a.is_viewed), 0)
+
+        from .serializers import SecureQuestionSerializer
+        return Response({
+            'session': PracticeSessionSerializer(session).data,
+            'questions': SecureQuestionSerializer([a.question for a in attempts], many=True).data,
+            'resume_index': resume_index,
+            'resumed': existing is not None,
+        })
+
+    @action(detail=False, methods=['get'])
+    def revision_summary(self, request):
+        """Counts behind each Revision Mode signal, without starting a session."""
+        buckets = _revision_buckets(request.user)
+        all_records = buckets['overdue'] + buckets['repeatedly_incorrect'] + buckets['recent_mistakes'] + buckets['weak_topics']
+        return Response({
+            'overdue': len({m.question_id for m in buckets['overdue']}),
+            'repeatedly_incorrect': len({m.question_id for m in buckets['repeatedly_incorrect']}),
+            'recent_mistakes': len({m.question_id for m in buckets['recent_mistakes']}),
+            'weak_topics': len({m.question_id for m in buckets['weak_topics']}),
+            'total_available': len({m.question_id for m in all_records}),
+        })
+
+    @action(detail=False, methods=['post'])
+    def start_revision(self, request):
+        """Assemble a revision session from the student's own performance history.
+
+        `focus` optionally biases which signal leads the queue (still mixing
+        in the others behind it) — lets the practice page's "Weak Topics" /
+        "Recently Incorrect" quick-starts point at the same engine instead of
+        being separate features.
+        """
+        focus = request.data.get('focus')
+        buckets = _revision_buckets(request.user)
+        order = ['overdue', 'repeatedly_incorrect', 'recent_mistakes', 'weak_topics']
+        if focus in order:
+            order.remove(focus)
+            order.insert(0, focus)
+
+        ordered_records = []
+        for key in order:
+            ordered_records += buckets[key]
+        questions = _dedup_questions(ordered_records, limit=REVISION_SESSION_SIZE)
+
+        if not questions:
+            return Response(
+                {'detail': "No revision questions yet — keep practicing and we'll build your revision queue from what you get wrong."},
+                status=400
+            )
+
+        first_exam = Exam.objects.first()
+        session = PracticeSession.objects.create(
+            user=request.user,
+            exam_id=first_exam.id if first_exam else None,
+            mode='revision',
+            total_questions=len(questions),
+        )
+        for q in questions:
+            QuestionAttempt.objects.create(session=session, question=q)
+
+        from .serializers import SecureQuestionSerializer
+        return Response({
+            'session': PracticeSessionSerializer(session).data,
+            'questions': SecureQuestionSerializer(questions, many=True).data,
+        })
 
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
@@ -187,7 +468,10 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         for attempt in attempts:
             if not attempt.selected_option:
                 unanswered += 1
-            elif attempt.selected_option == attempt.question.correct_option:
+            # correct_option is stored uppercase in the DB while the frontend
+            # sends lowercase option letters — compare case-insensitively or
+            # every correct answer is scored as wrong.
+            elif attempt.question.correct_option and attempt.selected_option.upper() == attempt.question.correct_option.upper():
                 attempt.is_correct = True
                 correct += 1
                 attempt.save()
@@ -236,7 +520,7 @@ class BookmarkViewSet(viewsets.ModelViewSet):
     serializer_class = BookmarkSerializer
 
     def get_queryset(self):
-        return self.Bookmark.objects.filter(user=self.request.user)
+        return self.Bookmark.objects.filter(user=self.request.user).order_by('-created_at')
 
     def create(self, request, *args, **kwargs):
         question_id = request.data.get('question_id')
@@ -313,24 +597,25 @@ class DashboardView(APIView):
             }
 
         # 2. Stats
-        from .models import ModelExamAttempt, PracticeSession, QuestionAttempt, ModelExamAttemptAnswer
-        model_attempts = ModelExamAttempt.objects.filter(student=user)
+        from .models import PracticeSession, QuestionAttempt, ExaminationAttempt, StudentAnswer
+        model_attempts = ExaminationAttempt.objects.filter(student=user)
+        completed_statuses = ('submitted', 'evaluated')
         practice_sessions = PracticeSession.objects.filter(user=user)
 
         total_exams = model_attempts.count()
-        completed_exams = model_attempts.filter(status='COMPLETED').count()
+        completed_exams = model_attempts.filter(status__in=completed_statuses).count()
 
-        avg_score = model_attempts.filter(status='COMPLETED').aggregate(Avg('score'))['score__avg'] or 0
-        best_score = model_attempts.filter(status='COMPLETED').order_by('-score').first()
+        avg_score = model_attempts.filter(status__in=completed_statuses).aggregate(Avg('score'))['score__avg'] or 0
+        best_score = model_attempts.filter(status__in=completed_statuses).order_by('-score').first()
         best_score_val = best_score.score if best_score else 0
 
-        exam_questions = ModelExamAttemptAnswer.objects.filter(attempt__student=user).count()
+        exam_questions = StudentAnswer.objects.filter(attempt__student=user).count()
         practice_questions = QuestionAttempt.objects.filter(session__user=user).count()
         questions_attempted = exam_questions + practice_questions
 
         avg_accuracy = practice_sessions.filter(completed=True).aggregate(Avg('accuracy'))['accuracy__avg'] or 0
 
-        exam_time = model_attempts.filter(status='COMPLETED').aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
+        exam_time = model_attempts.filter(status__in=completed_statuses).aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
         practice_time = practice_sessions.filter(completed=True).aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
         total_seconds = exam_time + practice_time
         hours = total_seconds // 3600
@@ -367,14 +652,14 @@ class DashboardView(APIView):
 
         # 3. Continue Learning
         continue_learning = None
-        in_progress_exam = model_attempts.filter(status='IN_PROGRESS').order_by('-started_at').first()
+        in_progress_exam = model_attempts.filter(status='in-progress').order_by('-started_at').first()
         if in_progress_exam:
             continue_learning = {
                 'id': in_progress_exam.id,
                 'type': 'model_exam',
-                'title': in_progress_exam.exam.title,
+                'title': in_progress_exam.examination.title,
                 'progress': 0,
-                'url': f'/student/model-exams/{in_progress_exam.exam.id}/attempt/{in_progress_exam.id}'
+                'url': f'/student/exams/{in_progress_exam.examination_id}/attempt/{in_progress_exam.id}'
             }
         else:
             in_progress_practice = practice_sessions.filter(completed=False).order_by('-created_at').first()
@@ -407,13 +692,13 @@ class DashboardView(APIView):
 
         # 5. Recent Exams
         recent_exams = []
-        for e in model_attempts.filter(status='COMPLETED').order_by('-submitted_at')[:5]:
+        for e in model_attempts.filter(status__in=completed_statuses).order_by('-submitted_at')[:5]:
             recent_exams.append({
                 'id': e.id,
-                'title': e.model_exam.title,
+                'title': e.examination.title,
                 'date': e.submitted_at.strftime('%Y-%m-%d'),
                 'score': float(e.score),
-                'percentage': float((e.score / max(e.model_exam.total_marks, 1)) * 100) if getattr(e.model_exam, 'total_marks', 0) > 0 else 0
+                'percentage': float(e.percentage),
             })
 
         # 6. Marketplace
@@ -466,44 +751,6 @@ class DashboardView(APIView):
                 {"subject": "Current Affairs", "progress": 81}
             ]
         })
-
-class ModelExamViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    [LEGACY - DEPRECATED]
-    This ViewSet is deprecated in favor of StudentExaminationViewSet.
-    It will be removed in a future phase.
-    """
-    from .models import Examination
-    from .serializers import ModelExamSerializer
-    serializer_class = ModelExamSerializer
-    
-    def get_queryset(self):
-        return self.Examination.objects.filter(status='published', exam_type='mock')
-
-class ModelExamAttemptViewSet(viewsets.ModelViewSet):
-    """
-    [LEGACY - DEPRECATED]
-    This ViewSet is deprecated in favor of StudentExaminationAttemptViewSet.
-    It will be removed in a future phase.
-    """
-    from .models import ExaminationAttempt
-    from .serializers import ModelExamAttemptSerializer
-    serializer_class = ModelExamAttemptSerializer
-
-    def get_queryset(self):
-        return self.ExaminationAttempt.objects.filter(student=self.request.user)
-
-    def create(self, request, *args, **kwargs):
-        # Deprecated: Forward to StudentExaminationAttemptViewSet internally or mock response
-        return Response({'detail': 'Legacy create attempt is deprecated. Use /student/exams/{id}/start'}, status=400)
-
-    @action(detail=True, methods=['post'])
-    def answer(self, request, pk=None):
-        return Response({'detail': 'Legacy answer is deprecated.'}, status=400)
-
-    @action(detail=True, methods=['post'])
-    def submit(self, request, pk=None):
-        return Response({'detail': 'Legacy submit is deprecated.'}, status=400)
 
 # ============================================================
 # SUBJECTIVE PRACTICE VIEWS
@@ -690,6 +937,19 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
             ans.submitted_at = timezone.now()
             ans.save()
 
+        submitted_count = attempt.answers.filter(status='submitted').count()
+        if submitted_count:
+            label = attempt.model_exam.title if attempt.model_exam else (
+                attempt.practice_set.title if attempt.practice_set else 'a practice set'
+            )
+            from core.notification_service import NotificationService
+            NotificationService.notify_admins(
+                notif_type='evaluation',
+                title='New Submission Awaiting Evaluation',
+                message=f"{attempt.student.get_full_name() or attempt.student.username} submitted '{label}' — {submitted_count} answer(s) need evaluation.",
+                action_url='/admin-dashboard/evaluations',
+            )
+
         return Response(self.get_serializer(attempt).data)
 
 
@@ -763,6 +1023,9 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
 
         answer.status = 'evaluated'
         answer.save()
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_subjective_evaluated(evaluation)
 
         from .serializers import EvaluationSerializer
         return Response(EvaluationSerializer(evaluation).data)
@@ -856,10 +1119,10 @@ class TeacherQuestionViewSet(viewsets.ModelViewSet):
         assigned_exam_ids = assigned_courses.values_list('exam_id', flat=True)
         
         assigned_questions = Question.objects.filter(
-            topic__chapter__subject__exam_id__in=assigned_exam_ids
+            topic__chapter__subject__paper__exam_id__in=assigned_exam_ids
         ).exclude(status='archived')
-        
-        return (authored | assigned_questions).distinct().select_related('topic', 'topic__chapter', 'topic__chapter__subject', 'topic__chapter__subject__exam')
+
+        return (authored | assigned_questions).distinct().select_related('topic', 'topic__chapter', 'topic__chapter__subject', 'topic__chapter__subject__paper__exam')
         
     def perform_create(self, serializer):
         # Duplicate detection: check for exact normalized text match
@@ -912,7 +1175,15 @@ class TeacherQuestionViewSet(viewsets.ModelViewSet):
         question.status = 'pending_review'
         question.submitted_at = timezone.now()
         question.save()
-        
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='question_review',
+            title='Question Submitted for Review',
+            message=f"{request.user.get_full_name() or request.user.username} submitted a question for review: '{question.text[:80]}'.",
+            action_url='/admin-dashboard/academic/questions',
+        )
+
         return Response({"detail": "Question submitted for review successfully."})
 
     @action(detail=False, methods=['post'], url_path='bulk-import')
@@ -1088,6 +1359,15 @@ class TeacherQuestionSetViewSet(viewsets.ModelViewSet):
         instance.status = 'pending_review'
         instance.submitted_at = timezone.now()
         instance.save()
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='question_review',
+            title='Question Set Submitted for Review',
+            message=f"{request.user.get_full_name() or request.user.username} submitted question set '{instance.name}' for review.",
+            action_url='/admin-dashboard/academic/question-sets',
+        )
+
         return Response(self.get_serializer(instance).data)
 
     @action(detail=True, methods=['post'], url_path='generate-blueprint')
@@ -1169,7 +1449,7 @@ class TeacherQuestionSetViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Expected a list of questions"}, status=400)
             
         from .models import Question
-        from .serializers import TeacherQuestionSerializer
+        from .serializers import QuestionFullSerializer
         from django.db.models import Max
         
         results = {"added_existing": 0, "created_drafts": 0, "errors": []}
@@ -1189,7 +1469,7 @@ class TeacherQuestionSetViewSet(viewsets.ModelViewSet):
                 except Question.DoesNotExist:
                     results["errors"].append(f"Row {idx+1}: Approved Question {question_id} not found.")
             else:
-                serializer = TeacherQuestionSerializer(data=row, context={'request': request})
+                serializer = QuestionFullSerializer(data=row, context={'request': request})
                 if serializer.is_valid():
                     q = serializer.save(created_by=request.user, status='draft')
                     QuestionSetQuestion.objects.create(
@@ -1426,6 +1706,15 @@ class TeacherMockExamViewSet(viewsets.ModelViewSet):
         exam.status = 'pending_review'
         exam.submitted_at = timezone.now()
         exam.save()
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='question_review',
+            title='Exam Submitted for Review',
+            message=f"{request.user.get_full_name() or request.user.username} submitted exam '{exam.title}' for review.",
+            action_url='/admin-dashboard/exams',
+        )
+
         return Response({'status': 'Exam submitted for review successfully.'})
 
     @action(detail=True, methods=['post'])
@@ -1559,11 +1848,15 @@ class AdminExaminationReviewViewSet(viewsets.ReadOnlyModelViewSet):
             exam.status = 'rejected'
         else:
             return Response({'detail': 'Invalid action'}, status=400)
-            
+
         exam.reviewer_comment = comment
         exam.reviewed_by = request.user
         exam.reviewed_at = timezone.now()
         exam.save()
+
+        if action == 'approve':
+            from core.notification_service import NotificationService
+            NotificationService.notify_students_exam_update(exam, 'published')
 
         return Response({'status': f'Exam marked as {exam.status}'})
 

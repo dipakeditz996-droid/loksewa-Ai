@@ -113,26 +113,26 @@ export default function CreateStudyMaterialPage() {
   const needsFileUpload = ['pdf', 'document', 'presentation'].includes(formData.material_type);
   const needsUrl = ['video', 'external_link'].includes(formData.material_type);
 
-  const selectClass = "w-full rounded-lg border border-[#D9E1EA] bg-white px-3 py-2 text-sm text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20";
-  const labelClass = "mb-1 block text-sm font-medium text-[#344054]";
+  const selectClass = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20";
+  const labelClass = "mb-1 block text-sm font-medium text-foreground";
 
   return (
     <div className="mx-auto max-w-4xl p-4 pb-12 md:p-8">
-      <Link href="/teacher/study-materials" className="mb-6 flex items-center text-[#667085] transition-colors hover:text-[#101828]">
+      <Link href="/teacher/study-materials" className="mb-6 flex items-center text-muted-foreground transition-colors hover:text-foreground">
         <ArrowLeft className="mr-2 h-4 w-4" />
         Back to Study Materials
       </Link>
 
-      <div className="overflow-hidden rounded-2xl border border-[#E7EBF3] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-        <div className="border-b border-[#EEF1F6] p-6">
-          <h1 className="font-heading text-2xl font-extrabold text-[#0B2545]">Create Study Material</h1>
-          <p className="mt-1 text-[#667085]">Add a new educational resource for your students.</p>
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div className="border-b border-border p-6">
+          <h1 className="font-heading text-2xl font-extrabold text-primary">Create Study Material</h1>
+          <p className="mt-1 text-muted-foreground">Add a new educational resource for your students.</p>
         </div>
 
         <div className="space-y-8 p-6">
           {/* Basic Info */}
           <section>
-            <h2 className="mb-4 text-lg font-semibold text-[#101828]">1. Basic Information</h2>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">1. Basic Information</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="col-span-2">
                 <label className={labelClass}>Material Title *</label>
@@ -140,7 +140,7 @@ export default function CreateStudyMaterialPage() {
                   name="title"
                   value={formData.title}
                   onChange={handleChange}
-                  className="rounded-lg border-[#D9E1EA]"
+                  className="rounded-lg border-border"
                   placeholder="e.g. Constitutional Development Chapter 1 Notes"
                 />
               </div>
@@ -151,7 +151,7 @@ export default function CreateStudyMaterialPage() {
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
-                  className="rounded-lg border-[#D9E1EA]"
+                  className="rounded-lg border-border"
                   placeholder="Provide a brief overview of this material..."
                   rows={3}
                 />
@@ -194,7 +194,7 @@ export default function CreateStudyMaterialPage() {
 
           {/* Placement */}
           <section>
-            <h2 className="mb-4 text-lg font-semibold text-[#101828]">2. Placement & Organization</h2>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">2. Placement & Organization</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               <div>
                 <label className={labelClass}>Course / Exam *</label>
@@ -247,41 +247,41 @@ export default function CreateStudyMaterialPage() {
 
           {/* Content */}
           <section>
-            <h2 className="mb-4 text-lg font-semibold text-[#101828]">3. Resource Content</h2>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">3. Resource Content</h2>
 
             {needsFileUpload && (
-              <div className="relative rounded-xl border-2 border-dashed border-[#D9E1EA] bg-[#F7F9FC] p-8 text-center transition-colors hover:bg-[#EEF2F8]">
+              <div className="relative rounded-xl border-2 border-dashed border-border bg-muted p-8 text-center transition-colors hover:bg-primary/10">
                 {file ? (
                   <div className="flex flex-col items-center justify-center">
-                    <FileIcon className="mb-2 h-12 w-12 text-[#0B2545]" />
-                    <span className="font-medium text-[#101828]">{file.name}</span>
-                    <span className="mt-1 text-sm text-[#667085]">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                    <FileIcon className="mb-2 h-12 w-12 text-primary" />
+                    <span className="font-medium text-foreground">{file.name}</span>
+                    <span className="mt-1 text-sm text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                     <button
                       onClick={() => setFile(null)}
-                      className="mt-4 flex items-center rounded-md bg-[#FBEAEA] px-3 py-1 text-sm text-[#B23A3A] transition-colors hover:bg-[#f5d3d3]"
+                      className="mt-4 flex items-center rounded-md bg-destructive/10 px-3 py-1 text-sm text-destructive transition-colors hover:bg-[#f5d3d3]"
                     >
                       <X className="mr-1 h-4 w-4" /> Remove File
                     </button>
                   </div>
                 ) : (
                   <>
-                    <Upload className="mx-auto mb-4 h-10 w-10 text-[#8A98AE]" />
-                    <p className="mb-1 font-medium text-[#344054]">Drag & drop your file here</p>
-                    <p className="mb-4 text-sm text-[#667085]">or click to browse from your computer</p>
+                    <Upload className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
+                    <p className="mb-1 font-medium text-foreground">Drag & drop your file here</p>
+                    <p className="mb-4 text-sm text-muted-foreground">or click to browse from your computer</p>
                     <Input
                       type="file"
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                       onChange={handleFileChange}
                       accept={formData.material_type === 'pdf' ? '.pdf' : '*/*'}
                     />
-                    <Button variant="outline" className="rounded-[9px] border-[#D9E1EA]">Browse Files</Button>
+                    <Button variant="outline" className="rounded-[9px] border-border">Browse Files</Button>
                   </>
                 )}
               </div>
             )}
 
             {needsUrl && (
-              <div className="rounded-xl border border-[#E7EBF3] bg-[#F7F9FC] p-6">
+              <div className="rounded-xl border border-border bg-muted p-6">
                 <label className={labelClass}>
                   {formData.material_type === 'video' ? 'YouTube / Video URL' : 'External Resource URL'} *
                 </label>
@@ -291,7 +291,7 @@ export default function CreateStudyMaterialPage() {
                   value={formData.external_url}
                   onChange={handleChange}
                   placeholder="https://"
-                  className="mb-2 rounded-lg border-[#D9E1EA] bg-white"
+                  className="mb-2 rounded-lg border-border bg-card"
                 />
                 {formData.external_url && formData.external_url.includes('youtube.com') && (
                   <div className="mt-4 flex aspect-video items-center justify-center overflow-hidden rounded-lg bg-black text-white">
@@ -308,7 +308,7 @@ export default function CreateStudyMaterialPage() {
                   name="content"
                   value={formData.content}
                   onChange={handleChange}
-                  className="rounded-lg border-[#D9E1EA]"
+                  className="rounded-lg border-border"
                   placeholder="Write your notes here..."
                   rows={8}
                 />
@@ -317,13 +317,13 @@ export default function CreateStudyMaterialPage() {
           </section>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#EEF1F6] bg-[#F7F9FC] p-6">
-          <p className="text-sm text-[#667085]">Drafts are not visible to students.</p>
+        <div className="flex items-center justify-between border-t border-border bg-muted p-6">
+          <p className="text-sm text-muted-foreground">Drafts are not visible to students.</p>
           <div className="flex gap-3">
-            <Button variant="outline" className="rounded-[9px] border-[#D9E1EA]" onClick={() => handleSubmit('draft')} disabled={loading}>
+            <Button variant="outline" className="rounded-[9px] border-border" onClick={() => handleSubmit('draft')} disabled={loading}>
               Save Draft
             </Button>
-            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C]" onClick={() => handleSubmit('submit')} disabled={loading}>
+            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={() => handleSubmit('submit')} disabled={loading}>
               {loading ? 'Saving...' : 'Submit for Review'}
             </Button>
           </div>

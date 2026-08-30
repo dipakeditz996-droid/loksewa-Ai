@@ -75,7 +75,7 @@ class PermissionAndPhase2ATests(APITestCase):
         response = self.client.post(f'/api/notes/admin/materials/{self.material1.id}/approve/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         
-        response2 = self.client.post('/api/admin/questions/bulk_action/', {'action': 'publish', 'ids': [self.question1.id]})
+        response2 = self.client.post('/api/admin/questions/bulk_action/', {'action': 'approve', 'ids': [self.question1.id]})
         self.assertEqual(response2.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_authorized_admin_reviewing_content_allowed(self):
@@ -83,7 +83,7 @@ class PermissionAndPhase2ATests(APITestCase):
         response = self.client.post(f'/api/notes/admin/materials/{self.material1.id}/approve/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
-        response2 = self.client.post('/api/admin/questions/bulk_action/', {'action': 'publish', 'ids': [self.question1.id]})
+        response2 = self.client.post('/api/admin/questions/bulk_action/', {'action': 'approve', 'ids': [self.question1.id]})
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
     def test_unauthorized_user_calling_admin_review_endpoint_denied(self):
@@ -113,3 +113,17 @@ class PermissionAndPhase2ATests(APITestCase):
         # Verify counts remain 1
         self.assertEqual(Purchase.objects.filter(student=self.student1, product=self.product1).count(), 1)
         self.assertEqual(Enrollment.objects.filter(student=self.student1, course=self.course1).count(), 1)
+
+    def test_admin_created_question_sets_created_by(self):
+        # AdminQuestionViewSet.perform_create used to call serializer.save()
+        # with no created_by, so every question made through the admin
+        # Question Bank UI showed up as "Unknown" everywhere that field is
+        # displayed (e.g. the Audit Logs page's Content Created events).
+        self.client.force_authenticate(user=self.admin1)
+        response = self.client.post('/api/admin/questions/', {
+            'text': 'A new admin-authored question',
+            'topic': self.topic1.id,
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        question = Question.objects.get(pk=response.data['id'])
+        self.assertEqual(question.created_by, self.admin1)

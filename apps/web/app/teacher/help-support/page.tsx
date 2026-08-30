@@ -77,27 +77,27 @@ export default function TeacherHelpSupportPage() {
         <Link href="/teacher/help-support/tickets/create">
           <div className="flex items-center gap-3 p-4 bg-[#D4A72C]/10 border border-[#D4A72C]/20 rounded-xl hover:bg-[#D4A72C]/15 transition-colors cursor-pointer">
             <Plus className="h-5 w-5 text-[#D4A72C]" />
-            <span className="text-sm font-semibold text-[#0B2545]">Report a Problem</span>
+            <span className="text-sm font-semibold text-primary">Report a Problem</span>
           </div>
         </Link>
         <Link href="/teacher/help-support/tickets">
           <div className="flex items-center gap-3 p-4 bg-[#0B2545]/5 border border-[#0B2545]/10 rounded-xl hover:bg-[#0B2545]/10 transition-colors cursor-pointer">
-            <TicketIcon className="h-5 w-5 text-[#0B2545]" />
-            <span className="text-sm font-semibold text-[#0B2545]">My Tickets</span>
+            <TicketIcon className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold text-primary">My Tickets</span>
           </div>
         </Link>
-        <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-          <HelpCircle className="h-5 w-5 text-slate-500" />
+        <div className="flex items-center gap-3 p-4 bg-muted border border-border rounded-xl">
+          <HelpCircle className="h-5 w-5 text-muted-foreground" />
           <div>
-            <span className="text-xs text-slate-500 block">Response Time</span>
-            <span className="text-sm font-semibold text-[#0B2545]">Within 24 hours</span>
+            <span className="text-xs text-muted-foreground block">Response Time</span>
+            <span className="text-sm font-semibold text-primary">Within 24 hours</span>
           </div>
         </div>
       </div>
 
       {/* Help Categories */}
       <section className="mb-10">
-        <h2 className="text-lg font-bold text-[#0B2545] mb-4">Browse by Category</h2>
+        <h2 className="text-lg font-bold text-primary mb-4">Browse by Category</h2>
         {loadingCats ? (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -117,12 +117,12 @@ export default function TeacherHelpSupportPage() {
                     "flex flex-col items-start p-5 rounded-xl border-2 text-left transition-all hover:shadow-sm",
                     isActive
                       ? "border-[#D4A72C] bg-[#D4A72C]/5"
-                      : "border-slate-200 bg-white hover:border-slate-300"
+                      : "border-border bg-card hover:border-primary/30"
                   )}
                 >
-                  <Icon className={cn("h-6 w-6 mb-2", isActive ? "text-[#D4A72C]" : "text-[#0B2545]")} />
-                  <p className="text-sm font-semibold text-[#0B2545]">{cat.name}</p>
-                  <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">{cat.description}</p>
+                  <Icon className={cn("h-6 w-6 mb-2", isActive ? "text-[#D4A72C]" : "text-primary")} />
+                  <p className="text-sm font-semibold text-primary">{cat.name}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{cat.description}</p>
                 </button>
               );
             })}
@@ -132,7 +132,7 @@ export default function TeacherHelpSupportPage() {
 
       {/* FAQs */}
       <section className="mb-10" id="faqs">
-        <h2 className="text-lg font-bold text-[#0B2545] mb-4">
+        <h2 className="text-lg font-bold text-primary mb-4">
           {selectedCategory ? `FAQs — ${categories?.find(c => c.key === selectedCategory)?.name || ""}` : "Frequently Asked Questions"}
         </h2>
 
@@ -145,34 +145,34 @@ export default function TeacherHelpSupportPage() {
         ) : faqs && faqs.length > 0 ? (
           <div className="space-y-3">
             {faqs.map((faq) => (
-              <div key={faq.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <div key={faq.id} className="bg-card rounded-xl border border-border overflow-hidden">
                 <button
                   onClick={() => setExpandedFaq(expandedFaq === faq.id ? null : faq.id)}
-                  className="flex items-center justify-between w-full p-5 text-left hover:bg-slate-50/50 transition-colors"
+                  className="flex items-center justify-between w-full p-5 text-left hover:bg-muted/50 transition-colors"
                 >
-                  <span className="text-[14px] font-medium text-[#0B2545] pr-4">{faq.question}</span>
+                  <span className="text-[14px] font-medium text-primary pr-4">{faq.question}</span>
                   {expandedFaq === faq.id ? (
-                    <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" />
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
                   ) : (
-                    <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
                   )}
                 </button>
                 {expandedFaq === faq.id && (
-                  <div className="px-5 pb-5 border-t border-slate-100">
-                    <p className="text-[13px] text-slate-600 leading-relaxed pt-4 whitespace-pre-line">
+                  <div className="px-5 pb-5 border-t border-border">
+                    <p className="text-[13px] text-muted-foreground leading-relaxed pt-4 whitespace-pre-line">
                       {faq.answer}
                     </p>
-                    <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100">
-                      <span className="text-[11px] text-slate-400">Was this helpful?</span>
+                    <div className="flex items-center gap-3 mt-4 pt-3 border-t border-border">
+                      <span className="text-[11px] text-muted-foreground">Was this helpful?</span>
                       <button
                         onClick={() => handleFeedback(faq.id, true)}
-                        className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-green-600 transition-colors"
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-green-600 transition-colors"
                       >
                         <ThumbsUp className="h-3.5 w-3.5" /> Yes
                       </button>
                       <button
                         onClick={() => handleFeedback(faq.id, false)}
-                        className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-500 transition-colors"
+                        className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-red-500 transition-colors"
                       >
                         <ThumbsDown className="h-3.5 w-3.5" /> No
                       </button>
@@ -183,17 +183,17 @@ export default function TeacherHelpSupportPage() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-            <HelpCircle className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-500">No FAQs found.</p>
-            <p className="text-xs text-slate-400 mt-1">Try a different search or category.</p>
+          <div className="text-center py-12 bg-card rounded-xl border border-border">
+            <HelpCircle className="h-10 w-10 text-muted-foreground/50 mx-auto mb-3" />
+            <p className="text-sm font-medium text-muted-foreground">No FAQs found.</p>
+            <p className="text-xs text-muted-foreground mt-1">Try a different search or category.</p>
           </div>
         )}
       </section>
 
       {/* Quick Help Links */}
       <section className="mb-8">
-        <h2 className="text-lg font-bold text-[#0B2545] mb-4">Quick Help</h2>
+        <h2 className="text-lg font-bold text-primary mb-4">Quick Help</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {QUICK_LINKS.map((link) => {
             const Icon = link.icon;
@@ -203,11 +203,11 @@ export default function TeacherHelpSupportPage() {
               <Wrapper
                 key={link.label}
                 href={link.href}
-                className="flex items-center gap-3 p-4 bg-white rounded-xl border border-slate-200 hover:border-[#D4A72C]/50 hover:bg-[#D4A72C]/5 transition-all group"
+                className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border hover:border-[#D4A72C]/50 hover:bg-[#D4A72C]/5 transition-all group"
               >
-                <Icon className="h-4 w-4 text-slate-500 group-hover:text-[#D4A72C]" />
-                <span className="text-sm font-medium text-slate-700 group-hover:text-[#0B2545]">{link.label}</span>
-                <ExternalLink className="h-3 w-3 text-slate-300 ml-auto group-hover:text-[#D4A72C]" />
+                <Icon className="h-4 w-4 text-muted-foreground group-hover:text-[#D4A72C]" />
+                <span className="text-sm font-medium text-foreground group-hover:text-primary">{link.label}</span>
+                <ExternalLink className="h-3 w-3 text-muted-foreground/50 ml-auto group-hover:text-[#D4A72C]" />
               </Wrapper>
             );
           })}

@@ -65,15 +65,37 @@ export default function QuestionStudio({ questionId }: QuestionStudioProps) {
 
   const [activeTab, setActiveTab] = useState("editor");
 
-  // In a real app we'd fetch this cascading structure from APIs
-  // Exam -> Subject -> Chapter -> Topic
-  const [mockTopics, setMockTopics] = useState([
-    { id: 1, name: "Database Normalization (Database Systems)" },
-    { id: 2, name: "Sorting Algorithms (Data Structures)" },
-    { id: 3, name: "Operating System Kernels (OS)" },
-  ]);
+  const [topics, setTopics] = useState<{id: number, name: string}[]>([]);
 
   useEffect(() => {
+    // Fetch real topics from the syllabus hierarchy
+    const loadTopics = async () => {
+      try {
+        const { syllabusApi } = await import("@/lib/api/syllabus");
+        const exams = await syllabusApi.getExams();
+        
+        // Flatten the hierarchy to get all topics
+        const allTopics: {id: number, name: string}[] = [];
+        exams.forEach(exam => {
+          exam.subjects?.forEach(subject => {
+            subject.units?.forEach(unit => {
+              unit.topics?.forEach(topic => {
+                allTopics.push({
+                  id: topic.id,
+                  name: `${topic.name} (${subject.name})`
+                });
+              });
+            });
+          });
+        });
+        setTopics(allTopics);
+      } catch (error) {
+        console.error("Failed to load syllabus topics", error);
+      }
+    };
+    
+    loadTopics();
+
     if (questionId) {
       const loadQuestion = async () => {
         try {
@@ -341,7 +363,7 @@ export default function QuestionStudio({ questionId }: QuestionStudioProps) {
                         <SelectValue placeholder="Select a topic" />
                       </SelectTrigger>
                       <SelectContent>
-                        {mockTopics.map(t => (
+                        {topics.map(t => (
                            <SelectItem key={t.id} value={t.id.toString()}>{t.name}</SelectItem>
                         ))}
                       </SelectContent>

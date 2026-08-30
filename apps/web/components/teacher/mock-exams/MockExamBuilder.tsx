@@ -341,7 +341,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
             variant={builderMode === "manual" ? "default" : "ghost"} 
             size="sm" 
             onClick={() => setBuilderMode("manual")}
-            className={builderMode === "manual" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}
+            className={builderMode === "manual" ? "bg-card text-slate-900 shadow-sm" : "text-slate-500"}
           >
             Manual Selection
           </Button>
@@ -349,7 +349,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
             variant={builderMode === "auto" ? "default" : "ghost"} 
             size="sm" 
             onClick={() => setBuilderMode("auto")}
-            className={builderMode === "auto" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}
+            className={builderMode === "auto" ? "bg-card text-slate-900 shadow-sm" : "text-slate-500"}
           >
             Auto-Generate
           </Button>
@@ -389,7 +389,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
                 />
               </div>
             </div>
-            <Button onClick={handleAutoGenerate} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleAutoGenerate} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
               {loading ? "Generating..." : "Generate Questions"}
             </Button>
           </CardContent>
@@ -398,7 +398,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-[500px]">
         {builderMode === "manual" && (
-          <div className="border rounded-xl bg-white flex flex-col overflow-hidden">
+          <div className="border rounded-xl bg-card flex flex-col overflow-hidden">
             <div className="p-4 border-b bg-slate-50">
               <h3 className="font-semibold text-slate-800 flex items-center gap-2 mb-3">
                 <BookOpen className="w-4 h-4 text-blue-600" /> Question Bank
@@ -437,7 +437,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         )}
 
         <div className="border rounded-xl bg-slate-50 flex flex-col overflow-hidden">
-          <div className="p-4 border-b bg-white flex justify-between items-center">
+          <div className="p-4 border-b bg-card flex justify-between items-center">
             <h3 className="font-semibold text-slate-800 flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-600" /> Selected Questions
             </h3>
@@ -450,7 +450,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
               <div className="text-center py-12 text-slate-400 text-sm">No questions added yet.</div>
             ) : (
               selectedQuestions.sort((a, b) => a.order - b.order).map((sq, idx, arr) => (
-                <div key={sq.id} className="p-3 bg-white border rounded-lg flex items-center gap-3">
+                <div key={sq.id} className="p-3 bg-card border rounded-lg flex items-center gap-3">
                   <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-600 shrink-0">
                     {idx + 1}
                   </div>
@@ -503,7 +503,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         <div className="bg-slate-50 px-4 py-3 border-b flex items-center gap-2 font-medium text-slate-700">
           <Clock className="w-4 h-4 text-slate-500"/> Timing & Scheduling
         </div>
-        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-card">
           <div className="space-y-2">
             <Label>Time Limit (minutes)</Label>
             <Input 
@@ -527,7 +527,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         <div className="bg-slate-50 px-4 py-3 border-b flex items-center gap-2 font-medium text-slate-700">
           <CheckCircle className="w-4 h-4 text-slate-500"/> Scoring & Marking
         </div>
-        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-card">
           <div className="space-y-2">
             <Label>Marks per Question</Label>
             <Input 
@@ -573,7 +573,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         <div className="bg-slate-50 px-4 py-3 border-b flex items-center gap-2 font-medium text-slate-700">
           <AlertCircle className="w-4 h-4 text-slate-500"/> Exam Behavior & Results
         </div>
-        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white">
+        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-card">
           <div className="space-y-2">
             <Label>Result Visibility</Label>
             <Select 
@@ -637,7 +637,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         </div>
 
         {/* Exam Header */}
-        <div className="bg-white p-4 flex justify-between items-center border-b border-slate-200">
+        <div className="bg-card p-4 flex justify-between items-center border-b border-slate-200">
           <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
             <span className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-xs">LOK</span>
             {formData.title || "Untitled Exam"}
@@ -647,7 +647,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
               <Clock className="w-4 h-4"/> 
               {String(Math.floor((formData.time_limit || 60) - 1)).padStart(2, '0')}:59
             </div>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700">Submit Exam</Button>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white">Submit Exam</Button>
           </div>
         </div>
         
@@ -657,7 +657,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           <div className="flex-1 p-8 overflow-y-auto">
             <div className="max-w-3xl mx-auto">
               {selectedQuestions.length > 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 relative">
+                <div className="bg-card rounded-xl shadow-sm border border-slate-200 p-8 relative">
                   <div className="absolute top-0 right-0 bg-blue-50 text-blue-700 font-medium text-xs px-3 py-1 rounded-bl-lg rounded-tr-xl border-l border-b border-blue-100">
                     Question 1 of {selectedQuestions.length}
                   </div>
@@ -697,11 +697,11 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
                       <Button variant="outline" className="text-orange-600 border-orange-200 hover:bg-orange-50">Mark for Review</Button>
                       <Button variant="outline">Clear Response</Button>
                     </div>
-                    <Button className="bg-blue-600 hover:bg-blue-700">Save & Next</Button>
+                    <Button className="bg-blue-600 hover:bg-blue-700 text-white">Save & Next</Button>
                   </div>
                 </div>
               ) : (
-                <div className="text-center p-16 text-slate-500 bg-white rounded-xl border border-dashed">
+                <div className="text-center p-16 text-slate-500 bg-card rounded-xl border border-dashed">
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <AlertCircle className="w-8 h-8 text-slate-400" />
                   </div>
@@ -713,7 +713,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           </div>
           
           {/* Question Palette Sidebar */}
-          <div className="w-64 bg-white border-l border-slate-200 p-4 flex flex-col">
+          <div className="w-64 bg-card border-l border-slate-200 p-4 flex flex-col">
             <h4 className="font-semibold text-slate-800 mb-4 text-sm">Question Palette</h4>
             <div className="grid grid-cols-5 gap-2 mb-6">
               {Array.from({ length: selectedQuestions.length || 10 }).map((_, i) => (
@@ -736,7 +736,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
 
   const renderStep5 = () => (
     <div className="space-y-6 animate-in fade-in max-w-2xl mx-auto py-8">
-      <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 text-center relative overflow-hidden">
+      <div className="bg-card p-8 rounded-2xl shadow-sm border border-slate-200 text-center relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-500" />
         <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
           <CheckCircle className="w-10 h-10 text-blue-600" />
@@ -767,7 +767,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           <Button variant="outline" className="w-full" onClick={() => router.push('/teacher/mock-exams')}>
             Save & Exit
           </Button>
-          <Button className="w-full bg-blue-600 hover:bg-blue-700 shadow-md gap-2" onClick={handleSubmit} disabled={loading || selectedQuestions.length === 0}>
+          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md gap-2" onClick={handleSubmit} disabled={loading || selectedQuestions.length === 0}>
             {loading ? "Submitting..." : <><Send className="w-4 h-4"/> Submit for Review</>}
           </Button>
         </div>
@@ -784,8 +784,8 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
   ];
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      <div className="border-b px-6 py-4 flex justify-between items-center sticky top-0 z-10 bg-white">
+    <div className="h-full flex flex-col bg-card">
+      <div className="border-b px-6 py-4 flex justify-between items-center sticky top-0 z-10 bg-card">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{mode === "create" ? "Create Mock Exam" : `Edit: ${initialData?.title}`}</h1>
         </div>
@@ -800,7 +800,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           
           {steps.map((step) => (
             <div key={step.id} className="flex flex-col items-center gap-2 bg-slate-50 px-2 cursor-pointer" onClick={() => { if (examId || step.id === 1) setCurrentStep(step.id); }}>
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium transition-colors border-2 ${currentStep === step.id ? "bg-blue-600 text-white border-blue-600 shadow-md" : currentStep > step.id ? "bg-blue-100 text-blue-700 border-blue-100" : "bg-white text-slate-400 border-slate-200"}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium transition-colors border-2 ${currentStep === step.id ? "bg-blue-600 text-white border-blue-600 shadow-md" : currentStep > step.id ? "bg-blue-100 text-blue-700 border-blue-100" : "bg-card text-slate-400 border-slate-200"}`}>
                 {currentStep > step.id ? <CheckCircle className="w-4 h-4" /> : step.id}
               </div>
               <span className={`text-xs font-medium ${currentStep === step.id ? "text-blue-700" : "text-slate-500"}`}>{step.name}</span>
@@ -819,7 +819,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         </div>
       </div>
 
-      <div className="border-t px-6 py-4 bg-white flex justify-between items-center sticky bottom-0 z-10">
+      <div className="border-t px-6 py-4 bg-card flex justify-between items-center sticky bottom-0 z-10">
         <Button variant="outline" onClick={() => setCurrentStep(prev => prev - 1)} disabled={currentStep === 1} className="gap-2">
           <ChevronLeft className="w-4 h-4" /> Back
         </Button>

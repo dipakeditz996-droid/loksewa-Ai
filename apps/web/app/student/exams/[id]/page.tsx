@@ -20,12 +20,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useCalmDownGate } from "@/components/calm-down/useCalmDownGate";
 
 export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const examId = Number(params.id);
   const [isStarting, setIsStarting] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
   const { data: exam, isLoading, error } = useQuery({
     queryKey: ['student-exam', examId],
@@ -40,13 +42,21 @@ export default function ExamDetailsPage() {
     },
     onError: (error: any) => {
       setIsStarting(false);
-      toast.error(error.response?.data?.detail || "Failed to start exam. Please try again.");
+      const errorMessage = error.data?.detail || error.message || "Failed to start exam. Please try again.";
+      toast.error(errorMessage);
     }
   });
 
   const handleStartExam = () => {
     setIsStarting(true);
     startExamMutation.mutate();
+  };
+
+  const { requestStart, gate } = useCalmDownGate(handleStartExam);
+
+  const handleConfirmStart = () => {
+    setIsConfirmDialogOpen(false);
+    requestStart();
   };
 
   if (isLoading) {
@@ -146,40 +156,71 @@ export default function ExamDetailsPage() {
             </div>
           </div>
         </CardContent>
-        <CardFooter className="pt-6 border-t border-border/50 bg-muted/10 flex justify-end gap-4">
-          <Button variant="outline" onClick={() => router.push('/student/exams')}>
+        <CardFooter className="pt-6 border-t border-border/50 bg-muted/10 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <Button variant="outline" onClick={() => router.push('/student/exams')} className="w-full sm:w-auto">
             Cancel
           </Button>
-          
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button disabled={isStarting || exam.has_attempted} className="gap-2">
-                {exam.has_attempted ? "Already Attempted" : <><Play className="h-4 w-4" /> Start Exam</>}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Ready to begin?</DialogTitle>
-                <DialogDescription>
-                  You are about to start <strong>{exam.title}</strong>. 
-                  The timer of {exam.time_limit} minutes will start immediately.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md my-2 flex items-start gap-2">
-                <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
-                <p>Ensure you have a stable internet connection. Do not close the browser during the exam.</p>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" disabled={isStarting}>Cancel</Button>
-                <Button onClick={handleStartExam} disabled={isStarting}>
-                  {isStarting ? "Starting..." : "Yes, Start Now"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
 
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+            {exam.active_attempt_id ? (
+              <Button asChild className="w-full sm:w-auto bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0B2545] font-bold gap-2">
+                <Link href={`/student/exams/${examId}/attempt/${exam.active_attempt_id}`}>
+                  <Play className="h-4 w-4 fill-current" /> Resume Exam
+                </Link>
+              </Button>
+            ) : exam.has_attempted ? (
+              <>
+                <Button asChild variant="outline" size="sm" className="text-xs font-semibold">
+                  <Link href="/student/results">View Result</Link>
+                </Button>
+                <Button
+                  disabled
+                  className="w-full sm:w-auto bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-70 pointer-events-none font-bold gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Already Taken
+                </Button>
+              </>
+            ) : !exam.can_start ? (
+              <Button
+                disabled
+                className="w-full sm:w-auto bg-muted text-muted-foreground border border-border cursor-not-allowed opacity-70 font-bold"
+              >
+                {exam.start_blocked_reason || 'Not available'}
+              </Button>
+            ) : (
+              <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button disabled={isStarting} className="w-full sm:w-auto gap-2 bg-[#0B2545] hover:bg-[#133E6D] text-white font-bold">
+                    <Play className="h-4 w-4" /> Start Exam
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Ready to begin?</DialogTitle>
+                    <DialogDescription>
+                      You are about to start <strong>{exam.title}</strong>. 
+                      The timer of {exam.time_limit} minutes will start immediately.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md my-2 flex items-start gap-2">
+                    <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
+                    <p>Ensure you have a stable internet connection. Do not close the browser during the exam.</p>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsConfirmDialogOpen(false)} disabled={isStarting}>Cancel</Button>
+                    <Button onClick={handleConfirmStart} disabled={isStarting} className="bg-[#0B2545] hover:bg-[#133E6D] text-white">
+                      {isStarting ? "Starting..." : "Yes, Start Now"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         </CardFooter>
+
       </Card>
+
+      {gate}
     </div>
   );
 }

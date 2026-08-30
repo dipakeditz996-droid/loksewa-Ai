@@ -241,8 +241,10 @@ export default function AcademicChaptersPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem className="cursor-pointer">
-                            <Eye className="w-4 h-4 mr-2" /> View Topics
+                          <DropdownMenuItem asChild>
+                            <Link href={`/admin-dashboard/academic/chapters/${chapter.id}`} className="cursor-pointer flex items-center">
+                              <Eye className="w-4 h-4 mr-2" /> View Topics
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem className="cursor-pointer">
                             <Edit className="w-4 h-4 mr-2" /> Edit

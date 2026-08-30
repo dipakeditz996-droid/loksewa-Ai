@@ -239,6 +239,15 @@ class SupportTicketViewSet(ListModelMixin, CreateModelMixin, RetrieveModelMixin,
             ticket.status = 'open'
             ticket.save(update_fields=['status', 'updated_at'])
 
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='support',
+            title='New Ticket Reply',
+            message=f"{request.user.get_full_name() or request.user.username} replied to ticket '{ticket.subject}' (#{ticket.ticket_number}).",
+            action_url=f'/admin-dashboard/support/{ticket.id}',
+            priority='important' if ticket.priority in ('high', 'urgent') else 'normal',
+        )
+
         return Response(
             SupportMessageSerializer(msg).data,
             status=status.HTTP_201_CREATED

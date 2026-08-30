@@ -1,264 +1,43 @@
 // @ts-nocheck
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, SlidersHorizontal, ArrowRight, Download, Eye, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen } from "lucide-react";
+import { Search, SlidersHorizontal, ArrowRight, Download, Eye, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-
-// --- MOCK DATA ---
-const examsData = [
-  {
-    id: "section-officer",
-    name: "Section Officer",
-    level: "Officer Level · First Class",
-    papersCount: 3,
-    subjectsCount: 12,
-    description: "The core administrative examination for Gazetted Third Class officers.",
-    papers: [
-      {
-        id: "paper-1",
-        name: "Paper I",
-        title: "Governance Systems",
-        subjects: [
-          {
-            id: "sub-1",
-            name: "Constitution",
-            topicsCount: 18,
-            questionsCount: 320,
-            topicGroups: [
-              {
-                id: "tg-1",
-                name: "1. Constitutional Development",
-                topics: [
-                  "Historical background",
-                  "Constitutional evolution",
-                  "Major constitutional milestones"
-                ]
-              },
-              {
-                id: "tg-2",
-                name: "2. Fundamental Rights",
-                topics: [
-                  "Right to equality",
-                  "Right to freedom",
-                  "Constitutional remedies",
-                  "Duties and responsibilities"
-                ]
-              },
-              {
-                id: "tg-3",
-                name: "3. Constitutional Bodies",
-                topics: [
-                  "Commission structures",
-                  "Roles and responsibilities",
-                  "Constitutional appointments"
-                ]
-              },
-              {
-                id: "tg-4",
-                name: "4. Federal Structure",
-                topics: [
-                  "Federal government",
-                  "Provincial government",
-                  "Local government",
-                  "Inter-government relations"
-                ]
-              }
-            ]
-          },
-          {
-            id: "sub-2",
-            name: "Public Administration",
-            topicsCount: 15,
-            questionsCount: 280,
-            topicGroups: [
-              {
-                id: "tg-5",
-                name: "1. Basics of Administration",
-                topics: [
-                  "Concept of Public Administration",
-                  "New Public Management",
-                  "Administrative Ethics"
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: "paper-2",
-        name: "Paper II",
-        title: "Contemporary Issues",
-        subjects: [
-          {
-            id: "sub-3",
-            name: "General Knowledge",
-            topicsCount: 12,
-            questionsCount: 450,
-            topicGroups: [
-              {
-                id: "tg-6",
-                name: "1. Geography",
-                topics: ["Physical Geography", "Economic Geography", "Human Geography"]
-              }
-            ]
-          },
-          {
-            id: "sub-4",
-            name: "Current Affairs",
-            topicsCount: 10,
-            questionsCount: 350,
-            topicGroups: [
-              {
-                id: "tg-7",
-                name: "1. National Events",
-                topics: ["Political events", "Economic policies", "Social developments"]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: "paper-3",
-        name: "Paper III",
-        title: "Service Related Subject",
-        subjects: [
-          {
-            id: "sub-5",
-            name: "Revenue Administration",
-            topicsCount: 8,
-            questionsCount: 200,
-            topicGroups: [
-              {
-                id: "tg-8",
-                name: "1. Taxation",
-                topics: ["Income Tax", "VAT", "Customs Duty"]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: "nayab-subba",
-    name: "Nayab Subba",
-    level: "Non-Gazetted · First Class",
-    papersCount: 2,
-    subjectsCount: 8,
-    description: "First Class Non-Gazetted position examination for technical and non-technical staff.",
-    papers: [
-      {
-        id: "paper-1",
-        name: "Paper I",
-        title: "General Awareness",
-        subjects: [
-          {
-            id: "sub-6",
-            name: "General Knowledge",
-            topicsCount: 14,
-            questionsCount: 300,
-            topicGroups: [
-              {
-                id: "tg-9",
-                name: "1. History",
-                topics: ["Ancient History", "Medieval History", "Modern History"]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: "paper-2",
-        name: "Paper II",
-        title: "Job Based Knowledge",
-        subjects: [
-          {
-            id: "sub-7",
-            name: "Office Management",
-            topicsCount: 10,
-            questionsCount: 250,
-            topicGroups: [
-              {
-                id: "tg-10",
-                name: "1. Basics of Office Management",
-                topics: ["Filing System", "Record Management", "Office Layout"]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: "kharidar",
-    name: "Kharidar",
-    level: "Non-Gazetted · Second Class",
-    papersCount: 2,
-    subjectsCount: 6,
-    description: "Entry-level administrative position examination.",
-    papers: [
-      {
-        id: "paper-1",
-        name: "Paper I",
-        title: "General Knowledge and Aptitude",
-        subjects: [
-          {
-            id: "sub-8",
-            name: "Basic Knowledge",
-            topicsCount: 8,
-            questionsCount: 150,
-            topicGroups: [
-              {
-                id: "tg-11",
-                name: "1. Basic Science",
-                topics: ["Physics basics", "Chemistry basics", "Biology basics"]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        id: "paper-2",
-        name: "Paper II",
-        title: "Basic Office Knowledge",
-        subjects: [
-          {
-            id: "sub-9",
-            name: "Clerical Knowledge",
-            topicsCount: 6,
-            questionsCount: 120,
-            topicGroups: [
-              {
-                id: "tg-12",
-                name: "1. Typing and Drafting",
-                topics: ["Drafting letters", "Memo writing", "Meeting minutes"]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-];
+import { publicApi, type PublicSyllabusExam } from "@/lib/api/public-api";
 
 export default function SyllabusPage() {
-  const [selectedExamId, setSelectedExamId] = useState(examsData[0]?.id || "");
-  const [selectedPaperId, setSelectedPaperId] = useState(examsData[0]?.papers?.[0]?.id || "");
-  
+  const [examsData, setExamsData] = useState<PublicSyllabusExam[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+  const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    publicApi.getSyllabusTree().then((data) => {
+      if (!mounted) return;
+      const exams = data || [];
+      setExamsData(exams);
+      if (exams.length > 0) {
+        setSelectedExamId(exams[0].id);
+        setSelectedPaperId(exams[0].papers?.[0]?.id ?? null);
+      }
+      setIsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   const selectedExam = examsData.find((exam) => exam.id === selectedExamId) || examsData[0];
   const selectedPaper = selectedExam?.papers?.find((paper) => paper.id === selectedPaperId) || selectedExam?.papers?.[0];
 
-  const handleExamChange = (examId: string) => {
+  const handleExamChange = (examId: number) => {
     setSelectedExamId(examId);
     const newExam = examsData.find(e => e.id === examId);
-    if (newExam && newExam?.papers && newExam?.papers.length > 0) {
-      setSelectedPaperId(newExam?.papers[0].id);
-    }
+    setSelectedPaperId(newExam?.papers?.[0]?.id ?? null);
   };
 
   return (
@@ -313,6 +92,13 @@ export default function SyllabusPage() {
         <div className="container mx-auto px-4 max-w-[1200px]">
           <h2 className="text-2xl font-[800] text-slate-900 dark:text-white mb-8 text-center">Choose Your Examination</h2>
           
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            </div>
+          ) : examsData.length === 0 ? (
+            <p className="text-center text-slate-500 font-[500]">No examinations have been published yet. Check back soon.</p>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {examsData.map((exam) => {
               const isSelected = exam.id === selectedExamId;
@@ -352,10 +138,12 @@ export default function SyllabusPage() {
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
       {/* 3. SYLLABUS EXPLORER & 4. PAPER NAVIGATION */}
+      {!isLoading && selectedExam && (
       <section className="py-16 md:py-24">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
@@ -377,6 +165,10 @@ export default function SyllabusPage() {
             </div>
           </div>
 
+          {(!selectedExam.papers || selectedExam.papers.length === 0) ? (
+            <p className="text-slate-500 font-[500] py-8">No syllabus content has been published yet for this examination.</p>
+          ) : (
+          <>
           {/* Paper Navigation */}
           <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-10 border-b border-slate-200 dark:border-white/10 pb-[1px]">
             {selectedExam?.papers.map((paper) => {
@@ -404,15 +196,15 @@ export default function SyllabusPage() {
           <div className="max-w-[900px]">
             <div className="mb-6">
               <h3 className="text-xl font-[800] text-slate-900 dark:text-white">
-                {selectedPaper.title}
+                {selectedPaper?.title}
               </h3>
             </div>
-            
+
             <Accordion type="multiple" className="space-y-4">
               {selectedPaper?.subjects.map((subject) => (
-                <AccordionItem 
-                  key={subject.id} 
-                  value={subject.id} 
+                <AccordionItem
+                  key={subject.id}
+                  value={String(subject.id)}
                   className="bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/10 rounded-[12px] overflow-hidden data-[state=open]:shadow-md transition-shadow"
                 >
                   <AccordionTrigger className="px-6 py-5 hover:no-underline [&[data-state=open]>div>div>svg]:rotate-180">
@@ -461,8 +253,11 @@ export default function SyllabusPage() {
               ))}
             </Accordion>
           </div>
+          </>
+          )}
         </div>
       </section>
+      )}
 
       {/* 7. SMART SYLLABUS FLOW */}
       <section className="py-20 bg-slate-900 dark:bg-[#060A0F] text-white relative overflow-hidden">

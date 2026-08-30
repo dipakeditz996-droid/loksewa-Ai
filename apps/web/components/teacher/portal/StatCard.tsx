@@ -5,9 +5,9 @@ type Tone = "neutral" | "success" | "pending" | "error";
 
 const ICON_CHIP_TONE: Record<Tone, string> = {
   neutral: "bg-gradient-to-br from-[#0B2545] to-[#163E6C] text-[#D4A72C]",
-  success: "bg-[#E9F6F2] text-[#0F7A69]",
-  pending: "bg-[#FBF2DC] text-[#946B00]",
-  error: "bg-[#FBEAEA] text-[#B23A3A]",
+  success: "bg-[#E9F6F2] text-[#0F7A69] dark:bg-[#0F7A69]/15 dark:text-[#4ADE9C]",
+  pending: "bg-[#FBF2DC] text-[#946B00] dark:bg-[#946B00]/20 dark:text-[#F2C94C]",
+  error: "bg-[#FBEAEA] text-[#B23A3A] dark:bg-[#B23A3A]/20 dark:text-[#F2A399]",
 };
 
 export function StatCard({
@@ -28,8 +28,8 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-[#E7EBF3] bg-white p-5",
-        "shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_1px_rgba(16,24,40,0.02)]",
+        "rounded-2xl border border-border bg-card p-5",
+        "shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_1px_rgba(16,24,40,0.02)] dark:shadow-none",
         className
       )}
     >
@@ -43,13 +43,13 @@ export function StatCard({
           <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
         </div>
         {badge && (
-          <span className="rounded-full bg-[#FBF2DC] px-2.5 py-1 text-[11px] font-bold text-[#946B00]">
+          <span className="rounded-full bg-[#FBF2DC] px-2.5 py-1 text-[11px] font-bold text-[#946B00] dark:bg-[#946B00]/20 dark:text-[#F2C94C]">
             {badge}
           </span>
         )}
       </div>
-      <div className="text-[12.5px] font-semibold text-[#667085]">{label}</div>
-      <div className="font-heading mt-0.5 text-[28px] font-extrabold leading-tight text-[#101828]">
+      <div className="text-[12.5px] font-semibold text-muted-foreground">{label}</div>
+      <div className="font-heading mt-0.5 text-[28px] font-extrabold leading-tight text-card-foreground">
         {value}
       </div>
     </div>

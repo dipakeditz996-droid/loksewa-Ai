@@ -2,42 +2,17 @@
 
 import React from "react";
 import { Star, CheckCircle } from "lucide-react";
-import { PublicTestimonial } from "@/lib/api/public-api";
+import { PublicTestimonial, PublicStats } from "@/lib/api/public-api";
+import { RetryImage } from "@/components/ui/retry-image";
+import { WriteReviewDialog } from "@/components/home/WriteReviewDialog";
 
-// ── Curated static metrics (backend-configurable via /public/stats/ eventually) ──
+// Fallback only for when /public/stats/ can't be reached (outage) — the real
+// endpoint always returns real, floor-guaranteed counts, never these.
 const STATIC_METRICS = [
-  { value: "50K+", label: "Aspirants", description: "Active learners" },
-  { value: "250K+", label: "Questions", description: "Practice questions" },
-  { value: "1,000+", label: "Practice Sets", description: "Topic-wise sets" },
+  { value: "5,000+", label: "Aspirants", description: "Active learners" },
+  { value: "10,000+", label: "Questions", description: "Practice questions" },
+  { value: "200+", label: "Practice Sets", description: "Topic-wise sets" },
   { value: "95%", label: "Content Accuracy", description: "Verified by experts" },
-];
-
-// ── Curated static testimonials (backend-configurable via /public/testimonials/) ──
-const STATIC_TESTIMONIALS: PublicTestimonial[] = [
-  {
-    id: 1,
-    name: "Ramesh Thapa",
-    position: "Section Officer | FPSC",
-    avatar: null,
-    review: "LoksewaAI transformed how I prepare. The AI identifies exactly where I'm weak and gives me targeted practice. Cleared my Section Officer exam on first attempt.",
-    rating: 5,
-  },
-  {
-    id: 2,
-    name: "Sita Sharma",
-    position: "Kharidar | PSC",
-    avatar: null,
-    review: "The personalized study plan kept me on track. Mock exams feel exactly like the real thing. I improved from 62% to 91% accuracy in just 3 months.",
-    rating: 5,
-  },
-  {
-    id: 3,
-    name: "Hari Poudel",
-    position: "Sub-Engineer | LoGo",
-    avatar: null,
-    review: "Best investment for Loksewa preparation. The notes are comprehensive, practice sets are well-structured, and the AI recommendations are spot-on.",
-    rating: 5,
-  },
 ];
 
 const AVATAR_COLORS = [
@@ -48,12 +23,23 @@ const AVATAR_COLORS = [
 
 interface Props {
   testimonials?: PublicTestimonial[] | null;
+  stats?: PublicStats | null;
 }
 
-export function SocialProofSection({ testimonials }: Props) {
-  const displayTestimonials = (testimonials && testimonials.length > 0)
-    ? testimonials
-    : STATIC_TESTIMONIALS;
+export function SocialProofSection({ testimonials, stats }: Props) {
+  // Real, admin-authored testimonials only — no fabricated names/quotes. When
+  // an admin hasn't published any yet, the section simply omits this row
+  // rather than inventing reviewers.
+  const displayTestimonials = testimonials && testimonials.length > 0 ? testimonials : [];
+
+  const metrics = stats
+    ? [
+        { value: `${stats.total_aspirants.toLocaleString()}+`, label: "Aspirants", description: "Active learners" },
+        { value: `${stats.total_questions.toLocaleString()}+`, label: "Questions", description: "Practice questions" },
+        { value: `${stats.practice_sets.toLocaleString()}+`, label: "Practice Sets", description: "Topic-wise sets" },
+        { value: `${stats.content_accuracy}%`, label: "Content Accuracy", description: "Verified by experts" },
+      ]
+    : STATIC_METRICS;
 
   return (
     <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
@@ -77,11 +63,14 @@ export function SocialProofSection({ testimonials }: Props) {
           <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
             Thousands of aspirants trust LoksewaAI to prepare smarter, practice better, and perform with confidence.
           </p>
+          <div className="mt-6">
+            <WriteReviewDialog />
+          </div>
         </div>
 
         {/* Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
-          {STATIC_METRICS.map((m, i) => (
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${displayTestimonials.length > 0 ? "mb-20" : ""}`}>
+          {metrics.map((m, i) => (
             <div
               key={m.label}
               className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[20px] p-6 text-center group hover:border-[#D4A72C]/30 dark:hover:border-[#D4A72C]/20 transition-all card-hover"
@@ -98,7 +87,8 @@ export function SocialProofSection({ testimonials }: Props) {
           ))}
         </div>
 
-        {/* Testimonials */}
+        {/* Testimonials — omitted entirely until an admin publishes at least one */}
+        {displayTestimonials.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {displayTestimonials.slice(0, 3).map((t, i) => (
             <div
@@ -120,7 +110,7 @@ export function SocialProofSection({ testimonials }: Props) {
               {/* Author */}
               <div className="flex items-center gap-3 pt-2 border-t border-slate-100 dark:border-white/[0.04]">
                 {t.avatar ? (
-                  <img src={t.avatar} alt={t.name} className="w-9 h-9 rounded-full object-cover" />
+                  <RetryImage src={t.avatar} alt={t.name} className="w-9 h-9 rounded-full object-cover" />
                 ) : (
                   <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white font-[700] text-[13px]`}>
                     {t.name.charAt(0)}
@@ -134,6 +124,7 @@ export function SocialProofSection({ testimonials }: Props) {
             </div>
           ))}
         </div>
+        )}
 
       </div>
     </section>

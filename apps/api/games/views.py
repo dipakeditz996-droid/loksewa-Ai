@@ -2,11 +2,13 @@ from rest_framework import views, status, generics
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
-from django.db.models import Q
+from django.utils.dateparse import parse_date
+from django.db.models import Q, Avg, Max, F, FloatField, ExpressionWrapper, Exists, OuterRef
 from django.core.paginator import Paginator
 import random
 from datetime import timedelta
 
+from core.models import User
 from .models import (
     GameMatch, GameQuestion, GameAnswer, SurvivalGame, SurvivalAnswer, GameProfile, generate_invite_code
 )
@@ -394,10 +396,12 @@ class LeaderboardView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # 1v1 Wins
-        top_1v1 = GameProfile.objects.order_by('-total_1v1_wins')[:10]
-        # Survival
-        top_survival = GameProfile.objects.order_by('-best_survival_score')[:10]
+        # Restricted to students - a teacher/admin who plays a duel while
+        # testing still gets a GameProfile row, but this is a student
+        # leaderboard and should never surface staff accounts.
+        base = GameProfile.objects.filter(user__role='student').select_related('user')
+        top_1v1 = base.order_by('-total_1v1_wins')[:10]
+        top_survival = base.order_by('-best_survival_score')[:10]
 
         return Response({
             'top_1v1': GameProfileSerializer(top_1v1, many=True).data,
@@ -417,6 +421,9 @@ class AdminGameMatchesView(views.APIView):
         page_size = int(request.query_params.get('page_size', 20))
         search = request.query_params.get('search', '').strip()
         status_filter = request.query_params.get('status', '').strip()
+        player_id = request.query_params.get('player_id', '').strip()
+        date_from = request.query_params.get('date_from', '').strip()
+        date_to = request.query_params.get('date_to', '').strip()
         order_by = request.query_params.get('order_by', '-created_at')
 
         # Build queryset with select_related to avoid N+1 queries
@@ -435,6 +442,23 @@ class AdminGameMatchesView(views.APIView):
         # Apply status filter
         if status_filter and status_filter in dict(GameMatch.STATUS_CHOICES):
             qs = qs.filter(status=status_filter)
+
+        # Apply player filter (either side of the match)
+        if player_id:
+            try:
+                player_id_int = int(player_id)
+                qs = qs.filter(Q(player1_id=player_id_int) | Q(player2_id=player_id_int))
+            except ValueError:
+                pass
+
+        # Apply date range filter (on created_at, the one timestamp every
+        # match has regardless of status - started_at/ended_at can be null)
+        parsed_from = parse_date(date_from) if date_from else None
+        if parsed_from:
+            qs = qs.filter(created_at__date__gte=parsed_from)
+        parsed_to = parse_date(date_to) if date_to else None
+        if parsed_to:
+            qs = qs.filter(created_at__date__lte=parsed_to)
 
         # Ensure valid ordering
         valid_orders = ['created_at', '-created_at', 'started_at', '-started_at', 'player1_score', '-player1_score']
@@ -472,6 +496,9 @@ class AdminSurvivalGamesView(views.APIView):
         page_size = int(request.query_params.get('page_size', 20))
         search = request.query_params.get('search', '').strip()
         status_filter = request.query_params.get('status', '').strip()
+        player_id = request.query_params.get('player_id', '').strip()
+        date_from = request.query_params.get('date_from', '').strip()
+        date_to = request.query_params.get('date_to', '').strip()
         order_by = request.query_params.get('order_by', '-created_at')
 
         # Build queryset with select_related to avoid N+1 queries
@@ -488,6 +515,21 @@ class AdminSurvivalGamesView(views.APIView):
         # Apply status filter
         if status_filter and status_filter in dict(SurvivalGame.STATUS_CHOICES):
             qs = qs.filter(status=status_filter)
+
+        # Apply player filter
+        if player_id:
+            try:
+                qs = qs.filter(player_id=int(player_id))
+            except ValueError:
+                pass
+
+        # Apply date range filter
+        parsed_from = parse_date(date_from) if date_from else None
+        if parsed_from:
+            qs = qs.filter(created_at__date__gte=parsed_from)
+        parsed_to = parse_date(date_to) if date_to else None
+        if parsed_to:
+            qs = qs.filter(created_at__date__lte=parsed_to)
 
         # Ensure valid ordering
         valid_orders = ['created_at', '-created_at', 'score', '-score', 'questions_survived', '-questions_survived']
@@ -514,4 +556,154 @@ class AdminSurvivalGamesView(views.APIView):
             'page_size': page_size,
             'total': total,
             'total_pages': paginator.num_pages
+        })
+
+
+# Window used to decide whether a player counts as "active" on the Game
+# Center dashboard - matches the "monthly" window already used elsewhere
+# in the admin (e.g. administration/leaderboard_views.py).
+ACTIVE_PLAYER_WINDOW_DAYS = 30
+
+
+class AdminGameStatsView(views.APIView):
+    """GET /api/games/admin/stats/
+
+    Real-data overview for the admin Game Center dashboard tab. Every figure
+    is computed directly from GameMatch/SurvivalGame - nothing here is a
+    stand-in or an estimate.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        since = timezone.now() - timedelta(days=ACTIVE_PLAYER_WINDOW_DAYS)
+
+        # Exists() subqueries avoid the row-multiplying join that a plain
+        # OR-across-three-reverse-relations filter would produce.
+        played_p1 = GameMatch.objects.filter(player1=OuterRef('pk'))
+        played_p2 = GameMatch.objects.filter(player2=OuterRef('pk'))
+        played_survival = SurvivalGame.objects.filter(player=OuterRef('pk'))
+
+        total_players = User.objects.annotate(
+            has_p1=Exists(played_p1), has_p2=Exists(played_p2), has_surv=Exists(played_survival),
+        ).filter(Q(has_p1=True) | Q(has_p2=True) | Q(has_surv=True)).count()
+
+        active_players = User.objects.annotate(
+            has_p1=Exists(played_p1.filter(created_at__gte=since)),
+            has_p2=Exists(played_p2.filter(created_at__gte=since)),
+            has_surv=Exists(played_survival.filter(created_at__gte=since)),
+        ).filter(Q(has_p1=True) | Q(has_p2=True) | Q(has_surv=True)).count()
+
+        total_duels = GameMatch.objects.count()
+        total_survival_runs = SurvivalGame.objects.count()
+
+        completed_duels = GameMatch.objects.filter(status='COMPLETED').count()
+        completed_survival = SurvivalGame.objects.filter(status='COMPLETED').count()
+
+        avg_duel_score = GameMatch.objects.filter(status='COMPLETED').aggregate(
+            avg=Avg(ExpressionWrapper(
+                (F('player1_score') + F('player2_score')) / 2.0, output_field=FloatField()
+            ))
+        )['avg']
+        avg_survival_score = SurvivalGame.objects.filter(status='COMPLETED').aggregate(avg=Avg('score'))['avg']
+
+        recent_matches = GameMatch.objects.select_related('player1', 'player2').order_by('-created_at')[:10]
+        recent_survival = SurvivalGame.objects.select_related('player').order_by('-created_at')[:10]
+
+        recent_activity = []
+        for m in recent_matches:
+            opponent = m.player2.username if m.player2 else 'waiting for opponent'
+            recent_activity.append({
+                'type': 'duel',
+                'id': m.id,
+                'description': f"{m.player1.username} vs {opponent}",
+                'status': m.status,
+                'timestamp': m.created_at.isoformat(),
+                'playerId': m.player1_id,
+                'opponentId': m.player2_id,
+            })
+        for s in recent_survival:
+            recent_activity.append({
+                'type': 'survival',
+                'id': s.id,
+                'description': f"{s.player.username} - survival run (score {s.score})",
+                'status': s.status,
+                'timestamp': s.created_at.isoformat(),
+                'playerId': s.player_id,
+                'opponentId': None,
+            })
+        recent_activity.sort(key=lambda item: item['timestamp'], reverse=True)
+
+        return Response({
+            'totalPlayers': total_players,
+            'activePlayers': active_players,
+            'activeWindowDays': ACTIVE_PLAYER_WINDOW_DAYS,
+            'totalGamesPlayed': total_duels + total_survival_runs,
+            'totalDuels': total_duels,
+            'totalSurvivalRuns': total_survival_runs,
+            'completedGames': completed_duels + completed_survival,
+            'completedDuels': completed_duels,
+            'completedSurvivalRuns': completed_survival,
+            'averageDuelScore': round(avg_duel_score, 2) if avg_duel_score is not None else None,
+            'averageSurvivalScore': round(avg_survival_score, 2) if avg_survival_score is not None else None,
+            'recentActivity': recent_activity[:10],
+        })
+
+
+class AdminPlayerGameActivityView(views.APIView):
+    """GET /api/games/admin/players/<player_id>/activity/
+
+    Per-student game activity for admins: which games they played, scores,
+    win/loss record, and accuracy - all read from real GameMatch/SurvivalGame/
+    GameAnswer/SurvivalAnswer rows for that one student.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, player_id):
+        try:
+            player = User.objects.get(pk=player_id, role='student')
+        except User.DoesNotExist:
+            return Response({'error': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        matches_qs = GameMatch.objects.filter(Q(player1=player) | Q(player2=player))
+        completed_matches = matches_qs.filter(status='COMPLETED')
+
+        duels_played = completed_matches.count()
+        duels_won = completed_matches.filter(winner=player).count()
+        duels_drawn = completed_matches.filter(is_draw=True).count()
+        duels_lost = duels_played - duels_won - duels_drawn
+
+        survival_qs = SurvivalGame.objects.filter(player=player)
+        best_survival_score = survival_qs.aggregate(m=Max('score'))['m']
+
+        duel_answers = GameAnswer.objects.filter(player=player)
+        duel_total = duel_answers.count()
+        duel_correct = duel_answers.filter(is_correct=True).count()
+        duel_accuracy = round((duel_correct / duel_total) * 100, 1) if duel_total else None
+
+        survival_answers = SurvivalAnswer.objects.filter(survival_game__player=player)
+        survival_total = survival_answers.count()
+        survival_correct = survival_answers.filter(is_correct=True).count()
+        survival_accuracy = round((survival_correct / survival_total) * 100, 1) if survival_total else None
+
+        recent_matches = matches_qs.select_related('player1', 'player2', 'winner').order_by('-created_at')[:20]
+        recent_survival = survival_qs.order_by('-created_at')[:20]
+
+        return Response({
+            'player': {
+                'id': player.id,
+                'username': player.username,
+                'name': player.get_full_name() or player.username,
+            },
+            'summary': {
+                'duelsPlayed': duels_played,
+                'duelsWon': duels_won,
+                'duelsLost': duels_lost,
+                'duelsDrawn': duels_drawn,
+                'duelAccuracy': duel_accuracy,
+                'survivalRuns': survival_qs.count(),
+                'bestSurvivalScore': best_survival_score,
+                'survivalAccuracy': survival_accuracy,
+            },
+            'recentMatches': AdminGameMatchSerializer(recent_matches, many=True).data,
+            'recentSurvivalRuns': AdminSurvivalGameSerializer(recent_survival, many=True).data,
         })

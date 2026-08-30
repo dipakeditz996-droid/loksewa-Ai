@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { LoksewaExamCountdown } from "@/components/student/countdown/LoksewaExamCountdown";
 
 // Public API Adapter
 import { publicApi } from "@/lib/api/public-api";
@@ -33,32 +34,42 @@ export default async function Home() {
   // Note: These use the publicApi adapter which gracefully catches errors and returns null
   // The components handle the null case by falling back to curated static showcase data.
   const [
-    examCategories,
+    courses,
     notes,
     products,
     packages,
-    testimonials
+    testimonials,
+    stats,
   ] = await Promise.all([
-    publicApi.getExamCategories(),
+    publicApi.getCourses(),
     publicApi.getNotesMaterials(),
     publicApi.getProducts(),
     publicApi.getPackages(),
     publicApi.getTestimonials(),
+    publicApi.getStats(),
   ]);
 
   return (
-    <>
+    // Scoped to this page only: `dark` here activates every `dark:` utility
+    // inside regardless of the site-wide theme toggle, so the homepage
+    // always opens in dark mode without changing the default for other pages.
+    <div className="dark">
       <Navbar />
-      
+
       <main className="flex-1 bg-slate-50 dark:bg-[#020611] bg-aurora min-h-screen">
         <HeroSection />
+        <section className="py-10 bg-white dark:bg-[#020611] relative">
+          <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
+            <LoksewaExamCountdown />
+          </div>
+        </section>
         <FeatureStrip />
-        <SocialProofSection testimonials={testimonials} />
+        <SocialProofSection testimonials={testimonials} stats={stats} />
         <AIPreparationSection />
         <AILearningNetworkSection />
         <StudyPlanSection />
-        <CoursesSection examCategories={examCategories} />
-        <SyllabusSection examCategories={examCategories} />
+        <CoursesSection courses={courses} />
+        <SyllabusSection />
         <PracticeSection />
         <MockExamSection />
         <AnalyticsSection />
@@ -71,6 +82,6 @@ export default async function Home() {
       </main>
 
       <Footer />
-    </>
+    </div>
   );
 }

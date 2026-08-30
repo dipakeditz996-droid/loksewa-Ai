@@ -1,160 +1,83 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { 
+import {
   Search, BookOpen, Zap, Globe, FileText, Bookmark, BookmarkCheck,
   Clock, CheckCircle2, ChevronRight, SlidersHorizontal, Lock, Unlock,
   PlayCircle, BrainCircuit, Sparkles, AlertCircle, MessageSquare,
-  ArrowRight, Target, BarChart2
+  ArrowRight, Target, BarChart2, Loader2
 } from "lucide-react";
 import Link from "next/link";
+import { publicApi, type PublicNote } from "@/lib/api/public-api";
 
-// --- MOCK DATA ---
+// Real material_type values (see notes/models.py) grouped into the four
+// discovery cards shown below the hero.
 const CATEGORIES = [
-  { id: "subject", label: "Subject Notes", icon: BookOpen, desc: "Detailed notes organized by subject" },
-  { id: "revision", label: "Revision Notes", icon: Zap, desc: "Concise materials for quick review" },
-  { id: "current", label: "Current Affairs", icon: Globe, desc: "Important national & global updates" },
-  { id: "resources", label: "Exam Resources", icon: FileText, desc: "Guides and reference materials" }
+  { id: "notes", types: ["notes", "study_guide"], label: "Subject Notes", icon: BookOpen, desc: "Detailed notes organized by subject" },
+  { id: "revision", types: ["presentation"], label: "Revision Notes", icon: Zap, desc: "Concise materials for quick review" },
+  { id: "external", types: ["external_link", "video"], label: "Current Affairs & Media", icon: Globe, desc: "Important updates and video resources" },
+  { id: "resources", types: ["pdf", "document", "reference"], label: "Exam Resources", icon: FileText, desc: "Guides and reference materials" }
 ];
 
-const EXAMS = ["All Exams", "Section Officer", "Nayab Subba", "Kharidar"];
-const SUBJECTS = ["All Subjects", "General Knowledge", "Constitution", "Public Administration", "Current Affairs", "Economics", "Geography", "Other"];
-const TYPES = ["All Types", "Detailed Notes", "Revision Notes", "Short Notes", "Reference Material"];
-const DIFFICULTIES = ["All Levels", "Beginner", "Intermediate", "Advanced"];
+const MATERIAL_TYPE_LABELS: Record<string, string> = {
+  notes: "Notes",
+  pdf: "PDF",
+  video: "Video",
+  document: "Document",
+  presentation: "Presentation",
+  external_link: "External Link",
+  study_guide: "Study Guide",
+  reference: "Reference Material",
+};
+
+const DIFFICULTY_LABELS: Record<string, "Beginner" | "Intermediate" | "Advanced"> = {
+  beginner: "Beginner",
+  intermediate: "Intermediate",
+  advanced: "Advanced",
+};
 
 type Note = {
   id: string;
   title: string;
-  category: string;
+  description: string;
   subject: string;
   type: string;
+  materialType: string;
   exam: string;
-  topics: number;
   readingTime: number; // in minutes
   difficulty: "Beginner" | "Intermediate" | "Advanced";
-  isPremium: boolean;
   updatedAt: string;
-  featured: boolean;
 };
 
-const MOCK_NOTES: Note[] = [
-  {
-    id: "n1",
-    title: "Constitution of Nepal — Complete Notes",
-    category: "subject",
-    subject: "Constitution",
-    type: "Detailed Notes",
-    exam: "Section Officer",
-    topics: 18,
-    readingTime: 45,
-    difficulty: "Intermediate",
-    isPremium: true,
-    updatedAt: "2 days ago",
-    featured: true,
-  },
-  {
-    id: "n2",
-    title: "General Knowledge — Quick Revision Guide",
-    category: "revision",
-    subject: "General Knowledge",
-    type: "Revision Notes",
-    exam: "All Exams",
-    topics: 24,
-    readingTime: 25,
-    difficulty: "Beginner",
-    isPremium: false,
-    updatedAt: "5 days ago",
-    featured: true,
-  },
-  {
-    id: "n3",
-    title: "Public Administration — Core Concepts",
-    category: "subject",
-    subject: "Public Administration",
-    type: "Detailed Notes",
-    exam: "Nayab Subba",
-    topics: 12,
-    readingTime: 35,
-    difficulty: "Intermediate",
-    isPremium: true,
-    updatedAt: "1 week ago",
-    featured: true,
-  },
-  {
-    id: "n4",
-    title: "Current Affairs — August 2026",
-    category: "current",
-    subject: "Current Affairs",
-    type: "Revision Notes",
-    exam: "All Exams",
-    topics: 5,
-    readingTime: 15,
-    difficulty: "Beginner",
-    isPremium: false,
-    updatedAt: "Today",
-    featured: false,
-  },
-  {
-    id: "n5",
-    title: "Federal Structure of Nepal",
-    category: "subject",
-    subject: "Constitution",
-    type: "Detailed Notes",
-    exam: "Section Officer",
-    topics: 8,
-    readingTime: 20,
-    difficulty: "Intermediate",
-    isPremium: false,
-    updatedAt: "2 days ago",
-    featured: false,
-  },
-  {
-    id: "n6",
-    title: "Economic Survey Highlights",
-    category: "resources",
-    subject: "Economics",
-    type: "Reference Material",
-    exam: "All Exams",
-    topics: 10,
-    readingTime: 30,
-    difficulty: "Advanced",
-    isPremium: true,
-    updatedAt: "3 weeks ago",
-    featured: false,
-  },
-  {
-    id: "n7",
-    title: "Geography of Nepal: Quick Facts",
-    category: "revision",
-    subject: "Geography",
-    type: "Short Notes",
-    exam: "Kharidar",
-    topics: 15,
-    readingTime: 12,
-    difficulty: "Beginner",
-    isPremium: false,
-    updatedAt: "1 month ago",
-    featured: false,
-  },
-  {
-    id: "n8",
-    title: "Governance and State Policies",
-    category: "subject",
-    subject: "Public Administration",
-    type: "Detailed Notes",
-    exam: "Section Officer",
-    topics: 14,
-    readingTime: 40,
-    difficulty: "Advanced",
-    isPremium: true,
-    updatedAt: "1 week ago",
-    featured: false,
-  }
-];
+function timeAgo(iso: string | null): string {
+  if (!iso) return "Recently";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diffMs / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day ago";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} week${Math.floor(days / 7) > 1 ? "s" : ""} ago`;
+  return `${Math.floor(days / 30)} month${Math.floor(days / 30) > 1 ? "s" : ""} ago`;
+}
+
+function mapNote(m: PublicNote): Note {
+  return {
+    id: String(m.id),
+    title: m.title,
+    description: m.description,
+    subject: m.subject_name || "General",
+    type: MATERIAL_TYPE_LABELS[m.material_type] || m.material_type,
+    materialType: m.material_type,
+    exam: m.exam_name || "All Exams",
+    readingTime: m.estimated_reading_time,
+    difficulty: DIFFICULTY_LABELS[m.difficulty] || "Beginner",
+    updatedAt: timeAgo(m.created_at),
+  };
+}
 
 export default function NotesPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -163,11 +86,28 @@ export default function NotesPage() {
   const [selectedType, setSelectedType] = useState("All Types");
   const [selectedDifficulty, setSelectedDifficulty] = useState("All Levels");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  
+
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [previewNote, setPreviewNote] = useState<Note | null>(null);
   const [savedNotes, setSavedNotes] = useState<Set<string>>(new Set());
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    publicApi.getNotesMaterials(24).then((data) => {
+      if (!mounted) return;
+      setNotes((data || []).map(mapNote));
+      setIsLoading(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const EXAMS = useMemo(() => ["All Exams", ...Array.from(new Set(notes.map(n => n.exam))).filter(e => e !== "All Exams")], [notes]);
+  const SUBJECTS = useMemo(() => ["All Subjects", ...Array.from(new Set(notes.map(n => n.subject)))], [notes]);
+  const TYPES = useMemo(() => ["All Types", ...Array.from(new Set(notes.map(n => n.type)))], [notes]);
+  const DIFFICULTIES = ["All Levels", "Beginner", "Intermediate", "Advanced"];
 
   const toggleSave = (e: React.MouseEvent, noteId: string) => {
     e.stopPropagation();
@@ -183,19 +123,22 @@ export default function NotesPage() {
     setPreviewNote(note);
   };
 
+  const featuredNotes = useMemo(() => notes.slice(0, 3), [notes]);
+
   const filteredNotes = useMemo(() => {
-    return MOCK_NOTES.filter(note => {
-      const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return notes.filter(note => {
+      const matchesSearch = note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                             note.subject.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesExam = selectedExam === "All Exams" || note.exam === selectedExam || note.exam === "All Exams";
       const matchesSubject = selectedSubject === "All Subjects" || note.subject === selectedSubject;
       const matchesType = selectedType === "All Types" || note.type === selectedType;
       const matchesDiff = selectedDifficulty === "All Levels" || note.difficulty === selectedDifficulty;
-      const matchesCat = !selectedCategory || note.category === selectedCategory;
+      const cat = CATEGORIES.find(c => c.id === selectedCategory);
+      const matchesCat = !cat || cat.types.includes(note.materialType);
 
       return matchesSearch && matchesExam && matchesSubject && matchesType && matchesDiff && matchesCat;
     });
-  }, [searchQuery, selectedExam, selectedSubject, selectedType, selectedDifficulty, selectedCategory]);
+  }, [notes, searchQuery, selectedExam, selectedSubject, selectedType, selectedDifficulty, selectedCategory]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
@@ -333,23 +276,24 @@ export default function NotesPage() {
               <p className="text-slate-500 mt-1 font-[500]">Start with the most useful materials for your preparation.</p>
             </div>
 
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+              </div>
+            ) : featuredNotes.length === 0 ? (
+              <p className="text-slate-500 font-[500]">No study materials published yet. Check back soon.</p>
+            ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {MOCK_NOTES.filter(n => n.featured).map((note) => (
+              {featuredNotes.map((note) => (
                 <div key={note.id} className="group relative bg-white dark:bg-[#0A1118] rounded-[20px] border border-slate-200 dark:border-white/10 overflow-hidden hover:border-[#163E6B]/50 dark:hover:border-[#D4A72C]/50 transition-all hover:shadow-xl hover:-translate-y-1 flex flex-col h-full">
-                  
+
                   {/* Card Header Pattern */}
                   <div className={`h-24 relative overflow-hidden ${
-                    note.type === "Detailed Notes" ? "bg-gradient-to-br from-[#163E6B] to-[#0A1118]" :
-                    note.type === "Revision Notes" ? "bg-gradient-to-br from-[#D4A72C] to-[#8C6D1D]" :
+                    note.materialType === "notes" || note.materialType === "study_guide" ? "bg-gradient-to-br from-[#163E6B] to-[#0A1118]" :
+                    note.materialType === "presentation" ? "bg-gradient-to-br from-[#D4A72C] to-[#8C6D1D]" :
                     "bg-gradient-to-br from-slate-700 to-slate-900"
                   }`}>
                     <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:16px_16px]"></div>
-                    {note.isPremium && (
-                      <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1.5">
-                        <Lock className="w-3 h-3 text-[#D4A72C]" />
-                        <span className="text-[10px] font-bold text-[#D4A72C] uppercase tracking-wider">Premium</span>
-                      </div>
-                    )}
                   </div>
 
                   <div className="p-6 flex-grow flex flex-col">
@@ -361,15 +305,15 @@ export default function NotesPage() {
                         {note.type}
                       </span>
                     </div>
-                    
+
                     <h3 className="text-lg font-[800] text-slate-900 dark:text-white leading-snug mb-4 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
                       {note.title}
                     </h3>
-                    
+
                     <div className="mt-auto grid grid-cols-2 gap-y-3 gap-x-2 text-sm text-slate-500 dark:text-slate-400 font-[500]">
                       <div className="flex items-center gap-2">
                         <BookOpen className="w-4 h-4" />
-                        <span>{note.topics} Topics</span>
+                        <span>{note.exam}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4" />
@@ -381,16 +325,16 @@ export default function NotesPage() {
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="p-4 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/5 flex items-center justify-between">
-                    <button 
+                    <button
                       className="text-slate-400 hover:text-[#D4A72C] transition-colors p-2 rounded-full hover:bg-white dark:hover:bg-[#0A1118]"
                       onClick={(e) => toggleSave(e, note.id)}
                     >
                       {savedNotes.has(note.id) ? <BookmarkCheck className="w-5 h-5 text-[#D4A72C]" /> : <Bookmark className="w-5 h-5" />}
                     </button>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       className="font-[700] text-[#163E6B] dark:text-white hover:bg-[#163E6B]/10 dark:hover:bg-white/10"
                       onClick={() => openPreview(note)}
                     >
@@ -400,6 +344,7 @@ export default function NotesPage() {
                 </div>
               ))}
             </div>
+            )}
           </div>
         </section>
 
@@ -496,11 +441,15 @@ export default function NotesPage() {
                 <div className="flex items-center justify-between mb-8">
                   <h2 className="text-2xl font-[800] text-slate-900 dark:text-white tracking-tight">Study Material Library</h2>
                   <div className="text-sm font-[600] text-slate-500">
-                    Showing {filteredNotes.length} notes
+                    {isLoading ? "Loading…" : `Showing ${filteredNotes.length} notes`}
                   </div>
                 </div>
 
-                {filteredNotes.length > 0 ? (
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+                  </div>
+                ) : filteredNotes.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {filteredNotes.map((note) => (
                       <div key={note.id} className="group flex flex-col bg-slate-50 dark:bg-[#0A1118] rounded-[16px] border border-slate-200 dark:border-white/10 hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all hover:shadow-lg cursor-pointer" onClick={() => openPreview(note)}>
@@ -509,7 +458,6 @@ export default function NotesPage() {
                             <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-[#163E6B]/10 dark:bg-white/5 text-[#163E6B] dark:text-slate-300">
                               {note.subject}
                             </span>
-                            {note.isPremium && <Lock className="w-3.5 h-3.5 text-[#D4A72C]" />}
                           </div>
                           <h3 className="text-lg font-[700] text-slate-900 dark:text-white leading-snug mb-2 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
                             {note.title}
@@ -518,7 +466,7 @@ export default function NotesPage() {
                             {note.type}
                           </p>
                           <div className="flex flex-wrap items-center gap-4 text-xs font-[600] text-slate-500 dark:text-slate-500">
-                            <div className="flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" />{note.topics} Topics</div>
+                            <div className="flex items-center gap-1.5"><BookOpen className="w-3.5 h-3.5" />{note.exam}</div>
                             <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />{note.readingTime}m read</div>
                           </div>
                         </div>
@@ -708,7 +656,7 @@ export default function NotesPage() {
                 </div>
                 
                 <div className="space-y-4">
-                  {MOCK_NOTES.filter(n => n.category === "revision" || n.readingTime < 20).slice(0, 4).map(note => (
+                  {notes.filter(n => n.readingTime < 20).slice(0, 4).map(note => (
                     <div key={`qr-${note.id}`} className="group flex items-center justify-between p-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[16px] hover:border-[#163E6B]/30 dark:hover:border-white/30 transition-colors cursor-pointer" onClick={() => openPreview(note)}>
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-[10px] bg-slate-100 dark:bg-white/10 flex items-center justify-center shrink-0 group-hover:bg-[#163E6B] dark:group-hover:bg-[#D4A72C] transition-colors">
@@ -738,7 +686,7 @@ export default function NotesPage() {
                 </div>
                 
                 <div className="space-y-4">
-                  {MOCK_NOTES.slice(0, 4).map(note => (
+                  {notes.slice(0, 4).map(note => (
                     <div key={`ru-${note.id}`} className="group flex flex-col p-4 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[16px] hover:border-slate-300 dark:hover:border-white/30 transition-colors cursor-pointer" onClick={() => openPreview(note)}>
                       <div className="flex justify-between items-start mb-2">
                         <h4 className="text-sm font-[700] text-slate-900 dark:text-white line-clamp-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">{note.title}</h4>
@@ -839,26 +787,20 @@ export default function NotesPage() {
           {previewNote && (
             <>
               <div className={`h-24 w-full relative ${
-                previewNote.type === "Detailed Notes" ? "bg-gradient-to-br from-[#163E6B] to-[#0A1118]" :
-                previewNote.type === "Revision Notes" ? "bg-gradient-to-br from-[#D4A72C] to-[#8C6D1D]" :
+                previewNote.materialType === "notes" || previewNote.materialType === "study_guide" ? "bg-gradient-to-br from-[#163E6B] to-[#0A1118]" :
+                previewNote.materialType === "presentation" ? "bg-gradient-to-br from-[#D4A72C] to-[#8C6D1D]" :
                 "bg-gradient-to-br from-slate-700 to-slate-900"
               }`}>
                 <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:16px_16px]"></div>
-                {previewNote.isPremium && (
-                  <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 flex items-center gap-1.5">
-                    <Lock className="w-3 h-3 text-[#D4A72C]" />
-                    <span className="text-[10px] font-bold text-[#D4A72C] uppercase tracking-wider">Premium</span>
-                  </div>
-                )}
               </div>
-              
+
               <div className="px-6 py-6 sm:px-8">
                 <DialogHeader className="mb-6 text-left">
                   <DialogTitle className="text-2xl font-[800] text-slate-900 dark:text-white leading-tight mb-2">
                     {previewNote.title}
                   </DialogTitle>
                   <DialogDescription className="text-slate-500 font-[500] text-[15px]">
-                    Access structured materials and prepare effectively for your upcoming {previewNote.exam} examinations.
+                    {previewNote.description || `Access structured materials and prepare effectively for your ${previewNote.exam} examinations.`}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -872,8 +814,8 @@ export default function NotesPage() {
                     <div className="text-sm font-[700] text-slate-900 dark:text-white">{previewNote.type}</div>
                   </div>
                   <div className="bg-slate-50 dark:bg-white/5 rounded-[12px] p-3 border border-slate-100 dark:border-white/5">
-                    <div className="text-xs text-slate-500 font-[500] mb-1">Topics</div>
-                    <div className="text-sm font-[700] text-slate-900 dark:text-white">{previewNote.topics}</div>
+                    <div className="text-xs text-slate-500 font-[500] mb-1">Difficulty</div>
+                    <div className="text-sm font-[700] text-slate-900 dark:text-white">{previewNote.difficulty}</div>
                   </div>
                   <div className="bg-slate-50 dark:bg-white/5 rounded-[12px] p-3 border border-slate-100 dark:border-white/5">
                     <div className="text-xs text-slate-500 font-[500] mb-1">Reading Time</div>
@@ -882,42 +824,19 @@ export default function NotesPage() {
                 </div>
 
                 <div className="mb-8">
-                  <h4 className="text-sm font-[800] text-slate-900 dark:text-white mb-3">What You'll Learn</h4>
-                  <ul className="space-y-2">
-                    {["Constitutional development", "Fundamental rights", "Constitutional bodies", "Federal structure"].map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300 font-[500]">
-                        <CheckCircle2 className="w-4 h-4 text-[#D4A72C] mt-0.5 shrink-0" />
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-4 text-xs font-[500] text-slate-400">
-                    Last Updated: {previewNote.updatedAt}
+                  <div className="text-xs font-[500] text-slate-400">
+                    Published: {previewNote.updatedAt}
                   </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Button 
-                    className={`flex-1 h-12 rounded-[10px] font-[700] text-[15px] ${
-                      previewNote.isPremium 
-                        ? "bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118]"
-                        : "bg-[#163E6B] hover:bg-[#163E6B]/90 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-[#0A1118]"
-                    }`}
-                    onClick={() => {
-                      if (previewNote.isPremium) {
-                        setPreviewNote(null);
-                        setShowAuthPrompt(true);
-                      }
-                    }}
-                  >
-                    {previewNote.isPremium ? (
-                      <><Lock className="w-4 h-4 mr-2" /> Unlock This Study Material</>
-                    ) : (
-                      <><BookOpen className="w-4 h-4 mr-2" /> Read Notes</>
-                    )}
-                  </Button>
-                  <Button 
-                    variant="outline" 
+                  <Link href="/login" className="flex-1">
+                    <Button className="w-full h-12 rounded-[10px] font-[700] text-[15px] bg-[#163E6B] hover:bg-[#163E6B]/90 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-[#0A1118]">
+                      <BookOpen className="w-4 h-4 mr-2" /> Read Notes
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
                     className="h-12 px-6 rounded-[10px] border-slate-200 dark:border-white/10 bg-transparent hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-white font-[600]"
                     onClick={(e) => toggleSave(e, previewNote.id)}
                   >

@@ -1,10 +1,11 @@
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
-from .models import Examination, ExaminationAttempt, StudentAnswer, Question
+from .models import Examination, ExaminationAttempt, StudentAnswer, Question, CalmSessionLog
 from .attempt_timing import (
     attempt_remaining_seconds,
     attempt_is_expired,
@@ -678,3 +679,19 @@ class LeaderboardViewSet(viewsets.ViewSet):
             'averageScore': round(avg_pct, 1),
             'highestScore': round(highest_pct, 1)
         })
+class CalmSessionLogView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        event_type = request.data.get('event_type')
+        meta_data = request.data.get('meta_data', {})
+        
+        if not event_type:
+            return Response({'detail': 'event_type is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        CalmSessionLog.objects.create(
+            student=request.user,
+            event_type=event_type,
+            meta_data=meta_data
+        )
+        return Response({'status': 'logged'})

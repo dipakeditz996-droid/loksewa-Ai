@@ -91,6 +91,8 @@ class Notification(models.Model):
         ('course', 'Course'),
         ('study_plan', 'Study Plan'),
         ('gamification', 'Gamification'),
+        ('order', 'Order Update'),
+        ('marketplace', 'Marketplace Activity'),
         ('other', 'Other'),
     )
     PRIORITY_CHOICES = (

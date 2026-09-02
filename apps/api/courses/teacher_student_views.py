@@ -167,16 +167,48 @@ class TeacherStudentViewSet(viewsets.GenericViewSet):
             course_id__in=assigned_courses
         ).select_related('course')
         
+        # Bulk fetch student's completed topic IDs to optimize progress calculation
+        completed_topic_ids = set(
+            UserTopicProgress.objects.filter(user=student, status='completed').values_list('topic_id', flat=True)
+        )
+        
         course_data = []
         for en in enrollments:
-            # Mock progress for now, would typically come from course module completion
+            # Calculate actual progress
+            total_topics = 0
+            completed_in_course = 0
+            if en.course.exam:
+                from exams.models import Topic
+                # Try getting topics for the exam through papers/subjects/chapters
+                try:
+                    topic_ids = set(Topic.objects.filter(
+                        chapter__subject__paper__exam=en.course.exam
+                    ).values_list('id', flat=True))
+                    
+                    if not topic_ids:
+                        # Fallback for flat hierarchy without papers
+                        topic_ids = set(Topic.objects.filter(
+                            chapter__subject__exam=en.course.exam
+                        ).values_list('id', flat=True))
+                    
+                    total_topics = len(topic_ids)
+                    completed_in_course = len(topic_ids.intersection(completed_topic_ids))
+                except Exception:
+                    pass
+
+            progress_percentage = 0
+            if total_topics > 0:
+                progress_percentage = min(100, int((completed_in_course / total_topics) * 100))
+            elif en.status == 'completed':
+                progress_percentage = 100
+                
             course_data.append({
                 'id': en.course.id,
                 'name': en.course.title,
                 'status': en.status,
                 'enrolled_at': en.enrolled_at,
-                'progress': 100 if en.status == 'completed' else 45, # Mock 45%
-                'thumbnail': en.course.thumbnail
+                'progress': progress_percentage,
+                'thumbnail': en.course.thumbnail.url if en.course.thumbnail else None
             })
             
         return Response(course_data)

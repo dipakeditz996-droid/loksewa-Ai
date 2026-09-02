@@ -163,6 +163,15 @@ body {
   font-family: var(--font-sans);
 }
 
+/* Ensure form elements have visible text by default */
+select, option, input, textarea {
+  color: hsl(var(--foreground));
+}
+
+option {
+  background-color: hsl(var(--background));
+}
+
 /* ===== SCROLLBAR ===== */
 
 ::-webkit-scrollbar {

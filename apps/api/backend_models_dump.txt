@@ -3,8 +3,15 @@
 Model: User
   - logentry: ForeignKey
   - outstandingtoken: ForeignKey
+  - backup_codes: ForeignKey
   - teacher_profile: OneToOneField
   - notifications: ForeignKey
+  - performance_feedback: ForeignKey
+  - feedback_given: ForeignKey
+  - testimonials_created: ForeignKey
+  - admin_notifications_created: ForeignKey
+  - admin_settings_updates: ForeignKey
+  - social_accounts: ForeignKey
   - topic_progress: ForeignKey
   - reviewed_questions: ForeignKey
   - authored_questions: ForeignKey
@@ -12,24 +19,32 @@ Model: User
   - created_question_sets: ForeignKey
   - reviewed_practice_sets: ForeignKey
   - practice_sessions: ForeignKey
+  - question_mastery: ForeignKey
   - bookmarks: ForeignKey
-  - model_exam_attempts: ForeignKey
   - subjective_attempts: ForeignKey
   - evaluations_given: ForeignKey
   - annotation: ForeignKey
   - created_examinations: ForeignKey
   - reviewed_mock_exams: ForeignKey
   - examination_attempts: ForeignKey
+  - calm_session_logs: ForeignKey
   - gamification_profile: OneToOneField
   - referrals_made: ForeignKey
   - referred_by: OneToOneField
   - xp_transactions: ForeignKey
+  - achievements: ForeignKey
+  - created_material_collections: ForeignKey
   - authored_materials: ForeignKey
   - material_progress: ForeignKey
   - material_bookmarks: ForeignKey
+  - marketplace_listings: ForeignKey
   - payment_submissions: ForeignKey
   - verified_payments: ForeignKey
   - purchases: ForeignKey
+  - delivery_addresses: ForeignKey
+  - cart: OneToOneField
+  - marketplace_orders: ForeignKey
+  - orderstatushistory: ForeignKey
   - game_profile: OneToOneField
   - matches_as_p1: ForeignKey
   - matches_as_p2: ForeignKey
@@ -39,7 +54,9 @@ Model: User
   - study_plan: OneToOneField
   - audit_logs: ForeignKey
   - csvimport: ForeignKey
+  - export_jobs: ForeignKey
   - tutor_conversations: ForeignKey
+  - prompttemplate: ForeignKey
   - tutor_usage: ForeignKey
   - student_profile: OneToOneField
   - notification_preferences: OneToOneField
@@ -49,7 +66,6 @@ Model: User
   - subscriptions: ForeignKey
   - subscription_payments: ForeignKey
   - verified_subscription_payments: ForeignKey
-  - student_notifications: ForeignKey
   - invoices: ForeignKey
   - enrollments: ForeignKey
   - course_applications: ForeignKey
@@ -72,8 +88,18 @@ Model: User
   - date_joined: DateTimeField
   - role: CharField
   - avatar: CharField
+  - failed_login_attempts: PositiveIntegerField
+  - locked_until: DateTimeField
+  - totp_secret: CharField
+  - is_2fa_enabled: BooleanField
   - groups: ManyToManyField
   - user_permissions: ManyToManyField
+Model: TwoFactorBackupCode
+  - id: BigAutoField
+  - user: ForeignKey
+  - code_hash: CharField
+  - used_at: DateTimeField
+  - created_at: DateTimeField
 Model: TeacherProfile
   - id: BigAutoField
   - user: OneToOneField
@@ -89,6 +115,8 @@ Model: TeacherProfile
 Model: Notification
   - id: BigAutoField
   - recipient: ForeignKey
+  - source_admin_notification: ForeignKey
+  - related_id: CharField
   - type: CharField
   - title: CharField
   - message: TextField
@@ -97,6 +125,97 @@ Model: Notification
   - priority: CharField
   - created_at: DateTimeField
   - read_at: DateTimeField
+Model: StudentFeedback
+  - id: BigAutoField
+  - student: ForeignKey
+  - given_by: ForeignKey
+  - message: TextField
+  - youtube_url: CharField
+  - created_at: DateTimeField
+Model: Testimonial
+  - id: BigAutoField
+  - name: CharField
+  - role_title: CharField
+  - quote: TextField
+  - avatar_url: CharField
+  - rating: PositiveSmallIntegerField
+  - is_published: BooleanField
+  - display_order: IntegerField
+  - created_by: ForeignKey
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: AdminNotification
+  - deliveries: ForeignKey
+  - id: BigAutoField
+  - title: CharField
+  - content: TextField
+  - type: CharField
+  - status: CharField
+  - target_role: CharField
+  - scheduled_for: DateTimeField
+  - recipient_count: IntegerField
+  - sent_at: DateTimeField
+  - created_by: ForeignKey
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: AdminSettings
+  - id: BigAutoField
+  - platform_name: CharField
+  - platform_logo_url: CharField
+  - platform_description: TextField
+  - timezone: CharField
+  - language: CharField
+  - email_smtp_host: CharField
+  - email_smtp_port: IntegerField
+  - email_smtp_user: CharField
+  - email_from_address: CharField
+  - email_from_name: CharField
+  - notifications_enabled: BooleanField
+  - enable_email_notifications: BooleanField
+  - enable_in_app_notifications: BooleanField
+  - enable_push_notifications: BooleanField
+  - password_min_length: IntegerField
+  - password_require_uppercase: BooleanField
+  - password_require_numbers: BooleanField
+  - password_require_special_chars: BooleanField
+  - session_timeout_minutes: IntegerField
+  - enable_two_factor_auth: BooleanField
+  - max_login_attempts: IntegerField
+  - enable_ai_tutor: BooleanField
+  - enable_marketplace: BooleanField
+  - enable_gamification: BooleanField
+  - enable_study_plans: BooleanField
+  - ai_tutor_daily_message_limit: PositiveIntegerField
+  - ai_tutor_base_prompt: TextField
+  - audit_log_retention_days: PositiveIntegerField
+  - updated_by: ForeignKey
+  - updated_at: DateTimeField
+Model: SocialAccount
+  - id: BigAutoField
+  - user: ForeignKey
+  - provider: CharField
+  - provider_account_id: CharField
+  - email: CharField
+  - created_at: DateTimeField
+Model: Position
+  - id: BigAutoField
+  - name: CharField
+  - code: CharField
+  - description: TextField
+  - category: CharField
+  - order: PositiveIntegerField
+  - is_active: BooleanField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: Tag
+  - id: BigAutoField
+  - name: CharField
+  - slug: SlugField
+  - description: TextField
+  - color: CharField
+  - is_active: BooleanField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
 
 --- App: exams ---
 Model: ExamCategory
@@ -104,6 +223,7 @@ Model: ExamCategory
   - question_sets: ForeignKey
   - examinations: ForeignKey
   - examinationeligibility: ForeignKey
+  - schedules: ForeignKey
   - targeted_students: ForeignKey
   - id: BigAutoField
   - name: CharField
@@ -114,14 +234,13 @@ Model: ExamCategory
   - updated_at: DateTimeField
 Model: Exam
   - papers: ForeignKey
-  - legacy_subjects: ForeignKey
   - question_sets: ForeignKey
   - practicesession: ForeignKey
-  - model_exams: ForeignKey
   - subjective_practice_sets: ForeignKey
   - subjective_model_exams: ForeignKey
   - examinations: ForeignKey
   - examinationeligibility: ForeignKey
+  - schedules: ForeignKey
   - materials: ForeignKey
   - marketplace_products: ForeignKey
   - study_plan_templates: ForeignKey
@@ -155,9 +274,9 @@ Model: Subject
   - examinations: ForeignKey
   - materials: ForeignKey
   - study_tasks: ForeignKey
+  - template_tasks: ForeignKey
   - id: BigAutoField
   - paper: ForeignKey
-  - exam: ForeignKey
   - name: CharField
   - code: CharField
   - description: TextField
@@ -184,6 +303,8 @@ Model: Topic
   - subjective_practice_sets: ForeignKey
   - materials: ForeignKey
   - study_tasks: ForeignKey
+  - template_tasks: ForeignKey
+  - csv_imports: ForeignKey
   - id: BigAutoField
   - chapter: ForeignKey
   - name: CharField
@@ -206,9 +327,8 @@ Model: Question
   - question_sets: ManyToManyField
   - questionsetquestion: ForeignKey
   - questionattempt: ForeignKey
+  - mastery_records: ForeignKey
   - bookmarks: ForeignKey
-  - model_exams: ManyToManyField
-  - modelexamattemptanswer: ForeignKey
   - practice_sets: ManyToManyField
   - subjective_model_exams: ManyToManyField
   - answers: ForeignKey
@@ -336,47 +456,26 @@ Model: QuestionAttempt
   - is_correct: BooleanField
   - is_marked_for_review: BooleanField
   - time_taken_seconds: IntegerField
+  - is_viewed: BooleanField
+  - viewed_at: DateTimeField
+Model: QuestionMastery
+  - id: BigAutoField
+  - user: ForeignKey
+  - question: ForeignKey
+  - times_answered: IntegerField
+  - times_correct: IntegerField
+  - times_incorrect: IntegerField
+  - consecutive_correct: IntegerField
+  - consecutive_incorrect: IntegerField
+  - last_attempted_at: DateTimeField
+  - interval_days: IntegerField
+  - next_review_at: DateTimeField
+  - updated_at: DateTimeField
 Model: Bookmark
   - id: BigAutoField
   - user: ForeignKey
   - question: ForeignKey
   - created_at: DateTimeField
-Model: ModelExam
-  - attempts: ForeignKey
-  - id: BigAutoField
-  - title: CharField
-  - description: TextField
-  - exam: ForeignKey
-  - duration_minutes: IntegerField
-  - total_questions: IntegerField
-  - total_marks: FloatField
-  - passing_marks: FloatField
-  - negative_marking: FloatField
-  - status: CharField
-  - created_at: DateTimeField
-  - updated_at: DateTimeField
-  - questions: ManyToManyField
-Model: ModelExamAttempt
-  - answers: ForeignKey
-  - id: BigAutoField
-  - student: ForeignKey
-  - model_exam: ForeignKey
-  - started_at: DateTimeField
-  - submitted_at: DateTimeField
-  - status: CharField
-  - score: FloatField
-  - accuracy: FloatField
-  - correct_count: IntegerField
-  - incorrect_count: IntegerField
-  - unanswered_count: IntegerField
-  - time_taken_seconds: IntegerField
-Model: ModelExamAttemptAnswer
-  - id: BigAutoField
-  - attempt: ForeignKey
-  - question: ForeignKey
-  - selected_option: CharField
-  - is_correct: BooleanField
-  - is_marked_for_review: BooleanField
 Model: SubjectivePracticeSet
   - attempts: ForeignKey
   - id: BigAutoField
@@ -451,11 +550,13 @@ Model: Examination
   - eligibility_rules: ForeignKey
   - attempts: ForeignKey
   - id: BigAutoField
+  - objective_category: CharField
   - title: CharField
   - description: TextField
   - exam_type: CharField
   - category: ForeignKey
   - exam: ForeignKey
+  - course: ForeignKey
   - subject: ForeignKey
   - question_set: ForeignKey
   - instructions: TextField
@@ -517,6 +618,29 @@ Model: StudentAnswer
   - answer_text: TextField
   - is_correct: BooleanField
   - marks_awarded: FloatField
+Model: ExamSchedule
+  - id: BigAutoField
+  - title: CharField
+  - exam_category: ForeignKey
+  - exam: ForeignKey
+  - description: TextField
+  - exam_date: DateField
+  - exam_time: TimeField
+  - exam_datetime: DateTimeField
+  - timezone: CharField
+  - application_deadline: DateField
+  - result_expected_date: DateField
+  - official_notice_url: CharField
+  - is_published: BooleanField
+  - is_active: BooleanField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: CalmSessionLog
+  - id: BigAutoField
+  - student: ForeignKey
+  - event_type: CharField
+  - meta_data: JSONField
+  - created_at: DateTimeField
 
 --- App: analytics ---
 
@@ -569,18 +693,57 @@ Model: Motivation
   - priority: IntegerField
   - created_at: DateTimeField
   - updated_at: DateTimeField
+Model: Achievement
+  - earned_by: ForeignKey
+  - id: BigAutoField
+  - title: CharField
+  - description: TextField
+  - icon: CharField
+  - xp_reward: IntegerField
+  - coins_reward: IntegerField
+  - criteria: CharField
+  - created_at: DateTimeField
+Model: StudentAchievement
+  - id: BigAutoField
+  - user: ForeignKey
+  - achievement: ForeignKey
+  - earned_at: DateTimeField
 
 --- App: notes ---
+Model: MaterialCategory
+  - materials: ForeignKey
+  - id: BigAutoField
+  - name: CharField
+  - slug: SlugField
+  - description: TextField
+  - color: CharField
+  - is_active: BooleanField
+  - order: IntegerField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: MaterialCollection
+  - id: BigAutoField
+  - name: CharField
+  - description: TextField
+  - color: CharField
+  - is_active: BooleanField
+  - created_by: ForeignKey
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+  - materials: ManyToManyField
 Model: StudyMaterial
+  - collections: ManyToManyField
   - progress: ForeignKey
   - bookmarks: ForeignKey
   - id: BigAutoField
   - title: CharField
   - slug: SlugField
   - teacher: ForeignKey
+  - course: ForeignKey
   - exam: ForeignKey
   - subject: ForeignKey
   - topic: ForeignKey
+  - category: ForeignKey
   - description: TextField
   - content: TextField
   - material_type: CharField
@@ -591,6 +754,7 @@ Model: StudyMaterial
   - status: CharField
   - review_note: TextField
   - estimated_reading_time: IntegerField
+  - available_to_ai_tutor: BooleanField
   - created_at: DateTimeField
   - updated_at: DateTimeField
 Model: StudentMaterialProgress
@@ -610,11 +774,25 @@ Model: StudentMaterialBookmark
 Model: Product
   - payment_submissions: ForeignKey
   - purchases: ForeignKey
+  - images: ForeignKey
+  - cartitem: ForeignKey
+  - orderitem: ForeignKey
   - id: BigAutoField
   - title: CharField
   - description: TextField
   - features: JSONField
   - category: CharField
+  - seller: ForeignKey
+  - condition: CharField
+  - stock: IntegerField
+  - listing_status: CharField
+  - negotiable: BooleanField
+  - location: CharField
+  - author: CharField
+  - publisher: CharField
+  - isbn: CharField
+  - edition: CharField
+  - brand: CharField
   - target_exam: ForeignKey
   - target_position: CharField
   - course: ForeignKey
@@ -642,9 +820,11 @@ Model: PaymentMethod
   - updated_at: DateTimeField
 Model: PaymentSubmission
   - purchase: OneToOneField
+  - course_applications: ForeignKey
   - id: BigAutoField
   - student: ForeignKey
   - product: ForeignKey
+  - order: ForeignKey
   - payment_method: ForeignKey
   - transaction_id: CharField
   - expected_amount: DecimalField
@@ -665,6 +845,80 @@ Model: Purchase
   - status: CharField
   - created_at: DateTimeField
   - approved_at: DateTimeField
+Model: ProductImage
+  - id: BigAutoField
+  - product: ForeignKey
+  - image: FileField
+  - is_primary: BooleanField
+  - created_at: DateTimeField
+Model: DeliveryAddress
+  - orders: ForeignKey
+  - id: BigAutoField
+  - student: ForeignKey
+  - full_name: CharField
+  - phone_number: CharField
+  - province: CharField
+  - district: CharField
+  - municipality: CharField
+  - ward_number: CharField
+  - tole_area: CharField
+  - street_landmark: CharField
+  - delivery_note: TextField
+  - is_default: BooleanField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: Cart
+  - items: ForeignKey
+  - id: BigAutoField
+  - student: OneToOneField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: CartItem
+  - id: BigAutoField
+  - cart: ForeignKey
+  - product: ForeignKey
+  - quantity: PositiveIntegerField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: Order
+  - payment_submissions: ForeignKey
+  - items: ForeignKey
+  - status_history: ForeignKey
+  - id: BigAutoField
+  - student: ForeignKey
+  - status: CharField
+  - total_amount: DecimalField
+  - delivery_fee: DecimalField
+  - shipping_address: TextField
+  - contact_number: CharField
+  - delivery_address_ref: ForeignKey
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: OrderItem
+  - id: BigAutoField
+  - order: ForeignKey
+  - product: ForeignKey
+  - quantity: PositiveIntegerField
+  - price: DecimalField
+Model: DeliveryFeeRule
+  - id: BigAutoField
+  - name: CharField
+  - province: CharField
+  - district: CharField
+  - municipality: CharField
+  - fee: DecimalField
+  - is_active: BooleanField
+  - priority: IntegerField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: OrderStatusHistory
+  - id: BigAutoField
+  - order: ForeignKey
+  - previous_status: CharField
+  - new_status: CharField
+  - changed_by: ForeignKey
+  - note: TextField
+  - created_at: DateTimeField
 
 --- App: games ---
 Model: GameProfile
@@ -736,6 +990,7 @@ Model: StudyPlanTemplate
   - name: CharField
   - description: TextField
   - duration_days: IntegerField
+  - course: ForeignKey
   - exam: ForeignKey
   - is_active: BooleanField
   - created_at: DateTimeField
@@ -771,6 +1026,8 @@ Model: StudyPlanTemplateTask
   - day_number: IntegerField
   - title: CharField
   - task_type: CharField
+  - subject: ForeignKey
+  - topic: ForeignKey
   - duration_minutes: IntegerField
 
 --- App: administration ---
@@ -787,12 +1044,26 @@ Model: CSVImport
   - admin: ForeignKey
   - file_name: CharField
   - status: CharField
+  - topic: ForeignKey
+  - question_type: CharField
+  - difficulty: CharField
   - total_rows: IntegerField
   - valid_rows: IntegerField
   - duplicate_rows: IntegerField
   - error_rows: IntegerField
   - report_data: JSONField
   - created_at: DateTimeField
+Model: ExportJob
+  - id: BigAutoField
+  - export_type: CharField
+  - status: CharField
+  - filters: JSONField
+  - file: FileField
+  - row_count: IntegerField
+  - error_message: TextField
+  - requested_by: ForeignKey
+  - created_at: DateTimeField
+  - completed_at: DateTimeField
 
 --- App: ai_tutor ---
 Model: Conversation
@@ -809,6 +1080,12 @@ Model: Message
   - role: CharField
   - content: TextField
   - created_at: DateTimeField
+Model: PromptTemplate
+  - id: BigAutoField
+  - mode: CharField
+  - prompt_text: TextField
+  - updated_at: DateTimeField
+  - updated_by: ForeignKey
 Model: TutorUsage
   - id: BigAutoField
   - student: ForeignKey
@@ -833,6 +1110,7 @@ Model: StudentProfile
   - allow_comparisons: BooleanField
   - allow_activity_visibility: BooleanField
   - language: CharField
+  - focus_mode_enabled: BooleanField
   - created_at: DateTimeField
   - updated_at: DateTimeField
 Model: NotificationPreference
@@ -953,15 +1231,6 @@ Model: SubscriptionPayment
   - submitted_at: DateTimeField
   - verified_at: DateTimeField
   - verified_by: ForeignKey
-Model: Notification
-  - id: BigAutoField
-  - student: ForeignKey
-  - type: CharField
-  - title: CharField
-  - message: TextField
-  - is_read: BooleanField
-  - related_id: CharField
-  - created_at: DateTimeField
 Model: Invoice
   - id: BigAutoField
   - student: ForeignKey
@@ -972,7 +1241,10 @@ Model: Invoice
 
 --- App: courses ---
 Model: Course
+  - examinations: ForeignKey
+  - study_materials: ForeignKey
   - marketplace_products: ForeignKey
+  - study_plan_templates: ForeignKey
   - subscription_plans: ForeignKey
   - enrollments: ForeignKey
   - applications: ForeignKey
@@ -1002,6 +1274,7 @@ Model: CourseApplication
   - student: ForeignKey
   - course: ForeignKey
   - subscription_payment: ForeignKey
+  - marketplace_payment: ForeignKey
   - status: CharField
   - note: TextField
   - applied_at: DateTimeField

@@ -116,7 +116,7 @@ export default function CreateStudyPlanPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (problems.length > 0) {
-      toast.error(problems[0]);
+      toast.error(problems[0] || "Please fill in all required fields");
       return;
     }
 

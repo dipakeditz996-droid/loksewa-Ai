@@ -10,10 +10,9 @@ import { PublicProduct } from "@/lib/api/public-api";
 const STATIC_PRODUCTS = [
   {
     id: -1,
-    title: "Mastering Constitutional Law (Video Course)",
-    description: "Complete 15-hour video series covering every article with case studies.",
-    category: "VIDEO",
-    is_free: false,
+    title: "Mastering Constitutional Law (Paperback)",
+    description: "Complete printed book covering every article with case studies.",
+    category: "BOOK",
     price: "1500",
     discount_price: null as string | null,
     final_price: "1500",
@@ -21,10 +20,9 @@ const STATIC_PRODUCTS = [
   },
   {
     id: -2,
-    title: "Section Officer 10 Full Mock Sets (PDF)",
-    description: "High-quality printable mock exams with detailed answer keys.",
-    category: "PDF",
-    is_free: false,
+    title: "Section Officer 10 Full Mock Sets (Printed Edition)",
+    description: "High-quality printed mock exams with detailed answer keys.",
+    category: "BOOK",
     price: "500",
     discount_price: null as string | null,
     final_price: "500",
@@ -32,10 +30,9 @@ const STATIC_PRODUCTS = [
   },
   {
     id: -3,
-    title: "Current Affairs 2080 Yearbook",
-    description: "The definitive guide to national and international events for Loksewa.",
-    category: "PDF",
-    is_free: false,
+    title: "Current Affairs 2080 Yearbook (Physical Copy)",
+    description: "The definitive physical guide to national and international events for Loksewa.",
+    category: "BOOK",
     price: "350",
     discount_price: null as string | null,
     final_price: "350",
@@ -86,7 +83,7 @@ export function MarketplaceSection({ products }: Props) {
                   )}
                   <div className="relative flex justify-between items-start">
                     <span className="text-[10px] font-[800] uppercase tracking-wide bg-white/20 text-white backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1.5">
-                      {p.category === "VIDEO" || p.category === "COURSE" ? <PlayCircle className="w-3 h-3" /> : <Download className="w-3 h-3" />}
+                      <ShoppingBag className="w-3 h-3" />
                       {String(p.category).replace(/_/g, " ")}
                     </span>
                     <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
@@ -106,16 +103,10 @@ export function MarketplaceSection({ products }: Props) {
 
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/[0.04] mt-auto">
                     <div>
-                      {p.is_free ? (
-                        <span className="text-[15px] font-[900] text-emerald-600 dark:text-emerald-400">Free</span>
-                      ) : (
-                        <>
                           {p.discount_price && Number(p.discount_price) < Number(p.price) && (
                             <span className="text-[11px] text-slate-400 line-through mr-2">Rs. {p.price}</span>
                           )}
                           <span className="text-[18px] font-[900] text-slate-800 dark:text-white">Rs. {p.final_price}</span>
-                        </>
-                      )}
                     </div>
                     <span className="text-[12px] font-[700] text-violet-600 dark:text-violet-400 flex items-center gap-1 group-hover:gap-2 transition-all">
                       View Details <ArrowRight className="w-3.5 h-3.5" />

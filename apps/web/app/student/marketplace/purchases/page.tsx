@@ -107,17 +107,11 @@ export default function PurchasesPage() {
                           <Badge variant="secondary" className="mb-2">{purchase.product_details?.category}</Badge>
                         </div>
                         
-                        {purchase.product_details?.product_file ? (
-                          <Button asChild size="sm" className="w-full sm:w-auto">
-                            <a href={purchase.product_details.product_file.startsWith('http') ? purchase.product_details.product_file : `${baseUrl}${purchase.product_details.product_file.startsWith('/') ? '' : '/'}${purchase.product_details.product_file}`} target="_blank" rel="noopener noreferrer">
-                              <Download className="mr-2 h-4 w-4" /> Download / Open
-                            </a>
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="outline" disabled className="w-full sm:w-auto">
-                            <Lock className="mr-2 h-4 w-4" /> Pending File
-                          </Button>
-                        )}
+                        <Button asChild size="sm" className="w-full sm:w-auto" variant="outline">
+                          <Link href={`/student/marketplace/${purchase.product}`}>
+                            View Details
+                          </Link>
+                        </Button>
                       </div>
                     </div>
                   </Card>

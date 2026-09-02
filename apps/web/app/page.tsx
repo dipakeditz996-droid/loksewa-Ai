@@ -50,10 +50,9 @@ export default async function Home() {
   ]);
 
   return (
-    // Scoped to this page only: `dark` here activates every `dark:` utility
-    // inside regardless of the site-wide theme toggle, so the homepage
-    // always opens in dark mode without changing the default for other pages.
-    <div className="dark">
+    // The site-wide theme toggle (next-themes) controls the dark mode via the <html> tag.
+    // We remove the hardcoded `dark` class so the toggle button actually works.
+    <div className="w-full flex flex-col min-h-screen">
       <Navbar />
 
       <main className="flex-1 bg-slate-50 dark:bg-[#020611] bg-aurora min-h-screen">

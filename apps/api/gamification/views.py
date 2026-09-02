@@ -207,3 +207,82 @@ def leaderboard(request):
         })
         
     return Response(leaderboard_data)
+
+from .models import Achievement
+from .serializers import AchievementSerializer, RecentActivitySerializer
+from datetime import timedelta
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_achievements(request):
+    achievements = Achievement.objects.all().order_by('id')
+    serializer = AchievementSerializer(achievements, many=True, context={'request': request})
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_recent_activity(request):
+    activities = XPTransaction.objects.filter(user=request.user).order_by('-created_at')[:10]
+    serializer = RecentActivitySerializer(activities, many=True)
+    return Response(serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_performance_data(request):
+    period = request.GET.get('period', '7days')
+    days = 7
+    if period == '30days':
+        days = 30
+    elif period == 'alltime':
+        days = 365
+        
+    today = timezone.now().date()
+    start_date = today - timedelta(days=days-1)
+    
+    # We will aggregate XP per day
+    # Alternatively we can also use GameAnswer for accuracy and score if available.
+    # For now, let's just create points for each day in the period
+    from django.db.models import Sum, Count, Q
+    
+    # Pre-fetch XP for the days
+    xp_by_day = XPTransaction.objects.filter(
+        user=request.user, 
+        created_at__date__gte=start_date
+    ).values('created_at__date').annotate(total_xp=Sum('amount'))
+    
+    xp_map = {item['created_at__date']: item['total_xp'] for item in xp_by_day}
+    
+    # Also fetch GameAnswer data if we want real accuracy.
+    accuracy_map = {}
+    try:
+        from games.models import GameAnswer
+        ans_by_day = GameAnswer.objects.filter(
+            player=request.user,
+            submitted_at__date__gte=start_date
+        ).values('submitted_at__date').annotate(
+            total=Count('id'),
+            correct=Count('id', filter=Q(is_correct=True))
+        )
+        accuracy_map = {
+            item['submitted_at__date']: int((item['correct'] / item['total']) * 100) if item['total'] > 0 else 0
+            for item in ans_by_day
+        }
+    except Exception:
+        pass
+
+    data = []
+    for i in range(days):
+        day = start_date + timedelta(days=i)
+        xp = xp_map.get(day, 0)
+        acc = accuracy_map.get(day, 0)
+        
+        # If no accuracy for the day, default to something reasonable or 0.
+        
+        data.append({
+            'date': day.strftime("%b %d"),
+            'xp': xp,
+            'accuracy': acc,
+            'score': xp  # Score can just mirror XP for charting purposes
+        })
+        
+    return Response(data)

@@ -98,3 +98,26 @@ class Motivation(models.Model):
 
     def __str__(self):
         return f"Motivation ({self.language}): {self.message[:30]}..."
+
+class Achievement(models.Model):
+    title = models.CharField(max_length=100)
+    description = models.TextField()
+    icon = models.CharField(max_length=50, help_text="Lucide icon name (e.g. 'Crown', 'Zap')")
+    xp_reward = models.IntegerField(default=0)
+    coins_reward = models.IntegerField(default=0)
+    criteria = models.CharField(max_length=100, help_text="Internal string to match trigger (e.g. 'FIRST_BLOOD')")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+class StudentAchievement(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='achievements')
+    achievement = models.ForeignKey(Achievement, on_delete=models.CASCADE, related_name='earned_by')
+    earned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'achievement')
+
+    def __str__(self):
+        return f"{self.user.username} earned {self.achievement.title}"

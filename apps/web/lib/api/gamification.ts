@@ -137,14 +137,24 @@ class GamificationService {
    * Fetch player's achievements
    */
   async getAchievements(): Promise<Achievement[]> {
-    return []; // Backend gap
+    try {
+      const res = await apiClient<Achievement[]>('/gamification/achievements/');
+      return res || [];
+    } catch {
+      return [];
+    }
   }
 
   /**
    * Fetch player's recent gaming activity
    */
   async getRecentActivity(): Promise<RecentActivity[]> {
-    return []; // Backend gap
+    try {
+      const res = await apiClient<RecentActivity[]>('/gamification/activity/');
+      return res || [];
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -165,7 +175,12 @@ class GamificationService {
    * Fetch performance analytics data for the chart
    */
   async getPerformanceData(period: '7days' | '30days' | 'alltime' = '7days'): Promise<PerformanceDataPoint[]> {
-    return []; // Backend gap
+    try {
+      const res = await apiClient<PerformanceDataPoint[]>(`/gamification/performance/?period=${period}`);
+      return res || [];
+    } catch {
+      return [];
+    }
   }
 
   // --- Referral API Endpoints ---

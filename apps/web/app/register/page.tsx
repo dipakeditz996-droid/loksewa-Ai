@@ -113,8 +113,13 @@ function RegisterForm() {
         router.push("/student");
       }
     } catch (err: any) {
-      setError(err.detail || err.error || "Failed to create account. Please try again.");
+      setError(err.message || err.detail || "Failed to create account. Please try again.");
       setIsLoading(false);
+      // Every validation error this endpoint returns (username/email taken,
+      // weak password, bad referral code) belongs to the Account step's
+      // fields, so send the user back there instead of leaving them stuck
+      // on Review with an error banner that has nothing to fix in view.
+      setCurrentStep(0);
     }
   };
 

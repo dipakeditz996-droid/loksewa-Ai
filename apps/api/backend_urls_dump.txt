@@ -1,8 +1,8 @@
 URL: api/token/
-View: TokenObtainPairView
+View: CustomTokenObtainPairView
 Auth: 
 Perms: 
-Serializer: None
+Serializer: CustomTokenObtainPairSerializer
 ----------------------------------------
 URL: api/token/refresh/
 View: TokenRefreshView
@@ -18,6 +18,12 @@ Serializer: None
 ----------------------------------------
 URL: api/auth/signup/
 View: StudentSignupView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/auth/social/
+View: SocialLoginView
 Auth: JWTAuthentication
 Perms: AllowAny
 Serializer: None
@@ -38,6 +44,54 @@ URL: api/auth/forgot-password/
 View: ForgotPasswordView
 Auth: JWTAuthentication
 Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/auth/2fa/status/
+View: TwoFactorStatusView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/auth/2fa/setup/
+View: TwoFactorSetupView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/auth/2fa/verify-setup/
+View: TwoFactorVerifySetupView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/auth/2fa/disable/
+View: TwoFactorDisableView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/auth/2fa/login/
+View: TwoFactorLoginView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/dashboard/
+View: StudentDashboardView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/media/drive/<str:file_id>/
+View: drive_media_proxy
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/student/feedback/
+View: StudentFeedbackListView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
 Serializer: None
 ----------------------------------------
 URL: api/auth/teacher/profile/
@@ -70,8 +124,62 @@ Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
 ----------------------------------------
+URL: api/public/syllabus/
+View: PublicSyllabusTreeView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/public/exams/
+View: PublicExaminationListView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/public/subjects/
+View: PublicSubjectListView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/public/practice-sets/
+View: PublicQuestionSetListView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
 URL: api/questions/availability/
 View: QuestionAvailabilityView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/admin/academic/tree/
+View: AdminAcademicTreeAPIView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/schedules/next/
+View: StudentExamScheduleNextView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/student/exam-schedule/next/
+View: StudentExamScheduleNextView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/student/mock-exams/upcoming/
+View: StudentUpcomingMockExamView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/student/calm-session-log/
+View: CalmSessionLogView
 Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
@@ -148,6 +256,18 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/^topics/(?P<pk>[^/.]+)/content/$
+View: TopicViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^topics/(?P<pk>[^/.]+)/content\.(?P<format>[a-z0-9]+)/?$
+View: TopicViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/^questions/$
 View: QuestionViewSet
 Auth: 
@@ -196,6 +316,54 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/^practice-sessions/daily/$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/daily\.(?P<format>[a-z0-9]+)/?$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/revision_summary/$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/revision_summary\.(?P<format>[a-z0-9]+)/?$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/start_revision/$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/start_revision\.(?P<format>[a-z0-9]+)/?$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/study/$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/study\.(?P<format>[a-z0-9]+)/?$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/^practice-sessions/(?P<pk>[^/.]+)/$
 View: PracticeSessionViewSet
 Auth: 
@@ -220,6 +388,18 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/^practice-sessions/(?P<pk>[^/.]+)/reveal/$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/(?P<pk>[^/.]+)/reveal\.(?P<format>[a-z0-9]+)/?$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/^practice-sessions/(?P<pk>[^/.]+)/submit/$
 View: PracticeSessionViewSet
 Auth: 
@@ -227,6 +407,18 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/^practice-sessions/(?P<pk>[^/.]+)/submit\.(?P<format>[a-z0-9]+)/?$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/(?P<pk>[^/.]+)/view/$
+View: PracticeSessionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^practice-sessions/(?P<pk>[^/.]+)/view\.(?P<format>[a-z0-9]+)/?$
 View: PracticeSessionViewSet
 Auth: 
 Perms: 
@@ -276,78 +468,6 @@ Serializer: None
 ----------------------------------------
 URL: api/^bookmarks/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
 View: BookmarkViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exams/$
-View: ModelExamViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exams\.(?P<format>[a-z0-9]+)/?$
-View: ModelExamViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exams/(?P<pk>[^/.]+)/$
-View: ModelExamViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exams/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
-View: ModelExamViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts\.(?P<format>[a-z0-9]+)/?$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/(?P<pk>[^/.]+)/$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/(?P<pk>[^/.]+)/answer/$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/(?P<pk>[^/.]+)/answer\.(?P<format>[a-z0-9]+)/?$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/(?P<pk>[^/.]+)/submit/$
-View: ModelExamAttemptViewSet
-Auth: 
-Perms: 
-Serializer: None
-----------------------------------------
-URL: api/^model-exam-attempts/(?P<pk>[^/.]+)/submit\.(?P<format>[a-z0-9]+)/?$
-View: ModelExamAttemptViewSet
 Auth: 
 Perms: 
 Serializer: None
@@ -940,6 +1060,42 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/^student/exams/academic-hierarchy/$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/academic-hierarchy\.(?P<format>[a-z0-9]+)/?$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/available-questions/$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/available-questions\.(?P<format>[a-z0-9]+)/?$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/generate_custom/$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/generate_custom\.(?P<format>[a-z0-9]+)/?$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/^student/exams/(?P<pk>[^/.]+)/$
 View: StudentExaminationViewSet
 Auth: 
@@ -947,6 +1103,18 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/^student/exams/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/(?P<pk>[^/.]+)/active-attempt/$
+View: StudentExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exams/(?P<pk>[^/.]+)/active-attempt\.(?P<format>[a-z0-9]+)/?$
 View: StudentExaminationViewSet
 Auth: 
 Perms: 
@@ -971,6 +1139,18 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/^student/exam-attempts\.(?P<format>[a-z0-9]+)/?$
+View: StudentExaminationAttemptViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exam-attempts/active/$
+View: StudentExaminationAttemptViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exam-attempts/active\.(?P<format>[a-z0-9]+)/?$
 View: StudentExaminationAttemptViewSet
 Auth: 
 Perms: 
@@ -1024,6 +1204,18 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/^student/exam-attempts/(?P<pk>[^/.]+)/state/$
+View: StudentExaminationAttemptViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^student/exam-attempts/(?P<pk>[^/.]+)/state\.(?P<format>[a-z0-9]+)/?$
+View: StudentExaminationAttemptViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/^student/exam-attempts/(?P<pk>[^/.]+)/submit/$
 View: StudentExaminationAttemptViewSet
 Auth: 
@@ -1068,6 +1260,198 @@ Serializer: None
 ----------------------------------------
 URL: api/^student/leaderboard/stats\.(?P<format>[a-z0-9]+)/?$
 View: LeaderboardViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/categories/$
+View: AdminExamCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/categories\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/categories/(?P<pk>[^/.]+)/$
+View: AdminExamCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/categories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/exams/$
+View: AdminExamViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/exams\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/exams/(?P<pk>[^/.]+)/$
+View: AdminExamViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/exams/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/papers/$
+View: AdminPaperViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/papers\.(?P<format>[a-z0-9]+)/?$
+View: AdminPaperViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/papers/(?P<pk>[^/.]+)/$
+View: AdminPaperViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/papers/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminPaperViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/subjects/$
+View: AdminSubjectViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/subjects\.(?P<format>[a-z0-9]+)/?$
+View: AdminSubjectViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/subjects/(?P<pk>[^/.]+)/$
+View: AdminSubjectViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/subjects/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminSubjectViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/chapters/$
+View: AdminChapterViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/chapters\.(?P<format>[a-z0-9]+)/?$
+View: AdminChapterViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/chapters/(?P<pk>[^/.]+)/$
+View: AdminChapterViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/chapters/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminChapterViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/topics/$
+View: AdminTopicViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/topics\.(?P<format>[a-z0-9]+)/?$
+View: AdminTopicViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/topics/(?P<pk>[^/.]+)/$
+View: AdminTopicViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/academic/topics/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminTopicViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/(?P<pk>[^/.]+)/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/(?P<pk>[^/.]+)/set-active/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/(?P<pk>[^/.]+)/set-active\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/(?P<pk>[^/.]+)/toggle-publish/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/^admin/schedules/(?P<pk>[^/.]+)/toggle-publish\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
 Auth: 
 Perms: 
 Serializer: None
@@ -1160,6 +1544,12 @@ URL: api/analytics/teacher/students/<int:student_id>/
 View: TeacherStudentDetailAnalyticsView
 Auth: JWTAuthentication
 Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/notes/public/
+View: PublicStudyMaterialListView
+Auth: JWTAuthentication
+Perms: AllowAny
 Serializer: None
 ----------------------------------------
 URL: api/notes/^materials/$
@@ -1366,6 +1756,12 @@ Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
 ----------------------------------------
+URL: api/marketplace/public/products/
+View: PublicProductListView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
 URL: api/marketplace/admin/^products/$
 View: AdminProductViewSet
 Auth: 
@@ -1470,6 +1866,90 @@ Serializer: None
 ----------------------------------------
 URL: api/marketplace/admin/^purchases/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
 View: AdminPurchaseViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^purchases/(?P<pk>[^/.]+)/reactivate/$
+View: AdminPurchaseViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^purchases/(?P<pk>[^/.]+)/reactivate\.(?P<format>[a-z0-9]+)/?$
+View: AdminPurchaseViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^purchases/(?P<pk>[^/.]+)/revoke/$
+View: AdminPurchaseViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^purchases/(?P<pk>[^/.]+)/revoke\.(?P<format>[a-z0-9]+)/?$
+View: AdminPurchaseViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^orders/$
+View: AdminOrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^orders\.(?P<format>[a-z0-9]+)/?$
+View: AdminOrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^orders/(?P<pk>[^/.]+)/$
+View: AdminOrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^orders/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminOrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^orders/(?P<pk>[^/.]+)/update_status/$
+View: AdminOrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^orders/(?P<pk>[^/.]+)/update_status\.(?P<format>[a-z0-9]+)/?$
+View: AdminOrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^delivery-fees/$
+View: AdminDeliveryFeeRuleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^delivery-fees\.(?P<format>[a-z0-9]+)/?$
+View: AdminDeliveryFeeRuleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^delivery-fees/(?P<pk>[^/.]+)/$
+View: AdminDeliveryFeeRuleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^delivery-fees/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminDeliveryFeeRuleViewSet
 Auth: 
 Perms: 
 Serializer: None
@@ -1582,6 +2062,150 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/marketplace/student/^cart/$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart\.(?P<format>[a-z0-9]+)/?$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart/add_item/$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart/add_item\.(?P<format>[a-z0-9]+)/?$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart/remove_item/$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart/remove_item\.(?P<format>[a-z0-9]+)/?$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart/(?P<pk>[^/.]+)/$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^cart/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: CartViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^delivery-addresses/$
+View: StudentDeliveryAddressViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^delivery-addresses\.(?P<format>[a-z0-9]+)/?$
+View: StudentDeliveryAddressViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^delivery-addresses/(?P<pk>[^/.]+)/$
+View: StudentDeliveryAddressViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^delivery-addresses/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentDeliveryAddressViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders\.(?P<format>[a-z0-9]+)/?$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/calculate_fee/$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/calculate_fee\.(?P<format>[a-z0-9]+)/?$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/checkout/$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/checkout\.(?P<format>[a-z0-9]+)/?$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/(?P<pk>[^/.]+)/$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^orders/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: OrderViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings\.(?P<format>[a-z0-9]+)/?$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)/$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/marketplace/student/
 View: APIRootView
 Auth: JWTAuthentication
@@ -1648,6 +2272,30 @@ Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
 ----------------------------------------
+URL: api/games/admin/stats/
+View: AdminGameStatsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/games/admin/matches/
+View: AdminGameMatchesView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/games/admin/survival-games/
+View: AdminSurvivalGamesView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/games/admin/players/<int:player_id>/activity/
+View: AdminPlayerGameActivityView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
 URL: api/games/
 View: APIRootView
 Auth: JWTAuthentication
@@ -1656,6 +2304,12 @@ Serializer: None
 ----------------------------------------
 URL: api/games/<drf_format_suffix:format>
 View: APIRootView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/study-plan/dashboard/
+View: DashboardView
 Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
@@ -1828,6 +2482,78 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/study-plan/^admin/templates/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/activate/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/activate\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/assign/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/assign\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/deactivate/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/deactivate\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/duplicate/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/study-plan/^admin/templates/(?P<pk>[^/.]+)/duplicate\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/study-plan/
 View: APIRootView
 Auth: JWTAuthentication
@@ -1852,6 +2578,18 @@ Auth: JWTAuthentication
 Perms: IsAdminUser
 Serializer: None
 ----------------------------------------
+URL: api/admin/analytics/export/
+View: AdminAnalyticsExportView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/analytics/students/
+View: AdminStudentsAnalyticsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
 URL: api/admin/users/
 View: AdminUsersView
 Auth: JWTAuthentication
@@ -1864,7 +2602,25 @@ Auth: JWTAuthentication
 Perms: IsAdminUser
 Serializer: None
 ----------------------------------------
-URL: api/admin/exams/
+URL: api/admin/admins/
+View: AdminAdministratorsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/roles/
+View: AdminRolesView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/permissions/
+View: AdminPermissionsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/exams-overview/
 View: AdminExamsOverviewView
 Auth: JWTAuthentication
 Perms: IsAdminUser
@@ -1872,6 +2628,36 @@ Serializer: None
 ----------------------------------------
 URL: api/admin/ai-tutor/
 View: AdminAITutorOverviewView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/ai-tutor/provider-status/
+View: AdminAITutorProviderStatusView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/ai-tutor/conversations/
+View: AdminAITutorConversationsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/ai-tutor/conversations/<int:pk>/
+View: AdminAITutorConversationDetailView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/ai-tutor/usage/
+View: AdminAITutorUsageView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/ai-tutor/prompts/
+View: AdminAITutorPromptsView
 Auth: JWTAuthentication
 Perms: IsAdminUser
 Serializer: None
@@ -1920,6 +2706,186 @@ Serializer: None
 ----------------------------------------
 URL: api/admin/evaluator-assignments/
 View: AdminEvaluationAssignmentsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/evaluations/
+View: AdminEvaluationsView
+Auth: JWTAuthentication
+Perms: IsEvaluatorUser
+Serializer: None
+----------------------------------------
+URL: api/admin/evaluations/<int:pk>/
+View: AdminEvaluationDetailView
+Auth: JWTAuthentication
+Perms: IsEvaluatorUser
+Serializer: None
+----------------------------------------
+URL: api/admin/study-materials/
+View: AdminStudyMaterialsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/study-materials/<int:pk>/
+View: AdminStudyMaterialDetailView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/study-plans/
+View: AdminStudyPlansView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/study-plans/<int:pk>/
+View: AdminStudyPlanDetailView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/gamification/leaderboard/
+View: AdminLeaderboardView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/students/<int:student_id>/feedback/
+View: AdminStudentFeedbackView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/students/<int:pk>/performance/
+View: AdminStudentPerformanceView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/students/<int:pk>/exam-history/
+View: AdminStudentExamHistoryView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/exam-attempts/<int:pk>/review/
+View: AdminExamAttemptReviewView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/audit-logs/
+View: AdminAuditLogsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/audit-logs/retention/
+View: AdminAuditLogRetentionView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/audit-logs/export/
+View: AdminAuditLogExportView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/audit-logs/export-jobs/
+View: AdminAuditLogExportJobView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/audit-logs/<str:event_id>/
+View: AdminAuditLogDetailView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/notifications/
+View: AdminNotificationsListView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/notifications/create/
+View: AdminNotificationsCreateView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/notifications/<int:pk>/
+View: AdminNotificationDetailView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/notifications/<int:pk>/send/
+View: AdminNotificationSendView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/notifications/<int:pk>/cancel/
+View: AdminNotificationCancelView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/notifications/<int:pk>/delete/
+View: AdminNotificationsDeleteView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/support/tickets/
+View: AdminSupportTicketsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/support/tickets/<int:pk>/
+View: AdminTicketDetailView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/support/tickets/<int:pk>/reply/
+View: AdminTicketReplyView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/support/tickets/<int:pk>/status/
+View: AdminTicketUpdateStatusView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/settings/
+View: AdminSettingsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/storage/health/
+View: AdminStorageHealthView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/syllabus/positions/
+View: AdminPositionsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
+URL: api/admin/syllabus/tags/
+View: AdminTagsView
 Auth: JWTAuthentication
 Perms: IsAdminUser
 Serializer: None
@@ -2087,6 +3053,18 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/admin/^questions/import/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: QuestionImportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^questions/import/(?P<pk>[^/.]+)/ai-fill/$
+View: QuestionImportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^questions/import/(?P<pk>[^/.]+)/ai-fill\.(?P<format>[a-z0-9]+)/?$
 View: QuestionImportViewSet
 Auth: 
 Perms: 
@@ -2308,6 +3286,18 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/add-questions/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/add-questions\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/admin/^exams/(?P<pk>[^/.]+)/analytics/$
 View: ExaminationViewSet
 Auth: 
@@ -2332,6 +3322,18 @@ Auth:
 Perms: 
 Serializer: None
 ----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/available-questions/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/available-questions\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
 URL: api/admin/^exams/(?P<pk>[^/.]+)/duplicate/$
 View: ExaminationViewSet
 Auth: 
@@ -2339,6 +3341,18 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/admin/^exams/(?P<pk>[^/.]+)/duplicate\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/generate-questions/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/generate-questions\.(?P<format>[a-z0-9]+)/?$
 View: ExaminationViewSet
 Auth: 
 Perms: 
@@ -2364,6 +3378,258 @@ Serializer: None
 ----------------------------------------
 URL: api/admin/^exams/(?P<pk>[^/.]+)/publish\.(?P<format>[a-z0-9]+)/?$
 View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/question-availability/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/question-availability\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/questions/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/questions\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/remove-questions/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/remove-questions\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/reorder-questions/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/reorder-questions\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/results/$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^exams/(?P<pk>[^/.]+)/results\.(?P<format>[a-z0-9]+)/?$
+View: ExaminationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/(?P<pk>[^/.]+)/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/(?P<pk>[^/.]+)/set-active/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/(?P<pk>[^/.]+)/set-active\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/(?P<pk>[^/.]+)/toggle-publish/$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^schedules/(?P<pk>[^/.]+)/toggle-publish\.(?P<format>[a-z0-9]+)/?$
+View: AdminExamScheduleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^testimonials/$
+View: AdminTestimonialViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^testimonials\.(?P<format>[a-z0-9]+)/?$
+View: AdminTestimonialViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^testimonials/(?P<pk>[^/.]+)/$
+View: AdminTestimonialViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^testimonials/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminTestimonialViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^study-plan-templates/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^study-plan-templates\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^study-plan-templates/(?P<pk>[^/.]+)/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^study-plan-templates/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^study-plan-templates/(?P<pk>[^/.]+)/duplicate/$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^study-plan-templates/(?P<pk>[^/.]+)/duplicate\.(?P<format>[a-z0-9]+)/?$
+View: AdminStudyPlanTemplateViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-categories/$
+View: AdminMaterialCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-categories\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-categories/(?P<pk>[^/.]+)/$
+View: AdminMaterialCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-categories/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCategoryViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/add-materials/$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/add-materials\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/materials/$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/materials\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/remove-materials/$
+View: AdminMaterialCollectionViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/admin/^material-collections/(?P<pk>[^/.]+)/remove-materials\.(?P<format>[a-z0-9]+)/?$
+View: AdminMaterialCollectionViewSet
 Auth: 
 Perms: 
 Serializer: None
@@ -2758,6 +4024,12 @@ Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
 ----------------------------------------
+URL: api/student/preferences/focus-mode/
+View: FocusModePreferenceView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
 URL: api/subscriptions/^plans/$
 View: SubscriptionPlanViewSet
 Auth: 
@@ -2861,6 +4133,18 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/subscriptions/^notifications\.(?P<format>[a-z0-9]+)/?$
+View: NotificationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/subscriptions/^notifications/mark_all_read/$
+View: NotificationViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/subscriptions/^notifications/mark_all_read\.(?P<format>[a-z0-9]+)/?$
 View: NotificationViewSet
 Auth: 
 Perms: 
@@ -2992,6 +4276,30 @@ Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
 ----------------------------------------
+URL: api/gamification/leaderboard/
+View: leaderboard
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/gamification/achievements/
+View: get_achievements
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/gamification/activity/
+View: get_recent_activity
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/gamification/performance/
+View: get_performance_data
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
 URL: api/teacher/dashboard/
 View: TeacherDashboardView
 Auth: JWTAuthentication
@@ -3004,8 +4312,20 @@ Auth: JWTAuthentication
 Perms: AllowAny
 Serializer: None
 ----------------------------------------
+URL: api/courses/<int:pk>/
+View: CourseDetailView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
 URL: api/courses/my-enrollment/
 View: StudentEnrollmentView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/courses/my-courses/
+View: MyCoursesListView
 Auth: JWTAuthentication
 Perms: IsAuthenticated
 Serializer: None
@@ -3212,6 +4532,36 @@ URL: api/notifications/preferences/teacher/
 View: TeacherNotificationPreferencesView
 Auth: JWTAuthentication
 Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/testimonials/mine/
+View: MyTestimonialView
+Auth: JWTAuthentication
+Perms: IsAuthenticated
+Serializer: None
+----------------------------------------
+URL: api/packages/public/
+View: PublicPackageListView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/public/stats/
+View: PublicStatsView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/public/testimonials/
+View: PublicTestimonialView
+Auth: JWTAuthentication
+Perms: AllowAny
+Serializer: None
+----------------------------------------
+URL: api/public/platform-settings/
+View: PublicPlatformSettingsView
+Auth: JWTAuthentication
+Perms: AllowAny
 Serializer: None
 ----------------------------------------
 URL: ^media/(?P<path>.*)$

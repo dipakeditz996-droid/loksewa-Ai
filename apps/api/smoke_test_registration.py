@@ -4,7 +4,6 @@ from urllib.parse import urlparse
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
 os.environ['DJANGO_ALLOWED_HOSTS'] = '*'
-os.environ['DATABASE_URL'] = "postgresql://postgres.oanknexcqcguofsaroen:Loksewaai%40121@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
 django.setup()
 
 from django.test import Client

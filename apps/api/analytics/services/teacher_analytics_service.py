@@ -503,7 +503,7 @@ class TeacherAnalyticsService:
         subject_perf = AnalyticsService.get_subject_performance(student)
         topic_perf = AnalyticsService.get_topic_performance(student)
         
-        recent_practice = PracticeSession.objects.filter(user=student, completed=True).order_by('-created_at')[:10]
+        recent_practice = PracticeSession.objects.filter(user=student, completed=True).select_related('subject').order_by('-created_at')[:10]
         practice_history = [{
             "id": p.id,
             "subject": p.subject.name if p.subject else "Mixed",
@@ -512,7 +512,7 @@ class TeacherAnalyticsService:
             "date": p.created_at.strftime('%Y-%m-%d')
         } for p in recent_practice]
         
-        recent_exams = ExaminationAttempt.objects.filter(student=student, status='submitted').order_by('-started_at')[:10]
+        recent_exams = ExaminationAttempt.objects.filter(student=student, status='submitted').select_related('examination').order_by('-started_at')[:10]
 
         exam_history = [{
             "id": e.id,

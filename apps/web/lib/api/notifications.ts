@@ -35,6 +35,8 @@ export type NotificationFilter =
   | "exam"
   | "learning"
   | "achievement"
+  | "payments"
+  | "orders"
   | "system";
 
 export interface ListNotificationsParams {

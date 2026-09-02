@@ -163,7 +163,6 @@ export default function StudentDetailPage() {
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'history', label: 'Practice & Exam History' },
-    { id: 'analytics', label: 'Detailed Analytics' },
   ];
 
   return (
@@ -246,13 +245,6 @@ export default function StudentDetailPage() {
           </button>
         ))}
       </div>
-
-      {activeTab === 'analytics' && (
-        <div className="overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-          <h3 className="mb-6 text-lg font-bold text-foreground">Advanced Analytics</h3>
-          <p className="text-muted-foreground">Student performance analytics are being tracked. Advanced charts will appear here as more data is collected.</p>
-        </div>
-      )}
 
       {activeTab === 'overview' ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

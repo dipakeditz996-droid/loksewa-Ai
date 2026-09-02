@@ -23,14 +23,14 @@ import {
 import { adminApi } from "@/lib/api/admin";
 
 interface AdminData {
-  id: string;
+  id: number;
   name: string;
   username: string;
   email: string;
   role: string;
   isActive: boolean;
   dateJoined: string;
-  avatar: string | null;
+  avatar?: string | null;
 }
 
 export default function AdministratorsPage() {
@@ -39,7 +39,7 @@ export default function AdministratorsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [totalAdmins, setTotalAdmins] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedAdmins, setSelectedAdmins] = useState<string[]>([]);
+  const [selectedAdmins, setSelectedAdmins] = useState<number[]>([]);
 
   const fetchAdmins = async () => {
     setIsLoading(true);
@@ -77,7 +77,7 @@ export default function AdministratorsPage() {
     }
   };
 
-  const toggleSelectAdmin = (id: string) => {
+  const toggleSelectAdmin = (id: number) => {
     setSelectedAdmins(prev =>
       prev.includes(id) ? prev.filter(aid => aid !== id) : [...prev, id]
     );

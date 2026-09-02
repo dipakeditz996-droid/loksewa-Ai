@@ -196,6 +196,7 @@ class StudentExaminationAttemptSerializer(AttemptTimingMixin, serializers.ModelS
 class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingMixin, serializers.ModelSerializer):
     """Lighter serializer for list views. Computes stats instead of sending all answers."""
     examination_title = serializers.CharField(source='examination.title', read_only=True)
+    total_marks = serializers.FloatField(source='examination.total_marks', read_only=True)
     total_questions = serializers.SerializerMethodField()
     correct_answers = serializers.SerializerMethodField()
     wrong_answers = serializers.SerializerMethodField()
@@ -204,7 +205,7 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
     class Meta:
         model = ExaminationAttempt
         fields = [
-            'id', 'examination', 'examination_title', 'started_at', 'submitted_at',
+            'id', 'examination', 'examination_title', 'total_marks', 'started_at', 'submitted_at',
             'status', 'score', 'percentage', 'passed', 'time_taken_seconds',
             'total_questions', 'correct_answers', 'wrong_answers', 'unanswered',
             'rank', 'total_participants'
@@ -225,12 +226,13 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
 class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin, serializers.ModelSerializer):
     """Includes correct answers and explanations for completed exams."""
     examination_title = serializers.CharField(source='examination.title', read_only=True)
+    total_marks = serializers.FloatField(source='examination.total_marks', read_only=True)
     answers = StudentAnswerSerializer(many=True, read_only=True)
 
     class Meta:
         model = ExaminationAttempt
         fields = [
-            'id', 'examination', 'examination_title', 'started_at', 'submitted_at',
+            'id', 'examination', 'examination_title', 'total_marks', 'started_at', 'submitted_at',
             'status', 'score', 'percentage', 'passed', 'time_taken_seconds', 'answers',
             'rank', 'total_participants'
         ] + TIMING_FIELDS

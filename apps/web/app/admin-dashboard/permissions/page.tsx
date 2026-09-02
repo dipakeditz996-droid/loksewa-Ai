@@ -16,8 +16,8 @@ export default function PermissionsMatrixPage() {
         setLoading(true);
         const response = await adminApi.getPermissions();
         setData(response);
-        if (response.roles.length > 0) {
-          setActiveRoleId(response.roles[0].id);
+        if (response?.roles && response.roles.length > 0) {
+          setActiveRoleId(response.roles[0]?.id || "");
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch permissions");

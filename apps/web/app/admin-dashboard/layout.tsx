@@ -39,6 +39,7 @@ import {
   ClipboardList,
   Trophy,
   Quote,
+  ShieldCheck,
 } from "lucide-react";
 
 // ===== Sidebar Nav Config =====
@@ -99,6 +100,7 @@ const SIDEBAR_NAV: NavSection[] = [
       { title: "Help & Support", href: "/admin-dashboard/support", icon: LifeBuoy },
       { title: "AI Tutor", href: "/admin-dashboard/ai-tutor", icon: Brain },
       { title: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },
+      { title: "Trust & Safety", href: "/admin-dashboard/marketplace/trust", icon: ShieldCheck },
       { title: "Evaluations", href: "/admin-dashboard/evaluations", icon: ClipboardCheck },
       { title: "Games", href: "/admin-dashboard/games", icon: Gamepad2 },
     ],

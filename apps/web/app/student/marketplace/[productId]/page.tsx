@@ -5,10 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { marketplaceApi, Product, Purchase } from "@/lib/api/marketplace";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, ShoppingBag, Download, FileText, Lock } from "lucide-react";
+import { ArrowLeft, CheckCircle, ShoppingBag, BookOpen, MapPin, User, FileText, Bookmark, Info, Star, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -16,8 +17,8 @@ export default function ProductDetailPage() {
   const productId = Number(params.productId);
   
   const [product, setProduct] = useState<Product | null>(null);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
+  const [addingToCart, setAddingToCart] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -26,12 +27,8 @@ export default function ProductDetailPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [prodData, purchData] = await Promise.all([
-        marketplaceApi.getProduct(productId),
-        marketplaceApi.getPurchases()
-      ]);
+      const prodData = await marketplaceApi.getProduct(productId);
       setProduct(prodData);
-      setPurchases(purchData);
     } catch (error) {
       console.error("Failed to load product details", error);
     } finally {
@@ -55,15 +52,19 @@ export default function ProductDetailPage() {
     );
   }
 
-  const hasPurchased = purchases.some(p => p.product === product.id && p.status === 'ACTIVE');
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
-  const isFree = product.is_free;
 
-  const handleGetAccess = async () => {
-    if (isFree && !hasPurchased) {
-      // In a real app, there might be a dedicated endpoint for claiming free products.
-      // Since it's free, we could direct them to checkout with 0 amount or auto-enroll.
-      router.push(`/student/marketplace/checkout/${product.id}`);
+  const handleAddToCart = async () => {
+    if (product.stock === 0) return;
+    try {
+      setAddingToCart(true);
+      await marketplaceApi.addToCart(product.id, 1);
+      toast.success("Added to Cart");
+      router.push("/student/marketplace/cart");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to add to cart");
+    } finally {
+      setAddingToCart(false);
     }
   };
 
@@ -103,9 +104,9 @@ export default function ProductDetailPage() {
               {product.category.replace('_', ' ')}
             </Badge>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight leading-tight">{product.title}</h1>
-            {product.target_position && (
+            {product.condition && (
               <p className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                <CheckCircle className="h-3.5 w-3.5" /> Target: {product.target_position}
+                <Bookmark className="h-3.5 w-3.5" /> Condition: {product.condition.replace('_', ' ')}
               </p>
             )}
           </div>
@@ -113,9 +114,9 @@ export default function ProductDetailPage() {
           <div className="bg-card p-6 rounded-2xl border shadow-sm space-y-6 mb-8">
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-extrabold tracking-tight">
-                {isFree ? 'Free' : `Rs. ${product.final_price}`}
+                {`Rs. ${product.final_price}`}
               </span>
-              {!isFree && product.discount_price && (
+              {product.discount_price && (
                 <span className="text-lg text-muted-foreground line-through font-medium">
                   Rs. {product.price}
                 </span>
@@ -125,38 +126,76 @@ export default function ProductDetailPage() {
             <Separator />
 
             <div>
-              {hasPurchased ? (
-                <div className="space-y-3">
-                  <div className="flex items-center text-green-600 bg-green-50 dark:bg-green-950/30 p-3 rounded-lg border border-green-100">
-                    <CheckCircle className="mr-2 h-5 w-5" />
-                    <span className="font-semibold">You own this material</span>
-                  </div>
-                  {product.product_file ? (
-                    <Button className="w-full h-12 text-md" asChild>
-                      <a href={product.product_file.startsWith('http') ? product.product_file : `${baseUrl}${product.product_file.startsWith('/') ? '' : '/'}${product.product_file}`} target="_blank" rel="noopener noreferrer">
-                        <Download className="mr-2 h-5 w-5" />
-                        Download / Access Material
-                      </a>
-                    </Button>
-                  ) : (
-                    <Button className="w-full h-12 text-md" disabled>
-                      <Lock className="mr-2 h-4 w-4" />
-                      Material Pending Upload
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <Button 
-                  className="w-full h-12 text-md bg-primary hover:bg-primary/90 shadow-md" 
-                  onClick={() => isFree ? handleGetAccess() : router.push(`/student/marketplace/checkout/${product.id}`)}
-                >
-                  {isFree ? "Get Free Access" : "Buy Now"}
-                </Button>
-              )}
+              <Button 
+                className="w-full h-12 text-md bg-primary hover:bg-primary/90 shadow-md" 
+                onClick={handleAddToCart}
+                disabled={addingToCart || (product.stock !== undefined && product.stock <= 0)}
+              >
+                {product.stock !== undefined && product.stock <= 0 ? "Out of Stock" : "Add to Cart"}
+              </Button>
             </div>
           </div>
 
           <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground bg-muted/30 p-4 rounded-xl border border-muted/50">
+               {product.author && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><User className="h-3.5 w-3.5" /> Author</span>
+                   <span>{product.author}</span>
+                 </div>
+               )}
+               {product.publisher && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Publisher</span>
+                   <span>{product.publisher}</span>
+                 </div>
+               )}
+               {product.isbn && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><Info className="h-3.5 w-3.5" /> ISBN</span>
+                   <span>{product.isbn}</span>
+                 </div>
+               )}
+               {product.edition && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><Info className="h-3.5 w-3.5" /> Edition</span>
+                   <span>{product.edition}</span>
+                 </div>
+               )}
+               {product.location && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Location</span>
+                   <span>{product.location}</span>
+                 </div>
+               )}
+               <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><ShoppingBag className="h-3.5 w-3.5" /> Stock</span>
+                   <span className={product.stock && product.stock > 0 ? "text-green-600" : "text-destructive"}>
+                     {product.stock && product.stock > 0 ? `${product.stock} available` : "Out of stock"}
+                   </span>
+               </div>
+                {product.seller_details && (
+                 <div className="flex flex-col col-span-2 mt-2 pt-4 border-t border-muted-foreground/20">
+                   <span className="font-bold text-foreground flex items-center gap-1 mb-2"><User className="h-4 w-4" /> Seller Details</span>
+                   <div className="flex items-center justify-between">
+                     <span className="font-medium">{product.seller_details.full_name || `${product.seller_details.first_name} ${product.seller_details.last_name || ''}`}</span>
+                     {product.seller_details.average_rating ? (
+                       <div className="flex items-center gap-1 bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-1 rounded text-xs font-bold">
+                         <Star className="w-3.5 h-3.5 fill-current" />
+                         {product.seller_details.average_rating.toFixed(1)} ({product.seller_details.total_reviews})
+                       </div>
+                     ) : (
+                       <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">No reviews yet</span>
+                     )}
+                   </div>
+                   <div className="mt-3">
+                     <button className="text-xs text-rose-500 hover:text-rose-600 flex items-center gap-1 font-medium">
+                       <ShieldAlert className="w-3.5 h-3.5" /> Report this listing
+                     </button>
+                   </div>
+                 </div>
+               )}
+            </div>
             <div>
               <h3 className="text-xl font-semibold mb-3 flex items-center">
                 <FileText className="mr-2 h-5 w-5 text-muted-foreground" />

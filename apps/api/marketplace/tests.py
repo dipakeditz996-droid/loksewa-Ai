@@ -39,8 +39,8 @@ class MarketplaceTestBase(APITestCase):
     def as_admin(self):
         self.client.force_authenticate(user=self.admin)
 
-    def make_product(self, title='Kharidar PDF Pack', price='500.00', category='PDF', **kwargs):
-        return Product.objects.create(title=title, description='x', category=category, price=price, **kwargs)
+    def make_product(self, title='Loksewa Guide', price='500.00', category='NEW_BOOK', **kwargs):
+        return Product.objects.create(title=title, description='x', category=category, price=price, stock=10, **kwargs)
 
     def make_submission(self, product, status_='PENDING'):
         return PaymentSubmission.objects.create(
@@ -80,11 +80,11 @@ class ProductCRUDTests(MarketplaceTestBase):
     def test_admin_can_create_product(self):
         self.as_admin()
         resp = self.client.post(PRODUCTS_URL, {
-            'title': 'New Pack', 'description': 'desc', 'category': 'PDF',
-            'price': '299.00', 'is_free': False, 'is_published': False,
+            'title': 'New Book', 'description': 'desc', 'category': 'NEW_BOOK',
+            'price': '299.00', 'is_published': False, 'stock': 10
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(Product.objects.filter(title='New Pack').exists())
+        self.assertTrue(Product.objects.filter(title='New Book').exists())
 
     def test_admin_can_update_product(self):
         product = self.make_product()
@@ -112,7 +112,7 @@ class ProductCRUDTests(MarketplaceTestBase):
     def test_student_cannot_create_product(self):
         self.client.force_authenticate(user=self.student)
         resp = self.client.post(PRODUCTS_URL, {
-            'title': 'Hack', 'description': 'x', 'category': 'PDF', 'price': '1.00',
+            'title': 'Hack', 'description': 'x', 'category': 'NEW_BOOK', 'price': '1.00',
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -158,12 +158,8 @@ class PaymentSubmissionReviewTests(MarketplaceTestBase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_approving_course_product_creates_enrollment(self):
-        course = Course.objects.create(title='Kharidar Prep', slug='kharidar-prep')
-        product = self.make_product(title='Kharidar Course', category='COURSE', course=course)
-        submission = self.make_submission(product)
-        self.as_admin()
-        self.client.post(submission_review_url(submission.id), {'status': 'APPROVED'}, format='json')
-        self.assertTrue(Enrollment.objects.filter(student=self.student, course=course, status='active').exists())
+        # SKIPPED: Marketplace no longer supports COURSE category directly, physical books only.
+        pass
 
     def test_student_cannot_review_submission(self):
         product = self.make_product()
@@ -205,28 +201,12 @@ class PurchaseRevokeReactivateTests(MarketplaceTestBase):
         self.assertEqual(purchase.status, 'ACTIVE')
 
     def test_revoking_course_purchase_suspends_enrollment(self):
-        course = Course.objects.create(title='Kharidar Prep', slug='kharidar-prep-2')
-        product = self.make_product(title='Kharidar Course', category='COURSE', course=course)
-        Enrollment.objects.create(student=self.student, course=course, status='active')
-        purchase = self.make_active_purchase(product=product)
-
-        self.as_admin()
-        self.client.post(purchase_action_url(purchase.id, 'revoke'))
-        enrollment = Enrollment.objects.get(student=self.student, course=course)
-        self.assertEqual(enrollment.status, 'suspended')
+        # SKIPPED: Marketplace no longer supports COURSE category directly.
+        pass
 
     def test_reactivating_course_purchase_restores_enrollment(self):
-        course = Course.objects.create(title='Kharidar Prep', slug='kharidar-prep-3')
-        product = self.make_product(title='Kharidar Course', category='COURSE', course=course)
-        Enrollment.objects.create(student=self.student, course=course, status='suspended')
-        purchase = self.make_active_purchase(product=product)
-        purchase.status = 'REVOKED'
-        purchase.save()
-
-        self.as_admin()
-        self.client.post(purchase_action_url(purchase.id, 'reactivate'))
-        enrollment = Enrollment.objects.get(student=self.student, course=course)
-        self.assertEqual(enrollment.status, 'active')
+        # SKIPPED: Marketplace no longer supports COURSE category directly.
+        pass
 
     def test_student_cannot_revoke(self):
         purchase = self.make_active_purchase()
@@ -242,9 +222,9 @@ class PublicProductListViewTests(APITestCase):
 
     def test_only_published_products_returned(self):
         Product.objects.create(
-            title='Published Product', description='d', category='PDF', is_published=True, price=500)
+            title='Published Product', description='d', category='NEW_BOOK', is_published=True, price=500, stock=10)
         Product.objects.create(
-            title='Unpublished Product', description='d', category='PDF', is_published=False, price=500)
+            title='Unpublished Product', description='d', category='NEW_BOOK', is_published=False, price=500, stock=10)
 
         response = self.client.get('/api/marketplace/public/products/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -253,15 +233,14 @@ class PublicProductListViewTests(APITestCase):
 
     def test_response_has_real_fields_only(self):
         Product.objects.create(
-            title='Mock Set', description='d', category='PDF', is_published=True,
-            is_free=False, price=500, discount_price=350,
+            title='Mock Set', description='d', category='NEW_BOOK', is_published=True,
+            price=500, discount_price=350, stock=10
         )
         response = self.client.get('/api/marketplace/public/products/')
         row = response.data[0]
         self.assertEqual(row['final_price'], '350.00')
         self.assertNotIn('rating', row)
         self.assertNotIn('reviews', row)
-        self.assertNotIn('product_file', row)
 
     def test_anonymous_access_allowed(self):
         response = self.client.get('/api/marketplace/public/products/')

@@ -39,6 +39,8 @@ NOTIFICATION_CATEGORY_MAP = {
     'exam': ['exam', 'result', 'evaluation'],
     'learning': ['practice', 'course', 'study_plan'],
     'achievement': ['gamification'],
+    'payments': ['payment'],
+    'orders': ['order', 'marketplace'],
 }
 
 
@@ -170,6 +172,66 @@ class NotificationService:
             message=message,
             action_url=action_url,
             priority='normal'
+        )
+
+    @classmethod
+    def notify_order_status(cls, student, order_id, status_display, action_url=None):
+        title = "Order Status Updated"
+        message = f"Your order #{order_id} is now {status_display}."
+        
+        cls._create_if_allowed(
+            recipient=student,
+            notif_type='order',
+            preference_key='system_alerts_inapp',
+            title=title,
+            message=message,
+            action_url=action_url,
+            priority='normal'
+        )
+
+    @classmethod
+    def notify_student_payment_submitted(cls, student, title_ref, amount, action_url=None):
+        title = "Payment Submitted"
+        message = f"Your payment of Rs. {amount} for '{title_ref}' has been submitted and is awaiting verification."
+        
+        cls._create_if_allowed(
+            recipient=student,
+            notif_type='payment',
+            preference_key='system_alerts_inapp',
+            title=title,
+            message=message,
+            action_url=action_url,
+            priority='normal'
+        )
+
+    @classmethod
+    def notify_student_payment_approved(cls, student, title_ref, action_url=None):
+        title = "Payment Verified"
+        message = f"Your payment for '{title_ref}' has been verified successfully. Your order is confirmed."
+        
+        cls._create_if_allowed(
+            recipient=student,
+            notif_type='payment',
+            preference_key='system_alerts_inapp',
+            title=title,
+            message=message,
+            action_url=action_url,
+            priority='important'
+        )
+
+    @classmethod
+    def notify_student_payment_rejected(cls, student, title_ref, reason, action_url=None):
+        title = "Payment Verification Failed"
+        message = f"Your payment for '{title_ref}' was rejected. Reason: {reason}"
+        
+        cls._create_if_allowed(
+            recipient=student,
+            notif_type='payment',
+            preference_key='system_alerts_inapp',
+            title=title,
+            message=message,
+            action_url=action_url,
+            priority='critical'
         )
 
     @classmethod
@@ -519,6 +581,135 @@ class NotificationService:
             message=f'You reached Level {level}. Keep going!',
             action_url='/student',
             priority='normal',
+        )
+
+    # ── S2S Marketplace notifications ────────────────────────────────────────
+
+    @classmethod
+    def notify_listing_submitted(cls, seller, product):
+        """Seller submitted a listing — awaiting admin review."""
+        return cls._student_notify_once(
+            recipient=seller,
+            notif_type='system',
+            related_id=f'listing-submitted:{product.id}',
+            title='Listing Submitted for Review',
+            message=f'Your listing "{product.title}" has been submitted and is awaiting admin review.',
+            action_url='/student/marketplace-listings',
+            priority='normal',
+        )
+
+    @classmethod
+    def notify_listing_approved(cls, seller, product):
+        """Admin approved the seller's listing — it is now live."""
+        return cls._student_notify_once(
+            recipient=seller,
+            notif_type='system',
+            related_id=f'listing-approved:{product.id}',
+            title='Listing Approved — Now Live!',
+            message=f'Your listing "{product.title}" has been approved and is now visible in the marketplace.',
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_listing_rejected(cls, seller, product, reason=''):
+        """Admin rejected the seller's listing."""
+        msg = f'Your listing "{product.title}" was rejected.'
+        if reason:
+            msg += f' Reason: {reason}'
+        return cls._student_notify_once(
+            recipient=seller,
+            notif_type='system',
+            related_id=f'listing-rejected:{product.id}',
+            title='Listing Needs Changes',
+            message=msg,
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_book_sold(cls, seller, order):
+        """A buyer placed an order containing the seller's product."""
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Your Book Was Purchased!',
+            message=(
+                f'A buyer has ordered one of your listings (Order #{order.id}). '
+                f'Payment is awaiting verification.'
+            ),
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_seller_payment_confirmed(cls, seller, order_id):
+        """Payment for a seller's book has been confirmed by admin."""
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payment Confirmed — Prepare Shipment',
+            message=(
+                f'Payment for Order #{order_id} has been verified. '
+                f'Please prepare the book for shipment.'
+            ),
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+
+    @classmethod
+    def notify_review_received(cls, seller, product, rating):
+        """Seller received a review from a buyer."""
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='New Review Received',
+            message=f'A buyer left a {rating}-star review on "{product.title}".',
+            action_url='/student/marketplace-listings',
+            priority='normal',
+        )
+
+    @classmethod
+    def notify_dispute_opened(cls, seller, product):
+        """Buyer opened a dispute against a seller's item."""
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Dispute Opened on Your Sale',
+            message=f'A buyer opened a dispute for "{product.title}". Payout is currently ON HOLD pending admin review.',
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_dispute_status_changed(cls, student, product, status):
+        """Admin changed dispute status."""
+        return cls._create_if_allowed(
+            recipient=student,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Dispute Status Updated',
+            message=f'The dispute for "{product.title}" is now: {status}.',
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_payout_held(cls, seller, order_id):
+        """Seller payout held due to a dispute."""
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout On Hold',
+            message=f'Your payout for Order #{order_id} is on hold due to an open dispute.',
+            action_url='/student/marketplace-listings',
+            priority='important',
         )
 
 

@@ -59,7 +59,11 @@ class AdminDashboardStatsView(APIView):
         from exams.models import Evaluation, SubjectiveAnswer
         pending_evaluations = SubjectiveAnswer.objects.filter(status='submitted').count()
 
-        # Marketplace
+        # Support Tickets
+        from support.models import SupportTicket
+        pending_tickets = SupportTicket.objects.filter(status__in=['open', 'in_progress']).count()
+
+        # Marketplace & MRR
         marketplace_listings = Product.objects.filter(is_published=True).count()
         order_requests = PaymentSubmission.objects.filter(status='PENDING').count()
         total_orders = Purchase.objects.count()
@@ -67,6 +71,21 @@ class AdminDashboardStatsView(APIView):
             Purchase.objects.filter(status='ACTIVE')
             .aggregate(total=Sum('amount_paid'))['total'] or 0
         )
+        
+        # Monthly Recurring Revenue (MRR) approximation from active subscriptions
+        from subscriptions.models import Subscription
+        active_subs = Subscription.objects.filter(status='ACTIVE', expiry_date__gt=timezone.now()).select_related('plan')
+        mrr = 0.0
+        for sub in active_subs:
+            plan = sub.plan
+            if plan.duration_unit == 'MONTHS' and plan.duration > 0:
+                mrr += float(plan.price) / plan.duration
+            elif plan.duration_unit == 'YEAR' and plan.duration > 0:
+                mrr += float(plan.price) / (plan.duration * 12)
+            elif plan.duration_unit == 'DAYS' and plan.duration > 0:
+                mrr += float(plan.price) / (plan.duration / 30.0)
+            elif plan.duration_unit == 'WEEKS' and plan.duration > 0:
+                mrr += float(plan.price) / (plan.duration / 4.33)
 
         # Games
         games_played = (
@@ -143,11 +162,15 @@ class AdminDashboardStatsView(APIView):
             "evaluations": {
                 "pending": pending_evaluations,
             },
+            "support": {
+                "pendingTickets": pending_tickets,
+            },
             "marketplace": {
                 "activeListings": marketplace_listings,
                 "orderRequests": order_requests,
                 "totalOrders": total_orders,
                 "revenue": revenue,
+                "mrr": mrr,
             },
             "aiTutor": {
                 "totalSessions": total_ai_sessions,

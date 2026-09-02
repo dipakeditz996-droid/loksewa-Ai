@@ -25,11 +25,15 @@ export interface AdminStats {
   evaluations: {
     pending: number;
   };
+  support: {
+    pendingTickets: number;
+  };
   marketplace: {
     activeListings: number;
     orderRequests: number;
     totalOrders: number;
     revenue: number;
+    mrr: number;
   };
   aiTutor: {
     totalSessions: number;

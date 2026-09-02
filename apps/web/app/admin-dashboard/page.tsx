@@ -344,6 +344,45 @@ export default function AdminDashboardOverview() {
         />
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          title="MRR"
+          value={formatCurrency(stats?.marketplace.mrr ?? 0)}
+          subtitle="Monthly Recurring"
+          icon={TrendingUp}
+          iconColor="text-emerald-600"
+          iconBg="bg-emerald-50"
+          loading={loadingStats}
+        />
+        <StatCard
+          title="Support Tickets"
+          value={stats?.support.pendingTickets ?? 0}
+          subtitle="Pending resolution"
+          icon={AlertCircle}
+          iconColor="text-red-600"
+          iconBg="bg-red-50"
+          loading={loadingStats}
+        />
+        <StatCard
+          title="Pending Evals"
+          value={stats?.evaluations.pending ?? 0}
+          subtitle="Require grading"
+          icon={ClipboardList}
+          iconColor="text-orange-600"
+          iconBg="bg-orange-50"
+          loading={loadingStats}
+        />
+        <StatCard
+          title="Active Listings"
+          value={stats?.marketplace.activeListings ?? 0}
+          subtitle="Marketplace products"
+          icon={ShoppingBag}
+          iconColor="text-blue-600"
+          iconBg="bg-blue-50"
+          loading={loadingStats}
+        />
+      </div>
+
       {/* ===== CHARTS + ACTIVITY ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
         {/* Chart */}

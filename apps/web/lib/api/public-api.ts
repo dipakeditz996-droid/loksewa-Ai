@@ -64,12 +64,25 @@ export interface PublicProduct {
   category: string;
   category_display: string;
   target_exam_name: string | null;
-  is_free: boolean;
   price: string;
   discount_price: string | null;
   final_price: string;
   cover_image: string | null;
+  condition?: string | null;
+  condition_display?: string | null;
+  stock?: number;
+  listing_status?: string;
+  author?: string;
+  publisher?: string;
+  location?: string | null;
+  is_seller_listing?: boolean;
+  seller_details?: {
+    id: number;
+    first_name: string;
+    member_since?: string | null;
+  } | null;
 }
+
 
 // ── Syllabus tree (real, public) ─────────────────────────────────────────────
 

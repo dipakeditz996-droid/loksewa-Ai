@@ -45,14 +45,14 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   );
 
   const SettingsSidebar = () => (
-    <div className="flex flex-col h-full bg-white border-r border-slate-200">
-      <div className="p-4 border-b border-slate-200 sticky top-0 bg-white z-10">
-        <h2 className="font-bold text-[#0B2545] text-lg mb-4 hidden md:block">Settings</h2>
+    <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900 z-10">
+        <h2 className="font-bold text-[#0B2545] dark:text-white text-lg mb-4 hidden md:block">Settings</h2>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input 
             placeholder="Search settings..." 
-            className="pl-9 bg-slate-50 border-slate-200"
+            className="pl-9 bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -70,8 +70,8 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                 className={cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   active 
-                    ? "bg-[#0B2545]/5 text-[#0B2545]" 
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    ? "bg-[#0B2545]/5 dark:bg-slate-800 text-[#0B2545] dark:text-white" 
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                 )}
               >
                 <item.icon 
@@ -94,19 +94,19 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div className="flex flex-col md:flex-row min-h-[calc(100vh-60px)] relative">
       
       {/* Mobile Sidebar Toggle */}
-      <div className="md:hidden p-4 border-b border-slate-200 bg-white sticky top-0 z-20 flex justify-between items-center">
+      <div className="md:hidden p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-20 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Settings className="w-5 h-5 text-[#D4A72C]" />
-          <span className="font-bold text-[#0B2545]">Platform Settings</span>
+          <span className="font-bold text-[#0B2545] dark:text-white">Platform Settings</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+        <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="dark:text-white">
           {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
       </div>
 
       {/* Mobile Sidebar Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden absolute top-[65px] left-0 right-0 bottom-0 z-30 bg-white">
+        <div className="md:hidden absolute top-[65px] left-0 right-0 bottom-0 z-30 bg-white dark:bg-slate-900">
           <SettingsSidebar />
         </div>
       )}
@@ -117,7 +117,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 bg-slate-50">
+      <main className="flex-1 min-w-0 bg-slate-50 dark:bg-[#020817]">
         <div className="p-4 md:p-8 max-w-5xl mx-auto pb-24">
           {children}
         </div>

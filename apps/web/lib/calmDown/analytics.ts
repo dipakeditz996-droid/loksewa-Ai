@@ -11,6 +11,7 @@
  * Never pass anything beyond the event name and these plain flags -
  * no student identity, no answers, no inferred mental state.
  */
+import { apiClient } from "@/lib/api/client";
 
 export type CalmDownEvent =
   | "calm_down_prompt_shown"
@@ -24,6 +25,21 @@ export function trackCalmDownEvent(event: CalmDownEvent, meta?: Record<string, s
     // eslint-disable-next-line no-console
     console.debug("[calm-down]", event, meta || {});
   }
-  // Real dispatch (e.g. window.gtag / posthog.capture) lands here once the
-  // project has an analytics provider - intentionally a no-op until then.
+  
+  // Clean prefix 'calm_down_' to match the EVENT_CHOICES in the backend CalmSessionLog model
+  let backendEvent = event.replace('calm_down_', '');
+  if (backendEvent === 'prompt_shown') {
+      return; // Skip logging this simple impression if not needed, or add to backend enum
+  }
+  
+  apiClient("/student/calm-session-log/", {
+    method: "POST",
+    body: JSON.stringify({
+      event_type: backendEvent,
+      meta_data: meta || {}
+    })
+  }).catch((err) => {
+    // Silent fail for analytics
+    console.warn("Failed to log calm session event", err);
+  });
 }

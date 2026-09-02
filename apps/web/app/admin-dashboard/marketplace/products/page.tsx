@@ -20,7 +20,7 @@ import { RetryImage } from "@/components/ui/retry-image";
 import { toast } from "sonner";
 
 const CATEGORIES = [
-  "PDF", "STUDY_MATERIAL", "QUESTION_COLLECTION", "QUESTION_SET", "VIDEO", "COURSE", "BUNDLE",
+  "NEW_BOOK", "USED_BOOK", "REFERENCE_BOOK", "GUIDE_BOOK", "GENERAL_KNOWLEDGE", "CONSTITUTION_LAW", "CURRENT_AFFAIRS", "STATIONERY"
 ];
 
 interface ProductFormState {
@@ -30,16 +30,23 @@ interface ProductFormState {
   target_position: string;
   price: string;
   discount_price: string;
-  is_free: boolean;
   is_published: boolean;
   features: string;
   cover_image: File | null;
+  stock: string;
+  condition: string;
+  author: string;
+  publisher: string;
+  isbn: string;
+  edition: string;
+  location: string;
 }
 
 const EMPTY_FORM: ProductFormState = {
-  title: "", description: "", category: "PDF", target_position: "",
-  price: "0", discount_price: "", is_free: false, is_published: false,
+  title: "", description: "", category: "NEW_BOOK", target_position: "",
+  price: "0", discount_price: "", is_published: false,
   features: "", cover_image: null,
+  stock: "1", condition: "NEW", author: "", publisher: "", isbn: "", edition: "", location: ""
 };
 
 export default function MarketplaceProductsPage() {
@@ -96,10 +103,16 @@ export default function MarketplaceProductsPage() {
       target_position: product.target_position,
       price: product.price,
       discount_price: product.discount_price || "",
-      is_free: product.is_free,
       is_published: product.is_published,
       features: (product.features || []).join("\n"),
       cover_image: null,
+      stock: product.stock !== undefined ? String(product.stock) : "1",
+      condition: product.condition || "NEW",
+      author: product.author || "",
+      publisher: product.publisher || "",
+      isbn: product.isbn || "",
+      edition: product.edition || "",
+      location: product.location || "",
     });
     setFormError("");
     setDialogOpen(true);
@@ -114,10 +127,16 @@ export default function MarketplaceProductsPage() {
       target_position: product.target_position,
       price: product.price,
       discount_price: product.discount_price || "",
-      is_free: product.is_free,
       is_published: false,
       features: (product.features || []).join("\n"),
       cover_image: null,
+      stock: product.stock !== undefined ? String(product.stock) : "1",
+      condition: product.condition || "NEW",
+      author: product.author || "",
+      publisher: product.publisher || "",
+      isbn: product.isbn || "",
+      edition: product.edition || "",
+      location: product.location || "",
     });
     setFormError("");
     setDialogOpen(true);
@@ -138,8 +157,14 @@ export default function MarketplaceProductsPage() {
       data.append("target_position", form.target_position);
       data.append("price", form.price || "0");
       if (form.discount_price) data.append("discount_price", form.discount_price);
-      data.append("is_free", String(form.is_free));
       data.append("is_published", String(form.is_published));
+      data.append("stock", form.stock);
+      if (form.condition) data.append("condition", form.condition);
+      if (form.author) data.append("author", form.author);
+      if (form.publisher) data.append("publisher", form.publisher);
+      if (form.isbn) data.append("isbn", form.isbn);
+      if (form.edition) data.append("edition", form.edition);
+      if (form.location) data.append("location", form.location);
       data.append(
         "features",
         JSON.stringify(form.features.split("\n").map(f => f.trim()).filter(Boolean))
@@ -246,9 +271,7 @@ export default function MarketplaceProductsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {product.is_free ? (
-                          <span className="font-bold text-emerald-600">Free</span>
-                        ) : product.discount_price ? (
+                        {product.discount_price ? (
                           <>
                             <span className="font-bold text-emerald-600">Rs. {product.final_price}</span>
                             <span className="text-xs text-slate-400 line-through">Rs. {product.price}</span>
@@ -346,18 +369,15 @@ export default function MarketplaceProductsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold text-slate-700">Price (Rs.)</label>
-                  <Input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} disabled={form.is_free} />
+                  <Input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold text-slate-700">Discount Price (Rs.)</label>
-                  <Input type="number" min="0" value={form.discount_price} onChange={(e) => setForm({ ...form, discount_price: e.target.value })} disabled={form.is_free} />
+                  <Input type="number" min="0" value={form.discount_price} onChange={(e) => setForm({ ...form, discount_price: e.target.value })} />
                 </div>
               </div>
               <div className="flex gap-6">
-                <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                  <input type="checkbox" checked={form.is_free} onChange={(e) => setForm({ ...form, is_free: e.target.checked })} className="w-4 h-4 rounded" />
-                  Free product
-                </label>
+
                 <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                   <input type="checkbox" checked={form.is_published} onChange={(e) => setForm({ ...form, is_published: e.target.checked })} className="w-4 h-4 rounded" />
                   Published
@@ -371,6 +391,50 @@ export default function MarketplaceProductsPage() {
                   className="resize-none h-20"
                   placeholder={"500+ practice questions\nDetailed explanations"}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Stock</label>
+                  <Input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Condition</label>
+                  <select
+                    className="w-full h-10 px-3 bg-white border border-slate-200 rounded-md text-sm"
+                    value={form.condition}
+                    onChange={(e) => setForm({ ...form, condition: e.target.value })}
+                  >
+                    <option value="NEW">New</option>
+                    <option value="LIKE_NEW">Like New</option>
+                    <option value="GOOD">Good</option>
+                    <option value="FAIR">Fair</option>
+                    <option value="POOR">Poor</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Author</label>
+                  <Input value={form.author} onChange={(e) => setForm({ ...form, author: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Publisher</label>
+                  <Input value={form.publisher} onChange={(e) => setForm({ ...form, publisher: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">ISBN</label>
+                  <Input value={form.isbn} onChange={(e) => setForm({ ...form, isbn: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Edition</label>
+                  <Input value={form.edition} onChange={(e) => setForm({ ...form, edition: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700">Location</label>
+                <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700">Cover Image</label>

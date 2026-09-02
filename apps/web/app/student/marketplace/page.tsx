@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
-import { Search, ShoppingBag, Filter } from "lucide-react";
+import { Search, ShoppingBag, Filter, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -15,7 +15,6 @@ export default function MarketplacePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [priceFilter, setPriceFilter] = useState("ALL");
 
   useEffect(() => {
     loadProducts();
@@ -36,12 +35,8 @@ export default function MarketplacePage() {
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase()) || 
                           p.category.toLowerCase().includes(search.toLowerCase());
-    
-    let matchesPrice = true;
-    if (priceFilter === "FREE") matchesPrice = p.is_free;
-    if (priceFilter === "PAID") matchesPrice = !p.is_free;
 
-    return matchesSearch && matchesPrice;
+    return matchesSearch;
   });
 
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
@@ -63,6 +58,35 @@ export default function MarketplacePage() {
         </Button>
       </div>
 
+      {/* Seller CTA Banner */}
+      <div className="bg-[#163E6B] dark:bg-card border dark:border-border text-white rounded-xl p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#D4A72C] rounded-full opacity-10 blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+        <div className="relative z-10">
+          <h3 className="text-2xl font-bold mb-2 flex items-center gap-2 text-white dark:text-foreground">
+            <BookOpen className="w-6 h-6 text-[#D4A72C]" />
+            Sell Your Used Book
+          </h3>
+          <p className="text-white/80 dark:text-muted-foreground font-medium mb-2 text-base">
+            Have books you no longer need? Sell them to fellow LoksewaAI students.
+          </p>
+          <p className="text-white/60 dark:text-muted-foreground/70 text-sm">
+            List your used books and earn while helping another student. All student listings are reviewed by LoksewaAI before appearing in the marketplace.
+          </p>
+        </div>
+        <div className="relative z-10 flex flex-col sm:flex-row gap-3 shrink-0 w-full md:w-auto">
+          <Button asChild className="bg-[#D4A72C] hover:bg-[#c49a20] text-[#0A1118] font-bold text-base h-11 px-6 shadow-md w-full sm:w-auto">
+            <Link href="/student/marketplace-listings">
+              Sell a Book
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 dark:text-foreground dark:border-border dark:hover:bg-muted h-11 bg-transparent w-full sm:w-auto">
+            <Link href="/student/marketplace-listings">
+              Manage My Listings
+            </Link>
+          </Button>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl shadow-sm border">
         <div className="relative flex-grow">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -73,17 +97,6 @@ export default function MarketplacePage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select value={priceFilter} onValueChange={setPriceFilter}>
-          <SelectTrigger className="w-full sm:w-[180px] bg-background">
-            <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <SelectValue placeholder="Price Filter" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">All Products</SelectItem>
-            <SelectItem value="FREE">Free</SelectItem>
-            <SelectItem value="PAID">Premium (Paid)</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {loading ? (
@@ -130,18 +143,12 @@ export default function MarketplacePage() {
               </CardHeader>
               <CardFooter className="p-4 pt-0 flex items-center justify-between">
                 <div className="font-bold text-lg">
-                  {product.is_free ? (
-                    <span className="text-green-600">Free</span>
-                  ) : (
-                    <>
                       <span>Rs. {product.final_price}</span>
                       {product.discount_price && (
                         <span className="text-sm text-muted-foreground line-through ml-2 font-normal">
                           Rs. {product.price}
                         </span>
                       )}
-                    </>
-                  )}
                 </div>
                 <Button asChild size="sm">
                   <Link href={`/student/marketplace/${product.id}`}>

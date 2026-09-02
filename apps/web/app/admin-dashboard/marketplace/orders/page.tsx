@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Search, Filter, ShoppingCart, CheckCircle2,
-  MoreHorizontal, Eye, Ban, X,
+  MoreHorizontal, Eye, Box, MapPin, Loader2, ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,96 +14,107 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { marketplaceApi, Purchase } from "@/lib/api/marketplace";
+import { marketplaceApi, Order } from "@/lib/api/marketplace";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function MarketplaceOrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [actioningId, setActioningId] = useState<number | null>(null);
-  const [viewOrder, setViewOrder] = useState<Purchase | null>(null);
+  
+  const [viewOrder, setViewOrder] = useState<Order | null>(null);
+  const [newStatus, setNewStatus] = useState<string>("");
+  const [statusNote, setStatusNote] = useState<string>("");
 
-  const fetchPurchases = async () => {
+  const fetchOrders = async () => {
     try {
-      const data = await marketplaceApi.adminGetPurchases();
-      setPurchases(data);
+      const data = await marketplaceApi.adminGetOrders();
+      setOrders(data);
     } catch (error) {
-      console.error("Failed to fetch purchases:", error);
+      console.error("Failed to fetch orders:", error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPurchases();
+    fetchOrders();
   }, []);
 
-  const handleRevoke = async (order: Purchase) => {
-    if (!confirm(`Revoke access for this order? The student will lose access to "${order.product_details?.title}".`)) return;
-    setActioningId(order.id);
+  const handleUpdateStatus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewOrder || !newStatus) return;
+    
     try {
-      await marketplaceApi.adminRevokePurchase(order.id);
-      toast.success("Access revoked.");
-      await fetchPurchases();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to revoke access");
-    } finally {
-      setActioningId(null);
-    }
-  };
-
-  const handleReactivate = async (order: Purchase) => {
-    setActioningId(order.id);
-    try {
-      await marketplaceApi.adminReactivatePurchase(order.id);
-      toast.success("Access restored.");
-      await fetchPurchases();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to restore access");
-    } finally {
-      setActioningId(null);
-    }
-  };
-
-  const filteredOrders = purchases.filter(o => {
-    const studentName = o.payment_submission_details?.student_details?.first_name 
-      ? `${o.payment_submission_details.student_details.first_name} ${o.payment_submission_details.student_details.last_name}`
-      : o.payment_submission_details?.student_details?.username || "Unknown";
+      setActioningId(viewOrder.id);
+      await marketplaceApi.adminUpdateOrderStatus(viewOrder.id, newStatus, statusNote);
+      toast.success("Order status updated successfully.");
+      setStatusNote("");
+      await fetchOrders();
       
+      // Update local viewOrder to reflect new history
+      const updatedOrders = await marketplaceApi.adminGetOrders();
+      const updatedOrder = updatedOrders.find(o => o.id === viewOrder.id);
+      if (updatedOrder) setViewOrder(updatedOrder);
+      
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to update order status");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleUpdateItemStatus = async (itemId: number, fulfillment_status: string, payout_status: string) => {
+    if (!viewOrder) return;
+    try {
+      await marketplaceApi.adminUpdateOrderItemStatus(viewOrder.id, itemId, fulfillment_status, payout_status);
+      toast.success("Item status updated successfully.");
+      
+      const updatedOrders = await marketplaceApi.adminGetOrders();
+      setOrders(updatedOrders);
+      const updatedOrder = updatedOrders.find(o => o.id === viewOrder.id);
+      if (updatedOrder) setViewOrder(updatedOrder);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to update item status");
+    }
+  };
+
+  const filteredOrders = orders.filter(o => {
     const matchesSearch = 
       o.id.toString().includes(search) || 
-      studentName.toLowerCase().includes(search.toLowerCase()) ||
-      (o.product_details?.title || "").toLowerCase().includes(search.toLowerCase());
+      (o.shipping_address || "").toLowerCase().includes(search.toLowerCase()) ||
+      (o.contact_number || "").includes(search);
       
-    const matchesStatus = statusFilter === "All" || o.status.toLowerCase() === statusFilter.toLowerCase();
+    const matchesStatus = statusFilter === "All" || o.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const getOrderStatusColor = (status: string) => {
-    switch(status.toUpperCase()) {
-      case "PENDING": return "bg-slate-100 text-slate-700 border-slate-200";
-      case "PROCESSING": return "bg-blue-100 text-blue-700 border-blue-200";
-      case "ACTIVE":
-      case "COMPLETED": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "REVOKED":
-      case "CANCELLED": return "bg-red-100 text-red-700 border-red-200";
+    switch(status) {
+      case "PENDING_PAYMENT": return "bg-slate-100 text-slate-700 border-slate-200";
+      case "PAYMENT_SUBMITTED": return "bg-amber-100 text-amber-700 border-amber-200";
+      case "PAYMENT_VERIFICATION": return "bg-blue-100 text-blue-700 border-blue-200";
+      case "CONFIRMED": return "bg-emerald-100 text-emerald-700 border-emerald-200";
+      case "PROCESSING": return "bg-indigo-100 text-indigo-700 border-indigo-200";
+      case "SHIPPED": return "bg-purple-100 text-purple-700 border-purple-200";
+      case "OUT_FOR_DELIVERY": return "bg-pink-100 text-pink-700 border-pink-200";
+      case "DELIVERED": return "bg-green-100 text-green-700 border-green-200";
+      case "CANCELLED":
+      case "REFUNDED": return "bg-red-100 text-red-700 border-red-200";
       default: return "bg-slate-100 text-slate-600 border-slate-200";
     }
   };
 
-  const getPaymentStatusColor = (status: string) => {
-    switch(status.toUpperCase()) {
-      case "PENDING": return "text-slate-500 bg-slate-100";
-      case "SUBMITTED": return "text-amber-600 bg-amber-100";
-      case "APPROVED": return "text-emerald-600 bg-emerald-100";
-      case "REJECTED": return "text-red-600 bg-red-100";
-      case "REFUNDED": return "text-purple-600 bg-purple-100";
-      default: return "text-slate-500 bg-slate-100";
-    }
-  };
+  const statusOptions = [
+    "PENDING_PAYMENT", "PAYMENT_SUBMITTED", "PAYMENT_VERIFICATION", 
+    "CONFIRMED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", 
+    "DELIVERED", "CANCELLED", "REFUNDED"
+  ];
 
   return (
     <div className="space-y-6">
@@ -112,7 +123,7 @@ export default function MarketplaceOrdersPage() {
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
-              placeholder="Search Order ID, Student, Product..."
+              placeholder="Search Order ID, Address, Contact..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-slate-50"
@@ -126,12 +137,8 @@ export default function MarketplaceOrdersPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="All">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="REVOKED">Revoked</option>
+            {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <Button variant="outline" className="bg-white gap-2 px-3">
-            <Filter className="w-4 h-4" /> <span className="hidden sm:inline">More Filters</span>
-          </Button>
         </div>
       </div>
 
@@ -141,64 +148,49 @@ export default function MarketplaceOrdersPage() {
             <TableHeader>
               <TableRow className="bg-slate-50 hover:bg-slate-50">
                 <TableHead className="w-32">Order ID & Date</TableHead>
-                <TableHead>Student</TableHead>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Order Status</TableHead>
+                <TableHead>Contact & Address</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead className="text-right">Grand Total</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-slate-500">
-                    Loading orders...
+                  <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                    <Loader2 className="w-8 h-8 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : filteredOrders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-slate-500">
+                  <TableCell colSpan={6} className="h-32 text-center text-slate-500">
                     <ShoppingCart className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                     <p>No orders found.</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredOrders.map((order) => {
-                  const studentDetails = order.payment_submission_details?.student_details;
-                  const studentName = studentDetails?.first_name 
-                    ? `${studentDetails.first_name} ${studentDetails.last_name}`
-                    : studentDetails?.username || "Unknown";
-                  const studentEmail = studentDetails?.email || "";
-                  const studentInitials = studentName.split(" ").map((n: string) => n[0]).join("").substring(0,2).toUpperCase();
-                  
                   return (
                     <TableRow key={order.id} className="hover:bg-slate-50/80">
                       <TableCell>
-                        <div className="font-mono text-xs font-semibold text-[#0B2545]">#{order.id}</div>
+                        <div className="font-mono text-xs font-semibold text-[#0B2545]">#ORD-{order.id}</div>
                         <div className="text-[11px] text-slate-400 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-7 w-7 border border-slate-200">
-                            <AvatarFallback className="bg-slate-100 text-slate-600 text-[10px] font-bold">{studentInitials}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <span className="font-semibold text-slate-700 text-xs">{studentName}</span>
-                            <span className="text-[10px] text-slate-500 truncate max-w-[120px]">{studentEmail}</span>
-                          </div>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-slate-700 text-xs">{order.contact_number}</span>
+                          <span className="text-[10px] text-slate-500 truncate max-w-[200px] mt-0.5">{order.shipping_address}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium text-sm text-[#0B2545] line-clamp-2">{order.product_details?.title || "Unknown Product"}</span>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-slate-800">
-                        Rs. {Number(order.amount_paid).toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${getPaymentStatusColor(order.payment_submission_details?.status || "UNKNOWN")}`}>
-                          {order.payment_submission_details?.status || "UNKNOWN"}
+                        <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                          {order.items.length} item(s)
                         </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="font-bold text-slate-800">Rs. {Number(order.total_amount) + Number(order.delivery_fee)}</div>
+                        {Number(order.delivery_fee) > 0 && <div className="text-[10px] text-slate-400">inc. Rs {order.delivery_fee} del.</div>}
                       </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getOrderStatusColor(order.status)}`}>
@@ -206,35 +198,16 @@ export default function MarketplaceOrdersPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-[#0B2545]" disabled={actioningId === order.id}>
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer" onClick={() => setViewOrder(order)}>
-                              <Eye className="mr-2 h-4 w-4" /> View Order Details
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {order.status !== "ACTIVE" && (
-                              <DropdownMenuItem
-                                className="cursor-pointer text-emerald-600 focus:text-emerald-600"
-                                onClick={() => handleReactivate(order)}
-                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4" /> Reactivate Access
-                              </DropdownMenuItem>
-                            )}
-                            {order.status === "ACTIVE" && (
-                              <DropdownMenuItem
-                                className="cursor-pointer text-red-600 focus:text-red-600"
-                                onClick={() => handleRevoke(order)}
-                              >
-                                <Ban className="mr-2 h-4 w-4" /> Revoke Access
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => {
+                            setViewOrder(order);
+                            setNewStatus(order.status);
+                          }}
+                        >
+                          Manage
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
@@ -245,65 +218,156 @@ export default function MarketplaceOrdersPage() {
         </div>
       </div>
 
-      {viewOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-[#0B2545]">Order #{viewOrder.id}</h3>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => setViewOrder(null)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="p-6 space-y-4 text-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Product</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">{viewOrder.product_details?.title || "Unknown"}</p>
+      <Dialog open={!!viewOrder} onOpenChange={(open: boolean) => !open && setViewOrder(null)}>
+        <DialogContent className="w-full max-w-2xl overflow-y-auto max-h-[90vh] bg-slate-50">
+          {viewOrder && (
+            <div className="space-y-8 py-4">
+              <DialogHeader>
+                <DialogTitle className="text-2xl flex items-center gap-2">
+                  <Box className="w-6 h-6 text-primary" /> Order #ORD-{viewOrder.id}
+                </DialogTitle>
+              </DialogHeader>
+              
+              <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4">
+                <div className="flex justify-between items-center border-b pb-4">
+                  <span className={`px-3 py-1 rounded-full text-sm font-bold border ${getOrderStatusColor(viewOrder.status)}`}>
+                    {viewOrder.status}
+                  </span>
+                  <span className="text-sm font-semibold">Total: Rs. {Number(viewOrder.total_amount) + Number(viewOrder.delivery_fee)}</span>
                 </div>
+                
                 <div>
-                  <p className="text-xs text-slate-500 font-medium">Amount Paid</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">Rs. {Number(viewOrder.amount_paid).toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Order Status</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">{viewOrder.status}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Payment Status</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">
-                    {viewOrder.payment_submission_details?.status || "N/A"}
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-slate-700">
+                    <MapPin className="w-4 h-4" /> Shipping Address
+                  </h4>
+                  <p className="text-sm text-slate-600 whitespace-pre-wrap bg-slate-50 p-3 rounded-lg border">
+                    {viewOrder.shipping_address}
+                    <br/><br/>
+                    <strong>Contact:</strong> {viewOrder.contact_number}
                   </p>
                 </div>
+                
                 <div>
-                  <p className="text-xs text-slate-500 font-medium">Created</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">
-                    {new Date(viewOrder.created_at).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Transaction ID</p>
-                  <p className="font-mono text-xs text-slate-800 mt-0.5">
-                    {viewOrder.payment_submission_details?.transaction_id || "N/A"}
-                  </p>
+                  <h4 className="font-semibold text-sm mb-2 text-slate-700">Order Items (S2S Fulfillment)</h4>
+                  <div className="space-y-4">
+                    {viewOrder.items.map(item => (
+                      <div key={item.id} className="flex flex-col gap-3 bg-slate-50 p-4 rounded-lg border text-sm">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-slate-800">{item.product_details?.title || item.snapshot_product_name || `Product #${item.product}`}</div>
+                            <div className="text-slate-500 text-xs mt-1">
+                              Qty: {item.quantity} × Rs. {item.price}
+                            </div>
+                            <div className="text-slate-500 text-xs mt-1">
+                              Seller: {item.product_details?.seller_details?.full_name || item.snapshot_seller_name || "LoksewaAI Official"}
+                            </div>
+                          </div>
+                          <div className="text-right text-xs">
+                            <div className="text-emerald-600 font-semibold">Earnings: Rs. {item.seller_earning || 0}</div>
+                            <div className="text-rose-500 font-medium">Comm: Rs. {item.commission_amount || 0}</div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mt-2 pt-3 border-t border-slate-200">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-500">Fulfillment Status</label>
+                            <Select 
+                              value={item.fulfillment_status || "PENDING"} 
+                              onValueChange={(val) => handleUpdateItemStatus(item.id, val, item.payout_status || "PENDING")}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {["PENDING", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"].map(s => (
+                                  <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-slate-500">Payout Status</label>
+                            <Select 
+                              value={item.payout_status || "PENDING"} 
+                              onValueChange={(val) => handleUpdateItemStatus(item.id, item.fulfillment_status || "PENDING", val)}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {["PENDING", "ELIGIBLE", "PROCESSING", "PAID", "FAILED", "CANCELLED"].map(s => (
+                                  <SelectItem key={s} value={s} className="text-xs">{s}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              {viewOrder.payment_submission_details?.student_details && (
-                <div className="pt-4 border-t border-slate-100">
-                  <p className="text-xs text-slate-500 font-medium">Student</p>
-                  <p className="font-semibold text-slate-800 mt-0.5">
-                    {viewOrder.payment_submission_details.student_details.first_name
-                      ? `${viewOrder.payment_submission_details.student_details.first_name} ${viewOrder.payment_submission_details.student_details.last_name}`
-                      : viewOrder.payment_submission_details.student_details.username}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {viewOrder.payment_submission_details.student_details.email}
-                  </p>
+
+              <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4">
+                <h4 className="font-semibold text-slate-800">Update Status</h4>
+                <form onSubmit={handleUpdateStatus} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-500">New Status</label>
+                    <Select value={newStatus} onValueChange={setNewStatus}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map(s => (
+                          <SelectItem key={s} value={s}>{s}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-500">Note (Optional)</label>
+                    <Textarea 
+                      placeholder="Add a tracking number or internal note..." 
+                      value={statusNote}
+                      onChange={(e) => setStatusNote(e.target.value)}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={actioningId !== null || newStatus === viewOrder.status}>
+                    {actioningId ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                    Confirm Status Change
+                  </Button>
+                </form>
+              </div>
+              
+              {viewOrder.status_history && viewOrder.status_history.length > 0 && (
+                <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4">
+                  <h4 className="font-semibold text-slate-800">Status History</h4>
+                  <div className="space-y-4">
+                    {viewOrder.status_history.map((history, idx) => (
+                      <div key={history.id} className="relative pl-6 border-l-2 border-slate-200 ml-2">
+                        <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-slate-300 ring-4 ring-white" />
+                        <div className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                          <span className="text-slate-500 line-through">{history.previous_status}</span>
+                          <ArrowRight className="w-3 h-3 text-slate-400" />
+                          <span className="text-primary">{history.new_status}</span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                          By {history.changed_by_name} on {new Date(history.created_at).toLocaleString()}
+                        </div>
+                        {history.note && (
+                          <div className="mt-2 text-xs bg-slate-50 p-2 rounded border text-slate-600">
+                            {history.note}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

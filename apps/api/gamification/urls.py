@@ -21,4 +21,9 @@ urlpatterns = [
     path('daily-motivation/', views.daily_motivation, name='daily-motivation'),
     path('motivation/daily/', views.daily_motivation, name='motivation-daily'),
     path('leaderboard/', views.leaderboard, name='leaderboard'),
+    
+    # New Game dashboard endpoints
+    path('achievements/', views.get_achievements, name='get-achievements'),
+    path('activity/', views.get_recent_activity, name='get-recent-activity'),
+    path('performance/', views.get_performance_data, name='get-performance-data'),
 ]

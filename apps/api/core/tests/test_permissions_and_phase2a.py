@@ -28,8 +28,8 @@ class PermissionAndPhase2ATests(APITestCase):
         # Course setup
         self.course1 = Course.objects.create(title='Course 1', status='published', exam=self.exam)
         
-        # Product setup (category='COURSE')
-        self.product1 = Product.objects.create(title='Product 1', category='COURSE', course=self.course1, price=100)
+        # Product setup (category='BOOK')
+        self.product1 = Product.objects.create(title='Product 1', category='BOOK', price=100)
         
         # Marketplace submissions
         self.payment_method = PaymentMethod.objects.create(method_type='ESEWA', display_name='eSewa')
@@ -101,18 +101,12 @@ class PermissionAndPhase2ATests(APITestCase):
         purchases = Purchase.objects.filter(student=self.student1, product=self.product1)
         self.assertEqual(purchases.count(), 1)
         
-        # Verify EXACTLY ONE enrollment
-        enrollments = Enrollment.objects.filter(student=self.student1, course=self.course1)
-        self.assertEqual(enrollments.count(), 1)
-        self.assertEqual(enrollments.first().status, 'active')
-        
         # Trying to approve again should be rejected since it's no longer PENDING
         response2 = self.client.post(f'/api/marketplace/admin/payment-submissions/{self.submission1.id}/review/', {'status': 'APPROVED'})
         self.assertEqual(response2.status_code, status.HTTP_400_BAD_REQUEST)
         
         # Verify counts remain 1
         self.assertEqual(Purchase.objects.filter(student=self.student1, product=self.product1).count(), 1)
-        self.assertEqual(Enrollment.objects.filter(student=self.student1, course=self.course1).count(), 1)
 
     def test_admin_created_question_sets_created_by(self):
         # AdminQuestionViewSet.perform_create used to call serializer.save()

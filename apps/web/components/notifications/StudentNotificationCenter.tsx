@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Sparkles,
   Trophy,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,8 @@ const TABS: { id: NotificationFilter; label: string }[] = [
   { id: "exam", label: "Exam" },
   { id: "learning", label: "Learning" },
   { id: "achievement", label: "Achievement" },
+  { id: "payments", label: "Payments" },
+  { id: "orders", label: "Orders" },
   { id: "system", label: "System" },
 ];
 
@@ -57,6 +60,9 @@ function getIcon(type: string, priority: string) {
       return <CreditCard className="w-5 h-5 text-green-600" />;
     case "support":
       return <HelpCircle className="w-5 h-5 text-amber-500" />;
+    case "order":
+    case "marketplace":
+      return <Package className="w-5 h-5 text-pink-500" />;
     case "announcement":
       return <Megaphone className="w-5 h-5 text-fuchsia-500" />;
     case "feedback":

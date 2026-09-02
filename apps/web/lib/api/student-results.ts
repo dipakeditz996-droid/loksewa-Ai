@@ -74,7 +74,7 @@ export const studentResultService = {
       examName: a.examination_title || 'Unknown Exam',
       date: a.submitted_at || new Date().toISOString(),
       score: a.score,
-      totalMarks: 100, // Fallback if not available
+      totalMarks: a.total_marks != null ? a.total_marks : 100, // Safe fallback for legacy missing data
       percentage: a.percentage,
       rank: 'N/A',
       totalParticipants: 'N/A',
@@ -121,7 +121,7 @@ export const studentResultService = {
         examId: attempt.examination.toString(),
         examName: attempt.examination_title || 'Unknown Exam',
         score: attempt.score,
-        totalMarks: 100, // TODO: Fetch from actual exam
+        totalMarks: attempt.total_marks != null ? attempt.total_marks : 100, // Safely fallback if legacy backend response
         percentage: attempt.percentage,
         timeTaken: attempt.time_taken_seconds || 0,
         rank: rank !== 'N/A' ? parseInt(rank) : 'N/A',

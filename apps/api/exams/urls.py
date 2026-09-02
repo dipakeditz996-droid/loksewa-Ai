@@ -12,7 +12,8 @@ from .views import (
 from .student_exam_views import (
     StudentExaminationViewSet,
     StudentExaminationAttemptViewSet,
-    LeaderboardViewSet
+    LeaderboardViewSet,
+    CalmSessionLogView
 )
 from .admin_views import (
     AdminExamCategoryViewSet, AdminExamViewSet, AdminPaperViewSet,
@@ -83,6 +84,7 @@ urlpatterns = [
     path('schedules/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next'),
     path('student/exam-schedule/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next-alt'),
     path('student/mock-exams/upcoming/', StudentUpcomingMockExamView.as_view(), name='student-mock-exams-upcoming'),
+    path('student/calm-session-log/', CalmSessionLogView.as_view(), name='student-calm-session-log'),
     path('', include(router.urls)),
 ]
 

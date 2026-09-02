@@ -82,7 +82,7 @@ export default function AddMaterialPage() {
 
   const save = async (status: "draft" | "published") => {
     if (problems.length > 0) {
-      toast.error(problems[0]);
+      toast.error(problems[0] || "Please fill in all required fields");
       return;
     }
     setSaving(status);

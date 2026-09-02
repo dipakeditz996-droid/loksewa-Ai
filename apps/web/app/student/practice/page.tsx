@@ -75,7 +75,7 @@ export default function PracticeSetupPage() {
     { id: "random", label: "Random Practice", icon: Zap, color: "text-purple-500", bg: "bg-purple-500/10", onClick: () => router.push(`/student/practice/session?exam=all&subject=all&topic=all&diff=all&q=20&mode=flexible`) },
     { id: "weak", label: "Weak Topics", icon: Target, color: "text-red-500", bg: "bg-red-500/10", onClick: () => router.push("/student/practice/revision?focus=weak_topics") },
     { id: "incorrect", label: "Recently Incorrect", icon: RefreshCw, color: "text-orange-500", bg: "bg-orange-500/10", onClick: () => router.push("/student/practice/revision?focus=recent_mistakes") },
-    { id: "daily", label: "Daily Practice", icon: Calendar, color: "text-[#D4A72C]", bg: "bg-[#D4A72C]/10", comingSoon: true },
+    { id: "daily", label: "Daily Practice", icon: Calendar, color: "text-[#D4A72C]", bg: "bg-[#D4A72C]/10", onClick: () => router.push("/student/practice/daily") },
   ];
 
   return (

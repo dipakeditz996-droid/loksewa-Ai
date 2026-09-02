@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Check, CircleAlert, FileText, HelpCircle, Users, Activity, CreditCard, ClipboardCheck, GraduationCap, UserPlus, UserCog } from "lucide-react";
+import { Bell, Check, CircleAlert, FileText, HelpCircle, Users, Activity, CreditCard, ClipboardCheck, GraduationCap, UserPlus, UserCog, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -80,6 +80,8 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
       case 'course_application': return <GraduationCap className="w-4 h-4 text-blue-500" />;
       case 'new_registration': return <UserPlus className="w-4 h-4 text-teal-500" />;
       case 'account': return <UserCog className="w-4 h-4 text-orange-500" />;
+      case 'order': return <Package className="w-4 h-4 text-pink-500" />;
+      case 'marketplace': return <Package className="w-4 h-4 text-pink-500" />;
       default: return <Bell className="w-4 h-4 text-slate-400" />;
     }
   };

@@ -1,0 +1,68 @@
+apps\api\create_teacher.py:15: 'first_name': 'Demo',
+apps\api\seed_student.py:22: 'email': 'demo@example.com',
+apps\api\seed_student.py:23: 'first_name': 'Demo',
+apps\api\verify_student_exam.py:37: exam_type='mock',
+apps\api\ai_tutor\services.py:147: """Generates a mock response when no API key is present."""
+apps\api\ai_tutor\services.py:150: "The AI Tutor is currently running in mock mode because the `GEMINI_API_KEY` environment variable is not set. "
+apps\api\ai_tutor\services.py:213: # Return mock data
+apps\api\backend\settings.py:276: # no certificate is bundled or hardcoded.
+apps\api\core\public_views.py:9: reflects what an admin configures instead of being hardcoded everywhere."""
+apps\api\core\public_views.py:24: (core.Testimonial), not a hardcoded list. Returns an empty array until an
+apps\api\core\management\commands\seed_reference_data.py:29: self.stdout.write(self.style.WARNING("WARNING: Loading DEVELOPMENT ONLY sample data. DO NOT USE IN PRODUCTION."))
+apps\api\courses\teacher_student_views.py:172: # Mock progress for now, would typically come from course module completion
+apps\api\courses\teacher_student_views.py:178: 'progress': 100 if en.status == 'completed' else 45, # Mock 45%
+apps\api\courses\views.py:409: # We map the plan to a dummy course object for display purposes
+apps\api\exams\models.py:241: ('full_mock', 'Full Mock Set'),
+apps\api\exams\models.py:256: subject_distribution = models.JSONField(default=dict, blank=True, help_text="For Full Mock sets, format: {'subject_id': count}")
+apps\api\exams\models.py:541: # classification like mock/full/subjective) and from `category` (the
+apps\api\exams\models.py:556: exam_type = models.CharField(max_length=20, choices=EXAM_TYPES, default='mock')
+apps\api\exams\public_views.py:66: """GET /api/public/exams/ - published mock/practice examinations for the
+apps\api\exams\schedule_views.py:123: base_qs = base_qs.filter(course__isnull=True, exam_type__in=['mock', 'full', 'position'])
+apps\api\exams\serializers.py:59: # We didn't add description to Subject model, but mock data expects it.
+apps\web\app\page.tsx:54: // We remove the hardcoded `dark` class so the toggle button actually works.
+apps\web\app\admin-dashboard\ai-tutor\overview\page.tsx:82: : "GEMINI_API_KEY is not set on the backend - the AI Tutor is running in mock-response mode for students."}
+apps\web\app\admin-dashboard\exams\new\page.tsx:66: const [examType, setExamType] = useState<ExaminationType>("mock");
+apps\web\app\admin-dashboard\referrals\page.tsx:28: // Demo data
+apps\web\app\admin-dashboard\study-materials\bulk-upload\page.tsx:46: subject: "Constitution of Nepal", // mock detection
+apps\web\app\admin-dashboard\study-plans\templates\components\TemplateFormModal.tsx:88: // For simplicity in this demo form, we might just load all subjects or rely on cascading.
+apps\web\app\courses\page.tsx:272: : badge === "Coming Soon"
+apps\web\app\courses\page.tsx:351: course.status === "Coming Soon"
+apps\web\app\courses\page.tsx:355: {course.status === "Coming Soon" ? (
+apps\web\app\courses\page.tsx:356: <span>Coming Soon</span>
+apps\web\app\exams\page.tsx:456: {/* Mock Header */}
+apps\web\app\exams\page.tsx:465: {/* Mock Body */}
+apps\web\app\exams\page.tsx:482: {/* Mock Footer */}
+apps\web\app\home\CoursesSection.tsx:16: tag: "Coming Soon",
+apps\web\app\home\CoursesSection.tsx:23: tag: "Coming Soon",
+apps\web\app\home\CoursesSection.tsx:30: tag: "Coming Soon",
+apps\web\app\home\CoursesSection.tsx:37: tag: "Coming Soon",
+apps\web\app\home\CoursesSection.tsx:56: // price), or a clearly-labeled "coming soon" fallback while the catalog
+apps\web\app\home\MarketplaceSection.tsx:24: title: "Section Officer 10 Full Mock Sets (PDF)",
+apps\web\app\home\MarketplaceSection.tsx:72: Unlock expert-created masterclasses, premium mock sets, and specialized study guides.
+apps\web\app\home\SyllabusSection.tsx:49: // this stays a static product demo like the other illustrative sections.
+apps\web\app\student\ai-tutor\page.tsx:28: { id: 'PRACTICE', label: 'Practice', icon: Brain, description: 'Generate mock MCQs' },
+apps\web\app\student\exams\page.tsx:56: <Badge variant={exam.exam_type === "mock" ? "default" : "secondary"}>
+apps\web\app\student\exams\subjective\page.tsx:174: let totalMarks = attempt.practice_set_detail?.question_count ? attempt.practice_set_detail.question_count * 10 : 100; // Mock total marks calculation
+apps\web\app\student\exams\subjective\[id]\page.tsx:9: * This page used to be a fully static mockup: hardcoded question text, an
+apps\web\app\student\exams\subjective\[id]\page.tsx:10: * uncontrolled textarea, a hardcoded "Words: 0 / 1000" counter, and a
+apps\web\app\student\exams\[id]\page.tsx:98: <Badge variant={exam.exam_type === "mock" ? "default" : "secondary"}>
+apps\web\app\student\plans\page.tsx:49: // For demo, we just use a default list based on plan name/price.
+apps\web\app\student\practice\page.tsx:277: <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-0.5">Coming soon</div>
+apps\web\app\student\syllabus\page.tsx:474: <h3 className="text-[18px] font-bold text-primary dark:text-foreground mb-2">Syllabus content coming soon</h3>
+apps\web\app\teacher\mock-exams\page.tsx:100: Auto-generate (Coming Soon)
+apps\web\app\teacher\questions\components\QuestionStudio.tsx:62: // Will hold cascading selection ID (for mock simplicity we use topic ID direct)
+apps\web\components\admin\exams\ExamForm.tsx:19: exam_type: 'mock',
+apps\web\components\admin\question-sets\QuestionSetForm.tsx:153: <option value="full_mock">Full Mock Set</option>
+apps\web\components\admin\question-sets\QuestionSetForm.tsx:191: <p className="text-xs text-gray-500 mb-4">Set the number of questions per subject for this full mock set.</p>
+apps\web\components\layout\sidebar.tsx:50: // Real platform name/logo from Admin Settings > Platform, not hardcoded.
+apps\web\components\marketplace\CheckoutFlow.tsx:369: {/* Mock QR Placeholder - Admin Configurable */}
+apps\web\components\student\settings\AppearanceSection.tsx:119: Nepali translation is coming soon. This saves your preference for when it's available.
+apps\web\components\teacher\mock-exams\MockExamBuilder.tsx:35: exam_type: "mock",
+apps\web\components\teacher\mock-exams\MockExamBuilder.tsx:257: value={formData.exam_type || "mock"}
+apps\web\components\teacher\mock-exams\MockExamBuilder.tsx:627: {/* Mock Browser Header */}
+apps\web\components\teacher\mock-exams\MockExamBuilder.tsx:675: const isSelected = i === 0; // Just mock the first option as selected
+apps\web\lib\api\admin-exams.ts:12: | 'mock'
+apps\web\lib\api\leaderboard.ts:7: * ║                            → Demo Data (fallback/dev)           ║
+apps\web\lib\api\leaderboard.ts:10: * ║  the real /student/leaderboard/ API and remove demo fallback.   ║
+apps\web\lib\api\leaderboard.ts:100: * Primary data fetcher. Tries real API first; falls back to demo data
+apps\web\lib\api\public-api.ts:218: /** Get published mock/practice examinations for the Exams page. */

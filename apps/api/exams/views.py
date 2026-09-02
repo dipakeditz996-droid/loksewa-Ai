@@ -452,6 +452,158 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             'questions': SecureQuestionSerializer(questions, many=True).data,
         })
 
+    @action(detail=False, methods=['post'])
+    def daily(self, request):
+        """Build (or resume) a Daily Practice session for today.
+
+        Question selection strategy (in priority order):
+          1. Questions from the student's weak topics (accuracy < 60 %, min 3 answers)
+          2. Questions the student has never seen before across their enrolled exam
+          3. Random approved questions from the exam as a fallback
+
+        The session is created once per calendar day and can be resumed if
+        the student closes the tab mid-session. A new session is created the
+        next calendar day.
+        """
+        from django.utils import timezone
+        from django.db.models import Sum
+        import random
+
+        user = request.user
+        today = timezone.localdate()
+        DAILY_SIZE = 20
+
+        # ── Reuse today's daily session if it already exists ───────────────
+        existing = PracticeSession.objects.filter(
+            user=user, mode='daily', completed=False,
+            created_at__date=today
+        ).order_by('-created_at').first()
+
+        if existing:
+            attempts = list(
+                QuestionAttempt.objects.filter(session=existing)
+                .select_related('question')
+                .order_by('id')
+            )
+            resume_index = next((i for i, a in enumerate(attempts) if not a.is_viewed), 0)
+            from .serializers import SecureQuestionSerializer
+            return Response({
+                'session': PracticeSessionSerializer(existing).data,
+                'questions': SecureQuestionSerializer(
+                    [a.question for a in attempts], many=True
+                ).data,
+                'resume_index': resume_index,
+                'resumed': True,
+            })
+
+        # ── Determine the student's enrolled exam ──────────────────────────
+        from courses.models import Enrollment
+        enrolled_exam_id = None
+        enrollment = Enrollment.objects.filter(
+            student=user, status='active'
+        ).select_related('course__exam').first()
+        if enrollment and enrollment.course and enrollment.course.exam:
+            enrolled_exam_id = enrollment.course.exam_id
+
+        approved_qs = QuestionSelectionService().get_base_queryset()
+        if enrolled_exam_id:
+            approved_qs = approved_qs.filter(
+                topic__chapter__subject__paper__exam_id=enrolled_exam_id
+            )
+
+        # Exclude questions recently seen (in last 7 days) to maintain freshness
+        from django.db.models import Q
+        seven_days_ago = timezone.now() - timezone.timedelta(days=7)
+        recently_seen_ids = set(
+            QuestionAttempt.objects.filter(
+                session__user=user,
+                is_viewed=True,
+                session__created_at__gte=seven_days_ago,
+            ).values_list('question_id', flat=True)
+        )
+
+        # ── Bucket 1: Weak topic questions ────────────────────────────────
+        mastery = QuestionMastery.objects.filter(
+            user=user, question_id__in=approved_qs.values_list('id', flat=True)
+        ).exclude(times_answered=0)
+
+        topic_stats = mastery.values('question__topic').annotate(
+            answered=Sum('times_answered'), correct=Sum('times_correct')
+        )
+        weak_topic_ids = [
+            t['question__topic'] for t in topic_stats
+            if t['answered'] >= WEAK_TOPIC_MIN_ANSWERED
+            and (t['correct'] * 100 / t['answered']) < WEAK_TOPIC_ACCURACY_THRESHOLD
+        ]
+
+        weak_questions = []
+        if weak_topic_ids:
+            wq = list(
+                approved_qs.filter(topic_id__in=weak_topic_ids)
+                .exclude(id__in=recently_seen_ids)
+                .order_by('?')[:DAILY_SIZE]
+            )
+            weak_questions = wq
+
+        # ── Bucket 2: Unseen questions ─────────────────────────────────────
+        ever_seen_ids = set(
+            QuestionAttempt.objects.filter(
+                session__user=user, is_viewed=True
+            ).values_list('question_id', flat=True)
+        )
+        unseen_questions = []
+        if len(weak_questions) < DAILY_SIZE:
+            need = DAILY_SIZE - len(weak_questions)
+            already_picked = {q.id for q in weak_questions}
+            uq = list(
+                approved_qs
+                .exclude(id__in=ever_seen_ids)
+                .exclude(id__in=already_picked)
+                .order_by('?')[:need]
+            )
+            unseen_questions = uq
+
+        # ── Bucket 3: Random fallback ──────────────────────────────────────
+        fallback_questions = []
+        total_so_far = len(weak_questions) + len(unseen_questions)
+        if total_so_far < DAILY_SIZE:
+            need = DAILY_SIZE - total_so_far
+            already_picked = {q.id for q in weak_questions + unseen_questions}
+            fq = list(
+                approved_qs
+                .exclude(id__in=already_picked)
+                .order_by('?')[:need]
+            )
+            fallback_questions = fq
+
+        questions = weak_questions + unseen_questions + fallback_questions
+        random.shuffle(questions)
+
+        if not questions:
+            return Response(
+                {'detail': 'No practice questions are available yet. Ask your teacher to publish questions.'},
+                status=400,
+            )
+
+        first_exam = Exam.objects.filter(id=enrolled_exam_id).first() if enrolled_exam_id else Exam.objects.first()
+        session = PracticeSession.objects.create(
+            user=user,
+            exam_id=first_exam.id if first_exam else None,
+            mode='daily',
+            total_questions=len(questions),
+        )
+        for q in questions:
+            QuestionAttempt.objects.create(session=session, question=q)
+
+        from .serializers import SecureQuestionSerializer
+        return Response({
+            'session': PracticeSessionSerializer(session).data,
+            'questions': SecureQuestionSerializer(questions, many=True).data,
+            'resume_index': 0,
+            'resumed': False,
+        })
+
+
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         session = self.get_object()

@@ -2,7 +2,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
 export class ApiError extends Error {
   constructor(public status: number, public data: any) {
-    super(data?.detail || data?.message || "An API error occurred");
+    super(data?.detail || data?.error || data?.message || "An API error occurred");
     this.name = "ApiError";
   }
 }

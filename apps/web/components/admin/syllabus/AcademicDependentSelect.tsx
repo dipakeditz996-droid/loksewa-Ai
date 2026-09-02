@@ -42,7 +42,7 @@ export function AcademicDependentSelect({
   useEffect(() => {
     setLoading(prev => ({ ...prev, category: true }));
     adminSyllabusApi.getCategories()
-      .then(res => setCategories(Array.isArray(res) ? res : (res?.results || [])))
+      .then((res: any) => setCategories(Array.isArray(res) ? res : (res?.results || [])))
       .catch(console.error)
       .finally(() => setLoading(prev => ({ ...prev, category: false })));
   }, []);
@@ -52,7 +52,7 @@ export function AcademicDependentSelect({
     if (category) {
       setLoading(prev => ({ ...prev, position: true }));
       adminSyllabusApi.getPositions(Number(category))
-        .then(res => setPositions(Array.isArray(res) ? res : (res?.results || [])))
+        .then((res: any) => setPositions(Array.isArray(res) ? res : (res?.results || [])))
         .catch(console.error)
         .finally(() => setLoading(prev => ({ ...prev, position: false })));
     }
@@ -63,7 +63,7 @@ export function AcademicDependentSelect({
     if (position) {
       setLoading(prev => ({ ...prev, subject: true }));
       adminSyllabusApi.getSubjects(Number(position))
-        .then(res => setSubjects(Array.isArray(res) ? res : (res?.results || [])))
+        .then((res: any) => setSubjects(Array.isArray(res) ? res : (res?.results || [])))
         .catch(console.error)
         .finally(() => setLoading(prev => ({ ...prev, subject: false })));
     }
@@ -74,7 +74,7 @@ export function AcademicDependentSelect({
     if (subject) {
       setLoading(prev => ({ ...prev, chapter: true }));
       adminSyllabusApi.getChapters(Number(subject))
-        .then(res => setChapters(Array.isArray(res) ? res : (res?.results || [])))
+        .then((res: any) => setChapters(Array.isArray(res) ? res : (res?.results || [])))
         .catch(console.error)
         .finally(() => setLoading(prev => ({ ...prev, chapter: false })));
     }
@@ -85,7 +85,7 @@ export function AcademicDependentSelect({
     if (chapter) {
       setLoading(prev => ({ ...prev, topic: true }));
       adminSyllabusApi.getTopics(Number(chapter))
-        .then(res => setTopics(Array.isArray(res) ? res : (res?.results || [])))
+        .then((res: any) => setTopics(Array.isArray(res) ? res : (res?.results || [])))
         .catch(console.error)
         .finally(() => setLoading(prev => ({ ...prev, topic: false })));
     }

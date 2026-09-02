@@ -308,6 +308,9 @@ class PracticeSession(models.Model):
         # A system-assembled queue from QuestionMastery signals (due for
         # review, repeatedly incorrect, weak topics) rather than a topic pick.
         ('revision', 'Revision'),
+        # A curated 20-question set personalised per student for the calendar
+        # day — built from weak topics, unseen questions, and exam syllabus.
+        ('daily', 'Daily Practice'),
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='practice_sessions')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE)
@@ -755,3 +758,20 @@ class ExamSchedule(models.Model):
     def __str__(self):
         return f"{self.title} ({self.exam_date})"
 
+
+class CalmSessionLog(models.Model):
+    """Tracks usage and skip rates of the pre-exam Calm Down Experience."""
+    EVENT_CHOICES = (
+        ('started', 'Started'),
+        ('completed', 'Completed'),
+        ('skipped', 'Skipped'),
+        ('audio_enabled', 'Audio Enabled'),
+    )
+    
+    student = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='calm_session_logs')
+    event_type = models.CharField(max_length=20, choices=EVENT_CHOICES)
+    meta_data = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.event_type} - {self.student.username if self.student else 'Anonymous'}"

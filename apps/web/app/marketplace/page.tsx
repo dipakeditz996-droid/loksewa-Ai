@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Search, ShoppingBag, Book, FileText, PenTool, Layers, BookOpen,
   Brain, FileQuestion, ChevronRight, SlidersHorizontal, Lock,
@@ -12,7 +13,6 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { CheckoutFlow } from "@/components/marketplace/CheckoutFlow";
 import { publicApi, type PublicProduct } from "@/lib/api/public-api";
 
 type ProductType = "Physical" | "Digital";
@@ -27,15 +27,23 @@ interface Product {
   price: number;
   originalPrice?: number;
   discountPercentage?: number;
-  stock: "In Stock" | "Pre-order" | "Out of Stock";
+  stock: number;
   rating: number;
   reviews: number;
   isFeatured: boolean;
   isBestSeller: boolean;
   isNewArrival: boolean;
-  imageColor: string; // Fallback when there's no cover image
+  imageColor: string;
   coverImage: string | null;
+  condition?: string | null;
+  stockStatus: string;
+  sellerName?: string | null;
+  // S2S fields
+  isSellerListing?: boolean;
+  conditionDisplay?: string | null;
+  sellerLocation?: string | null;
 }
+
 
 const CATEGORY_ICONS: Record<string, any> = {
   "PDF": FileText,
@@ -68,36 +76,42 @@ function mapProduct(p: PublicProduct, idx: number): Product {
     description: p.description,
     category: p.category_display,
     exam: p.target_exam_name || "General",
-    type: "Digital",
+    type: p.category === "COURSE" ? "Digital" : "Physical",
     price,
     originalPrice: original,
     discountPercentage,
-    stock: "In Stock",
+    stock: p.stock ?? 0,
+    stockStatus: p.stock !== undefined ? (p.stock > 0 ? `${p.stock} in stock` : "Out of Stock") : "In Stock",
     rating: 0,
     reviews: 0,
+    isSellerListing: (p as any).is_seller_listing ?? false,
+    conditionDisplay: (p as any).condition_display ?? null,
+    sellerLocation: (p as any).location ?? null,
     isFeatured: idx < 4,
     isBestSeller: false,
     isNewArrival: false,
-    imageColor: IMAGE_GRADIENTS[idx % IMAGE_GRADIENTS.length],
+    imageColor: IMAGE_GRADIENTS[idx % IMAGE_GRADIENTS.length] as string,
     coverImage: p.cover_image,
+    condition: p.condition,
+    sellerName: p.seller_details ? p.seller_details.first_name + (p.seller_details as any).last_name ? ` ${(p.seller_details as any).last_name}` : "" : null,
   };
 }
 
 export default function MarketplacePage() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedExam, setSelectedExam] = useState<string>("All Exams");
   const [selectedPrice, setSelectedPrice] = useState<string>("All Prices");
+  const [selectedSellerType, setSelectedSellerType] = useState<string>("All");
   const [sortBy, setSortBy] = useState<string>("Recommended");
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modals state
-  const [previewProduct, setPreviewProduct] = useState<Product | null>(null);
-  const [showCart, setShowCart] = useState(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [showWishlistPrompt, setShowWishlistPrompt] = useState(false);
   const [cartItems, setCartItems] = useState<{product: Product, quantity: number}[]>([]);
+  const [showCart, setShowCart] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -125,24 +139,21 @@ export default function MarketplacePage() {
     if (selectedPrice === "Rs. 1,000-2,000") matchesPrice = product.price > 1000 && product.price <= 2000;
     if (selectedPrice === "Rs. 2,000+") matchesPrice = product.price > 2000;
 
-    return matchesSearch && matchesCategory && matchesExam && matchesPrice;
+    let matchesSellerType = true;
+    if (selectedSellerType === "Student Sellers") matchesSellerType = !!(product as any).isSellerListing;
+    if (selectedSellerType === "Platform") matchesSellerType = !(product as any).isSellerListing;
+
+    return matchesSearch && matchesCategory && matchesExam && matchesPrice && matchesSellerType;
   }).sort((a, b) => {
     if (sortBy === "Price: Low to High") return a.price - b.price;
     if (sortBy === "Price: High to Low") return b.price - a.price;
     return 0;
   });
 
+    const router = useRouter();
   const handleAddToCart = (product: Product, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setCartItems(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
-      if (existing) {
-        return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
-    setPreviewProduct(null);
-    setShowCart(true);
+    router.push(`/marketplace/product/${product.id}`);
   };
 
   const handleWishlist = (e: React.MouseEvent) => {
@@ -166,14 +177,7 @@ export default function MarketplacePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-[#0A1118] text-slate-900 dark:text-slate-50 flex flex-col font-sans selection:bg-[#163E6B]/20 dark:selection:bg-[#D4A72C]/30">
       <Navbar />
 
-      {isCheckoutOpen ? (
-        <CheckoutFlow 
-          cartItems={cartItems} 
-          onBack={() => setIsCheckoutOpen(false)} 
-          onComplete={() => { setCartItems([]); setIsCheckoutOpen(false); }}
-        />
-      ) : (
-        <main className="flex-1">
+      <main className="flex-1">
           {/* 1. HERO SECTION */}
           <section className="relative pt-32 pb-20 overflow-hidden bg-[#0A1118] border-b border-white/10">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#163E6B_0%,transparent_70%)] opacity-30"></div>
@@ -315,6 +319,7 @@ export default function MarketplacePage() {
                       setSelectedCategory("All");
                       setSelectedExam("All Exams");
                       setSelectedPrice("All Prices");
+                      setSelectedSellerType("All");
                       setSortBy("Recommended");
                     }}
                   >
@@ -385,6 +390,27 @@ export default function MarketplacePage() {
                   </div>
                 </div>
 
+                {/* Seller Type Filter */}
+                <div>
+                  <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Seller Type</h4>
+                  <div className="space-y-2">
+                    {["All", "Student Sellers", "Platform"].map(type => (
+                      <label key={type} className="flex items-center gap-3 cursor-pointer group">
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
+                          selectedSellerType === type 
+                            ? 'bg-[#163E6B] border-[#163E6B] dark:bg-[#D4A72C] dark:border-[#D4A72C]' 
+                            : 'border-slate-300 dark:border-white/20 group-hover:border-[#163E6B] dark:group-hover:border-white/40'
+                        }`}>
+                          {selectedSellerType === type && <div className="w-1.5 h-1.5 rounded-full bg-white dark:bg-[#0A1118]" />}
+                        </div>
+                        <span className={`text-sm font-[500] ${selectedSellerType === type ? 'text-slate-900 dark:text-white font-[700]' : 'text-slate-600 dark:text-slate-400'}`}>
+                          {type}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
               </div>
 
               {/* Main Library Grid */}
@@ -419,7 +445,7 @@ export default function MarketplacePage() {
                       <div
                         key={product.id}
                         className="group flex flex-col bg-white dark:bg-[#060B11] border border-slate-200 dark:border-white/10 rounded-[20px] overflow-hidden hover:shadow-xl hover:border-[#163E6B]/30 dark:hover:border-white/30 transition-all cursor-pointer h-full"
-                        onClick={() => setPreviewProduct(product)}
+                        onClick={() => router.push(`/marketplace/product/${product.id}`)}
                       >
                         {/* Product Image Area */}
                         <div className={`relative h-48 w-full ${product.coverImage ? "" : `bg-gradient-to-br ${product.imageColor}`}`}>
@@ -440,12 +466,34 @@ export default function MarketplacePage() {
 
                         {/* Product Details */}
                         <div className="p-5 flex flex-col flex-1">
-                          <div className="text-[10px] font-[800] uppercase tracking-wider text-[#163E6B] dark:text-[#D4A72C] mb-2">
-                            {product.category}
+                          {/* Category + Seller type badges */}
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            <div className="text-[10px] font-[800] uppercase tracking-wider text-[#163E6B] dark:text-[#D4A72C]">
+                              {product.category}
+                            </div>
+                            {(product as any).isSellerListing && (
+                              <span className="text-[9px] font-[800] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                Student Seller
+                              </span>
+                            )}
+                            {(product as any).conditionDisplay && (
+                              <span className="text-[9px] font-[700] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                                {(product as any).conditionDisplay}
+                              </span>
+                            )}
                           </div>
+
                           <h3 className="text-sm font-[800] text-slate-900 dark:text-white leading-tight mb-2 line-clamp-2 flex-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
                             {product.name}
                           </h3>
+
+                          {/* Seller location for used books */}
+                          {(product as any).sellerLocation && (
+                            <p className="text-[10px] text-slate-400 mb-1 flex items-center gap-1">
+                              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                              {(product as any).sellerLocation}
+                            </p>
+                          )}
 
                           <div className="flex items-end justify-between mt-auto pt-4 border-t border-slate-100 dark:border-white/5">
                             <div>
@@ -461,16 +509,20 @@ export default function MarketplacePage() {
                                 </div>
                               )}
                             </div>
+                            {product.stockStatus === "Out of Stock" && (
+                              <span className="text-[10px] font-[700] text-red-500">Out of Stock</span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Add to Cart Footer */}
+                                                {/* Add to Cart Footer */}
                         <div className="px-5 pb-5">
                           <Button 
-                            className="w-full h-10 rounded-[10px] bg-slate-100 hover:bg-[#163E6B] text-slate-900 hover:text-white font-[700] dark:bg-white/5 dark:hover:bg-white dark:text-white dark:hover:text-[#0A1118] transition-all"
+                            className="w-full h-10 rounded-[10px] bg-slate-100 hover:bg-[#163E6B] text-slate-900 hover:text-white font-[700] dark:bg-white/5 dark:hover:bg-white dark:text-white dark:hover:text-[#0A1118] transition-all disabled:opacity-50 disabled:hover:bg-slate-100 dark:disabled:hover:bg-white/5 disabled:hover:text-slate-900 dark:disabled:hover:text-white"
                             onClick={(e) => handleAddToCart(product, e)}
+                            disabled={product.stock === 0}
                           >
-                            <ShoppingCart className="w-4 h-4 mr-2" /> Add to Cart
+                            <ShoppingCart className="w-4 h-4 mr-2" /> {product.stock === 0 ? "Out of Stock" : "Add to Cart"}
                           </Button>
                         </div>
                       </div>
@@ -573,102 +625,9 @@ export default function MarketplacePage() {
         </section>
 
       </main>
-      )}
 
       {/* PRODUCT PREVIEW DIALOG */}
-      <Dialog open={!!previewProduct} onOpenChange={(open) => !open && setPreviewProduct(null)}>
-        <DialogContent className="sm:max-w-2xl bg-white dark:bg-[#0A1118] border border-slate-200 dark:border-white/10 p-0 overflow-hidden rounded-[24px]">
-          {previewProduct && (
-            <div className="flex flex-col md:flex-row h-full md:max-h-[600px]">
-              {/* Product Image Side */}
-              <div className={`w-full md:w-2/5 h-64 md:h-auto relative ${previewProduct.coverImage ? "" : `bg-gradient-to-br ${previewProduct.imageColor}`}`}>
-                {previewProduct.coverImage ? (
-                  <img src={previewProduct.coverImage} alt={previewProduct.name} className="absolute inset-0 w-full h-full object-cover" />
-                ) : (
-                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:12px_12px]"></div>
-                )}
-                <div className="absolute top-4 left-4">
-                  <div className="px-2.5 py-1 bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-[800] uppercase tracking-wider rounded-md">
-                    {previewProduct.type} Product
-                  </div>
-                </div>
-              </div>
-
-              {/* Product Info Side */}
-              <div className="w-full md:w-3/5 p-6 md:p-8 flex flex-col overflow-y-auto">
-                <div className="text-[10px] font-[800] uppercase tracking-wider text-[#163E6B] dark:text-[#D4A72C] mb-2">
-                  {previewProduct.category} • {previewProduct.exam}
-                </div>
-
-                <DialogTitle className="text-2xl font-[900] text-slate-900 dark:text-white leading-tight mb-4">
-                  {previewProduct.name}
-                </DialogTitle>
-
-                <div className="flex flex-wrap items-end gap-3 mb-6 pb-6 border-b border-slate-100 dark:border-white/5">
-                  <span className="text-3xl font-[900] text-slate-900 dark:text-white">{previewProduct.price === 0 ? "Free" : `Rs. ${previewProduct.price}`}</span>
-                  {previewProduct.originalPrice && (
-                    <span className="text-lg font-[500] text-slate-400 line-through mb-1">Rs. {previewProduct.originalPrice}</span>
-                  )}
-                  {previewProduct.discountPercentage && (
-                    <div className="px-2 py-1 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-xs font-[800] rounded-md mb-1.5 ml-2">
-                      SAVE {previewProduct.discountPercentage}%
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-8">
-                  <h4 className="text-sm font-[800] text-slate-900 dark:text-white mb-2">Description</h4>
-                  <DialogDescription className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed font-[500]">
-                    {previewProduct.description}
-                  </DialogDescription>
-                </div>
-
-                {previewProduct.category === "Bundle" && (
-                  <div className="mb-8 p-4 bg-slate-50 dark:bg-white/5 rounded-[12px] border border-slate-100 dark:border-white/5">
-                    <h4 className="text-xs font-[800] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">What's Included</h4>
-                    <ul className="space-y-2">
-                      {["Complete Preparation Guide", "Topic-wise Explanations", "Practice Questions", "Revision Sections"].map((item, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200 font-[600]">
-                          <CheckCircle2 className="w-4 h-4 text-[#D4A72C] mt-0.5 shrink-0" />
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                <div className="mt-auto flex flex-col gap-3 pt-4">
-                  <Button 
-                    className="w-full h-14 rounded-[12px] bg-[#163E6B] hover:bg-[#163E6B]/90 text-white font-[800] text-[16px] dark:bg-white dark:hover:bg-slate-200 dark:text-[#0A1118]"
-                    onClick={() => handleAddToCart(previewProduct)}
-                  >
-                    Add to Cart
-                  </Button>
-                  <div className="flex gap-3">
-                    <Button 
-                      variant="outline" 
-                      className="flex-1 h-12 rounded-[12px] border-slate-200 dark:border-white/10 font-[700]"
-                      onClick={() => {
-                        handleAddToCart(previewProduct);
-                        // Future implementation: Redirect to checkout
-                      }}
-                    >
-                      Buy Now
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="w-12 h-12 shrink-0 rounded-[12px] border-slate-200 dark:border-white/10 flex items-center justify-center p-0"
-                      onClick={handleWishlist}
-                    >
-                      <Heart className="w-5 h-5 text-slate-400" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      
 
       {/* CART DRAWER SIMULATION */}
       {showCart && (
@@ -747,29 +706,7 @@ export default function MarketplacePage() {
       )}
 
       {/* WISHLIST PROMPT */}
-      <Dialog open={showWishlistPrompt} onOpenChange={setShowWishlistPrompt}>
-        <DialogContent className="sm:max-w-md bg-white dark:bg-[#0A1118] border border-slate-200 dark:border-white/10 rounded-[20px] text-center p-8">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-pink-500 mx-auto flex items-center justify-center shadow-lg mb-6">
-            <Heart className="w-8 h-8 text-white fill-white" />
-          </div>
-          <DialogTitle className="text-2xl font-[800] text-slate-900 dark:text-white mb-2">
-            Save products for later
-          </DialogTitle>
-          <DialogDescription className="text-slate-500 font-[500] text-base mb-8">
-            Log in to create your personal wishlist and save items for your future preparation journey.
-          </DialogDescription>
-          <div className="flex flex-col gap-3">
-            <Link href="/login" className="w-full">
-              <Button className="w-full h-12 rounded-[10px] font-[700] bg-[#163E6B] hover:bg-[#163E6B]/90 text-white dark:bg-white dark:hover:bg-slate-200 dark:text-[#0A1118]">
-                Log In
-              </Button>
-            </Link>
-            <Button variant="outline" className="w-full h-12 rounded-[10px] font-[600] border-slate-200 dark:border-white/10" onClick={() => setShowWishlistPrompt(false)}>
-              Cancel
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      
 
       <Footer />
     </div>

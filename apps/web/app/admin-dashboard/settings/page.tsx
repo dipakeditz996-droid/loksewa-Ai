@@ -143,11 +143,11 @@ export default function SettingsPage() {
     <div className="p-6 max-w-6xl mx-auto space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Settings className="w-6 h-6 text-amber-500" />
           Platform Settings
         </h1>
-        <p className="text-slate-500 text-sm mt-1">Configure global platform behavior and system preferences.</p>
+        <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Configure global platform behavior and system preferences.</p>
       </div>
 
       {/* Message */}
@@ -169,15 +169,15 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Sidebar Tabs */}
         <div className="flex flex-col lg:col-span-1">
-          <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium border-b border-slate-200 last:border-b-0 transition ${
+                className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium border-b border-slate-200 dark:border-slate-800 last:border-b-0 transition ${
                   activeTab === tab.id
                     ? "bg-blue-50 text-blue-600 border-l-4 border-l-blue-600"
-                    : "text-slate-700 hover:bg-slate-50"
+                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:bg-slate-950"
                 }`}
               >
                 {tab.icon}
@@ -189,18 +189,18 @@ export default function SettingsPage() {
 
         {/* Main Content */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-lg p-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-6">
             {/* Platform Settings */}
             {activeTab === "platform" && (
               <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <Server className="w-5 h-5 text-blue-500" />
                   Platform Settings
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Platform Name
                     </label>
                     <Input
@@ -211,13 +211,13 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Language
                     </label>
                     <select
                       value={formData.platform.language}
                       onChange={(e) => updateFormData("platform", "language", e.target.value)}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm"
                     >
                       <option value="en">English</option>
                       <option value="ne">Nepali</option>
@@ -226,7 +226,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Platform Description
                   </label>
                   <textarea
@@ -234,12 +234,12 @@ export default function SettingsPage() {
                     onChange={(e) => updateFormData("platform", "description", e.target.value)}
                     placeholder="Describe your platform..."
                     rows={3}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Platform Logo URL
                   </label>
                   <Input
@@ -252,13 +252,13 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     Timezone
                   </label>
                   <select
                     value={formData.platform.timezone}
                     onChange={(e) => updateFormData("platform", "timezone", e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md text-sm"
                   >
                     <option value="UTC">UTC</option>
                     <option value="Asia/Kathmandu">Asia/Kathmandu (Nepal)</option>
@@ -274,14 +274,14 @@ export default function SettingsPage() {
             {/* Email Settings */}
             {activeTab === "email" && (
               <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <Mail className="w-5 h-5 text-blue-500" />
                   Email Settings
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       SMTP Host
                     </label>
                     <Input
@@ -292,7 +292,7 @@ export default function SettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       SMTP Port
                     </label>
                     <Input
@@ -306,7 +306,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     SMTP Username/Email
                   </label>
                   <Input
@@ -318,7 +318,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     From Address
                   </label>
                   <Input
@@ -331,7 +331,7 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                     From Name
                   </label>
                   <Input
@@ -347,13 +347,13 @@ export default function SettingsPage() {
             {/* Notification Settings */}
             {activeTab === "notifications" && (
               <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <Bell className="w-5 h-5 text-blue-500" />
                   Notification Settings
                 </h2>
 
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.notifications.enabled}
@@ -361,12 +361,12 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Enable Notifications</p>
-                      <p className="text-xs text-slate-600">Allow the system to send notifications</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Enable Notifications</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Allow the system to send notifications</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.notifications.enableEmail}
@@ -374,12 +374,12 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Email Notifications</p>
-                      <p className="text-xs text-slate-600">Send notifications via email</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Email Notifications</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Send notifications via email</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.notifications.enableInApp}
@@ -387,12 +387,12 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">In-App Notifications</p>
-                      <p className="text-xs text-slate-600">Show notifications within the app</p>
+                      <p className="font-medium text-slate-900 dark:text-white">In-App Notifications</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Show notifications within the app</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.notifications.enablePush}
@@ -400,8 +400,8 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Push Notifications</p>
-                      <p className="text-xs text-slate-600">Send push notifications to mobile devices</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Push Notifications</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Send push notifications to mobile devices</p>
                     </div>
                   </label>
                 </div>
@@ -411,14 +411,14 @@ export default function SettingsPage() {
             {/* Security Settings */}
             {activeTab === "security" && (
               <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <Shield className="w-5 h-5 text-blue-500" />
                   Security Settings
                 </h2>
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Minimum Password Length
                     </label>
                     <Input
@@ -432,7 +432,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Session Timeout (minutes)
                     </label>
                     <Input
@@ -446,7 +446,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                       Max Login Attempts
                     </label>
                     <Input
@@ -461,39 +461,39 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="space-y-3">
-                  <p className="text-sm font-medium text-slate-700">Password Requirements</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Password Requirements</p>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.security.passwordRequireUppercase}
                       onChange={(e) => updateFormData("security", "passwordRequireUppercase", e.target.checked)}
                       className="w-4 h-4 rounded"
                     />
-                    <span className="text-sm text-slate-700">Require uppercase letters (A-Z)</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">Require uppercase letters (A-Z)</span>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.security.passwordRequireNumbers}
                       onChange={(e) => updateFormData("security", "passwordRequireNumbers", e.target.checked)}
                       className="w-4 h-4 rounded"
                     />
-                    <span className="text-sm text-slate-700">Require numbers (0-9)</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">Require numbers (0-9)</span>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.security.passwordRequireSpecialChars}
                       onChange={(e) => updateFormData("security", "passwordRequireSpecialChars", e.target.checked)}
                       className="w-4 h-4 rounded"
                     />
-                    <span className="text-sm text-slate-700">Require special characters (!@#$%^&*)</span>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">Require special characters (!@#$%^&*)</span>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.security.enableTwoFactorAuth}
@@ -501,8 +501,8 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Two-Factor Authentication</p>
-                      <p className="text-xs text-slate-600">
+                      <p className="font-medium text-slate-900 dark:text-white">Two-Factor Authentication</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
                         Allow admins to set up 2FA on their own accounts. This never forces 2FA on an
                         admin who hasn't set it up — each admin opts in individually below.
                       </p>
@@ -517,13 +517,13 @@ export default function SettingsPage() {
             {/* Feature Flags */}
             {activeTab === "features" && (
               <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <Zap className="w-5 h-5 text-blue-500" />
                   Feature Settings
                 </h2>
 
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.features.enableAiTutor}
@@ -531,12 +531,12 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">AI Tutor</p>
-                      <p className="text-xs text-slate-600">Enable AI-powered tutoring feature</p>
+                      <p className="font-medium text-slate-900 dark:text-white">AI Tutor</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Enable AI-powered tutoring feature</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.features.enableMarketplace}
@@ -544,12 +544,12 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Marketplace</p>
-                      <p className="text-xs text-slate-600">Enable student marketplace for study materials</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Marketplace</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Enable student marketplace for study materials</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.features.enableGamification}
@@ -557,12 +557,12 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Gamification</p>
-                      <p className="text-xs text-slate-600">Enable points, badges, and leaderboards</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Gamification</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Enable points, badges, and leaderboards</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 dark:border-slate-800 rounded-lg cursor-pointer hover:bg-slate-50 dark:bg-slate-950">
                     <input
                       type="checkbox"
                       checked={formData.features.enableStudyPlans}
@@ -570,8 +570,8 @@ export default function SettingsPage() {
                       className="w-4 h-4 rounded"
                     />
                     <div>
-                      <p className="font-medium text-slate-900">Study Plans</p>
-                      <p className="text-xs text-slate-600">Enable personalized study plan generation</p>
+                      <p className="font-medium text-slate-900 dark:text-white">Study Plans</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">Enable personalized study plan generation</p>
                     </div>
                   </label>
                 </div>
@@ -579,7 +579,7 @@ export default function SettingsPage() {
             )}
 
             {/* Save Button */}
-            <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200">
+            <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-200 dark:border-slate-800">
               <Button
                 variant="outline"
                 onClick={fetchSettings}
@@ -689,10 +689,10 @@ function TwoFactorSelfService({ platformEnabled }: { platformEnabled: boolean })
   }
 
   return (
-    <div className="mt-2 p-4 border border-slate-200 rounded-lg bg-slate-50 space-y-4">
+    <div className="mt-2 p-4 border border-slate-200 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-950 space-y-4">
       <div className="flex items-center gap-2">
         <ShieldCheck className={`w-5 h-5 ${enabled ? "text-green-600" : "text-slate-400"}`} />
-        <p className="text-sm font-semibold text-slate-900">
+        <p className="text-sm font-semibold text-slate-900 dark:text-white">
           Your Account's Two-Factor Authentication
         </p>
       </div>
@@ -713,7 +713,7 @@ function TwoFactorSelfService({ platformEnabled }: { platformEnabled: boolean })
         <div>
           {enabled ? (
             <div className="flex items-center justify-between">
-              <p className="text-xs text-slate-600">2FA is currently enabled on your account.</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">2FA is currently enabled on your account.</p>
               <Button type="button" variant="outline" size="sm" onClick={() => setShowDisableForm(true)}>
                 Disable
               </Button>
@@ -729,7 +729,7 @@ function TwoFactorSelfService({ platformEnabled }: { platformEnabled: boolean })
 
       {showDisableForm && (
         <div className="space-y-2">
-          <label className="block text-xs font-medium text-slate-700">Confirm your password to disable 2FA</label>
+          <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Confirm your password to disable 2FA</label>
           <div className="flex gap-2">
             <Input
               type="password"
@@ -749,25 +749,25 @@ function TwoFactorSelfService({ platformEnabled }: { platformEnabled: boolean })
 
       {stage === "setup" && (
         <div className="space-y-3">
-          <p className="text-xs text-slate-600">
+          <p className="text-xs text-slate-600 dark:text-slate-400">
             Scan this into your authenticator app (Google Authenticator, Authy, 1Password, etc.), or
             enter the secret manually, then confirm with the 6-digit code it generates.
           </p>
-          <div className="p-2 bg-white border border-slate-200 rounded font-mono text-xs break-all flex items-center justify-between gap-2">
+          <div className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono text-xs break-all flex items-center justify-between gap-2">
             <span>{secret}</span>
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(secret)}
-              className="shrink-0 text-slate-400 hover:text-slate-700"
+              className="shrink-0 text-slate-400 hover:text-slate-700 dark:text-slate-300"
               title="Copy secret"
             >
               <Copy className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-[11px] text-slate-500 break-all">{otpauthUri}</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 break-all">{otpauthUri}</p>
           <div className="flex gap-2 items-end">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">6-digit code</label>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">6-digit code</label>
               <Input
                 type="text"
                 inputMode="numeric"
@@ -794,7 +794,7 @@ function TwoFactorSelfService({ platformEnabled }: { platformEnabled: boolean })
             2FA is enabled. Save these one-time backup codes somewhere safe — each works once if you
             lose access to your authenticator app. They will not be shown again.
           </p>
-          <div className="grid grid-cols-2 gap-2 p-3 bg-white border border-slate-200 rounded font-mono text-xs">
+          <div className="grid grid-cols-2 gap-2 p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded font-mono text-xs">
             {backupCodes.map((code) => (
               <span key={code}>{code}</span>
             ))}

@@ -78,7 +78,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     if (!product || !selectedMethodId) return;
 
-    if (!product.is_free && !screenshot) {
+    if (!screenshot) {
       toast.error("Please upload your payment proof.");
       return;
     }

@@ -169,7 +169,12 @@ export const practiceApi = {
     });
   },
 
-  listSavedQuestions: () => {
-    return apiClient<SavedQuestion[]>("/bookmarks/");
+  startDailySession: () => {
+    return apiClient<StudySessionResponse>("/practice-sessions/daily/", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
   },
+
+  listSavedQuestions: () => apiClient<SavedQuestion[]>("/bookmarks/"),
 };

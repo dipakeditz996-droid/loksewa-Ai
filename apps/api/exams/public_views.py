@@ -3,7 +3,53 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from django.db.models import Count, Q
 
-from .models import Exam, Subject, Examination, QuestionSet, Question
+from .models import Exam, ExamCategory, Subject, Examination, QuestionSet, Question
+
+
+class PublicExamPreferenceTreeView(APIView):
+    """GET /api/public/exam-preferences/ - the "what are you preparing for?"
+    picker for registration: active ExamCategory rows, each with its Exam
+    tree nested arbitrarily deep via Exam.parent (Level -> Service/Faculty,
+    or however many levels a category actually has). Admin-managed through
+    the existing ExamCategory/Exam CRUD - nothing here is hardcoded, so a
+    new level or category shows up on the registration form with no
+    frontend change."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        def serialize_exam(exam, children_by_parent):
+            return {
+                'id': exam.id,
+                'name': exam.name,
+                'children': [
+                    serialize_exam(child, children_by_parent)
+                    for child in children_by_parent.get(exam.id, [])
+                ],
+            }
+
+        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'name')
+        exams = Exam.objects.filter(is_active=True, category__in=categories).order_by('order', 'name')
+
+        children_by_parent = {}
+        top_level_by_category = {}
+        for exam in exams:
+            if exam.parent_id:
+                children_by_parent.setdefault(exam.parent_id, []).append(exam)
+            else:
+                top_level_by_category.setdefault(exam.category_id, []).append(exam)
+
+        data = [
+            {
+                'id': category.id,
+                'name': category.name,
+                'exams': [
+                    serialize_exam(exam, children_by_parent)
+                    for exam in top_level_by_category.get(category.id, [])
+                ],
+            }
+            for category in categories
+        ]
+        return Response(data)
 
 
 class PublicSyllabusTreeView(APIView):

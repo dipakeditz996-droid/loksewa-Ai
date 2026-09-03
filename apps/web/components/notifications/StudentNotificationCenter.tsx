@@ -26,6 +26,7 @@ import {
   type NotificationFilter,
   type NotificationItem,
 } from "@/lib/api/notifications";
+import { notifyNotificationsChanged } from "@/lib/notification-events";
 
 const TABS: { id: NotificationFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -126,6 +127,7 @@ export function StudentNotificationCenter() {
     try {
       await notificationsApi.markAllRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      notifyNotificationsChanged();
     } catch (err) {
       console.error("Failed to mark all as read", err);
     }
@@ -138,8 +140,14 @@ export function StudentNotificationCenter() {
       );
       try {
         await notificationsApi.markRead(notif.id);
-      } catch (err) {
-        console.error("Failed to mark as read", err);
+        notifyNotificationsChanged();
+      } catch (err: any) {
+        // A 404 means this notification was already deleted server-side -
+        // it's already shown as read locally, so just avoid a hard-error log
+        // (Next's dev overlay treats console.error as a crash).
+        if (err?.status !== 404) {
+          console.warn("Failed to mark as read", err);
+        }
       }
     }
     if (notif.action_url) {

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Check, CircleAlert, FileText, HelpCircle, Users, Activity, Search, CreditCard, ClipboardCheck, GraduationCap, UserPlus, UserCog } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { notifyNotificationsChanged } from '@/lib/notification-events';
 
 interface NotificationData {
   id: number;
@@ -64,6 +65,7 @@ export function NotificationsInbox({ subtitle, settingsHref, filters = DEFAULT_F
     try {
       await apiClient('/notifications/mark-all-read/', { method: 'POST' });
       setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      notifyNotificationsChanged();
     } catch (error) {
       console.error("Failed to mark all as read", error);
     }
@@ -74,8 +76,16 @@ export function NotificationsInbox({ subtitle, settingsHref, filters = DEFAULT_F
       try {
         await apiClient(`/notifications/${notif.id}/read/`, { method: 'PATCH' });
         setNotifications(notifications.map(n => n.id === notif.id ? { ...n, is_read: true } : n));
-      } catch (error) {
-        console.error("Failed to mark as read", error);
+        notifyNotificationsChanged();
+      } catch (error: any) {
+        // A 404 means this notification was already deleted server-side -
+        // drop the now-stale row instead of logging a hard error (Next's dev
+        // overlay treats console.error as a crash).
+        if (error?.status === 404) {
+          setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+        } else {
+          console.warn("Failed to mark as read", error);
+        }
       }
     }
     if (notif.action_url) {
@@ -96,13 +106,13 @@ export function NotificationsInbox({ subtitle, settingsHref, filters = DEFAULT_F
       case 'material_review': return <FileText className="w-5 h-5 text-emerald-500" />;
       case 'student_activity': return <Users className="w-5 h-5 text-sky-500" />;
       case 'support': return <HelpCircle className="w-5 h-5 text-amber-500" />;
-      case 'system': return <Activity className="w-5 h-5 text-slate-500" />;
+      case 'system': return <Activity className="w-5 h-5 text-muted-foreground" />;
       case 'payment': return <CreditCard className="w-5 h-5 text-green-600" />;
       case 'evaluation': return <ClipboardCheck className="w-5 h-5 text-violet-500" />;
       case 'course_application': return <GraduationCap className="w-5 h-5 text-blue-500" />;
       case 'new_registration': return <UserPlus className="w-5 h-5 text-teal-500" />;
       case 'account': return <UserCog className="w-5 h-5 text-orange-500" />;
-      default: return <Activity className="w-5 h-5 text-slate-400" />;
+      default: return <Activity className="w-5 h-5 text-muted-foreground" />;
     }
   };
 

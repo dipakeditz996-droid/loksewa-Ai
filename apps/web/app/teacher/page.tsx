@@ -258,19 +258,23 @@ export default function TeacherDashboardPage() {
                     <div className="flex-1">
                       <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-muted-foreground">
                         <span>Completion</span>
-                        <span className="italic">Gathering data</span>
+                        <span className={course.completion_percentage > 0 ? "" : "italic"}>
+                          {course.completion_percentage > 0 ? `${course.completion_percentage}%` : "Gathering data"}
+                        </span>
                       </div>
                       <div className="h-1.5 rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-[#D4A72C]" style={{ width: "0%" }} />
+                        <div className="h-full rounded-full bg-[#D4A72C]" style={{ width: `${course.completion_percentage}%` }} />
                       </div>
                     </div>
                     <div className="flex-1">
                       <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-muted-foreground">
                         <span>Avg Score</span>
-                        <span className="italic">Gathering data</span>
+                        <span className={course.average_score > 0 ? "" : "italic"}>
+                          {course.average_score > 0 ? `${course.average_score}%` : "Gathering data"}
+                        </span>
                       </div>
                       <div className="h-1.5 rounded-full bg-muted">
-                        <div className="h-full rounded-full bg-[#159A82]" style={{ width: "0%" }} />
+                        <div className="h-full rounded-full bg-[#159A82]" style={{ width: `${course.average_score}%` }} />
                       </div>
                     </div>
                   </div>

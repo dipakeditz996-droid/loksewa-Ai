@@ -1,6 +1,7 @@
 from django.db import models
 from core.models import User
 from exams.models import Exam, Subject, Topic
+from core.upload_validators import validate_document_size_20mb, validate_document_extension
 
 
 class MaterialCategory(models.Model):
@@ -102,7 +103,10 @@ class StudyMaterial(models.Model):
     
     material_type = models.CharField(max_length=20, choices=MATERIAL_TYPES, default='notes')
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='beginner')
-    file = models.FileField(upload_to='study_materials/pdfs/', blank=True, null=True)
+    file = models.FileField(
+        upload_to='study_materials/pdfs/', blank=True, null=True,
+        validators=[validate_document_size_20mb, validate_document_extension],
+    )
     external_url = models.URLField(blank=True, null=True, help_text="For videos or external resources")
     
     access_type = models.CharField(max_length=20, choices=ACCESS_TYPES, default='free')

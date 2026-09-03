@@ -1,9 +1,10 @@
+# pyrefly: ignore [missing-import]
 from rest_framework import serializers
 from .models import (
     Product, PaymentMethod, PaymentSubmission, Purchase, ProductImage,
     Cart, CartItem, Order, OrderItem, DeliveryAddress, DeliveryFeeRule,
     OrderStatusHistory, MarketplaceSettings, MarketplaceListingReport,
-    Review, Dispute, DisputeEvidence,
+    Review, Dispute, DisputeEvidence, PayoutAccount, SellerPayout,
 )
 from core.models import User
 from exams.models import Exam
@@ -333,3 +334,42 @@ class DisputeSerializer(serializers.ModelSerializer):
             'buyer', 'seller', 'status', 'resolution', 'admin_notes', 
             'resolved_by', 'resolved_at', 'created_at', 'updated_at'
         )
+
+
+# ---------------------------------------------------------------------------
+# Payouts
+# ---------------------------------------------------------------------------
+
+class PayoutAccountSerializer(serializers.ModelSerializer):
+    method_display = serializers.CharField(source='get_method_display', read_only=True)
+
+    class Meta:
+        model = PayoutAccount
+        fields = '__all__'
+        read_only_fields = ('seller', 'is_verified', 'created_at', 'updated_at')
+
+
+class SellerPayoutSerializer(serializers.ModelSerializer):
+    payout_account_details = PayoutAccountSerializer(source='payout_account', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = SellerPayout
+        fields = '__all__'
+        read_only_fields = (
+            'seller', 'status', 'admin_note', 'rejection_reason', 
+            'transaction_reference', 'processed_by', 'processed_at', 
+            'created_at', 'updated_at'
+        )
+
+class AdminSellerPayoutSerializer(SellerPayoutSerializer):
+    seller_name = serializers.CharField(source='seller.get_full_name', read_only=True)
+    processed_by_name = serializers.CharField(source='processed_by.get_full_name', read_only=True)
+
+
+class SellerBalanceSerializer(serializers.Serializer):
+    total_earnings = serializers.DecimalField(max_digits=10, decimal_places=2)
+    pending_payouts = serializers.DecimalField(max_digits=10, decimal_places=2)
+    paid_out = serializers.DecimalField(max_digits=10, decimal_places=2)
+    available_balance = serializers.DecimalField(max_digits=10, decimal_places=2)
+    minimum_payout_amount = serializers.DecimalField(max_digits=10, decimal_places=2)

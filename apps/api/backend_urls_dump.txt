@@ -1762,6 +1762,12 @@ Auth: JWTAuthentication
 Perms: AllowAny
 Serializer: None
 ----------------------------------------
+URL: api/marketplace/admin/settings/
+View: AdminMarketplaceSettingsView
+Auth: JWTAuthentication
+Perms: IsAdminUser
+Serializer: None
+----------------------------------------
 URL: api/marketplace/admin/^products/$
 View: AdminProductViewSet
 Auth: 
@@ -1781,6 +1787,42 @@ Perms:
 Serializer: None
 ----------------------------------------
 URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminProductViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)/approve/$
+View: AdminProductViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)/approve\.(?P<format>[a-z0-9]+)/?$
+View: AdminProductViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)/archive/$
+View: AdminProductViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)/archive\.(?P<format>[a-z0-9]+)/?$
+View: AdminProductViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)/reject/$
+View: AdminProductViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^products/(?P<pk>[^/.]+)/reject\.(?P<format>[a-z0-9]+)/?$
 View: AdminProductViewSet
 Auth: 
 Perms: 
@@ -1950,6 +1992,138 @@ Serializer: None
 ----------------------------------------
 URL: api/marketplace/admin/^delivery-fees/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
 View: AdminDeliveryFeeRuleViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^listing-reports/$
+View: AdminListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^listing-reports\.(?P<format>[a-z0-9]+)/?$
+View: AdminListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^listing-reports/(?P<pk>[^/.]+)/$
+View: AdminListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^listing-reports/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^listing-reports/(?P<pk>[^/.]+)/review/$
+View: AdminListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^listing-reports/(?P<pk>[^/.]+)/review\.(?P<format>[a-z0-9]+)/?$
+View: AdminListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^reviews/$
+View: AdminReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^reviews\.(?P<format>[a-z0-9]+)/?$
+View: AdminReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^reviews/(?P<pk>[^/.]+)/$
+View: AdminReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^reviews/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^disputes/$
+View: AdminDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^disputes\.(?P<format>[a-z0-9]+)/?$
+View: AdminDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^disputes/(?P<pk>[^/.]+)/$
+View: AdminDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^disputes/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^disputes/(?P<pk>[^/.]+)/resolve/$
+View: AdminDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^disputes/(?P<pk>[^/.]+)/resolve\.(?P<format>[a-z0-9]+)/?$
+View: AdminDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^payouts/$
+View: AdminPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^payouts\.(?P<format>[a-z0-9]+)/?$
+View: AdminPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^payouts/(?P<pk>[^/.]+)/$
+View: AdminPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^payouts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: AdminPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^payouts/(?P<pk>[^/.]+)/update_status/$
+View: AdminPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/admin/^payouts/(?P<pk>[^/.]+)/update_status\.(?P<format>[a-z0-9]+)/?$
+View: AdminPayoutViewSet
 Auth: 
 Perms: 
 Serializer: None
@@ -2202,6 +2376,198 @@ Serializer: None
 ----------------------------------------
 URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
 View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)/archive/$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)/archive\.(?P<format>[a-z0-9]+)/?$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)/resubmit/$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-listings/(?P<pk>[^/.]+)/resubmit\.(?P<format>[a-z0-9]+)/?$
+View: SellerListingViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-sales/$
+View: SellerSalesViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-sales\.(?P<format>[a-z0-9]+)/?$
+View: SellerSalesViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-sales/(?P<pk>[^/.]+)/$
+View: SellerSalesViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^my-sales/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: SellerSalesViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^listing-reports/$
+View: StudentListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^listing-reports\.(?P<format>[a-z0-9]+)/?$
+View: StudentListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^listing-reports/(?P<pk>[^/.]+)/$
+View: StudentListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^listing-reports/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentListingReportViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^reviews/$
+View: StudentReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^reviews\.(?P<format>[a-z0-9]+)/?$
+View: StudentReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^reviews/(?P<pk>[^/.]+)/$
+View: StudentReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^reviews/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentReviewViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^disputes/$
+View: StudentDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^disputes\.(?P<format>[a-z0-9]+)/?$
+View: StudentDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^disputes/(?P<pk>[^/.]+)/$
+View: StudentDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^disputes/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentDisputeViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payout-accounts/$
+View: StudentPayoutAccountViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payout-accounts\.(?P<format>[a-z0-9]+)/?$
+View: StudentPayoutAccountViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payout-accounts/(?P<pk>[^/.]+)/$
+View: StudentPayoutAccountViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payout-accounts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentPayoutAccountViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts\.(?P<format>[a-z0-9]+)/?$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/balance/$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/balance\.(?P<format>[a-z0-9]+)/?$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/request/$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/request\.(?P<format>[a-z0-9]+)/?$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/(?P<pk>[^/.]+)/$
+View: StudentPayoutViewSet
+Auth: 
+Perms: 
+Serializer: None
+----------------------------------------
+URL: api/marketplace/student/^payouts/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$
+View: StudentPayoutViewSet
 Auth: 
 Perms: 
 Serializer: None

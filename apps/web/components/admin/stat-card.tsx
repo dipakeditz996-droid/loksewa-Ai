@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
@@ -16,6 +17,7 @@ interface StatCardProps {
   trendLabel?: string;
   loading?: boolean;
   className?: string;
+  href?: string;
 }
 
 export function StatCard({
@@ -29,6 +31,7 @@ export function StatCard({
   trendLabel,
   loading = false,
   className,
+  href,
 }: StatCardProps) {
   if (loading) {
     return (
@@ -47,9 +50,10 @@ export function StatCard({
   const trendColor = trend === undefined ? "" : trend > 0 ? "text-emerald-600" : trend < 0 ? "text-red-500" : "text-slate-400";
   const trendBg = trend === undefined ? "" : trend > 0 ? "bg-emerald-50" : trend < 0 ? "bg-red-50" : "bg-slate-50";
 
-  return (
+  const content = (
     <div className={cn(
-      "bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-shadow duration-200",
+      "bg-white rounded-xl border border-slate-200 p-5 shadow-sm transition-all duration-200",
+      href ? "hover:shadow-md hover:border-[#D4A72C] cursor-pointer" : "hover:shadow-md",
       className
     )}>
       <div className="flex items-start justify-between mb-4">
@@ -72,4 +76,10 @@ export function StatCard({
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link href={href} className="block">{content}</Link>;
+  }
+
+  return content;
 }

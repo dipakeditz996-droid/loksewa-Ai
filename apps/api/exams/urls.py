@@ -30,6 +30,7 @@ from .public_views import (
     PublicExaminationListView,
     PublicSubjectListView,
     PublicQuestionSetListView,
+    PublicExamPreferenceTreeView,
 )
 
 router = DefaultRouter()
@@ -74,6 +75,7 @@ urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     # Public (no auth) — Syllabus, Exams & Practice pages
     path('public/syllabus/', PublicSyllabusTreeView.as_view(), name='public-syllabus'),
+    path('public/exam-preferences/', PublicExamPreferenceTreeView.as_view(), name='public-exam-preferences'),
     path('public/exams/', PublicExaminationListView.as_view(), name='public-exam-list'),
     path('public/subjects/', PublicSubjectListView.as_view(), name='public-subject-list'),
     path('public/practice-sets/', PublicQuestionSetListView.as_view(), name='public-practice-sets'),

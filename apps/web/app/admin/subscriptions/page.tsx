@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { apiClient } from "@/lib/api/client";
 
 interface SubscriptionPlan {
   id: number;
@@ -28,12 +29,8 @@ export default function AdminSubscriptionsPage() {
   const fetchPlans = async () => {
     setIsLoading(true);
     try {
-      // Use full URL to hit django backend
-      const res = await fetch("http://127.0.0.1:8000/api/subscriptions/plans/");
-      if (res.ok) {
-        const data = await res.json();
-        setPlans(data);
-      }
+      const data = await apiClient<SubscriptionPlan[]>("/subscriptions/plans/");
+      setPlans(data);
     } catch (error) {
       console.error("Error fetching plans:", error);
     } finally {

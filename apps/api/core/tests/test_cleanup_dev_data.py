@@ -22,12 +22,12 @@ class CleanupDevDataTest(TestCase):
         self.dev_topic2 = Topic.objects.create(chapter=self.dev_chapter, name="[DEV] Mountains")
         
         self.dev_course = Course.objects.create(title="[DEV] Kharidar Complete Course", slug="dev-kharidar-complete-course", is_open_for_enrollment=True)
-        self.dev_product = Product.objects.create(title="[DEV] Kharidar Complete Course", category="COURSE", price=2000.00, course=self.dev_course)
+        self.dev_product = Product.objects.create(title="[DEV] Kharidar Complete Course", category="COURSE", price=2000.00)
         self.dev_sub_plan = SubscriptionPlan.objects.create(name="[DEV] Basic Monthly Plan", price=500.00, duration=1)
         
         # Create Real data (not DEV)
         self.real_course = Course.objects.create(title="Real Course", slug="real-course", is_open_for_enrollment=True)
-        self.real_product = Product.objects.create(title="Real Course Product", category="COURSE", price=100.00, course=self.real_course)
+        self.real_product = Product.objects.create(title="Real Course Product", category="COURSE", price=100.00)
         
         # Create user for relations
         self.student = User.objects.create_user(username="teststudent", email="teststudent@example.com", password="password", role="student", first_name="Test", last_name="Student")
@@ -54,7 +54,9 @@ class CleanupDevDataTest(TestCase):
         Enrollment.objects.create(student=self.student, course=self.dev_course, status="active", expires_at=timezone.now())
         
         output = self.run_command()
-        self.assertIn("Course | ID: %s | Title: [DEV] Kharidar Complete Course | Status: UNSAFE | Reason: marketplace_products (1), enrollments (1)" % self.dev_course.id, output)
+        # marketplace_products isn't checked for Course anymore - Product.course
+        # was removed, so enrollments is the only real dependency here.
+        self.assertIn("Course | ID: %s | Title: [DEV] Kharidar Complete Course | Status: UNSAFE | Reason: enrollments (1)" % self.dev_course.id, output)
 
     def test_4_candidate_with_purchase_is_unsafe(self):
         # Create purchase for dev_product

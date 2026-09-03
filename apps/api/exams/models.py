@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from core.models import User
 from django.conf import settings
+from core.upload_validators import validate_image_size_5mb, validate_image_extension
 
 class ExamCategory(models.Model):
     name = models.CharField(max_length=255)
@@ -16,6 +17,16 @@ class ExamCategory(models.Model):
 
 class Exam(models.Model):
     category = models.ForeignKey(ExamCategory, on_delete=models.CASCADE, related_name='exams')
+    # Self-nesting lets one Exam row stand in for a "Level" (e.g. PSC's 4th/
+    # 5th/7th Level) with its own child Exam rows underneath standing in for
+    # "Service/Faculty" (e.g. Civil, Computer, Surveyor) - and Course.exam
+    # already points at whichever Exam is most specific. This gives the
+    # registration flow's PSC -> Level -> Service/Faculty -> Course hierarchy
+    # for free, through the existing Exam admin CRUD, at arbitrary depth, for
+    # any category - not just PSC - without any frontend code changes.
+    parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='children'
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -566,7 +577,10 @@ class Examination(models.Model):
     questions = models.ManyToManyField(Question, through='ExaminationQuestion', related_name='examinations_set')
     
     instructions = models.TextField(blank=True)
-    thumbnail = models.ImageField(upload_to='exams/thumbnails/', null=True, blank=True)
+    thumbnail = models.ImageField(
+        upload_to='exams/thumbnails/', null=True, blank=True,
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     
     # Configuration (can inherit from QuestionSet or override)
     total_questions = models.IntegerField(default=0)

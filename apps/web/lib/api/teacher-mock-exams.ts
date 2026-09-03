@@ -46,6 +46,42 @@ export interface MockExam {
   updated_at: string;
 }
 
+export interface MockExamAnalyticsSummary {
+  total_attempts: number;
+  completed_attempts?: number;
+  in_progress_attempts?: number;
+  average_score?: number;
+  average_percentage?: number;
+  highest_score?: number;
+  lowest_score?: number;
+  pass_count?: number;
+  fail_count?: number;
+}
+
+export interface MockExamAnalytics {
+  exam: { id: number; title: string; exam_type: string; status: string };
+  summary: MockExamAnalyticsSummary;
+  message?: string;
+  time_statistics?: {
+    average_duration_seconds: number;
+    min_duration_seconds: number | null;
+    max_duration_seconds: number | null;
+  };
+  score_distribution?: { range: string; count: number }[];
+  question_performance?: {
+    question_id: number;
+    question_number: number;
+    question_text: string;
+    total_responses: number;
+    correct: number;
+    incorrect: number;
+    skipped: number;
+    accuracy: number;
+    difficulty: string;
+  }[];
+  difficulty_performance?: { level: string; attempts: number; accuracy: number }[];
+}
+
 export const teacherMockExamsApi = {
   getAll: async () => {
     return apiClient<MockExam[]>('/teacher/mock-exams/');
@@ -53,6 +89,10 @@ export const teacherMockExamsApi = {
 
   getById: async (id: number) => {
     return apiClient<MockExam>(`/teacher/mock-exams/${id}/`);
+  },
+
+  getAnalytics: async (id: number) => {
+    return apiClient<MockExamAnalytics>(`/teacher/mock-exams/${id}/analytics/`);
   },
 
   create: async (data: Partial<MockExam>) => {

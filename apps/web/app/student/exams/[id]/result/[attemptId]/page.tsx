@@ -8,7 +8,7 @@ import { studentExamsApi } from "@/lib/api/student-exams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle2, XCircle, LayoutGrid, ArrowLeft, Loader2, AlertTriangle, Play } from "lucide-react";
+import { CheckCircle2, XCircle, LayoutGrid, ArrowLeft, Loader2, AlertTriangle, Play, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function ExamResultPage() {
@@ -169,6 +169,15 @@ export default function ExamResultPage() {
                     );
                   })}
                 </div>
+
+                {currentAnswer?.is_correct !== true && (
+                  <Link
+                    href={`/student/community/ask?question_id=${currentQuestion.id}&question_text=${encodeURIComponent(currentQuestion.text.replace(/<[^>]*>/g, ""))}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline mt-4"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" /> Still confused? Ask the Community
+                  </Link>
+                )}
               </CardContent>
             </Card>
           )}

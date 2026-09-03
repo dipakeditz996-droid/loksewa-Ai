@@ -287,6 +287,7 @@ function LoginContent() {
                       type="text" 
                       placeholder="Enter your email or username" 
                       className="h-[50px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
+                      style={{ color: 'white' }}
                       required 
                     />
                   </div>
@@ -303,6 +304,7 @@ function LoginContent() {
                       type={showPassword ? "text" : "password"} 
                       placeholder="Enter your password"
                       className="h-[50px] w-full pl-11 pr-12 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
+                      style={{ color: 'white' }}
                       required 
                     />
                     <button 

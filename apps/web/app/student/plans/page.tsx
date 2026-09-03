@@ -6,6 +6,7 @@ import { Check, Shield, Zap, BookOpen, MessageSquare, Trophy, AlertCircle, XCirc
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRouter } from "next/navigation";
+import { apiClient } from "@/lib/api/client";
 
 interface SubscriptionPlan {
   id: number;
@@ -31,12 +32,9 @@ export default function StudentPlansPage() {
   const fetchPlans = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/subscriptions/plans/");
-      if (res.ok) {
-        const data = await res.json();
-        // Filter out inactive plans
-        setPlans(data.filter((p: SubscriptionPlan) => p.status === 'ACTIVE'));
-      }
+      const data = await apiClient<SubscriptionPlan[]>("/subscriptions/plans/");
+      // Filter out inactive plans
+      setPlans(data.filter((p: SubscriptionPlan) => p.status === 'ACTIVE'));
     } catch (error) {
       console.error("Error fetching plans:", error);
     } finally {

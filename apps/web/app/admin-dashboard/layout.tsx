@@ -22,6 +22,7 @@ import {
   BarChart3,
   Settings,
   ShieldAlert,
+  Hourglass,
   Database,
   FileText,
   Brain,
@@ -66,6 +67,7 @@ const SIDEBAR_NAV: NavSection[] = [
     title: "User & Access",
     items: [
       { title: "Users", href: "/admin-dashboard/users", icon: Users as any },
+      { title: "Pending Verification", href: "/admin-dashboard/students/pending-verification", icon: Hourglass as any },
       { title: "Applications", href: "/admin-dashboard/applications", icon: ClipboardCheck },
       { title: "Administrators", href: "/admin-dashboard/admins", icon: ShieldAlert },
       { title: "Roles", href: "/admin-dashboard/roles", icon: Database },
@@ -77,6 +79,7 @@ const SIDEBAR_NAV: NavSection[] = [
     items: [
       { title: "Academic Management", href: "/admin-dashboard/academic", icon: GraduationCap as any },
       { title: "Question Bank", href: "/admin-dashboard/academic/questions", icon: BookOpen as any },
+      { title: "Review Queue", href: "/admin-dashboard/questions/review", icon: ClipboardCheck },
       { title: "Collections", href: "/admin-dashboard/academic/collections", icon: ListTodo },
       { title: "Question Sets", href: "/admin-dashboard/academic/question-sets", icon: Layers },
       { title: "Study Plans", href: "/admin-dashboard/study-plans", icon: CalendarDays },
@@ -96,6 +99,7 @@ const SIDEBAR_NAV: NavSection[] = [
     title: "Platform",
     items: [
       { title: "Notifications", href: "/admin-dashboard/notifications", icon: Bell },
+      { title: "Community", href: "/admin-dashboard/community", icon: Users as any },
       { title: "Testimonials", href: "/admin-dashboard/testimonials", icon: Quote },
       { title: "Help & Support", href: "/admin-dashboard/support", icon: LifeBuoy },
       { title: "AI Tutor", href: "/admin-dashboard/ai-tutor", icon: Brain },
@@ -350,7 +354,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
           <p className="text-sm text-slate-400">Loading admin panel...</p>
@@ -365,7 +369,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       window.location.href = "/admin-login";
     }
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
           <p className="text-sm text-slate-400">Redirecting to login...</p>
@@ -376,7 +380,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (!["admin", "super-admin"].includes(user.role)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center max-w-sm mx-auto px-6">
           <div className="h-20 w-20 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-5">
             <ShieldAlert className="w-10 h-10 text-red-400" />
@@ -397,7 +401,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="admin-light-scope flex h-screen bg-slate-50">
       <AdminSidebar
         collapsed={collapsed}
         setCollapsed={setCollapsed}

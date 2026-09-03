@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { 
-  Store, ShoppingCart, CreditCard, LayoutDashboard, Settings, Package, BookOpen, Truck
+  Store, ShoppingCart, CreditCard, LayoutDashboard, Settings, Package, BookOpen, Truck, Wallet
 } from "lucide-react";
 
 export default function MarketplaceLayout({
@@ -56,6 +56,12 @@ export default function MarketplaceLayout({
       name: "Delivery Fees",
       href: "/admin-dashboard/marketplace/delivery-fees",
       icon: Truck,
+      exact: false
+    },
+    {
+      name: "Payouts",
+      href: "/admin-dashboard/marketplace/payouts",
+      icon: Wallet,
       exact: false
     }
   ];

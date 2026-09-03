@@ -45,6 +45,17 @@ Model: User
   - cart: OneToOneField
   - marketplace_orders: ForeignKey
   - orderstatushistory: ForeignKey
+  - listing_reports: ForeignKey
+  - resolved_reports: ForeignKey
+  - reviews_given: ForeignKey
+  - reviews_received: ForeignKey
+  - disputes_raised: ForeignKey
+  - disputes_received: ForeignKey
+  - resolved_disputes: ForeignKey
+  - disputeevidence: ForeignKey
+  - payout_accounts: ForeignKey
+  - payouts: ForeignKey
+  - processed_payouts: ForeignKey
   - game_profile: OneToOneField
   - matches_as_p1: ForeignKey
   - matches_as_p2: ForeignKey
@@ -777,6 +788,8 @@ Model: Product
   - images: ForeignKey
   - cartitem: ForeignKey
   - orderitem: ForeignKey
+  - reports: ForeignKey
+  - reviews: ForeignKey
   - id: BigAutoField
   - title: CharField
   - description: TextField
@@ -784,6 +797,7 @@ Model: Product
   - category: CharField
   - seller: ForeignKey
   - condition: CharField
+  - condition_details: JSONField
   - stock: IntegerField
   - listing_status: CharField
   - negotiable: BooleanField
@@ -792,16 +806,15 @@ Model: Product
   - publisher: CharField
   - isbn: CharField
   - edition: CharField
+  - publication_year: CharField
   - brand: CharField
   - target_exam: ForeignKey
   - target_position: CharField
-  - course: ForeignKey
-  - is_free: BooleanField
   - price: DecimalField
   - discount_price: DecimalField
   - cover_image: FileField
-  - product_file: FileField
   - is_published: BooleanField
+  - rejection_reason: TextField
   - created_at: DateTimeField
   - updated_at: DateTimeField
 Model: PaymentMethod
@@ -849,6 +862,7 @@ Model: ProductImage
   - id: BigAutoField
   - product: ForeignKey
   - image: FileField
+  - label: CharField
   - is_primary: BooleanField
   - created_at: DateTimeField
 Model: DeliveryAddress
@@ -895,11 +909,19 @@ Model: Order
   - created_at: DateTimeField
   - updated_at: DateTimeField
 Model: OrderItem
+  - review: OneToOneField
+  - dispute: OneToOneField
   - id: BigAutoField
   - order: ForeignKey
   - product: ForeignKey
   - quantity: PositiveIntegerField
   - price: DecimalField
+  - commission_amount: DecimalField
+  - seller_earning: DecimalField
+  - fulfillment_status: CharField
+  - payout_status: CharField
+  - snapshot_product_name: CharField
+  - snapshot_seller_name: CharField
 Model: DeliveryFeeRule
   - id: BigAutoField
   - name: CharField
@@ -919,6 +941,83 @@ Model: OrderStatusHistory
   - changed_by: ForeignKey
   - note: TextField
   - created_at: DateTimeField
+Model: MarketplaceSettings
+  - id: BigAutoField
+  - platform_commission_percentage: DecimalField
+  - max_listing_images: PositiveIntegerField
+  - allow_student_listings: BooleanField
+  - minimum_payout_amount: DecimalField
+  - updated_at: DateTimeField
+Model: MarketplaceListingReport
+  - id: BigAutoField
+  - listing: ForeignKey
+  - reporter: ForeignKey
+  - reason: CharField
+  - description: TextField
+  - status: CharField
+  - admin_response: TextField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+  - resolved_at: DateTimeField
+  - resolved_by: ForeignKey
+Model: Review
+  - id: BigAutoField
+  - order_item: OneToOneField
+  - product: ForeignKey
+  - buyer: ForeignKey
+  - seller: ForeignKey
+  - rating: PositiveSmallIntegerField
+  - review_text: TextField
+  - status: CharField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: Dispute
+  - evidence: ForeignKey
+  - id: BigAutoField
+  - order_item: OneToOneField
+  - buyer: ForeignKey
+  - seller: ForeignKey
+  - reason: CharField
+  - description: TextField
+  - status: CharField
+  - resolution: TextField
+  - admin_notes: TextField
+  - resolved_by: ForeignKey
+  - resolved_at: DateTimeField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: DisputeEvidence
+  - id: BigAutoField
+  - dispute: ForeignKey
+  - uploaded_by: ForeignKey
+  - image: FileField
+  - created_at: DateTimeField
+Model: PayoutAccount
+  - payouts: ForeignKey
+  - id: BigAutoField
+  - seller: ForeignKey
+  - method: CharField
+  - account_name: CharField
+  - account_identifier: CharField
+  - bank_name: CharField
+  - branch: CharField
+  - is_verified: BooleanField
+  - is_default: BooleanField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
+Model: SellerPayout
+  - id: BigAutoField
+  - seller: ForeignKey
+  - payout_account: ForeignKey
+  - requested_amount: DecimalField
+  - status: CharField
+  - admin_note: TextField
+  - rejection_reason: TextField
+  - transaction_reference: CharField
+  - processed_by: ForeignKey
+  - processed_at: DateTimeField
+  - created_at: DateTimeField
+  - updated_at: DateTimeField
 
 --- App: games ---
 Model: GameProfile
@@ -1243,7 +1342,6 @@ Model: Invoice
 Model: Course
   - examinations: ForeignKey
   - study_materials: ForeignKey
-  - marketplace_products: ForeignKey
   - study_plan_templates: ForeignKey
   - subscription_plans: ForeignKey
   - enrollments: ForeignKey

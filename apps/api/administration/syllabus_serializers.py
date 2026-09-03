@@ -14,10 +14,14 @@ class ExamCategorySerializer(serializers.ModelSerializer):
 class ExamSerializer(serializers.ModelSerializer):
     paper_count = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True)
+    parent_name = serializers.CharField(source='parent.name', read_only=True, default=None)
 
     class Meta:
         model = Exam
-        fields = ['id', 'category', 'category_name', 'name', 'description', 'is_active', 'order', 'created_at', 'updated_at', 'paper_count']
+        # parent lets one Exam stand in for a "Level" with child Exam rows
+        # under it standing in for "Service/Faculty" (see exams.models.Exam),
+        # used by the registration flow's PSC -> Level -> Service picker.
+        fields = ['id', 'category', 'category_name', 'parent', 'parent_name', 'name', 'description', 'is_active', 'order', 'created_at', 'updated_at', 'paper_count']
 
     def get_paper_count(self, obj):
         return obj.papers.count()

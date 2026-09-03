@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from core.upload_validators import validate_document_size_20mb, validate_document_extension
 
 
 class StudentProfile(models.Model):
@@ -39,6 +40,13 @@ class StudentProfile(models.Model):
     )
     phone = models.CharField(max_length=20, blank=True)
     bio = models.TextField(blank=True)
+    # "What are you preparing for?" - target_category is the top-level pick
+    # (PSC Exams / Licence Exam / Entrance Exam / University Exam, each a
+    # real ExamCategory row); target_position is the most specific Exam the
+    # student drilled into (a Level, or a Level's Service/Faculty child, or
+    # just the category's top-level exam if there's no deeper hierarchy).
+    # Walking target_position.parent chains back up recovers the full path
+    # for course personalization, without a separate registration model.
     target_category = models.ForeignKey(
         'exams.ExamCategory', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='targeted_students'
@@ -47,6 +55,22 @@ class StudentProfile(models.Model):
         'exams.Exam', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='targeted_students'
     )
+
+    # Permanent address, collected at registration. Plain strings, matching
+    # the existing convention in marketplace.DeliveryAddress (district /
+    # municipality as free text) - there's no structured District/LocalLevel
+    # model anywhere in the project to reuse, and building a full Nepal
+    # geographic dataset wasn't asked for.
+    permanent_district = models.CharField(max_length=100, blank=True)
+    permanent_local_level = models.CharField(max_length=100, blank=True)
+
+    # Email-verification state for the registration flow. Defaults to True
+    # so the migration backfills every pre-existing student (who already
+    # went through the old verify-then-create signup and can already log
+    # in) as verified - only new registrations under the reworked flow are
+    # explicitly created with this False.
+    is_verified = models.BooleanField(default=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
 
     # Study Preferences
     preferred_study_time = models.CharField(
@@ -221,7 +245,10 @@ class SupportAttachment(models.Model):
     message = models.ForeignKey(
         SupportMessage, on_delete=models.CASCADE, related_name='attachments'
     )
-    file = models.FileField(upload_to='support/attachments/%Y/%m/')
+    file = models.FileField(
+        upload_to='support/attachments/%Y/%m/',
+        validators=[validate_document_size_20mb, validate_document_extension],
+    )
     file_name = models.CharField(max_length=255)
     file_size = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

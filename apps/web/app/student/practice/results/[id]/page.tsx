@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { practiceApi, SubmitSessionResponse } from "@/lib/api/practice";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Target, Clock, CheckCircle2, XCircle, ChevronRight, BarChart3 } from "lucide-react";
+import { Loader2, ArrowLeft, Target, Clock, CheckCircle2, XCircle, ChevronRight, BarChart3, HelpCircle } from "lucide-react";
 import Link from "next/link";
 
 export default function PracticeResultPage() {
@@ -159,6 +159,15 @@ export default function PracticeResultPage() {
                        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50 rounded-[10px] p-4 text-sm text-blue-800">
                          <strong>Explanation:</strong> {attempt.question.explanation}
                        </div>
+                     )}
+
+                     {!isCorrect && (
+                       <Link
+                         href={`/student/community/ask?question_id=${attempt.question.id}&question_text=${encodeURIComponent(attempt.question.text)}${result.session.topic ? `&topic_id=${result.session.topic}` : ""}`}
+                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                       >
+                         <HelpCircle className="w-3.5 h-3.5" /> Still confused? Ask the Community
+                       </Link>
                      )}
                    </div>
                  </div>

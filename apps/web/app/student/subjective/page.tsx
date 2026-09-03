@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { PenTool, FileText, Target, BookOpen, Clock, ArrowRight, History } from "lucide-react";
+import { PenTool, FileText, BookOpen, ArrowRight, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function SubjectiveLandingPage() {
@@ -32,8 +32,8 @@ export default function SubjectiveLandingPage() {
         </Link>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        
+      <div className="grid md:grid-cols-2 gap-6">
+
         {/* Practice Sets */}
         <div className="bg-card rounded-[16px] border border-border p-8 flex flex-col hover:border-blue-300 transition-colors shadow-sm group">
           <div className="w-14 h-14 bg-blue-50 dark:bg-blue-950/30 text-blue-600 rounded-[12px] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -47,24 +47,6 @@ export default function SubjectiveLandingPage() {
             <Link href="/student/subjective/practice-sets" className="w-full">
               <Button className="w-full h-12 bg-primary text-primary-foreground hover:bg-[#1a365d] text-white font-bold text-[15px]">
                 View Practice Sets <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Model Exams */}
-        <div className="bg-card rounded-[16px] border border-border p-8 flex flex-col hover:border-purple-300 transition-colors shadow-sm group">
-          <div className="w-14 h-14 bg-purple-50 text-purple-600 rounded-[12px] flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-            <Target className="w-7 h-7" />
-          </div>
-          <h3 className="text-[20px] font-bold text-primary dark:text-foreground mb-2">Model Exams</h3>
-          <p className="text-muted-foreground mb-8 leading-relaxed">
-            Full-length subjective examinations with strict, fixed timing. Automatically submits when the timer expires.
-          </p>
-          <div className="mt-auto">
-            <Link href="/student/subjective/model-exams" className="w-full">
-              <Button className="w-full h-12 bg-primary text-primary-foreground hover:bg-[#1a365d] text-white font-bold text-[15px]">
-                View Model Exams <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
           </div>

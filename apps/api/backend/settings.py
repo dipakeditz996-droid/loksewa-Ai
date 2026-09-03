@@ -169,6 +169,7 @@ INSTALLED_APPS = [
     'support',
     'subscriptions',
     'courses',
+    'community',
     'storages',
 ]
 
@@ -370,6 +371,39 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
     if origin.strip()
 ]
+if not CSRF_TRUSTED_ORIGINS and not DEBUG:
+    raise RuntimeError("CSRF_TRUSTED_ORIGINS must be explicitly set in production.")
+
+# --- EMAIL (password reset) ---
+# EMAIL_HOST unset (the default, including local dev) means Django uses the
+# console backend - reset emails print to the server log/terminal instead of
+# actually sending, so the flow is fully testable with zero external
+# credentials. Set EMAIL_HOST (+ EMAIL_HOST_USER/PASSWORD) to send real mail.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '').strip()
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+    EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+    EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', True)
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@loksewaai.com')
+
+# Used to build the password-reset link emailed to the user (the API server
+# has no other way to know its own frontend's origin).
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
+# --- EmailJS (delivers signup + password-reset OTP codes) ---
+# core/emailjs_service.py calls EmailJS's REST API server-side, using
+# EMAILJS_PRIVATE_KEY as the strict-mode access token, so OTP generation and
+# verification stay entirely on the backend while EmailJS handles delivery.
+# Defaults are the project's EmailJS credentials; override via env vars for
+# a different EmailJS account without touching code.
+EMAILJS_SERVICE_ID = os.environ.get('EMAILJS_SERVICE_ID', 'service_n4s172m')
+EMAILJS_TEMPLATE_ID = os.environ.get('EMAILJS_TEMPLATE_ID', 'template_ff2dd35')
+EMAILJS_PUBLIC_KEY = os.environ.get('EMAILJS_PUBLIC_KEY', 'FYeUEDdQfp9-d0stz')
+EMAILJS_PRIVATE_KEY = os.environ.get('EMAILJS_PRIVATE_KEY', 'guEHC3-t117IQVlWKnN9A')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -482,3 +516,47 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 # Keep failed jobs' tracebacks in results for a day, not forever.
 CELERY_RESULT_EXPIRES = 60 * 60 * 24
+
+# --- LOGGING ---
+# Without this, Django falls back to its bare-bones default: console-only
+# under `runserver`, and effectively silent under gunicorn unless SENTRY_DSN
+# is also set - an unhandled exception in production could go completely
+# unobserved. This keeps Django/DRF's own noisy request-cycle logs at a
+# reasonable level while ensuring warnings/errors from the app's own code
+# always reach the console (which Render/any host captures into its log
+# stream) regardless of DEBUG.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        # This project's own apps log through `logging.getLogger(__name__)`,
+        # which all land under no specific prefix worth singling out here -
+        # the root logger above already catches them at INFO+.
+    },
+}

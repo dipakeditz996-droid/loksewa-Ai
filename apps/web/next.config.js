@@ -2,9 +2,10 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // Was `ignoreBuildErrors: true` - removed now that `tsc --noEmit` runs
+  // clean (0 errors), so a real type error introduced later fails the
+  // build loudly instead of shipping silently, same as it always should
+  // have.
   images: {
     remotePatterns: [
       {

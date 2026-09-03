@@ -3,6 +3,7 @@ from core.models import User
 from marketplace.models import PaymentMethod
 from datetime import timedelta
 from django.utils import timezone
+from core.upload_validators import validate_image_size_5mb, validate_image_extension
 
 class SubscriptionPlan(models.Model):
     DURATION_UNIT_CHOICES = (
@@ -96,7 +97,10 @@ class SubscriptionPayment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_id = models.CharField(max_length=255, unique=True)
     
-    screenshot = models.ImageField(upload_to='subscriptions/payment_proofs/')
+    screenshot = models.ImageField(
+        upload_to='subscriptions/payment_proofs/',
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     note = models.TextField(blank=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')

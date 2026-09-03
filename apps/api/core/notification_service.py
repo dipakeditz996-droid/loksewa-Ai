@@ -41,6 +41,7 @@ NOTIFICATION_CATEGORY_MAP = {
     'achievement': ['gamification'],
     'payments': ['payment'],
     'orders': ['order', 'marketplace'],
+    'community': ['community'],
 }
 
 
@@ -709,6 +710,124 @@ class NotificationService:
             title='Payout On Hold',
             message=f'Your payout for Order #{order_id} is on hold due to an open dispute.',
             action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_payout_requested(cls, seller, amount):
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout Request Submitted',
+            message=f'Your payout request for Rs. {amount} has been submitted and is pending admin review.',
+            action_url='/student/marketplace-listings',
+            priority='normal',
+        )
+
+    @classmethod
+    def notify_payout_approved(cls, seller, amount):
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout Request Approved',
+            message=f'Your payout request for Rs. {amount} has been approved and will be processed soon.',
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_payout_processing(cls, seller, amount):
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout Processing',
+            message=f'Your payout for Rs. {amount} is being processed.',
+            action_url='/student/marketplace-listings',
+            priority='normal',
+        )
+
+    @classmethod
+    def notify_payout_paid(cls, seller, amount, method, reference):
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout Completed',
+            message=f'Your payout of Rs. {amount} via {method} has been completed. Ref: {reference}',
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_payout_rejected(cls, seller, amount, reason):
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout Request Rejected',
+            message=f'Your payout request for Rs. {amount} was rejected. Reason: {reason}',
+            action_url='/student/marketplace-listings',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_payout_failed(cls, seller, amount, reason):
+        return cls._create_if_allowed(
+            recipient=seller,
+            notif_type='system',
+            preference_key='system_alerts_inapp',
+            title='Payout Failed',
+            message=f'We encountered an issue processing your payout of Rs. {amount}. Reason: {reason}',
+            action_url='/student/marketplace-listings',
+            priority='critical',
+        )
+
+    # ── Community Q&A notifications ──────────────────────────────────────
+
+    @classmethod
+    def notify_community_reply(cls, post, reply):
+        """A new reply landed on someone's post. Never fires for a
+        self-reply (asking your own question a follow-up doesn't need a
+        notification), and is deduped per (post author, reply) so a retried
+        request can't double-notify."""
+        if post.author_id == reply.author_id:
+            return None
+        return cls._student_notify_once(
+            recipient=post.author,
+            notif_type='community',
+            related_id=f'community-reply:{reply.id}',
+            title='New Reply to Your Post',
+            message=f'{reply.author.get_full_name() or reply.author.username} replied to "{post.title}".',
+            action_url=f'/student/community/{post.id}',
+            priority='normal',
+        )
+
+    @classmethod
+    def notify_community_best_answer(cls, reply):
+        """The reply author's answer was marked Best Answer."""
+        return cls._student_notify_once(
+            recipient=reply.author,
+            notif_type='community',
+            related_id=f'community-best-answer:{reply.id}',
+            title='Your Answer Was Marked Best Answer!',
+            message=f'Your reply on "{reply.post.title}" was marked as the best answer.',
+            action_url=f'/student/community/{reply.post_id}',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_community_content_removed(cls, user, title, action_url):
+        """Transparency notice when a moderator removes a user's post/reply."""
+        return cls._create_if_allowed(
+            recipient=user,
+            notif_type='community',
+            preference_key='system_alerts_inapp',
+            title='Community Content Removed',
+            message=f'Your post/reply "{title}" was removed by a moderator for violating community guidelines.',
+            action_url=action_url,
             priority='important',
         )
 

@@ -12,6 +12,7 @@ from .views import (
     AdminListingReportViewSet,
     AdminReviewViewSet,
     AdminDisputeViewSet,
+    AdminPayoutViewSet,
     # Student
     StudentProductViewSet,
     StudentPaymentMethodViewSet,
@@ -25,6 +26,8 @@ from .views import (
     StudentListingReportViewSet,
     StudentReviewViewSet,
     StudentDisputeViewSet,
+    StudentPayoutAccountViewSet,
+    StudentPayoutViewSet,
     # Public
     PublicProductListView,
 )
@@ -40,6 +43,7 @@ admin_router.register(r'delivery-fees', AdminDeliveryFeeRuleViewSet, basename='a
 admin_router.register(r'listing-reports', AdminListingReportViewSet, basename='admin-listing-reports')
 admin_router.register(r'reviews', AdminReviewViewSet, basename='admin-reviews')
 admin_router.register(r'disputes', AdminDisputeViewSet, basename='admin-disputes')
+admin_router.register(r'payouts', AdminPayoutViewSet, basename='admin-payouts')
 
 # Student routers
 student_router = DefaultRouter()
@@ -55,6 +59,8 @@ student_router.register(r'my-sales', SellerSalesViewSet, basename='student-sales
 student_router.register(r'listing-reports', StudentListingReportViewSet, basename='student-listing-reports')
 student_router.register(r'reviews', StudentReviewViewSet, basename='student-reviews')
 student_router.register(r'disputes', StudentDisputeViewSet, basename='student-disputes')
+student_router.register(r'payout-accounts', StudentPayoutAccountViewSet, basename='student-payout-accounts')
+student_router.register(r'payouts', StudentPayoutViewSet, basename='student-payouts')
 
 urlpatterns = [
     path('public/products/', PublicProductListView.as_view(), name='public-products'),

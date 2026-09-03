@@ -280,9 +280,13 @@ export default function CreatePracticeSetPage() {
 
     try {
       setLoading(true);
+      // status is server-controlled (read-only on the serializer, to stop a
+      // teacher from PATCHing their own set straight to approved/published)
+      // - sending it here is a no-op the backend silently ignores, so the
+      // actual draft -> pending_review transition has to go through the
+      // dedicated submit action below.
       const payload: Partial<PracticeSet> = {
         ...formData,
-        status,
         total_questions: selectedQuestions.length,
         questions_data: selectedQuestions.map(sq => ({
           question_id: sq.question,
@@ -292,10 +296,15 @@ export default function CreatePracticeSetPage() {
       };
 
       // A blueprint/bulk-import run may have already created the draft.
-      if (formData.id) {
-        await teacherPracticeSetsApi.updatePracticeSet(formData.id, payload);
+      let savedId = formData.id;
+      if (savedId) {
+        await teacherPracticeSetsApi.updatePracticeSet(savedId, payload);
       } else {
-        await teacherPracticeSetsApi.createPracticeSet(payload);
+        const created = await teacherPracticeSetsApi.createPracticeSet(payload);
+        savedId = created.id;
+      }
+      if (status === "pending_review") {
+        await teacherPracticeSetsApi.submitPracticeSet(savedId!);
       }
       toast.success(status === "pending_review" ? "Practice Set submitted for review!" : "Draft saved!");
       router.push("/teacher/practice-sets");
@@ -586,10 +595,15 @@ export default function CreatePracticeSetPage() {
                           {selectedQuestions[0].question_details?.text}
                         </h4>
                         <div className="space-y-3 pl-10">
-                          {['A', 'B', 'C', 'D'].map((opt) => (
-                            <div key={opt} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/50 cursor-pointer">
+                          {([
+                            selectedQuestions[0].question_details?.option_a,
+                            selectedQuestions[0].question_details?.option_b,
+                            selectedQuestions[0].question_details?.option_c,
+                            selectedQuestions[0].question_details?.option_d,
+                          ]).map((optionText, idx) => (
+                            <div key={idx} className="flex items-center gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/50 cursor-pointer">
                               <div className="h-4 w-4 rounded-full border border-primary"></div>
-                              <span>Option {opt} content...</span>
+                              <span>{optionText}</span>
                             </div>
                           ))}
                         </div>

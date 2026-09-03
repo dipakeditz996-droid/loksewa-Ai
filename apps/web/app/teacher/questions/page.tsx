@@ -260,7 +260,7 @@ export default function TeacherQuestionsPage() {
                     </td>
                     <td className="border-b border-[#F2F4F8] px-5 py-4">
                       <StatusPill status={q.status} />
-                      {q.status === 'changes_requested' && (
+                      {['changes_requested', 'rejected'].includes(q.status) && (
                         <div className="mt-1 max-w-[150px] truncate text-[10px] text-destructive" title={q.reviewer_comment}>
                           {q.reviewer_comment}
                         </div>

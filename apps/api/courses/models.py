@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from exams.models import Exam
+from core.upload_validators import validate_image_size_5mb, validate_image_extension
 
 class Course(models.Model):
     STATUS_CHOICES = (
@@ -12,7 +13,10 @@ class Course(models.Model):
     slug = models.SlugField(unique=True, max_length=255)
     short_description = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
-    thumbnail = models.ImageField(upload_to='courses/thumbnails/', blank=True, null=True)
+    thumbnail = models.ImageField(
+        upload_to='courses/thumbnails/', blank=True, null=True,
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='courses', null=True, blank=True)
     featured = models.BooleanField(default=False)

@@ -14,6 +14,8 @@ export interface TeacherDashboardCourse {
   thumbnail: string | null;
   status: string;
   student_count: number;
+  completion_percentage: number;
+  average_score: number;
 }
 
 export interface TeacherDashboardEvaluation {

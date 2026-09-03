@@ -28,23 +28,88 @@ def _access_token_for(user):
     access.set_exp(lifetime=timedelta(minutes=minutes))
     return str(access)
 
+class SignupRequestOTPView(APIView):
+    """POST /api/auth/signup/request-otp/ - body: {email}. Resends a 6-digit
+    verification code (via EmailJS) for an ALREADY-registered-but-unverified
+    account. Registration itself (StudentSignupView) sends the first code
+    automatically, so this is only for "I didn't get it" / "it expired"."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip()
+        if not email:
+            return Response({'error': 'Please provide your email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, role='student').first()
+        if not user:
+            return Response(
+                {'error': 'No pending registration found for this email. Please register first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from support.models import StudentProfile
+        profile, _ = StudentProfile.objects.get_or_create(user=user)
+        if profile.is_verified:
+            return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .otp import create_and_send_otp, OTPError
+        try:
+            create_and_send_otp(email, 'signup')
+        except OTPError as e:
+            return Response({'error': str(e)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        from administration.models import AuditLog
+        AuditLog.objects.create(
+            actor=None, action='REGISTRATION_OTP_RESENT',
+            entity_type='User', entity_id=str(user.id), details={'email': email},
+        )
+        return Response({'detail': 'Verification code sent to your email.'})
+
+
 class StudentSignupView(APIView):
+    """POST /api/auth/signup/ - creates the account immediately as pending
+    verification (StudentProfile.is_verified=False) and sends the first OTP;
+    it does NOT verify a code or issue tokens itself. That split is what
+    lets admins see and assist a registration that never received its email,
+    which isn't possible if the account only starts existing once an OTP is
+    already confirmed. See VerifyEmailOTPView for the next step."""
     permission_classes = [AllowAny]
 
     def post(self, request):
         username = request.data.get('username')
-        email = request.data.get('email')
+        email = (request.data.get('email') or '').strip()
         password = request.data.get('password')
+        full_name = (request.data.get('name') or '').strip()
+        phone = (request.data.get('mobile') or request.data.get('phone') or '').strip()
+        permanent_district = (request.data.get('permanent_district') or '').strip()
+        permanent_local_level = (request.data.get('permanent_local_level') or '').strip()
+        exam_category_id = request.data.get('exam_category_id')
+        exam_position_id = request.data.get('exam_position_id')  # optional - Level or Service/Faculty, whichever is deepest chosen
         referral_code = request.data.get('ref', '').strip()
         plan_id = request.data.get('plan_id')
         course_id = request.data.get('course_id')
 
-        if not username or not email or not password:
-            return Response({'error': 'Please provide username, email, and password.'}, status=status.HTTP_400_BAD_REQUEST)
+        missing = []
+        if not username: missing.append('username')
+        if not email: missing.append('email')
+        if not password: missing.append('password')
+        if not full_name: missing.append('name')
+        if not phone: missing.append('mobile')
+        if not permanent_district: missing.append('permanent_district')
+        if not permanent_local_level: missing.append('permanent_local_level')
+        if not exam_category_id: missing.append('exam_category_id')
+        if missing:
+            return Response(
+                {'error': f"Please provide: {', '.join(missing)}.", 'missing_fields': missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .validators import is_valid_nepal_phone
+        if not is_valid_nepal_phone(phone):
+            return Response({'error': 'Please enter a valid 10-digit Nepali mobile number.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
-        if User.objects.filter(email=email).exists():
+        if User.objects.filter(email__iexact=email).exists():
             return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -52,19 +117,41 @@ class StudentSignupView(APIView):
         except DjangoValidationError as e:
             return Response({'error': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
 
+        from exams.models import ExamCategory, Exam
+        try:
+            exam_category = ExamCategory.objects.get(id=exam_category_id, is_active=True)
+        except (ExamCategory.DoesNotExist, ValueError):
+            return Response({'error': 'Please select what you are preparing for.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        exam_position = None
+        if exam_position_id:
+            try:
+                exam_position = Exam.objects.get(id=exam_position_id, is_active=True, category=exam_category)
+            except (Exam.DoesNotExist, ValueError):
+                return Response({'error': 'Invalid exam selection.'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Validate Referral Code BEFORE creating user
         if referral_code:
             from gamification.models import GamificationProfile
             if not GamificationProfile.objects.filter(referral_code=referral_code).exists():
                 return Response({'error': 'Invalid referral code.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        first_name, _, last_name = full_name.partition(' ')
+
         try:
             with transaction.atomic():
-                user = User.objects.create_user(username=username, email=email, password=password, role='student')
-                
-                # Explicitly create required related profiles
+                user = User.objects.create_user(
+                    username=username, email=email, password=password, role='student',
+                    first_name=first_name[:150], last_name=last_name[:150],
+                )
+
                 from support.models import StudentProfile, NotificationPreference
-                StudentProfile.objects.create(user=user)
+                StudentProfile.objects.create(
+                    user=user, phone=phone,
+                    permanent_district=permanent_district, permanent_local_level=permanent_local_level,
+                    target_category=exam_category, target_position=exam_position,
+                    is_verified=False,
+                )
                 NotificationPreference.objects.create(user=user)
 
                 # Register Referral and gamification profile
@@ -75,21 +162,15 @@ class StudentSignupView(APIView):
                     from gamification.models import GamificationProfile
                     GamificationProfile.objects.create(user=user)
 
-                from core.notification_service import NotificationService
-                NotificationService.notify_admins(
-                    notif_type='new_registration',
-                    title='New Student Registered',
-                    message=f"{username} ({email}) just created a new student account.",
-                    action_url='/admin-dashboard/students',
-                )
-
                 # Process Course/Package Application if plan_id or course_id is provided.
+                # Declaring a preferred exam above is NOT an enrollment - this is a
+                # separate, explicit application the student additionally opted into.
                 if plan_id or course_id:
                     payment = None
                     if plan_id:
                         from subscriptions.models import SubscriptionPlan, SubscriptionPayment
                         from marketplace.models import PaymentMethod
-                        
+
                         plan = SubscriptionPlan.objects.get(id=plan_id)
                         payment_method, _ = PaymentMethod.objects.get_or_create(
                             method_type='ESEWA',
@@ -100,7 +181,7 @@ class StudentSignupView(APIView):
                                 'is_active': True,
                             }
                         )
-                        
+
                         import uuid
                         payment = SubscriptionPayment.objects.create(
                             student=user,
@@ -111,7 +192,7 @@ class StudentSignupView(APIView):
                             status='PENDING',
                             note='Auto-generated from registration.'
                         )
-                    
+
                     if course_id:
                         from courses.models import Course, CourseApplication
                         course = Course.objects.get(id=course_id)
@@ -129,9 +210,86 @@ class StudentSignupView(APIView):
                             message=f"New student {username} applied for '{course.title}' during registration.",
                             action_url='/admin-dashboard/applications',
                         )
+
+                from administration.models import AuditLog
+                AuditLog.objects.create(
+                    actor=None, action='REGISTRATION_CREATED',
+                    entity_type='User', entity_id=str(user.id),
+                    details={'email': email, 'username': username},
+                )
         except Exception as e:
             logger.exception("Failed to process registration for email=%s", email)
             return Response({'error': 'Registration failed due to an internal error. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Admins should see this pending registration right away, and the
+        # student should get their first code - neither is critical enough
+        # to roll back a successfully-created account if it fails.
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='new_registration',
+            title='New Student Registered',
+            message=f"{username} ({email}) just registered and is pending email verification.",
+            action_url='/admin-dashboard/students/pending-verification',
+        )
+        from .otp import create_and_send_otp, OTPError
+        try:
+            create_and_send_otp(email, 'signup')
+            from administration.models import AuditLog
+            AuditLog.objects.create(
+                actor=None, action='REGISTRATION_OTP_GENERATED',
+                entity_type='User', entity_id=str(user.id), details={'email': email},
+            )
+        except OTPError:
+            logger.warning("Could not send initial signup OTP for email=%s", email)
+
+        return Response({
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'pending_verification': True,
+            'detail': 'Registration successful. Please check your email for a verification code.',
+        }, status=status.HTTP_201_CREATED)
+
+
+class VerifyEmailOTPView(APIView):
+    """POST /api/auth/verify-email-otp/ - body: {email, otp}. Confirms the
+    code StudentSignupView emailed, flips StudentProfile.is_verified, and
+    (only here, for the normal happy path) logs the student straight in."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip()
+        otp = (request.data.get('otp') or '').strip()
+        if not email or not otp:
+            return Response({'error': 'Please provide your email and the verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, role='student').first()
+        if not user:
+            return Response({'error': 'No pending registration found for this email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from support.models import StudentProfile
+        profile, _ = StudentProfile.objects.get_or_create(user=user)
+        if profile.is_verified:
+            return Response({'error': 'This account is already verified. Please log in.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .otp import verify_otp, OTPError
+        from administration.models import AuditLog
+        try:
+            verify_otp(email, 'signup', otp)
+        except OTPError as e:
+            AuditLog.objects.create(
+                actor=None, action='REGISTRATION_OTP_VERIFY_FAILED',
+                entity_type='User', entity_id=str(user.id), details={'email': email, 'reason': str(e)},
+            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.is_verified = True
+        profile.verified_at = timezone.now()
+        profile.save(update_fields=['is_verified', 'verified_at'])
+        AuditLog.objects.create(
+            actor=None, action='REGISTRATION_OTP_VERIFIED',
+            entity_type='User', entity_id=str(user.id), details={'email': email},
+        )
 
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
@@ -144,7 +302,62 @@ class StudentSignupView(APIView):
                 'email': user.email,
                 'role': user.role,
             }
-        }, status=status.HTTP_201_CREATED)
+        }, status=status.HTTP_200_OK)
+
+
+class VerifyRecoveryCodeView(APIView):
+    """POST /api/auth/verify-recovery-code/ - body: {email, code}. Confirms
+    an admin-generated recovery code (see administration.registration_views.
+    AdminGenerateRecoveryCodeView) for a student who never got their email
+    OTP. Deliberately does NOT issue tokens - this only flips is_verified;
+    the student then logs in the normal way, same as anyone else. That's the
+    line between "recovery verification" and "a second login system"."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip()
+        code = (request.data.get('code') or '').strip()
+        if not email or not code:
+            return Response({'error': 'Please provide your email and the recovery code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email, role='student').first()
+        if not user:
+            return Response({'error': 'No pending registration found for this email.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from support.models import StudentProfile
+        profile, _ = StudentProfile.objects.get_or_create(user=user)
+        if profile.is_verified:
+            return Response({'error': 'This account is already verified. Please log in.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .otp import verify_otp, OTPError
+        from .models import EmailOTP
+        from administration.models import AuditLog
+        try:
+            verify_otp(email, 'admin_recovery', code)
+        except OTPError as e:
+            AuditLog.objects.create(
+                actor=None, action='RECOVERY_VERIFY_FAILED',
+                entity_type='User', entity_id=str(user.id), details={'email': email, 'reason': str(e)},
+            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.is_verified = True
+        profile.verified_at = timezone.now()
+        profile.save(update_fields=['is_verified', 'verified_at'])
+
+        used_otp = EmailOTP.objects.filter(
+            email=email.lower(), purpose='admin_recovery', is_used=True
+        ).order_by('-created_at').first()
+        AuditLog.objects.create(
+            actor=None, action='RECOVERY_VERIFIED',
+            entity_type='User', entity_id=str(user.id),
+            details={'email': email, 'generated_by': used_otp.generated_by_id if used_otp else None},
+        )
+
+        return Response({
+            'verified': True,
+            'detail': 'Your account is verified. Please log in.',
+        }, status=status.HTTP_200_OK)
 
 
 class UserMeView(APIView):
@@ -271,9 +484,9 @@ class AuthLogoutView(APIView):
 
 class ForgotPasswordView(APIView):
     """
-    Stub endpoint for forgot password.
-    Accepts an email but returns a "not configured" message until
-    an email service is set up.
+    Requests a password-reset verification code via EmailJS. Always
+    responds with the same generic message regardless of whether the email
+    exists, so this endpoint can't be used to enumerate registered accounts.
     """
     permission_classes = [AllowAny]
 
@@ -284,10 +497,63 @@ class ForgotPasswordView(APIView):
                 {'detail': 'Please provide your email address.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        return Response({
-            'detail': 'Password reset is not yet configured. Please contact the system administrator.',
-            'configured': False,
-        }, status=status.HTTP_200_OK)
+
+        generic_response = {
+            'detail': 'If an account exists for that email, a verification code has been sent.',
+            'configured': True,
+        }
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None:
+            # Deliberately identical to the success path - see docstring.
+            return Response(generic_response, status=status.HTTP_200_OK)
+
+        from .otp import create_and_send_otp, OTPError
+        try:
+            create_and_send_otp(email, 'password_reset')
+        except OTPError:
+            # Rate-limited resend - still return the generic response so
+            # this endpoint can't be used to enumerate accounts or probe
+            # timing.
+            logger.info('Password reset OTP resend throttled for email=%s', email)
+
+        return Response(generic_response, status=status.HTTP_200_OK)
+
+
+class ResetPasswordConfirmView(APIView):
+    """Completes a password reset given the OTP emailed by ForgotPasswordView."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email', '').strip()
+        otp = request.data.get('otp', '').strip()
+        new_password = request.data.get('password', '')
+
+        if not email or not otp or not new_password:
+            return Response(
+                {'detail': 'email, otp, and password are all required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        if user is None:
+            return Response({'detail': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .otp import verify_otp, OTPError
+        try:
+            verify_otp(email, 'password_reset', otp)
+        except OTPError as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            django_validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            return Response({'detail': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+
+        return Response({'detail': 'Your password has been reset. You can now sign in.'}, status=status.HTTP_200_OK)
 
 
 class StudentDashboardView(APIView):

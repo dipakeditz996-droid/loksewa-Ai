@@ -247,6 +247,14 @@ class SubjectiveEvaluationNotificationTests(APITestCase):
         self.answer = SubjectiveAnswer.objects.create(
             attempt=self.attempt, question=self.question, answer_text='...', status='submitted')
 
+        # The evaluate endpoint scopes a teacher to only their assigned
+        # courses' enrolled students - link t1 to s1 the same way, or the
+        # scoped queryset is empty and evaluate() 404s.
+        from courses.models import Course, Enrollment, TeacherCourseAssignment
+        course = Course.objects.create(title='Kharidar Foundation', slug='kharidar-foundation-eval-test')
+        TeacherCourseAssignment.objects.create(teacher=self.teacher, course=course)
+        Enrollment.objects.create(student=self.student, course=course, status='active')
+
     def test_teacher_evaluate_action_notifies_student(self):
         self.client.force_authenticate(user=self.teacher)
         response = self.client.post(

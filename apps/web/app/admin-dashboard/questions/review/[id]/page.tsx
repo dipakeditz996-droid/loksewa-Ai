@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Loader2, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,8 @@ import * as adminQuestionsApi from "@/lib/api/admin-questions";
 import { QuestionData } from "@/lib/api/teacher-questions";
 import toast from "react-hot-toast";
 
-export default function AdminModerationPanel({ params }: { params: { id: string } }) {
+export default function AdminModerationPanel({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = React.use(params);
   const router = useRouter();
   const [question, setQuestion] = useState<QuestionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,7 +22,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
   useEffect(() => {
     const fetchQuestion = async () => {
       try {
-        const data = await adminQuestionsApi.getAdminQuestion(Number(params.id));
+        const data = await adminQuestionsApi.getAdminQuestion(Number(resolvedParams.id));
         setQuestion(data);
         if (data.reviewer_comment) {
           setFeedback(data.reviewer_comment);
@@ -34,7 +35,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
       }
     };
     fetchQuestion();
-  }, [params.id, router]);
+  }, [resolvedParams.id, router]);
 
   const handleAction = async (action: 'approve' | 'reject' | 'request_changes') => {
     if ((action === 'reject' || action === 'request_changes') && !feedback.trim()) {
@@ -45,11 +46,11 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
     try {
       setIsSubmitting(true);
       if (action === 'approve') {
-        await adminQuestionsApi.approveQuestion(Number(params.id), feedback);
+        await adminQuestionsApi.approveQuestion(Number(resolvedParams.id), feedback);
       } else if (action === 'reject') {
-        await adminQuestionsApi.rejectQuestion(Number(params.id), feedback);
+        await adminQuestionsApi.rejectQuestion(Number(resolvedParams.id), feedback);
       } else if (action === 'request_changes') {
-        await adminQuestionsApi.requestChanges(Number(params.id), feedback);
+        await adminQuestionsApi.requestChanges(Number(resolvedParams.id), feedback);
       }
       
       toast.success(`Question ${action.replace('_', ' ')}d successfully.`);
@@ -108,7 +109,7 @@ export default function AdminModerationPanel({ params }: { params: { id: string 
                            <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold mr-4 ${isCorrect ? 'border-emerald-500 text-emerald-600' : 'border-muted text-muted-foreground'}`}>
                              {letter}
                            </div>
-                           <div className={`mt-1 ${isCorrect ? 'font-medium' : ''}`}>{val as string}</div>
+                           <div className={`mt-1 ${isCorrect ? 'font-medium text-emerald-900' : ''}`}>{val as string}</div>
                            {isCorrect && <CheckCircle2 className="w-5 h-5 ml-auto text-emerald-500 mt-1" />}
                          </div>
                        )

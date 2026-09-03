@@ -1,7 +1,10 @@
+# pyrefly: ignore [missing-import]
 from django.db import models
+# pyrefly: ignore [missing-import]
 from django.core.validators import MinValueValidator, MaxValueValidator
 from core.models import User
 from exams.models import Exam
+from core.upload_validators import validate_image_size_5mb, validate_image_extension
 
 
 class Product(models.Model):
@@ -77,7 +80,10 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
-    cover_image = models.ImageField(upload_to='marketplace/covers/', null=True, blank=True)
+    cover_image = models.ImageField(
+        upload_to='marketplace/covers/', null=True, blank=True,
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
 
     is_published = models.BooleanField(default=False)
 
@@ -121,7 +127,10 @@ class PaymentMethod(models.Model):
     bank_name = models.CharField(max_length=255, blank=True)
     branch = models.CharField(max_length=255, blank=True)
 
-    qr_image = models.ImageField(upload_to='marketplace/payment_qrs/', null=True, blank=True)
+    qr_image = models.ImageField(
+        upload_to='marketplace/payment_qrs/', null=True, blank=True,
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     instructions = models.TextField(blank=True)
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -154,7 +163,10 @@ class PaymentSubmission(models.Model):
     expected_amount = models.DecimalField(max_digits=10, decimal_places=2)
     submitted_amount = models.DecimalField(max_digits=10, decimal_places=2)
 
-    screenshot = models.ImageField(upload_to='marketplace/payment_proofs/')
+    screenshot = models.ImageField(
+        upload_to='marketplace/payment_proofs/',
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     note = models.TextField(blank=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
@@ -209,7 +221,10 @@ class ProductImage(models.Model):
     )
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='marketplace/product_images/')
+    image = models.ImageField(
+        upload_to='marketplace/product_images/',
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     label = models.CharField(
         max_length=20, choices=IMAGE_LABEL_CHOICES, default='other', blank=True
     )
@@ -387,6 +402,10 @@ class MarketplaceSettings(models.Model):
         default=True,
         help_text="When off, students cannot create new listings (existing ones unaffected)."
     )
+    minimum_payout_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=500.00,
+        help_text="Minimum available balance required to request a payout."
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -521,8 +540,71 @@ class Dispute(models.Model):
 class DisputeEvidence(models.Model):
     dispute = models.ForeignKey(Dispute, on_delete=models.CASCADE, related_name='evidence')
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='marketplace/dispute_evidence/')
+    image = models.ImageField(
+        upload_to='marketplace/dispute_evidence/',
+        validators=[validate_image_size_5mb, validate_image_extension],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Evidence for Dispute #{self.dispute.id}"
+
+
+# ---------------------------------------------------------------------------
+# S2S Payouts
+# ---------------------------------------------------------------------------
+
+class PayoutAccount(models.Model):
+    METHOD_CHOICES = (
+        ('ESEWA', 'eSewa'),
+        ('KHALTI', 'Khalti'),
+        ('BANK', 'Bank Transfer'),
+    )
+
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payout_accounts')
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES)
+    account_name = models.CharField(max_length=255)
+    account_identifier = models.CharField(max_length=255, help_text="eSewa ID, Khalti ID, or Bank Account Number")
+    
+    # Specific to bank
+    bank_name = models.CharField(max_length=255, blank=True)
+    branch = models.CharField(max_length=255, blank=True)
+
+    is_verified = models.BooleanField(default=False)
+    is_default = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.get_method_display()} - {self.account_identifier} ({self.seller.username})"
+
+
+class SellerPayout(models.Model):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('PROCESSING', 'Processing'),
+        ('PAID', 'Paid'),
+        ('REJECTED', 'Rejected'),
+        ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
+    )
+
+    seller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payouts')
+    payout_account = models.ForeignKey(PayoutAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='payouts')
+    requested_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    admin_note = models.TextField(blank=True)
+    rejection_reason = models.TextField(blank=True)
+    transaction_reference = models.CharField(max_length=255, blank=True)
+    
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_payouts')
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Payout #{self.id} for {self.seller.username} - {self.status}"

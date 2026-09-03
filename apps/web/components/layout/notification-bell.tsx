@@ -11,6 +11,7 @@ import {
 import { apiClient } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { onNotificationsChanged, notifyNotificationsChanged } from "@/lib/notification-events";
 
 interface NotificationData {
   id: number;
@@ -49,7 +50,14 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
     fetchNotifications();
     // Poll every 3 minutes
     const interval = setInterval(fetchNotifications, 180000);
-    return () => clearInterval(interval);
+    // Other notification surfaces (the full inbox pages) mark things read
+    // independently of this bell's own state - refetch whenever any of them
+    // reports a change, so the badge doesn't sit stale until the next poll.
+    const unsubscribe = onNotificationsChanged(fetchNotifications);
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, []);
 
   const handleNotificationClick = async (notif: NotificationData) => {
@@ -58,8 +66,19 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
       try {
         await apiClient(`/notifications/${notif.id}/read/`, { method: "PATCH" });
         setUnreadCount((prev) => Math.max(0, prev - 1));
-      } catch (error) {
-        console.error("Failed to mark as read", error);
+        notifyNotificationsChanged();
+      } catch (error: any) {
+        // A 404 just means this notification was already deleted server-side
+        // (e.g. its source record was removed) - drop it locally and resync
+        // rather than logging it as a hard error, matching fetchNotifications'
+        // own console.warn below (Next's dev overlay treats console.error as
+        // a crash and pops up intrusively for what's really a stale row).
+        if (error?.status === 404) {
+          setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+          fetchNotifications();
+        } else {
+          console.warn("Failed to mark as read", error);
+        }
       }
     }
     if (notif.action_url) {
@@ -74,7 +93,7 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
       case 'material_review': return <FileText className="w-4 h-4 text-emerald-500" />;
       case 'student_activity': return <Users className="w-4 h-4 text-sky-500" />;
       case 'support': return <HelpCircle className="w-4 h-4 text-amber-500" />;
-      case 'system': return <Activity className="w-4 h-4 text-slate-500" />;
+      case 'system': return <Activity className="w-4 h-4 text-muted-foreground" />;
       case 'payment': return <CreditCard className="w-4 h-4 text-green-600" />;
       case 'evaluation': return <ClipboardCheck className="w-4 h-4 text-violet-500" />;
       case 'course_application': return <GraduationCap className="w-4 h-4 text-blue-500" />;
@@ -82,7 +101,7 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
       case 'account': return <UserCog className="w-4 h-4 text-orange-500" />;
       case 'order': return <Package className="w-4 h-4 text-pink-500" />;
       case 'marketplace': return <Package className="w-4 h-4 text-pink-500" />;
-      default: return <Bell className="w-4 h-4 text-slate-400" />;
+      default: return <Bell className="w-4 h-4 text-muted-foreground" />;
     }
   };
 
@@ -123,40 +142,42 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
         >
           <Bell className={`h-4 w-4 ${isFocusActive ? "opacity-60" : ""}`} />
           {badgeCount > 0 && (
-            <span className="absolute top-2 right-2.5 flex h-2 w-2">
+            <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 ring-2 ring-background">
               {/* No ping while Focus Mode is on - that is the whole point. */}
               {!isFocusActive && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
               )}
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 ring-2 ring-background"></span>
+              <span className="relative text-[10px] font-bold leading-none text-white">
+                {badgeCount > 9 ? "9+" : badgeCount}
+              </span>
             </span>
           )}
         </Button>
       </DropdownMenuTrigger>
       
-      <DropdownMenuContent className="w-80 p-0 rounded-2xl border-slate-200/80 shadow-lg" align="end">
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
+      <DropdownMenuContent className="w-80 p-0 rounded-2xl border-border shadow-lg" align="end">
+        <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex flex-col">
-            <span className="font-semibold text-slate-800">Notifications</span>
+            <span className="font-semibold text-foreground">Notifications</span>
             {unreadCount > 0 && (
-              <span className="text-xs text-slate-500">{unreadCount} unread</span>
+              <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
             )}
             {isFocusActive && (
-              <span className="text-[11px] font-medium text-amber-600 mt-0.5">
+              <span className="text-[11px] font-medium text-amber-600 dark:text-amber-400 mt-0.5">
                 Focus Mode is on - only important alerts are highlighted
               </span>
             )}
           </div>
         </div>
-        
-        <div className="max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+
+        <div className="max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-border">
           {notifications.length === 0 ? (
             <div className="p-8 text-center flex flex-col items-center justify-center">
-              <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mb-2">
-                <Check className="w-5 h-5 text-slate-300" />
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-2">
+                <Check className="w-5 h-5 text-muted-foreground" />
               </div>
-              <p className="text-sm font-medium text-slate-500">You're all caught up</p>
-              <p className="text-xs text-slate-400 mt-1">No new notifications right now.</p>
+              <p className="text-sm font-medium text-foreground">You're all caught up</p>
+              <p className="text-xs text-muted-foreground mt-1">No new notifications right now.</p>
             </div>
           ) : (
             <div className="flex flex-col">
@@ -164,21 +185,21 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
                 <button
                   key={notif.id}
                   onClick={() => handleNotificationClick(notif)}
-                  className={`w-full text-left p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors flex items-start gap-3 ${
-                    !notif.is_read ? 'bg-slate-50/50' : 'opacity-80'
+                  className={`w-full text-left p-4 border-b border-border hover:bg-muted transition-colors flex items-start gap-3 ${
+                    !notif.is_read ? 'bg-muted/50' : 'opacity-80'
                   }`}
                 >
                   <div className="mt-1 flex-shrink-0">
                     {getIcon(notif.type, notif.priority)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!notif.is_read ? 'font-semibold text-[#0B2545]' : 'font-medium text-slate-700'}`}>
+                    <p className={`text-sm ${!notif.is_read ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}>
                       {notif.title}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
                       {notif.message}
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                    <p className="text-[10px] text-muted-foreground/80 mt-2 font-medium">
                       {formatTime(notif.created_at)}
                     </p>
                   </div>
@@ -190,11 +211,11 @@ export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { v
             </div>
           )}
         </div>
-        
-        <div className="p-3 border-t border-slate-100 bg-slate-50 rounded-b-2xl">
-          <Button 
-            variant="ghost" 
-            className="w-full text-xs font-semibold text-[#D4A72C] hover:text-[#0B2545] hover:bg-white"
+
+        <div className="p-3 border-t border-border bg-muted/50 rounded-b-2xl">
+          <Button
+            variant="ghost"
+            className="w-full text-xs font-semibold text-primary hover:text-foreground hover:bg-background"
             onClick={() => {
               setIsOpen(false);
               router.push(viewAllHref);

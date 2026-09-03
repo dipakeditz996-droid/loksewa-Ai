@@ -341,6 +341,46 @@ export interface Dispute {
   resolved_by?: number;
 }
 
+export interface PayoutAccount {
+  id: number;
+  seller: number;
+  method: "ESEWA" | "KHALTI" | "BANK";
+  method_display?: string;
+  account_name: string;
+  account_identifier: string;
+  bank_name?: string;
+  branch?: string;
+  is_verified: boolean;
+  is_default: boolean;
+  created_at: string;
+}
+
+export interface SellerPayout {
+  id: number;
+  seller: number;
+  seller_name?: string;
+  payout_account: number;
+  payout_account_details?: PayoutAccount;
+  requested_amount: string;
+  status: "PENDING" | "APPROVED" | "PROCESSING" | "PAID" | "REJECTED" | "FAILED" | "CANCELLED";
+  status_display?: string;
+  admin_note?: string;
+  rejection_reason?: string;
+  transaction_reference?: string;
+  processed_by?: number;
+  processed_by_name?: string;
+  processed_at?: string;
+  created_at: string;
+}
+
+export interface SellerBalance {
+  total_earnings: string;
+  pending_payouts: string;
+  paid_out: string;
+  available_balance: string;
+  minimum_payout_amount: string;
+}
+
 export const marketplaceApi = {
   // Student - Products (browse)
   getProducts: async (params?: {
@@ -763,6 +803,49 @@ export const marketplaceApi = {
       `/marketplace/admin/disputes/${id}/resolve/`,
       { method: "POST", body: JSON.stringify({ status, resolution }) }
     );
+  },
+
+  // Student - Payouts
+  getPayoutBalance: async () => {
+    return apiClient<SellerBalance>("/marketplace/student/payouts/balance/");
+  },
+  getPayoutAccounts: async () => {
+    return apiClient<PayoutAccount[]>("/marketplace/student/payout-accounts/");
+  },
+  createPayoutAccount: async (data: Partial<PayoutAccount>) => {
+    return apiClient<PayoutAccount>("/marketplace/student/payout-accounts/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  deletePayoutAccount: async (id: number) => {
+    return apiClient(`/marketplace/student/payout-accounts/${id}/`, { method: "DELETE" });
+  },
+  requestPayout: async (data: { requested_amount: string | number; payout_account_id: number }) => {
+    return apiClient<SellerPayout>("/marketplace/student/payouts/request/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  getPayoutHistory: async () => {
+    return apiClient<SellerPayout[]>("/marketplace/student/payouts/");
+  },
+
+  // Admin - Payouts
+  adminGetPayouts: async () => {
+    return apiClient<SellerPayout[]>("/marketplace/admin/payouts/");
+  },
+  adminUpdatePayoutStatus: async (
+    id: number,
+    status: SellerPayout["status"],
+    admin_note?: string,
+    rejection_reason?: string,
+    transaction_reference?: string
+  ) => {
+    return apiClient<SellerPayout>(`/marketplace/admin/payouts/${id}/update_status/`, {
+      method: "POST",
+      body: JSON.stringify({ status, admin_note, rejection_reason, transaction_reference }),
+    });
   },
 
 };

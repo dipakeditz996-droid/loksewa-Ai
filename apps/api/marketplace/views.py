@@ -356,6 +356,10 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
                 note=note,
             )
 
+            # Mark order items ELIGIBLE for payout when order is DELIVERED
+            if new_status == 'DELIVERED' and old_status != 'DELIVERED':
+                order.items.filter(product__seller__isnull=False, payout_status='PENDING').update(payout_status='ELIGIBLE')
+
             # Return stock on cancellation (but not after delivery)
             if new_status == 'CANCELLED' and old_status not in ['DELIVERED']:
                 for item in order.items.all():
@@ -1126,3 +1130,181 @@ class AdminDisputeViewSet(viewsets.ModelViewSet):
         NotificationService.notify_dispute_status_changed(dispute.seller, dispute.order_item.product, dispute.get_status_display())
         
         return Response(DisputeSerializer(dispute).data)
+
+
+# ---------------------------------------------------------------------------
+# S2S Payouts (Student)
+# ---------------------------------------------------------------------------
+from .models import PayoutAccount, SellerPayout
+from .serializers import PayoutAccountSerializer, SellerPayoutSerializer, AdminSellerPayoutSerializer, SellerBalanceSerializer
+from django.db.models import Sum
+
+class StudentPayoutAccountViewSet(viewsets.ModelViewSet):
+    serializer_class = PayoutAccountSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return PayoutAccount.objects.filter(seller=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(seller=self.request.user)
+
+
+class StudentPayoutViewSet(viewsets.ModelViewSet):
+    serializer_class = SellerPayoutSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ['get', 'post', 'head', 'options']
+
+    def get_queryset(self):
+        return SellerPayout.objects.filter(seller=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def balance(self, request):
+        seller = request.user
+        settings = MarketplaceSettings.get_settings()
+        
+        # Calculate Total Earnings
+        earnings_agg = OrderItem.objects.filter(
+            product__seller=seller, 
+            payout_status__in=['ELIGIBLE', 'PROCESSING', 'PAID']
+        ).aggregate(total=Sum('seller_earning'))
+        total_earnings = earnings_agg['total'] or Decimal('0.00')
+
+        # Calculate Pending Payouts
+        pending_agg = SellerPayout.objects.filter(
+            seller=seller, 
+            status__in=['PENDING', 'APPROVED', 'PROCESSING']
+        ).aggregate(total=Sum('requested_amount'))
+        pending_payouts = pending_agg['total'] or Decimal('0.00')
+
+        # Calculate Paid Out
+        paid_agg = SellerPayout.objects.filter(
+            seller=seller, 
+            status='PAID'
+        ).aggregate(total=Sum('requested_amount'))
+        paid_out = paid_agg['total'] or Decimal('0.00')
+
+        available_balance = total_earnings - pending_payouts - paid_out
+
+        data = {
+            'total_earnings': total_earnings,
+            'pending_payouts': pending_payouts,
+            'paid_out': paid_out,
+            'available_balance': available_balance,
+            'minimum_payout_amount': settings.minimum_payout_amount
+        }
+        return Response(SellerBalanceSerializer(data).data)
+
+    @action(detail=False, methods=['post'])
+    def request(self, request):
+        amount_str = request.data.get('requested_amount')
+        payout_account_id = request.data.get('payout_account_id')
+
+        if not amount_str or not payout_account_id:
+            return Response({"detail": "requested_amount and payout_account_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(str(amount_str))
+        except Exception:
+            return Response({"detail": "Invalid amount."}, status=status.HTTP_400_BAD_REQUEST)
+
+        settings = MarketplaceSettings.get_settings()
+        if amount < settings.minimum_payout_amount:
+            return Response({"detail": f"Minimum payout amount is Rs. {settings.minimum_payout_amount}."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payout_account = PayoutAccount.objects.get(id=payout_account_id, seller=request.user)
+        except PayoutAccount.DoesNotExist:
+            return Response({"detail": "Invalid payout account."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            # Lock the seller to prevent double payout request race conditions
+            from core.models import User as UserModel
+            UserModel.objects.select_for_update().get(id=request.user.id)
+
+            earnings_agg = OrderItem.objects.filter(
+                product__seller=request.user, 
+                payout_status__in=['ELIGIBLE', 'PROCESSING', 'PAID']
+            ).aggregate(total=Sum('seller_earning'))
+            total_earnings = earnings_agg['total'] or Decimal('0.00')
+
+            pending_agg = SellerPayout.objects.filter(
+                seller=request.user, 
+                status__in=['PENDING', 'APPROVED', 'PROCESSING']
+            ).aggregate(total=Sum('requested_amount'))
+            pending_payouts = pending_agg['total'] or Decimal('0.00')
+
+            paid_agg = SellerPayout.objects.filter(
+                seller=request.user, 
+                status='PAID'
+            ).aggregate(total=Sum('requested_amount'))
+            paid_out = paid_agg['total'] or Decimal('0.00')
+
+            available_balance = total_earnings - pending_payouts - paid_out
+
+            if amount > available_balance:
+                return Response({"detail": "Requested amount exceeds available balance."}, status=status.HTTP_400_BAD_REQUEST)
+
+            payout = SellerPayout.objects.create(
+                seller=request.user,
+                payout_account=payout_account,
+                requested_amount=amount,
+                status='PENDING'
+            )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_payout_requested(request.user, amount)
+
+        return Response(SellerPayoutSerializer(payout).data, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# S2S Payouts (Admin)
+# ---------------------------------------------------------------------------
+
+class AdminPayoutViewSet(viewsets.ModelViewSet):
+    queryset = SellerPayout.objects.all().select_related('seller', 'payout_account', 'processed_by').order_by('-created_at')
+    serializer_class = AdminSellerPayoutSerializer
+    permission_classes = [IsAdminUser]
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        payout = self.get_object()
+        new_status = request.data.get('status')
+        admin_note = request.data.get('admin_note', payout.admin_note)
+        rejection_reason = request.data.get('rejection_reason', payout.rejection_reason)
+        transaction_reference = request.data.get('transaction_reference', payout.transaction_reference)
+
+        valid_statuses = [choice[0] for choice in SellerPayout.STATUS_CHOICES]
+        if new_status not in valid_statuses:
+            return Response({"detail": "Invalid status."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_status == 'REJECTED' and not rejection_reason:
+            return Response({"detail": "Rejection reason is required when rejecting a payout."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if new_status == 'PAID' and not transaction_reference:
+            return Response({"detail": "Transaction reference is required when marking as PAID."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            payout.status = new_status
+            payout.admin_note = admin_note
+            payout.rejection_reason = rejection_reason
+            payout.transaction_reference = transaction_reference
+            payout.processed_by = request.user
+            payout.processed_at = timezone.now()
+            payout.save()
+
+        from core.notification_service import NotificationService
+        if new_status == 'APPROVED':
+            NotificationService.notify_payout_approved(payout.seller, payout.requested_amount)
+        elif new_status == 'PROCESSING':
+            NotificationService.notify_payout_processing(payout.seller, payout.requested_amount)
+        elif new_status == 'PAID':
+            method = payout.payout_account.get_method_display() if payout.payout_account else 'Unknown'
+            NotificationService.notify_payout_paid(payout.seller, payout.requested_amount, method, transaction_reference)
+        elif new_status == 'REJECTED':
+            NotificationService.notify_payout_rejected(payout.seller, payout.requested_amount, rejection_reason)
+        elif new_status == 'FAILED':
+            NotificationService.notify_payout_failed(payout.seller, payout.requested_amount, admin_note)
+
+        return Response(AdminSellerPayoutSerializer(payout).data)

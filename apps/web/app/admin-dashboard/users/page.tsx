@@ -422,7 +422,7 @@ export default function UsersManagementPage() {
       <Dialog open={createUserModalOpen} onOpenChange={setCreateUserModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[#0B2545]">
+            <DialogTitle className="flex items-center gap-2 text-foreground">
               <UserPlus className="w-5 h-5" /> Create New User
             </DialogTitle>
             <DialogDescription>
@@ -431,26 +431,26 @@ export default function UsersManagementPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {createError && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-md border border-red-200">
+              <div className="p-3 bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-sm rounded-md border border-red-200 dark:border-red-900/50">
                 {createError}
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#0B2545]">Username *</label>
-              <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="e.g. johndoe" className="placeholder:text-slate-600" />
+              <label className="text-sm font-bold text-foreground">Username *</label>
+              <Input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="e.g. johndoe" className="placeholder:text-muted-foreground" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#0B2545]">Email *</label>
-              <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="e.g. john@example.com" className="placeholder:text-slate-600" />
+              <label className="text-sm font-bold text-foreground">Email *</label>
+              <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} type="email" placeholder="e.g. john@example.com" className="placeholder:text-muted-foreground" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#0B2545]">Password *</label>
-              <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="Temporary password" className="placeholder:text-slate-600" />
+              <label className="text-sm font-bold text-foreground">Password *</label>
+              <Input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="Temporary password" className="placeholder:text-muted-foreground" />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#0B2545]">Role *</label>
+              <label className="text-sm font-bold text-foreground">Role *</label>
               <select
-                className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white text-[#0B2545] font-medium focus:outline-none focus:ring-2 focus:ring-[#0B2545]"
+                className="w-full p-2 border border-input rounded-md text-sm bg-background text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 value={newRole}
                 onChange={(e) => setNewRole(e.target.value)}
               >
@@ -462,7 +462,7 @@ export default function UsersManagementPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateUserModalOpen(false)} disabled={isCreatingUser}>Cancel</Button>
-            <Button className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white gap-2" onClick={handleCreateUser} disabled={isCreatingUser}>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2" onClick={handleCreateUser} disabled={isCreatingUser}>
               {isCreatingUser ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />

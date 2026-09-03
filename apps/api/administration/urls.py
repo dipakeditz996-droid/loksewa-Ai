@@ -1,5 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from .registration_views import (
+    AdminPendingVerificationsView,
+    AdminResendRegistrationOTPView,
+    AdminGenerateRecoveryCodeView,
+)
 from .views import (
     AdminDashboardStatsView,
     AdminAnalyticsView,
@@ -105,6 +110,9 @@ urlpatterns = [
     path('analytics/students/', AdminStudentsAnalyticsView.as_view(), name='admin-analytics-students'),
     path('users/', AdminUsersView.as_view(), name='admin-users'),
     path('users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('users/pending-verifications/', AdminPendingVerificationsView.as_view(), name='admin-users-pending-verifications'),
+    path('users/<int:pk>/resend-otp/', AdminResendRegistrationOTPView.as_view(), name='admin-user-resend-otp'),
+    path('users/<int:pk>/generate-recovery-code/', AdminGenerateRecoveryCodeView.as_view(), name='admin-user-generate-recovery-code'),
     path('admins/', AdminAdministratorsView.as_view(), name='admin-administrators'),
     path('roles/', AdminRolesView.as_view(), name='admin-roles'),
     path('permissions/', AdminPermissionsView.as_view(), name='admin-permissions'),

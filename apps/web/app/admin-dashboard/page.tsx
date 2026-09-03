@@ -275,6 +275,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
           loading={loadingStats}
+          href="/admin-dashboard/users"
         />
         <StatCard
           title="Active Students"
@@ -284,6 +285,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-emerald-600"
           iconBg="bg-emerald-50"
           loading={loadingStats}
+          href="/admin-dashboard/users"
         />
         <StatCard
           title="Total Exams"
@@ -293,6 +295,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-purple-600"
           iconBg="bg-purple-50"
           loading={loadingExams}
+          href="/admin-dashboard/academic/exams"
         />
         <StatCard
           title="Questions Bank"
@@ -302,6 +305,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-indigo-600"
           iconBg="bg-indigo-50"
           loading={loadingStats}
+          href="/admin-dashboard/academic/questions"
         />
       </div>
 
@@ -314,6 +318,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-teal-600"
           iconBg="bg-teal-50"
           loading={loadingStats}
+          href="/admin-dashboard/materials"
         />
         <StatCard
           title="AI Tutor Sessions"
@@ -323,6 +328,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-violet-600"
           iconBg="bg-violet-50"
           loading={loadingAI && loadingStats}
+          href="/admin-dashboard/ai-tutor"
         />
         <StatCard
           title="Orders"
@@ -332,6 +338,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-amber-600"
           iconBg="bg-amber-50"
           loading={loadingMarket && loadingStats}
+          href="/admin-dashboard/marketplace/orders"
         />
         <StatCard
           title="Revenue"
@@ -341,6 +348,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-[#D4A72C]"
           iconBg="bg-yellow-50"
           loading={loadingMarket && loadingStats}
+          href="/admin-dashboard/marketplace"
         />
       </div>
 
@@ -353,6 +361,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-emerald-600"
           iconBg="bg-emerald-50"
           loading={loadingStats}
+          href="/admin-dashboard/marketplace"
         />
         <StatCard
           title="Support Tickets"
@@ -371,6 +380,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-orange-600"
           iconBg="bg-orange-50"
           loading={loadingStats}
+          href="/admin-dashboard/evaluations"
         />
         <StatCard
           title="Active Listings"
@@ -380,6 +390,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
           loading={loadingStats}
+          href="/admin-dashboard/marketplace/listings"
         />
       </div>
 

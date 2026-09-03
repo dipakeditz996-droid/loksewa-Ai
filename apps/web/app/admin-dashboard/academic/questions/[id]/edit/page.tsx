@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, use } from "react";
 import { ArrowLeft, Edit3, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -8,7 +8,8 @@ import { SingleQuestionForm } from "@/components/admin/questions/SingleQuestionF
 import { adminQuestionApi, AdminQuestion } from "@/lib/api/admin-questions";
 import { useRouter } from "next/navigation";
 
-export default function EditQuestionPage({ params }: { params: { id: string } }) {
+export default function EditQuestionPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
   const router = useRouter();
   const [question, setQuestion] = useState<AdminQuestion | null>(null);
   const [loading, setLoading] = useState(true);
@@ -17,7 +18,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
   useEffect(() => {
     const fetchQuestion = async () => {
       try {
-        const data = await adminQuestionApi.getQuestion(Number(params.id));
+        const data = await adminQuestionApi.getQuestion(Number(resolvedParams.id));
         setQuestion(data);
       } catch (err: any) {
         console.error(err);
@@ -27,7 +28,7 @@ export default function EditQuestionPage({ params }: { params: { id: string } })
       }
     };
     fetchQuestion();
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   if (loading) {
     return (

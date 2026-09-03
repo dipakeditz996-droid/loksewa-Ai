@@ -17,12 +17,14 @@ export default function AdminReviewQueuePage() {
   const router = useRouter();
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("pending_review");
 
   const fetchQueue = async () => {
     try {
       setLoading(true);
+      setError(false);
       const params: any = { search };
       if (statusFilter !== "all") {
         params.status = statusFilter;
@@ -31,7 +33,8 @@ export default function AdminReviewQueuePage() {
       const response = await adminQuestionsApi.getAdminReviewQueue(params);
       const data = Array.isArray(response) ? response : (response.results || []);
       setQuestions(data);
-    } catch (error) {
+    } catch (err) {
+      setError(true);
       toast.error("Failed to load review queue");
     } finally {
       setLoading(false);
@@ -101,7 +104,15 @@ export default function AdminReviewQueuePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {loading ? (
+              {error ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center">
+                    <AlertCircle className="w-12 h-12 mx-auto text-destructive mb-4" />
+                    <p className="text-lg font-medium text-foreground">Failed to load queue</p>
+                    <Button variant="outline" className="mt-4" onClick={fetchQueue}>Retry</Button>
+                  </td>
+                </tr>
+              ) : loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     <td className="px-6 py-4"><Skeleton className="h-4 w-64" /></td>

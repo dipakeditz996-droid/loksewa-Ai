@@ -24,15 +24,40 @@ export const authApi = {
   },
 
   /**
-   * Student registration
+   * Student registration. Creates the account immediately as pending email
+   * verification (no tokens issued here) and sends the first OTP - call
+   * verifyEmailOtp next, which is what actually logs the student in.
    */
   studentSignup: async (data: Record<string, string>) => {
-    const response = await apiClient<{ access: string; refresh: string; user: User }>("/auth/signup/", {
+    return apiClient<{ id: number; username: string; email: string; pending_verification: true; detail: string }>(
+      "/auth/signup/",
+      { method: "POST", body: JSON.stringify(data) }
+    );
+  },
+
+  /**
+   * Confirms the code emailed by studentSignup (or resendSignupOtp) and, on
+   * success, logs the student in.
+   */
+  verifyEmailOtp: async (email: string, otp: string) => {
+    const response = await apiClient<{ access: string; refresh: string; user: User }>("/auth/verify-email-otp/", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ email, otp }),
     });
     setAuthToken(response.access, response.refresh);
     return response;
+  },
+
+  /**
+   * Confirms an admin-generated recovery code for a student who never
+   * received their email OTP. Does NOT log the student in - they use the
+   * normal login form afterward, same as any other verified account.
+   */
+  verifyRecoveryCode: async (email: string, code: string) => {
+    return apiClient<{ verified: boolean; detail: string }>("/auth/verify-recovery-code/", {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    });
   },
 
   /**
@@ -96,12 +121,36 @@ export const authApi = {
   },
 
   /**
-   * Forgot password stub.
+   * Resends the signup verification code for an already-registered but
+   * still-unverified account ("I didn't get it" / "it expired"). studentSignup
+   * already sends the first one automatically.
+   */
+  requestSignupOtp: async (email: string) => {
+    return apiClient<{ detail?: string; error?: string }>("/auth/signup/request-otp/", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
+   * Sends a password-reset verification code (via EmailJS) to the given
+   * email, if an account exists for it. Always returns the same generic
+   * response regardless of whether the account exists.
    */
   forgotPassword: async (email: string) => {
     return apiClient<{ detail: string; configured: boolean }>("/auth/forgot-password/", {
       method: "POST",
       body: JSON.stringify({ email }),
+    });
+  },
+
+  /**
+   * Completes a password reset with the OTP emailed by forgotPassword.
+   */
+  resetPassword: async (email: string, otp: string, password: string) => {
+    return apiClient<{ detail: string }>("/auth/reset-password/", {
+      method: "POST",
+      body: JSON.stringify({ email, otp, password }),
     });
   },
 

@@ -134,7 +134,13 @@ class NotificationCategoryFilterTests(APITestCase):
         self.assertEqual(self._titles('achievement'), {'Level Up'})
 
     def test_system_category_is_the_catch_all(self):
-        self.assertEqual(self._titles('system'), {'Payment', 'Announcement', 'Critical'})
+        # 'payment' now has its own 'payments' category tab (see
+        # NOTIFICATION_CATEGORY_MAP), so it's no longer part of the
+        # 'system' catch-all.
+        self.assertEqual(self._titles('system'), {'Announcement', 'Critical'})
+
+    def test_payments_category_groups_payment(self):
+        self.assertEqual(self._titles('payments'), {'Payment'})
 
     def test_important_category_is_priority_based(self):
         self.assertEqual(self._titles('important'), {'Critical', 'Important exam'})

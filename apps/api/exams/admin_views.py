@@ -33,7 +33,7 @@ class AdminExamViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter, DjangoFilterBackend]
     search_fields = ['name', 'description']
-    filterset_fields = ['category', 'is_active']
+    filterset_fields = ['category', 'is_active', 'parent']
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

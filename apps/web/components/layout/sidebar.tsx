@@ -67,6 +67,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
     { href: "/student/exams", label: "Mock Exams", icon: FileText },
     { href: "/student/results", label: "Results", icon: FileText },
     { href: "/student/leaderboard", label: "Leaderboard", icon: Trophy },
+    { href: "/student/community", label: "Community", icon: Users },
     { href: "/student/feedback", label: "Feedback", icon: MessageSquarePlus },
     { href: "/student/ai-tutor", label: "AI Tutor", icon: MessageSquare },
     { href: "/student/notes", label: "Notes", icon: Bookmark },

@@ -61,15 +61,21 @@ class TeacherDashboardView(APIView):
         # 1. Assigned Courses & Total Students
         # Fetch the courses assigned to the teacher
         assigned_assignments = TeacherCourseAssignment.objects.filter(teacher=user).select_related('course')
+
+        from analytics.services.teacher_analytics_service import TeacherAnalyticsService
+        performance_by_course = {
+            row['id']: row for row in TeacherAnalyticsService.get_course_performance(user)
+        }
+
         courses_data = []
         course_ids = []
         for assignment in assigned_assignments:
             course = assignment.course
             course_ids.append(course.id)
-            
+
             # Simple student count per course
             student_count = course.enrollments.filter(status='active').count()
-            
+
             thumbnail_url = None
             if course.thumbnail:
                 try:
@@ -77,12 +83,15 @@ class TeacherDashboardView(APIView):
                 except Exception:
                     pass
 
+            perf = performance_by_course.get(course.id)
             courses_data.append({
                 'id': course.id,
                 'title': course.title,
                 'thumbnail': thumbnail_url,
                 'status': course.status,
                 'student_count': student_count,
+                'completion_percentage': perf['completion'] if perf else 0,
+                'average_score': perf['average_score'] if perf else 0,
             })
             
         # Total distinct students across all teacher's active courses
@@ -99,11 +108,19 @@ class TeacherDashboardView(APIView):
         published_content = questions_count + practice_sets_count
 
         # 2. Pending Evaluations
-        # Currently fetching all submitted answers as there's no strict scoping to teacher courses in the models yet.
-        pending_answers = SubjectiveAnswer.objects.filter(status='submitted').select_related(
+        # Scoped to students enrolled in this teacher's own assigned courses -
+        # same TeacherCourseAssignment -> Enrollment pattern used by
+        # TeacherStudentViewSet, so one teacher's dashboard doesn't surface
+        # (or let them evaluate) another teacher's students' submissions.
+        teacher_student_ids = Enrollment.objects.filter(
+            course_id__in=course_ids, status='active'
+        ).values_list('student_id', flat=True)
+        scoped_answers = SubjectiveAnswer.objects.filter(attempt__student_id__in=teacher_student_ids)
+
+        pending_answers = scoped_answers.filter(status='submitted').select_related(
             'attempt__student', 'question__topic'
         ).order_by('-submitted_at')[:5]
-        
+
         evaluations_data = []
         for ans in pending_answers:
             evaluations_data.append({
@@ -114,9 +131,9 @@ class TeacherDashboardView(APIView):
                 'submitted_at': ans.submitted_at,
                 'status': ans.status
             })
-            
-        total_pending = SubjectiveAnswer.objects.filter(status='submitted').count()
-        total_completed = SubjectiveAnswer.objects.filter(status='evaluated').count()
+
+        total_pending = scoped_answers.filter(status='submitted').count()
+        total_completed = scoped_answers.filter(status='evaluated').count()
         
         # 3. Recent Practice Sets
         recent_sets = QuestionSet.objects.filter(created_by=user).exclude(status='archived').order_by('-created_at')[:3]
@@ -180,6 +197,13 @@ class PublicCourseListView(APIView):
         ).select_related('exam').annotate(
             enrolled_count=Count('enrollments', filter=Q(enrollments__status='active'))
         ).order_by('-featured', 'title')
+
+        # Optional personalization: ?exam=<id> filters to courses for that
+        # exact Exam (e.g. a student's registration preference - PSC 5th
+        # Level Computer). This is filtering only, never auto-enrollment.
+        exam_id = request.query_params.get('exam')
+        if exam_id:
+            courses = courses.filter(exam_id=exam_id)
 
         data = []
         for c in courses:

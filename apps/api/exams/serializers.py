@@ -78,7 +78,7 @@ class QuestionFullSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = '__all__'
-        read_only_fields = ['created_by']
+        read_only_fields = ['created_by', 'status', 'reviewer_comment', 'reviewed_by', 'reviewed_at', 'submitted_at']
 
 from .models import QuestionSet, QuestionSetQuestion
 
@@ -108,7 +108,7 @@ class TeacherQuestionSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuestionSet
         fields = '__all__'
-        read_only_fields = ['created_by', 'created_at', 'updated_at', 'reviewer_comment', 'reviewed_by', 'submitted_at', 'reviewed_at']
+        read_only_fields = ['created_by', 'created_at', 'updated_at', 'status', 'reviewer_comment', 'reviewed_by', 'submitted_at', 'reviewed_at']
 
     def create(self, validated_data):
         questions_data = validated_data.pop('questions_data', [])

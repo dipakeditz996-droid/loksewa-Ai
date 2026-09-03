@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { 
   FileText, CheckSquare, Plus, Search, Filter, Upload,
   MoreVertical, Edit2, Trash2, Copy, BookOpen, Layers,
-  Wand2, FolderPlus
+  Wand2, FolderPlus, ClipboardCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -444,6 +444,15 @@ export default function QuestionBankPage() {
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {q.status === 'pending_review' && (
+                          <Link 
+                            href={`/admin-dashboard/questions/review/${q.id}`}
+                            className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+                            title="Review Question"
+                          >
+                            <ClipboardCheck className="w-4 h-4" />
+                          </Link>
+                        )}
                         {q.ai_status === 'pending' && (
                           <Link 
                             href={`/admin-dashboard/academic/questions/${q.id}/edit`}

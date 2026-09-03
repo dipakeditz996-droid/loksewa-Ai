@@ -1109,9 +1109,24 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
     """Teacher/Admin evaluation endpoints"""
     permission_classes = [IsAuthenticated]
 
+    def _scoped_answers(self, user):
+        """Admins/super-admins see every submission (platform-wide oversight,
+        consistent with AdminQuestionReviewViewSet etc). A teacher only sees
+        answers from students enrolled in one of their own assigned courses -
+        same TeacherCourseAssignment -> Enrollment scoping already used by
+        TeacherStudentViewSet, so a teacher can't view/grade another
+        teacher's students by guessing an answer id."""
+        from .models import SubjectiveAnswer
+        qs = SubjectiveAnswer.objects.all()
+        if user.role == 'teacher':
+            from courses.models import Enrollment, TeacherCourseAssignment
+            assigned_courses = TeacherCourseAssignment.objects.filter(teacher=user).values_list('course_id', flat=True)
+            student_ids = Enrollment.objects.filter(course_id__in=assigned_courses, status='active').values_list('student_id', flat=True)
+            qs = qs.filter(attempt__student_id__in=student_ids)
+        return qs
+
     def list(self, request):
         """List all submitted answers pending evaluation"""
-        from .models import SubjectiveAnswer
         from .serializers import SubjectiveAnswerListSerializer
 
         user = request.user
@@ -1119,7 +1134,7 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
             return Response({'detail': 'Permission denied.'}, status=403)
 
         status_filter = request.query_params.get('status', 'submitted')
-        qs = SubjectiveAnswer.objects.filter(status=status_filter).select_related(
+        qs = self._scoped_answers(user).filter(status=status_filter).select_related(
             'attempt__student', 'question__topic'
         ).order_by('-submitted_at')
 
@@ -1136,7 +1151,7 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
             return Response({'detail': 'Permission denied.'}, status=403)
 
         try:
-            answer = SubjectiveAnswer.objects.select_related(
+            answer = self._scoped_answers(user).select_related(
                 'attempt__student', 'question__topic'
             ).get(id=pk)
             serializer = SubjectiveAnswerSerializer(answer)
@@ -1154,7 +1169,7 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
             return Response({'detail': 'Permission denied.'}, status=403)
 
         try:
-            answer = SubjectiveAnswer.objects.get(id=pk)
+            answer = self._scoped_answers(user).get(id=pk)
         except SubjectiveAnswer.DoesNotExist:
             return Response({'detail': 'Answer not found.'}, status=404)
 
@@ -1192,7 +1207,7 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
             return Response({'detail': 'Permission denied.'}, status=403)
 
         try:
-            answer = SubjectiveAnswer.objects.get(id=pk)
+            answer = self._scoped_answers(user).get(id=pk)
             evaluation = answer.evaluation
         except (SubjectiveAnswer.DoesNotExist, Evaluation.DoesNotExist):
             return Response({'detail': 'Answer or evaluation not found.'}, status=404)
@@ -1220,7 +1235,7 @@ class TeacherEvaluationViewSet(viewsets.ViewSet):
             return Response({'detail': 'Permission denied.'}, status=403)
 
         try:
-            answer = SubjectiveAnswer.objects.get(id=pk)
+            answer = self._scoped_answers(user).get(id=pk)
             evaluation = answer.evaluation
         except (SubjectiveAnswer.DoesNotExist, Evaluation.DoesNotExist):
             return Response({'detail': 'Answer or evaluation not found.'}, status=404)
@@ -1384,9 +1399,9 @@ class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if not user.is_authenticated or user.role != 'admin':
+        if not user.is_authenticated or user.role not in ('admin', 'super-admin'):
             return Question.objects.none()
-        
+
         # Admin can see all questions that have been submitted at some point, or all questions
         # Prioritize pending review
         return Question.objects.exclude(status='draft').exclude(status='archived')
@@ -1644,9 +1659,9 @@ class AdminPracticeSetReviewViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        if not user.is_authenticated or user.role != 'admin':
+        if not user.is_authenticated or user.role not in ('admin', 'super-admin'):
             return QuestionSet.objects.none()
-            
+
         return QuestionSet.objects.filter(
             status__in=['pending_review', 'approved', 'changes_requested', 'rejected', 'published']
         ).order_by('-submitted_at')
@@ -1866,6 +1881,17 @@ class TeacherMockExamViewSet(viewsets.ModelViewSet):
             message=f"{request.user.get_full_name() or request.user.username} submitted exam '{exam.title}' for review.",
             action_url='/admin-dashboard/exams',
         )
+
+        return Response(self.get_serializer(exam).data)
+
+    @action(detail=True, methods=['get'])
+    def analytics(self, request, pk=None):
+        # get_queryset already scopes this to the teacher's own exams, so
+        # get_object() 404s a teacher trying another teacher's exam id -
+        # same computation the admin exam analytics endpoint uses.
+        from .analytics_utils import build_examination_analytics
+        exam = self.get_object()
+        return Response(build_examination_analytics(exam))
 
         return Response({'status': 'Exam submitted for review successfully.'})
 

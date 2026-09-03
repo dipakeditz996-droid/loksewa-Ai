@@ -74,6 +74,20 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'no_active_account'
             )
 
+        # A student whose registration is still pending email/recovery
+        # verification (see StudentProfile.is_verified) can't log in yet -
+        # checked only after the password is confirmed correct, so a wrong
+        # password never leaks whether an account is verified.
+        if user.role == 'student':
+            from support.models import StudentProfile
+            profile = StudentProfile.objects.filter(user=user).only('is_verified').first()
+            if profile and not profile.is_verified:
+                raise exceptions.AuthenticationFailed(
+                    'Please verify your email before logging in. Check your inbox for the verification code, '
+                    'or contact an administrator if you need help.',
+                    'account_unverified',
+                )
+
         # If user is valid, we still use the super().validate() to get the tokens,
         # but we must pass the actual username because the provided username might be an email.
         attrs[username_field] = user.username

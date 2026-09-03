@@ -59,11 +59,16 @@ class StudyPlansFlagTests(FeatureFlagTestBase):
 
 class GamificationFlagTests(FeatureFlagTestBase):
     def test_enabled_by_default_leaderboard_reachable(self):
+        # /leaderboard/ requires authentication - unauthenticated always 401s
+        # regardless of the feature flag, so that's not what this test means
+        # to check.
+        self.client.force_authenticate(user=self.student)
         response = self.client.get('/api/gamification/leaderboard/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_disabled_blocks_leaderboard(self):
         self.disable(enable_gamification=False)
+        self.client.force_authenticate(user=self.student)
         response = self.client.get('/api/gamification/leaderboard/')
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -192,18 +197,29 @@ class PasswordPolicyTests(APITestCase):
         self.admin = User.objects.create_user(
             username='admin1', email='admin1@test.com', password='StrongPass123!',
             role='admin', is_staff=True)
+        from exams.models import ExamCategory
+        self.category = ExamCategory.objects.create(name='PSC Exams', is_active=True)
+
+    def _signup_payload(self, **overrides):
+        payload = {
+            'name': 'Test Student', 'mobile': '9812345678',
+            'permanent_district': 'Kathmandu', 'permanent_local_level': 'Kathmandu Metro',
+            'exam_category_id': self.category.id,
+        }
+        payload.update(overrides)
+        return payload
 
     def test_signup_rejects_weak_password(self):
-        response = self.client.post('/api/auth/signup/', {
-            'username': 'newstudent', 'email': 'new@test.com', 'password': 'weak',
-        })
+        response = self.client.post('/api/auth/signup/', self._signup_payload(
+            username='newstudent', email='new@test.com', password='weak',
+        ))
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(username='newstudent').exists())
 
     def test_signup_accepts_strong_password(self):
-        response = self.client.post('/api/auth/signup/', {
-            'username': 'newstudent2', 'email': 'new2@test.com', 'password': 'StrongPass123!',
-        })
+        response = self.client.post('/api/auth/signup/', self._signup_payload(
+            username='newstudent2', email='new2@test.com', password='StrongPass123!',
+        ))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_admin_configured_min_length_enforced(self):
@@ -211,9 +227,9 @@ class PasswordPolicyTests(APITestCase):
         settings.password_min_length = 20
         settings.save()
 
-        response = self.client.post('/api/auth/signup/', {
-            'username': 'newstudent3', 'email': 'new3@test.com', 'password': 'Short1!',
-        })
+        response = self.client.post('/api/auth/signup/', self._signup_payload(
+            username='newstudent3', email='new3@test.com', password='Short1!',
+        ))
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_admin_disabling_complexity_allows_simpler_password(self):
@@ -223,9 +239,9 @@ class PasswordPolicyTests(APITestCase):
         settings.password_require_special_chars = False
         settings.save()
 
-        response = self.client.post('/api/auth/signup/', {
-            'username': 'newstudent4', 'email': 'new4@test.com', 'password': 'lowercaseonly',
-        })
+        response = self.client.post('/api/auth/signup/', self._signup_payload(
+            username='newstudent4', email='new4@test.com', password='lowercaseonly',
+        ))
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_admin_create_user_rejects_weak_password(self):

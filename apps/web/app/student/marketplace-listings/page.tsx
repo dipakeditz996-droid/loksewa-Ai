@@ -32,7 +32,9 @@ import {
   ChevronUp,
   Info,
   Pencil,
+  Wallet,
 } from "lucide-react";
+import PayoutsTab from "./PayoutsTab";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -149,7 +151,7 @@ const BLANK_FORM = {
 
 export default function SellerDashboardPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"listings" | "sales" | "trust">("listings");
+  const [activeTab, setActiveTab] = useState<"listings" | "sales" | "trust" | "payouts">("listings");
 
   // Data
   const [listings, setListings] = useState<Product[]>([]);
@@ -409,6 +411,7 @@ export default function SellerDashboardPage() {
             [
               { key: "listings", label: "My Listings", icon: Package },
               { key: "sales", label: "My Sales", icon: ShoppingBag },
+              { key: "payouts", label: "Payouts", icon: Wallet },
               { key: "trust", label: "Trust Center", icon: Star },
             ] as const
           ).map(({ key, label, icon: Icon }) => (
@@ -1115,6 +1118,13 @@ export default function SellerDashboardPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ------------------------------------------------------------------ */}
+        {/* PAYOUTS TAB                                                        */}
+        {/* ------------------------------------------------------------------ */}
+        {activeTab === "payouts" && (
+          <PayoutsTab />
         )}
       </main>
 

@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 
 from core.models import User
 from courses.models import Course, Enrollment
-from .models import Product, PaymentMethod, PaymentSubmission, Purchase
+from marketplace.models import Product, PaymentMethod, PaymentSubmission, Purchase
 
 PRODUCTS_URL = '/api/marketplace/admin/products/'
 PAYMENT_METHODS_URL = '/api/marketplace/admin/payment-methods/'
@@ -221,10 +221,16 @@ class PublicProductListViewTests(APITestCase):
     (no invented rating/reviews the frontend used to render as undefined)."""
 
     def test_only_published_products_returned(self):
+        # A product must be BOTH admin-published AND past S2S moderation
+        # (listing_status='ACTIVE') to appear publicly - is_published=True
+        # alone is not enough since listing_status defaults to
+        # 'PENDING_REVIEW'. This fixture predates that moderation field.
         Product.objects.create(
-            title='Published Product', description='d', category='NEW_BOOK', is_published=True, price=500, stock=10)
+            title='Published Product', description='d', category='NEW_BOOK', is_published=True,
+            listing_status='ACTIVE', price=500, stock=10)
         Product.objects.create(
-            title='Unpublished Product', description='d', category='NEW_BOOK', is_published=False, price=500, stock=10)
+            title='Unpublished Product', description='d', category='NEW_BOOK', is_published=False,
+            listing_status='ACTIVE', price=500, stock=10)
 
         response = self.client.get('/api/marketplace/public/products/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -234,7 +240,7 @@ class PublicProductListViewTests(APITestCase):
     def test_response_has_real_fields_only(self):
         Product.objects.create(
             title='Mock Set', description='d', category='NEW_BOOK', is_published=True,
-            price=500, discount_price=350, stock=10
+            listing_status='ACTIVE', price=500, discount_price=350, stock=10
         )
         response = self.client.get('/api/marketplace/public/products/')
         row = response.data[0]

@@ -5,10 +5,13 @@ Covers: NotificationService.notify_admins() itself (fan-out, kill switches),
 and that real student-triggered events (a support ticket, a course
 application) actually land one in each active admin's inbox.
 """
+import hashlib
+
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import User, AdminSettings, Notification
+from core.models import User, AdminSettings, Notification, EmailOTP
 from core.notification_service import NotificationService
 
 
@@ -100,12 +103,22 @@ class NewRegistrationNotifiesAdminsTests(APITestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             username='admin1', email='admin1@test.com', password='pass123', role='admin')
+        from exams.models import ExamCategory
+        self.category = ExamCategory.objects.create(name='PSC Exams', is_active=True)
 
     def test_signing_up_notifies_admins(self):
+        # Registration itself no longer requires a verified OTP - the
+        # account is created pending-verification and the OTP is emailed as
+        # part of this same call (see VerifyEmailOTPView for the next step).
         response = self.client.post('/api/auth/signup/', {
             'username': 'newstudent',
             'email': 'newstudent@test.com',
             'password': 'StrongPass123!',
+            'name': 'New Student',
+            'mobile': '9812345678',
+            'permanent_district': 'Kathmandu',
+            'permanent_local_level': 'Kathmandu Metro',
+            'exam_category_id': self.category.id,
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 

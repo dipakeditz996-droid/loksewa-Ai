@@ -173,7 +173,7 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
       {/* Core Settings */}
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <FileText className="w-5 h-5 text-navy-600" />
+          <FileText className="w-5 h-5 text-[#0B2545]" />
           Core Configuration
         </h2>
         
@@ -277,7 +277,7 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
                     checked={correctOption === opt}
                     onChange={() => setCorrectOption(opt)}
                     disabled={aiGenerate}
-                    className="w-5 h-5 text-navy-600 border-gray-300 focus:ring-navy-500 disabled:opacity-50"
+                    className="w-5 h-5 text-[#0B2545] border-gray-300 focus:ring-[#0B2545] disabled:opacity-50"
                   />
                   <span className="font-bold text-gray-700 w-6">{opt}.</span>
                   <input 
@@ -300,11 +300,11 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
             <h2 className="text-lg font-semibold">True / False Selection</h2>
             <div className="flex gap-6 mt-4">
               <label className="flex items-center gap-2">
-                <input type="radio" name="tf_correct" checked={correctOption === 'A'} onChange={() => setCorrectOption('A')} className="w-5 h-5 text-navy-600" />
+                <input type="radio" name="tf_correct" checked={correctOption === 'A'} onChange={() => setCorrectOption('A')} className="w-5 h-5 text-[#0B2545]" />
                 True
               </label>
               <label className="flex items-center gap-2">
-                <input type="radio" name="tf_correct" checked={correctOption === 'B'} onChange={() => setCorrectOption('B')} className="w-5 h-5 text-navy-600" />
+                <input type="radio" name="tf_correct" checked={correctOption === 'B'} onChange={() => setCorrectOption('B')} className="w-5 h-5 text-[#0B2545]" />
                 False
               </label>
             </div>
@@ -336,11 +336,11 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         </div>
       </div>
 
-      <div className="flex justify-end pt-4 pb-12">
+      <div className="flex justify-end gap-4 pt-4 pb-12">
         <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
           Cancel
         </Button>
-        <Button type="submit" disabled={loading} className="bg-navy-600 hover:bg-navy-700 text-white flex items-center gap-2">
+        <Button type="submit" disabled={loading} className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white flex items-center gap-2">
           <Save className="w-4 h-4" />
           {loading ? 'Saving...' : (initialData ? 'Update Question' : 'Save Question')}
         </Button>

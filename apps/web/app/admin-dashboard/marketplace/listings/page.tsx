@@ -46,7 +46,6 @@ export default function ListingModerationPage() {
     setLoading(true);
     try {
       const data = await marketplaceApi.adminGetProducts({
-        listing_status: statusFilter || undefined,
         is_seller_listing: "true",
       });
       setListings(data);
@@ -55,15 +54,16 @@ export default function ListingModerationPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
 
   const filtered = listings.filter(
     (l) =>
-      l.title.toLowerCase().includes(search.toLowerCase()) ||
+      (!statusFilter || l.listing_status === statusFilter) &&
+      (l.title.toLowerCase().includes(search.toLowerCase()) ||
       (l.author || "").toLowerCase().includes(search.toLowerCase()) ||
-      (l.location || "").toLowerCase().includes(search.toLowerCase())
+      (l.location || "").toLowerCase().includes(search.toLowerCase()))
   );
 
   const handleApprove = async (id: number) => {
@@ -127,8 +127,8 @@ export default function ListingModerationPage() {
       {/* Page Header */}
       <div className="flex flex-wrap gap-4 justify-between items-center mb-6">
         <div>
-          <h2 className="text-2xl font-extrabold">Listing Moderation</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h2 className="text-2xl font-extrabold text-[#0B2545] dark:text-slate-100">Listing Moderation</h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
             Review, approve, or reject student-submitted book listings.
           </p>
         </div>
@@ -170,10 +170,10 @@ export default function ListingModerationPage() {
           <button
             key={key}
             onClick={() => setStatusFilter(key)}
-            className={`p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-left transition-all ${statusFilter === key ? `ring-2 ring-current ${color}` : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10"}`}
+            className={`p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-left transition-all ${statusFilter === key ? `ring-2 ring-current ${color}` : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10"}`}
           >
-            <p className="text-xs font-semibold mb-0.5">{label}</p>
-            <p className={`text-lg font-extrabold ${statusFilter === key ? color : "text-slate-800 dark:text-slate-200"}`}>
+            <p className="text-xs font-bold mb-0.5">{label}</p>
+            <p className={`text-lg font-extrabold ${statusFilter === key ? color : "text-[#0B2545] dark:text-slate-200"}`}>
               {listings.filter((l) => l.listing_status === key).length}
             </p>
           </button>
@@ -186,28 +186,38 @@ export default function ListingModerationPage() {
           <Loader2 className="w-8 h-8 animate-spin text-[#163E6B]" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 border border-slate-200 dark:border-white/10 rounded-2xl">
+        <div className="text-center py-16 border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5 rounded-2xl">
           <BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="font-semibold text-slate-500">No listings found.</p>
+          <p className="text-[15px] font-bold text-[#0B2545] dark:text-slate-200">
+            {statusFilter === "ACTIVE" ? "No active listings yet."
+            : statusFilter === "PENDING_REVIEW" ? "No listings awaiting review."
+            : statusFilter === "REJECTED" ? "No rejected listings."
+            : statusFilter === "SOLD" ? "No sold listings."
+            : "No listings found."}
+          </p>
+          <p className="text-[13px] text-slate-500 mt-1">
+            {statusFilter === "ACTIVE" ? "Approved student books will appear here." : "Change your filters or check back later."}
+          </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {filtered.map((listing) => (
             <div
               key={listing.id}
-              className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 flex flex-col sm:flex-row gap-4"
+              className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row gap-4 shadow-sm"
             >
               {/* Image */}
-              <div className="w-16 h-16 shrink-0 rounded-xl overflow-hidden bg-slate-100 dark:bg-white/10">
+              <div className="w-20 h-28 sm:w-24 sm:h-32 shrink-0 rounded-lg overflow-hidden bg-slate-50 dark:bg-white/10 border border-slate-100 dark:border-white/5 flex items-center justify-center p-2">
                 {primaryImage(listing) ? (
                   <img
                     src={primaryImage(listing)!}
-                    alt=""
-                    className="w-full h-full object-cover"
+                    alt={listing.title}
+                    className="w-full h-full object-cover rounded shadow-sm"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-1.5 text-center">
                     <BookOpen className="w-6 h-6 text-slate-300" />
+                    <span className="text-[10px] text-slate-400 font-medium leading-tight">Book image unavailable</span>
                   </div>
                 )}
               </div>
@@ -215,48 +225,49 @@ export default function ListingModerationPage() {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap gap-2 items-start mb-1">
-                  <h4 className="font-bold truncate flex-1">{listing.title}</h4>
+                  <h4 className="text-[16px] font-bold text-[#0B2545] dark:text-slate-100 truncate flex-1">{listing.title}</h4>
                   <span
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[listing.listing_status || ""] || "bg-slate-100 text-slate-600"}`}
+                    className={`px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${STATUS_BADGE[listing.listing_status || ""] || "bg-slate-100 text-slate-600"}`}
                   >
                     {(listing.listing_status || "").replace(/_/g, " ")}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                  {listing.author && (
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {listing.author}
-                    </span>
-                  )}
+                <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-400 mb-3">
+                  {listing.author ? `${listing.author} · ` : ""}Student Seller · Used Book
+                </p>
+
+                <div className="flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" />
+                    Rs. {listing.price}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" />
+                    {listing.seller_details?.first_name || "Unknown Seller"}
+                  </span>
                   {listing.location && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5" />
                       {listing.location}
                     </span>
                   )}
-                  <span className="flex items-center gap-1">
-                    <Tag className="w-3 h-3" />
-                    Rs. {listing.price}
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Condition: {listing.condition_display || listing.condition || "N/A"}
                   </span>
-                  <span>
-                    Condition: {listing.condition_display || listing.condition}
+                  <span className="flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Stock: {listing.stock || 1}
                   </span>
-                  <span>Stock: {listing.stock}</span>
-                  <span>
-                    Submitted:{" "}
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
                     {new Date(listing.created_at).toLocaleDateString("en-NP")}
                   </span>
-                  {listing.seller_details && (
-                    <span className="flex items-center gap-1 font-semibold text-[#163E6B] dark:text-[#D4A72C]">
-                      Seller: {listing.seller_details.first_name}
-                    </span>
-                  )}
                 </div>
 
                 {/* Description preview */}
-                <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-2.5 line-clamp-2">
                   {listing.description}
                 </p>
 
@@ -297,7 +308,7 @@ export default function ListingModerationPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="flex sm:flex-col gap-2 shrink-0 justify-end">
+              <div className="flex sm:flex-col gap-2 shrink-0 sm:justify-start items-end border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-white/10 pt-3 sm:pt-0 sm:pl-4 mt-3 sm:mt-0 w-full sm:w-auto">
                 {listing.listing_status === "PENDING_REVIEW" && (
                   <>
                     <Button

@@ -4,8 +4,24 @@ settings.py. Wired into AUTH_PASSWORD_VALIDATORS so every real password-set
 path (signup, admin-create-user, change-password) enforces whatever the
 admin currently has configured.
 """
+import re
+
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext as _
+
+NEPAL_PHONE_PATTERN = re.compile(r'^9[678]\d{8}$')
+
+
+def is_valid_nepal_phone(phone):
+    """True if `phone` is a 10-digit Nepali mobile number (96/97/98-prefixed),
+    after stripping spaces, hyphens, and an optional +977/977 country code.
+    This is the project's phone-validation convention - used for both
+    registration and any other Nepal-phone field going forward."""
+    if not phone:
+        return False
+    cleaned = re.sub(r'[\s-]', '', phone)
+    cleaned = re.sub(r'^(\+?977)', '', cleaned)
+    return bool(NEPAL_PHONE_PATTERN.match(cleaned))
 
 
 def _security_settings():

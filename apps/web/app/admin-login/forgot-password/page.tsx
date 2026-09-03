@@ -2,28 +2,50 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Mail, Shield, ArrowLeft, CheckCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, Mail, Shield, ArrowLeft, CheckCircle, Lock, KeyRound } from "lucide-react";
 import { authApi } from "@/lib/api/auth";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
+  const [stage, setStage] = useState<"email" | "reset" | "done">("email");
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setMessage(null);
 
     try {
-      const response = await authApi.forgotPassword(email);
-      // The backend will currently return a stub message since it's not configured
-      setMessage({
-        text: response.detail || "Instructions sent if the email exists.",
-        isError: !response.configured
-      });
+      await authApi.forgotPassword(email);
+      setStage("reset");
     } catch (err: any) {
       const detail = err?.data?.detail || err?.message || "An unexpected error occurred.";
+      setMessage({ text: detail, isError: true });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+    if (password !== confirmPassword) {
+      setMessage({ text: "Passwords do not match.", isError: true });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await authApi.resetPassword(email, otp, password);
+      setStage("done");
+      setTimeout(() => router.push("/admin-login"), 2500);
+    } catch (err: any) {
+      const detail = err?.data?.detail || err?.message || "Invalid or expired code. Please try again.";
       setMessage({ text: detail, isError: true });
     } finally {
       setIsLoading(false);
@@ -101,17 +123,21 @@ export default function ForgotPasswordPage() {
 
           <div className="mb-8">
             <h2 className="text-[26px] font-[800] text-[#0B2545] tracking-tight">
-              Forgot Password?
+              {stage === "done" ? "Password Reset" : stage === "reset" ? "Enter Verification Code" : "Forgot Password?"}
             </h2>
             <p className="text-[14px] text-slate-500 mt-1.5 font-medium">
-              Enter your email and we'll send you a reset link.
+              {stage === "done"
+                ? "Redirecting you to sign in..."
+                : stage === "reset"
+                ? `We sent a 6-digit code to ${email}. Enter it below with your new password.`
+                : "Enter your email and we'll send you a verification code."}
             </p>
           </div>
 
           {message && (
             <div className={`mb-5 p-4 rounded-xl border flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${
-              message.isError 
-                ? "bg-red-50 border-red-200 text-red-700" 
+              message.isError
+                ? "bg-red-50 border-red-200 text-red-700"
                 : "bg-amber-50 border-amber-200 text-amber-700" // using amber for the "not configured" state
             }`}>
               <div className={`h-5 w-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
@@ -123,40 +149,105 @@ export default function ForgotPasswordPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-1.5">
-              <label htmlFor="email" className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">
-                Email Address
-              </label>
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 group-focus-within:text-[#0B2545] transition-colors" />
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="admin@loksewa.ai"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full h-[52px] pl-12 pr-4 bg-white border border-slate-200 rounded-xl text-[14px] text-slate-800 placeholder:text-slate-600 placeholder:font-medium focus:outline-none focus:ring-2 focus:ring-[#0B2545]/15 focus:border-[#0B2545]/40 transition-all"
-                />
-              </div>
+          {stage === "done" ? (
+            <div className="text-center py-6">
+              <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-4" />
             </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-[52px] bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-70 text-white text-[15px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#0B2545]/20 hover:shadow-[#0B2545]/30 mt-2"
-            >
-              {isLoading ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Sending...</span>
+          ) : stage === "reset" ? (
+            <form onSubmit={handleReset} className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">Verification Code</label>
+                <div className="relative group">
+                  <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 group-focus-within:text-[#0B2545] transition-colors" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="6-digit code"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                    required
+                    className="w-full h-[52px] pl-12 pr-4 bg-white border border-slate-200 rounded-xl text-[14px] text-slate-800 tracking-[0.3em] placeholder:tracking-normal placeholder:text-slate-600 placeholder:font-medium focus:outline-none focus:ring-2 focus:ring-[#0B2545]/15 focus:border-[#0B2545]/40 transition-all"
+                  />
                 </div>
-              ) : (
-                "Send Reset Link"
-              )}
-            </button>
-          </form>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">New Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 group-focus-within:text-[#0B2545] transition-colors" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full h-[52px] pl-12 pr-4 bg-white border border-slate-200 rounded-xl text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/15 focus:border-[#0B2545]/40 transition-all"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">Confirm New Password</label>
+                <div className="relative group">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 group-focus-within:text-[#0B2545] transition-colors" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="w-full h-[52px] pl-12 pr-4 bg-white border border-slate-200 rounded-xl text-[14px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/15 focus:border-[#0B2545]/40 transition-all"
+                  />
+                </div>
+              </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full h-[52px] bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-70 text-white text-[15px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#0B2545]/20 hover:shadow-[#0B2545]/30 mt-2"
+              >
+                {isLoading ? "Resetting..." : "Reset Password"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStage("email")}
+                className="w-full text-center text-[12px] text-slate-500 hover:text-[#0B2545] transition-colors"
+              >
+                Use a different email
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSendCode} className="space-y-5">
+              <div className="space-y-1.5">
+                <label htmlFor="email" className="text-[12px] font-bold text-slate-600 uppercase tracking-wider">
+                  Email Address
+                </label>
+                <div className="relative group">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-[18px] w-[18px] text-slate-400 group-focus-within:text-[#0B2545] transition-colors" />
+                  <input
+                    id="email"
+                    type="email"
+                    placeholder="admin@loksewa.ai"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full h-[52px] pl-12 pr-4 bg-white border border-slate-200 rounded-xl text-[14px] text-slate-800 placeholder:text-slate-600 placeholder:font-medium focus:outline-none focus:ring-2 focus:ring-[#0B2545]/15 focus:border-[#0B2545]/40 transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full h-[52px] bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-70 text-white text-[15px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#0B2545]/20 hover:shadow-[#0B2545]/30 mt-2"
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Sending...</span>
+                  </div>
+                ) : (
+                  "Send Verification Code"
+                )}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

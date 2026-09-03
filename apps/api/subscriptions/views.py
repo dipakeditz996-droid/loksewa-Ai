@@ -47,7 +47,13 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         return SubscriptionPayment.objects.filter(student=self.request.user).order_by('-submitted_at')
 
     def perform_create(self, serializer):
-        payment = serializer.save(student=self.request.user)
+        # amount must never come from the client - a student could submit
+        # amount=1 against a premium plan and, if an admin approves without
+        # manually cross-checking, get the full plan activated. Compute it
+        # server-side from the plan's real price, same pattern marketplace
+        # checkout already uses for its own submitted_amount.
+        plan = serializer.validated_data['plan']
+        payment = serializer.save(student=self.request.user, amount=plan.price)
         # Notify user
         Notification.objects.create(
             recipient=self.request.user,

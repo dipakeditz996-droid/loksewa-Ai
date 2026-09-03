@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { BookOpen, User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, UserCircle2, Gift, Check, X, GraduationCap, Clock, Zap, CheckCircle2 } from "lucide-react";
+import { BookOpen, User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, UserCircle2, Gift, Check, X, GraduationCap, Clock, Zap, CheckCircle2, KeyRound, MapPin, ShieldQuestion, LifeBuoy } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { authApi } from "@/lib/api/auth";
 import { apiClient } from "@/lib/api/client";
 import { subscriptionPlansApi } from "@/lib/api/gamification";
+import { examPreferencesApi, ExamPreferenceCategory, ExamPreferenceNode } from "@/lib/api/exam-preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import bgImage from "../../media/signup.png";
@@ -27,6 +28,13 @@ interface SubscriptionPlan {
 
 const STEPS = ["Account", "Select Plan", "Review"];
 
+// Mirrors core.validators.is_valid_nepal_phone on the backend - the
+// project's Nepal phone-number convention (10 digits, 96/97/98-prefixed).
+function isValidNepalPhone(phone: string): boolean {
+  const cleaned = phone.replace(/[\s-]/g, "").replace(/^\+?977/, "");
+  return /^9[678]\d{8}$/.test(cleaned);
+}
+
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,6 +45,8 @@ function RegisterForm() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
+  const [district, setDistrict] = useState("");
+  const [localLevel, setLocalLevel] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [referralStatus, setReferralStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
@@ -44,6 +54,27 @@ function RegisterForm() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // "What are you preparing for?" - progressive/hierarchical, driven
+  // entirely by the admin-managed ExamCategory/Exam tree (no hardcoded
+  // levels/services). `examPath` holds the chosen node at each depth below
+  // the category (Level, then Service/Faculty, etc, however deep the data
+  // goes); the most specific one chosen is what gets submitted.
+  const [examTree, setExamTree] = useState<ExamPreferenceCategory[]>([]);
+  const [examTreeLoading, setExamTreeLoading] = useState(true);
+  const [examCategoryId, setExamCategoryId] = useState<number | null>(null);
+  const [examPath, setExamPath] = useState<ExamPreferenceNode[]>([]);
+
+  // Registration itself now happens on the Review step's "Create Account"
+  // button (see handleRegister) - this stage switches to the post-
+  // registration OTP screen once that succeeds.
+  const [registrationStage, setRegistrationStage] = useState<"form" | "otp">("form");
+  const [otp, setOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [recoveryVerified, setRecoveryVerified] = useState(false);
 
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
@@ -53,10 +84,17 @@ function RegisterForm() {
   useEffect(() => {
     const ref = searchParams.get("ref");
     if (ref) { setReferralCode(ref); validateReferral(ref); }
-    
+
     const course = searchParams.get("course");
     if (course) { setCourseId(course); }
   }, [searchParams]);
+
+  useEffect(() => {
+    examPreferencesApi.getTree()
+      .then(setExamTree)
+      .catch(() => setExamTree([]))
+      .finally(() => setExamTreeLoading(false));
+  }, []);
 
   useEffect(() => {
     if (currentStep === 1) {
@@ -68,6 +106,28 @@ function RegisterForm() {
     }
   }, [currentStep]);
 
+  const selectedExamCategory = examTree.find((c) => c.id === examCategoryId) || null;
+  // Options available at a given depth beneath the category: depth 0 is the
+  // category's own top-level exams (a "Level"), depth 1 is examPath[0]'s
+  // children (a "Service/Faculty"), and so on for however deep the data goes.
+  const examOptionsAtDepth = (depth: number): ExamPreferenceNode[] => {
+    if (!selectedExamCategory) return [];
+    if (depth === 0) return selectedExamCategory.exams;
+    const parent = examPath[depth - 1];
+    return parent ? parent.children : [];
+  };
+  const examDepthLabel = (depth: number): string => {
+    if (depth === 0) return selectedExamCategory?.name === "PSC Exams" ? "Select PSC Level" : `Select ${selectedExamCategory?.name} Level`;
+    if (depth === 1) return "Select Service / Faculty";
+    return "Select an option";
+  };
+  const selectExamNode = (depth: number, node: ExamPreferenceNode) => {
+    setExamPath((prev) => [...prev.slice(0, depth), node]);
+  };
+  // The most specific node chosen is what's submitted - falls back through
+  // shallower depths, then finally the category itself if it has no tree at all.
+  const selectedExamPosition = examPath.length > 0 ? examPath[examPath.length - 1] : null;
+
   const validateReferral = async (code: string) => {
     if (!code.trim()) { setReferralStatus("idle"); return; }
     setReferralStatus("validating");
@@ -77,14 +137,30 @@ function RegisterForm() {
     } catch { setReferralStatus("invalid"); }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     setError("");
     if (currentStep === 0) {
       if (!fullName || !username || !email || !password || !confirmPassword) { setError("Please fill all required fields."); return; }
+      if (!district.trim() || !localLevel.trim()) { setError("Please provide your permanent address (District and Local Level)."); return; }
+      if (!mobile.trim()) { setError("Please provide your mobile number."); return; }
+      if (!isValidNepalPhone(mobile)) { setError("Please enter a valid 10-digit Nepali mobile number."); return; }
       if (password !== confirmPassword) { setError("Passwords do not match."); return; }
       if (referralCode && referralStatus === "invalid") { setError("Please provide a valid referral code or remove it."); return; }
+      if (!examCategoryId) { setError("Please select what you are preparing for."); return; }
     }
     setCurrentStep((s) => Math.min(s + 1, 2));
+  };
+
+  const handleResendOtp = async () => {
+    setError("");
+    setOtpLoading(true);
+    try {
+      await authApi.requestSignupOtp(email);
+    } catch (err: any) {
+      setError(err.message || err.error || "Could not resend verification code. Please try again.");
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
   const handleRegister = async () => {
@@ -97,29 +173,74 @@ function RegisterForm() {
         password,
         name: fullName,
         mobile,
+        permanent_district: district,
+        permanent_local_level: localLevel,
+        exam_category_id: String(examCategoryId),
         ref: referralCode,
         plan_id: selectedPlanId ? String(selectedPlanId) : "",
       };
-      
+      if (selectedExamPosition) {
+        payload.exam_position_id = String(selectedExamPosition.id);
+      }
       if (courseId) {
         payload.course_id = courseId;
       }
-      
+
       await authApi.studentSignup(payload);
-      
+      setRegistrationStage("otp");
+    } catch (err: any) {
+      setError(err.message || err.detail || "Failed to create account. Please try again.");
+      // Every validation error this endpoint returns (username/email taken,
+      // weak password, bad referral code, missing/invalid preference) belongs
+      // to the Account step's fields, so send the user back there instead of
+      // leaving them stuck on Review with an error banner that has nothing
+      // to fix in view.
+      setCurrentStep(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError("");
+    if (!otp || otp.length !== 6) { setError("Please enter the 6-digit code sent to your email."); return; }
+    setOtpLoading(true);
+    try {
+      await authApi.verifyEmailOtp(email, otp);
       if (courseId) {
         router.push(`/student/courses/${courseId}`);
       } else {
         router.push("/student");
       }
+    } catch (emailErr: any) {
+      // The same 6-digit box is what a student naturally uses for whatever
+      // code they were given, whether that's the emailed OTP or an
+      // admin-issued recovery code - they shouldn't have to know those are
+      // two different code types verified by two different endpoints. If
+      // the email OTP didn't match, silently try it as a recovery code
+      // before surfacing an error.
+      try {
+        await authApi.verifyRecoveryCode(email, otp);
+        setRecoveryVerified(true);
+      } catch {
+        setError(emailErr.message || emailErr.error || "Verification failed. Please check the code and try again.");
+      }
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyRecovery = async () => {
+    setError("");
+    if (!recoveryCode.trim()) { setError("Please enter the recovery code an administrator gave you."); return; }
+    setRecoveryLoading(true);
+    try {
+      await authApi.verifyRecoveryCode(email, recoveryCode.trim());
+      setRecoveryVerified(true);
     } catch (err: any) {
-      setError(err.message || err.detail || "Failed to create account. Please try again.");
-      setIsLoading(false);
-      // Every validation error this endpoint returns (username/email taken,
-      // weak password, bad referral code) belongs to the Account step's
-      // fields, so send the user back there instead of leaving them stuck
-      // on Review with an error banner that has nothing to fix in view.
-      setCurrentStep(0);
+      setError(err.message || err.error || "That recovery code did not work. Please double-check it with your administrator.");
+    } finally {
+      setRecoveryLoading(false);
     }
   };
 
@@ -170,6 +291,8 @@ function RegisterForm() {
         <div className="w-full flex justify-center lg:justify-end flex-1 items-center py-10">
           <div className={`w-full ${currentStep === 1 ? 'lg:w-[760px]' : 'lg:w-[480px]'} bg-black/20 backdrop-blur-[24px] border border-white/10 rounded-[24px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.4)] relative transition-all duration-300`}>
 
+            {registrationStage === "form" && (
+            <>
             {/* Step Indicator */}
             <div className="flex items-center px-8 pt-7 pb-5 border-b border-white/5">
               {STEPS.map((step, i) => (
@@ -219,7 +342,15 @@ function RegisterForm() {
 
                   <div className="relative group">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Phone className="h-4 w-4" strokeWidth={1.5} /></div>
-                    <Input id="mobile" type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile Number (Optional)" className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" />
+                    <Input id="mobile" type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile Number (98XXXXXXXX)" className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
+                  </div>
+
+                  <div>
+                    <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Permanent Address</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input id="district" type="text" value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="District" className="h-[48px] w-full bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
+                      <Input id="localLevel" type="text" value={localLevel} onChange={(e) => setLocalLevel(e.target.value)} placeholder="Local Level" className="h-[48px] w-full bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
+                    </div>
                   </div>
 
                   <div className="relative group">
@@ -257,6 +388,74 @@ function RegisterForm() {
                       {referralStatus === "valid" && <Check className="h-4 w-4 text-[#22c55e]" strokeWidth={2} />}
                       {referralStatus === "invalid" && <X className="h-4 w-4 text-red-500" strokeWidth={2} />}
                     </div>
+                  </div>
+
+                  {/* Preferred Exam/Course - progressive/hierarchical selection */}
+                  <div className="pt-2">
+                    <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" /> What are you preparing for? *</p>
+                    {examTreeLoading ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        {[1, 2, 3, 4].map((i) => <div key={i} className="h-[44px] rounded-[10px] bg-white/5 animate-pulse" />)}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {examTree.map((category) => {
+                          const isSelected = examCategoryId === category.id;
+                          return (
+                            <button
+                              key={category.id}
+                              type="button"
+                              onClick={() => { setExamCategoryId(category.id); setExamPath([]); }}
+                              className={`h-[44px] px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                            >
+                              {category.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {selectedExamCategory && examOptionsAtDepth(0).length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11px] text-white/50 font-semibold mb-2">{examDepthLabel(0)}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {examOptionsAtDepth(0).map((node) => {
+                            const isSelected = examPath[0]?.id === node.id;
+                            return (
+                              <button
+                                key={node.id}
+                                type="button"
+                                onClick={() => selectExamNode(0, node)}
+                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                              >
+                                {node.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {examPath[0] && examOptionsAtDepth(1).length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11px] text-white/50 font-semibold mb-2">{examDepthLabel(1)}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {examOptionsAtDepth(1).map((node) => {
+                            const isSelected = examPath[1]?.id === node.id;
+                            return (
+                              <button
+                                key={node.id}
+                                type="button"
+                                onClick={() => selectExamNode(1, node)}
+                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                              >
+                                {node.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <Button onClick={handleNext} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
@@ -349,6 +548,15 @@ function RegisterForm() {
                         <div><span className="text-white/50">Username:</span> <span className="text-white font-medium">{username}</span></div>
                         <div className="col-span-2"><span className="text-white/50">Email:</span> <span className="text-white font-medium">{email}</span></div>
                         {mobile && <div><span className="text-white/50">Mobile:</span> <span className="text-white font-medium">{mobile}</span></div>}
+                        {(district || localLevel) && <div className="col-span-2"><span className="text-white/50">Address:</span> <span className="text-white font-medium">{[localLevel, district].filter(Boolean).join(", ")}</span></div>}
+                        {selectedExamCategory && (
+                          <div className="col-span-2">
+                            <span className="text-white/50">Preparing for:</span>{" "}
+                            <span className="text-white font-medium">
+                              {[selectedExamCategory.name, ...examPath.map((n) => n.name)].join(" → ")}
+                            </span>
+                          </div>
+                        )}
                         {referralCode && referralStatus === 'valid' && <div><span className="text-white/50">Referral:</span> <span className="text-[#22c55e] font-medium">{referralCode} âœ“</span></div>}
                       </div>
                     </div>
@@ -392,11 +600,115 @@ function RegisterForm() {
                   </div>
                 </div>
               )}
+            </div>
+            </>
+            )}
 
-              <div className="text-center mt-6 text-[12px] text-white/70">
+            {registrationStage === "otp" && (
+              <div className="p-8 sm:p-10">
+                {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-[10px] text-red-400 text-[13px] font-medium mb-4">{error}</div>}
+
+                {recoveryVerified ? (
+                  <div className="text-center py-6">
+                    <div className="w-14 h-14 rounded-full bg-[#22c55e]/15 flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle2 className="h-7 w-7 text-[#22c55e]" />
+                    </div>
+                    <h2 className="text-[20px] font-bold text-white mb-2">Account Verified</h2>
+                    <p className="text-[13px] text-white/60 mb-6">Your account is verified. Please log in to continue.</p>
+                    <Link href="/login">
+                      <Button className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] border-none">
+                        Go to Login
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+                        <KeyRound className="h-6 w-6 text-white/80" strokeWidth={1.5} />
+                      </div>
+                      <div>
+                        <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Verify <span className="text-[#D4A72C]">your email</span></h2>
+                        <p className="text-[12px] text-white/60 font-medium">We sent a verification code to your email.</p>
+                      </div>
+                    </div>
+
+                    {!showRecovery ? (
+                      <div className="space-y-4">
+                        <p className="text-[13px] text-white/60 -mt-2">
+                          Enter the 6-digit code sent to <span className="text-white/80 font-medium">{email}</span>.
+                        </p>
+                        <div className="relative group">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><KeyRound className="h-4 w-4" strokeWidth={1.5} /></div>
+                          <Input
+                            id="otp"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                            placeholder="6-digit code"
+                            className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-[0.3em] focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
+                            required
+                          />
+                        </div>
+
+                        <Button onClick={handleVerifyOtp} disabled={otpLoading} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
+                          {otpLoading ? "Verifying..." : (<>Verify <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} /></>)}
+                        </Button>
+                        <div className="flex items-center justify-between text-[12px]">
+                          <span className="text-white/40">Didn't receive the code?</span>
+                          <button type="button" onClick={handleResendOtp} disabled={otpLoading} className="text-[#D4A72C] font-semibold hover:text-[#e0b745] transition-colors disabled:opacity-50">
+                            {otpLoading ? "Resending..." : "Resend OTP"}
+                          </button>
+                        </div>
+
+                        <div className="rounded-[10px] border border-white/10 bg-white/3 p-3 flex items-start gap-2.5 mt-2">
+                          <LifeBuoy className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
+                          <div className="text-[11px] text-white/50 leading-relaxed">
+                            Having trouble receiving email? Contact an administrator for verification assistance.{" "}
+                            <button type="button" onClick={() => setShowRecovery(true)} className="text-[#D4A72C] font-semibold hover:underline">
+                              Have a recovery code?
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-[13px] text-white/60 -mt-2 flex items-start gap-2">
+                          <ShieldQuestion className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
+                          Enter the recovery code an administrator gave you through a support channel.
+                        </p>
+                        <div className="relative group">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><KeyRound className="h-4 w-4" strokeWidth={1.5} /></div>
+                          <Input
+                            id="recoveryCode"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={recoveryCode}
+                            onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, ""))}
+                            placeholder="Recovery code"
+                            className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-[0.3em] focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
+                            required
+                          />
+                        </div>
+                        <Button onClick={handleVerifyRecovery} disabled={recoveryLoading} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
+                          {recoveryLoading ? "Verifying..." : (<>Verify Recovery Code <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} /></>)}
+                        </Button>
+                        <button type="button" onClick={() => setShowRecovery(false)} className="text-[12px] text-white/50 hover:text-white transition-colors">
+                          &larr; Back to email code
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+              <div className="text-center mt-6 mb-6 text-[12px] text-white/70">
                 Already have an account?{" "}<Link href="/login" className="text-[#D4A72C] font-bold hover:text-[#e0b745] transition-colors">Sign in</Link>
               </div>
-            </div>
           </div>
         </div>
       </div>

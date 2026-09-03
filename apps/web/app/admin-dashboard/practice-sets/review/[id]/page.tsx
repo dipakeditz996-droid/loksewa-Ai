@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, CheckCircle2, ShieldCheck, RefreshCcw, XCircle, Play, Settings
@@ -16,7 +16,8 @@ import { toast } from "react-hot-toast";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 
-export default function PracticeSetModerationPanel({ params }: { params: { id: string } }) {
+export default function PracticeSetModerationPanel({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const [practiceSet, setPracticeSet] = useState<PracticeSet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,15 +28,15 @@ export default function PracticeSetModerationPanel({ params }: { params: { id: s
   const [showChangesModal, setShowChangesModal] = useState(false);
 
   useEffect(() => {
-    if (params.id) {
+    if (id) {
       fetchPracticeSet();
     }
-  }, [params.id]);
+  }, [id]);
 
   const fetchPracticeSet = async () => {
     try {
       setLoading(true);
-      const data = await adminPracticeSetsApi.getReviewSet(params.id);
+      const data = await adminPracticeSetsApi.getReviewSet(id);
       setPracticeSet(data);
       if (data.reviewer_comment) {
         setFeedback(data.reviewer_comment);
@@ -49,7 +50,7 @@ export default function PracticeSetModerationPanel({ params }: { params: { id: s
 
   const handleApprove = async () => {
     try {
-      await adminPracticeSetsApi.approve(params.id, feedback);
+      await adminPracticeSetsApi.approve(id, feedback);
       toast.success("Practice Set approved and published");
       router.push("/admin-dashboard/practice-sets/review");
     } catch (error) {
@@ -63,7 +64,7 @@ export default function PracticeSetModerationPanel({ params }: { params: { id: s
       return;
     }
     try {
-      await adminPracticeSetsApi.reject(params.id, feedback);
+      await adminPracticeSetsApi.reject(id, feedback);
       toast.success("Practice Set rejected");
       setShowRejectModal(false);
       router.push("/admin-dashboard/practice-sets/review");
@@ -78,7 +79,7 @@ export default function PracticeSetModerationPanel({ params }: { params: { id: s
       return;
     }
     try {
-      await adminPracticeSetsApi.requestChanges(params.id, feedback);
+      await adminPracticeSetsApi.requestChanges(id, feedback);
       toast.success("Changes requested");
       setShowChangesModal(false);
       router.push("/admin-dashboard/practice-sets/review");

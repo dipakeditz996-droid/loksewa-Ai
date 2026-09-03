@@ -186,10 +186,12 @@ def _gamification_enabled():
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def leaderboard(request):
     """
-    Returns the top 50 users based on XP.
+    Returns the top 50 users based on XP. Only consumed by authenticated
+    student/admin pages - no public page renders this, so there is no
+    reason to expose every student's name/avatar/XP to logged-out callers.
     """
     if not _gamification_enabled():
         raise PermissionDenied("Gamification is currently disabled by the administrator.")

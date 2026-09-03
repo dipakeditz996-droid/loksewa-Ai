@@ -9,7 +9,7 @@ from core.serializers import CustomTokenObtainPairSerializer
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, StudentSignupView, StudentDashboardView, SocialLoginView
+from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, ResetPasswordConfirmView, StudentSignupView, SignupRequestOTPView, VerifyEmailOTPView, VerifyRecoveryCodeView, StudentDashboardView, SocialLoginView
 from core.media_views import drive_media_proxy
 from core.feedback_views import StudentFeedbackListView
 from core.teacher_views import (
@@ -32,10 +32,14 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/me/', UserMeView.as_view(), name='auth_me'),
     path('api/auth/signup/', StudentSignupView.as_view(), name='auth_student_signup'),
+    path('api/auth/signup/request-otp/', SignupRequestOTPView.as_view(), name='auth_signup_request_otp'),
+    path('api/auth/verify-email-otp/', VerifyEmailOTPView.as_view(), name='auth_verify_email_otp'),
+    path('api/auth/verify-recovery-code/', VerifyRecoveryCodeView.as_view(), name='auth_verify_recovery_code'),
     path('api/auth/social/', SocialLoginView.as_view(), name='auth_social_login'),
     path('api/auth/admin-login/', AdminLoginView.as_view(), name='auth_admin_login'),
     path('api/auth/logout/', AuthLogoutView.as_view(), name='auth_logout'),
     path('api/auth/forgot-password/', ForgotPasswordView.as_view(), name='auth_forgot_password'),
+    path('api/auth/reset-password/', ResetPasswordConfirmView.as_view(), name='auth_reset_password_confirm'),
     path('api/auth/2fa/status/', TwoFactorStatusView.as_view(), name='auth_2fa_status'),
     path('api/auth/2fa/setup/', TwoFactorSetupView.as_view(), name='auth_2fa_setup'),
     path('api/auth/2fa/verify-setup/', TwoFactorVerifySetupView.as_view(), name='auth_2fa_verify_setup'),
@@ -64,6 +68,7 @@ urlpatterns = [
     path('api/subscriptions/', include('subscriptions.urls')),
     path('api/gamification/', include('gamification.urls')),
     path('api/', include('courses.urls')),
+    path('api/community/', include('community.urls')),
     path('api/notifications/', include('core.notification_urls')),
     path('api/', include('core.testimonial_urls')),
     path('api/', include('subscriptions.public_urls')),

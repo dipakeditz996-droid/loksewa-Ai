@@ -177,7 +177,6 @@ export interface PublicStats {
   total_questions: number;
   practice_sets: number;
   content_accuracy: number;
-  rating: string;
 }
 
 // ── Testimonials (integration-ready — endpoint TBD) ──────────────────────────

@@ -60,7 +60,11 @@ class Command(BaseCommand):
             'Subject': ['chapters', 'question_sets', 'practicesession_set', 'subjective_practice_sets', 'examinations', 'materials', 'study_tasks'],
             'Chapter': ['topics', 'question_sets'],
             'Topic': ['user_progress', 'questions', 'question_sets', 'practicesession_set', 'subjective_practice_sets', 'materials', 'study_tasks'],
-            'Course': ['marketplace_products', 'subscription_plans', 'enrollments', 'applications', 'teachers'],
+            # 'marketplace_products' was dropped: Product.course was removed in
+            # the physical-marketplace refactor, so Course no longer has that
+            # reverse relation at all - checking it here would silently no-op
+            # via the getattr(..., None) fallback below and always read as safe.
+            'Course': ['subscription_plans', 'enrollments', 'applications', 'teachers'],
             'Product': ['payment_submissions', 'purchases'],
             'SubscriptionPlan': ['subscriptions', 'subscription_payments'],
         }

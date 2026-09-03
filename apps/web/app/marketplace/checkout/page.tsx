@@ -40,7 +40,7 @@ export default function CheckoutPage() {
           router.push("/marketplace");
         }
         setPaymentMethods(methodsData);
-        if (methodsData.length > 0) setSelectedMethodId(methodsData[0].id);
+        if (methodsData.length > 0 && methodsData[0]?.id) setSelectedMethodId(methodsData[0].id);
         setLoading(false);
       })
       .catch((err) => {

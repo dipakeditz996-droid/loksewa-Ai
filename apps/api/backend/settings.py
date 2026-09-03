@@ -356,21 +356,27 @@ STORAGES = {
 # Set CORS_ALLOWED_ORIGINS (comma-separated) in production, e.g.
 #   CORS_ALLOWED_ORIGINS="https://app.example.com"
 # When it is unset, all origins are allowed (previous development behaviour).
-CORS_ALLOWED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
-    if origin.strip()
-]
+def _parse_origins(env_value):
+    # Both settings require a bare scheme+host[:port] - no trailing path,
+    # which a trailing "/" (the single most common copy-paste mistake, since
+    # that's exactly how a URL looks in a browser's address bar) turns into
+    # in django-cors-headers' eyes. Stripping it here means pasting the URL
+    # straight from the browser can never fail the corsheaders.E014 system
+    # check at deploy time.
+    return [
+        origin.strip().rstrip('/')
+        for origin in env_value.split(',')
+        if origin.strip()
+    ]
+
+
+CORS_ALLOWED_ORIGINS = _parse_origins(os.environ.get('CORS_ALLOWED_ORIGINS', ''))
 if not CORS_ALLOWED_ORIGINS and not DEBUG:
     raise RuntimeError("CORS_ALLOWED_ORIGINS must be explicitly set in production.")
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip()
-    for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
-    if origin.strip()
-]
+CSRF_TRUSTED_ORIGINS = _parse_origins(os.environ.get('CSRF_TRUSTED_ORIGINS', ''))
 if not CSRF_TRUSTED_ORIGINS and not DEBUG:
     raise RuntimeError("CSRF_TRUSTED_ORIGINS must be explicitly set in production.")
 

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from .emailjs_service import send_otp_email
+from .email_service import send_otp_email
 from .models import EmailOTP
 
 OTP_TTL_MINUTES = 10
@@ -22,10 +22,10 @@ def _hash_code(code):
 
 
 def create_and_send_otp(email, purpose):
-    """Generates a 6-digit code, stores its hash, and emails it via
-    EmailJS. Rate-limited to one send per RESEND_COOLDOWN_SECONDS per
-    (email, purpose) so a single email can't be used to hammer EmailJS's
-    quota."""
+    """Generates a 6-digit code, stores its hash, and emails it via the
+    Django EmailService (Resend SMTP). Rate-limited to one send per
+    RESEND_COOLDOWN_SECONDS per (email, purpose) so a single email can't be
+    used to hammer the daily Resend send quota."""
     email = email.strip().lower()
 
     recent = EmailOTP.objects.filter(email=email, purpose=purpose).order_by('-created_at').first()

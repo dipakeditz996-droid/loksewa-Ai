@@ -104,6 +104,33 @@ export interface AdminUsersResponse {
   totalPages: number;
 }
 
+// Mirrors administration.views.AdminUsersView.post - username/email/password/
+// role are required for every role; the rest only apply when role is
+// "student" and mirror exactly what core.views.StudentSignupView collects
+// (see apps/web/app/register/page.tsx for the same field set/shape).
+export interface AdminCreateUserPayload {
+  username: string;
+  email: string;
+  password: string;
+  role: "student" | "teacher" | "admin";
+  name?: string;
+  mobile?: string;
+  permanent_district?: string;
+  permanent_local_level?: string;
+  exam_category_id?: number;
+  exam_position_id?: number;
+  course_id?: number;
+  send_welcome_email?: boolean;
+}
+
+export interface AdminCreateUserResponse {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  message: string;
+}
+
 export interface AdminRecentExam {
   id: number;
   title: string;
@@ -738,6 +765,13 @@ export const adminApi = {
     if (params?.page) query.set("page", String(params.page));
     if (params?.pageSize) query.set("page_size", String(params.pageSize));
     return apiClient<AdminUsersResponse>(`/admin/users/?${query.toString()}`);
+  },
+
+  createUser: async (payload: AdminCreateUserPayload): Promise<AdminCreateUserResponse> => {
+    return apiClient<AdminCreateUserResponse>("/admin/users/", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
 
   getExamsOverview: async (): Promise<AdminExamsOverview> => {

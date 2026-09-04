@@ -329,7 +329,9 @@ export default function CommunityPostPage({ params }: { params: Promise<{ id: st
           </div>
         ) : (
           <div className="space-y-3">
-            {replies.map((reply) => (
+            {[...replies]
+              .sort((a, b) => Number(b.is_best_answer) - Number(a.is_best_answer))
+              .map((reply) => (
               <ReplyCard
                 key={reply.id} reply={reply} postAuthorId={post.author.id} isAdmin={isAdmin}
                 currentUserId={user ? Number(user.id) : undefined}

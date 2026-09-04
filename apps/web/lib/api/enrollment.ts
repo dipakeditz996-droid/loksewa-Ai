@@ -98,9 +98,13 @@ export const courseEnrollmentApi = {
   /**
    * Public — no auth required.
    * Returns courses that are published + open for enrollment.
+   * Pass examId to filter to courses linked to one specific Exam node
+   * (e.g. a chosen PSC Level/Service - mirrors courses.views.PublicCourseListView's
+   * `?exam=` filter, used by both student registration deep-links and the
+   * Admin "Create Student" course picker).
    */
-  getPublicCourses: (): Promise<PublicCourse[]> =>
-    apiClient<PublicCourse[]>("/courses/public/"),
+  getPublicCourses: (examId?: number): Promise<PublicCourse[]> =>
+    apiClient<PublicCourse[]>(examId ? `/courses/public/?exam=${examId}` : "/courses/public/"),
 
   /**
    * Authenticated student — returns their enrollment/application/payment status.

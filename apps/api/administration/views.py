@@ -12,12 +12,15 @@ from django.utils.dateparse import parse_date, parse_datetime
 from django.db import transaction
 from django.core.paginator import Paginator
 from datetime import timedelta, date
-from core.models import User, Position, Tag
+from core.models import User, Position, Tag, TeacherProfile
 from exams.models import Exam, Question, Examination, PracticeSession, ExaminationAttempt
 from notes.models import StudyMaterial
 from marketplace.models import Product, PaymentSubmission, Purchase
 from games.models import GameMatch, SurvivalGame
 from ai_tutor.models import Conversation, Message, TutorUsage, PromptTemplate
+from courses.models import Enrollment
+from subscriptions.models import Subscription
+from support.models import StudentProfile, NotificationPreference
 from .models import AuditLog
 from .permissions import IsAdminUser, IsEvaluatorUser
 
@@ -413,20 +416,23 @@ class AdminUsersView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         role = request.data.get('role', 'student')
-        
+
         if not username or not email or not password:
             return Response({'error': 'Username, email, and password are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        if User.objects.filter(email=email).exists():
-            return Response({'error': 'Email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if User.objects.filter(email__iexact=email).exists():
+            return Response({'error': 'This email is already registered.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             django_validate_password(password)
         except DjangoValidationError as e:
             return Response({'error': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+
+        if role == 'student':
+            return self._create_student(request, username, email, password)
 
         user = User.objects.create_user(username=username, email=email, password=password, role=role)
 
@@ -451,10 +457,210 @@ class AdminUsersView(APIView):
             "message": "User created successfully."
         }, status=status.HTTP_201_CREATED)
 
+    def _create_student(self, request, username, email, password):
+        """An admin-created student collects the same information as normal
+        self-registration (core.views.StudentSignupView) - full name, phone,
+        permanent address, and exam preference - so the resulting account and
+        StudentProfile are indistinguishable from a self-registered one. The
+        one deliberate difference: an admin is vouching for this account
+        directly, so it's created already verified/active (is_verified=True)
+        instead of going through the email-OTP pending step self-registration
+        requires - there is nothing to leave "pending" here."""
+        full_name = (request.data.get('name') or '').strip()
+        phone = (request.data.get('mobile') or request.data.get('phone') or '').strip()
+        permanent_district = (request.data.get('permanent_district') or '').strip()
+        permanent_local_level = (request.data.get('permanent_local_level') or '').strip()
+        exam_category_id = request.data.get('exam_category_id')
+        exam_position_id = request.data.get('exam_position_id')
+        course_id = request.data.get('course_id')
+        send_welcome_email = bool(request.data.get('send_welcome_email'))
+
+        missing = []
+        if not full_name: missing.append('name')
+        if not phone: missing.append('mobile')
+        if not permanent_district: missing.append('permanent_district')
+        if not permanent_local_level: missing.append('permanent_local_level')
+        if not exam_category_id: missing.append('exam_category_id')
+        if missing:
+            return Response(
+                {'error': f"Please provide: {', '.join(missing)}.", 'missing_fields': missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from core.validators import is_valid_nepal_phone
+        if not is_valid_nepal_phone(phone):
+            return Response({'error': 'Please enter a valid 10-digit Nepali mobile number.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from exams.models import ExamCategory, Exam
+        try:
+            exam_category = ExamCategory.objects.get(id=exam_category_id, is_active=True)
+        except (ExamCategory.DoesNotExist, ValueError, TypeError):
+            return Response({'error': 'Please select what the student is preparing for.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        exam_position = None
+        if exam_position_id:
+            try:
+                exam_position = Exam.objects.get(id=exam_position_id, is_active=True, category=exam_category)
+            except (Exam.DoesNotExist, ValueError, TypeError):
+                return Response({'error': 'Invalid exam selection.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        course = None
+        if course_id:
+            from courses.models import Course
+            try:
+                course = Course.objects.get(id=course_id, status='published')
+            except (Course.DoesNotExist, ValueError, TypeError):
+                return Response({'error': 'Invalid course selection.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        first_name, _, last_name = full_name.partition(' ')
+
+        try:
+            with transaction.atomic():
+                user = User.objects.create_user(
+                    username=username, email=email, password=password, role='student',
+                    first_name=first_name[:150], last_name=last_name[:150],
+                )
+
+                StudentProfile.objects.create(
+                    user=user, phone=phone,
+                    permanent_district=permanent_district, permanent_local_level=permanent_local_level,
+                    target_category=exam_category, target_position=exam_position,
+                    is_verified=True, verified_at=timezone.now(),
+                )
+                NotificationPreference.objects.create(user=user)
+
+                from gamification.models import GamificationProfile
+                GamificationProfile.objects.create(user=user)
+
+                # Same as StudentSignupView: choosing a course here only
+                # records intent (a pending CourseApplication) - it is never
+                # an auto-enrollment or an auto-purchase. An admin/teacher
+                # still has to review and approve it like any other
+                # application before an Enrollment is created.
+                if course:
+                    from courses.models import CourseApplication
+                    CourseApplication.objects.create(student=user, course=course, status='pending')
+
+                AuditLog.objects.create(
+                    actor=request.user, action='ADMIN_STUDENT_CREATED',
+                    entity_type='User', entity_id=str(user.id),
+                    details={'email': email, 'username': username, 'created_by': request.user.username},
+                )
+        except Exception:
+            logger.exception("Admin-created student setup failed for email=%s", email)
+            return Response({'error': 'Failed to create student account due to an internal error.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if send_welcome_email:
+            from core.email_service import send_account_created_email
+            send_account_created_email(email, username)
+
+        return Response({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "message": "Student account created successfully."
+        }, status=status.HTTP_201_CREATED)
+
 
 class AdminUserDetailView(APIView):
     """View, update, or suspend a specific user."""
     permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        try:
+            user = User.objects.select_related('student_profile', 'teacher_profile').get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = {
+            "id": user.id,
+            "username": user.username,
+            "firstName": user.first_name,
+            "lastName": user.last_name,
+            "name": user.get_full_name() or user.username,
+            "email": user.email,
+            "role": user.role,
+            "isActive": user.is_active,
+            "isStaff": user.is_staff,
+            "is2FAEnabled": user.is_2fa_enabled,
+            "avatar": user.avatar,
+            "dateJoined": user.date_joined.isoformat(),
+            "lastLogin": user.last_login.isoformat() if user.last_login else None,
+        }
+
+        if user.role == 'student':
+            try:
+                profile = user.student_profile
+                data["studentProfile"] = {
+                    "phone": profile.phone,
+                    "bio": profile.bio,
+                    "targetCategory": profile.target_category.name if profile.target_category else None,
+                    "targetPosition": profile.target_position.name if profile.target_position else None,
+                    "permanentDistrict": profile.permanent_district,
+                    "permanentLocalLevel": profile.permanent_local_level,
+                    "isVerified": profile.is_verified,
+                    "preferredStudyTime": profile.preferred_study_time,
+                    "dailyStudyGoalMinutes": profile.daily_study_goal_minutes,
+                    "difficultyPreference": profile.difficulty_preference,
+                    "studyMode": profile.study_mode,
+                    "language": profile.language,
+                }
+            except StudentProfile.DoesNotExist:
+                data["studentProfile"] = None
+
+            enrollments = Enrollment.objects.filter(student=user).select_related('course').order_by('-enrolled_at')
+            data["enrollments"] = [
+                {
+                    "courseTitle": e.course.title,
+                    "status": e.status,
+                    "enrolledAt": e.enrolled_at.isoformat(),
+                    "expiresAt": e.expires_at.isoformat() if e.expires_at else None,
+                }
+                for e in enrollments
+            ]
+
+            active_sub = Subscription.objects.filter(student=user, status='ACTIVE').select_related('plan').order_by('-expiry_date').first()
+            data["subscription"] = {
+                "planName": active_sub.plan.name,
+                "status": active_sub.status,
+                "startDate": active_sub.start_date.isoformat(),
+                "expiryDate": active_sub.expiry_date.isoformat(),
+                "isActive": active_sub.is_active,
+            } if active_sub else None
+
+            exam_attempts = ExaminationAttempt.objects.filter(student=user, status='evaluated')
+            exam_agg = exam_attempts.aggregate(avg_pct=Avg('percentage'), total=Count('id'), passed=Count('id', filter=Q(passed=True)))
+            practice_sessions = PracticeSession.objects.filter(user=user, completed=True)
+            practice_agg = practice_sessions.aggregate(avg_accuracy=Avg('accuracy'), total=Count('id'))
+
+            data["examStats"] = {
+                "totalAttempts": exam_agg['total'] or 0,
+                "averagePercentage": round(exam_agg['avg_pct'], 1) if exam_agg['avg_pct'] is not None else None,
+                "passedCount": exam_agg['passed'] or 0,
+            }
+            data["practiceStats"] = {
+                "totalSessions": practice_agg['total'] or 0,
+                "averageAccuracy": round(practice_agg['avg_accuracy'], 1) if practice_agg['avg_accuracy'] is not None else None,
+            }
+            data["purchaseCount"] = Purchase.objects.filter(student=user).count()
+
+        elif user.role == 'teacher':
+            try:
+                profile = user.teacher_profile
+                data["teacherProfile"] = {
+                    "bio": profile.bio,
+                    "specialization": profile.specialization,
+                    "designation": profile.designation,
+                    "experienceYears": profile.experience_years,
+                    "phoneNumber": profile.phone_number,
+                    "preferredDifficulty": profile.preferred_difficulty,
+                    "preferredQuestionType": profile.preferred_question_type,
+                }
+            except TeacherProfile.DoesNotExist:
+                data["teacherProfile"] = None
+
+        return Response(data)
 
     def patch(self, request, pk):
         try:
@@ -494,6 +700,38 @@ class AdminUserDetailView(APIView):
             "role": user.role,
             "message": "User updated successfully."
         })
+
+    def delete(self, request, pk):
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if user.id == request.user.id:
+            return Response({'error': 'You cannot delete your own account.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if user.role == 'super-admin' and request.user.role != 'super-admin':
+            return Response({'error': 'Only a super-admin can delete a super-admin account.'}, status=status.HTTP_403_FORBIDDEN)
+
+        username, email, role = user.username, user.email, user.role
+        user.delete()
+
+        AuditLog.objects.create(
+            actor=request.user, action='DELETE_USER',
+            entity_type='User', entity_id=str(pk),
+            details={"username": username, "email": email, "role": role},
+        )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='account',
+            title='Account Deleted',
+            message=f"{request.user.get_full_name() or request.user.username} permanently deleted {role} account '{username}'.",
+            action_url='/admin-dashboard/users',
+            priority='important',
+        )
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AdminRolesView(APIView):

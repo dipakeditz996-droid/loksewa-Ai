@@ -30,7 +30,7 @@ def _access_token_for(user):
 
 class SignupRequestOTPView(APIView):
     """POST /api/auth/signup/request-otp/ - body: {email}. Resends a 6-digit
-    verification code (via EmailJS) for an ALREADY-registered-but-unverified
+    verification code (via core.email_service / Resend SMTP) for an ALREADY-registered-but-unverified
     account. Registration itself (StudentSignupView) sends the first code
     automatically, so this is only for "I didn't get it" / "it expired"."""
     permission_classes = [AllowAny]
@@ -484,7 +484,7 @@ class AuthLogoutView(APIView):
 
 class ForgotPasswordView(APIView):
     """
-    Requests a password-reset verification code via EmailJS. Always
+    Requests a password-reset verification code via core.email_service (Resend SMTP). Always
     responds with the same generic message regardless of whether the email
     exists, so this endpoint can't be used to enumerate registered accounts.
     """

@@ -228,7 +228,7 @@ export default function AdminDashboardOverview() {
   const quickActions = [
     { label: "Add Question", icon: Plus, href: "/admin-dashboard/academic/questions", color: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200" },
     { label: "Create Exam", icon: FileText, href: "/admin-dashboard/academic/exams", color: "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200" },
-    { label: "Add Material", icon: BookMarked, href: "/admin-dashboard/materials", color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200" },
+    { label: "Add Material", icon: BookMarked, href: "/admin-dashboard/study-materials", color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200" },
     { label: "Manage Users", icon: Users, href: "/admin-dashboard/users", color: "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200" },
     { label: "Evaluations", icon: ClipboardList, href: "/admin-dashboard/evaluations", color: "bg-red-50 text-red-700 hover:bg-red-100 border-red-200" },
     { label: "AI Tutor", icon: Brain, href: "/admin-dashboard/ai-tutor", color: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200" },
@@ -318,7 +318,7 @@ export default function AdminDashboardOverview() {
           iconColor="text-teal-600"
           iconBg="bg-teal-50"
           loading={loadingStats}
-          href="/admin-dashboard/materials"
+          href="/admin-dashboard/study-materials"
         />
         <StatCard
           title="AI Tutor Sessions"

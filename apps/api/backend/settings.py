@@ -380,36 +380,35 @@ CSRF_TRUSTED_ORIGINS = _parse_origins(os.environ.get('CSRF_TRUSTED_ORIGINS', '')
 if not CSRF_TRUSTED_ORIGINS and not DEBUG:
     raise RuntimeError("CSRF_TRUSTED_ORIGINS must be explicitly set in production.")
 
-# --- EMAIL (password reset) ---
+# --- EMAIL (signup OTP, password reset - via core/email_service.py) ---
 # EMAIL_HOST unset (the default, including local dev) means Django uses the
-# console backend - reset emails print to the server log/terminal instead of
+# console backend - emails print to the server log/terminal instead of
 # actually sending, so the flow is fully testable with zero external
-# credentials. Set EMAIL_HOST (+ EMAIL_HOST_USER/PASSWORD) to send real mail.
+# credentials. Set EMAIL_HOST (+ EMAIL_HOST_USER/PASSWORD) to send real mail
+# through Resend's SMTP relay (smtp.resend.com).
+#
+# Resend's SMTP relay uses implicit SSL on port 465, not STARTTLS - set
+# EMAIL_USE_SSL=True (default) rather than EMAIL_USE_TLS for it. The two are
+# mutually exclusive; EMAIL_USE_TLS only applies if EMAIL_USE_SSL is unset/false.
 EMAIL_HOST = os.environ.get('EMAIL_HOST', '').strip()
 if EMAIL_HOST:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+    EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
     EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', True)
+    EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', True)
+    EMAIL_USE_TLS = False if EMAIL_USE_SSL else _env_bool('EMAIL_USE_TLS', False)
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@loksewaai.com')
+# onboarding@resend.dev is Resend's shared sender for accounts that haven't
+# verified their own domain yet - safe to use for development/testing.
+# Switch to a verified-domain address in production once one exists; no
+# code change needed, just DEFAULT_FROM_EMAIL.
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'onboarding@resend.dev')
 
 # Used to build the password-reset link emailed to the user (the API server
 # has no other way to know its own frontend's origin).
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-
-# --- EmailJS (delivers signup + password-reset OTP codes) ---
-# core/emailjs_service.py calls EmailJS's REST API server-side, using
-# EMAILJS_PRIVATE_KEY as the strict-mode access token, so OTP generation and
-# verification stay entirely on the backend while EmailJS handles delivery.
-# Defaults are the project's EmailJS credentials; override via env vars for
-# a different EmailJS account without touching code.
-EMAILJS_SERVICE_ID = os.environ.get('EMAILJS_SERVICE_ID', 'service_n4s172m')
-EMAILJS_TEMPLATE_ID = os.environ.get('EMAILJS_TEMPLATE_ID', 'template_ff2dd35')
-EMAILJS_PUBLIC_KEY = os.environ.get('EMAILJS_PUBLIC_KEY', 'FYeUEDdQfp9-d0stz')
-EMAILJS_PRIVATE_KEY = os.environ.get('EMAILJS_PRIVATE_KEY', 'guEHC3-t117IQVlWKnN9A')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

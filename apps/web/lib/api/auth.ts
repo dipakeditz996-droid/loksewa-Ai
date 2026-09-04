@@ -133,7 +133,7 @@ export const authApi = {
   },
 
   /**
-   * Sends a password-reset verification code (via EmailJS) to the given
+   * Sends a password-reset verification code (emailed by the Django API) to the given
    * email, if an account exists for it. Always returns the same generic
    * response regardless of whether the account exists.
    */

@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { 
-  Loader2, ArrowLeft, MessageSquare, Pin, Lock, 
-  Trash2, Eye, EyeOff, ShieldAlert, Check, MoreVertical
+import {
+  Loader2, ArrowLeft, MessageSquare, Pin, Lock,
+  Trash2, Eye, EyeOff, ShieldAlert, Check, MoreVertical, Award
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -130,6 +130,21 @@ export default function AdminDiscussionDetailPage() {
     }
   };
 
+  const handleToggleBestAnswer = async (replyId: number, isCurrentlyBest: boolean) => {
+    try {
+      if (isCurrentlyBest) {
+        await communityApi.unmarkBest(replyId);
+        toast.success("Best answer removed.");
+      } else {
+        await communityApi.markBest(replyId);
+        toast.success("Marked as best answer.");
+      }
+      loadData();
+    } catch {
+      toast.error("Failed to update best answer.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -250,7 +265,9 @@ export default function AdminDiscussionDetailPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {replies.map(reply => (
+            {[...replies]
+              .sort((a, b) => Number(b.is_best_answer) - Number(a.is_best_answer))
+              .map(reply => (
               <div 
                 key={reply.id} 
                 className={`bg-white rounded-xl border ${reply.is_best_answer ? 'border-emerald-200 ring-1 ring-emerald-200' : 'border-slate-200'} ${reply.status === 'removed' ? 'opacity-70 bg-slate-50' : ''} p-5`}
@@ -281,6 +298,16 @@ export default function AdminDiscussionDetailPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {reply.is_best_answer ? (
+                        <DropdownMenuItem onClick={() => handleToggleBestAnswer(reply.id, true)} className="text-slate-600 font-medium">
+                          <Award className="w-4 h-4 mr-2" /> Unmark Best Answer
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => handleToggleBestAnswer(reply.id, false)} className="text-emerald-600 font-medium">
+                          <Award className="w-4 h-4 mr-2" /> Mark as Best Answer
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
                       {reply.status === 'published' ? (
                         <DropdownMenuItem onClick={() => handleToggleRemoveReply(reply.id, reply.status)} className="text-red-600 font-medium">
                           <EyeOff className="w-4 h-4 mr-2" /> Hide Reply

@@ -45,6 +45,12 @@ google-genai==2.18.1
 #   token verification (from google.oauth2 import id_token,
 #   from google.auth.transport import requests).
 google-auth==2.56.3
+# google-api-python-client: directly imported in core/google_drive.py
+#   (from googleapiclient.discovery import build, .http import
+#   MediaIoBaseUpload/MediaIoBaseDownload) - the Google Drive storage backend
+#   used for all platform file uploads. Without this, GoogleDriveStorage
+#   raises an unhandled ImportError on first use.
+google-api-python-client==2.198.0
 
 # -- Two-factor authentication --------------------------------------------------
 # pyotp: TOTP secret generation/verification for admin 2FA (core/two_factor.py).

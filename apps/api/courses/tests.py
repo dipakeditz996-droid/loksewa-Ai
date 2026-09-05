@@ -59,3 +59,24 @@ class PublicCourseListViewTests(APITestCase):
     def test_anonymous_access_allowed(self):
         response = self.client.get('/api/courses/public/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class TeacherCourseViewSetTests(APITestCase):
+    def setUp(self):
+        self.teacher = User.objects.create_user(
+            username='teacher1', email='teacher@test.com', password='pass', role='teacher'
+        )
+        self.category = ExamCategory.objects.create(name='Loksewa')
+        self.exam = Exam.objects.create(name='Kharidar', category=self.category)
+        self.course = Course.objects.create(
+            title='Teacher Course', slug='teacher-course', status='published',
+            is_open_for_enrollment=True, exam=self.exam, duration_months=6,
+        )
+        from courses.models import TeacherCourseAssignment
+        TeacherCourseAssignment.objects.create(teacher=self.teacher, course=self.course)
+
+    def test_teacher_course_list_success(self):
+        """Regression test for Bug 3: Teacher course list does not throw FieldError"""
+        self.client.force_authenticate(user=self.teacher)
+        response = self.client.get('/api/teacher/courses/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

@@ -88,6 +88,21 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                     'account_unverified',
                 )
 
+        # A 2FA-enabled account (enrollment is admin/super-admin only - see
+        # TwoFactorSetupView - so this only ever fires for those roles today)
+        # must pass a second factor before receiving real tokens. This is the
+        # one login endpoint every role now goes through, so returning here
+        # is what makes 2FA apply no matter which portal the user typed
+        # their password into.
+        from .models import AdminSettings
+        if AdminSettings.get_settings().enable_two_factor_auth and user.is_2fa_enabled:
+            from .two_factor_views import TwoFactorPendingToken
+            pending = TwoFactorPendingToken.for_user(user)
+            return {
+                'twoFactorRequired': True,
+                'pendingToken': str(pending),
+            }
+
         # If user is valid, we still use the super().validate() to get the tokens,
         # but we must pass the actual username because the provided username might be an email.
         attrs[username_field] = user.username

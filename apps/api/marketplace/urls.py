@@ -19,6 +19,7 @@ from .views import (
     StudentPaymentSubmissionViewSet,
     StudentPurchaseViewSet,
     CartViewSet,
+    CartItemDetailView,
     OrderViewSet,
     SellerListingViewSet,
     SellerSalesViewSet,
@@ -66,5 +67,6 @@ urlpatterns = [
     path('public/products/', PublicProductListView.as_view(), name='public-products'),
     path('admin/settings/', AdminMarketplaceSettingsView.as_view(), name='admin-marketplace-settings'),
     path('admin/', include(admin_router.urls)),
+    path('student/cart/items/<int:pk>/', CartItemDetailView.as_view(), name='student-cart-item-detail'),
     path('student/', include(student_router.urls)),
 ]

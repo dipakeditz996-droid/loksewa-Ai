@@ -686,6 +686,39 @@ class StudentDashboardView(APIView):
         except Exception as e:
             logger.error(f"Error fetching today's plan for dashboard: {e}")
 
+        # Package/subscription status - lets the frontend render the locked
+        # dashboard state without a second round-trip. Reuses
+        # subscriptions.access (the same check HasActiveSubscription enforces
+        # server-side) so this can never drift from what's actually allowed.
+        from .models import AdminSettings
+        from subscriptions.access import get_active_subscription
+        from subscriptions.models import SubscriptionPayment
+
+        active_subscription = get_active_subscription(user)
+        latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
+        latest_payment_data = None
+        if latest_payment and not active_subscription:
+            # Only surface the latest payment while there's no active package
+            # to explain - once a package is active, pending/rejected history
+            # from before it belongs on the purchases/history page, not here.
+            latest_payment_data = {
+                "status": latest_payment.status,
+                "rejectionReason": latest_payment.rejection_reason or None,
+                "planName": latest_payment.plan.name,
+                "amount": str(latest_payment.amount),
+                "submittedAt": latest_payment.submitted_at.isoformat() if latest_payment.submitted_at else None,
+            }
+
+        package_data = {
+            "enforcementEnabled": AdminSettings.get_settings().enforce_subscription_access,
+            "hasActivePackage": active_subscription is not None,
+            "planName": active_subscription.plan.name if active_subscription else None,
+            "status": active_subscription.status if active_subscription else None,
+            "expiryDate": active_subscription.expiry_date.isoformat() if active_subscription else None,
+            "remainingDays": max((active_subscription.expiry_date - timezone.now()).days, 0) if active_subscription else None,
+            "latestPayment": latest_payment_data,
+        }
+
         data = {
             "profile": profile_data,
             "stats": stats_data,
@@ -693,8 +726,9 @@ class StudentDashboardView(APIView):
             "todaysPlan": todays_plan,
             "recentExams": recent_exams_data,
             "purchases": purchases_data,
-            "supportTickets": [], 
-            "subjectPerformance": formatted_subject_performance
+            "supportTickets": [],
+            "subjectPerformance": formatted_subject_performance,
+            "package": package_data,
         }
 
         return Response(data)
@@ -712,7 +746,7 @@ class SocialLoginView(APIView):
 
         try:
             from core.social_auth import SocialAuthService
-            
+
             if provider == 'google':
                 provider_data = SocialAuthService.verify_google_token(token)
             elif provider == 'facebook':
@@ -722,7 +756,25 @@ class SocialLoginView(APIView):
             else:
                 return Response({"detail": "Invalid provider."}, status=status.HTTP_400_BAD_REQUEST)
 
-            user = SocialAuthService.get_or_create_social_user(provider, provider_data, additional_data)
+            user, is_new_user = SocialAuthService.get_or_create_social_user(provider, provider_data, additional_data)
+
+            # Determine whether the student has completed all required profile fields.
+            profile_complete = False
+            if user.role == 'student':
+                from support.models import StudentProfile
+                try:
+                    profile = user.student_profile
+                    profile_complete = bool(
+                        profile.phone and
+                        profile.permanent_district and
+                        profile.permanent_local_level and
+                        profile.target_category_id
+                    )
+                except Exception:
+                    profile_complete = False
+            else:
+                # Teachers and admins have no onboarding requirement
+                profile_complete = True
 
             from rest_framework_simplejwt.tokens import RefreshToken
             update_last_login(None, user)
@@ -731,6 +783,8 @@ class SocialLoginView(APIView):
             return Response({
                 'access': _access_token_for(user),
                 'refresh': str(refresh),
+                'is_new_user': is_new_user,
+                'profile_complete': profile_complete,
                 'user': {
                     'id': user.id,
                     'username': user.username,
@@ -745,3 +799,98 @@ class SocialLoginView(APIView):
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"detail": f"Authentication failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CompleteGoogleProfileView(APIView):
+    """
+    POST /api/auth/complete-profile/
+
+    Called by the /student/onboarding page after Google OAuth when the
+    new user fills in their required profile fields. Requires a valid
+    JWT (the token was already issued by SocialLoginView).
+
+    Accepts:
+        full_name             str  required
+        phone                 str  required (Nepal format)
+        permanent_district    str  required
+        permanent_local_level str  required
+        exam_category_id      int  required
+        exam_position_id      int  optional
+
+    Returns:
+        { profile_complete: true }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+
+        full_name = (request.data.get('full_name') or '').strip()
+        phone = (request.data.get('phone') or '').strip()
+        permanent_district = (request.data.get('permanent_district') or '').strip()
+        permanent_local_level = (request.data.get('permanent_local_level') or '').strip()
+        exam_category_id = request.data.get('exam_category_id')
+        exam_position_id = request.data.get('exam_position_id')
+
+        missing = []
+        if not full_name: missing.append('full_name')
+        if not phone: missing.append('phone')
+        if not permanent_district: missing.append('permanent_district')
+        if not permanent_local_level: missing.append('permanent_local_level')
+        if not exam_category_id: missing.append('exam_category_id')
+        if missing:
+            return Response(
+                {'error': f"Please provide: {', '.join(missing)}.", 'missing_fields': missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .validators import is_valid_nepal_phone
+        if not is_valid_nepal_phone(phone):
+            return Response(
+                {'error': 'Please enter a valid 10-digit Nepali mobile number.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from exams.models import ExamCategory, Exam
+        try:
+            exam_category = ExamCategory.objects.get(id=exam_category_id, is_active=True)
+        except (ExamCategory.DoesNotExist, ValueError):
+            return Response({'error': 'Please select what you are preparing for.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        exam_position = None
+        if exam_position_id:
+            try:
+                exam_position = Exam.objects.get(id=exam_position_id, is_active=True, category=exam_category)
+            except (Exam.DoesNotExist, ValueError):
+                return Response({'error': 'Invalid exam selection.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update User name fields
+        first_name, _, last_name = full_name.partition(' ')
+        user.first_name = first_name[:150]
+        user.last_name = last_name[:150]
+        user.save(update_fields=['first_name', 'last_name'])
+
+        # Update / create StudentProfile
+        from support.models import StudentProfile
+        from django.utils import timezone as tz
+        profile, _ = StudentProfile.objects.get_or_create(user=user)
+        profile.phone = phone
+        profile.permanent_district = permanent_district
+        profile.permanent_local_level = permanent_local_level
+        profile.target_category = exam_category
+        if exam_position:
+            profile.target_position = exam_position
+        if not profile.is_verified:
+            profile.is_verified = True
+            profile.verified_at = tz.now()
+        profile.save()
+
+        from administration.models import AuditLog
+        AuditLog.objects.create(
+            actor=user, action='GOOGLE_PROFILE_COMPLETED',
+            entity_type='User', entity_id=str(user.id),
+            details={'exam_category': exam_category.name},
+        )
+
+        return Response({'profile_complete': True})
+

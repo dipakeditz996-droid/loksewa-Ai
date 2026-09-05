@@ -90,7 +90,7 @@ export function ApiErrorState({
           </Button>
         )}
         {status === 401 && (
-          <Link href="/admin-login">
+          <Link href="/login">
             <Button size="sm" variant="outline" className="bg-white">
               Sign in
             </Button>

@@ -105,6 +105,22 @@ class StudentProfile(models.Model):
         help_text="Reduce in-app distractions while studying and taking exams."
     )
 
+    # Admin Granted Access
+    ACCESS_ORIGIN_CHOICES = (
+        ('SELF_REGISTERED', 'Self-Registered'),
+        ('ADMIN_GRANTED', 'Admin-Granted'),
+    )
+    access_origin = models.CharField(
+        max_length=20, choices=ACCESS_ORIGIN_CHOICES, default='SELF_REGISTERED'
+    )
+    admin_access_expiry = models.DateTimeField(null=True, blank=True)
+    admin_access_note = models.TextField(blank=True)
+    admin_granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='granted_access_profiles'
+    )
+    admin_granted_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

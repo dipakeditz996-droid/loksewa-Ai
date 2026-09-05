@@ -184,11 +184,11 @@ class AccountLockoutTests(APITestCase):
         self.student.refresh_from_db()
         self.assertEqual(self.student.failed_login_attempts, 0)
 
-    def test_admin_login_endpoint_also_locks_out(self):
+    def test_lockout_applies_to_admin_accounts_too(self):
         for _ in range(3):
-            self.client.post('/api/auth/admin-login/', {'username': 'admin1', 'password': 'wrong'})
-        response = self.client.post('/api/auth/admin-login/', {'username': 'admin1', 'password': 'StrongPass123!'})
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+            self.client.post('/api/token/', {'username': 'admin1', 'password': 'wrong'})
+        response = self.client.post('/api/token/', {'username': 'admin1', 'password': 'StrongPass123!'})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertIn('too many failed attempts', str(response.data).lower())
 
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  BookOpen, GraduationCap, Mail,
+  BookOpen, Mail,
   ShieldCheck, BadgeCheck, Cpu, TrendingUp, ArrowRight, MapPin, Phone,
   Globe, MessageCircle, Share2, Users
 } from "lucide-react";
@@ -170,24 +170,6 @@ export function Footer() {
                     </Link>
                   </li>
                 ))}
-                <li>
-                  <Link
-                    href="/teacher/login"
-                    className="flex items-center gap-1.5 text-[14px] text-[#D4A72C] hover:text-[#C29322] transition-colors"
-                  >
-                    <GraduationCap className="w-3.5 h-3.5" />
-                    Teacher Portal
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/admin-login"
-                    className="flex items-center gap-1.5 text-[14px] text-red-500 hover:text-red-600 transition-colors"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Admin Portal
-                  </Link>
-                </li>
               </ul>
             </div>
 

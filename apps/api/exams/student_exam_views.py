@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 from .models import Examination, ExaminationAttempt, StudentAnswer, Question, CalmSessionLog
+from .selection_service import QuestionSelectionService
 from .attempt_timing import (
     attempt_remaining_seconds,
     attempt_is_expired,
@@ -23,12 +24,13 @@ from .student_serializers import (
 from core.pagination import StandardResultsSetPagination
 from django.db.models import F, Window, Sum, Avg, Max, Count, FloatField, ExpressionWrapper
 from django.db.models.functions import DenseRank
+from subscriptions.permissions import HasActiveSubscription
 
 class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for students to view available exams and start them.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
     serializer_class = StudentExaminationSerializer
     
     def get_queryset(self):
@@ -234,49 +236,75 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='available-questions')
     def available_questions(self, request):
-        from exams.models import Question
-        q_filter = self._build_question_filter(request.data)
-        count = Question.objects.filter(q_filter).count()
-        return Response({'available': count})
+        # QuestionSelectionService is imported at the top of this module
+        data = request.data
+        avail = QuestionSelectionService().check_availability(
+            exam_id=data.get('exam_id'),
+            category_id=data.get('category_id'),
+            paper_id=data.get('paper_id'),
+            subject_id=data.get('subject_id'),
+            chapter_id=data.get('chapter_id'),
+            topic_id=data.get('topic_id'),
+            difficulty=data.get('difficulty') if data.get('difficulty') not in ('all', 'mixed', None) else None,
+            question_type=data.get('question_type', 'mcq'),
+        )
+        return Response({'available': avail['total']})
 
     @action(detail=False, methods=['post'])
     def generate_custom(self, request):
-        from exams.models import ExaminationQuestion, Question, Exam
+        from exams.models import ExaminationQuestion, Exam
+        # QuestionSelectionService is imported at the top of this module
         from django.db import transaction
 
-        exam_id = request.data.get('exam_id')
-        category_id = request.data.get('category_id')
-        num_questions = int(request.data.get('question_count', 20))
-        random_questions = request.data.get('random_questions', True)
+        data = request.data
+        exam_id = data.get('exam_id')
+        category_id = data.get('category_id')
+        num_questions = int(data.get('question_count', 20))
+        difficulty_raw = data.get('difficulty')
+        difficulty = difficulty_raw if difficulty_raw not in ('all', 'mixed', None) else None
+        question_type = data.get('question_type', 'mcq')
 
         if not exam_id and not category_id:
             return Response({'detail': 'exam_id or category_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        q_filter = self._build_question_filter(request.data)
+        service = QuestionSelectionService()
+        avail = service.check_availability(
+            exam_id=exam_id,
+            category_id=category_id,
+            paper_id=data.get('paper_id'),
+            subject_id=data.get('subject_id'),
+            chapter_id=data.get('chapter_id'),
+            topic_id=data.get('topic_id'),
+            difficulty=difficulty,
+            question_type=question_type,
+        )
+        if num_questions > avail['total']:
+            return Response({
+                'detail': f'Only {avail["total"]} questions are available for your selected criteria.'
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
-                qs = Question.objects.filter(q_filter)
-                available = qs.count()
-
-                if num_questions > available:
-                    return Response({
-                        'detail': f'Only {available} questions are available for your selected criteria.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
-                if random_questions:
-                    questions = list(qs.order_by('?')[:num_questions])
-                else:
-                    questions = list(qs.order_by('id')[:num_questions])
+                result = service.select(
+                    exam_id=exam_id,
+                    category_id=category_id,
+                    paper_id=data.get('paper_id'),
+                    subject_id=data.get('subject_id'),
+                    chapter_id=data.get('chapter_id'),
+                    topic_id=data.get('topic_id'),
+                    difficulty=difficulty,
+                    question_type=question_type,
+                    count=num_questions,
+                    randomize=True,
+                )
+                questions = result['questions']
 
                 # Examination.exam is a required FK to one Position/Level, but
                 # a category-wide "full syllabus" exam spans every position
                 # under that category - there's no single exam to point at.
                 # Fall back to whichever exam the first selected question
                 # actually belongs to (purely for display; the real content
-                # is the ExaminationQuestion rows below). This also fixes the
-                # exam's `category` always being ExamCategory.objects.first()
-                # regardless of what was actually selected.
+                # is the ExaminationQuestion rows below).
                 if exam_id:
                     resolved_exam = Exam.objects.get(id=exam_id)
                 else:
@@ -324,7 +352,7 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     """
     ViewSet for students to manage their active and past attempts.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
     serializer_class = StudentExaminationAttemptSerializer
     pagination_class = StandardResultsSetPagination
     
@@ -620,7 +648,7 @@ class LeaderboardViewSet(viewsets.ViewSet):
     """
     Provides leaderboard rankings for students based on ExaminationAttempt data.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def list(self, request):
         try:
@@ -680,7 +708,7 @@ class LeaderboardViewSet(viewsets.ViewSet):
             'highestScore': round(highest_pct, 1)
         })
 class CalmSessionLogView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
     
     def post(self, request):
         event_type = request.data.get('event_type')

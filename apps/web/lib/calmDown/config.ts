@@ -72,9 +72,29 @@ export const CALM_DOWN_COPY = {
   experienceTitle: "Calm Down",
   experienceSubtitle: "Take a moment to breathe and reset.",
   readyLine: "You're ready.",
+  completionBody: "Your breathing session is complete.",
   startExam: "Start Exam",
   skipDuring: "Skip Calm Down",
   skipConfirmTitle: "Skip the relaxation session and start your exam?",
   skipConfirmContinue: "Continue Calm Down",
   skipConfirmSkip: "Skip & Start Exam",
 } as const;
+
+/** Short instruction shown alongside the phase label + countdown. */
+export const BREATHING_PHASE_GUIDANCE: Record<BreathingPhase, string> = {
+  inhale: "Slowly breathe in",
+  hold: "Hold gently",
+  exhale: "Slowly breathe out",
+};
+
+/**
+ * Calming lines shown at the bottom of the experience, cross-fading every
+ * few breathing cycles. Kept short and non-clinical - see the module
+ * docstring above about honest, non-medical wellness copy.
+ */
+export const CALM_MESSAGES: string[] = [
+  "Let your breathing slow your thoughts.",
+  "Prepare your mind for focused learning.",
+  "One breath at a time.",
+  "Slow your breathing. Clear your mind.",
+];

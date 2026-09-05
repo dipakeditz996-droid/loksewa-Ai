@@ -89,13 +89,13 @@ export async function apiClient<T>(
     }
     
     if (response.status === 401 && !options.skipRedirect) {
-      // Force logout if refresh failed or no token was present
+      // Force logout if refresh failed or no token was present. Every role
+      // signs in through the same /login form, so there's only one place
+      // to send anyone back to.
       if (typeof window !== "undefined") {
         const path = window.location.pathname;
-        const isAdminRoute = path.startsWith("/admin-dashboard") || path.startsWith("/admin-login");
-        const loginPath = isAdminRoute ? "/admin-login" : "/login";
         if (!path.includes("/login")) {
-          window.location.href = `${loginPath}?expired=true`;
+          window.location.href = "/login?expired=true";
           return new Promise(() => {}); // never resolve to prevent further execution
         }
       }
@@ -109,6 +109,18 @@ export async function apiClient<T>(
     } catch {
       errorData = { detail: response.statusText };
     }
+    
+    // Intercept package lock
+    if (response.status === 403 && errorData?.code === 'subscription_required' && !options.skipRedirect) {
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        if (path !== "/student") {
+          window.location.href = "/student";
+          return new Promise(() => {}); // Prevent further execution
+        }
+      }
+    }
+
     throw new ApiError(response.status, errorData);
   }
 

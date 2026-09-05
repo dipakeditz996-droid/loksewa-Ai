@@ -9,7 +9,7 @@ from core.serializers import CustomTokenObtainPairSerializer
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, ResetPasswordConfirmView, StudentSignupView, SignupRequestOTPView, VerifyEmailOTPView, VerifyRecoveryCodeView, StudentDashboardView, SocialLoginView
+from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, ResetPasswordConfirmView, StudentSignupView, SignupRequestOTPView, VerifyEmailOTPView, VerifyRecoveryCodeView, StudentDashboardView, SocialLoginView, CompleteGoogleProfileView
 from core.media_views import drive_media_proxy
 from core.feedback_views import StudentFeedbackListView
 from core.teacher_views import (
@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/auth/verify-email-otp/', VerifyEmailOTPView.as_view(), name='auth_verify_email_otp'),
     path('api/auth/verify-recovery-code/', VerifyRecoveryCodeView.as_view(), name='auth_verify_recovery_code'),
     path('api/auth/social/', SocialLoginView.as_view(), name='auth_social_login'),
+    path('api/auth/complete-profile/', CompleteGoogleProfileView.as_view(), name='auth_complete_google_profile'),
     path('api/auth/admin-login/', AdminLoginView.as_view(), name='auth_admin_login'),
     path('api/auth/logout/', AuthLogoutView.as_view(), name='auth_logout'),
     path('api/auth/forgot-password/', ForgotPasswordView.as_view(), name='auth_forgot_password'),

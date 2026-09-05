@@ -79,9 +79,9 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const adminLinks = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/mock-exams", label: "Mock Exam Review", icon: FileText },
-    { href: "/admin/subscriptions", label: "Subscription Plans", icon: Bookmark },
+    { href: "/admin-dashboard/packages", label: "Subscription Plans", icon: Bookmark },
     { href: "/admin/payment-settings", label: "Payment Settings", icon: Settings },
-    { href: "/admin/subscription-payments", label: "Subscription Payments", icon: FileText },
+    { href: "/admin-dashboard/applications", label: "Subscription Payments", icon: FileText },
   ];
 
   const teacherLinksGroups = [

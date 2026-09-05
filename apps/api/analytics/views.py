@@ -1,19 +1,20 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from subscriptions.permissions import HasActiveSubscription
 from django.core.cache import cache
 from .services.analytics_service import AnalyticsService
 from .services.ai_service import AIService
 
 class OverviewView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
         data = AnalyticsService.get_overview(request.user)
         return Response(data)
 
 class PerformanceTrendView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
         days = int(request.query_params.get('days', 30))
@@ -21,21 +22,21 @@ class PerformanceTrendView(APIView):
         return Response(data)
 
 class SubjectPerformanceView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
         data = AnalyticsService.get_subject_performance(request.user)
         return Response(data)
 
 class TopicPerformanceView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
         data = AnalyticsService.get_topic_performance(request.user)
         return Response(data)
 
 class AIInsightView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def post(self, request):
         cache_key = f"ai_insight_{request.user.id}"

@@ -62,6 +62,7 @@ export default function SettingsPage() {
       enableMarketplace: true,
       enableGamification: true,
       enableStudyPlans: true,
+      enforceSubscriptionAccess: false,
     },
   });
 
@@ -572,6 +573,22 @@ export default function SettingsPage() {
                     <div>
                       <p className="font-medium text-slate-900 dark:text-white">Study Plans</p>
                       <p className="text-xs text-slate-600 dark:text-slate-400">Enable personalized study plan generation</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-3 p-3 border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 rounded-lg cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-950/30">
+                    <input
+                      type="checkbox"
+                      checked={formData.features.enforceSubscriptionAccess}
+                      onChange={(e) => updateFormData("features", "enforceSubscriptionAccess", e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
+                    <div>
+                      <p className="font-medium text-slate-900 dark:text-white">Require Active Package</p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        Students without an active package lose access to Practice, Mock Exams, Study Materials, AI Tutor, and Games.
+                        Turn this on only once your packages are priced and ready — every existing student without one is affected immediately.
+                      </p>
                     </div>
                   </label>
                 </div>

@@ -19,6 +19,7 @@ from .serializers import (
 from exams.models import Question
 from exams.selection_service import QuestionSelectionService
 from administration.permissions import IsAdminUser
+from subscriptions.permissions import HasActiveSubscription
 
 # Configuration
 MATCH_QUESTIONS_COUNT = 10
@@ -60,7 +61,7 @@ def assign_random_questions(match, exam_id=None, subject_id=None, topic_id=None,
 # ==========================================
 
 class MatchmakingView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def post(self, request):
         user = request.user
@@ -95,7 +96,7 @@ class MatchmakingView(views.APIView):
         return Response(GameMatchSerializer(new_match).data)
 
 class InviteMatchView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def post(self, request):
         user = request.user
@@ -110,7 +111,7 @@ class InviteMatchView(views.APIView):
         return Response(GameMatchSerializer(match).data)
 
 class JoinMatchView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def post(self, request):
         code = request.data.get('invite_code')
@@ -181,9 +182,11 @@ class MatchStateView(views.APIView):
             match.save()
             
     def end_match(self, match):
+        from gamification.services import award_xp
+
         match.status = 'COMPLETED'
         match.ended_at = timezone.now()
-        
+
         if match.player1_score > match.player2_score:
             match.winner = match.player1
             p1_profile = get_or_create_profile(match.player1)
@@ -196,8 +199,21 @@ class MatchStateView(views.APIView):
             p2_profile.save()
         else:
             match.is_draw = True
-            
+
         match.save()
+
+        # Award XP based on server-computed scores only — never trust the client.
+        # Each player earns 1 XP per point scored (10 per correct answer).
+        # The winner also receives a +50 Victory Bonus.
+        # XP can only be awarded once because end_match() is only reached when
+        # transitioning to COMPLETED, and completed matches are rejected by the
+        # answer and state views.
+        if match.player1_score > 0:
+            award_xp(match.player1, match.player1_score, f'1v1 Match #{match.id} Score')
+        if match.player2 and match.player2_score > 0:
+            award_xp(match.player2, match.player2_score, f'1v1 Match #{match.id} Score')
+        if match.winner and not match.is_draw:
+            award_xp(match.winner, 50, f'1v1 Match #{match.id} Victory Bonus')
 
 class MatchAnswerView(views.APIView):
     permission_classes = [IsAuthenticated]
@@ -295,7 +311,7 @@ def get_survival_question(survived_count, exam_id=None, subject_id=None, topic_i
     return question, points, time
 
 class SurvivalStartView(views.APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def post(self, request):
         user = request.user
@@ -349,15 +365,22 @@ class SurvivalAnswerView(views.APIView):
                 game.status = 'COMPLETED'
                 game.ended_at = timezone.now()
                 game.save()
-                
-                # Update profile
+
+                # Update game profile
                 profile = get_or_create_profile(request.user)
                 if game.score > profile.best_survival_score:
                     profile.best_survival_score = game.score
                 if game.highest_streak > profile.best_survival_streak:
                     profile.best_survival_streak = game.highest_streak
                 profile.save()
-                
+
+                # Award XP from server-computed score — never trust client values.
+                # XP is only awarded once because completed games are rejected at
+                # the top of this view (status='IN_PROGRESS' filter on get()).
+                if game.score > 0:
+                    from gamification.services import award_xp
+                    award_xp(request.user, game.score, f'Survival Game #{game.id} Completed')
+
                 return Response({'status': 'GAME_OVER', 'game': SurvivalGameSerializer(game).data})
                 
             else:

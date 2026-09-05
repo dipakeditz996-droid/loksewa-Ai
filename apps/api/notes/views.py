@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from django.db.models import Q
 from .models import StudyMaterial, StudentMaterialProgress, StudentMaterialBookmark
 from .serializers import StudyMaterialListSerializer, StudyMaterialDetailSerializer
+from subscriptions.access import has_active_subscription
 
 
 class PublicStudyMaterialListView(APIView):
@@ -48,7 +49,16 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
         from courses.models import Enrollment
         active_courses = Enrollment.objects.filter(student=self.request.user, status='active').values_list('course_id', flat=True)
         queryset = queryset.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
-        
+
+        # Package access control - premium materials require an active
+        # subscription once the admin has turned enforcement on (see
+        # subscriptions.access.has_active_subscription); free materials stay
+        # visible to every authenticated student regardless.
+        from core.models import AdminSettings
+        if AdminSettings.get_settings().enforce_subscription_access and self.request.user.role not in ('teacher', 'admin', 'super-admin'):
+            if not has_active_subscription(self.request.user):
+                queryset = queryset.filter(access_type='free')
+
         # Filtering
         exam = self.request.query_params.get('exam')
         subject = self.request.query_params.get('subject')

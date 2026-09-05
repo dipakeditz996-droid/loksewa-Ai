@@ -12,14 +12,25 @@ export interface User {
 
 export const authApi = {
   /**
-   * Student/general login via SimpleJWT token obtain.
+   * The one login endpoint for every role (student, teacher, admin,
+   * super-admin). Backend validates credentials and, if the account has
+   * 2FA enabled, returns { twoFactorRequired: true, pendingToken } instead
+   * of tokens - call `completeTwoFactorLogin` next.
    */
   login: async (credentials: Record<string, string>) => {
-    const data = await apiClient<{ access: string; refresh: string }>("/token/", {
+    const data = await apiClient<{
+      access?: string;
+      refresh?: string;
+      twoFactorRequired?: boolean;
+      pendingToken?: string;
+    }>("/token/", {
       method: "POST",
       body: JSON.stringify(credentials),
     });
-    setAuthToken(data.access, data.refresh);
+    if (data.twoFactorRequired) {
+      return data;
+    }
+    setAuthToken(data.access!, data.refresh!);
     return data;
   },
 
@@ -61,31 +72,8 @@ export const authApi = {
   },
 
   /**
-   * Admin-specific login. Backend validates credentials AND role.
-   * If the account has 2FA enabled, returns { twoFactorRequired: true, pendingToken }
-   * instead of tokens — call `completeTwoFactorLogin` next.
-   */
-  adminLogin: async (credentials: { username: string; password: string }) => {
-    const data = await apiClient<{
-      access?: string;
-      refresh?: string;
-      user?: User;
-      twoFactorRequired?: boolean;
-      pendingToken?: string;
-    }>("/auth/admin-login/", {
-      method: "POST",
-      body: JSON.stringify(credentials),
-    });
-    if (data.twoFactorRequired) {
-      return data;
-    }
-    setAuthToken(data.access!, data.refresh!);
-    return data;
-  },
-
-  /**
-   * Completes an admin login that returned twoFactorRequired, with a TOTP
-   * or backup code.
+   * Completes a login that returned twoFactorRequired, with a TOTP or
+   * backup code.
    */
   completeTwoFactorLogin: async (pendingToken: string, code: string) => {
     const data = await apiClient<{ access: string; refresh: string; user: User }>("/auth/2fa/login/", {
@@ -155,12 +143,36 @@ export const authApi = {
   },
 
   socialLogin: async (provider: 'google' | 'facebook' | 'apple', token: string, additional_data?: any) => {
-    const data = await apiClient<{ access: string; refresh: string }>("/auth/social/", {
+    const data = await apiClient<{
+      access: string;
+      refresh: string;
+      is_new_user: boolean;
+      profile_complete: boolean;
+      user: User;
+    }>("/auth/social/", {
       method: "POST",
       body: JSON.stringify({ provider, token, additional_data }),
     });
     setAuthToken(data.access, data.refresh);
     return data;
+  },
+
+  /**
+   * Saves profile fields collected during Google-user onboarding.
+   * Called from /student/onboarding after Google OAuth for new users.
+   */
+  completeGoogleProfile: async (data: {
+    full_name: string;
+    phone: string;
+    permanent_district: string;
+    permanent_local_level: string;
+    exam_category_id: number;
+    exam_position_id?: number | null;
+  }) => {
+    return apiClient<{ profile_complete: boolean }>("/auth/complete-profile/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
 };
 

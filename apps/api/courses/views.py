@@ -9,6 +9,7 @@ from administration.permissions import IsTeacher
 from .models import Course, TeacherCourseAssignment, Enrollment, CourseApplication
 from .serializers import CourseSerializer, TeacherCourseAssignmentSerializer
 from exams.models import SubjectiveAnswer
+from subscriptions.permissions import HasActiveSubscription
 
 class TeacherCourseViewSet(viewsets.ModelViewSet):
     """
@@ -23,7 +24,6 @@ class TeacherCourseViewSet(viewsets.ModelViewSet):
         return Course.objects.filter(
             teachers__teacher=self.request.user
         ).select_related('exam').prefetch_related(
-            'exam__legacy_subjects', # Using legacy_subjects based on exams.models.py
             'exam__papers',
             'exam__papers__subjects',
             'exam__papers__subjects__chapters',
@@ -365,7 +365,7 @@ class MyCoursesListView(APIView):
     Returns a list of all active courses the student is enrolled in, 
     including calculated real progress based on UserTopicProgress.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
         user = request.user

@@ -19,6 +19,8 @@ interface Subscription {
   status: string;
   start_date: string;
   expiry_date: string;
+  remaining_days: number;
+  computed_status: "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" | "CANCELLED";
 }
 
 interface Payment {
@@ -103,11 +105,21 @@ function StudentPurchasesContent() {
         ) : activeSubscription ? (
           <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-[#0B2545] to-[#163E6B] text-white p-6 rounded-[20px] shadow-lg relative overflow-hidden">
             <div className="absolute top-0 right-0 w-64 h-64 bg-card/5 rounded-full blur-3xl -mr-20 -mt-20"></div>
-            
+
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-2">
-                <span className="bg-[#D4A72C] text-[#0A1118] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  Active
+                <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                  activeSubscription.computed_status === 'EXPIRED'
+                    ? 'bg-red-500 text-white'
+                    : activeSubscription.computed_status === 'EXPIRING_SOON'
+                    ? 'bg-amber-400 text-[#0A1118]'
+                    : 'bg-[#D4A72C] text-[#0A1118]'
+                }`}>
+                  {activeSubscription.computed_status === 'EXPIRED'
+                    ? 'Expired'
+                    : activeSubscription.computed_status === 'EXPIRING_SOON'
+                    ? 'Expiring Soon'
+                    : 'Active'}
                 </span>
               </div>
               <h3 className="text-2xl font-bold">{activeSubscription.plan_details.name}</h3>
@@ -116,11 +128,17 @@ function StudentPurchasesContent() {
                 Valid until {new Date(activeSubscription.expiry_date).toLocaleDateString()}
               </p>
             </div>
-            
+
             <div className="relative z-10 mt-6 md:mt-0 text-center md:text-right">
               <p className="text-slate-300 text-sm mb-2">Days Remaining</p>
-              <div className="text-4xl font-bold text-[#D4A72C]">
-                {Math.ceil((new Date(activeSubscription.expiry_date).getTime() - new Date().getTime()) / (1000 * 3600 * 24))}
+              <div className={`text-4xl font-bold ${
+                activeSubscription.computed_status === 'EXPIRED'
+                  ? 'text-red-400'
+                  : activeSubscription.computed_status === 'EXPIRING_SOON'
+                  ? 'text-amber-400'
+                  : 'text-[#D4A72C]'
+              }`}>
+                {activeSubscription.remaining_days}
               </div>
             </div>
           </div>

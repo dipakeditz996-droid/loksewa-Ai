@@ -160,6 +160,9 @@ class TeacherAccountCreatedNotifiesAdminsTests(APITestCase):
         self.acting_admin = User.objects.create_user(
             username='admin2', email='admin2@test.com', password='pass123', role='super-admin')
 
+        from exams.models import ExamCategory
+        self.exam_category = ExamCategory.objects.create(name='PSC Exams', is_active=True)
+
     def test_creating_a_teacher_notifies_other_admins(self):
         self.client.force_authenticate(user=self.acting_admin)
         response = self.client.post('/api/admin/users/', {
@@ -176,8 +179,11 @@ class TeacherAccountCreatedNotifiesAdminsTests(APITestCase):
         response = self.client.post('/api/admin/users/', {
             'username': 'newstud', 'email': 'newstud@test.com',
             'password': 'StrongPass123!', 'role': 'student',
+            'name': 'New Student', 'mobile': '9812345678',
+            'permanent_district': 'Rupandehi', 'permanent_local_level': 'Butwal',
+            'exam_category_id': self.exam_category.id,
         }, format='json')
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertFalse(Notification.objects.filter(title='New Teacher Account Created').exists())
 
 
@@ -307,7 +313,7 @@ class AdminAccountLockoutNotifiesAdminsTests(APITestCase):
 
     def test_locking_an_admin_account_notifies_other_admins(self):
         for _ in range(3):
-            self.client.post('/api/auth/admin-login/', {
+            self.client.post('/api/token/', {
                 'username': 'admin2', 'password': 'WrongPassword',
             }, format='json')
 
@@ -317,12 +323,12 @@ class AdminAccountLockoutNotifiesAdminsTests(APITestCase):
 
     def test_locking_out_does_not_double_notify_on_further_attempts(self):
         for _ in range(3):
-            self.client.post('/api/auth/admin-login/', {
+            self.client.post('/api/token/', {
                 'username': 'admin2', 'password': 'WrongPassword',
             }, format='json')
         # Account is now locked - further attempts short-circuit before
         # record_failed_attempt runs again, so no second notification.
-        self.client.post('/api/auth/admin-login/', {
+        self.client.post('/api/token/', {
             'username': 'admin2', 'password': 'WrongPassword',
         }, format='json')
         self.assertEqual(
@@ -333,7 +339,7 @@ class AdminAccountLockoutNotifiesAdminsTests(APITestCase):
         student = User.objects.create_user(
             username='stud1', email='stud1@test.com', password='CorrectPass123!', role='student')
         for _ in range(3):
-            self.client.post('/api/auth/admin-login/', {
+            self.client.post('/api/token/', {
                 'username': 'stud1', 'password': 'WrongPassword',
             }, format='json')
         self.assertFalse(Notification.objects.filter(title='Admin Account Locked Out').exists())

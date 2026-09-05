@@ -22,13 +22,22 @@ class IsAdminUser(permissions.BasePermission):
         return request.user and request.user.is_authenticated and request.user.role in ['admin', 'super-admin']
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
-    queryset = SubscriptionPlan.objects.all().order_by('display_order')
     serializer_class = SubscriptionPlanSerializer
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
         return [IsAdminUser()]
+
+    def get_queryset(self):
+        qs = SubscriptionPlan.objects.all().order_by('display_order')
+        # Draft/inactive plans are admin-management data, not something a
+        # student (or an anonymous visitor - list/retrieve are AllowAny so
+        # the pre-login pricing section can call this) should ever see.
+        user = self.request.user
+        if not (user and user.is_authenticated and user.role in ('admin', 'super-admin')):
+            qs = qs.filter(status='ACTIVE')
+        return qs
 
 class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubscriptionSerializer
@@ -54,16 +63,14 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         # checkout already uses for its own submitted_amount.
         plan = serializer.validated_data['plan']
         payment = serializer.save(student=self.request.user, amount=plan.price)
-        # Notify user
-        Notification.objects.create(
-            recipient=self.request.user,
-            type='payment',
-            title='Payment Submitted',
-            message='Your payment has been submitted and is awaiting verification.',
-            related_id=str(payment.id)
-        )
 
         from core.notification_service import NotificationService
+        NotificationService.notify_student_payment_submitted(
+            student=self.request.user,
+            title_ref=plan.name,
+            amount=payment.amount,
+            action_url='/student/purchases',
+        )
         NotificationService.notify_admins(
             notif_type='payment',
             title='New Subscription Payment Awaiting Verification',
@@ -170,13 +177,12 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                 amount=payment.amount
             )
 
-            # Create notification
-            Notification.objects.create(
-                recipient=payment.student,
-                type='payment',
-                title='Enrollment Activated',
-                message=f'Your enrollment in "{enrolled_course_title}" has been activated successfully!',
-                related_id=str(payment.id)
+            # Notify student
+            from core.notification_service import NotificationService
+            NotificationService.notify_student_payment_approved(
+                student=payment.student,
+                title_ref=enrolled_course_title,
+                action_url='/student/purchases',
             )
 
         # Placed after the atomic block so it only fires once the approval
@@ -209,16 +215,13 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         payment.verified_at = timezone.now()
         payment.save()
         
-        # Create notification
-        Notification.objects.create(
-            recipient=payment.student,
-            type='payment',
-            title='Payment Rejected',
-            message=f'Your payment was rejected. Reason: {reason}',
-            related_id=str(payment.id)
-        )
-
         from core.notification_service import NotificationService
+        NotificationService.notify_student_payment_rejected(
+            student=payment.student,
+            title_ref=payment.plan.name,
+            reason=reason,
+            action_url='/student/purchases',
+        )
         NotificationService.notify_admins(
             notif_type='payment',
             title='Subscription Payment Rejected',

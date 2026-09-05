@@ -25,7 +25,7 @@ class TwoFactorSafetyTests(APITestCase):
         settings_obj.enable_two_factor_auth = True
         settings_obj.save(update_fields=['enable_two_factor_auth'])
 
-        response = self.client.post('/api/auth/admin-login/', {
+        response = self.client.post('/api/token/', {
             'username': 'admin1', 'password': 'pass123',
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -70,7 +70,7 @@ class TwoFactorEnrollmentAndLoginTests(APITestCase):
     def test_login_requires_code_after_enrollment(self):
         secret, _ = self._enroll()
 
-        login = self.client.post('/api/auth/admin-login/', {
+        login = self.client.post('/api/token/', {
             'username': 'admin1', 'password': 'pass123',
         })
         self.assertEqual(login.status_code, status.HTTP_200_OK)
@@ -87,7 +87,7 @@ class TwoFactorEnrollmentAndLoginTests(APITestCase):
 
     def test_wrong_code_rejected(self):
         self._enroll()
-        login = self.client.post('/api/auth/admin-login/', {
+        login = self.client.post('/api/token/', {
             'username': 'admin1', 'password': 'pass123',
         })
         pending_token = login.data['pendingToken']
@@ -98,7 +98,7 @@ class TwoFactorEnrollmentAndLoginTests(APITestCase):
 
     def test_backup_code_works_once(self):
         _, backup_codes = self._enroll()
-        login = self.client.post('/api/auth/admin-login/', {
+        login = self.client.post('/api/token/', {
             'username': 'admin1', 'password': 'pass123',
         })
         pending_token = login.data['pendingToken']
@@ -109,7 +109,7 @@ class TwoFactorEnrollmentAndLoginTests(APITestCase):
         })
         self.assertEqual(first.status_code, status.HTTP_200_OK)
 
-        login2 = self.client.post('/api/auth/admin-login/', {
+        login2 = self.client.post('/api/token/', {
             'username': 'admin1', 'password': 'pass123',
         })
         second = self.client.post('/api/auth/2fa/login/', {

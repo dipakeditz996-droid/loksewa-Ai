@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  BookOpen, Menu, X, Moon, Sun, ArrowRight, GraduationCap,
+  BookOpen, Menu, X, Moon, Sun, ArrowRight,
   Home, Target, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -121,28 +121,9 @@ export function Navbar() {
                 </button>
               )}
 
-              {/* Teacher Portal */}
-              <Link
-                href="/teacher/login"
-                className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#D4A72C]/30 dark:border-[#D4A72C]/20 bg-[#D4A72C]/5 dark:bg-[#D4A72C]/5 hover:bg-[#D4A72C]/10 dark:hover:bg-[#D4A72C]/10 transition-all group"
-              >
-                <GraduationCap className="w-3.5 h-3.5 text-[#D4A72C]" />
-                <span className="text-[12px] font-[700] text-[#D4A72C]">Teacher Portal</span>
-                <ArrowRight className="w-3 h-3 text-[#D4A72C] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-              </Link>
-
-              {/* Admin Portal */}
-              <Link
-                href="/admin-login"
-                className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-blue-500/30 dark:border-blue-400/20 bg-blue-500/5 dark:bg-blue-400/5 hover:bg-blue-500/10 dark:hover:bg-blue-400/10 transition-all group"
-              >
-                <span className="text-[12px] font-[700] text-blue-600 dark:text-blue-400">Admin Portal</span>
-                <ArrowRight className="w-3 h-3 text-blue-600 dark:text-blue-400 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-              </Link>
-
-              <div className="h-4 w-px bg-slate-300/60 dark:bg-white/10" />
-
-              {/* Log In */}
+              {/* Log In - single unified entry point; role-based redirect happens
+                  after authentication (see app/login/page.tsx), never via a
+                  separate public Teacher/Admin portal link. */}
               <Link
                 href="/login"
                 className="text-[13px] font-[600] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors px-1.5"
@@ -215,31 +196,8 @@ export function Navbar() {
               <div className="h-px bg-slate-100 dark:bg-white/5 mx-3" />
 
               <div className="p-3 flex flex-col gap-2.5 pb-4">
-                {/* Teacher Portal */}
-                <Link
-                  href="/teacher/login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center justify-between px-4 py-3 rounded-[14px] border border-[#D4A72C]/25 bg-[#D4A72C]/5"
-                >
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className="w-4 h-4 text-[#D4A72C]" />
-                    <span className="text-[14px] font-[700] text-[#D4A72C]">Teacher Portal</span>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#D4A72C]" />
-                </Link>
-
-                {/* Admin Portal */}
-                <Link
-                  href="/admin-login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center justify-between px-4 py-3 rounded-[14px] border border-blue-500/25 bg-blue-500/5"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-[700] text-blue-600 dark:text-blue-400">Admin Portal</span>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                </Link>
-
+                {/* Single unified Login entry - role-based redirect happens after
+                    authentication (see app/login/page.tsx). */}
                 <div className="flex gap-2">
                   <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex-1">
                     <Button variant="outline" className="w-full h-[44px] text-[14px] font-[600] border-slate-200 dark:border-white/10 text-slate-700 dark:text-white rounded-[14px] bg-transparent">

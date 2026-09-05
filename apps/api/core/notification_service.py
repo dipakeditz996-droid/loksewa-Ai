@@ -236,6 +236,79 @@ class NotificationService:
         )
 
     @classmethod
+    def notify_subscription_expiring_soon(cls, days_ahead=7):
+        """Periodic job (see subscriptions/tasks.py + backend/celery.py):
+        one notification per ACTIVE Subscription whose expiry_date falls
+        within the next `days_ahead` days. Mirrors notify_exams_starting_soon's
+        shape - the related_id dedupe means running this daily as an
+        expiry approaches never sends more than one row per subscription."""
+        from .models import AdminSettings
+        from subscriptions.models import Subscription
+
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return 0
+
+        now = timezone.now()
+        soon = now + timedelta(days=days_ahead)
+        expiring = Subscription.objects.filter(
+            status='ACTIVE', expiry_date__gt=now, expiry_date__lte=soon,
+        ).select_related('student', 'plan')
+
+        sent = 0
+        for subscription in expiring:
+            result = cls._student_notify_once(
+                recipient=subscription.student,
+                notif_type='payment',
+                related_id=f'subscription-expiring:{subscription.id}',
+                title='Package Expiring Soon',
+                message=(
+                    f'Your "{subscription.plan.name}" package expires on '
+                    f'{timezone.localtime(subscription.expiry_date).strftime("%B %d, %Y")}. '
+                    f'Renew to keep your access.'
+                ),
+                action_url='/student/purchases',
+                priority='important',
+            )
+            if result:
+                sent += 1
+        return sent
+
+    @classmethod
+    def notify_subscription_expired(cls):
+        """Periodic job counterpart to notify_subscription_expiring_soon:
+        one notification per ACTIVE Subscription whose expiry_date has
+        already passed. Does not mutate Subscription.status - is_active /
+        subscriptions.access.has_active_subscription already do a live date
+        comparison, so status is never a second source of truth to drift."""
+        from .models import AdminSettings
+        from subscriptions.models import Subscription
+
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return 0
+
+        now = timezone.now()
+        expired = Subscription.objects.filter(
+            status='ACTIVE', expiry_date__lte=now,
+        ).select_related('student', 'plan')
+
+        sent = 0
+        for subscription in expired:
+            result = cls._student_notify_once(
+                recipient=subscription.student,
+                notif_type='payment',
+                related_id=f'subscription-expired:{subscription.id}',
+                title='Package Expired',
+                message=f'Your "{subscription.plan.name}" package has expired. Renew to restore your access.',
+                action_url='/student/purchases',
+                priority='important',
+            )
+            if result:
+                sent += 1
+        return sent
+
+    @classmethod
     def notify_admins_schedule_change(cls, schedule, event_type="updated"):
         """Notify administrators when an official exam schedule is published/changed."""
         admins = User.objects.filter(is_staff=True, is_active=True)

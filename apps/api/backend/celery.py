@@ -47,4 +47,12 @@ app.conf.beat_schedule = {
         'task': 'exams.tasks.notify_exams_starting_soon',
         'schedule': crontab(minute='*/5'),
     },
+    # "Package expiring soon" / "package expired" notifications for students
+    # with an active Subscription. Once daily is enough lead time (see
+    # NotificationService.notify_subscription_expiring_soon's 7-day window);
+    # the related_id dedupe means running it daily never double-notifies.
+    'notify-expiring-and-expired-subscriptions': {
+        'task': 'subscriptions.tasks.notify_expiring_and_expired_subscriptions',
+        'schedule': crontab(hour=8, minute=0),
+    },
 }

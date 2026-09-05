@@ -518,6 +518,24 @@ export interface AdminTestimonialInput {
   display_order?: number;
 }
 
+/** Mirrors core.website_page_serializers.AdminWebsitePageSerializer. slug is
+ * never editable through this type - see AdminWebsitePageViewSet for why. */
+export interface AdminWebsitePage {
+  id: number;
+  slug: string;
+  title: string;
+  content: string;
+  status: "draft" | "published";
+  updated_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminWebsitePageInput {
+  title?: string;
+  content?: string;
+}
+
 export interface AdminNotificationsResponse {
   notifications: AdminNotification[];
   total: number;
@@ -665,6 +683,7 @@ export interface AdminSettingsData {
     enableMarketplace: boolean;
     enableGamification: boolean;
     enableStudyPlans: boolean;
+    enforceSubscriptionAccess: boolean;
   };
   aiTutor: {
     dailyMessageLimit: number;
@@ -1068,6 +1087,43 @@ export const adminApi = {
   deleteTestimonial: async (id: number): Promise<void> => {
     return apiClient<void>(`/admin/testimonials/${id}/`, {
       method: "DELETE",
+    });
+  },
+
+  getWebsitePages: async (): Promise<AdminWebsitePage[]> => {
+    const res = await apiClient<any>("/admin/website-pages/");
+    return Array.isArray(res) ? res : res.results ?? [];
+  },
+
+  getWebsitePage: async (slug: string): Promise<AdminWebsitePage> => {
+    return apiClient<AdminWebsitePage>(`/admin/website-pages/${slug}/`);
+  },
+
+  updateWebsitePage: async (slug: string, data: AdminWebsitePageInput): Promise<AdminWebsitePage> => {
+    return apiClient<AdminWebsitePage>(`/admin/website-pages/${slug}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  publishWebsitePage: async (slug: string): Promise<AdminWebsitePage> => {
+    return apiClient<AdminWebsitePage>(`/admin/website-pages/${slug}/publish/`, {
+      method: "POST",
+    });
+  },
+
+  unpublishWebsitePage: async (slug: string): Promise<AdminWebsitePage> => {
+    return apiClient<AdminWebsitePage>(`/admin/website-pages/${slug}/unpublish/`, {
+      method: "POST",
+    });
+  },
+
+  uploadWebsitePageImage: async (file: File): Promise<{ url: string }> => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return apiClient<{ url: string }>("/admin/website-pages/upload_image/", {
+      method: "POST",
+      body: formData,
     });
   },
 

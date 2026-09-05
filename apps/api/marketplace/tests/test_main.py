@@ -251,3 +251,203 @@ class PublicProductListViewTests(APITestCase):
     def test_anonymous_access_allowed(self):
         response = self.client.get('/api/marketplace/public/products/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+
+from marketplace.models import Order, Cart, CartItem, OrderItem, MarketplaceSettings, DeliveryAddress
+from decimal import Decimal
+from unittest.mock import patch
+from django.core.files.uploadedfile import SimpleUploadedFile
+
+class BugFixRegressionTests(APITestCase):
+    def setUp(self):
+        self.student1 = User.objects.create_user(
+            username='student1', email='student1@test.com', password='password123', role='STUDENT'
+        )
+        self.student2 = User.objects.create_user(
+            username='student2', email='student2@test.com', password='password123', role='STUDENT'
+        )
+        self.seller = User.objects.create_user(
+            username='seller1', email='seller@test.com', password='password123', role='STUDENT'
+        )
+        self.product = Product.objects.create(
+            seller=self.seller, title='Test Notes', category='USED_BOOK', description='A note',
+            price=Decimal('1000.00'), stock=5, listing_status='ACTIVE', is_published=True
+        )
+        self.order = Order.objects.create(
+            student=self.student1, total_amount=Decimal('1000.00'),
+            delivery_fee=Decimal('50.00'), status='PENDING_PAYMENT'
+        )
+        self.payment_method = PaymentMethod.objects.create(
+            method_type='ESEWA', display_name='eSewa',
+            account_name='Test', account_number='123'
+        )
+        MarketplaceSettings.get_settings() # Ensure it exists
+
+    @patch('core.google_drive.upload_file')
+    def test_payment_submission_ownership_valid(self, mock_upload):
+        """Regression test for Bug 4: Owner can submit payment"""
+        self.client.force_authenticate(user=self.student1)
+        mock_upload.return_value = {'id': 'mock_id'}
+        import base64
+        gif_data = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
+        dummy_file = SimpleUploadedFile('test.gif', gif_data, content_type='image/gif')
+        resp = self.client.post('/api/marketplace/student/payment-submissions/', {
+            'order': self.order.id,
+            'payment_method': self.payment_method.id,
+            'transaction_id': 'TXN123',
+            'screenshot': dummy_file
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+    def test_payment_submission_ownership_invalid(self):
+        """Regression test for Bug 4: Non-owner gets 403"""
+        self.client.force_authenticate(user=self.student2)
+        import base64
+        gif_data = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7')
+        dummy_file = SimpleUploadedFile('test.gif', gif_data, content_type='image/gif')
+        resp = self.client.post('/api/marketplace/student/payment-submissions/', {
+            'order': self.order.id,
+            'payment_method': self.payment_method.id,
+            'transaction_id': 'TXN456',
+            'screenshot': dummy_file
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_seller_listing_edit_nameerror(self):
+        """Regression test for Bug 2: Edit S2S listing without NameError"""
+        self.client.force_authenticate(user=self.seller)
+        resp = self.client.patch(f'/api/marketplace/student/my-listings/{self.product.id}/', {
+            'price': Decimal('900.00')
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.price, Decimal('900.00'))
+
+    def test_seller_cannot_edit_other_listing(self):
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.patch(f'/api/marketplace/student/my-listings/{self.product.id}/', {
+            'price': Decimal('900.00')
+        })
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_checkout_commission_calculation(self):
+        """Regression test for Bug 1: Commission calculated during checkout"""
+        cart, _ = Cart.objects.get_or_create(student=self.student1)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=2)
+        
+        addr = DeliveryAddress.objects.create(
+            student=self.student1, full_name='Test', phone_number='980000',
+            province='Bagmati', district='KTM', municipality='KTM', ward_number='1', tole_area='Baneshwor'
+        )
+        
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.post('/api/marketplace/student/orders/checkout/', {
+            'delivery_address_id': addr.id
+        })
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        
+        order_id = resp.data['id']
+        order_item = OrderItem.objects.get(order_id=order_id)
+        
+        self.assertEqual(order_item.commission_amount, Decimal('100.00'))
+        self.assertEqual(order_item.seller_earning, Decimal('1900.00'))
+
+    def test_cart_item_quantity_update_valid(self):
+        """Regression test for Bug 5: PATCH .../cart/items/{id}/ works (was a 404 - route didn't exist)"""
+        cart, _ = Cart.objects.get_or_create(student=self.student1)
+        item = CartItem.objects.create(cart=cart, product=self.product, quantity=1)
+
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.patch(f'/api/marketplace/student/cart/items/{item.id}/', {'quantity': 3}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 3)
+
+    def test_cart_item_quantity_update_exceeds_stock(self):
+        cart, _ = Cart.objects.get_or_create(student=self.student1)
+        item = CartItem.objects.create(cart=cart, product=self.product, quantity=1)  # product.stock == 5
+
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.patch(f'/api/marketplace/student/cart/items/{item.id}/', {'quantity': 99}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 1)  # unchanged
+
+    def test_cart_item_quantity_update_invalid_value(self):
+        cart, _ = Cart.objects.get_or_create(student=self.student1)
+        item = CartItem.objects.create(cart=cart, product=self.product, quantity=1)
+
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.patch(f'/api/marketplace/student/cart/items/{item.id}/', {'quantity': 0}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cart_item_update_blocked_for_other_student(self):
+        """IDOR check: Student B cannot update Student A's cart item."""
+        cart, _ = Cart.objects.get_or_create(student=self.student1)
+        item = CartItem.objects.create(cart=cart, product=self.product, quantity=1)
+
+        self.client.force_authenticate(user=self.student2)
+        resp = self.client.patch(f'/api/marketplace/student/cart/items/{item.id}/', {'quantity': 2}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 1)  # unchanged
+
+    def test_cart_item_delete(self):
+        cart, _ = Cart.objects.get_or_create(student=self.student1)
+        item = CartItem.objects.create(cart=cart, product=self.product, quantity=1)
+
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.delete(f'/api/marketplace/student/cart/items/{item.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(CartItem.objects.filter(id=item.id).exists())
+
+    def test_admin_update_item_fulfillment_status(self):
+        """Regression test for Bug 6: admin per-item shipment status endpoint (was missing entirely)"""
+        admin = User.objects.create_user(username='mp_admin', password='pw', role='admin', is_staff=True)
+        item = OrderItem.objects.create(order=self.order, product=self.product, quantity=1, price=Decimal('1000.00'))
+
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            f'/api/marketplace/admin/orders/{self.order.id}/update_item_status/',
+            {'item_id': item.id, 'fulfillment_status': 'SHIPPED'}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        item.refresh_from_db()
+        self.assertEqual(item.fulfillment_status, 'SHIPPED')
+
+    def test_admin_update_item_payout_status(self):
+        admin = User.objects.create_user(username='mp_admin2', password='pw', role='admin', is_staff=True)
+        item = OrderItem.objects.create(order=self.order, product=self.product, quantity=1, price=Decimal('1000.00'))
+
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            f'/api/marketplace/admin/orders/{self.order.id}/update_item_status/',
+            {'item_id': item.id, 'payout_status': 'ELIGIBLE'}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        item.refresh_from_db()
+        self.assertEqual(item.payout_status, 'ELIGIBLE')
+
+    def test_non_admin_cannot_update_item_status(self):
+        item = OrderItem.objects.create(order=self.order, product=self.product, quantity=1, price=Decimal('1000.00'))
+
+        self.client.force_authenticate(user=self.student1)
+        resp = self.client.post(
+            f'/api/marketplace/admin/orders/{self.order.id}/update_item_status/',
+            {'item_id': item.id, 'fulfillment_status': 'SHIPPED'}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        item.refresh_from_db()
+        self.assertEqual(item.fulfillment_status, 'PENDING')
+
+    def test_update_item_status_rejects_invalid_value(self):
+        admin = User.objects.create_user(username='mp_admin3', password='pw', role='admin', is_staff=True)
+        item = OrderItem.objects.create(order=self.order, product=self.product, quantity=1, price=Decimal('1000.00'))
+
+        self.client.force_authenticate(user=admin)
+        resp = self.client.post(
+            f'/api/marketplace/admin/orders/{self.order.id}/update_item_status/',
+            {'item_id': item.id, 'fulfillment_status': 'NOT_A_REAL_STATUS'}, format='json',
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)

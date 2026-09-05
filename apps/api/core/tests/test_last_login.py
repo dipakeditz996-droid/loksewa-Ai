@@ -1,8 +1,9 @@
 """User.last_login was never written anywhere in this JWT-based app (no
 Django session login, so the built-in login signal never fires), which
 silently broke any "active user" reporting built on it. Covers the fix:
-UPDATE_LAST_LOGIN on the standard token endpoint, plus an explicit
-update_last_login() call in the two views that mint tokens manually."""
+UPDATE_LAST_LOGIN on the standard token endpoint (used by every role,
+including admin/super-admin), plus an explicit update_last_login() call
+in SocialLoginView, which mints tokens manually."""
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -27,9 +28,9 @@ class LastLoginTests(APITestCase):
         self.student.refresh_from_db()
         self.assertIsNotNone(self.student.last_login)
 
-    def test_admin_login_updates_last_login(self):
+    def test_admin_role_login_updates_last_login(self):
         self.assertIsNone(self.admin.last_login)
-        response = self.client.post('/api/auth/admin-login/', {
+        response = self.client.post('/api/token/', {
             'username': 'admin1', 'password': 'pass123',
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)

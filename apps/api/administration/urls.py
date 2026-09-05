@@ -12,6 +12,7 @@ from .views import (
     AdminStudentsAnalyticsView,
     AdminUsersView,
     AdminUserDetailView,
+    AdminUserAccessView,
     AdminAdministratorsView,
     AdminRolesView,
     AdminPermissionsView,
@@ -81,6 +82,7 @@ from .material_taxonomy_views import (
 
 from exams.schedule_views import AdminExamScheduleViewSet
 from core.testimonial_views import AdminTestimonialViewSet
+from core.website_page_views import AdminWebsitePageViewSet
 
 router = DefaultRouter()
 router.register(r'questions', AdminQuestionViewSet, basename='admin-questions')
@@ -90,6 +92,7 @@ router.register(r'collections', QuestionCollectionViewSet, basename='admin-colle
 router.register(r'exams', ExaminationViewSet, basename='admin-examination')
 router.register(r'schedules', AdminExamScheduleViewSet, basename='admin-exam-schedules')
 router.register(r'testimonials', AdminTestimonialViewSet, basename='admin-testimonials')
+router.register(r'website-pages', AdminWebsitePageViewSet, basename='admin-website-pages')
 router.register(r'study-plan-templates', AdminStudyPlanTemplateViewSet, basename='admin-study-plan-templates')
 router.register(r'material-categories', AdminMaterialCategoryViewSet, basename='admin-material-categories')
 router.register(r'material-collections', AdminMaterialCollectionViewSet, basename='admin-material-collections')
@@ -110,6 +113,7 @@ urlpatterns = [
     path('analytics/students/', AdminStudentsAnalyticsView.as_view(), name='admin-analytics-students'),
     path('users/', AdminUsersView.as_view(), name='admin-users'),
     path('users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
+    path('users/<int:pk>/access/', AdminUserAccessView.as_view(), name='admin-user-access'),
     path('users/pending-verifications/', AdminPendingVerificationsView.as_view(), name='admin-users-pending-verifications'),
     path('users/<int:pk>/resend-otp/', AdminResendRegistrationOTPView.as_view(), name='admin-user-resend-otp'),
     path('users/<int:pk>/generate-recovery-code/', AdminGenerateRecoveryCodeView.as_view(), name='admin-user-generate-recovery-code'),

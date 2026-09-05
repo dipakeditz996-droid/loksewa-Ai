@@ -7,6 +7,7 @@ from .serializers import (
     QuestionFullSerializer, SecureQuestionSerializer, PracticeSessionSerializer, UserTopicProgressSerializer
 )
 from .selection_service import QuestionSelectionService
+from subscriptions.permissions import HasActiveSubscription
 
 # Minimum answered questions in a topic before its accuracy counts as a
 # "weak topic" signal — avoids flagging a topic off one unlucky guess.
@@ -153,6 +154,7 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
 
 class PracticeSessionViewSet(viewsets.ModelViewSet):
     serializer_class = PracticeSessionSerializer
+    permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
 
     def get_queryset(self):
         return PracticeSession.objects.filter(user=self.request.user)
@@ -505,11 +507,10 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         if enrollment and enrollment.course and enrollment.course.exam:
             enrolled_exam_id = enrollment.course.exam_id
 
-        approved_qs = QuestionSelectionService().get_base_queryset()
-        if enrolled_exam_id:
-            approved_qs = approved_qs.filter(
-                topic__chapter__subject__paper__exam_id=enrolled_exam_id
-            )
+        base_qs = QuestionSelectionService().get_base_queryset()
+        approved_qs = QuestionSelectionService().apply_filters(
+            base_qs, exam_id=enrolled_exam_id
+        )
 
         # Exclude questions recently seen (in last 7 days) to maintain freshness
         from django.db.models import Q
@@ -538,12 +539,13 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
 
         weak_questions = []
         if weak_topic_ids:
-            wq = list(
-                approved_qs.filter(topic_id__in=weak_topic_ids)
-                .exclude(id__in=recently_seen_ids)
-                .order_by('?')[:DAILY_SIZE]
+            res1 = QuestionSelectionService().select(
+                exam_id=enrolled_exam_id,
+                topic_ids=weak_topic_ids,
+                exclude_ids=list(recently_seen_ids),
+                count=DAILY_SIZE
             )
-            weak_questions = wq
+            weak_questions = res1['questions']
 
         # ── Bucket 2: Unseen questions ─────────────────────────────────────
         ever_seen_ids = set(
@@ -554,27 +556,26 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         unseen_questions = []
         if len(weak_questions) < DAILY_SIZE:
             need = DAILY_SIZE - len(weak_questions)
-            already_picked = {q.id for q in weak_questions}
-            uq = list(
-                approved_qs
-                .exclude(id__in=ever_seen_ids)
-                .exclude(id__in=already_picked)
-                .order_by('?')[:need]
+            already_picked = [q.id for q in weak_questions]
+            res2 = QuestionSelectionService().select(
+                exam_id=enrolled_exam_id,
+                exclude_ids=list(ever_seen_ids) + already_picked,
+                count=need
             )
-            unseen_questions = uq
+            unseen_questions = res2['questions']
 
         # ── Bucket 3: Random fallback ──────────────────────────────────────
         fallback_questions = []
         total_so_far = len(weak_questions) + len(unseen_questions)
         if total_so_far < DAILY_SIZE:
             need = DAILY_SIZE - total_so_far
-            already_picked = {q.id for q in weak_questions + unseen_questions}
-            fq = list(
-                approved_qs
-                .exclude(id__in=already_picked)
-                .order_by('?')[:need]
+            already_picked = [q.id for q in weak_questions + unseen_questions]
+            res3 = QuestionSelectionService().select(
+                exam_id=enrolled_exam_id,
+                exclude_ids=already_picked,
+                count=need
             )
-            fallback_questions = fq
+            fallback_questions = res3['questions']
 
         questions = weak_questions + unseen_questions + fallback_questions
         random.shuffle(questions)

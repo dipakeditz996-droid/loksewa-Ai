@@ -41,6 +41,8 @@ import {
   Trophy,
   Quote,
   ShieldCheck,
+  Globe,
+  Package,
 } from "lucide-react";
 
 // ===== Sidebar Nav Config =====
@@ -101,10 +103,12 @@ const SIDEBAR_NAV: NavSection[] = [
       { title: "Notifications", href: "/admin-dashboard/notifications", icon: Bell },
       { title: "Community", href: "/admin-dashboard/community", icon: Users as any },
       { title: "Testimonials", href: "/admin-dashboard/testimonials", icon: Quote },
+      { title: "Website Content", href: "/admin-dashboard/website-content", icon: Globe },
       { title: "Help & Support", href: "/admin-dashboard/support", icon: LifeBuoy },
       { title: "AI Tutor", href: "/admin-dashboard/ai-tutor", icon: Brain },
       { title: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },
       { title: "Trust & Safety", href: "/admin-dashboard/marketplace/trust", icon: ShieldCheck },
+      { title: "Packages", href: "/admin-dashboard/packages", icon: Package },
       { title: "Evaluations", href: "/admin-dashboard/evaluations", icon: ClipboardCheck },
       { title: "Games", href: "/admin-dashboard/games", icon: Gamepad2 },
     ],
@@ -276,7 +280,7 @@ function AdminHeader({
   const { logout } = useAuth();
 
   const handleAdminLogout = () => {
-    logout("/admin-login");
+    logout("/login");
   };
 
   const initials = user.name
@@ -364,9 +368,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   if (!user) {
-    // Not authenticated — redirect to admin login
+    // Not authenticated — redirect to the unified login
     if (typeof window !== "undefined") {
-      window.location.href = "/admin-login";
+      window.location.href = "/login";
     }
     return (
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">

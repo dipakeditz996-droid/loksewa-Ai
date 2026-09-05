@@ -38,7 +38,6 @@ class AuthAPITests(TestCase):
 
         self.login_url = reverse('token_obtain_pair')
         self.me_url = reverse('auth_me')
-        self.admin_login_url = reverse('auth_admin_login')
         self.logout_url = reverse('auth_logout')
 
     def test_login_valid_username_password(self):

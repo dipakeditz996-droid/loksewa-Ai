@@ -6,6 +6,7 @@ from rest_framework.exceptions import PermissionDenied
 from .models import Conversation, Message, TutorUsage
 from .serializers import ConversationSerializer, ConversationDetailSerializer, MessageSerializer
 from .services import AITutorService
+from subscriptions.permissions import HasActiveSubscription
 import datetime
 
 
@@ -23,8 +24,13 @@ class ConversationListView(generics.ListCreateAPIView):
         return Conversation.objects.filter(student=self.request.user)
 
     def perform_create(self, serializer):
-        if not _get_ai_tutor_settings().enable_ai_tutor:
+        settings = _get_ai_tutor_settings()
+        if not settings.enable_ai_tutor:
             raise PermissionDenied("AI Tutor is currently disabled by the administrator.")
+        if settings.enforce_subscription_access and self.request.user.role not in ('teacher', 'admin', 'super-admin'):
+            from subscriptions.access import has_active_subscription
+            if not has_active_subscription(self.request.user):
+                raise PermissionDenied(HasActiveSubscription.message)
         serializer.save(student=self.request.user)
 
 
@@ -49,7 +55,7 @@ class MessageListView(generics.ListAPIView):
 
 
 class SendMessageView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def post(self, request, conversation_id):
         ai_tutor_settings = _get_ai_tutor_settings()

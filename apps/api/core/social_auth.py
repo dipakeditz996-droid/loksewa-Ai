@@ -87,6 +87,19 @@ class SocialAuthService:
 
     @staticmethod
     def get_or_create_social_user(provider, provider_data, additional_data=None):
+        """
+        Find or create a User for the given social provider identity.
+
+        Returns (user, is_new_user) where is_new_user is True only when
+        this call created a brand-new User row (first-ever login).
+
+        Key guarantees:
+        - Existing SocialAccount → return the linked user immediately (False).
+        - Email match to existing user → link SocialAccount, return user (False).
+        - No match → create new User + SocialAccount (True).
+        - Google-authenticated email is always marked verified on StudentProfile.
+        - ADMIN_GRANTED access_origin is never overwritten.
+        """
         provider_account_id = provider_data['provider_account_id']
         email = provider_data['email']
         first_name = provider_data.get('first_name', '')
@@ -99,19 +112,23 @@ class SocialAuthService:
                 first_name = apple_name.get('firstName')
             if apple_name.get('lastName'):
                 last_name = apple_name.get('lastName')
-        
+
+        # ── 1. Existing SocialAccount (returning user) ─────────────────────
         social_account = SocialAccount.objects.filter(
-            provider=provider, 
+            provider=provider,
             provider_account_id=provider_account_id
         ).first()
-        
         if social_account:
-            return social_account.user
-            
+            return social_account.user, False
+
+        # ── 2. Existing User matched by email ──────────────────────────────
         user = None
         if email:
             user = User.objects.filter(email=email).first()
-            
+
+        is_new_user = user is None
+
+        # ── 3. Brand-new user ──────────────────────────────────────────────
         if not user:
             username = email.split('@')[0] if email else f"{provider}_{provider_account_id[:10]}"
             base_username = username
@@ -119,22 +136,42 @@ class SocialAuthService:
             while User.objects.filter(username=username).exists():
                 username = f"{base_username}{counter}"
                 counter += 1
-                
+
             user = User.objects.create(
                 username=username,
                 email=email or "",
                 first_name=first_name,
                 last_name=last_name,
-                role='student' # Default role for social sign-ups
+                role='student',  # Default role for social sign-ups
             )
             user.set_password(get_random_string(32))
             user.save()
-            
+
+        # ── 4. Link the social account ─────────────────────────────────────
         SocialAccount.objects.create(
             user=user,
             provider=provider,
             provider_account_id=provider_account_id,
-            email=email
+            email=email,
         )
-        
-        return user
+
+        # ── 5. Stamp StudentProfile (verification + access_origin) ─────────
+        # get_or_create is safe for both new and pre-existing users.
+        if user.role == 'student':
+            from support.models import StudentProfile
+            from django.utils import timezone as tz
+            profile, _ = StudentProfile.objects.get_or_create(user=user)
+
+            changed = False
+            # Google/Facebook/Apple already verified the email — no OTP needed.
+            if not profile.is_verified:
+                profile.is_verified = True
+                profile.verified_at = tz.now()
+                changed = True
+
+            # Never overwrite ADMIN_GRANTED. Default is SELF_REGISTERED which
+            # is correct for any organic social sign-up.
+            if changed:
+                profile.save()
+
+        return user, is_new_user

@@ -13,10 +13,11 @@ from courses.models import Enrollment
 from exams.models import UserTopicProgress
 from gamification.models import GamificationProfile, Motivation
 from .services import generate_study_plan_tasks
+from subscriptions.permissions import HasActiveSubscription
 
 class StudyPlanTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = StudyPlanTemplateSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
     
     def get_queryset(self):
         return StudyPlanTemplate.objects.filter(is_active=True)
@@ -28,7 +29,7 @@ def _study_plans_enabled():
 
 class StudyPlanViewSet(viewsets.ModelViewSet):
     serializer_class = StudyPlanSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
 
     def get_queryset(self):
         # A student should only access their own plan
@@ -118,7 +119,7 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
 
 class StudyTaskViewSet(viewsets.ModelViewSet):
     serializer_class = StudyTaskSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
 
     def get_queryset(self):
         return StudyTask.objects.filter(study_plan__student=self.request.user)
@@ -184,7 +185,7 @@ class StudyTaskViewSet(viewsets.ModelViewSet):
 
 
 class DashboardView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
         user = request.user

@@ -526,6 +526,9 @@ class AdminUsersView(APIView):
                     permanent_district=permanent_district, permanent_local_level=permanent_local_level,
                     target_category=exam_category, target_position=exam_position,
                     is_verified=True, verified_at=timezone.now(),
+                    access_origin='ADMIN_GRANTED',
+                    admin_granted_by=request.user,
+                    admin_granted_at=timezone.now(),
                 )
                 NotificationPreference.objects.create(user=user)
 
@@ -599,6 +602,11 @@ class AdminUserDetailView(APIView):
                     "targetPosition": profile.target_position.name if profile.target_position else None,
                     "permanentDistrict": profile.permanent_district,
                     "permanentLocalLevel": profile.permanent_local_level,
+                    "accessOrigin": profile.access_origin,
+                    "adminAccessExpiry": profile.admin_access_expiry.isoformat() if profile.admin_access_expiry else None,
+                    "adminAccessNote": profile.admin_access_note,
+                    "adminGrantedBy": profile.admin_granted_by.username if profile.admin_granted_by else None,
+                    "adminGrantedAt": profile.admin_granted_at.isoformat() if profile.admin_granted_at else None,
                     "isVerified": profile.is_verified,
                     "preferredStudyTime": profile.preferred_study_time,
                     "dailyStudyGoalMinutes": profile.daily_study_goal_minutes,
@@ -732,6 +740,66 @@ class AdminUserDetailView(APIView):
         )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminUserAccessView(APIView):
+    """Grant or revoke admin-granted access for a student."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, pk):
+        from support.models import StudentProfile
+        from django.utils import timezone
+        try:
+            user = User.objects.get(pk=pk, role='student')
+            profile = user.student_profile
+        except (User.DoesNotExist, StudentProfile.DoesNotExist):
+            return Response({'error': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+            
+        expiry = request.data.get('expiry')
+        note = request.data.get('note', '')
+
+        parsed_expiry = None
+        if expiry:
+            try:
+                parsed_expiry = timezone.datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+            except ValueError:
+                return Response({'error': 'Invalid expiry date format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.access_origin = 'ADMIN_GRANTED'
+        profile.admin_access_expiry = parsed_expiry
+        profile.admin_access_note = note
+        profile.admin_granted_by = request.user
+        profile.admin_granted_at = timezone.now()
+        profile.save(update_fields=['access_origin', 'admin_access_expiry', 'admin_access_note', 'admin_granted_by', 'admin_granted_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            actor=request.user, action='ADMIN_GRANTED_ACCESS',
+            entity_type='User', entity_id=str(user.id),
+            details={'expiry': expiry, 'note': note}
+        )
+        return Response({'message': 'Access granted successfully.'})
+
+    def delete(self, request, pk):
+        from support.models import StudentProfile
+        try:
+            user = User.objects.get(pk=pk, role='student')
+            profile = user.student_profile
+        except (User.DoesNotExist, StudentProfile.DoesNotExist):
+            return Response({'error': 'Student not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        profile.access_origin = 'SELF_REGISTERED'
+        profile.admin_access_expiry = None
+        profile.admin_access_note = ''
+        profile.admin_granted_by = None
+        profile.admin_granted_at = None
+        profile.save(update_fields=['access_origin', 'admin_access_expiry', 'admin_access_note', 'admin_granted_by', 'admin_granted_at', 'updated_at'])
+
+        AuditLog.objects.create(
+            actor=request.user, action='ADMIN_REVOKED_ACCESS',
+            entity_type='User', entity_id=str(user.id),
+            details={}
+        )
+        return Response({'message': 'Access revoked successfully.'})
 
 
 class AdminRolesView(APIView):
@@ -3668,6 +3736,7 @@ class AdminSettingsView(APIView):
                         'enableMarketplace': settings.enable_marketplace,
                         'enableGamification': settings.enable_gamification,
                         'enableStudyPlans': settings.enable_study_plans,
+                        'enforceSubscriptionAccess': settings.enforce_subscription_access,
                     },
                     'aiTutor': {
                         'dailyMessageLimit': settings.ai_tutor_daily_message_limit,
@@ -3731,6 +3800,7 @@ class AdminSettingsView(APIView):
                 settings.enable_marketplace = features.get('enableMarketplace', settings.enable_marketplace)
                 settings.enable_gamification = features.get('enableGamification', settings.enable_gamification)
                 settings.enable_study_plans = features.get('enableStudyPlans', settings.enable_study_plans)
+                settings.enforce_subscription_access = features.get('enforceSubscriptionAccess', settings.enforce_subscription_access)
 
             # AI Tutor configuration
             if 'aiTutor' in request.data:

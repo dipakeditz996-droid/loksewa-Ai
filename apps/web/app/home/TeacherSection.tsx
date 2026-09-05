@@ -57,7 +57,7 @@ export function TeacherSection() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/teacher/login">
+                <Link href="/login">
                   <Button className="w-full sm:w-auto bg-[#D4A72C] hover:bg-[#C29322] text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] border-none flex items-center justify-center gap-2 group transition-all hover:-translate-y-0.5 shadow-[0_8px_25px_rgba(212,167,44,0.3)]">
                     Go to Teacher Portal
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

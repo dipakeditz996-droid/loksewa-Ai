@@ -6,7 +6,7 @@ import {
   BookOpen, Target, Clock, Calendar, CheckCircle2, Circle, 
   ChevronRight, Sparkles, MessageSquare, FileText, ArrowRight, TrendingUp,
   ShoppingBag, HelpCircle, Flame, Activity, Gift, Copy, Share2, Users, Coins,
-  GraduationCap, AlertCircle, GripVertical
+  GraduationCap, AlertCircle, GripVertical, Lock
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -208,6 +208,111 @@ export default function StudentDashboardPage() {
         <h2 className="text-2xl font-bold mb-2">Dashboard Unavailable</h2>
         <p className="text-muted-foreground mb-6">We couldn't load your dashboard data at this moment.</p>
         <Button onClick={loadDashboard}>Retry</Button>
+      </div>
+    );
+  }
+
+  // Server-enforced package lock (subscriptions.permissions.HasActiveSubscription
+  // is the real gate on protected endpoints - this is just the matching UI
+  // state, driven by the same has_active_subscription check via
+  // StudentDashboardView's `package` block). Only shows once an admin has
+  // turned enforcement on; otherwise the full dashboard below renders as before.
+  if (data.package?.enforcementEnabled && !data.package?.hasActivePackage) {
+    const isPending = data.package.latestPayment?.status === "PENDING";
+    const isRejected = data.package.latestPayment?.status === "REJECTED";
+    const isExpired = data.package.status === "EXPIRED" || (data.package.status === "ACTIVE" && data.package.remainingDays === 0);
+
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-6 bg-muted/30">
+        <div className="max-w-md w-full bg-card border border-border rounded-[24px] shadow-sm p-10 relative overflow-hidden">
+          {/* Decorative background elements */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#D4A72C]/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="relative z-10 flex flex-col items-center text-center">
+            {isPending ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-yellow-50 dark:bg-yellow-900/20 flex items-center justify-center mb-6 shadow-sm border border-yellow-100 dark:border-yellow-900/30">
+                  <Clock className="w-10 h-10 text-yellow-500 animate-pulse" />
+                </div>
+                <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-3">Verification Pending</h2>
+                <p className="text-muted-foreground mb-6">
+                  We are currently verifying your payment for the <span className="font-semibold text-foreground">{data.package.latestPayment?.planName}</span> package. This usually takes less than 30 minutes during working hours.
+                </p>
+                <div className="bg-muted w-full p-4 rounded-xl border border-border text-sm mb-6 text-left">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-muted-foreground">Amount:</span>
+                    <span className="font-medium text-foreground">Rs. {data.package.latestPayment?.amount}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Submitted:</span>
+                    <span className="font-medium text-foreground">
+                      {data.package.latestPayment?.submittedAt 
+                        ? new Date(data.package.latestPayment.submittedAt).toLocaleDateString() 
+                        : 'Recently'}
+                    </span>
+                  </div>
+                </div>
+                <Button variant="outline" className="w-full h-12 rounded-xl" onClick={() => window.location.reload()}>
+                  Refresh Status
+                </Button>
+              </>
+            ) : isRejected ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-6 shadow-sm border border-red-100 dark:border-red-900/30">
+                  <AlertCircle className="w-10 h-10 text-red-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-3">Payment Rejected</h2>
+                <p className="text-muted-foreground mb-4">
+                  Unfortunately, we couldn't verify your payment for the <span className="font-semibold text-foreground">{data.package.latestPayment?.planName}</span> package.
+                </p>
+                {data.package.latestPayment?.rejectionReason && (
+                  <div className="bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 p-4 rounded-xl border border-red-100 dark:border-red-900/50 text-sm mb-6 w-full text-left">
+                    <span className="font-semibold block mb-1">Reason:</span>
+                    {data.package.latestPayment.rejectionReason}
+                  </div>
+                )}
+                <Button
+                  onClick={() => (window.location.href = "/student/plans")}
+                  className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold py-6 rounded-xl"
+                >
+                  Submit Payment Again
+                </Button>
+              </>
+            ) : isExpired ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center mb-6 shadow-sm border border-orange-100 dark:border-orange-900/30">
+                  <Clock className="w-10 h-10 text-orange-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-3">Package Expired</h2>
+                <p className="text-muted-foreground mb-8">
+                  Your <span className="font-semibold text-foreground">{data.package.planName}</span> package has expired. Renew your package to restore access to all premium features.
+                </p>
+                <Button
+                  onClick={() => (window.location.href = "/student/plans")}
+                  className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold py-6 rounded-xl"
+                >
+                  Renew Package
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 rounded-full bg-[#D4A72C]/10 flex items-center justify-center mb-6 shadow-sm border border-[#D4A72C]/20">
+                  <Lock className="w-10 h-10 text-[#D4A72C]" />
+                </div>
+                <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-3">Welcome to LoksewaAI</h2>
+                <p className="text-muted-foreground mb-8">
+                  Your account is ready. Choose a premium package to unlock your full learning experience, including AI tutoring, mock exams, and analytics.
+                </p>
+                <Button
+                  onClick={() => (window.location.href = "/student/plans")}
+                  className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold py-6 rounded-xl"
+                >
+                  Browse Premium Packages
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     );
   }

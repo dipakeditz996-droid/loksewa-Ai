@@ -214,6 +214,33 @@ class Testimonial(models.Model):
         return f"{self.name} ({'published' if self.is_published else 'draft'})"
 
 
+class WebsitePage(models.Model):
+    """Admin-managed content for a public/legal page (Contact, Privacy, Terms,
+    Refund today; About/FAQ/etc could reuse this same model later without a
+    new migration). The single source of truth for anything shown on a public
+    informational route - editing here never requires a frontend redeploy.
+
+    Only ever exposed publicly when status='published'; a draft is visible to
+    admins only (see core.public_views.PublicWebsitePageView)."""
+    STATUS_CHOICES = (
+        ('draft', 'Draft'),
+        ('published', 'Published'),
+    )
+    slug = models.SlugField(max_length=50, unique=True)
+    title = models.CharField(max_length=255)
+    content = models.TextField(blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='website_pages_updated')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['slug']
+
+    def __str__(self):
+        return f"{self.title} ({self.slug}, {self.status})"
+
+
 class AdminNotification(models.Model):
     """System-wide announcements/notifications created by admins."""
     TYPE_CHOICES = (
@@ -300,6 +327,13 @@ class AdminSettings(models.Model):
     enable_marketplace = models.BooleanField(default=True)
     enable_gamification = models.BooleanField(default=True)
     enable_study_plans = models.BooleanField(default=True)
+
+    # Package/subscription access enforcement - OFF by default so existing
+    # accounts (none of which have a Subscription row yet) are never locked
+    # out the moment this ships. Admin turns this on once packages are
+    # priced and ready; HasActiveSubscription (subscriptions/permissions.py)
+    # passes every request through unchanged while this is False.
+    enforce_subscription_access = models.BooleanField(default=False)
 
     # AI Tutor configuration
     ai_tutor_daily_message_limit = models.PositiveIntegerField(default=20)

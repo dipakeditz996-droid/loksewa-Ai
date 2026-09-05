@@ -64,6 +64,22 @@ export interface DashboardSubjectPerformance {
   progress: number;
 }
 
+export interface DashboardPackageStatus {
+  enforcementEnabled: boolean;
+  hasActivePackage: boolean;
+  planName: string | null;
+  status: string | null;
+  expiryDate: string | null;
+  remainingDays: number | null;
+  latestPayment: {
+    status: "PENDING" | "REJECTED" | "APPROVED";
+    rejectionReason: string | null;
+    planName: string;
+    amount: string;
+    submittedAt: string | null;
+  } | null;
+}
+
 export interface DashboardData {
   profile: DashboardProfile;
   stats: DashboardStats;
@@ -73,6 +89,7 @@ export interface DashboardData {
   purchases: DashboardPurchase[];
   supportTickets: DashboardSupportTicket[];
   subjectPerformance: DashboardSubjectPerformance[];
+  package: DashboardPackageStatus;
 }
 
 export const QUICK_ACTIONS = [

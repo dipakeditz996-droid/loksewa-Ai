@@ -31,7 +31,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ planId: str
     try {
       const [planRes, methodsRes] = await Promise.all([
         apiClient<any>(`/subscriptions/plans/${unwrappedParams.planId}/`),
-        apiClient<any[]>(`/marketplace/payment-methods/`)
+        apiClient<any[]>(`/marketplace/student/payment-methods/`)
       ]);
       
       setPlan(planRes);
@@ -76,7 +76,8 @@ export default function CheckoutPage({ params }: { params: Promise<{ planId: str
         body: formData,
       });
       
-      router.push("/student/purchases?success=true");
+      // Redirect to dashboard where they will see the PAYMENT_PENDING locked state
+      router.push("/student");
     } catch (error) {
       console.error(error);
       alert("An error occurred.");
@@ -94,37 +95,47 @@ export default function CheckoutPage({ params }: { params: Promise<{ planId: str
   }
 
   return (
-    <div className="p-4 lg:p-8 max-w-5xl mx-auto">
-      <Button 
-        variant="ghost" 
-        onClick={() => router.back()}
-        className="mb-6 -ml-4 text-muted-foreground hover:text-primary dark:text-foreground"
-      >
-        <ArrowLeft className="w-4 h-4 mr-2" /> Back to Plans
-      </Button>
+    <div className="min-h-screen bg-muted/20 pb-20">
+      <div className="bg-primary text-primary-foreground pt-12 pb-24 px-4">
+        <div className="max-w-5xl mx-auto">
+          <Button 
+            variant="ghost" 
+            onClick={() => router.back()}
+            className="mb-6 -ml-4 text-primary-foreground/70 hover:text-white hover:bg-white/10"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Plans
+          </Button>
+          <h1 className="text-3xl md:text-4xl font-bold mb-2 tracking-tight">Complete Your Purchase</h1>
+          <p className="text-primary-foreground/80 text-lg">Select a payment method and submit your transaction details below.</p>
+        </div>
+      </div>
       
-      <div className="grid lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 space-y-6">
-          <div className="bg-card p-6 rounded-[24px] border border-border shadow-sm">
-            <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Select Payment Method</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-              {methods.map(method => (
-                <div 
-                  key={method.id}
-                  onClick={() => setSelectedMethod(method)}
-                  className={`border-2 rounded-[16px] p-4 cursor-pointer transition-all ${
-                    selectedMethod?.id === method.id 
-                      ? 'border-[#D4A72C] bg-[#D4A72C]/5 ring-4 ring-[#D4A72C]/10' 
-                      : 'border-border hover:border-border bg-muted'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-primary dark:text-foreground">{method.display_name}</span>
-                    {selectedMethod?.id === method.id && <CheckCircle2 className="w-5 h-5 text-[#D4A72C]" />}
+      <div className="p-4 lg:p-8 max-w-5xl mx-auto -mt-16">
+        <div className="grid lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 space-y-6">
+            <div className="bg-card p-6 md:p-8 rounded-[24px] border border-border shadow-sm">
+              <h2 className="text-xl font-bold text-primary dark:text-foreground mb-6 flex items-center gap-2">
+                <span className="bg-[#D4A72C] text-[#0A1118] w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">1</span> 
+                Select Payment Method
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                {methods.map(method => (
+                  <div 
+                    key={method.id}
+                    onClick={() => setSelectedMethod(method)}
+                    className={`border-2 rounded-[16px] p-5 cursor-pointer transition-all ${
+                      selectedMethod?.id === method.id 
+                        ? 'border-[#D4A72C] bg-[#D4A72C]/5 ring-4 ring-[#D4A72C]/10 shadow-sm transform scale-[1.02]' 
+                        : 'border-border hover:border-primary/20 bg-muted/50 hover:bg-muted'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-primary dark:text-foreground">{method.display_name}</span>
+                      {selectedMethod?.id === method.id && <CheckCircle2 className="w-5 h-5 text-[#D4A72C]" />}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
 
             {selectedMethod && (
               <div className="bg-muted rounded-[16px] border border-border p-6 flex flex-col md:flex-row gap-8 items-start">
@@ -169,12 +180,16 @@ export default function CheckoutPage({ params }: { params: Promise<{ planId: str
                 </div>
               </div>
             )}
-          </div>
+            </div>
 
-          <form onSubmit={handleSubmit} className="bg-card p-6 rounded-[24px] border border-border shadow-sm space-y-6">
-            <h2 className="text-xl font-bold text-primary dark:text-foreground">Submit Payment Details</h2>
-            
-            <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="bg-card p-6 md:p-8 rounded-[24px] border border-border shadow-sm space-y-6 relative overflow-hidden">
+              <div className="absolute right-0 top-0 w-32 h-32 bg-[#D4A72C]/5 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10"></div>
+              <h2 className="text-xl font-bold text-primary dark:text-foreground mb-2 flex items-center gap-2 relative z-10">
+                <span className="bg-[#D4A72C] text-[#0A1118] w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold">2</span>
+                Submit Payment Details
+              </h2>
+              
+              <div className="space-y-5 relative z-10">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">Transaction ID / Code *</label>
                 <Input 
@@ -233,17 +248,22 @@ export default function CheckoutPage({ params }: { params: Promise<{ planId: str
               className="w-full bg-primary text-primary-foreground hover:bg-primary text-primary-foreground/90 text-white py-6 rounded-[12px] text-lg font-semibold"
             >
               {isSubmitting ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Submitting...</> : "Submit Payment for Verification"}
-            </Button>
-          </form>
-        </div>
+              </Button>
+            </form>
+          </div>
 
-        <div className="lg:col-span-4">
-          <div className="bg-card rounded-[24px] border border-border shadow-sm overflow-hidden sticky top-8">
-            <div className="bg-primary text-primary-foreground p-6 text-white text-center space-y-2">
-              <span className="text-[#D4A72C] font-bold text-sm tracking-wider uppercase">{plan.badge !== 'NONE' ? plan.badge.replace('_', ' ') : 'PREMIUM PLAN'}</span>
-              <h2 className="text-2xl font-bold">{plan.name}</h2>
-              <p className="text-slate-300">{plan.duration} {plan.duration_unit}</p>
-            </div>
+          <div className="lg:col-span-4 mt-8 lg:mt-0">
+            <div className="bg-card rounded-[24px] border border-border shadow-sm overflow-hidden sticky top-8">
+              <div className="bg-gradient-to-br from-[#0B2545] to-[#163E6B] text-white p-8 text-center space-y-3 relative overflow-hidden">
+                <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
+                <div className="absolute -left-8 -bottom-8 w-24 h-24 bg-[#D4A72C]/20 rounded-full blur-xl pointer-events-none"></div>
+                
+                <span className="inline-block bg-[#D4A72C]/20 border border-[#D4A72C]/50 text-[#D4A72C] font-bold text-[10px] tracking-widest uppercase px-3 py-1 rounded-full relative z-10">
+                  {plan.badge !== 'NONE' ? plan.badge.replace('_', ' ') : 'PREMIUM PLAN'}
+                </span>
+                <h2 className="text-3xl font-bold tracking-tight relative z-10">{plan.name}</h2>
+                <p className="text-slate-300 font-medium relative z-10">{plan.duration} {plan.duration_unit}</p>
+              </div>
             
             <div className="p-6 space-y-6">
               <div className="space-y-3 pb-6 border-b border-border/50">
@@ -275,6 +295,7 @@ export default function CheckoutPage({ params }: { params: Promise<{ planId: str
                     Premium analytics & AI tools
                   </li>
                 </ul>
+                </div>
               </div>
             </div>
           </div>

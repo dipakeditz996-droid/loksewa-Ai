@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { useState, useEffect } from "react";
@@ -42,16 +41,26 @@ export default function StudentPlansPage() {
     }
   };
 
+  // Known feature-key vocabulary shared with apps/web/lib/access.ts and the
+  // backend (subscriptions.access.has_feature) - a plan can also include
+  // custom strings an admin typed in, which fall back to a title-cased label.
+  const FEATURE_LABELS: Record<string, string> = {
+    "*": "Full Platform Access",
+    ai_tutor: "AI Tutor Access",
+    premium_materials: "Premium Study Materials",
+    advanced_mock_exam: "Advanced Mock Exams",
+    analytics: "Advanced Performance Analytics",
+  };
+
   const getFeatureList = (plan: SubscriptionPlan) => {
-    // If we have actual features from DB, we could map them.
-    // For demo, we just use a default list based on plan name/price.
-    return [
-      { text: "Unlimited Mock Exams", included: true },
-      { text: "AI Tutor Access", included: parseFloat(plan.price) > 0 },
-      { text: "Premium Study Materials", included: parseFloat(plan.price) > 0 },
-      { text: "Advanced Performance Analytics", included: parseFloat(plan.price) > 499 },
-      { text: "Priority Support", included: parseFloat(plan.price) >= 999 },
-    ];
+    const features = Array.isArray(plan.features) ? plan.features : [];
+    if (features.length === 0) {
+      return [{ text: "Full platform access", included: true }];
+    }
+    return features.map((key) => ({
+      text: FEATURE_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      included: true,
+    }));
   };
 
   return (

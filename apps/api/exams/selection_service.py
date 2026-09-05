@@ -65,6 +65,9 @@ class QuestionSelectionService:
         subject_id: Optional[int] = None,
         chapter_id: Optional[int] = None,
         topic_id: Optional[int] = None,
+        category_id: Optional[int] = None,
+        topic_ids: Optional[list] = None,
+        difficulty: Optional[str] = None,
         question_type: Optional[str] = None,
         tags: Optional[str] = None,
         exclude_ids: Optional[list] = None,
@@ -83,6 +86,12 @@ class QuestionSelectionService:
             qs = qs.filter(topic__chapter_id=chapter_id)
         if topic_id:
             qs = qs.filter(topic_id=topic_id)
+        if category_id:
+            qs = qs.filter(topic__chapter__subject__paper__exam__category_id=category_id)
+        if topic_ids:
+            qs = qs.filter(topic_id__in=topic_ids)
+        if difficulty:
+            qs = qs.filter(difficulty=difficulty)
         if question_type:
             qs = qs.filter(question_type=question_type)
         if tags:
@@ -101,6 +110,9 @@ class QuestionSelectionService:
         subject_id=None,
         chapter_id=None,
         topic_id=None,
+        category_id=None,
+        topic_ids=None,
+        difficulty=None,
         question_type=None,
         tags=None,
         exclude_ids=None,
@@ -123,6 +135,9 @@ class QuestionSelectionService:
             subject_id=subject_id,
             chapter_id=chapter_id,
             topic_id=topic_id,
+            category_id=category_id,
+            topic_ids=topic_ids,
+            difficulty=difficulty,
             question_type=question_type,
             tags=tags,
             exclude_ids=exclude_ids,
@@ -144,6 +159,9 @@ class QuestionSelectionService:
         subject_id=None,
         chapter_id=None,
         topic_id=None,
+        category_id=None,
+        topic_ids=None,
+        difficulty=None,
         # Content filters
         question_type=None,
         tags=None,
@@ -195,6 +213,9 @@ class QuestionSelectionService:
             subject_id=subject_id,
             chapter_id=chapter_id,
             topic_id=topic_id,
+            category_id=category_id,
+            topic_ids=topic_ids,
+            difficulty=difficulty,
             question_type=question_type,
             tags=tags,
             exclude_ids=exclude_ids,

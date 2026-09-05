@@ -397,6 +397,47 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response(OrderSerializer(order).data)
 
+    @action(detail=True, methods=['post'])
+    def update_item_status(self, request, pk=None):
+        """Per-item companion to update_status above - the order-level status
+        is the buyer-facing summary (PENDING_PAYMENT..DELIVERED), while this
+        updates one line item's own fulfillment_status/payout_status
+        (matters for multi-seller orders, where each seller's item ships and
+        gets paid out independently of the others). Admin-only: the existing
+        architecture gives sellers no self-service way to mark their own
+        items shipped/delivered (SellerSalesViewSet is read-only) - payout
+        eligibility is downstream of fulfillment_status, so only a trusted
+        admin flips it, never the seller being paid."""
+        order = self.get_object()
+        item_id = request.data.get('item_id')
+        try:
+            item = order.items.get(id=item_id)
+        except OrderItem.DoesNotExist:
+            return Response({'detail': 'Item not found on this order.'}, status=status.HTTP_404_NOT_FOUND)
+
+        fulfillment_status = request.data.get('fulfillment_status')
+        payout_status = request.data.get('payout_status')
+        valid_fulfillment = [c[0] for c in OrderItem.FULFILLMENT_CHOICES]
+        valid_payout = [c[0] for c in OrderItem.PAYOUT_CHOICES]
+
+        update_fields = []
+        if fulfillment_status is not None:
+            if fulfillment_status not in valid_fulfillment:
+                return Response({'detail': 'Invalid fulfillment_status.'}, status=status.HTTP_400_BAD_REQUEST)
+            item.fulfillment_status = fulfillment_status
+            update_fields.append('fulfillment_status')
+        if payout_status is not None:
+            if payout_status not in valid_payout:
+                return Response({'detail': 'Invalid payout_status.'}, status=status.HTTP_400_BAD_REQUEST)
+            item.payout_status = payout_status
+            update_fields.append('payout_status')
+
+        if not update_fields:
+            return Response({'detail': 'Provide fulfillment_status and/or payout_status.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.save(update_fields=update_fields)
+        return Response(OrderSerializer(order).data)
+
 
 class AdminDeliveryFeeRuleViewSet(viewsets.ModelViewSet):
     queryset = DeliveryFeeRule.objects.all().order_by('-priority', '-created_at')
@@ -548,6 +589,8 @@ class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
             expected_amount = product.discount_price if product.discount_price is not None else product.price
             title = product.title
         else:
+            if order.student != self.request.user:
+                raise PermissionDenied("You do not have permission to submit payment for this order.")
             if order.status not in ['PENDING_PAYMENT', 'PAYMENT_REJECTED', 'PAYMENT_SUBMITTED']:
                 raise ValidationError({"detail": "Order is not in a payable state."})
             expected_amount = order.total_amount + order.delivery_fee
@@ -670,6 +713,57 @@ class CartViewSet(viewsets.ModelViewSet):
         return Response(CartSerializer(cart).data)
 
 
+class CartItemDetailView(APIView):
+    """PATCH /marketplace/student/cart/items/<id>/ - update one cart item's
+    quantity. add_item/remove_item (above) cover add-to-cart and delete; this
+    is the missing third piece the frontend (lib/api/marketplace.ts
+    updateCartItem) already targets for the +/- quantity controls on the
+    cart page, which previously 404'd because this route never existed.
+
+    Kept as a dedicated view rather than a CartViewSet @action because a
+    detail route needs the *item* id in the URL, not the cart id (get_object
+    on CartViewSet always resolves to the caller's own singleton cart)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_item(self, request, pk):
+        # Scoped to the caller's own cart - looking up another student's
+        # cart item returns 404, not their cart contents (IDOR-safe).
+        try:
+            return CartItem.objects.select_related('product', 'cart').get(pk=pk, cart__student=request.user)
+        except CartItem.DoesNotExist:
+            return None
+
+    def patch(self, request, pk):
+        item = self._get_item(request, pk)
+        if item is None:
+            return Response({'detail': 'Cart item not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            quantity = int(request.data.get('quantity'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'quantity must be a whole number.'}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity < 1:
+            return Response({'detail': 'quantity must be at least 1. Use remove_item to delete an item.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        product = item.product
+        if not product.is_published or product.listing_status != 'ACTIVE':
+            return Response({'detail': 'This product is no longer available.'}, status=status.HTTP_400_BAD_REQUEST)
+        if product.stock < quantity:
+            return Response({'detail': f'Only {product.stock} in stock.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        item.quantity = quantity
+        item.save(update_fields=['quantity', 'updated_at'])
+        return Response(CartSerializer(item.cart).data)
+
+    def delete(self, request, pk):
+        # REST-complete alternative to CartViewSet.remove_item's POST action;
+        # same ownership scoping and semantics (missing item is a no-op, not an error).
+        item = self._get_item(request, pk)
+        if item is not None:
+            item.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -787,12 +881,21 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status='PENDING_PAYMENT',
             )
 
+            commission_pct = MarketplaceSettings.get_settings().platform_commission_percentage
+
             for item in cart_items:
+                price = item.product.final_price
+                line_total = price * item.quantity
+                commission = (line_total * Decimal(str(commission_pct))) / Decimal('100.00')
+                seller_earning = line_total - commission
+
                 OrderItem.objects.create(
                     order=order,
                     product=item.product,
                     quantity=item.quantity,
-                    price=item.product.final_price,
+                    price=price,
+                    commission_amount=commission,
+                    seller_earning=seller_earning,
                 )
 
             OrderStatusHistory.objects.create(
@@ -823,7 +926,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 # ---------------------------------------------------------------------------
 
 # Fields that trigger re-review if changed on an ACTIVE listing
-_REreview_FIELDS = {
+_REVIEW_FIELDS = {
     'price', 'condition', 'description', 'title',
     'author', 'publisher', 'isbn', 'edition', 'condition_details',
 }

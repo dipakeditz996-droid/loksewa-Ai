@@ -16,7 +16,7 @@ from support.models import StudentProfile
 from exams.models import ExamCategory, Exam
 from courses.models import Course, CourseApplication, Enrollment
 from gamification.models import GamificationProfile
-from .models import AuditLog
+from administration.models import AuditLog
 
 CREATE_URL = '/api/admin/users/'
 PENDING_VERIFICATION_URL = '/api/admin/users/pending-verifications/'

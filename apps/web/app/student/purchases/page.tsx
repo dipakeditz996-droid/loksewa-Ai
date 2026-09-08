@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { apiClient } from "@/lib/api/client";
+import { dashboardApi } from "@/lib/api/dashboard";
+import { ShieldCheck } from "lucide-react";
 
 interface Subscription {
   id: number;
@@ -41,6 +43,7 @@ function StudentPurchasesContent() {
   
   const [activeSubscription, setActiveSubscription] = useState<Subscription | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [isAdminGranted, setIsAdminGranted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -50,15 +53,17 @@ function StudentPurchasesContent() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [subsRes, paymentsRes] = await Promise.all([
+      const [subsRes, paymentsRes, dashboard] = await Promise.all([
         apiClient<Subscription[]>("/subscriptions/my-subscriptions/"),
-        apiClient<Payment[]>("/subscriptions/payments/")
+        apiClient<Payment[]>("/subscriptions/payments/"),
+        dashboardApi.getStudentDashboard().catch(() => null)
       ]);
-      
+
       const active = subsRes.find((s: Subscription) => s.status === 'ACTIVE');
       if (active) setActiveSubscription(active);
-      
+
       setPayments(paymentsRes);
+      setIsAdminGranted(!!dashboard?.package?.isAdminGranted);
     } catch (error) {
       console.error(error);
     } finally {
@@ -142,12 +147,27 @@ function StudentPurchasesContent() {
               </div>
             </div>
           </div>
+        ) : isAdminGranted ? (
+          <div className="flex flex-col md:flex-row justify-between items-center bg-gradient-to-r from-emerald-700 to-emerald-900 text-white p-6 rounded-[20px] shadow-lg relative overflow-hidden">
+            <div className="relative z-10">
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-5 h-5" />
+                <span className="text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-emerald-400 text-emerald-950">
+                  Admin Granted
+                </span>
+              </div>
+              <h3 className="text-2xl font-bold">Full Access Enabled</h3>
+              <p className="text-emerald-100 mt-1">
+                Your access was granted directly by an administrator, so no package purchase is required.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="bg-muted border-2 border-dashed border-border rounded-[20px] p-8 text-center">
             <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-bold text-primary dark:text-foreground">No Active Subscription</h3>
             <p className="text-muted-foreground mt-2 mb-6">Unlock premium features, AI tutoring, and advanced mock exams.</p>
-            <Button 
+            <Button
               onClick={() => window.location.href = '/student/plans'}
               className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold"
             >

@@ -25,6 +25,7 @@ interface Payment {
   note: string;
   status: string;
   submitted_at: string;
+  selected_courses?: { id: number; title: string }[];
 }
 
 interface CourseApplication {
@@ -303,8 +304,16 @@ export default function AdminApplicationsPage() {
                       <tr key={`payment-${payment.id}`} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-medium text-[#0B2545]">{payment.student_name || "Unknown Student"}</td>
                         <td className="px-6 py-4 text-slate-600">
-                          <p className="font-medium">{payment.plan_details?.name}</p>
-                          <p className="text-xs text-slate-400">{payment.plan_details?.duration} {payment.plan_details?.duration_unit}</p>
+                          <p className="font-medium text-[#D4A72C]">{payment.plan_details?.name}</p>
+                          <p className="text-xs text-slate-400 mb-2">{payment.plan_details?.duration} {payment.plan_details?.duration_unit}</p>
+                          {payment.selected_courses && payment.selected_courses.length > 0 && (
+                            <div className="space-y-1 mt-1 border-t border-slate-100 pt-1">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preparations:</p>
+                              {payment.selected_courses.map(course => (
+                                <p key={course.id} className="text-xs font-medium flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-[#22c55e]" /> {course.title}</p>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-[#0B2545] font-semibold">Rs. {payment.amount}</td>
                         <td className="px-6 py-4">

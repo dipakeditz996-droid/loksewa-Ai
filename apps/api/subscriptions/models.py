@@ -26,6 +26,13 @@ class SubscriptionPlan(models.Model):
         ('LIMITED_OFFER', 'Limited Offer'),
     )
 
+    PACKAGE_TYPE_CHOICES = (
+        ('SINGLE', 'Single Preparation'),
+        ('MULTI', 'Multi Preparation'),
+        ('BUNDLE', 'Bundle'),
+        ('ALL_ACCESS', 'All Access'),
+    )
+
     name = models.CharField(max_length=255)
     description = models.TextField()
     duration = models.IntegerField()
@@ -46,8 +53,21 @@ class SubscriptionPlan(models.Model):
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='subscription_plans',
-        help_text='The Course this plan grants enrollment access to. When payment is approved, student is enrolled in this course.'
+        help_text='Legacy/Single: The Course this plan grants enrollment access to. When payment is approved, student is enrolled in this course.'
     )
+
+    package_type = models.CharField(max_length=20, choices=PACKAGE_TYPE_CHOICES, default='SINGLE', help_text="Type of package dictating the access rules.")
+    
+    eligible_courses = models.ManyToManyField(
+        'courses.Course', 
+        blank=True, 
+        related_name='eligible_plans',
+        help_text="Courses this package can grant access to. Used for MULTI and BUNDLE types."
+    )
+
+    # Flexible Preparation Pricing
+    allowed_preparation_count = models.IntegerField(default=1, help_text="Number of preparations allowed for this plan (used for MULTI packages)")
+    is_flexible = models.BooleanField(default=False, help_text="Deprecated: Use package_type='MULTI'. If true, the student can pick up to `allowed_preparation_count` courses.")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     display_order = models.IntegerField(default=0)

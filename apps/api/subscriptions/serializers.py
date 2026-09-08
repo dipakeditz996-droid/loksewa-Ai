@@ -10,9 +10,21 @@ from core.models import User
 EXPIRING_SOON_THRESHOLD_DAYS = 7
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    eligible_courses_details = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = SubscriptionPlan
         fields = '__all__'
+
+    def get_eligible_courses_details(self, obj):
+        return [
+            {
+                "id": course.id,
+                "title": course.title,
+                "exam": course.exam.name if course.exam else None
+            }
+            for course in obj.eligible_courses.select_related('exam')
+        ]
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan_details = SubscriptionPlanSerializer(source='plan', read_only=True)
@@ -45,11 +57,22 @@ class SubscriptionPaymentSerializer(serializers.ModelSerializer):
     plan_details = SubscriptionPlanSerializer(source='plan', read_only=True)
     payment_method_details = PaymentMethodSerializer(source='payment_method', read_only=True)
     student_name = serializers.CharField(source='student.get_full_name', read_only=True)
+    selected_courses = serializers.SerializerMethodField()
     
     class Meta:
         model = SubscriptionPayment
         fields = '__all__'
         read_only_fields = ('student', 'status', 'rejection_reason', 'verified_at', 'verified_by')
+
+    def get_selected_courses(self, obj):
+        return [
+            {
+                "id": app.course.id,
+                "title": app.course.title,
+                "exam": app.course.exam.name if app.course.exam else None
+            }
+            for app in obj.course_applications.select_related('course', 'course__exam')
+        ]
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:

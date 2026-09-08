@@ -27,7 +27,7 @@ interface SubscriptionPlan {
   status: string;
 }
 
-const STEPS = ["Account", "Select Plan", "Review"];
+const STEPS = ["Signup", "Category", "Level", "Service", "Course", "Packages", "Purchase", "Review"];
 
 // Mirrors core.validators.is_valid_nepal_phone on the backend - the
 // project's Nepal phone-number convention (10 digits, 96/97/98-prefixed).
@@ -98,7 +98,7 @@ function RegisterForm() {
   }, []);
 
   useEffect(() => {
-    if (currentStep === 1) {
+    if (currentStep === 5) {
       setPlansLoading(true);
       subscriptionPlansApi.getPlans()
         .then((data) => setPlans(data.filter((p: SubscriptionPlan) => p.status === 'ACTIVE')))
@@ -147,9 +147,17 @@ function RegisterForm() {
       if (!isValidNepalPhone(mobile)) { setError("Please enter a valid 10-digit Nepali mobile number."); return; }
       if (password !== confirmPassword) { setError("Passwords do not match."); return; }
       if (referralCode && referralStatus === "invalid") { setError("Please provide a valid referral code or remove it."); return; }
-      if (!examCategoryId) { setError("Please select what you are preparing for."); return; }
     }
-    setCurrentStep((s) => Math.min(s + 1, 2));
+    if (currentStep === 1 && !examCategoryId) { setError("Please select an exam category."); return; }
+    if (currentStep === 2 && !examPath[0] && examOptionsAtDepth(0).length > 0) { setError("Please select a level."); return; }
+    if (currentStep === 3 && !examPath[1] && examOptionsAtDepth(1).length > 0) { setError("Please select a service / faculty."); return; }
+    
+    // Auto-skip steps if no options available
+    let nextStep = currentStep + 1;
+    if (nextStep === 2 && examOptionsAtDepth(0).length === 0) nextStep = 4; // Skip Level and Service if none
+    if (nextStep === 3 && examOptionsAtDepth(1).length === 0) nextStep = 4; // Skip Service if none
+    
+    setCurrentStep((s) => Math.min(nextStep, 7));
   };
 
   const handleResendOtp = async () => {
@@ -453,82 +461,197 @@ function RegisterForm() {
                     </div>
                   </div>
 
-                  {/* Preferred Exam/Course - progressive/hierarchical selection */}
-                  <div className="pt-2">
-                    <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" /> What are you preparing for? *</p>
-                    {examTreeLoading ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {[1, 2, 3, 4].map((i) => <div key={i} className="h-[44px] rounded-[10px] bg-white/5 animate-pulse" />)}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-2">
-                        {examTree.map((category) => {
-                          const isSelected = examCategoryId === category.id;
-                          return (
-                            <button
-                              key={category.id}
-                              type="button"
-                              onClick={() => { setExamCategoryId(category.id); setExamPath([]); }}
-                              className={`h-[44px] px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
-                            >
-                              {category.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {selectedExamCategory && examOptionsAtDepth(0).length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[11px] text-white/50 font-semibold mb-2">{examDepthLabel(0)}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {examOptionsAtDepth(0).map((node) => {
-                            const isSelected = examPath[0]?.id === node.id;
-                            return (
-                              <button
-                                key={node.id}
-                                type="button"
-                                onClick={() => selectExamNode(0, node)}
-                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
-                              >
-                                {node.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {examPath[0] && examOptionsAtDepth(1).length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[11px] text-white/50 font-semibold mb-2">{examDepthLabel(1)}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {examOptionsAtDepth(1).map((node) => {
-                            const isSelected = examPath[1]?.id === node.id;
-                            return (
-                              <button
-                                key={node.id}
-                                type="button"
-                                onClick={() => selectExamNode(1, node)}
-                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
-                              >
-                                {node.name}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
                   <Button onClick={handleNext} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
                     Continue <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} />
                   </Button>
                 </div>
               )}
+              {/* STEP 1: Exam Category */}
+              {currentStep === 1 && (
+                <div className="space-y-4">
+                  <div className="mb-6">
+                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Select <span className="text-[#D4A72C]">Exam Category</span></h2>
+                    <p className="text-[12px] text-white/60 font-medium">What are you preparing for?</p>
+                  </div>
+                  {examTreeLoading ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {[1, 2, 3, 4].map((i) => <div key={i} className="h-[44px] rounded-[10px] bg-white/5 animate-pulse" />)}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {examTree.map((category) => {
+                        const isSelected = examCategoryId === category.id;
+                        return (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={() => { setExamCategoryId(category.id); setExamPath([]); }}
+                            className={`h-[44px] px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                          >
+                            {category.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex gap-3 mt-6">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
+                      Continue <ArrowRight className="h-[18px] w-[18px] ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+    
+              {/* STEP 2: Level */}
+              {currentStep === 2 && (
+                <div className="space-y-4">
+                  <div className="mb-6">
+                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Select <span className="text-[#D4A72C]">Level</span></h2>
+                    <p className="text-[12px] text-white/60 font-medium">{examDepthLabel(0)}</p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {examOptionsAtDepth(0).map((node) => {
+                      const isSelected = examPath[0]?.id === node.id;
+                      return (
+                        <button
+                          key={node.id}
+                          type="button"
+                          onClick={() => selectExamNode(0, node)}
+                          className={`px-4 py-3 rounded-[10px] border text-[13px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                        >
+                          {node.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
+                      Continue <ArrowRight className="h-[18px] w-[18px] ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+    
+              {/* STEP 3: Service / Faculty */}
+              {currentStep === 3 && (
+                <div className="space-y-4">
+                  <div className="mb-6">
+                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Select <span className="text-[#D4A72C]">Service / Faculty</span></h2>
+                    <p className="text-[12px] text-white/60 font-medium">{examDepthLabel(1)}</p>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {examOptionsAtDepth(1).map((node) => {
+                      const isSelected = examPath[1]?.id === node.id;
+                      return (
+                        <button
+                          key={node.id}
+                          type="button"
+                          onClick={() => selectExamNode(1, node)}
+                          className={`px-4 py-3 rounded-[10px] border text-[13px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                        >
+                          {node.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
+                      Continue <ArrowRight className="h-[18px] w-[18px] ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+    
+              {/* STEP 4: FIXED COURSE */}
+              {currentStep === 4 && (
+                <div className="space-y-4">
+                  <div className="mb-6">
+                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Recommended <span className="text-[#D4A72C]">Course</span></h2>
+                    <p className="text-[12px] text-white/60 font-medium">Based on your selections, here is your path.</p>
+                  </div>
+                  
+                  <div className="p-5 rounded-[14px] border border-[#D4A72C] bg-[#D4A72C]/10 flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-[10px] bg-[#D4A72C]/20 flex items-center justify-center shrink-0">
+                      <GraduationCap className="h-6 w-6 text-[#D4A72C]" />
+                    </div>
+                    <div>
+                      <h3 className="text-[16px] font-bold text-white">{[selectedExamCategory?.name, ...examPath.map((n) => n.name)].filter(Boolean).join(" - ")} Preparation</h3>
+                      <p className="text-[12px] text-white/60 mt-1">Complete package for your success.</p>
+                      
+                      <div className="mt-3 flex gap-2">
+                        <span className="text-[10px] px-2 py-1 rounded bg-white/10 text-white">Live Classes</span>
+                        <span className="text-[10px] px-2 py-1 rounded bg-white/10 text-white">Mock Exams</span>
+                        <span className="text-[10px] px-2 py-1 rounded bg-white/10 text-white">Study Notes</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
+                      View Packages <ArrowRight className="h-[18px] w-[18px] ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+    
+              {/* STEP 6: Purchase */}
+              {currentStep === 6 && (
+                <div className="space-y-4">
+                  <div className="mb-6">
+                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Checkout & <span className="text-[#D4A72C]">Payment</span></h2>
+                    <p className="text-[12px] text-white/60 font-medium">Choose a payment method to complete enrollment.</p>
+                  </div>
+                  
+                  {selectedPlan ? (
+                    <div className="rounded-[12px] border border-[#D4A72C]/30 bg-[#D4A72C]/5 p-4 mb-4">
+                      <p className="text-[10px] text-[#D4A72C]/70 uppercase tracking-widest font-bold mb-3">Selected Plan</p>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-bold text-[15px]">{selectedPlan.name}</p>
+                          <p className="text-white/50 text-[12px]">{selectedPlan.duration} {selectedPlan.duration_unit.toLowerCase()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[#D4A72C] font-bold text-[18px]">Rs. {parseFloat(selectedPlan.price).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-[12px] border border-white/10 bg-white/3 p-4 text-center">
+                      <p className="text-[13px] text-white/70">No plan selected. You will be registered for free access.</p>
+                    </div>
+                  )}
+
+                  <div className="p-4 rounded-[12px] border border-white/10 bg-white/5 text-center">
+                    <p className="text-[13px] text-white/60">Payment integration placeholder</p>
+                    <p className="text-[11px] text-white/40 mt-1">eSewa, Khalti, or Bank Transfer options would appear here.</p>
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                    </Button>
+                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
+                      Continue to Review <ArrowRight className="h-[18px] w-[18px] ml-2" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+    
 
               {/* STEP 1: Plan Selection */}
-              {currentStep === 1 && (
+              {currentStep === 5 && (
                 <div>
                   <div className="mb-6">
                     <h2 className="text-[24px] font-bold text-white mb-1">Select Your <span className="text-[#D4A72C]">Course Plan</span></h2>
@@ -585,7 +708,7 @@ function RegisterForm() {
                   )}
 
                   <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(0)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
                       <ArrowLeft className="h-4 w-4 mr-2" /> Back
                     </Button>
                     <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
@@ -596,7 +719,7 @@ function RegisterForm() {
               )}
 
               {/* STEP 2: Review & Register */}
-              {currentStep === 2 && (
+              {currentStep === 7 && (
                 <div>
                   <div className="mb-6">
                     <h2 className="text-[24px] font-bold text-white mb-1">Review & <span className="text-[#D4A72C]">Register</span></h2>
@@ -650,7 +773,7 @@ function RegisterForm() {
                   </div>
 
                   <div className="flex gap-3">
-                    <Button onClick={() => setCurrentStep(1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
+                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
                       <ArrowLeft className="h-4 w-4 mr-2" /> Back
                     </Button>
                     <Button onClick={handleRegister} disabled={isLoading} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none flex items-center justify-center gap-2">

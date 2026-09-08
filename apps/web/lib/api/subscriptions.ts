@@ -12,13 +12,22 @@ export interface SubscriptionPlan {
   badge: "NONE" | "POPULAR" | "BEST_VALUE" | "RECOMMENDED" | "LIMITED_OFFER";
   features: string[];
   course: number | null;
+  package_type: "SINGLE" | "MULTI" | "BUNDLE" | "ALL_ACCESS";
+  eligible_courses: number[];
+  eligible_courses_details?: {
+    id: number;
+    title: string;
+    exam: string | null;
+  }[];
+  is_flexible: boolean;
+  allowed_preparation_count: number;
   status: "ACTIVE" | "INACTIVE";
   display_order: number;
   created_at: string;
   updated_at: string;
 }
 
-export type SubscriptionPlanInput = Omit<SubscriptionPlan, "id" | "created_at" | "updated_at">;
+export type SubscriptionPlanInput = Omit<SubscriptionPlan, "id" | "created_at" | "updated_at" | "eligible_courses_details">;
 
 export interface Subscription {
   id: number;

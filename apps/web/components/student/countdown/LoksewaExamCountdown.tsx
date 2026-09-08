@@ -48,7 +48,7 @@ export function LoksewaExamCountdown({ className = "" }: { className?: string })
           setSchedule(null);
         }
       } catch (err) {
-        console.error("Failed to load official exam schedule", err);
+        console.warn("Failed to load official exam schedule", err);
         if (isMounted) setError(true);
       } finally {
         if (isMounted) setLoading(false);

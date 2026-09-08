@@ -162,54 +162,31 @@ class StudentSignupView(APIView):
                     from gamification.models import GamificationProfile
                     GamificationProfile.objects.create(user=user)
 
-                # Process Course/Package Application if plan_id or course_id is provided.
-                # Declaring a preferred exam above is NOT an enrollment - this is a
-                # separate, explicit application the student additionally opted into.
-                if plan_id or course_id:
-                    payment = None
-                    if plan_id:
-                        from subscriptions.models import SubscriptionPlan, SubscriptionPayment
-                        from marketplace.models import PaymentMethod
+                # Process a direct course-application deep link (?course=) if one was
+                # given. NOTE: plan_id (the signup wizard's "Select Plan" step) is
+                # intentionally NOT turned into a payment here - the student hasn't
+                # actually paid anything yet at this point, so fabricating a
+                # SubscriptionPayment with a random transaction ID would be a fake
+                # payment record. The frontend instead sends the verified student to
+                # the real checkout page (QR/payment method, real transaction ID,
+                # proof upload) for that plan after they verify their email.
+                if course_id:
+                    from courses.models import Course, CourseApplication
+                    course = Course.objects.get(id=course_id)
+                    CourseApplication.objects.create(
+                        student=user,
+                        course=course,
+                        subscription_payment=None,
+                        status='pending'
+                    )
 
-                        plan = SubscriptionPlan.objects.get(id=plan_id)
-                        payment_method, _ = PaymentMethod.objects.get_or_create(
-                            method_type='ESEWA',
-                            defaults={
-                                'display_name': 'eSewa',
-                                'account_name': 'LoksewaAI Default',
-                                'account_number': '0000000000',
-                                'is_active': True,
-                            }
-                        )
-
-                        import uuid
-                        payment = SubscriptionPayment.objects.create(
-                            student=user,
-                            plan=plan,
-                            payment_method=payment_method,
-                            amount=plan.price,
-                            transaction_id=str(uuid.uuid4())[:20],
-                            status='PENDING',
-                            note='Auto-generated from registration.'
-                        )
-
-                    if course_id:
-                        from courses.models import Course, CourseApplication
-                        course = Course.objects.get(id=course_id)
-                        CourseApplication.objects.create(
-                            student=user,
-                            course=course,
-                            subscription_payment=payment,
-                            status='pending'
-                        )
-
-                        from core.notification_service import NotificationService
-                        NotificationService.notify_admins(
-                            notif_type='course_application',
-                            title='New Course Application',
-                            message=f"New student {username} applied for '{course.title}' during registration.",
-                            action_url='/admin-dashboard/applications',
-                        )
+                    from core.notification_service import NotificationService
+                    NotificationService.notify_admins(
+                        notif_type='course_application',
+                        title='New Course Application',
+                        message=f"New student {username} applied for '{course.title}' during registration.",
+                        action_url='/admin-dashboard/applications',
+                    )
 
                 from administration.models import AuditLog
                 AuditLog.objects.create(
@@ -691,10 +668,11 @@ class StudentDashboardView(APIView):
         # subscriptions.access (the same check HasActiveSubscription enforces
         # server-side) so this can never drift from what's actually allowed.
         from .models import AdminSettings
-        from subscriptions.access import get_active_subscription
+        from subscriptions.access import get_active_subscription, has_admin_granted_access
         from subscriptions.models import SubscriptionPayment
 
         active_subscription = get_active_subscription(user)
+        is_admin_granted = has_admin_granted_access(user)
         latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
         latest_payment_data = None
         if latest_payment and not active_subscription:
@@ -711,7 +689,8 @@ class StudentDashboardView(APIView):
 
         package_data = {
             "enforcementEnabled": AdminSettings.get_settings().enforce_subscription_access,
-            "hasActivePackage": active_subscription is not None,
+            "hasActivePackage": active_subscription is not None or is_admin_granted,
+            "isAdminGranted": is_admin_granted,
             "planName": active_subscription.plan.name if active_subscription else None,
             "status": active_subscription.status if active_subscription else None,
             "expiryDate": active_subscription.expiry_date.isoformat() if active_subscription else None,

@@ -251,4 +251,8 @@ export const publicApi = {
    */
   getTestimonials: (): Promise<PublicTestimonial[] | null> =>
     safeGet<PublicTestimonial[]>("/public/testimonials/"),
+
+  /** Get the progressive academic hierarchy (Category -> Exam -> Level -> Faculty -> Course) */
+  getCourseHierarchy: (): Promise<any[] | null> =>
+    safeGet<any[]>("/courses/hierarchy/"),
 };

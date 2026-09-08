@@ -29,8 +29,12 @@ const EMPTY_FORM: SubscriptionPlanInput = {
   badge: "NONE",
   features: [],
   course: null,
+  package_type: "SINGLE",
+  eligible_courses: [],
   status: "INACTIVE",
   display_order: 0,
+  is_flexible: false,
+  allowed_preparation_count: 1,
 };
 
 const FEATURE_OPTIONS = [
@@ -41,8 +45,11 @@ const FEATURE_OPTIONS = [
   { key: "analytics", label: "Advanced Analytics" },
 ];
 
+import { publicApi, PublicCourse } from "@/lib/api/public-api";
+
 export default function AdminPackagesPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [courses, setCourses] = useState<PublicCourse[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -51,9 +58,14 @@ export default function AdminPackagesPage() {
 
   const load = () => {
     setLoading(true);
-    subscriptionsApi
-      .adminListPlans()
-      .then((data) => setPlans([...data].sort((a, b) => a.display_order - b.display_order)))
+    Promise.all([
+      subscriptionsApi.adminListPlans(),
+      publicApi.getCourses()
+    ])
+      .then(([planData, coursesData]) => {
+        setPlans([...planData].sort((a, b) => a.display_order - b.display_order));
+        if (coursesData) setCourses(coursesData);
+      })
       .catch(() => toast.error("Failed to load packages."))
       .finally(() => setLoading(false));
   };
@@ -79,8 +91,12 @@ export default function AdminPackagesPage() {
       badge: plan.badge,
       features: plan.features,
       course: plan.course,
+      package_type: plan.package_type,
+      eligible_courses: plan.eligible_courses || [],
       status: plan.status,
       display_order: plan.display_order,
+      is_flexible: plan.is_flexible,
+      allowed_preparation_count: plan.allowed_preparation_count,
     });
     setDialogOpen(true);
   };
@@ -97,6 +113,15 @@ export default function AdminPackagesPage() {
       toast.error("Package name is required.");
       return;
     }
+    
+    // For SINGLE type, we still rely on course field if it's set, 
+    // or maybe the user just selects one eligible course.
+    // For MULTI/BUNDLE, ensure there's at least one eligible course.
+    if (form.package_type !== "SINGLE" && form.eligible_courses.length === 0) {
+      toast.error(`Please select at least one eligible course for ${form.package_type} packages.`);
+      return;
+    }
+
     setSaving(true);
     try {
       if (editingId) {
@@ -175,7 +200,13 @@ export default function AdminPackagesPage() {
                       <span className="ml-1.5 text-xs text-slate-400 line-through">Rs. {plan.original_price}</span>
                     )}
                   </td>
-                  <td className="px-5 py-4 text-slate-600">{plan.duration} {plan.duration_unit.toLowerCase()}</td>
+                  <td className="px-5 py-4 text-slate-600">
+                    <div className="font-medium">{plan.duration} {plan.duration_unit.toLowerCase()}</div>
+                    <div className="text-xs text-slate-400 mt-0.5">
+                      Type: <span className="font-semibold">{plan.package_type}</span>
+                      {plan.package_type === "MULTI" && ` (Limit: ${plan.allowed_preparation_count})`}
+                    </div>
+                  </td>
                   <td className="px-5 py-4 text-slate-500 text-xs max-w-[220px]">
                     {plan.features.length ? plan.features.join(", ") : "—"}
                   </td>
@@ -250,6 +281,69 @@ export default function AdminPackagesPage() {
                 </Select>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Package Type</Label>
+                <Select value={form.package_type} onValueChange={(v) => setForm({ ...form, package_type: v as any, course: null })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SINGLE">Single Preparation</SelectItem>
+                    <SelectItem value="MULTI">Multi Preparation</SelectItem>
+                    <SelectItem value="BUNDLE">Bundle (All Included)</SelectItem>
+                    <SelectItem value="ALL_ACCESS">All Access</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.package_type === "MULTI" && (
+                <div className="space-y-1.5">
+                  <Label>Allowed Preparations</Label>
+                  <Input type="number" min={1} value={form.allowed_preparation_count} onChange={(e) => setForm({ ...form, allowed_preparation_count: parseInt(e.target.value) || 1 })} />
+                </div>
+              )}
+            </div>
+
+            {form.package_type !== "ALL_ACCESS" && (
+              <div className="space-y-1.5">
+                <Label>Eligible Courses</Label>
+                {courses.length === 0 ? (
+                  <div className="text-xs text-slate-400">Loading courses...</div>
+                ) : (
+                  <div className="grid grid-cols-1 max-h-[150px] overflow-y-auto gap-2 border border-slate-200 rounded-lg p-3">
+                    {courses.map((c) => {
+                      const isSelected = form.package_type === "SINGLE" 
+                        ? form.course === c.id 
+                        : form.eligible_courses.includes(c.id);
+                        
+                      return (
+                        <label key={c.id} className="flex items-start gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
+                          <input
+                            type={form.package_type === "SINGLE" ? "radio" : "checkbox"}
+                            name="eligible_courses"
+                            checked={isSelected}
+                            onChange={() => {
+                              if (form.package_type === "SINGLE") {
+                                setForm({ ...form, course: c.id, eligible_courses: [c.id] });
+                              } else {
+                                const newSelection = isSelected
+                                  ? form.eligible_courses.filter((id) => id !== c.id)
+                                  : [...form.eligible_courses, c.id];
+                                setForm({ ...form, eligible_courses: newSelection, course: null });
+                              }
+                            }}
+                            className="mt-1 rounded border-slate-300"
+                          />
+                          <div>
+                            <div className="font-medium">{c.title}</div>
+                            {c.exam && <div className="text-[10px] text-slate-400">{c.exam.title}</div>}
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label>Badge</Label>

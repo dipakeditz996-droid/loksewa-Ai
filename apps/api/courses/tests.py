@@ -3,7 +3,9 @@ section. Covers: a course with an exam linked no longer 500s (it read
 `exam.title`, but core.models.Exam only has `.name`), and the response now
 carries real subject/enrollment counts instead of the frontend inventing them.
 """
+# pyrefly: ignore [missing-import]
 from rest_framework import status
+# pyrefly: ignore [missing-import]
 from rest_framework.test import APITestCase
 
 from core.models import User

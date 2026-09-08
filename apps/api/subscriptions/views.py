@@ -61,8 +61,66 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         # manually cross-checking, get the full plan activated. Compute it
         # server-side from the plan's real price, same pattern marketplace
         # checkout already uses for its own submitted_amount.
+        from rest_framework.exceptions import ValidationError
         plan = serializer.validated_data['plan']
+        course_ids = self.request.data.get('course_ids', [])
+
+        if plan.package_type == 'MULTI':
+            if not course_ids:
+                raise ValidationError({"course_ids": "Flexible plans require course selections."})
+            if len(course_ids) > plan.allowed_preparation_count:
+                raise ValidationError({"course_ids": f"This plan allows up to {plan.allowed_preparation_count} preparations."})
+            # Also validate that course_ids are within eligible_courses
+            eligible_ids = list(plan.eligible_courses.values_list('id', flat=True))
+            if eligible_ids:
+                invalid_courses = [cid for cid in course_ids if int(cid) not in eligible_ids]
+                if invalid_courses:
+                    raise ValidationError({"course_ids": "Some selected courses are not eligible for this package."})
+
         payment = serializer.save(student=self.request.user, amount=plan.price)
+
+        from courses.models import CourseApplication
+        if plan.package_type == 'MULTI':
+            for course_id in course_ids:
+                CourseApplication.objects.update_or_create(
+                    student=self.request.user,
+                    course_id=course_id,
+                    defaults={
+                        'subscription_payment': payment,
+                        'status': 'pending',
+                        'reviewed_at': None,
+                        'reviewed_by': None
+                    }
+                )
+        elif plan.package_type == 'BUNDLE':
+            # Bundle gets all eligible courses
+            for course in plan.eligible_courses.all():
+                CourseApplication.objects.update_or_create(
+                    student=self.request.user,
+                    course=course,
+                    defaults={
+                        'subscription_payment': payment,
+                        'status': 'pending',
+                        'reviewed_at': None,
+                        'reviewed_by': None
+                    }
+                )
+        elif plan.package_type == 'ALL_ACCESS':
+            # ALL_ACCESS doesn't specifically create CourseApplications upfront 
+            # or it gives access to a giant set. For now, leave empty or grant all.
+            pass
+        elif plan.course or plan.is_flexible: # Fallback to single or legacy
+            if plan.course:
+                CourseApplication.objects.update_or_create(
+                    student=self.request.user,
+                    course=plan.course,
+                    defaults={
+                        'subscription_payment': payment,
+                        'status': 'pending',
+                        'reviewed_at': None,
+                        'reviewed_by': None
+                    }
+                )
 
         from core.notification_service import NotificationService
         NotificationService.notify_student_payment_submitted(
@@ -129,14 +187,17 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             payment.subscription = subscription
             payment.save()
 
-            # ── AUTO-ENROLL: if plan has a linked Course, create/activate Enrollment ──
+            # ── AUTO-ENROLL: activate Enrollment based on CourseApplications ──
             enrolled_course_title = plan.name  # fallback notification text
-            if plan.course:
-                try:
-                    from courses.models import Enrollment, CourseApplication
+            try:
+                from courses.models import Enrollment, CourseApplication
+                
+                applications = CourseApplication.objects.filter(subscription_payment=payment)
+                
+                for app in applications:
                     enrollment, created = Enrollment.objects.get_or_create(
                         student=payment.student,
-                        course=plan.course,
+                        course=app.course,
                         defaults={
                             'status': 'active',
                             'expires_at': expiry_date,
@@ -148,26 +209,24 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                         enrollment.expires_at = expiry_date
                         enrollment.save(update_fields=['status', 'expires_at'])
 
-                    enrolled_course_title = plan.course.title
+                    app.status = 'approved'
+                    app.reviewed_at = now
+                    app.reviewed_by = request.user
+                    app.save()
 
-                    # Approve any CourseApplication linked to this payment or this student+course
-                    CourseApplication.objects.filter(
-                        student=payment.student,
-                        course=plan.course,
-                        status='pending'
-                    ).update(
-                        status='approved',
-                        reviewed_at=now,
-                        reviewed_by=request.user,
-                    )
-                except Exception:
-                    # Deliberately not re-raised: a bug in the auto-enroll
-                    # step shouldn't block the payment approval itself, but
-                    # it must not fail silently either.
-                    logger.exception(
-                        "Auto-enroll failed for payment_id=%s student_id=%s course_id=%s",
-                        payment.id, payment.student_id, plan.course_id,
-                    )
+                if applications.exists():
+                    if applications.count() == 1:
+                        enrolled_course_title = applications.first().course.title
+                    else:
+                        enrolled_course_title = f"{applications.count()} Preparations"
+            except Exception:
+                # Deliberately not re-raised: a bug in the auto-enroll
+                # step shouldn't block the payment approval itself, but
+                # it must not fail silently either.
+                logger.exception(
+                    "Auto-enroll failed for payment_id=%s student_id=%s",
+                    payment.id, payment.student_id,
+                )
 
             # Create invoice
             Invoice.objects.create(

@@ -7,7 +7,8 @@ from .views import (
     StudentEnrollmentView,
     StudentCourseApplicationView,
     CourseDetailView,
-    MyCoursesListView
+    MyCoursesListView,
+    ProgressiveHierarchyAPIView
 )
 from .teacher_student_views import TeacherStudentViewSet, TeacherMessageViewSet
 
@@ -21,6 +22,7 @@ urlpatterns = [
 
     # Public (no auth)
     path('courses/public/', PublicCourseListView.as_view(), name='public-courses'),
+    path('courses/hierarchy/', ProgressiveHierarchyAPIView.as_view(), name='course-hierarchy'),
     path('courses/<int:pk>/', CourseDetailView.as_view(), name='course-detail'),
 
     # Student authenticated

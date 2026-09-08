@@ -80,7 +80,7 @@ export default function OnboardingPage() {
       });
       setSuccess(true);
       setTimeout(() => {
-        router.push("/student");
+        router.push("/student/onboarding/preparation");
       }, 1500);
     } catch (err: any) {
       setError(err.message || err.detail || "Failed to update profile. Please try again.");

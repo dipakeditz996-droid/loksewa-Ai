@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
@@ -33,6 +33,34 @@ export default function StudentLayout({
   // student on every /student page with no sidebar and no way back short of
   // finding the exam URL themselves. So: anywhere except the attempt page
   // itself, show a real way back in instead of just blank chrome.
+  const [packageLocked, setPackageLocked] = useState(false);
+
+  useEffect(() => {
+    // Only check if we are NOT on the main dashboard, onboarding, or checkout pages
+    if (pathname === "/student" || pathname.startsWith("/student/onboarding") || pathname.startsWith("/student/checkout") || pathname.startsWith("/student/plans")) {
+      return;
+    }
+    
+    // We do a lightweight check to see if they should be locked out
+    // Since HasActiveSubscription is enforced on backend, we could wait for 403s,
+    // but proactive redirect provides a better UX.
+    import("@/lib/api/dashboard").then(({ dashboardApi }) => {
+      dashboardApi.getStudentDashboard().then(data => {
+        if (data.package?.enforcementEnabled && !data.package?.hasActivePackage) {
+          setPackageLocked(true);
+        }
+      }).catch(() => {});
+    });
+  }, [pathname]);
+
+  if (packageLocked) {
+    // Redirect to dashboard where the locked UI is rendered
+    if (typeof window !== "undefined") {
+      window.location.href = "/student";
+    }
+    return <div className="min-h-screen bg-muted/20" />;
+  }
+
   if (examFocus) {
     return (
       <div className="flex min-h-screen flex-col bg-muted">

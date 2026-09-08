@@ -256,6 +256,70 @@ class PublicCourseListView(APIView):
 
         return Response(data)
 
+class ProgressiveHierarchyAPIView(APIView):
+    """
+    GET /api/courses/hierarchy/
+    Returns the progressive academic hierarchy: Category -> Exam -> Level -> Faculty -> Course.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from exams.models import ExamCategory, Exam
+        
+        # We need to build a tree
+        # 1. Categories
+        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'id')
+        
+        # 2. All active Exams (prefetch children/courses if possible, but recursive is tricky with prefetch)
+        # Better to fetch all and build in memory
+        all_exams = list(Exam.objects.filter(is_active=True).order_by('order', 'id'))
+        
+        # 3. All active courses that are published and open
+        from courses.models import Course
+        all_courses = list(Course.objects.filter(status='published', is_open_for_enrollment=True).select_related('exam'))
+        
+        # Build courses by exam
+        courses_by_exam = {}
+        for c in all_courses:
+            if c.exam_id:
+                courses_by_exam.setdefault(c.exam_id, []).append({
+                    "id": c.id,
+                    "title": c.title,
+                    "slug": c.slug,
+                    "short_description": c.short_description,
+                    "thumbnail": request.build_absolute_uri(c.thumbnail.url) if c.thumbnail else None,
+                })
+                
+        # Build exams by parent
+        exams_by_parent = {}
+        root_exams_by_category = {}
+        for e in all_exams:
+            if e.parent_id:
+                exams_by_parent.setdefault(e.parent_id, []).append(e)
+            else:
+                root_exams_by_category.setdefault(e.category_id, []).append(e)
+                
+        def build_exam_tree(exam):
+            children = exams_by_parent.get(exam.id, [])
+            return {
+                "id": exam.id,
+                "name": exam.name,
+                "description": exam.description,
+                "children": [build_exam_tree(c) for c in children],
+                "courses": courses_by_exam.get(exam.id, [])
+            }
+            
+        result = []
+        for cat in categories:
+            root_exams = root_exams_by_category.get(cat.id, [])
+            result.append({
+                "id": cat.id,
+                "name": cat.name,
+                "description": cat.description,
+                "exams": [build_exam_tree(e) for e in root_exams]
+            })
+            
+        return Response(result)
 
 # ============================================================
 # STUDENT ENROLLMENT STATUS

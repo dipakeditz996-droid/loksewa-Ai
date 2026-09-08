@@ -67,6 +67,7 @@ export interface DashboardSubjectPerformance {
 export interface DashboardPackageStatus {
   enforcementEnabled: boolean;
   hasActivePackage: boolean;
+  isAdminGranted: boolean;
   planName: string | null;
   status: string | null;
   expiryDate: string | null;

@@ -183,27 +183,36 @@ class TeacherDashboardView(APIView):
 class PublicCourseListView(APIView):
     """
     GET /api/courses/public/
-    Returns all published courses that are open for enrollment.
-    No authentication required — used on public website and registration form.
+    Returns published + coming_soon courses (no auth required).
+
+    published  → is_open_for_enrollment=True, purchaseable
+    coming_soon → is_coming_soon=True, never purchaseable (UI shows badge only)
+
+    Used on public website, the admin package eligibility selector,
+    and the student registration form.
     """
     permission_classes = [AllowAny]
 
     def get(self, request):
         from django.db.models import Q
 
+        # Return both published (open) AND coming_soon courses so the UI can
+        # display the Coming Soon badge without enabling purchase.
         courses = Course.objects.filter(
-            status='published',
-            is_open_for_enrollment=True,
-        ).select_related('exam').annotate(
+            status__in=['published', 'coming_soon'],
+        ).select_related('exam', 'exam__parent', 'exam__category').annotate(
             enrolled_count=Count('enrollments', filter=Q(enrollments__status='active'))
         ).order_by('-featured', 'title')
 
-        # Optional personalization: ?exam=<id> filters to courses for that
-        # exact Exam (e.g. a student's registration preference - PSC 5th
-        # Level Computer). This is filtering only, never auto-enrollment.
+        # Optional filter: ?exam=<id> scopes to courses for a specific Exam node.
         exam_id = request.query_params.get('exam')
         if exam_id:
             courses = courses.filter(exam_id=exam_id)
+
+        # Optional filter: ?status=published|coming_soon restricts to one status.
+        status_filter = request.query_params.get('status')
+        if status_filter in ('published', 'coming_soon'):
+            courses = courses.filter(status=status_filter)
 
         data = []
         for c in courses:
@@ -211,22 +220,25 @@ class PublicCourseListView(APIView):
             subject_count = 0
             if c.exam:
                 try:
-                    # Try the paper-based structure first
                     from exams.models import Subject
                     subject_count = Subject.objects.filter(
                         paper__exam=c.exam
                     ).distinct().count()
                     if subject_count == 0:
-                        # Fall back to legacy subjects
                         subject_count = c.exam.legacy_subjects.count()
                 except Exception:
                     pass
 
-            # Get associated plans
-            plans = list(c.subscription_plans.filter(status='ACTIVE').values(
-                'id', 'name', 'price', 'original_price', 'discount',
-                'duration', 'duration_unit', 'badge', 'features'
-            ).order_by('price'))
+            is_coming_soon = (c.status == 'coming_soon')
+
+            # Only active/published courses surface their plans.
+            # Coming-soon courses must never surface a purchaseable plan.
+            plans = [] if is_coming_soon else list(
+                c.subscription_plans.filter(status='ACTIVE').values(
+                    'id', 'name', 'price', 'original_price', 'discount',
+                    'duration', 'duration_unit', 'badge', 'features'
+                ).order_by('price')
+            )
 
             thumbnail_url = None
             if c.thumbnail:
@@ -234,6 +246,18 @@ class PublicCourseListView(APIView):
                     thumbnail_url = request.build_absolute_uri(c.thumbnail.url)
                 except Exception:
                     pass
+
+            # Build exam context including level/category for frontend hierarchy display
+            exam_data = None
+            if c.exam:
+                exam_data = {
+                    'id': c.exam.id,
+                    'title': c.exam.name,
+                    'parent_id': c.exam.parent_id,
+                    'parent_name': c.exam.parent.name if c.exam.parent else None,
+                    'category_id': c.exam.category_id,
+                    'category_name': c.exam.category.name if c.exam.category else None,
+                }
 
             data.append({
                 'id': c.id,
@@ -245,11 +269,10 @@ class PublicCourseListView(APIView):
                 'duration_months': c.duration_months,
                 'subject_count': subject_count,
                 'enrolled_count': c.enrolled_count,
-                # Exam is the position/level model (core.models.Exam), which has
-                # `name`, not `title` - fixes an AttributeError that fired for
-                # any course with an exam linked.
-                'exam': {'id': c.exam.id, 'title': c.exam.name} if c.exam else None,
+                'exam': exam_data,
                 'featured': c.featured,
+                'status': c.status,
+                'is_coming_soon': is_coming_soon,
                 'starting_price': plans[0]['price'] if plans else None,
                 'plans': plans,
             })
@@ -259,38 +282,52 @@ class PublicCourseListView(APIView):
 class ProgressiveHierarchyAPIView(APIView):
     """
     GET /api/courses/hierarchy/
-    Returns the progressive academic hierarchy: Category -> Exam -> Level -> Faculty -> Course.
+    Returns the progressive academic hierarchy:
+      Category → Level (Exam, no parent) → Faculty/Course-type (Exam, parent=Level) → Courses
+
+    Includes both published (active) and coming_soon courses.
+    coming_soon courses carry is_coming_soon=True and no plan data — the
+    frontend must not render a Buy/Enroll button for them.
     """
     permission_classes = [AllowAny]
 
     def get(self, request):
         from exams.models import ExamCategory, Exam
-        
-        # We need to build a tree
-        # 1. Categories
-        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'id')
-        
-        # 2. All active Exams (prefetch children/courses if possible, but recursive is tricky with prefetch)
-        # Better to fetch all and build in memory
-        all_exams = list(Exam.objects.filter(is_active=True).order_by('order', 'id'))
-        
-        # 3. All active courses that are published and open
         from courses.models import Course
-        all_courses = list(Course.objects.filter(status='published', is_open_for_enrollment=True).select_related('exam'))
-        
-        # Build courses by exam
+
+        # Active ExamCategories only (PSC Exams, License Exam, Entrance Exam, University Exam)
+        # Filter out legacy dev categories that are no longer canonical
+        categories = ExamCategory.objects.filter(
+            is_active=True,
+            id__in=[19, 20, 21, 22]  # PSC, License, Entrance, University
+        ).order_by('order', 'id')
+
+        all_exams = list(Exam.objects.filter(is_active=True).order_by('order', 'id'))
+
+        # Include published AND coming_soon courses in the tree.
+        # Archived / draft courses are excluded.
+        all_courses = list(Course.objects.filter(
+            status__in=['published', 'coming_soon']
+        ).select_related('exam'))
+
+        # Index courses by exam_id
         courses_by_exam = {}
         for c in all_courses:
             if c.exam_id:
+                is_cs = (c.status == 'coming_soon')
                 courses_by_exam.setdefault(c.exam_id, []).append({
-                    "id": c.id,
-                    "title": c.title,
-                    "slug": c.slug,
-                    "short_description": c.short_description,
-                    "thumbnail": request.build_absolute_uri(c.thumbnail.url) if c.thumbnail else None,
+                    'id': c.id,
+                    'title': c.title,
+                    'slug': c.slug,
+                    'short_description': c.short_description,
+                    'thumbnail': request.build_absolute_uri(c.thumbnail.url) if c.thumbnail else None,
+                    'status': c.status,
+                    'is_coming_soon': is_cs,
+                    # Never expose plans for coming_soon courses
+                    'has_plans': (not is_cs) and c.subscription_plans.filter(status='ACTIVE').exists(),
                 })
-                
-        # Build exams by parent
+
+        # Build parent→children index
         exams_by_parent = {}
         root_exams_by_category = {}
         for e in all_exams:
@@ -298,27 +335,28 @@ class ProgressiveHierarchyAPIView(APIView):
                 exams_by_parent.setdefault(e.parent_id, []).append(e)
             else:
                 root_exams_by_category.setdefault(e.category_id, []).append(e)
-                
+
         def build_exam_tree(exam):
             children = exams_by_parent.get(exam.id, [])
+            node_courses = courses_by_exam.get(exam.id, [])
             return {
-                "id": exam.id,
-                "name": exam.name,
-                "description": exam.description,
-                "children": [build_exam_tree(c) for c in children],
-                "courses": courses_by_exam.get(exam.id, [])
+                'id': exam.id,
+                'name': exam.name,
+                'description': exam.description,
+                'children': [build_exam_tree(ch) for ch in children],
+                'courses': node_courses,
             }
-            
+
         result = []
         for cat in categories:
             root_exams = root_exams_by_category.get(cat.id, [])
             result.append({
-                "id": cat.id,
-                "name": cat.name,
-                "description": cat.description,
-                "exams": [build_exam_tree(e) for e in root_exams]
+                'id': cat.id,
+                'name': cat.name,
+                'description': cat.description,
+                'exams': [build_exam_tree(e) for e in root_exams],
             })
-            
+
         return Response(result)
 
 # ============================================================
@@ -375,7 +413,7 @@ class StudentEnrollmentView(APIView):
                     'short_description': enrollment.course.short_description,
                     'exam': {
                         'id': enrollment.course.exam.id,
-                        'title': enrollment.course.exam.title,
+                        'title': getattr(enrollment.course.exam, 'name', getattr(enrollment.course.exam, 'title', '')),
                     } if enrollment.course.exam else None,
                 }
             }
@@ -477,7 +515,7 @@ class MyCoursesListView(APIView):
                     'slug': course.slug,
                     'short_description': course.short_description,
                     'thumbnail': thumbnail_url,
-                    'exam': {'id': course.exam.id, 'title': course.exam.title} if course.exam else None,
+                    'exam': {'id': course.exam.id, 'title': getattr(course.exam, 'name', getattr(course.exam, 'title', ''))} if course.exam else None,
                 },
                 'progress': {
                     'total_topics': total_topics,
@@ -495,7 +533,7 @@ class MyCoursesListView(APIView):
             
             # The subscription plan acts as a course wrapper for analytics/display
             # We map the plan to a dummy course object for display purposes
-            if active_sub.plan.id not in enrolled_course_ids:
+            if not data and active_sub.plan.id not in enrolled_course_ids:
                 data.append({
                     'enrollment_id': -active_sub.id,
                     'enrolled_at': active_sub.created_at,
@@ -549,7 +587,7 @@ class CourseDetailView(APIView):
             'thumbnail': thumbnail_url,
             'duration_months': course.duration_months,
             'is_open_for_enrollment': course.is_open_for_enrollment,
-            'exam': {'id': course.exam.id, 'title': course.exam.title} if course.exam else None,
+            'exam': {'id': course.exam.id, 'title': getattr(course.exam, 'name', getattr(course.exam, 'title', ''))} if course.exam else None,
         }
         
         # Include the curriculum (subjects/chapters/topics)

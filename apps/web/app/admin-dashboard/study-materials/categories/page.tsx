@@ -381,7 +381,7 @@ export default function MaterialTaxonomyPage() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium text-slate-900 truncate">{m.title}</p>
                           <p className="text-xs text-slate-500">
-                            {m.subject} · {m.materialType} · {m.status}
+                            {m.subjectName || "General"} · {m.materialType} · {m.status}
                           </p>
                         </div>
                         {inside ? (

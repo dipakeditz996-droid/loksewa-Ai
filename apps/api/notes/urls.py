@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     StudyMaterialViewSet, TeacherStudyMaterialViewSet, AdminStudyMaterialViewSet,
-    PublicStudyMaterialListView,
+    PublicStudyMaterialListView, StudentPortalSyllabusNotesView,
 )
 
 router = DefaultRouter()
@@ -12,5 +12,6 @@ router.register(r'admin/materials', AdminStudyMaterialViewSet, basename='admin-m
 
 urlpatterns = [
     path('public/', PublicStudyMaterialListView.as_view(), name='public-materials'),
+    path('student/portal/', StudentPortalSyllabusNotesView.as_view(), name='student-portal-syllabus-notes'),
     path('', include(router.urls)),
 ]

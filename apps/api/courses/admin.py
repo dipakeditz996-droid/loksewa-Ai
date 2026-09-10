@@ -5,9 +5,25 @@ from .models import Course, Enrollment, CourseApplication, TeacherCourseAssignme
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
     list_display = ('title', 'status', 'is_open_for_enrollment', 'featured', 'exam', 'duration_months', 'created_at')
-    list_filter = ('status', 'is_open_for_enrollment', 'featured')
+    list_filter = ('status', 'is_open_for_enrollment', 'featured', 'exam__category')
     search_fields = ('title', 'slug')
     prepopulated_fields = {'slug': ('title',)}
+    actions = ['mark_coming_soon', 'mark_published', 'mark_archived']
+
+    def mark_coming_soon(self, request, queryset):
+        queryset.update(status='coming_soon', is_open_for_enrollment=False)
+        self.message_user(request, f"Marked {queryset.count()} course(s) as Coming Soon.")
+    mark_coming_soon.short_description = "Mark selected as Coming Soon"
+
+    def mark_published(self, request, queryset):
+        queryset.update(status='published')
+        self.message_user(request, f"Published {queryset.count()} course(s).")
+    mark_published.short_description = "Publish selected courses"
+
+    def mark_archived(self, request, queryset):
+        queryset.update(status='archived', is_open_for_enrollment=False)
+        self.message_user(request, f"Archived {queryset.count()} course(s).")
+    mark_archived.short_description = "Archive selected courses"
 
 
 @admin.register(Enrollment)

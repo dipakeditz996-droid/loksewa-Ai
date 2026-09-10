@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authApi } from "@/lib/api/auth";
 import { examPreferencesApi, ExamPreferenceCategory, ExamPreferenceNode } from "@/lib/api/exam-preferences";
+import { ALL_NEPAL_DISTRICTS } from "@/lib/constants/nepal-districts";
+import { DistrictSelector } from "@/components/DistrictSelector";
 import Link from "next/link";
-import bgImage from "../../../media/signup.png";
+import bgImage from "@/media/signup.png";
 
 function isValidNepalPhone(phone: string): boolean {
   const cleaned = phone.replace(/[\s-]/g, "").replace(/^\+?977/, "");
@@ -143,7 +145,11 @@ export default function OnboardingPage() {
                   <div>
                     <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Permanent Address</p>
                     <div className="grid grid-cols-2 gap-4">
-                      <Input id="district" type="text" value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="District" className="h-[48px] w-full bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
+                      <DistrictSelector
+                        id="district"
+                        value={district}
+                        onChange={(d) => setDistrict(d)}
+                      />
                       <Input id="localLevel" type="text" value={localLevel} onChange={(e) => setLocalLevel(e.target.value)} placeholder="Local Level" className="h-[48px] w-full bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
                     </div>
                   </div>

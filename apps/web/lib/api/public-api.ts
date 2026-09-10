@@ -35,8 +35,17 @@ export interface PublicCourse {
   duration_months: number;
   subject_count: number;
   enrolled_count: number;
-  exam: { id: number; title: string } | null;
+  exam: {
+    id: number;
+    title: string;
+    parent_id: number | null;
+    parent_name: string | null;
+    category_id: number | null;
+    category_name: string | null;
+  } | null;
   featured: boolean;
+  status: string;
+  is_coming_soon: boolean;
   starting_price: string | null;
   plans: PublicCoursePlan[];
 }
@@ -115,6 +124,16 @@ export interface PublicSyllabusExam {
   papersCount: number;
   subjectsCount: number;
   papers: PublicSyllabusPaper[];
+  // Self-nesting: a "Level" (e.g. PSC's 5th Level) carries its nested
+  // "Preparation/Service" (e.g. Civil Engineering) here, exactly mirroring
+  // Exam.parent in the admin Syllabus Builder - never flattened.
+  children: PublicSyllabusExam[];
+}
+
+export interface PublicSyllabusCategory {
+  id: number;
+  name: string;
+  exams: PublicSyllabusExam[];
 }
 
 // ── Public examinations (real, public) ───────────────────────────────────────
@@ -213,9 +232,10 @@ export const publicApi = {
   getProducts: (limit = 6): Promise<PublicProduct[] | null> =>
     safeGet<PublicProduct[]>(`/marketplace/public/products/?limit=${limit}`),
 
-  /** Get the active exam > paper > subject > chapter > topic tree for the Syllabus page. */
-  getSyllabusTree: (): Promise<PublicSyllabusExam[] | null> =>
-    safeGet<PublicSyllabusExam[]>("/public/syllabus/"),
+  /** Get the active category > exam (Level -> nested Preparation/Service) >
+   * paper > subject > chapter > topic tree for the Syllabus page. */
+  getSyllabusTree: (): Promise<PublicSyllabusCategory[] | null> =>
+    safeGet<PublicSyllabusCategory[]>("/public/syllabus/"),
 
   /** Get published mock/practice examinations for the Exams page. */
   getExaminations: (): Promise<PublicExamination[] | null> =>

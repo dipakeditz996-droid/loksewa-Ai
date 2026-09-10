@@ -34,9 +34,9 @@ export function Navbar() {
     { href: "/", label: "Home" },
     { href: "/courses", label: "Courses" },
     { href: "/syllabus", label: "Syllabus" },
+    { href: "/notes", label: "Notes" },
     { href: "/practice", label: "Practice" },
     { href: "/exams", label: "Exams" },
-    { href: "/notes", label: "Notes" },
     { href: "/marketplace", label: "Marketplace" },
   ];
 

@@ -231,12 +231,29 @@ body {
    Using `inherit` instead of a hard foreground value lets Tailwind's text-*
    utilities and inline styles on individual inputs win, while still preventing
    browser default grey on un-styled inputs. */
-select, option, input, textarea {
+select, input, textarea {
   color: inherit;
 }
 
 option {
-  background-color: hsl(var(--background));
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.dark option,
+[data-theme="dark"] option {
+  background-color: #1e293b;
+  color: #f8fafc;
+}
+
+::placeholder {
+  color: #94a3b8;
+  opacity: 0.9;
+}
+
+.dark ::placeholder {
+  color: #94a3b8;
+  opacity: 0.9;
 }
 
 /* ===== SCROLLBAR ===== */

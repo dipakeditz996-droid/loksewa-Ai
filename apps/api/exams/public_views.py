@@ -53,19 +53,22 @@ class PublicExamPreferenceTreeView(APIView):
 
 
 class PublicSyllabusTreeView(APIView):
-    """GET /api/public/syllabus/ - the active academic hierarchy (exam > paper >
-    subject > chapter > topic) for the anonymous Syllabus page. Mirrors the
-    admin academic tree but scoped to is_active records only, with real
+    """GET /api/public/syllabus/ - the active academic hierarchy (category >
+    exam [Level -> nested Preparation/Service via Exam.parent, arbitrarily
+    deep] > paper > subject > chapter > topic) for the anonymous Syllabus
+    page. Mirrors PublicExamPreferenceTreeView's recursive nesting so a
+    Level and the Preparations under it are never flattened into one list -
+    the exact same tree the admin Syllabus Builder edits, with real
     topic/question counts instead of hand-authored numbers."""
     permission_classes = [AllowAny]
 
     def get(self, request):
-        exams = Exam.objects.filter(is_active=True).select_related('category').prefetch_related(
+        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'name')
+        exams = Exam.objects.filter(is_active=True, category__in=categories).select_related('category').prefetch_related(
             'papers__subjects__chapters__topics',
-        ).order_by('order')
+        ).order_by('order', 'name')
 
-        data = []
-        for exam in exams:
+        def build_papers(exam):
             papers = []
             subjects_count = 0
             for paper in exam.papers.filter(is_active=True).order_by('order'):
@@ -96,15 +99,43 @@ class PublicSyllabusTreeView(APIView):
                     'title': paper.description or paper.name,
                     'subjects': subjects,
                 })
-            data.append({
+            return papers, subjects_count
+
+        children_by_parent = {}
+        top_level_by_category = {}
+        for exam in exams:
+            if exam.parent_id:
+                children_by_parent.setdefault(exam.parent_id, []).append(exam)
+            else:
+                top_level_by_category.setdefault(exam.category_id, []).append(exam)
+
+        def serialize_exam(exam, level_name):
+            papers, subjects_count = build_papers(exam)
+            return {
                 'id': exam.id,
                 'name': exam.name,
-                'level': exam.category.name if exam.category else '',
+                'level': level_name,
                 'description': exam.description,
                 'papersCount': len(papers),
                 'subjectsCount': subjects_count,
                 'papers': papers,
-            })
+                'children': [
+                    serialize_exam(child, level_name)
+                    for child in children_by_parent.get(exam.id, [])
+                ],
+            }
+
+        data = [
+            {
+                'id': category.id,
+                'name': category.name,
+                'exams': [
+                    serialize_exam(exam, category.name)
+                    for exam in top_level_by_category.get(category.id, [])
+                ],
+            }
+            for category in categories
+        ]
         return Response(data)
 
 

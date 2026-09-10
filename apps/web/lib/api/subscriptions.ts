@@ -12,12 +12,19 @@ export interface SubscriptionPlan {
   badge: "NONE" | "POPULAR" | "BEST_VALUE" | "RECOMMENDED" | "LIMITED_OFFER";
   features: string[];
   course: number | null;
+  course_details?: {
+    id: number;
+    title: string;
+    exam: string | null;
+  } | null;
   package_type: "SINGLE" | "MULTI" | "BUNDLE" | "ALL_ACCESS";
   eligible_courses: number[];
   eligible_courses_details?: {
     id: number;
     title: string;
     exam: string | null;
+    level?: string | null;
+    service?: string | null;
   }[];
   is_flexible: boolean;
   allowed_preparation_count: number;
@@ -74,9 +81,33 @@ export interface SubscriptionPayment {
   verified_by: number | null;
 }
 
+export interface AvailablePlansResponse {
+  preparation: {
+    has_preference: boolean;
+    category_name: string | null;
+    category_id: number | null;
+    level_name: string | null;
+    service_name: string | null;
+    exam_id: number | null;
+    exam_name: string | null;
+    course_id: number | null;
+    course_title: string | null;
+    owned_course_ids: number[];
+    has_matched_specific: boolean;
+  };
+  plans: SubscriptionPlan[];
+}
+
 export const subscriptionsApi = {
   // Public/student
   listPlans: (): Promise<SubscriptionPlan[]> => apiClient<SubscriptionPlan[]>("/subscriptions/plans/"),
+  listAvailablePlans: (params?: { course_id?: number | string; exam_id?: number | string }): Promise<AvailablePlansResponse> => {
+    const query = new URLSearchParams();
+    if (params?.course_id) query.set("course_id", String(params.course_id));
+    if (params?.exam_id) query.set("exam_id", String(params.exam_id));
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return apiClient<AvailablePlansResponse>(`/subscriptions/plans/available/${qs}`);
+  },
   getPlan: (id: number | string): Promise<SubscriptionPlan> => apiClient<SubscriptionPlan>(`/subscriptions/plans/${id}/`),
   mySubscriptions: (): Promise<Subscription[]> => apiClient<Subscription[]>("/subscriptions/my-subscriptions/"),
   myPayments: (): Promise<SubscriptionPayment[]> => apiClient<SubscriptionPayment[]>("/subscriptions/payments/"),

@@ -36,6 +36,9 @@ from .views import (
     AdminEvaluationDetailView,
     AdminStudyMaterialsView,
     AdminStudyMaterialDetailView,
+    AdminCourseStatusView,
+    AdminStudyMaterialsHierarchyView,
+    AdminPreparationAcademicTreeView,
     AdminStudyPlansView,
     AdminStudyPlanDetailView,
     AdminAuditLogsView,
@@ -55,6 +58,7 @@ from .views import (
     AdminTicketUpdateStatusView,
     AdminSettingsView,
     AdminPositionsView,
+    AdminPositionDetailView,
     AdminTagsView,
     AdminStorageHealthView,
 )
@@ -142,7 +146,10 @@ urlpatterns = [
     path('evaluations/<int:pk>/', AdminEvaluationDetailView.as_view(), name='admin-evaluation-detail'),
     # Study materials
     path('study-materials/', AdminStudyMaterialsView.as_view(), name='admin-study-materials'),
+    path('study-materials/hierarchy/', AdminStudyMaterialsHierarchyView.as_view(), name='admin-study-materials-hierarchy'),
+    path('study-materials/academic-tree/', AdminPreparationAcademicTreeView.as_view(), name='admin-study-materials-academic-tree'),
     path('study-materials/<int:pk>/', AdminStudyMaterialDetailView.as_view(), name='admin-study-material-detail'),
+    path('courses/<int:pk>/status/', AdminCourseStatusView.as_view(), name='admin-course-status'),
     # Study plans
     path('study-plans/', AdminStudyPlansView.as_view(), name='admin-study-plans'),
     path('study-plans/<int:pk>/', AdminStudyPlanDetailView.as_view(), name='admin-study-plan-detail'),
@@ -180,6 +187,7 @@ urlpatterns = [
     path('storage/health/', AdminStorageHealthView.as_view(), name='admin-storage-health'),
     # Positions
     path('syllabus/positions/', AdminPositionsView.as_view(), name='admin-positions'),
+    path('syllabus/positions/<int:pk>/', AdminPositionDetailView.as_view(), name='admin-position-detail'),
     # Tags
     path('syllabus/tags/', AdminTagsView.as_view(), name='admin-tags'),
     # Course applications / enrollment management

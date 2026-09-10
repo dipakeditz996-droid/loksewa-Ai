@@ -133,9 +133,23 @@ export function AcademicDependentSelect({
             className={`w-full p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 ${errors.exam || errors.position ? 'border-red-500' : 'border-gray-200'} ${!category ? 'bg-gray-50' : ''}`}
           >
             <option value="">Select Position</option>
-            {positions.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
+            {/* Grouped by Level (Exam.parent) so a Level's nested Preparations/
+                Services show under it instead of flattened alphabetically -
+                mirrors the same hierarchy the Syllabus Builder edits. */}
+            {positions.filter(p => !p.parent).map(level => {
+              const children = positions.filter(p => p.parent === level.id);
+              if (children.length === 0) {
+                return <option key={level.id} value={level.id}>{level.name}</option>;
+              }
+              return (
+                <optgroup key={level.id} label={level.name}>
+                  <option value={level.id}>{level.name} (General)</option>
+                  {children.map(child => (
+                    <option key={child.id} value={child.id}>{child.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
           </select>
           {loading.position && <p className="text-xs text-gray-400 mt-1">Loading...</p>}
           {(errors.exam || errors.position) && <p className="text-red-500 text-xs mt-1">{errors.exam || errors.position}</p>}

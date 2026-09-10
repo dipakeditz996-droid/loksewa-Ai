@@ -7,6 +7,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register(r'plans', SubscriptionPlanViewSet, basename='plan')
+router.register(r'packages', SubscriptionPlanViewSet, basename='package')
 router.register(r'my-subscriptions', SubscriptionViewSet, basename='subscription')
 router.register(r'payments', SubscriptionPaymentViewSet, basename='payment')
 router.register(r'notifications', NotificationViewSet, basename='notification')

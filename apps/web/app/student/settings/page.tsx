@@ -26,11 +26,43 @@ const SETTINGS_TABS = [
 
 type SettingsTab = (typeof SETTINGS_TABS)[number]["key"];
 
+import { Loader2, LogIn } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+
 export default function StudentSettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (!user) return null;
+  if (loading) {
+    return (
+      <div className="p-6 md:p-12 max-w-7xl mx-auto flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <Loader2 className="w-8 h-8 text-[#D4A72C] animate-spin" />
+        <p className="text-sm text-muted-foreground font-medium">Loading settings...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="p-6 md:p-12 max-w-md mx-auto text-center space-y-5 my-12 bg-card border border-border rounded-3xl shadow-sm">
+        <div className="w-14 h-14 rounded-2xl bg-[#D4A72C]/10 text-[#D4A72C] flex items-center justify-center mx-auto">
+          <User className="w-7 h-7" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-xl font-bold text-foreground">Sign In Required</h2>
+          <p className="text-sm text-muted-foreground">
+            Please sign in with your student account to access and customize your profile and settings.
+          </p>
+        </div>
+        <Button asChild className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold h-11">
+          <Link href="/login">
+            <LogIn className="w-4 h-4 mr-2" /> Sign In to Continue
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
@@ -54,8 +86,8 @@ export default function StudentSettingsPage() {
                   className={cn(
                     "flex items-center gap-3 w-full px-5 py-3.5 text-left text-[13px] font-medium transition-all border-l-[3px]",
                     isActive
-                      ? "bg-primary text-primary-foreground/5 text-primary dark:text-foreground border-l-[#D4A72C]"
-                      : "text-muted-foreground border-l-transparent hover:bg-muted hover:text-foreground"
+                      ? "bg-[#D4A72C]/10 text-[#D4A72C] font-semibold border-l-[#D4A72C] dark:bg-[#D4A72C]/15"
+                      : "text-muted-foreground border-l-transparent hover:bg-muted/60 hover:text-foreground"
                   )}
                 >
                   <Icon className={cn("h-4 w-4", isActive ? "text-[#D4A72C]" : "text-muted-foreground")} strokeWidth={1.5} />

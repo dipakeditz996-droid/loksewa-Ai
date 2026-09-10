@@ -11,6 +11,48 @@ from django.utils.translation import gettext as _
 
 NEPAL_PHONE_PATTERN = re.compile(r'^9[678]\d{8}$')
 
+NEPAL_DISTRICTS = (
+    # Koshi Province (14)
+    "Bhojpur", "Dhankuta", "Ilam", "Jhapa", "Khotang", "Morang", "Okhaldhunga",
+    "Panchthar", "Sankhuwasabha", "Solukhumbu", "Sunsari", "Taplejung", "Terhathum", "Udayapur",
+    # Madhesh Province (8)
+    "Bara", "Dhanusha", "Mahottari", "Parsa", "Rautahat", "Saptari", "Sarlahi", "Siraha",
+    # Bagmati Province (13)
+    "Bhaktapur", "Chitwan", "Dhading", "Dolakha", "Kathmandu", "Kavrepalanchok",
+    "Lalitpur", "Makwanpur", "Nuwakot", "Ramechhap", "Rasuwa", "Sindhuli", "Sindhupalchok",
+    # Gandaki Province (11)
+    "Baglung", "Gorkha", "Kaski", "Lamjung", "Manang", "Mustang", "Myagdi",
+    "Nawalpur", "Parbat", "Syangja", "Tanahun",
+    # Lumbini Province (12)
+    "Arghakhanchi", "Banke", "Bardiya", "Dang", "Gulmi", "Kapilvastu",
+    "Palpa", "Parasi", "Pyuthan", "Rolpa", "Rukum East", "Rupandehi",
+    # Karnali Province (10)
+    "Dailekh", "Dolpa", "Humla", "Jajarkot", "Jumla", "Kalikot", "Mugu",
+    "Rukum West", "Salyan", "Surkhet",
+    # Sudurpashchim Province (9)
+    "Achham", "Baitadi", "Bajhang", "Bajura", "Dadeldhura", "Darchula",
+    "Doti", "Kailali", "Kanchanpur",
+)
+
+NEPAL_DISTRICTS_LOWER = {d.lower() for d in NEPAL_DISTRICTS}
+
+
+def is_valid_nepal_district(district):
+    """True if `district` matches one of the canonical 77 districts of Nepal."""
+    if not district or not isinstance(district, str):
+        return False
+    # Also support common alternate spellings/suffixes (e.g. Kavre -> Kavrepalanchok, Nawalparasi)
+    d = district.strip().lower()
+    if d in NEPAL_DISTRICTS_LOWER:
+        return True
+    aliases = {
+        'kavre': 'kavrepalanchok',
+        'sindhupalchowk': 'sindhupalchok',
+        'nawalparasi': 'nawalpur',
+        'rukum': 'rukum west',
+    }
+    return aliases.get(d) in NEPAL_DISTRICTS_LOWER
+
 
 def is_valid_nepal_phone(phone):
     """True if `phone` is a 10-digit Nepali mobile number (96/97/98-prefixed),

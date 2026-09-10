@@ -456,29 +456,66 @@ export default function StudentDashboardPage() {
             </div>
           )}
 
-          <div className="bg-primary text-primary-foreground text-white p-4 rounded-xl border border-[#163E6B] shadow-md relative overflow-hidden">
-            <div className="absolute right-0 top-0 w-32 h-32 bg-card/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+          <div className="bg-[#0B2545] dark:bg-[#0D1B2A] text-white p-5 rounded-2xl border border-[#163E6B] dark:border-[#243B53] shadow-lg relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
-            {enrollmentStatus?.has_active_enrollment && enrollmentStatus.enrollment ? (
+            {data.package?.hasActivePackage && data.package.planName ? (
+              <div className="relative z-10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-[#D4A72C] rounded-lg">
+                      <Sparkles className="w-4 h-4 text-[#0A1118]" />
+                    </div>
+                    <span className="font-bold text-[15px] tracking-tight text-white">{data.package.planName}</span>
+                  </div>
+                  <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase border border-emerald-500/30">
+                    {data.package.status || "ACTIVE"}
+                  </span>
+                </div>
+
+                {enrollmentStatus?.enrollment?.course && (
+                  <div className="font-semibold text-slate-200 text-xs leading-snug">
+                    {enrollmentStatus.enrollment.course.title}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-white/15 text-xs text-slate-300 space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Remaining Access:</span>
+                    <span className="font-bold text-[#D4A72C]">{data.package.remainingDays ?? 0} days</span>
+                  </div>
+                  {data.package.expiryDate && (
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>Expires:</span>
+                      <span className="font-medium text-slate-200">{new Date(data.package.expiryDate).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold shadow-sm transition-colors">
+                  <Link href="/student/courses">Go to My Courses</Link>
+                </Button>
+              </div>
+            ) : enrollmentStatus?.has_active_enrollment && enrollmentStatus.enrollment ? (
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-[#D4A72C] rounded-lg"><GraduationCap className="w-4 h-4 text-[#0A1118]" /></div>
-                  <span className="font-bold text-lg tracking-tight">Active Course</span>
+                  <span className="font-bold text-lg tracking-tight text-white">Active Course</span>
                 </div>
                 <div className="font-semibold text-white text-sm leading-snug">{enrollmentStatus.enrollment.course.title}</div>
                 {enrollmentStatus.enrollment.course.exam && (
-                  <div className="text-[11px] text-muted-foreground font-medium">{enrollmentStatus.enrollment.course.exam.title}</div>
+                  <div className="text-[11px] text-slate-400 font-medium">{enrollmentStatus.enrollment.course.exam.title}</div>
                 )}
                 {analytics && (
-                  <div className="pt-2 border-t border-white/10">
+                  <div className="pt-2 border-t border-white/15">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs text-muted-foreground font-medium">Journey Progress</span>
+                      <span className="text-xs text-slate-400 font-medium">Journey Progress</span>
                       <span className="text-xs font-bold text-[#D4A72C]">{analytics.journey_progress}%</span>
                     </div>
-                    <Progress value={analytics.journey_progress} className="h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
+                    <Progress value={analytics.journey_progress} className="h-1.5 bg-white/10" indicatorClassName="bg-[#D4A72C]" />
                   </div>
                 )}
-                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-card/10 hover:text-white bg-transparent h-8 text-xs font-bold">
+                <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold shadow-sm transition-colors">
                   <Link href="/student/study-plan">Resume Journey</Link>
                 </Button>
               </div>
@@ -486,16 +523,16 @@ export default function StudentDashboardPage() {
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-yellow-400/20 rounded-lg"><Clock className="w-4 h-4 text-yellow-300" /></div>
-                  <span className="font-bold text-lg tracking-tight">Application Pending</span>
+                  <span className="font-bold text-lg tracking-tight text-white">Application Pending</span>
                 </div>
-                <div className="font-semibold text-yellow-200 text-sm leading-snug">{enrollmentStatus.application.course.title}</div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
+                <div className="font-semibold text-yellow-300 text-sm leading-snug">{enrollmentStatus.application.course.title}</div>
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Your application is under review. You'll be notified once it's approved.
                   {enrollmentStatus.payment?.status === 'PENDING' && (
-                    <span className="block mt-1 text-yellow-300 font-medium">Payment verification in progress.</span>
+                    <span className="block mt-1 text-yellow-400 font-medium">Payment verification in progress.</span>
                   )}
                 </p>
-                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-card/10 hover:text-white bg-transparent h-8 text-xs font-bold">
+                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-white/10 hover:text-white bg-white/5 text-white h-9 text-xs font-bold">
                   <Link href="/student/purchases">View Payment Status</Link>
                 </Button>
               </div>
@@ -503,12 +540,12 @@ export default function StudentDashboardPage() {
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-red-500/20 rounded-lg"><AlertCircle className="w-4 h-4 text-red-300" /></div>
-                  <span className="font-bold text-lg tracking-tight">Application Rejected</span>
+                  <span className="font-bold text-lg tracking-tight text-white">Application Rejected</span>
                 </div>
                 {enrollmentStatus.application.note && (
-                  <p className="text-xs text-red-200 leading-relaxed">{enrollmentStatus.application.note}</p>
+                  <p className="text-xs text-red-300 leading-relaxed">{enrollmentStatus.application.note}</p>
                 )}
-                <p className="text-xs text-muted-foreground leading-relaxed">Please contact support or apply again.</p>
+                <p className="text-xs text-slate-300 leading-relaxed">Please contact support or apply again.</p>
                 <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold">
                   <Link href="/student/plans">Apply Again</Link>
                 </Button>
@@ -517,27 +554,27 @@ export default function StudentDashboardPage() {
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-[#D4A72C] rounded-lg"><Sparkles className="w-4 h-4 text-[#0A1118]" /></div>
-                  <span className="font-bold text-lg tracking-tight">Active Plan</span>
+                  <span className="font-bold text-lg tracking-tight text-white">Active Plan</span>
                 </div>
                 <div className="font-semibold text-white text-sm">{analytics.active_course.name}</div>
-                <div className="pt-2 border-t border-white/10">
+                <div className="pt-2 border-t border-white/15">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-muted-foreground font-medium">Journey Progress</span>
+                    <span className="text-xs text-slate-400 font-medium">Journey Progress</span>
                     <span className="text-xs font-bold text-[#D4A72C]">{analytics.journey_progress}%</span>
                   </div>
-                  <Progress value={analytics.journey_progress} className="h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
+                  <Progress value={analytics.journey_progress} className="h-1.5 bg-white/10" indicatorClassName="bg-[#D4A72C]" />
                 </div>
-                <Button asChild variant="outline" className="w-full mt-2 border-white/20 hover:bg-card/10 hover:text-white bg-transparent h-8 text-xs font-bold">
+                <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold">
                   <Link href="/student/study-plan">Resume Journey</Link>
                 </Button>
               </div>
             ) : (
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-[#0B2545]/10 rounded-lg"><Sparkles className="w-4 h-4 text-[#0B2545]/80" /></div>
-                  <span className="font-bold text-lg tracking-tight text-[#0B2545]">Unlock Full Access</span>
+                  <div className="p-1.5 bg-[#D4A72C]/20 rounded-lg"><Sparkles className="w-4 h-4 text-[#D4A72C]" /></div>
+                  <span className="font-bold text-lg tracking-tight text-white">Unlock Full Access</span>
                 </div>
-                <p className="text-xs text-[#0B2545]/80 leading-relaxed">
+                <p className="text-xs text-slate-300 leading-relaxed">
                   Get access to premium preparation tools, AI tutoring, and advanced mock exams.
                 </p>
                 <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold">

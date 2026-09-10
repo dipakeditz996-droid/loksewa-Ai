@@ -1,6 +1,6 @@
 from django.db import models
 from core.models import User
-from exams.models import Exam, Subject, Topic
+from exams.models import Exam, Subject, Chapter, Topic
 from core.upload_validators import validate_document_size_20mb, validate_document_extension
 
 
@@ -85,14 +85,39 @@ class StudyMaterial(models.Model):
         ('intermediate', 'Intermediate'),
         ('advanced', 'Advanced'),
     )
+    CONTENT_CATEGORY_CHOICES = (
+        ('syllabus', 'Syllabus'),
+        ('subjective_topicwise', 'Subjective Topicwise Notes [Detailed]'),
+        ('objective_topicwise', 'Objective Topicwise Notes [Detailed]'),
+        ('revision_notes', 'Revision Notes'),
+    )
+    NOTE_TYPE_CHOICES = (
+        ('standard', 'Standard'),
+        ('ai', 'AI'),
+        ('subjective', 'Subjective'),
+        ('objective', 'Objective'),
+    )
 
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True, blank=True) # allow blank for auto-generation
     teacher = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='authored_materials')
     course = models.ForeignKey('courses.Course', on_delete=models.CASCADE, related_name='study_materials', null=True, blank=True)
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='materials')
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='materials')
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name='materials')
+    chapter = models.ForeignKey(Chapter, on_delete=models.SET_NULL, null=True, blank=True, related_name='materials')
     topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True, related_name='materials')
+    content_category = models.CharField(
+        max_length=50,
+        choices=CONTENT_CATEGORY_CHOICES,
+        default='subjective_topicwise',
+        db_index=True,
+    )
+    note_type = models.CharField(
+        max_length=50,
+        choices=NOTE_TYPE_CHOICES,
+        default='standard',
+        db_index=True,
+    )
     category = models.ForeignKey(
         MaterialCategory, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='materials',

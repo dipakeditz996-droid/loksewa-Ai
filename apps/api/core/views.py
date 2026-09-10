@@ -89,7 +89,7 @@ class StudentSignupView(APIView):
         course_id = request.data.get('course_id')
 
         missing = []
-        if not username: missing.append('username')
+        if not username and not email: missing.append('username')
         if not email: missing.append('email')
         if not password: missing.append('password')
         if not full_name: missing.append('name')
@@ -103,9 +103,28 @@ class StudentSignupView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from .validators import is_valid_nepal_phone
+        from django.core.validators import validate_email
+        try:
+            validate_email(email)
+        except DjangoValidationError:
+            return Response({'error': 'Please enter a valid email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .validators import is_valid_nepal_phone, is_valid_nepal_district
         if not is_valid_nepal_phone(phone):
             return Response({'error': 'Please enter a valid 10-digit Nepali mobile number.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not is_valid_nepal_district(permanent_district):
+            return Response({'error': 'Please select a valid district of Nepal.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not username and email:
+            import re
+            base_user = re.sub(r'[^a-zA-Z0-9_]', '', email.split('@')[0]) or 'student'
+            candidate = base_user
+            idx = 1
+            while User.objects.filter(username=candidate).exists():
+                candidate = f"{base_user}_{idx}"
+                idx += 1
+            username = candidate
 
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -138,6 +157,18 @@ class StudentSignupView(APIView):
 
         first_name, _, last_name = full_name.partition(' ')
 
+        target_course = None
+        if course_id:
+            from courses.models import Course
+            try:
+                target_course = Course.objects.filter(id=course_id).first()
+                if target_course and not exam_position and target_course.exam:
+                    exam_position = target_course.exam
+                if target_course and not exam_category and target_course.exam and target_course.exam.category:
+                    exam_category = target_course.exam.category
+            except (ValueError, TypeError):
+                target_course = None
+
         try:
             with transaction.atomic():
                 user = User.objects.create_user(
@@ -149,7 +180,7 @@ class StudentSignupView(APIView):
                 StudentProfile.objects.create(
                     user=user, phone=phone,
                     permanent_district=permanent_district, permanent_local_level=permanent_local_level,
-                    target_category=exam_category, target_position=exam_position,
+                    target_category=exam_category, target_position=exam_position, target_course=target_course,
                     is_verified=False,
                 )
                 NotificationPreference.objects.create(user=user)
@@ -162,20 +193,11 @@ class StudentSignupView(APIView):
                     from gamification.models import GamificationProfile
                     GamificationProfile.objects.create(user=user)
 
-                # Process a direct course-application deep link (?course=) if one was
-                # given. NOTE: plan_id (the signup wizard's "Select Plan" step) is
-                # intentionally NOT turned into a payment here - the student hasn't
-                # actually paid anything yet at this point, so fabricating a
-                # SubscriptionPayment with a random transaction ID would be a fake
-                # payment record. The frontend instead sends the verified student to
-                # the real checkout page (QR/payment method, real transaction ID,
-                # proof upload) for that plan after they verify their email.
-                if course_id:
-                    from courses.models import Course, CourseApplication
-                    course = Course.objects.get(id=course_id)
+                if target_course:
+                    from courses.models import CourseApplication
                     CourseApplication.objects.create(
                         student=user,
-                        course=course,
+                        course=target_course,
                         subscription_payment=None,
                         status='pending'
                     )
@@ -184,7 +206,7 @@ class StudentSignupView(APIView):
                     NotificationService.notify_admins(
                         notif_type='course_application',
                         title='New Course Application',
-                        message=f"New student {username} applied for '{course.title}' during registration.",
+                        message=f"New student {username} applied for '{target_course.title}' during registration.",
                         action_url='/admin-dashboard/applications',
                     )
 
@@ -810,6 +832,7 @@ class CompleteGoogleProfileView(APIView):
         permanent_local_level = (request.data.get('permanent_local_level') or '').strip()
         exam_category_id = request.data.get('exam_category_id')
         exam_position_id = request.data.get('exam_position_id')
+        course_id = request.data.get('course_id')
 
         missing = []
         if not full_name: missing.append('full_name')
@@ -823,10 +846,16 @@ class CompleteGoogleProfileView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from .validators import is_valid_nepal_phone
+        from .validators import is_valid_nepal_phone, is_valid_nepal_district
         if not is_valid_nepal_phone(phone):
             return Response(
                 {'error': 'Please enter a valid 10-digit Nepali mobile number.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not is_valid_nepal_district(permanent_district):
+            return Response(
+                {'error': 'Please select a valid district of Nepal.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -859,6 +888,13 @@ class CompleteGoogleProfileView(APIView):
         profile.target_category = exam_category
         if exam_position:
             profile.target_position = exam_position
+        if course_id:
+            from courses.models import Course
+            target_course = Course.objects.filter(id=course_id).first()
+            if target_course:
+                profile.target_course = target_course
+                if not profile.target_position and target_course.exam:
+                    profile.target_position = target_course.exam
         if not profile.is_verified:
             profile.is_verified = True
             profile.verified_at = tz.now()

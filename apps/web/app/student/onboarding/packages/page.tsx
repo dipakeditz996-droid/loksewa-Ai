@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, Package, Sparkles } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { subscriptionsApi, SubscriptionPlan } from "@/lib/api/subscriptions";
 import Link from "next/link";
-import bgImage from "../../../../media/signup.png";
+import bgImage from "@/media/signup.png";
 
 export default function PackagesSelectionPage() {
   const router = useRouter();

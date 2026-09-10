@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookOpen, Target, ArrowRight, Search, SlidersHorizontal, Star, Sparkles, ChevronDown, CheckCircle2, BookMarked } from "lucide-react";
+import { BookOpen, Target, ArrowRight, Search, SlidersHorizontal, Sparkles, ChevronDown, CheckCircle2, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Navbar } from "@/components/layout/navbar";
@@ -134,82 +134,90 @@ export default function CoursesPage() {
 
         <section className="container mx-auto px-4 max-w-[1200px] py-12">
           
-          {/* 8. FEATURED COURSE */}
-          {activeCategory === "All Courses" && (
-            <div className="mb-16">
-              <div className="flex items-center gap-2 mb-6">
-                <Sparkles className="w-5 h-5 text-[#D4A72C]" />
-                <h2 className="text-xl font-[800] text-slate-900 dark:text-white">Recommended for You</h2>
-              </div>
-              
-              <div className="group relative bg-white dark:bg-[#0B1521] rounded-[24px] border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-2xl overflow-hidden flex flex-col md:flex-row transition-all duration-500 hover:border-[#163E6B]/30 hover:shadow-[0_20px_40px_-15px_rgba(22,62,107,0.15)]">
-                {/* Image side */}
-                <div className="w-full md:w-[45%] lg:w-[40%] relative overflow-hidden bg-[#0A1118]">
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#163E6B]/80 to-[#0A1118] z-10 mix-blend-multiply group-hover:scale-105 transition-transform duration-700"></div>
-                  <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-20 z-10"></div>
-                  <div className="absolute inset-0 flex items-center justify-center z-20">
-                    <BookOpen className="w-24 h-24 text-white/10" />
-                  </div>
-                  <div className="absolute top-6 left-6 z-30 flex flex-wrap gap-2">
-                    <Badge className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C] font-bold border-none uppercase tracking-wider text-[10px] px-2.5 py-1">Featured</Badge>
-                    <Badge className="bg-white/20 text-white hover:bg-white/20 backdrop-blur-md font-bold border border-white/10 uppercase tracking-wider text-[10px] px-2.5 py-1">Officer Level</Badge>
-                  </div>
+          {/* 8. FEATURED COURSE — a real course from the API (admin-flagged
+              "featured", or the first live one), never fabricated content. */}
+          {activeCategory === "All Courses" && !isLoading && (() => {
+            const featured = courses.find((c) => c.featured) || courses[0];
+            if (!featured) return null;
+            const plan = featured.plans?.[0];
+            return (
+              <div className="mb-16">
+                <div className="flex items-center gap-2 mb-6">
+                  <Sparkles className="w-5 h-5 text-[#D4A72C]" />
+                  <h2 className="text-xl font-[800] text-slate-900 dark:text-white">Recommended for You</h2>
                 </div>
-                
-                {/* Content side */}
-                <div className="flex-1 p-8 md:p-10 flex flex-col justify-center relative z-20">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-[700] text-[#163E6B] dark:text-[#8BA4C4] uppercase tracking-wider">Complete Preparation</span>
-                    <div className="flex items-center gap-1 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-md">
-                      <Star className="w-3.5 h-3.5 fill-current" />
-                      <span className="text-xs font-bold">4.9</span>
+
+                <div className="group relative bg-white dark:bg-[#0B1521] rounded-[24px] border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-2xl overflow-hidden flex flex-col md:flex-row transition-all duration-500 hover:border-[#163E6B]/30 hover:shadow-[0_20px_40px_-15px_rgba(22,62,107,0.15)]">
+                  {/* Image side */}
+                  <div className="w-full md:w-[45%] lg:w-[40%] relative overflow-hidden bg-[#0A1118]">
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#163E6B]/80 to-[#0A1118] z-10 mix-blend-multiply group-hover:scale-105 transition-transform duration-700"></div>
+                    <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-20 z-10"></div>
+                    <div className="absolute inset-0 flex items-center justify-center z-20">
+                      <BookOpen className="w-24 h-24 text-white/10" />
+                    </div>
+                    <div className="absolute top-6 left-6 z-30 flex flex-wrap gap-2">
+                      {featured.featured && (
+                        <Badge className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C] font-bold border-none uppercase tracking-wider text-[10px] px-2.5 py-1">Featured</Badge>
+                      )}
+                      {featured.exam?.parent_name && (
+                        <Badge className="bg-white/20 text-white hover:bg-white/20 backdrop-blur-md font-bold border border-white/10 uppercase tracking-wider text-[10px] px-2.5 py-1">{featured.exam.parent_name}</Badge>
+                      )}
                     </div>
                   </div>
-                  
-                  <h3 className="text-2xl md:text-3xl font-[800] text-slate-900 dark:text-white leading-tight mb-4 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
-                    Loksewa Officer (Section Officer) Complete Preparation
-                  </h3>
-                  
-                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-8 text-[15px]">
-                    Master the Section Officer curriculum with our comprehensive AI-powered learning path. Includes structured video lessons, exhaustive study notes, smart mock exams, and personalized performance tracking.
-                  </p>
-                  
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-2xl font-[800] text-slate-900 dark:text-white">8</span>
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Subjects</span>
+
+                  {/* Content side */}
+                  <div className="flex-1 p-8 md:p-10 flex flex-col justify-center relative z-20">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-[700] text-[#163E6B] dark:text-[#8BA4C4] uppercase tracking-wider">{featured.exam?.category_name || "Complete Preparation"}</span>
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-2xl font-[800] text-slate-900 dark:text-white">2.5k+</span>
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">MCQs</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-2xl font-[800] text-slate-900 dark:text-white">45</span>
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Mock Tests</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-2xl font-[800] text-slate-900 dark:text-white">1.2k</span>
-                      <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Enrolled</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-auto pt-6 border-t border-slate-100 dark:border-white/5">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-3xl font-[900] text-slate-900 dark:text-white tracking-tight">{formatPrice(4999)}</span>
-                        <span className="text-sm font-semibold text-slate-400 line-through decoration-slate-300 dark:decoration-slate-600">{formatPrice(6499)}</span>
+
+                    <h3 className="text-2xl md:text-3xl font-[800] text-slate-900 dark:text-white leading-tight mb-4 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors">
+                      {featured.title}
+                    </h3>
+
+                    <p className="text-slate-600 dark:text-slate-400 leading-relaxed mb-8 text-[15px]">
+                      {featured.short_description || featured.description || "Comprehensive preparation for this examination."}
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-2xl font-[800] text-slate-900 dark:text-white">{featured.subject_count ?? 0}</span>
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Subjects</span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-2xl font-[800] text-slate-900 dark:text-white">{featured.duration_months ?? 0}</span>
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Months</span>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-2xl font-[800] text-slate-900 dark:text-white">{featured.enrolled_count ?? 0}</span>
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Enrolled</span>
                       </div>
                     </div>
-                    <Button asChild className="h-[48px] px-8 rounded-[12px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[700] text-[15px] transition-all shadow-md flex items-center gap-2 group/btn">
-                      <Link href={`/courses/1`}>
-                        View Course <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                      </Link>
-                    </Button>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-auto pt-6 border-t border-slate-100 dark:border-white/5">
+                      <div>
+                        {featured.is_coming_soon ? (
+                          <span className="text-lg font-[800] text-slate-500 dark:text-slate-400">Coming Soon</span>
+                        ) : featured.starting_price ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-3xl font-[900] text-slate-900 dark:text-white tracking-tight">{formatPrice(Number(featured.starting_price))}</span>
+                            {plan?.original_price && Number(plan.original_price) > Number(featured.starting_price) && (
+                              <span className="text-sm font-semibold text-slate-400 line-through decoration-slate-300 dark:decoration-slate-600">{formatPrice(Number(plan.original_price))}</span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                      <Button asChild disabled={featured.is_coming_soon} className="h-[48px] px-8 rounded-[12px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[700] text-[15px] transition-all shadow-md flex items-center gap-2 group/btn">
+                        <Link href={`/courses/${featured.id}`}>
+                          {featured.is_coming_soon ? "Notify Me" : "View Course"} <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 10. RESULTS HEADER */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -263,19 +271,14 @@ export default function CoursesPage() {
                     <BookOpen className="w-20 h-20 text-white" />
                   </div>
                   
-                  {/* Badges */}
+                  {/* Badges — derived from real fields, never a fabricated list */}
                   <div className="absolute top-4 left-4 flex flex-wrap gap-2 z-10">
-                    {course.badges?.map((badge: string, idx: number) => (
-                      <Badge key={idx} className={`${
-                        badge === "Best Seller" || badge === "Popular" || badge === "Trending"
-                          ? "bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]"
-                          : badge === "Coming Soon"
-                          ? "bg-slate-800 text-white border border-slate-600"
-                          : "bg-white/20 text-white border border-white/20 backdrop-blur-md"
-                      } font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 border-none shadow-sm`}>
-                        {badge}
-                      </Badge>
-                    ))}
+                    {course.featured && (
+                      <Badge className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C] font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 border-none shadow-sm">Featured</Badge>
+                    )}
+                    {course.is_coming_soon && (
+                      <Badge className="bg-slate-800 text-white border border-slate-600 font-bold uppercase tracking-wider text-[9px] px-2 py-0.5 shadow-sm">Coming Soon</Badge>
+                    )}
                   </div>
 
                   {/* Status */}
@@ -289,18 +292,18 @@ export default function CoursesPage() {
                 {/* Content */}
                 <div className="flex flex-col flex-1 p-6 relative">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-[12px] font-[700] text-[#163E6B] dark:text-[#8BA4C4] uppercase tracking-wider">{course.category || "General"}</span>
+                    <span className="text-[12px] font-[700] text-[#163E6B] dark:text-[#8BA4C4] uppercase tracking-wider">{course.exam?.category_name || "General"}</span>
                   </div>
-                  
+
                   <h3 className="text-[18px] font-[800] text-slate-900 dark:text-white leading-[1.3] mb-3 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors line-clamp-2">
                     {course.title}
                   </h3>
-                  
+
                   <p className="text-[14px] text-slate-600 dark:text-slate-400 line-clamp-2 mb-6 leading-relaxed">
                     {course.short_description || course.description || "Comprehensive preparation for this subject."}
                   </p>
-                  
-                  {/* Stats Row */}
+
+                  {/* Stats Row — real fields from the API only */}
                   <div className="grid grid-cols-3 gap-2 py-4 border-t border-b border-slate-100 dark:border-white/5 mb-6">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 rounded-md bg-slate-50 dark:bg-white/5">
@@ -316,8 +319,8 @@ export default function CoursesPage() {
                         <Target className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.is_open_for_enrollment ? 'Yes' : 'No'}</span>
-                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Enroll</span>
+                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.subject_count ?? 0}</span>
+                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Subjects</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -325,34 +328,38 @@ export default function CoursesPage() {
                         <CheckCircle2 className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.featured ? 'Yes' : 'No'}</span>
-                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Featured</span>
+                        <span className="text-[13px] font-[700] text-slate-900 dark:text-white leading-none">{course.enrolled_count ?? 0}</span>
+                        <span className="text-[10px] font-[600] text-slate-500 uppercase mt-1">Enrolled</span>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Footer Stats & Price */}
+
+                  {/* Footer: Level + Price */}
                   <div className="mt-auto">
                     <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-1.5">
-                        <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                        <span className="text-[14px] font-[700] text-slate-900 dark:text-white">{course.rating || "New"}</span>
-                        <span className="text-[12px] text-slate-500">({course.students || 0})</span>
-                      </div>
+                      <span className="text-[13px] font-[600] text-slate-500 dark:text-slate-400 truncate">
+                        {course.exam?.parent_name || course.exam?.title || ""}
+                      </span>
                       <div className="flex flex-col items-end">
-                        <span className="text-[20px] font-[800] text-slate-900 dark:text-white tracking-tight leading-none">{course.price ? formatPrice(course.price) : "Free"}</span>
-                        {course.originalPrice && (
-                          <span className="text-[12px] font-[600] text-slate-400 line-through mt-1">{formatPrice(course.originalPrice)}</span>
-                        )}
+                        {course.is_coming_soon ? (
+                          <span className="text-[14px] font-[700] text-slate-500 dark:text-slate-400">Coming Soon</span>
+                        ) : course.starting_price ? (
+                          <>
+                            <span className="text-[20px] font-[800] text-slate-900 dark:text-white tracking-tight leading-none">{formatPrice(Number(course.starting_price))}</span>
+                            {course.plans?.[0]?.original_price && Number(course.plans[0].original_price) > Number(course.starting_price) && (
+                              <span className="text-[12px] font-[600] text-slate-400 line-through mt-1">{formatPrice(Number(course.plans[0].original_price))}</span>
+                            )}
+                          </>
+                        ) : null}
                       </div>
                     </div>
-                    
-                    <Button asChild className={`w-full h-[44px] rounded-[10px] font-[700] text-[14px] transition-all flex items-center justify-center gap-2 group/btn ${
-                      course.status === "Coming Soon" 
-                        ? "bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 cursor-not-allowed" 
+
+                    <Button asChild disabled={course.is_coming_soon} className={`w-full h-[44px] rounded-[10px] font-[700] text-[14px] transition-all flex items-center justify-center gap-2 group/btn ${
+                      course.is_coming_soon
+                        ? "bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 cursor-not-allowed"
                         : "bg-white dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 hover:bg-[#0B2545] hover:border-[#0B2545] hover:text-white dark:hover:bg-white/10 dark:hover:border-white/20 shadow-sm"
                     }`}>
-                      {course.status === "Coming Soon" ? (
+                      {course.is_coming_soon ? (
                         <span>Coming Soon</span>
                       ) : (
                         <Link href={`/courses/${course.id}`}>

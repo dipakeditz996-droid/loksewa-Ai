@@ -21,7 +21,8 @@ class ExamSerializer(serializers.ModelSerializer):
         # parent lets one Exam stand in for a "Level" with child Exam rows
         # under it standing in for "Service/Faculty" (see exams.models.Exam),
         # used by the registration flow's PSC -> Level -> Service picker.
-        fields = ['id', 'category', 'category_name', 'parent', 'parent_name', 'name', 'description', 'is_active', 'order', 'created_at', 'updated_at', 'paper_count']
+        fields = ['id', 'category', 'category_name', 'parent', 'parent_name', 'name', 'description', 'status', 'is_active', 'order', 'created_at', 'updated_at', 'paper_count']
+        read_only_fields = ['is_active']
 
     def get_paper_count(self, obj):
         return obj.papers.count()

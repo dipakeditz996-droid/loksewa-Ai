@@ -38,22 +38,26 @@ export default function SubjectsPage() {
   const [subjects, setSubjects] = useState<ApiSubject[]>([]);
   const [categories, setCategories] = useState<ApiExamCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingSubject, setDeletingSubject] = useState<ApiSubject | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      const [subRes, catRes] = await Promise.all([
+        adminAcademicApi.getSubjects(),
+        adminAcademicApi.getCategories()
+      ]);
+      setSubjects(subRes);
+      setCategories(catRes);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [subRes, catRes] = await Promise.all([
-          adminAcademicApi.getSubjects(),
-          adminAcademicApi.getCategories()
-        ]);
-        setSubjects(subRes);
-        setCategories(catRes);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -75,6 +79,31 @@ export default function SubjectsPage() {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
     );
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!deletingSubject) return;
+    setIsDeleting(true);
+    setActionError(null);
+    try {
+      await adminAcademicApi.deleteSubject(deletingSubject.id);
+      setSubjects(prev => prev.filter(s => s.id !== deletingSubject.id));
+      setSelected(prev => prev.filter(id => id !== deletingSubject.id));
+      setDeletingSubject(null);
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to delete subject. It may have linked chapters or questions.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleToggleActive = async (subject: ApiSubject) => {
+    try {
+      await adminAcademicApi.updateSubject(subject.id, { is_active: !subject.is_active });
+      setSubjects(prev => prev.map(s => s.id === subject.id ? { ...s, is_active: !s.is_active } : s));
+    } catch (err: any) {
+      alert(err?.message || "Failed to update subject status.");
+    }
   };
 
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading subjects...</div>;
@@ -246,17 +275,17 @@ export default function SubjectsPage() {
                               <BookOpen className="mr-2 h-4 w-4" /> Manage Chapters
                             </Link>
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Copy className="mr-2 h-4 w-4" /> Duplicate
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem>
-                            <Power className="mr-2 h-4 w-4" /> 
-                            {(subject as any).status === 'Active' ? 'Deactivate' : 'Activate'}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="text-red-600 focus:text-red-600">
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleToggleActive(subject)}>
+                             <Power className="mr-2 h-4 w-4" /> 
+                             {subject.is_active ? 'Deactivate' : 'Activate'}
+                           </DropdownMenuItem>
+                           <DropdownMenuItem 
+                             className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                             onClick={() => { setDeletingSubject(subject); setActionError(null); }}
+                           >
+                             <Trash2 className="mr-2 h-4 w-4" /> Delete
+                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -338,6 +367,49 @@ export default function SubjectsPage() {
             <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
             <Button className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white" onClick={() => setIsAddModalOpen(false)}>
               Create Subject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingSubject} onOpenChange={(open) => { if (!open) { setDeletingSubject(null); setActionError(null); } }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Delete Subject
+            </DialogTitle>
+            <DialogDescription className="pt-2">
+              Are you sure you want to permanently delete{" "}
+              <strong className="text-slate-900">&ldquo;{deletingSubject?.name}&rdquo;</strong>?
+              {(deletingSubject?.chapter_count ?? 0) > 0 && (
+                <span className="block mt-2 text-amber-600 font-medium text-sm">
+                  ⚠️ This subject has {deletingSubject?.chapter_count} chapter{(deletingSubject?.chapter_count ?? 0) > 1 ? 's' : ''}.
+                  All chapters and topics inside will also be deleted.
+                </span>
+              )}
+              <span className="block mt-2 text-red-600 text-sm font-medium">This action cannot be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          {actionError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {actionError}
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => { setDeletingSubject(null); setActionError(null); }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeleteConfirmed}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Yes, Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

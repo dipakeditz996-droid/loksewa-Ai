@@ -29,10 +29,26 @@ class Exam(models.Model):
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('coming_soon', 'Coming Soon'),
+        ('inactive', 'Inactive'),
+    ]
+    # Single admin-facing status for this Level/Preparation node (set from
+    # the Syllabus Builder). is_active stays in sync via save() below so
+    # every existing `Exam.objects.filter(is_active=True)` query - used
+    # throughout the registration picker, study materials, public syllabus,
+    # etc. - keeps excluding only 'inactive' nodes; 'coming_soon' nodes stay
+    # visible everywhere those already show a Coming Soon badge.
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     is_active = models.BooleanField(default=True)
     order = models.IntegerField(default=0)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.is_active = self.status != 'inactive'
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name

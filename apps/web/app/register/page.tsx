@@ -1,39 +1,60 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
-import { BookOpen, User, Mail, Phone, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, UserCircle2, Gift, Check, X, GraduationCap, Clock, Zap, CheckCircle2, KeyRound, MapPin, ShieldQuestion, LifeBuoy } from "lucide-react";
+import {
+  BookOpen,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  ArrowLeft,
+  UserCircle2,
+  Gift,
+  Check,
+  X,
+  GraduationCap,
+  Clock,
+  CheckCircle2,
+  KeyRound,
+  MapPin,
+  ShieldQuestion,
+  LifeBuoy,
+  ChevronDown,
+  Sparkles,
+  Loader2,
+} from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { authApi } from "@/lib/api/auth";
 import { apiClient } from "@/lib/api/client";
-import { subscriptionPlansApi } from "@/lib/api/gamification";
 import { examPreferencesApi, ExamPreferenceCategory, ExamPreferenceNode } from "@/lib/api/exam-preferences";
+import { ALL_NEPAL_DISTRICTS } from "@/lib/constants/nepal-districts";
+import { DistrictSelector } from "@/components/DistrictSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import bgImage from "../../media/signup.png";
+import bgImage from "@/media/signup.png";
 import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
 
-interface SubscriptionPlan {
-  id: number;
-  name: string;
-  description: string;
-  duration: number;
-  duration_unit: string;
-  price: string;
-  original_price?: string;
-  discount: string;
-  badge: string;
-  features: string[];
-  status: string;
-}
+const STEPS = ["Basic Info", "Address", "Preparation", "Review"];
 
-const STEPS = ["Signup", "Category", "Level", "Service", "Course", "Packages", "Purchase", "Review"];
-
-// Mirrors core.validators.is_valid_nepal_phone on the backend - the
-// project's Nepal phone-number convention (10 digits, 96/97/98-prefixed).
 function isValidNepalPhone(phone: string): boolean {
   const cleaned = phone.replace(/[\s-]/g, "").replace(/^\+?977/, "");
   return /^9[678]\d{8}$/.test(cleaned);
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return email;
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return email;
+  if (local.length <= 2) return `${local[0]}***@${domain}`;
+  return `${local[0]}${"*".repeat(Math.min(local.length - 2, 5))}${local[local.length - 1]}@${domain}`;
 }
 
 function RegisterForm() {
@@ -42,134 +63,185 @@ function RegisterForm() {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Step 1: Basic Information
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
-  const [district, setDistrict] = useState("");
-  const [localLevel, setLocalLevel] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [referralCode, setReferralCode] = useState("");
   const [referralStatus, setReferralStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
-  const [error, setError] = useState("");
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
-  // "What are you preparing for?" - progressive/hierarchical, driven
-  // entirely by the admin-managed ExamCategory/Exam tree (no hardcoded
-  // levels/services). `examPath` holds the chosen node at each depth below
-  // the category (Level, then Service/Faculty, etc, however deep the data
-  // goes); the most specific one chosen is what gets submitted.
+  // Step 2: Permanent Address
+  const [district, setDistrict] = useState("");
+  const [localLevel, setLocalLevel] = useState("");
+
+  // Step 3: Exam Preference (Hierarchical)
   const [examTree, setExamTree] = useState<ExamPreferenceCategory[]>([]);
   const [examTreeLoading, setExamTreeLoading] = useState(true);
   const [examCategoryId, setExamCategoryId] = useState<number | null>(null);
   const [examPath, setExamPath] = useState<ExamPreferenceNode[]>([]);
+  const [courseId, setCourseId] = useState<string>("");
 
-  // Registration itself now happens on the Review step's "Create Account"
-  // button (see handleRegister) - this stage switches to the post-
-  // registration OTP screen once that succeeds.
+  // Step 4 & OTP State
   const [registrationStage, setRegistrationStage] = useState<"form" | "otp">("form");
-  const [otp, setOtp] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // OTP inputs
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendActive, setResendActive] = useState(false);
+
+  // Recovery Code Fallback
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState("");
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [recoveryVerified, setRecoveryVerified] = useState(false);
 
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
-  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
-  const [plansLoading, setPlansLoading] = useState(false);
-  const [courseId, setCourseId] = useState<string>("");
+  // Google Auth
+  const [googleError, setGoogleError] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     const ref = searchParams.get("ref");
-    if (ref) { setReferralCode(ref); validateReferral(ref); }
-
+    if (ref) {
+      setReferralCode(ref);
+      validateReferral(ref);
+    }
     const course = searchParams.get("course");
-    if (course) { setCourseId(course); }
+    if (course) {
+      setCourseId(course);
+    }
   }, [searchParams]);
 
   useEffect(() => {
-    examPreferencesApi.getTree()
-      .then(setExamTree)
+    examPreferencesApi
+      .getTree()
+      .then((tree) => {
+        setExamTree(tree);
+        // Default to PSC Exams if available
+        const psc = tree.find((c) => c.name.toLowerCase().includes("psc"));
+        if (psc) {
+          setExamCategoryId(psc.id);
+        } else if (tree.length > 0 && tree[0]) {
+          setExamCategoryId(tree[0].id);
+        }
+      })
       .catch(() => setExamTree([]))
       .finally(() => setExamTreeLoading(false));
   }, []);
 
+  // Countdown timer for OTP resend
   useEffect(() => {
-    if (currentStep === 5) {
-      setPlansLoading(true);
-      subscriptionPlansApi.getPlans()
-        .then((data) => setPlans(data.filter((p: SubscriptionPlan) => p.status === 'ACTIVE')))
-        .catch(() => setPlans([]))
-        .finally(() => setPlansLoading(false));
+    if (registrationStage !== "otp") return;
+    if (resendCooldown <= 0) {
+      setResendActive(true);
+      return;
     }
-  }, [currentStep]);
+    setResendActive(false);
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [registrationStage, resendCooldown]);
 
   const selectedExamCategory = examTree.find((c) => c.id === examCategoryId) || null;
-  // Options available at a given depth beneath the category: depth 0 is the
-  // category's own top-level exams (a "Level"), depth 1 is examPath[0]'s
-  // children (a "Service/Faculty"), and so on for however deep the data goes.
+
   const examOptionsAtDepth = (depth: number): ExamPreferenceNode[] => {
     if (!selectedExamCategory) return [];
     if (depth === 0) return selectedExamCategory.exams;
     const parent = examPath[depth - 1];
     return parent ? parent.children : [];
   };
-  const examDepthLabel = (depth: number): string => {
-    if (depth === 0) return selectedExamCategory?.name === "PSC Exams" ? "Select PSC Level" : `Select ${selectedExamCategory?.name} Level`;
-    if (depth === 1) return "Select Service / Faculty";
-    return "Select an option";
-  };
+
   const selectExamNode = (depth: number, node: ExamPreferenceNode) => {
     setExamPath((prev) => [...prev.slice(0, depth), node]);
   };
-  // The most specific node chosen is what's submitted - falls back through
-  // shallower depths, then finally the category itself if it has no tree at all.
+
   const selectedExamPosition = examPath.length > 0 ? examPath[examPath.length - 1] : null;
 
   const validateReferral = async (code: string) => {
-    if (!code.trim()) { setReferralStatus("idle"); return; }
+    if (!code.trim()) {
+      setReferralStatus("idle");
+      return;
+    }
     setReferralStatus("validating");
     try {
-      const res = await apiClient<{ valid: boolean }>(`/gamification/referrals/validate/?code=${encodeURIComponent(code)}`);
+      const res = await apiClient<{ valid: boolean }>(
+        `/gamification/referrals/validate/?code=${encodeURIComponent(code)}`
+      );
       setReferralStatus(res.valid ? "valid" : "invalid");
-    } catch { setReferralStatus("invalid"); }
+    } catch {
+      setReferralStatus("invalid");
+    }
   };
 
-  const handleNext = async () => {
+  const handleNext = () => {
     setError("");
     if (currentStep === 0) {
-      if (!fullName || !username || !email || !password || !confirmPassword) { setError("Please fill all required fields."); return; }
-      if (!district.trim() || !localLevel.trim()) { setError("Please provide your permanent address (District and Local Level)."); return; }
-      if (!mobile.trim()) { setError("Please provide your mobile number."); return; }
-      if (!isValidNepalPhone(mobile)) { setError("Please enter a valid 10-digit Nepali mobile number."); return; }
-      if (password !== confirmPassword) { setError("Passwords do not match."); return; }
-      if (referralCode && referralStatus === "invalid") { setError("Please provide a valid referral code or remove it."); return; }
+      if (!fullName.trim()) {
+        setError("Full name is required.");
+        return;
+      }
+      if (!email.trim() || !isValidEmail(email)) {
+        setError("Please provide a valid email address.");
+        return;
+      }
+      if (!mobile.trim() || !isValidNepalPhone(mobile)) {
+        setError("Please provide a valid 10-digit Nepali mobile number (98/97/96XXXXXXXX).");
+        return;
+      }
+      if (!password) {
+        setError("Please enter a password.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match.");
+        return;
+      }
+      if (referralCode && referralStatus === "invalid") {
+        setError("Please provide a valid referral code or remove it.");
+        return;
+      }
     }
-    if (currentStep === 1 && !examCategoryId) { setError("Please select an exam category."); return; }
-    if (currentStep === 2 && !examPath[0] && examOptionsAtDepth(0).length > 0) { setError("Please select a level."); return; }
-    if (currentStep === 3 && !examPath[1] && examOptionsAtDepth(1).length > 0) { setError("Please select a service / faculty."); return; }
-    
-    // Auto-skip steps if no options available
-    let nextStep = currentStep + 1;
-    if (nextStep === 2 && examOptionsAtDepth(0).length === 0) nextStep = 4; // Skip Level and Service if none
-    if (nextStep === 3 && examOptionsAtDepth(1).length === 0) nextStep = 4; // Skip Service if none
-    
-    setCurrentStep((s) => Math.min(nextStep, 7));
-  };
 
-  const handleResendOtp = async () => {
-    setError("");
-    setOtpLoading(true);
-    try {
-      await authApi.requestSignupOtp(email);
-    } catch (err: any) {
-      setError(err.message || err.error || "Could not resend verification code. Please try again.");
-    } finally {
-      setOtpLoading(false);
+    if (currentStep === 1) {
+      if (!district.trim()) {
+        setError("Please select your permanent district.");
+        return;
+      }
+      if (!localLevel.trim()) {
+        setError("Please provide your local level / municipality.");
+        return;
+      }
     }
+
+    if (currentStep === 2) {
+      if (!examCategoryId) {
+        setError("Please select what you are preparing for.");
+        return;
+      }
+      if (examOptionsAtDepth(0).length > 0 && !examPath[0]) {
+        setError("Please select a level.");
+        return;
+      }
+      if (examOptionsAtDepth(1).length > 0 && !examPath[1]) {
+        setError("Please select a service / faculty.");
+        return;
+      }
+    }
+
+    setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
   const handleRegister = async () => {
@@ -177,16 +249,15 @@ function RegisterForm() {
     setIsLoading(true);
     try {
       const payload: Record<string, string> = {
-        username,
-        email,
+        name: fullName.trim(),
+        username: username.trim() || email.split("@")[0] || "student",
+        email: email.trim(),
+        mobile: mobile.trim(),
         password,
-        name: fullName,
-        mobile,
-        permanent_district: district,
-        permanent_local_level: localLevel,
+        permanent_district: district.trim(),
+        permanent_local_level: localLevel.trim(),
         exam_category_id: String(examCategoryId),
-        ref: referralCode,
-        plan_id: selectedPlanId ? String(selectedPlanId) : "",
+        ref: referralCode.trim(),
       };
       if (selectedExamPosition) {
         payload.exam_position_id = String(selectedExamPosition.id);
@@ -197,32 +268,115 @@ function RegisterForm() {
 
       await authApi.studentSignup(payload);
       setRegistrationStage("otp");
+      setResendCooldown(60);
     } catch (err: any) {
-      setError(err.message || err.detail || "Failed to create account. Please try again.");
-      // Every validation error this endpoint returns (username/email taken,
-      // weak password, bad referral code, missing/invalid preference) belongs
-      // to the Account step's fields, so send the user back there instead of
-      // leaving them stuck on Review with an error banner that has nothing
-      // to fix in view.
-      setCurrentStep(0);
+      setError(err.message || err.error || err.detail || "Failed to create account. Please check your details.");
+      // Return to first step if account validation failed
+      if (err.missing_fields?.includes("email") || err.missing_fields?.includes("mobile")) {
+        setCurrentStep(0);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const [googleError, setGoogleError] = useState("");
-  const [googleLoading, setGoogleLoading] = useState(false);
+  // OTP Digits Handling
+  const handleOtpDigitChange = (index: number, val: string) => {
+    const cleaned = val.replace(/\D/g, "");
+    const newDigits = [...otpDigits];
 
-  // Google already verifies the email and supplies a name, so signing up
-  // this way skips the whole multi-step wizard - same backend endpoint and
-  // is_new_user/profile_complete redirect logic as the login page's Google
-  // button, just entered from Register instead of Login.
+    if (cleaned.length > 1) {
+      // Paste full OTP
+      const pasted = cleaned.slice(0, 6).split("");
+      pasted.forEach((ch, idx) => {
+        if (idx < 6) newDigits[idx] = ch;
+      });
+      setOtpDigits(newDigits);
+      const nextIdx = Math.min(pasted.length, 5);
+      otpInputsRef.current[nextIdx]?.focus();
+      return;
+    }
+
+    newDigits[index] = cleaned;
+    setOtpDigits(newDigits);
+
+    if (cleaned && index < 5) {
+      otpInputsRef.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      otpInputsRef.current[index - 1]?.focus();
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError("");
+    const enteredOtp = otpDigits.join("");
+    if (enteredOtp.length !== 6) {
+      setError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+    setOtpLoading(true);
+    try {
+      await authApi.verifyEmailOtp(email, enteredOtp);
+      // Success: redirect to onboarding preparation or student dashboard
+      if (courseId) {
+        router.push(`/student/courses/${courseId}`);
+      } else {
+        router.push("/student/onboarding/preparation");
+      }
+    } catch (emailErr: any) {
+      // If regular OTP failed, attempt verification as recovery code before erroring
+      try {
+        await authApi.verifyRecoveryCode(email, enteredOtp);
+        setRecoveryVerified(true);
+      } catch {
+        setError(emailErr.message || emailErr.error || "Verification failed. The code may be incorrect or expired.");
+      }
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError("");
+    setOtpLoading(true);
+    try {
+      await authApi.requestSignupOtp(email);
+      setResendCooldown(60);
+      setOtpDigits(["", "", "", "", "", ""]);
+      otpInputsRef.current[0]?.focus();
+    } catch (err: any) {
+      setError(err.message || err.error || "Could not resend code. Please wait before trying again.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyRecovery = async () => {
+    setError("");
+    if (!recoveryCode.trim()) {
+      setError("Please enter the recovery code provided by an administrator.");
+      return;
+    }
+    setRecoveryLoading(true);
+    try {
+      await authApi.verifyRecoveryCode(email, recoveryCode.trim());
+      setRecoveryVerified(true);
+    } catch (err: any) {
+      setError(err.message || err.error || "Invalid or expired recovery code. Please check with an administrator.");
+    } finally {
+      setRecoveryLoading(false);
+    }
+  };
+
   const handleGoogleSuccess = async (token: string) => {
     setGoogleLoading(true);
     setGoogleError("");
     try {
       const result = await authApi.socialLogin("google", token);
-
       if (result.user?.role === "teacher") {
         router.push("/teacher");
         return;
@@ -237,653 +391,769 @@ function RegisterForm() {
       }
       router.push("/student");
     } catch (err: any) {
-      setGoogleError(err.message || err.detail || "Failed to sign up with Google.");
+      setGoogleError(err.message || err.detail || "Google sign-in failed. Please try again.");
       setGoogleLoading(false);
     }
   };
 
   const signUpWithGoogle = useGoogleLogin({
     onSuccess: (tokenResponse) => handleGoogleSuccess(tokenResponse.access_token),
-    onError: () => setGoogleError("Google sign-up failed."),
+    onError: () => setGoogleError("Google sign-up failed. Please use email."),
   });
-
-  const handleVerifyOtp = async () => {
-    setError("");
-    if (!otp || otp.length !== 6) { setError("Please enter the 6-digit code sent to your email."); return; }
-    setOtpLoading(true);
-    try {
-      await authApi.verifyEmailOtp(email, otp);
-      if (courseId) {
-        router.push(`/student/courses/${courseId}`);
-      } else {
-        router.push("/student");
-      }
-    } catch (emailErr: any) {
-      // The same 6-digit box is what a student naturally uses for whatever
-      // code they were given, whether that's the emailed OTP or an
-      // admin-issued recovery code - they shouldn't have to know those are
-      // two different code types verified by two different endpoints. If
-      // the email OTP didn't match, silently try it as a recovery code
-      // before surfacing an error.
-      try {
-        await authApi.verifyRecoveryCode(email, otp);
-        setRecoveryVerified(true);
-      } catch {
-        setError(emailErr.message || emailErr.error || "Verification failed. Please check the code and try again.");
-      }
-    } finally {
-      setOtpLoading(false);
-    }
-  };
-
-  const handleVerifyRecovery = async () => {
-    setError("");
-    if (!recoveryCode.trim()) { setError("Please enter the recovery code an administrator gave you."); return; }
-    setRecoveryLoading(true);
-    try {
-      await authApi.verifyRecoveryCode(email, recoveryCode.trim());
-      setRecoveryVerified(true);
-    } catch (err: any) {
-      setError(err.message || err.error || "That recovery code did not work. Please double-check it with your administrator.");
-    } finally {
-      setRecoveryLoading(false);
-    }
-  };
 
   const getPasswordStrength = () => {
     if (password.length === 0) return { score: 0, label: "", color: "bg-white/10", textColor: "text-white/50" };
     if (password.length < 6) return { score: 1, label: "Weak", color: "bg-red-500", textColor: "text-red-500" };
-    if (password.length < 10) return { score: 2, label: "Medium", color: "bg-yellow-500", textColor: "text-yellow-500" };
-    if (password.match(/[A-Z]/) && password.match(/[0-9]/) && password.match(/[^A-Za-z0-9]/)) return { score: 4, label: "Strong", color: "bg-[#22c55e]", textColor: "text-[#22c55e]" };
-    return { score: 3, label: "Good", color: "bg-[#22c55e]", textColor: "text-[#22c55e]" };
+    if (password.length < 8) return { score: 2, label: "Fair", color: "bg-yellow-500", textColor: "text-yellow-500" };
+    if (password.match(/[A-Z]/) && password.match(/[0-9]/) && password.match(/[^A-Za-z0-9]/))
+      return { score: 4, label: "Strong", color: "bg-[#22c55e]", textColor: "text-[#22c55e]" };
+    return { score: 3, label: "Good", color: "bg-[#D4A72C]", textColor: "text-[#D4A72C]" };
   };
 
   const strength = getPasswordStrength();
-  const selectedPlan = plans.find((p) => p.id === selectedPlanId);
-
-  const getBadgeStyle = (badge: string) => {
-    switch (badge) {
-      case 'POPULAR': return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
-      case 'BEST_VALUE': return 'bg-[#D4A72C]/20 text-[#D4A72C] border border-[#D4A72C]/30';
-      case 'RECOMMENDED': return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-      case 'LIMITED_OFFER': return 'bg-red-500/20 text-red-300 border border-red-500/30';
-      default: return '';
-    }
-  };
 
   return (
     <div className="min-h-screen relative flex font-sans overflow-hidden bg-[#0A1118] text-white">
+      {/* Background Graphic */}
       <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-cover bg-[25%_top] lg:bg-[center_top] bg-no-repeat" style={{ backgroundImage: `url(${bgImage.src})` }} />
-        {/* Mobile: vertical gradient suits the single-column stacked layout.
-            Desktop (lg+): original left-right gradients for the side-by-side layout. */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-black/95 lg:bg-gradient-to-r lg:from-black/50 lg:via-black/20 lg:to-black/80 mix-blend-multiply" />
-        <div className="hidden lg:block absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-[#0A1118]/90 via-[#0A1118]/40 to-transparent" />
+        <div
+          className="absolute inset-0 bg-cover bg-[25%_top] lg:bg-[center_top] bg-no-repeat"
+          style={{ backgroundImage: `url(${bgImage.src})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/70 to-black/95 lg:bg-gradient-to-r lg:from-black/60 lg:via-black/30 lg:to-black/85 mix-blend-multiply" />
+        <div className="hidden lg:block absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-[#0A1118]/95 via-[#0A1118]/60 to-transparent" />
       </div>
 
-      <div className="container relative z-10 w-full mx-auto px-6 md:px-12 py-8 flex flex-col min-h-screen">
+      <div className="container relative z-10 w-full mx-auto px-4 md:px-12 py-6 flex flex-col min-h-screen">
+        {/* Header Logo */}
         <div className="flex justify-start w-full mb-auto lg:mb-0">
-          <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity w-fit mt-4">
+          <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity w-fit mt-2">
             <div className="bg-transparent border border-white/80 p-1.5 rounded-[8px] flex items-center justify-center">
               <BookOpen className="h-5 w-5 text-white" strokeWidth={1.5} />
             </div>
             <div>
-              <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">Loksewa<span className="text-[#D4A72C]">AI</span></span>
-              <span className="text-[9px] text-white/70 block mt-0.5 font-medium tracking-wide">Your Journey. Our Guidance. Your Success.</span>
+              <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">
+                Loksewa<span className="text-[#D4A72C]">AI</span>
+              </span>
+              <span className="text-[9px] text-white/70 block mt-0.5 font-medium tracking-wide">
+                Your Journey. Our Guidance. Your Success.
+              </span>
             </div>
           </Link>
         </div>
 
-        <div className="w-full flex justify-center lg:justify-end flex-1 items-center py-10">
-          <div className={`w-full ${currentStep === 1 ? 'lg:w-[760px]' : 'lg:w-[480px]'} bg-black/20 backdrop-blur-[24px] border border-white/10 rounded-[24px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.4)] relative transition-all duration-300`}>
-
+        {/* Main Card Container */}
+        <div className="w-full flex justify-center lg:justify-end flex-1 items-center py-8">
+          <div className="w-full lg:w-[520px] bg-black/40 backdrop-blur-[24px] border border-white/15 rounded-[24px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] relative transition-all duration-300">
             {registrationStage === "form" && (
-            <>
-            {/* Step Indicator */}
-            <div className="flex items-center px-8 pt-7 pb-5 border-b border-white/5">
-              {STEPS.map((step, i) => (
-                <React.Fragment key={step}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-300 ${i < currentStep ? 'bg-[#D4A72C] text-black' : i === currentStep ? 'bg-[#D4A72C]/20 border-2 border-[#D4A72C] text-[#D4A72C]' : 'bg-white/5 border border-white/20 text-white/30'}`}>
-                      {i < currentStep ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
-                    </div>
-                    <span className={`text-[11px] font-semibold tracking-wide ${i === currentStep ? 'text-white' : 'text-white/30'}`}>{step}</span>
-                  </div>
-                  {i < STEPS.length - 1 && <div className={`flex-1 h-[1px] mx-3 transition-colors duration-300 ${i < currentStep ? 'bg-[#D4A72C]/60' : 'bg-white/10'}`} />}
-                </React.Fragment>
-              ))}
-            </div>
-
-            <div className="p-8 sm:p-10">
-              {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-[10px] text-red-400 text-[13px] font-medium mb-4">{error}</div>}
-
-              {/* STEP 0: Account Info */}
-              {currentStep === 0 && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
-                      <UserCircle2 className="h-6 w-6 text-white/80" strokeWidth={1.5} />
-                    </div>
-                    <div>
-                      <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Create <span className="text-[#D4A72C]">Your Account</span></h2>
-                      <p className="text-[12px] text-white/60 font-medium">Start your Loksewa success journey today.</p>
-                    </div>
-                  </div>
-
-                  {googleError && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-[10px] text-red-400 text-[13px] font-medium">{googleError}</div>}
-
-                  <button
-                    type="button"
-                    disabled={googleLoading}
-                    onClick={() => signUpWithGoogle()}
-                    className="h-[48px] w-full flex items-center justify-center gap-3 bg-transparent hover:bg-white/5 border border-white/20 rounded-[10px] transition-colors disabled:opacity-50 text-[13px] font-semibold text-white/90"
-                  >
-                    <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
-                      <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
-                        <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/>
-                        <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/>
-                        <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/>
-                        <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/>
-                      </g>
-                    </svg>
-                    {googleLoading ? "Signing up..." : "Continue with Google"}
-                  </button>
-
-                  <div className="flex items-center gap-4 py-1">
-                    <div className="flex-1 h-[1px] bg-white/10"></div>
-                    <span className="text-[10px] text-white/50 lowercase tracking-wide">or sign up with email</span>
-                    <div className="flex-1 h-[1px] bg-white/10"></div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="relative group">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><User className="h-4 w-4" strokeWidth={1.5} /></div>
-                      <Input id="fullName" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full Name" className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                    </div>
-                    <div className="relative group">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><User className="h-4 w-4" strokeWidth={1.5} /></div>
-                      <Input id="username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                    </div>
-                  </div>
-
-                  <div className="relative group">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Mail className="h-4 w-4" strokeWidth={1.5} /></div>
-                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email Address" className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                  </div>
-
-                  <div className="relative group">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Phone className="h-4 w-4" strokeWidth={1.5} /></div>
-                    <Input id="mobile" type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile Number (98XXXXXXXX)" className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                  </div>
-
-                  <div>
-                    <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Permanent Address</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <Input id="district" type="text" value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="District" className="h-[48px] w-full bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                      <Input id="localLevel" type="text" value={localLevel} onChange={(e) => setLocalLevel(e.target.value)} placeholder="Local Level" className="h-[48px] w-full bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                    </div>
-                  </div>
-
-                  <div className="relative group">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Lock className="h-4 w-4" strokeWidth={1.5} /></div>
-                    <Input id="password" type={showPassword ? "text" : "password"} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-[48px] w-full pl-11 pr-12 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
-                      {showPassword ? <EyeOff className="h-4 w-4" strokeWidth={1.5} /> : <Eye className="h-4 w-4" strokeWidth={1.5} />}
-                    </button>
-                  </div>
-
-                  <div className="relative group">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Lock className="h-4 w-4" strokeWidth={1.5} /></div>
-                    <Input id="confirmPassword" type={showConfirmPassword ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Confirm Password" className="h-[48px] w-full pl-11 pr-12 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40" required />
-                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
-                      {showConfirmPassword ? <EyeOff className="h-4 w-4" strokeWidth={1.5} /> : <Eye className="h-4 w-4" strokeWidth={1.5} />}
-                    </button>
-                  </div>
-
-                  <div className="pt-1 pb-1">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] text-white/60">Password Strength</span>
-                      {strength.label && <span className={`text-[10px] font-bold ${strength.textColor}`}>{strength.label}</span>}
-                    </div>
-                    <div className="flex gap-1 h-1">
-                      {[1, 2, 3, 4].map((level) => (
-                        <div key={level} className={`flex-1 rounded-full ${level <= strength.score ? strength.color : "bg-white/10"} transition-colors duration-300`} />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="relative group">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Gift className="h-4 w-4" strokeWidth={1.5} /></div>
-                    <Input id="referralCode" type="text" placeholder="Referral Code (Optional)" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} onBlur={() => validateReferral(referralCode)} className={`h-[48px] w-full pl-11 pr-11 bg-transparent text-[13px] text-white focus:bg-white/5 focus:ring-1 rounded-[10px] transition-all placeholder:text-white/40 ${referralStatus === "invalid" ? "border-red-500 focus:border-red-500 focus:ring-red-500" : referralStatus === "valid" ? "border-[#22c55e] focus:border-[#22c55e] focus:ring-[#22c55e]" : "border-white/20 focus:border-[#D4A72C] focus:ring-[#D4A72C]"}`} />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                      {referralStatus === "valid" && <Check className="h-4 w-4 text-[#22c55e]" strokeWidth={2} />}
-                      {referralStatus === "invalid" && <X className="h-4 w-4 text-red-500" strokeWidth={2} />}
-                    </div>
-                  </div>
-
-                  <Button onClick={handleNext} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
-                    Continue <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} />
-                  </Button>
-                </div>
-              )}
-              {/* STEP 1: Exam Category */}
-              {currentStep === 1 && (
-                <div className="space-y-4">
-                  <div className="mb-6">
-                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Select <span className="text-[#D4A72C]">Exam Category</span></h2>
-                    <p className="text-[12px] text-white/60 font-medium">What are you preparing for?</p>
-                  </div>
-                  {examTreeLoading ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      {[1, 2, 3, 4].map((i) => <div key={i} className="h-[44px] rounded-[10px] bg-white/5 animate-pulse" />)}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {examTree.map((category) => {
-                        const isSelected = examCategoryId === category.id;
-                        return (
-                          <button
-                            key={category.id}
-                            type="button"
-                            onClick={() => { setExamCategoryId(category.id); setExamPath([]); }}
-                            className={`h-[44px] px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+              <>
+                {/* Progressive Step Indicator */}
+                <div className="px-6 pt-6 pb-4 border-b border-white/10 bg-white/[0.02]">
+                  <div className="flex items-center justify-between">
+                    {STEPS.map((step, i) => (
+                      <React.Fragment key={step}>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-300 ${
+                              i < currentStep
+                                ? "bg-[#D4A72C] text-black shadow-[0_0_12px_rgba(212,167,44,0.4)]"
+                                : i === currentStep
+                                ? "bg-[#D4A72C]/20 border-2 border-[#D4A72C] text-[#D4A72C]"
+                                : "bg-white/5 border border-white/20 text-white/40"
+                            }`}
                           >
-                            {category.name}
-                          </button>
-                        );
-                      })}
+                            {i < currentStep ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : i + 1}
+                          </div>
+                          <span
+                            className={`text-[11px] font-semibold hidden sm:inline tracking-wide ${
+                              i === currentStep ? "text-white" : "text-white/40"
+                            }`}
+                          >
+                            {step}
+                          </span>
+                        </div>
+                        {i < STEPS.length - 1 && (
+                          <div
+                            className={`flex-1 h-[1px] mx-2 transition-colors duration-300 ${
+                              i < currentStep ? "bg-[#D4A72C]/60" : "bg-white/10"
+                            }`}
+                          />
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-6 sm:p-8">
+                  {error && (
+                    <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-[12px] text-red-400 text-[13px] font-medium mb-5 flex items-start gap-2">
+                      <X className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
+                      <span>{error}</span>
                     </div>
                   )}
-                  <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
-                      Continue <ArrowRight className="h-[18px] w-[18px] ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-    
-              {/* STEP 2: Level */}
-              {currentStep === 2 && (
-                <div className="space-y-4">
-                  <div className="mb-6">
-                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Select <span className="text-[#D4A72C]">Level</span></h2>
-                    <p className="text-[12px] text-white/60 font-medium">{examDepthLabel(0)}</p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {examOptionsAtDepth(0).map((node) => {
-                      const isSelected = examPath[0]?.id === node.id;
-                      return (
-                        <button
-                          key={node.id}
-                          type="button"
-                          onClick={() => selectExamNode(0, node)}
-                          className={`px-4 py-3 rounded-[10px] border text-[13px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
-                        >
-                          {node.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
-                      Continue <ArrowRight className="h-[18px] w-[18px] ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-    
-              {/* STEP 3: Service / Faculty */}
-              {currentStep === 3 && (
-                <div className="space-y-4">
-                  <div className="mb-6">
-                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Select <span className="text-[#D4A72C]">Service / Faculty</span></h2>
-                    <p className="text-[12px] text-white/60 font-medium">{examDepthLabel(1)}</p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {examOptionsAtDepth(1).map((node) => {
-                      const isSelected = examPath[1]?.id === node.id;
-                      return (
-                        <button
-                          key={node.id}
-                          type="button"
-                          onClick={() => selectExamNode(1, node)}
-                          className={`px-4 py-3 rounded-[10px] border text-[13px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
-                        >
-                          {node.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
-                      Continue <ArrowRight className="h-[18px] w-[18px] ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-    
-              {/* STEP 4: FIXED COURSE */}
-              {currentStep === 4 && (
-                <div className="space-y-4">
-                  <div className="mb-6">
-                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Recommended <span className="text-[#D4A72C]">Course</span></h2>
-                    <p className="text-[12px] text-white/60 font-medium">Based on your selections, here is your path.</p>
-                  </div>
-                  
-                  <div className="p-5 rounded-[14px] border border-[#D4A72C] bg-[#D4A72C]/10 flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-[10px] bg-[#D4A72C]/20 flex items-center justify-center shrink-0">
-                      <GraduationCap className="h-6 w-6 text-[#D4A72C]" />
-                    </div>
-                    <div>
-                      <h3 className="text-[16px] font-bold text-white">{[selectedExamCategory?.name, ...examPath.map((n) => n.name)].filter(Boolean).join(" - ")} Preparation</h3>
-                      <p className="text-[12px] text-white/60 mt-1">Complete package for your success.</p>
-                      
-                      <div className="mt-3 flex gap-2">
-                        <span className="text-[10px] px-2 py-1 rounded bg-white/10 text-white">Live Classes</span>
-                        <span className="text-[10px] px-2 py-1 rounded bg-white/10 text-white">Mock Exams</span>
-                        <span className="text-[10px] px-2 py-1 rounded bg-white/10 text-white">Study Notes</span>
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
-                      View Packages <ArrowRight className="h-[18px] w-[18px] ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-    
-              {/* STEP 6: Purchase */}
-              {currentStep === 6 && (
-                <div className="space-y-4">
-                  <div className="mb-6">
-                    <h2 className="text-[26px] font-bold text-white tracking-tight leading-tight">Checkout & <span className="text-[#D4A72C]">Payment</span></h2>
-                    <p className="text-[12px] text-white/60 font-medium">Choose a payment method to complete enrollment.</p>
-                  </div>
-                  
-                  {selectedPlan ? (
-                    <div className="rounded-[12px] border border-[#D4A72C]/30 bg-[#D4A72C]/5 p-4 mb-4">
-                      <p className="text-[10px] text-[#D4A72C]/70 uppercase tracking-widest font-bold mb-3">Selected Plan</p>
-                      <div className="flex items-center justify-between">
+                  {/* STEP 1: Basic Information */}
+                  {currentStep === 0 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3.5 mb-5">
+                        <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+                          <UserCircle2 className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                        </div>
                         <div>
-                          <p className="text-white font-bold text-[15px]">{selectedPlan.name}</p>
-                          <p className="text-white/50 text-[12px]">{selectedPlan.duration} {selectedPlan.duration_unit.toLowerCase()}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[#D4A72C] font-bold text-[18px]">Rs. {parseFloat(selectedPlan.price).toLocaleString()}</p>
+                          <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
+                            Basic <span className="text-[#D4A72C]">Information</span>
+                          </h2>
+                          <p className="text-[12px] text-white/60 font-medium">Step 1 of 4: Enter your account details</p>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-[12px] border border-white/10 bg-white/3 p-4 text-center">
-                      <p className="text-[13px] text-white/70">No plan selected. You will be registered for free access.</p>
+
+                      {googleError && (
+                        <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-[10px] text-red-400 text-[12px]">
+                          {googleError}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={googleLoading}
+                        onClick={() => signUpWithGoogle()}
+                        className="h-[46px] w-full flex items-center justify-center gap-3 bg-white/5 hover:bg-white/10 border border-white/20 rounded-[10px] transition-colors disabled:opacity-50 text-[13px] font-semibold text-white"
+                      >
+                        <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
+                          <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
+                            <path fill="#4285F4" d="M -3.264 51.509 C -3.264 50.719 -3.334 49.969 -3.454 49.239 L -14.754 49.239 L -14.754 53.749 L -8.284 53.749 C -8.574 55.229 -9.424 56.479 -10.684 57.329 L -10.684 60.329 L -6.824 60.329 C -4.564 58.239 -3.264 55.159 -3.264 51.509 Z"/>
+                            <path fill="#34A853" d="M -14.754 63.239 C -11.514 63.239 -8.804 62.159 -6.824 60.329 L -10.684 57.329 C -11.764 58.049 -13.134 58.489 -14.754 58.489 C -17.884 58.489 -20.534 56.379 -21.484 53.529 L -25.464 53.529 L -25.464 56.619 C -23.494 60.539 -19.444 63.239 -14.754 63.239 Z"/>
+                            <path fill="#FBBC05" d="M -21.484 53.529 C -21.734 52.809 -21.864 52.039 -21.864 51.239 C -21.864 50.439 -21.724 49.669 -21.484 48.949 L -21.484 45.859 L -25.464 45.859 C -26.284 47.479 -26.754 49.299 -26.754 51.239 C -26.754 53.179 -26.284 54.999 -25.464 56.619 L -21.484 53.529 Z"/>
+                            <path fill="#EA4335" d="M -14.754 43.989 C -12.984 43.989 -11.404 44.599 -10.154 45.789 L -6.734 42.369 C -8.804 40.429 -11.514 39.239 -14.754 39.239 C -19.444 39.239 -23.494 41.939 -25.464 45.859 L -21.484 48.949 C -20.534 46.099 -17.884 43.989 -14.754 43.989 Z"/>
+                          </g>
+                        </svg>
+                        {googleLoading ? "Signing in..." : "Continue with Google"}
+                      </button>
+
+                      <div className="flex items-center gap-3 py-1">
+                        <div className="flex-1 h-[1px] bg-white/10" />
+                        <span className="text-[10px] text-white/50 lowercase tracking-wider font-medium">or fill details manually</span>
+                        <div className="flex-1 h-[1px] bg-white/10" />
+                      </div>
+
+                      {/* Full Name */}
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <User className="h-4 w-4" strokeWidth={1.5} />
+                        </div>
+                        <Input
+                          id="fullName"
+                          type="text"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          placeholder="Full Name *"
+                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          required
+                        />
+                      </div>
+
+                      {/* Email */}
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <Mail className="h-4 w-4" strokeWidth={1.5} />
+                        </div>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value.toLowerCase().trim())}
+                          placeholder="Email Address *"
+                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          required
+                        />
+                      </div>
+
+                      {/* Phone Number */}
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <Phone className="h-4 w-4" strokeWidth={1.5} />
+                        </div>
+                        <Input
+                          id="mobile"
+                          type="tel"
+                          value={mobile}
+                          onChange={(e) => setMobile(e.target.value)}
+                          placeholder="Mobile Number (98XXXXXXXX) *"
+                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          required
+                        />
+                      </div>
+
+                      {/* Password */}
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <Lock className="h-4 w-4" strokeWidth={1.5} />
+                        </div>
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="Password (minimum 8 chars) *"
+                          className="h-[46px] w-full pl-10 pr-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+
+                      {/* Confirm Password */}
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <Lock className="h-4 w-4" strokeWidth={1.5} />
+                        </div>
+                        <Input
+                          id="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Confirm Password *"
+                          className="h-[46px] w-full pl-10 pr-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+
+                      {/* Password Strength Meter */}
+                      {password && (
+                        <div className="pt-1">
+                          <div className="flex justify-between items-center mb-1.5">
+                            <span className="text-[10px] text-white/60">Strength</span>
+                            <span className={`text-[10px] font-bold ${strength.textColor}`}>{strength.label}</span>
+                          </div>
+                          <div className="flex gap-1 h-1">
+                            {[1, 2, 3, 4].map((lvl) => (
+                              <div
+                                key={lvl}
+                                className={`flex-1 rounded-full transition-colors duration-300 ${
+                                  lvl <= strength.score ? strength.color : "bg-white/10"
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Referral Code (Optional) */}
+                      <div className="relative group">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <Gift className="h-4 w-4" strokeWidth={1.5} />
+                        </div>
+                        <Input
+                          id="referralCode"
+                          type="text"
+                          value={referralCode}
+                          onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                          onBlur={() => validateReferral(referralCode)}
+                          placeholder="Referral Code (Optional)"
+                          className={`h-[46px] w-full pl-10 pr-10 bg-transparent text-[13px] text-white rounded-[10px] placeholder:text-white/40 ${
+                            referralStatus === "invalid"
+                              ? "border-red-500 focus:border-red-500"
+                              : referralStatus === "valid"
+                              ? "border-[#22c55e] focus:border-[#22c55e]"
+                              : "border-white/20 focus:border-[#D4A72C]"
+                          }`}
+                        />
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                          {referralStatus === "valid" && <Check className="h-4 w-4 text-[#22c55e]" strokeWidth={2} />}
+                          {referralStatus === "invalid" && <X className="h-4 w-4 text-red-500" strokeWidth={2} />}
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        onClick={handleNext}
+                        className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2 mt-4"
+                      >
+                        Continue to Address <ArrowRight className="h-4 w-4" />
+                      </Button>
                     </div>
                   )}
 
-                  <div className="p-4 rounded-[12px] border border-white/10 bg-white/5 text-center">
-                    <p className="text-[13px] text-white/60">Payment integration placeholder</p>
-                    <p className="text-[11px] text-white/40 mt-1">eSewa, Khalti, or Bank Transfer options would appear here.</p>
-                  </div>
+                  {/* STEP 2: Permanent Address */}
+                  {currentStep === 1 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3.5 mb-5">
+                        <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+                          <MapPin className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                          <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
+                            Permanent <span className="text-[#D4A72C]">Address</span>
+                          </h2>
+                          <p className="text-[12px] text-white/60 font-medium">Step 2 of 4: Structured location info</p>
+                        </div>
+                      </div>
 
-                  <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
-                      Continue to Review <ArrowRight className="h-[18px] w-[18px] ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-    
+                      {/* District Dropdown */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                          Permanent District *
+                        </label>
+                        <DistrictSelector
+                          id="districtSelect"
+                          value={district}
+                          onChange={(d) => setDistrict(d)}
+                        />
+                        <p className="text-[10px] text-white/40 mt-1">
+                          Only official districts of Nepal are accepted to avoid invalid records.
+                        </p>
+                      </div>
 
-              {/* STEP 1: Plan Selection */}
-              {currentStep === 5 && (
-                <div>
-                  <div className="mb-6">
-                    <h2 className="text-[24px] font-bold text-white mb-1">Select Your <span className="text-[#D4A72C]">Course Plan</span></h2>
-                    <p className="text-[12px] text-white/60">Choose a course to enroll in. You can skip and explore for free.</p>
-                  </div>
+                      {/* Local Level / Municipality */}
+                      <div className="pt-2">
+                        <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-1.5">
+                          Local Level / Municipality / Ward *
+                        </label>
+                        <div className="relative group">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                            <MapPin className="h-4 w-4" strokeWidth={1.5} />
+                          </div>
+                          <Input
+                            id="localLevelInput"
+                            type="text"
+                            value={localLevel}
+                            onChange={(e) => setLocalLevel(e.target.value)}
+                            placeholder="e.g. Kathmandu Metropolitan City - 10"
+                            className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                            required
+                          />
+                        </div>
+                      </div>
 
-                  {plansLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[1, 2].map(i => <div key={i} className="h-[180px] rounded-[14px] bg-white/5 animate-pulse" />)}
-                    </div>
-                  ) : plans.length === 0 ? (
-                    <div className="text-center py-12 text-white/50">
-                      <GraduationCap className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">No course plans available right now.</p>
-                      <p className="text-xs mt-1">You can explore the platform after registration.</p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[380px] overflow-y-auto pr-1">
-                      {plans.map((plan) => {
-                        const isSelected = selectedPlanId === plan.id;
-                        return (
-                          <button key={plan.id} onClick={() => setSelectedPlanId(isSelected ? null : plan.id)} className={`relative text-left rounded-[14px] border p-5 transition-all duration-200 ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/5 shadow-[0_0_20px_rgba(212,167,44,0.12)]' : 'border-white/10 bg-white/3 hover:border-white/20 hover:bg-white/5'}`}>
-                            {plan.badge !== 'NONE' && <span className={`absolute top-3 right-3 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${getBadgeStyle(plan.badge)}`}>{plan.badge.replace('_', ' ')}</span>}
-                            {isSelected && <div className="absolute top-3 left-3 w-5 h-5 rounded-full bg-[#D4A72C] flex items-center justify-center"><Check className="h-3 w-3 text-black" strokeWidth={3} /></div>}
-                            <div className="flex items-start gap-3 mb-3">
-                              <div className={`w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? 'bg-[#D4A72C]/20' : 'bg-white/5'}`}>
-                                <GraduationCap className={`h-4 w-4 ${isSelected ? 'text-[#D4A72C]' : 'text-white/60'}`} />
-                              </div>
-                              <div>
-                                <h3 className={`text-[14px] font-bold leading-tight ${isSelected ? 'text-[#D4A72C]' : 'text-white'}`}>{plan.name}</h3>
-                                <p className="text-[11px] text-white/50 mt-0.5 line-clamp-2">{plan.description}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 mb-3">
-                              <span className="text-[18px] font-bold text-white">Rs. {parseFloat(plan.price).toLocaleString()}</span>
-                              {plan.original_price && <span className="text-[11px] text-white/40 line-through">Rs. {parseFloat(plan.original_price).toLocaleString()}</span>}
-                              <div className="flex items-center gap-1 text-white/40 text-[11px] ml-auto">
-                                <Clock className="h-3 w-3" /><span>{plan.duration} {plan.duration_unit.toLowerCase()}</span>
-                              </div>
-                            </div>
-                            {plan.features && plan.features.length > 0 && (
-                              <ul className="space-y-1">
-                                {plan.features.slice(0, 3).map((f: string, idx: number) => (
-                                  <li key={idx} className="flex items-center gap-1.5 text-[11px] text-white/60">
-                                    <CheckCircle2 className={`h-3 w-3 shrink-0 ${isSelected ? 'text-[#D4A72C]' : 'text-white/30'}`} />{f}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </button>
-                        );
-                      })}
+                      <div className="flex gap-3 pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCurrentStep((s) => s - 1)}
+                          className="flex-1 h-[46px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]"
+                        >
+                          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleNext}
+                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
+                        >
+                          Continue <ArrowRight className="h-4 w-4 ml-2" />
+                        </Button>
+                      </div>
                     </div>
                   )}
 
-                  <div className="flex gap-3 mt-6">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleNext} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] border-none">
-                      {selectedPlanId ? 'Continue with Plan' : 'Skip & Continue'} <ArrowRight className="h-[18px] w-[18px] ml-2" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+                  {/* STEP 3: Preparation Selection */}
+                  {currentStep === 2 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3.5 mb-5">
+                        <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+                          <GraduationCap className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                        </div>
+                        <div>
+                          <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
+                            What are you <span className="text-[#D4A72C]">preparing for?</span>
+                          </h2>
+                          <p className="text-[12px] text-white/60 font-medium">Step 3 of 4: Select your exam category & path</p>
+                        </div>
+                      </div>
 
-              {/* STEP 2: Review & Register */}
-              {currentStep === 7 && (
-                <div>
-                  <div className="mb-6">
-                    <h2 className="text-[24px] font-bold text-white mb-1">Review & <span className="text-[#D4A72C]">Register</span></h2>
-                    <p className="text-[12px] text-white/60">Confirm your details before creating your account.</p>
-                  </div>
-
-                  <div className="space-y-3 mb-6">
-                    <div className="rounded-[12px] border border-white/10 bg-white/3 p-4 space-y-2">
-                      <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-3">Account Details</p>
-                      <div className="grid grid-cols-2 gap-2 text-[13px]">
-                        <div><span className="text-white/50">Name:</span> <span className="text-white font-medium">{fullName}</span></div>
-                        <div><span className="text-white/50">Username:</span> <span className="text-white font-medium">{username}</span></div>
-                        <div className="col-span-2"><span className="text-white/50">Email:</span> <span className="text-white font-medium">{email}</span></div>
-                        {mobile && <div><span className="text-white/50">Mobile:</span> <span className="text-white font-medium">{mobile}</span></div>}
-                        {(district || localLevel) && <div className="col-span-2"><span className="text-white/50">Address:</span> <span className="text-white font-medium">{[localLevel, district].filter(Boolean).join(", ")}</span></div>}
-                        {selectedExamCategory && (
-                          <div className="col-span-2">
-                            <span className="text-white/50">Preparing for:</span>{" "}
-                            <span className="text-white font-medium">
-                              {[selectedExamCategory.name, ...examPath.map((n) => n.name)].join(" → ")}
-                            </span>
+                      {/* Exam Category */}
+                      <div>
+                        <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-2">
+                          Exam Category
+                        </label>
+                        {examTreeLoading ? (
+                          <div className="grid grid-cols-2 gap-2">
+                            {[1, 2, 3, 4].map((i) => (
+                              <div key={i} className="h-[42px] rounded-[10px] bg-white/5 animate-pulse" />
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2">
+                            {examTree.map((cat) => {
+                              const isSelected = examCategoryId === cat.id;
+                              return (
+                                <button
+                                  key={cat.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setExamCategoryId(cat.id);
+                                    setExamPath([]);
+                                  }}
+                                  className={`h-[42px] px-3.5 rounded-[10px] border text-[12px] font-semibold text-left transition-all ${
+                                    isSelected
+                                      ? "border-[#D4A72C] bg-[#D4A72C]/15 text-[#D4A72C] shadow-[0_0_12px_rgba(212,167,44,0.15)]"
+                                      : "border-white/15 bg-white/[0.03] text-white/70 hover:border-white/30"
+                                  }`}
+                                >
+                                  {cat.name}
+                                </button>
+                              );
+                            })}
                           </div>
                         )}
-                        {referralCode && referralStatus === 'valid' && <div><span className="text-white/50">Referral:</span> <span className="text-[#22c55e] font-medium">{referralCode} âœ“</span></div>}
+                      </div>
+
+                      {/* Level Selection (Depth 0) */}
+                      {examOptionsAtDepth(0).length > 0 && (
+                        <div className="pt-2">
+                          <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-2">
+                            {selectedExamCategory?.name === "PSC Exams" ? "PSC Level" : "Level"}
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {examOptionsAtDepth(0).map((lvl) => {
+                              const isSelected = examPath[0]?.id === lvl.id;
+                              return (
+                                <button
+                                  key={lvl.id}
+                                  type="button"
+                                  onClick={() => selectExamNode(0, lvl)}
+                                  className={`py-2.5 px-3 rounded-[10px] border text-[12px] font-semibold text-center transition-all ${
+                                    isSelected
+                                      ? "border-[#D4A72C] bg-[#D4A72C]/15 text-[#D4A72C]"
+                                      : "border-white/15 bg-white/[0.03] text-white/70 hover:border-white/30"
+                                  }`}
+                                >
+                                  {lvl.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Service / Faculty (Depth 1) */}
+                      {examOptionsAtDepth(1).length > 0 && (
+                        <div className="pt-2">
+                          <label className="block text-[11px] font-semibold text-white/70 uppercase tracking-wider mb-2">
+                            Service / Faculty
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            {examOptionsAtDepth(1).map((svc) => {
+                              const isSelected = examPath[1]?.id === svc.id;
+                              return (
+                                <button
+                                  key={svc.id}
+                                  type="button"
+                                  onClick={() => selectExamNode(1, svc)}
+                                  className={`py-2.5 px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-all ${
+                                    isSelected
+                                      ? "border-[#D4A72C] bg-[#D4A72C]/15 text-[#D4A72C]"
+                                      : "border-white/15 bg-white/[0.03] text-white/70 hover:border-white/30"
+                                  }`}
+                                >
+                                  {svc.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Fixed Canonical Path Preview */}
+                      <div className="rounded-[12px] border border-[#D4A72C]/30 bg-[#D4A72C]/5 p-4 mt-3">
+                        <div className="flex items-center gap-2 text-[#D4A72C] text-[11px] font-bold uppercase tracking-wider mb-1">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Canonical Preparation Path
+                        </div>
+                        <p className="text-[13px] font-semibold text-white">
+                          {[selectedExamCategory?.name, ...examPath.map((n) => n.name)].filter(Boolean).join(" → ")}
+                        </p>
+                        <p className="text-[11px] text-white/50 mt-1 leading-relaxed">
+                          Your registration preference aligns your study materials. You will select your access package on the next step.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-3 pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCurrentStep((s) => s - 1)}
+                          className="flex-1 h-[46px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]"
+                        >
+                          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleNext}
+                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
+                        >
+                          Review <ArrowRight className="h-4 w-4 ml-2" />
+                        </Button>
                       </div>
                     </div>
+                  )}
 
-                    {selectedPlan ? (
-                      <div className="rounded-[12px] border border-[#D4A72C]/30 bg-[#D4A72C]/5 p-4">
-                        <p className="text-[10px] text-[#D4A72C]/70 uppercase tracking-widest font-bold mb-3">Selected Course Plan</p>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-white font-bold text-[15px]">{selectedPlan.name}</p>
-                            <p className="text-white/50 text-[12px]">{selectedPlan.duration} {selectedPlan.duration_unit.toLowerCase()}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[#D4A72C] font-bold text-[18px]">Rs. {parseFloat(selectedPlan.price).toLocaleString()}</p>
-                            <p className="text-[10px] text-white/40">Application pending payment</p>
-                          </div>
+                  {/* STEP 4: Review & Create Account */}
+                  {currentStep === 3 && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3.5 mb-4">
+                        <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="h-6 w-6 text-[#22c55e]" strokeWidth={1.5} />
                         </div>
-                      </div>
-                    ) : (
-                      <div className="rounded-[12px] border border-white/10 bg-white/3 p-4 flex items-center gap-3">
-                        <Zap className="h-5 w-5 text-white/30" />
                         <div>
-                          <p className="text-white/70 text-[13px] font-medium">No course plan selected</p>
-                          <p className="text-white/40 text-[11px]">You can enroll in a course after registration.</p>
+                          <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
+                            Review & <span className="text-[#D4A72C]">Register</span>
+                          </h2>
+                          <p className="text-[12px] text-white/60 font-medium">Step 4 of 4: Verify details before account creation</p>
                         </div>
                       </div>
-                    )}
-                  </div>
 
-                  <div className="flex gap-3">
-                    <Button onClick={() => setCurrentStep(s => s - 1)} variant="outline" className="flex-1 h-[48px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]">
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back
-                    </Button>
-                    <Button onClick={handleRegister} disabled={isLoading} className="flex-1 h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none flex items-center justify-center gap-2">
-                      {isLoading ? "Creating Account..." : (<>Create Account <CheckCircle2 className="h-5 w-5" /></>)}
-                    </Button>
-                  </div>
+                      <div className="rounded-[12px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50">Full Name</span>
+                          <span className="text-white font-medium">{fullName}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50">Email Address</span>
+                          <span className="text-white font-medium">{email}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50">Mobile Number</span>
+                          <span className="text-white font-medium">{mobile}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50">Permanent Address</span>
+                          <span className="text-white font-medium">{localLevel}, {district}</span>
+                        </div>
+                        <div className="flex justify-between items-start text-[12px]">
+                          <span className="text-white/50">Preparation</span>
+                          <span className="text-[#D4A72C] font-semibold text-right max-w-[240px]">
+                            {[selectedExamCategory?.name, ...examPath.map((n) => n.name)].filter(Boolean).join(" → ")}
+                          </span>
+                        </div>
+                      </div>
 
-                  <div className="text-center mt-5 text-[11px] text-white/50">
-                    By registering you agree to our{" "}<Link href="/terms" className="text-[#D4A72C] hover:underline">Terms</Link>{" "}and{" "}<Link href="/privacy" className="text-[#D4A72C] hover:underline">Privacy Policy</Link>.
-                  </div>
+                      <div className="rounded-[10px] border border-blue-500/20 bg-blue-500/5 p-3 text-[11px] text-blue-300 leading-relaxed">
+                        Submitting will register your profile as <span className="font-semibold text-white">Pending Verification</span> and send a 6-digit confirmation code via Resend.
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCurrentStep((s) => s - 1)}
+                          className="flex-1 h-[46px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]"
+                        >
+                          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={handleRegister}
+                          disabled={isLoading}
+                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              Create Account
+                              <CheckCircle2 className="h-4 w-4" />
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="text-center mt-3 text-[11px] text-white/50">
+                        By continuing, you agree to our{" "}
+                        <Link href="/terms" className="text-[#D4A72C] hover:underline">
+                          Terms
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/privacy" className="text-[#D4A72C] hover:underline">
+                          Privacy Policy
+                        </Link>
+                        .
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            </>
+              </>
             )}
 
+            {/* STAGE: OTP / EMAIL VERIFICATION */}
             {registrationStage === "otp" && (
-              <div className="p-8 sm:p-10">
-                {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-[10px] text-red-400 text-[13px] font-medium mb-4">{error}</div>}
+              <div className="p-6 sm:p-8">
+                {error && (
+                  <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-[12px] text-red-400 text-[13px] font-medium mb-5 flex items-start gap-2">
+                    <X className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
                 {recoveryVerified ? (
                   <div className="text-center py-6">
-                    <div className="w-14 h-14 rounded-full bg-[#22c55e]/15 flex items-center justify-center mx-auto mb-4">
+                    <div className="w-14 h-14 rounded-full bg-[#22c55e]/15 flex items-center justify-center mx-auto mb-4 border border-[#22c55e]/30">
                       <CheckCircle2 className="h-7 w-7 text-[#22c55e]" />
                     </div>
-                    <h2 className="text-[20px] font-bold text-white mb-2">Account Verified</h2>
-                    <p className="text-[13px] text-white/60 mb-6">Your account is verified. Please log in to continue.</p>
+                    <h2 className="text-[20px] font-bold text-white mb-2">Account Verified!</h2>
+                    <p className="text-[13px] text-white/60 mb-6 max-w-sm mx-auto leading-relaxed">
+                      Your account was verified using an administrative recovery code. Please log in with your credentials to start learning.
+                    </p>
                     <Link href="/login">
-                      <Button className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] border-none">
+                      <Button className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white text-[14px] font-bold rounded-[10px]">
                         Go to Login
                       </Button>
                     </Link>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
-                        <KeyRound className="h-6 w-6 text-white/80" strokeWidth={1.5} />
+                    <div className="flex items-center gap-3.5 mb-5">
+                      <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
+                        <KeyRound className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
                       </div>
                       <div>
-                        <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">Verify <span className="text-[#D4A72C]">your email</span></h2>
-                        <p className="text-[12px] text-white/60 font-medium">We sent a verification code to your email.</p>
+                        <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
+                          Verify <span className="text-[#D4A72C]">your email</span>
+                        </h2>
+                        <p className="text-[12px] text-white/60 font-medium">
+                          Enter code sent to <span className="text-white font-semibold">{maskEmail(email)}</span>
+                        </p>
                       </div>
                     </div>
 
                     {!showRecovery ? (
-                      <div className="space-y-4">
-                        <p className="text-[13px] text-white/60 -mt-2">
-                          Enter the 6-digit code sent to <span className="text-white/80 font-medium">{email}</span>.
+                      <div className="space-y-5">
+                        <p className="text-[13px] text-white/70 leading-relaxed">
+                          Please enter the 6-digit verification code sent to your email inbox (or spam folder).
                         </p>
-                        <div className="relative group">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><KeyRound className="h-4 w-4" strokeWidth={1.5} /></div>
-                          <Input
-                            id="otp"
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={6}
-                            value={otp}
-                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                            placeholder="6-digit code"
-                            className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-[0.3em] focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
-                            required
-                          />
+
+                        {/* 6-Digit OTP Box Grid */}
+                        <div className="flex justify-between gap-2 sm:gap-3 my-4">
+                          {otpDigits.map((digit, idx) => (
+                            <input
+                              key={idx}
+                              ref={(el) => {
+                                otpInputsRef.current[idx] = el;
+                              }}
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={1}
+                              value={digit}
+                              onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                              onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                              className="w-12 h-13 sm:w-14 sm:h-14 text-center text-[20px] font-bold bg-[#121B24] border border-white/20 rounded-[10px] text-white focus:border-[#D4A72C] focus:ring-2 focus:ring-[#D4A72C]/30 outline-none transition-all"
+                            />
+                          ))}
                         </div>
 
-                        <Button onClick={handleVerifyOtp} disabled={otpLoading} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
-                          {otpLoading ? "Verifying..." : (<>Verify <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} /></>)}
+                        <Button
+                          type="button"
+                          onClick={handleVerifyOtp}
+                          disabled={otpLoading || otpDigits.join("").length !== 6}
+                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
+                        >
+                          {otpLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            <>
+                              Verify Email & Continue
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          )}
                         </Button>
-                        <div className="flex items-center justify-between text-[12px]">
-                          <span className="text-white/40">Didn't receive the code?</span>
-                          <button type="button" onClick={handleResendOtp} disabled={otpLoading} className="text-[#D4A72C] font-semibold hover:text-[#e0b745] transition-colors disabled:opacity-50">
-                            {otpLoading ? "Resending..." : "Resend OTP"}
+
+                        <div className="flex items-center justify-between text-[12px] pt-1">
+                          <span className="text-white/50">Didn't receive the email?</span>
+                          <button
+                            type="button"
+                            disabled={!resendActive || otpLoading}
+                            onClick={handleResendOtp}
+                            className={`font-semibold transition-colors ${
+                              resendActive
+                                ? "text-[#D4A72C] hover:text-[#e0b745] cursor-pointer"
+                                : "text-white/40 cursor-not-allowed"
+                            }`}
+                          >
+                            {resendActive ? "Resend Code" : `Resend in ${resendCooldown}s`}
                           </button>
                         </div>
 
-                        <div className="rounded-[10px] border border-white/10 bg-white/3 p-3 flex items-start gap-2.5 mt-2">
-                          <LifeBuoy className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
-                          <div className="text-[11px] text-white/50 leading-relaxed">
-                            Having trouble receiving email? Contact an administrator for verification assistance.{" "}
-                            <button type="button" onClick={() => setShowRecovery(true)} className="text-[#D4A72C] font-semibold hover:underline">
-                              Have a recovery code?
+                        {/* Admin Recovery Code Fallback */}
+                        <div className="rounded-[12px] border border-white/10 bg-white/[0.03] p-3.5 flex items-start gap-3 mt-4">
+                          <LifeBuoy className="h-4 w-4 text-[#D4A72C] shrink-0 mt-0.5" />
+                          <div className="text-[11px] text-white/60 leading-relaxed">
+                            Email issue or spam filter problem? Your administrator can issue a recovery code.{" "}
+                            <button
+                              type="button"
+                              onClick={() => setShowRecovery(true)}
+                              className="text-[#D4A72C] font-semibold hover:underline"
+                            >
+                              Enter Admin Recovery Code
                             </button>
                           </div>
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <p className="text-[13px] text-white/60 -mt-2 flex items-start gap-2">
-                          <ShieldQuestion className="h-4 w-4 text-white/40 shrink-0 mt-0.5" />
-                          Enter the recovery code an administrator gave you through a support channel.
-                        </p>
+                        <div className="rounded-[10px] border border-amber-500/20 bg-amber-500/5 p-3 text-[12px] text-amber-300 flex items-start gap-2.5 leading-relaxed">
+                          <ShieldQuestion className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span>
+                            Enter the single-use recovery code generated by an authorized platform administrator.
+                          </span>
+                        </div>
+
                         <div className="relative group">
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><KeyRound className="h-4 w-4" strokeWidth={1.5} /></div>
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                            <KeyRound className="h-4 w-4" strokeWidth={1.5} />
+                          </div>
                           <Input
-                            id="recoveryCode"
+                            id="adminRecoveryCode"
                             type="text"
-                            inputMode="numeric"
-                            maxLength={6}
                             value={recoveryCode}
-                            onChange={(e) => setRecoveryCode(e.target.value.replace(/\D/g, ""))}
-                            placeholder="Recovery code"
-                            className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-[0.3em] focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
+                            onChange={(e) => setRecoveryCode(e.target.value.trim())}
+                            placeholder="6-digit recovery code"
+                            className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[14px] text-white font-mono tracking-widest focus:border-[#D4A72C] rounded-[10px]"
                             required
                           />
                         </div>
-                        <Button onClick={handleVerifyRecovery} disabled={recoveryLoading} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none">
-                          {recoveryLoading ? "Verifying..." : (<>Verify Recovery Code <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} /></>)}
+
+                        <Button
+                          type="button"
+                          onClick={handleVerifyRecovery}
+                          disabled={recoveryLoading || !recoveryCode.trim()}
+                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] flex items-center justify-center gap-2"
+                        >
+                          {recoveryLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Verifying...
+                            </>
+                          ) : (
+                            <>
+                              Verify Recovery Code
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          )}
                         </Button>
-                        <button type="button" onClick={() => setShowRecovery(false)} className="text-[12px] text-white/50 hover:text-white transition-colors">
-                          &larr; Back to email code
+
+                        <button
+                          type="button"
+                          onClick={() => setShowRecovery(false)}
+                          className="text-[12px] text-white/60 hover:text-white transition-colors block text-center w-full pt-1"
+                        >
+                          &larr; Return to email OTP
                         </button>
                       </div>
                     )}
@@ -892,9 +1162,13 @@ function RegisterForm() {
               </div>
             )}
 
-              <div className="text-center mt-6 mb-6 text-[12px] text-white/70">
-                Already have an account?{" "}<Link href="/login" className="text-[#D4A72C] font-bold hover:text-[#e0b745] transition-colors">Sign in</Link>
-              </div>
+            {/* Footer Navigation */}
+            <div className="text-center py-4 border-t border-white/5 bg-white/[0.01] text-[12px] text-white/60">
+              Already have an account?{" "}
+              <Link href="/login" className="text-[#D4A72C] font-bold hover:text-[#e0b745] transition-colors">
+                Sign in
+              </Link>
+            </div>
           </div>
         </div>
       </div>

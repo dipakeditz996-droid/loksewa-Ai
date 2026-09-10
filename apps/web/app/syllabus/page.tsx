@@ -8,36 +8,72 @@ import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
-import { publicApi, type PublicSyllabusExam } from "@/lib/api/public-api";
+import { publicApi, type PublicSyllabusCategory, type PublicSyllabusExam } from "@/lib/api/public-api";
 
 export default function SyllabusPage() {
-  const [examsData, setExamsData] = useState<PublicSyllabusExam[]>([]);
+  // The hierarchy is Category -> Level (top-level Exam) -> nested
+  // Preparation/Service (Exam.children), never flattened - see
+  // PublicSyllabusTreeView. Papers/subjects/topics attach to whichever node
+  // ends up being "selectedExam" below (the level itself if it has no
+  // nested preparations, otherwise the selected preparation).
+  const [categories, setCategories] = useState<PublicSyllabusCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedExamId, setSelectedExamId] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedLevelId, setSelectedLevelId] = useState<number | null>(null);
+  const [selectedPrepId, setSelectedPrepId] = useState<number | null>(null);
   const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
     publicApi.getSyllabusTree().then((data) => {
       if (!mounted) return;
-      const exams = data || [];
-      setExamsData(exams);
-      if (exams.length > 0) {
-        setSelectedExamId(exams[0].id);
-        setSelectedPaperId(exams[0].papers?.[0]?.id ?? null);
-      }
+      const cats = (data || []).filter((c) => c.exams.length > 0);
+      setCategories(cats);
+      const firstCat = cats[0];
+      const firstLevel = firstCat?.exams?.[0];
+      const firstPrep = firstLevel?.children?.[0];
+      const firstLeaf = firstPrep || firstLevel;
+      setSelectedCategoryId(firstCat?.id ?? null);
+      setSelectedLevelId(firstLevel?.id ?? null);
+      setSelectedPrepId(firstPrep?.id ?? null);
+      setSelectedPaperId(firstLeaf?.papers?.[0]?.id ?? null);
       setIsLoading(false);
     });
     return () => { mounted = false; };
   }, []);
 
-  const selectedExam = examsData.find((exam) => exam.id === selectedExamId) || examsData[0];
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || categories[0];
+  const selectedLevel = selectedCategory?.exams.find((e) => e.id === selectedLevelId) || selectedCategory?.exams[0];
+  const selectedPrep = selectedLevel?.children?.find((c) => c.id === selectedPrepId) || selectedLevel?.children?.[0];
+  // The actual leaf node whose papers/subjects/topics are shown: the
+  // preparation under the level if one exists, otherwise the level itself.
+  const selectedExam = selectedLevel?.children?.length ? selectedPrep : selectedLevel;
   const selectedPaper = selectedExam?.papers?.find((paper) => paper.id === selectedPaperId) || selectedExam?.papers?.[0];
 
+  const handleCategoryChange = (categoryId: number) => {
+    setSelectedCategoryId(categoryId);
+    const newCat = categories.find((c) => c.id === categoryId);
+    const newLevel = newCat?.exams?.[0];
+    const newPrep = newLevel?.children?.[0];
+    const newLeaf = newPrep || newLevel;
+    setSelectedLevelId(newLevel?.id ?? null);
+    setSelectedPrepId(newPrep?.id ?? null);
+    setSelectedPaperId(newLeaf?.papers?.[0]?.id ?? null);
+  };
+
   const handleExamChange = (examId: number) => {
-    setSelectedExamId(examId);
-    const newExam = examsData.find(e => e.id === examId);
-    setSelectedPaperId(newExam?.papers?.[0]?.id ?? null);
+    setSelectedLevelId(examId);
+    const newLevel = selectedCategory?.exams.find((e) => e.id === examId);
+    const newPrep = newLevel?.children?.[0];
+    const newLeaf = newPrep || newLevel;
+    setSelectedPrepId(newPrep?.id ?? null);
+    setSelectedPaperId(newLeaf?.papers?.[0]?.id ?? null);
+  };
+
+  const handlePrepChange = (prepId: number) => {
+    setSelectedPrepId(prepId);
+    const newPrep = selectedLevel?.children?.find((c) => c.id === prepId);
+    setSelectedPaperId(newPrep?.papers?.[0]?.id ?? null);
   };
 
   return (
@@ -90,25 +126,50 @@ export default function SyllabusPage() {
       {/* 2. EXAM SELECTOR */}
       <section className="py-12 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5">
         <div className="container mx-auto px-4 max-w-[1200px]">
-          <h2 className="text-2xl font-[800] text-slate-900 dark:text-white mb-8 text-center">Choose Your Examination</h2>
-          
+          <h2 className="text-2xl font-[800] text-slate-900 dark:text-white mb-6 text-center">Choose Your Examination</h2>
+
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
             </div>
-          ) : examsData.length === 0 ? (
+          ) : categories.length === 0 ? (
             <p className="text-center text-slate-500 font-[500]">No examinations have been published yet. Check back soon.</p>
           ) : (
+          <>
+          {/* Category tabs */}
+          {categories.length > 1 && (
+            <div className="flex flex-wrap justify-center gap-2 mb-8">
+              {categories.map((cat) => {
+                const isSelected = cat.id === selectedCategoryId;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => handleCategoryChange(cat.id)}
+                    className={`px-5 py-2.5 rounded-full text-sm font-[700] transition-all border ${
+                      isSelected
+                        ? "bg-[#0B2545] dark:bg-[#D4A72C] text-white dark:text-[#0A1118] border-transparent"
+                        : "bg-transparent text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-[#163E6B]/40"
+                    }`}
+                  >
+                    {cat.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Level cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {examsData.map((exam) => {
-              const isSelected = exam.id === selectedExamId;
+            {selectedCategory?.exams.map((exam) => {
+              const isSelected = exam.id === selectedLevelId;
+              const hasPreparations = (exam.children?.length ?? 0) > 0;
               return (
-                <div 
+                <div
                   key={exam.id}
                   onClick={() => handleExamChange(exam.id)}
                   className={`relative p-6 rounded-[16px] cursor-pointer transition-all duration-300 border ${
-                    isSelected 
-                      ? "bg-[#0B2545] dark:bg-[#163E6B]/40 border-[#D4A72C]/50 shadow-[0_8px_30px_rgba(212,167,44,0.15)]" 
+                    isSelected
+                      ? "bg-[#0B2545] dark:bg-[#163E6B]/40 border-[#D4A72C]/50 shadow-[0_8px_30px_rgba(212,167,44,0.15)]"
                       : "bg-slate-50 dark:bg-[#0A1118] border-slate-200 dark:border-white/10 hover:border-[#163E6B]/30 dark:hover:border-white/20 hover:shadow-md"
                   }`}
                 >
@@ -124,9 +185,15 @@ export default function SyllabusPage() {
                     {exam.level}
                   </div>
                   <div className={`flex gap-4 text-sm font-[500] mb-4 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                    <span>{exam.papersCount} Papers</span>
-                    <span>•</span>
-                    <span>{exam.subjectsCount} Subjects</span>
+                    {hasPreparations ? (
+                      <span>{exam.children.length} Preparation{exam.children.length !== 1 ? 's' : ''}</span>
+                    ) : (
+                      <>
+                        <span>{exam.papersCount} Papers</span>
+                        <span>•</span>
+                        <span>{exam.subjectsCount} Subjects</span>
+                      </>
+                    )}
                   </div>
                   <p className={`text-sm leading-relaxed mb-6 ${isSelected ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'}`}>
                     {exam.description}
@@ -138,6 +205,34 @@ export default function SyllabusPage() {
               );
             })}
           </div>
+
+          {/* Preparation / Service selector — only when the selected Level nests them */}
+          {(selectedLevel?.children?.length ?? 0) > 0 && (
+            <div className="mt-8 pt-8 border-t border-slate-200 dark:border-white/10">
+              <h3 className="text-sm font-[700] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4 text-center">
+                Select Preparation / Service
+              </h3>
+              <div className="flex flex-wrap justify-center gap-2">
+                {selectedLevel!.children.map((prep) => {
+                  const isSelected = prep.id === selectedPrepId;
+                  return (
+                    <button
+                      key={prep.id}
+                      onClick={() => handlePrepChange(prep.id)}
+                      className={`px-5 py-2.5 rounded-full text-sm font-[700] transition-all border ${
+                        isSelected
+                          ? "bg-[#D4A72C] text-[#0A1118] border-transparent shadow-[0_0_15px_rgba(212,167,44,0.3)]"
+                          : "bg-transparent text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-[#163E6B]/40"
+                      }`}
+                    >
+                      {prep.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          </>
           )}
         </div>
       </section>

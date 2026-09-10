@@ -170,21 +170,21 @@ export default function MaterialDetailPage({ params }: { params: Promise<{ id: s
           <BookOpen className="w-4 h-4 text-slate-400" />
           <div>
             <p className="text-xs text-slate-500">Subject</p>
-            <p className="text-sm font-medium text-slate-800">{material.subject}</p>
+            <p className="text-sm font-medium text-slate-800">{material.subjectName}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Tag className="w-4 h-4 text-slate-400" />
           <div>
             <p className="text-xs text-slate-500">Exam</p>
-            <p className="text-sm font-medium text-slate-800">{material.exam}</p>
+            <p className="text-sm font-medium text-slate-800">{material.examName}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <Tag className="w-4 h-4 text-slate-400" />
           <div>
             <p className="text-xs text-slate-500">Topic</p>
-            <p className="text-sm font-medium text-slate-800">{material.topic || "-"}</p>
+            <p className="text-sm font-medium text-slate-800">{material.topicName || "-"}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

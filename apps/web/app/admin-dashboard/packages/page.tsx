@@ -309,38 +309,57 @@ export default function AdminPackagesPage() {
                 {courses.length === 0 ? (
                   <div className="text-xs text-slate-400">Loading courses...</div>
                 ) : (
-                  <div className="grid grid-cols-1 max-h-[150px] overflow-y-auto gap-2 border border-slate-200 rounded-lg p-3">
-                    {courses.map((c) => {
-                      const isSelected = form.package_type === "SINGLE" 
-                        ? form.course === c.id 
-                        : form.eligible_courses.includes(c.id);
-                        
-                      return (
-                        <label key={c.id} className="flex items-start gap-2 text-sm cursor-pointer hover:bg-slate-50 p-1 rounded">
-                          <input
-                            type={form.package_type === "SINGLE" ? "radio" : "checkbox"}
-                            name="eligible_courses"
-                            checked={isSelected}
-                            onChange={() => {
-                              if (form.package_type === "SINGLE") {
-                                setForm({ ...form, course: c.id, eligible_courses: [c.id] });
-                              } else {
-                                const newSelection = isSelected
-                                  ? form.eligible_courses.filter((id) => id !== c.id)
-                                  : [...form.eligible_courses, c.id];
-                                setForm({ ...form, eligible_courses: newSelection, course: null });
-                              }
-                            }}
-                            className="mt-1 rounded border-slate-300"
-                          />
-                          <div>
-                            <div className="font-medium">{c.title}</div>
-                            {c.exam && <div className="text-[10px] text-slate-400">{c.exam.title}</div>}
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <>
+                    <div className="grid grid-cols-1 max-h-[200px] overflow-y-auto gap-1.5 border border-slate-200 rounded-lg p-3">
+                      {courses.map((c) => {
+                        const isSelected = form.package_type === "SINGLE"
+                          ? form.course === c.id
+                          : form.eligible_courses.includes(c.id);
+                        const isCS = c.is_coming_soon;
+
+                        return (
+                          <label key={c.id} className={`flex items-start gap-2 text-sm cursor-pointer rounded p-1.5 ${isCS ? "hover:bg-amber-50" : "hover:bg-slate-50"}`}>
+                            <input
+                              type={form.package_type === "SINGLE" ? "radio" : "checkbox"}
+                              name="eligible_courses"
+                              checked={isSelected}
+                              onChange={() => {
+                                if (form.package_type === "SINGLE") {
+                                  setForm({ ...form, course: c.id, eligible_courses: [c.id] });
+                                } else {
+                                  const newSelection = isSelected
+                                    ? form.eligible_courses.filter((id) => id !== c.id)
+                                    : [...form.eligible_courses, c.id];
+                                  setForm({ ...form, eligible_courses: newSelection, course: null });
+                                }
+                              }}
+                              className="mt-1 rounded border-slate-300"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className={`font-medium flex items-center gap-1.5 flex-wrap ${isCS ? "text-amber-700" : ""}`}>
+                                {c.title}
+                                {isCS && (
+                                  <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-600 border border-amber-200 uppercase tracking-wide">
+                                    Coming Soon
+                                  </span>
+                                )}
+                              </div>
+                              {c.exam && (
+                                <div className="text-[10px] text-slate-400">
+                                  {c.exam.category_name && `${c.exam.category_name} › `}
+                                  {c.exam.parent_name && `${c.exam.parent_name} › `}
+                                  {c.exam.title}
+                                </div>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Amber-labelled courses are <span className="font-semibold text-amber-600">Coming Soon</span> — students cannot purchase them yet but you can pre-configure packages.
+                    </p>
+                  </>
                 )}
               </div>
             )}

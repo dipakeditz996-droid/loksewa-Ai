@@ -11,30 +11,58 @@ EXPIRING_SOON_THRESHOLD_DAYS = 7
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     eligible_courses_details = serializers.SerializerMethodField(read_only=True)
+    course_details = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = SubscriptionPlan
         fields = '__all__'
 
     def get_eligible_courses_details(self, obj):
-        return [
-            {
+        details = []
+        for course in obj.eligible_courses.select_related('exam', 'exam__parent', 'exam__category').all():
+            exam_name = course.exam.name if course.exam else None
+            level = course.exam.parent.name if (course.exam and course.exam.parent) else (exam_name if exam_name and 'level' in exam_name.lower() else None)
+            details.append({
                 "id": course.id,
                 "title": course.title,
-                "exam": course.exam.name if course.exam else None
-            }
-            for course in obj.eligible_courses.select_related('exam')
-        ]
+                "exam": exam_name,
+                "level": level,
+                "service": exam_name if course.exam and course.exam.parent else None,
+            })
+        return details
+
+    def get_course_details(self, obj):
+        if not obj.course:
+            return None
+        c = obj.course
+        return {
+            "id": c.id,
+            "title": c.title,
+            "exam": c.exam.name if c.exam else None,
+        }
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan_details = SubscriptionPlanSerializer(source='plan', read_only=True)
     remaining_days = serializers.SerializerMethodField()
     computed_status = serializers.SerializerMethodField()
+    authorized_courses = serializers.SerializerMethodField()
 
     class Meta:
         model = Subscription
         fields = '__all__'
         read_only_fields = ('student', 'status', 'start_date', 'expiry_date')
+
+    def get_authorized_courses(self, obj):
+        from courses.models import Enrollment
+        enrollments = Enrollment.objects.filter(student=obj.student, status='active').select_related('course', 'course__exam')
+        return [
+            {
+                "id": e.course.id,
+                "title": e.course.title,
+                "exam": e.course.exam.name if e.course.exam else None,
+            }
+            for e in enrollments
+        ]
 
     def get_remaining_days(self, obj):
         """Derived from expiry_date, never stored - stays correct without a
@@ -62,17 +90,25 @@ class SubscriptionPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SubscriptionPayment
         fields = '__all__'
-        read_only_fields = ('student', 'status', 'rejection_reason', 'verified_at', 'verified_by')
+        read_only_fields = ('student', 'amount', 'status', 'rejection_reason', 'verified_at', 'verified_by')
 
     def get_selected_courses(self, obj):
-        return [
+        apps = list(obj.course_applications.select_related('course', 'course__exam'))
+        res = [
             {
                 "id": app.course.id,
                 "title": app.course.title,
                 "exam": app.course.exam.name if app.course.exam else None
             }
-            for app in obj.course_applications.select_related('course', 'course__exam')
+            for app in apps
         ]
+        if not res and obj.plan and obj.plan.course:
+            res.append({
+                "id": obj.plan.course.id,
+                "title": obj.plan.course.title,
+                "exam": obj.plan.course.exam.name if obj.plan.course.exam else None
+            })
+        return res
 
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:

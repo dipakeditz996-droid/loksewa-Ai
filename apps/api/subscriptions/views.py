@@ -25,19 +25,127 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     serializer_class = SubscriptionPlanSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'available']:
             return [permissions.AllowAny()]
         return [IsAdminUser()]
 
     def get_queryset(self):
         qs = SubscriptionPlan.objects.all().order_by('display_order')
-        # Draft/inactive plans are admin-management data, not something a
-        # student (or an anonymous visitor - list/retrieve are AllowAny so
-        # the pre-login pricing section can call this) should ever see.
         user = self.request.user
         if not (user and user.is_authenticated and user.role in ('admin', 'super-admin')):
             qs = qs.filter(status='ACTIVE')
         return qs
+
+    @action(detail=False, methods=['get'], url_path='available')
+    def available(self, request):
+        user = request.user if (request.user and request.user.is_authenticated) else None
+        profile = getattr(user, 'student_profile', None) if user else None
+
+        target_category = profile.target_category if profile else None
+        target_position = profile.target_position if profile else None
+        target_course = profile.target_course if profile else None
+
+        # Check for query overrides (e.g. if student clicks "Buy Another Course" or explores specific preparation)
+        course_id_param = request.query_params.get('course_id')
+        exam_id_param = request.query_params.get('exam_id')
+
+        from courses.models import Course, Enrollment
+
+        if course_id_param:
+            try:
+                tc = Course.objects.filter(id=course_id_param).first()
+                if tc:
+                    target_course = tc
+                    if tc.exam:
+                        target_position = tc.exam
+                        target_category = tc.exam.category
+            except (ValueError, TypeError):
+                pass
+        elif exam_id_param:
+            from exams.models import Exam
+            try:
+                tp = Exam.objects.filter(id=exam_id_param).first()
+                if tp:
+                    target_position = tp
+                    target_category = tp.category
+            except (ValueError, TypeError):
+                pass
+
+        # Identify candidate course IDs for this student's preparation
+        candidate_courses_qs = Course.objects.filter(status='published')
+        if target_course:
+            candidate_course_ids = {target_course.id}
+        elif target_position:
+            child_exam_ids = list(target_position.children.values_list('id', flat=True))
+            relevant_exam_ids = [target_position.id] + child_exam_ids
+            if target_position.parent_id:
+                relevant_exam_ids.append(target_position.parent_id)
+            candidate_courses_qs = candidate_courses_qs.filter(exam_id__in=relevant_exam_ids)
+            candidate_course_ids = set(candidate_courses_qs.values_list('id', flat=True))
+        elif target_category:
+            candidate_courses_qs = candidate_courses_qs.filter(exam__category=target_category)
+            candidate_course_ids = set(candidate_courses_qs.values_list('id', flat=True))
+        else:
+            candidate_course_ids = set(candidate_courses_qs.values_list('id', flat=True))
+
+        # Active enrollments student already owns
+        owned_course_ids = set()
+        if user:
+            owned_course_ids = set(Enrollment.objects.filter(
+                student=user,
+                status='active'
+            ).values_list('course_id', flat=True))
+
+        all_active_plans = SubscriptionPlan.objects.filter(status='ACTIVE').order_by('display_order')
+
+        matching_plans = []
+        for plan in all_active_plans:
+            is_compatible = False
+
+            if plan.package_type == 'ALL_ACCESS':
+                is_compatible = True
+            elif plan.package_type == 'SINGLE':
+                if plan.course_id and plan.course_id in candidate_course_ids:
+                    is_compatible = True
+                elif not plan.course_id and not plan.eligible_courses.exists():
+                    is_compatible = True
+                elif plan.eligible_courses.filter(id__in=candidate_course_ids).exists():
+                    is_compatible = True
+            elif plan.package_type in ('MULTI', 'BUNDLE'):
+                if plan.eligible_courses.filter(id__in=candidate_course_ids).exists():
+                    is_compatible = True
+                elif not plan.eligible_courses.exists():
+                    is_compatible = True
+            else:
+                if plan.course_id in candidate_course_ids or not plan.course_id:
+                    is_compatible = True
+
+            if is_compatible:
+                matching_plans.append(plan)
+
+        has_matched_specific = bool(matching_plans)
+        if not matching_plans:
+            matching_plans = list(all_active_plans)
+
+        prep_info = {
+            "has_preference": bool(target_category or target_position or target_course),
+            "category_name": target_category.name if target_category else None,
+            "category_id": target_category.id if target_category else None,
+            "level_name": target_position.parent.name if (target_position and target_position.parent) else (target_position.name if target_position else None),
+            "service_name": target_position.name if (target_position and target_position.parent) else None,
+            "exam_id": target_position.id if target_position else None,
+            "exam_name": target_position.name if target_position else None,
+            "course_id": target_course.id if target_course else None,
+            "course_title": target_course.title if target_course else None,
+            "owned_course_ids": list(owned_course_ids),
+            "has_matched_specific": has_matched_specific,
+        }
+
+        serializer = self.get_serializer(matching_plans, many=True)
+        return Response({
+            "preparation": prep_info,
+            "plans": serializer.data,
+        })
 
 class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubscriptionSerializer
@@ -56,30 +164,43 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         return SubscriptionPayment.objects.filter(student=self.request.user).order_by('-submitted_at')
 
     def perform_create(self, serializer):
-        # amount must never come from the client - a student could submit
-        # amount=1 against a premium plan and, if an admin approves without
-        # manually cross-checking, get the full plan activated. Compute it
-        # server-side from the plan's real price, same pattern marketplace
-        # checkout already uses for its own submitted_amount.
         from rest_framework.exceptions import ValidationError
         plan = serializer.validated_data['plan']
-        course_ids = self.request.data.get('course_ids', [])
+
+        # Prevent duplicate pending payment for the same plan
+        existing_pending = SubscriptionPayment.objects.filter(
+            student=self.request.user,
+            plan=plan,
+            status='PENDING'
+        ).first()
+        if existing_pending:
+            raise ValidationError({"detail": "You already have a pending payment under review for this package."})
+
+        # Parse course_ids safely from FormData or JSON
+        course_ids = self.request.data.getlist('course_ids') if hasattr(self.request.data, 'getlist') else self.request.data.get('course_ids', [])
+        if not course_ids:
+            raw = self.request.data.get('course_ids')
+            if isinstance(raw, str):
+                course_ids = [c.strip() for c in raw.split(',') if c.strip()]
+            elif isinstance(raw, list):
+                course_ids = raw
+            else:
+                course_ids = []
 
         if plan.package_type == 'MULTI':
             if not course_ids:
-                raise ValidationError({"course_ids": "Flexible plans require course selections."})
+                raise ValidationError({"course_ids": "Please select your preparation(s) for this package."})
             if len(course_ids) > plan.allowed_preparation_count:
-                raise ValidationError({"course_ids": f"This plan allows up to {plan.allowed_preparation_count} preparations."})
-            # Also validate that course_ids are within eligible_courses
+                raise ValidationError({"course_ids": f"This plan allows up to {plan.allowed_preparation_count} preparation(s)."})
             eligible_ids = list(plan.eligible_courses.values_list('id', flat=True))
             if eligible_ids:
                 invalid_courses = [cid for cid in course_ids if int(cid) not in eligible_ids]
                 if invalid_courses:
-                    raise ValidationError({"course_ids": "Some selected courses are not eligible for this package."})
+                    raise ValidationError({"course_ids": "Some selected preparations are not eligible for this package."})
 
         payment = serializer.save(student=self.request.user, amount=plan.price)
 
-        from courses.models import CourseApplication
+        from courses.models import Course, CourseApplication
         if plan.package_type == 'MULTI':
             for course_id in course_ids:
                 CourseApplication.objects.update_or_create(
@@ -93,7 +214,6 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                     }
                 )
         elif plan.package_type == 'BUNDLE':
-            # Bundle gets all eligible courses
             for course in plan.eligible_courses.all():
                 CourseApplication.objects.update_or_create(
                     student=self.request.user,
@@ -105,15 +225,16 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                         'reviewed_by': None
                     }
                 )
-        elif plan.package_type == 'ALL_ACCESS':
-            # ALL_ACCESS doesn't specifically create CourseApplications upfront 
-            # or it gives access to a giant set. For now, leave empty or grant all.
-            pass
-        elif plan.course or plan.is_flexible: # Fallback to single or legacy
-            if plan.course:
+        elif plan.package_type == 'SINGLE':
+            single_course = plan.course
+            if not single_course and plan.eligible_courses.count() == 1:
+                single_course = plan.eligible_courses.first()
+            elif not single_course and course_ids:
+                single_course = Course.objects.filter(id=course_ids[0]).first()
+            if single_course:
                 CourseApplication.objects.update_or_create(
                     student=self.request.user,
-                    course=plan.course,
+                    course=single_course,
                     defaults={
                         'subscription_payment': payment,
                         'status': 'pending',
@@ -121,6 +242,17 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                         'reviewed_by': None
                     }
                 )
+        elif plan.course:
+            CourseApplication.objects.update_or_create(
+                student=self.request.user,
+                course=plan.course,
+                defaults={
+                    'subscription_payment': payment,
+                    'status': 'pending',
+                    'reviewed_at': None,
+                    'reviewed_by': None
+                }
+            )
 
         from core.notification_service import NotificationService
         NotificationService.notify_student_payment_submitted(
@@ -214,7 +346,21 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                     app.reviewed_by = request.user
                     app.save()
 
-                if applications.exists():
+                if plan.course:
+                    enrollment, created = Enrollment.objects.get_or_create(
+                        student=payment.student,
+                        course=plan.course,
+                        defaults={
+                            'status': 'active',
+                            'expires_at': expiry_date,
+                        }
+                    )
+                    if not created:
+                        enrollment.status = 'active'
+                        enrollment.expires_at = expiry_date
+                        enrollment.save(update_fields=['status', 'expires_at'])
+                    enrolled_course_title = plan.course.title
+                elif applications.exists():
                     if applications.count() == 1:
                         enrolled_course_title = applications.first().course.title
                     else:

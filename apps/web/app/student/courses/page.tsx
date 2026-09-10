@@ -44,12 +44,20 @@ function MyCoursesContent() {
             Continue learning and pick up right where you left off. Track your progress across all your enrolled courses.
           </p>
         </div>
-        <Button variant="outline" asChild className="border-border text-primary dark:text-foreground hover:bg-muted shrink-0 font-semibold shadow-sm">
-          <Link href="/student/marketplace">
-            <Target className="w-4 h-4 mr-2" />
-            Explore More Courses
-          </Link>
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button asChild className="bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[12px] shadow-[0_4px_14px_rgba(212,167,44,0.3)]">
+            <Link href="/student/onboarding/preparation">
+              <GraduationCap className="w-4 h-4 mr-2" />
+              Buy Another Course
+            </Link>
+          </Button>
+          <Button variant="outline" asChild className="border-border text-primary dark:text-foreground hover:bg-muted shrink-0 font-semibold shadow-sm rounded-[12px]">
+            <Link href="/student/marketplace">
+              <Target className="w-4 h-4 mr-2" />
+              Marketplace
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

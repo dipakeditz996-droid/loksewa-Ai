@@ -1,65 +1,128 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { Bookmark, Search, Loader2, MoreVertical, Eye, Plus } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Bookmark, Search, Loader2, MoreVertical, Plus, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
-import { apiClient } from "@/lib/api/client";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { adminSyllabusApi, AdminExamCategory } from "@/lib/api/admin-syllabus";
+import { toast } from "sonner";
+
+type ModalMode = "create" | "edit" | "delete" | null;
 
 export default function ExamCategoriesPage() {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<AdminExamCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [totalCategories, setTotalCategories] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createFormData, setCreateFormData] = useState({ name: "", description: "", order: 0 });
+  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setIsLoading(true);
-      try {
-        const data = await apiClient<any>("/admin/syllabus/categories/?page_size=50");
-        const cats = Array.isArray(data) ? data : (data.results || []);
-        setCategories(cats);
-        setTotalCategories(data.count || cats.length || 0);
-      } catch (error) {
-        console.error("Failed to fetch categories", error);
-      } finally {
-        setIsLoading(false);
-      }
-    })();
+  // Single modal state — mode controls which dialog is open
+  const [modalMode, setModalMode] = useState<ModalMode>(null);
+  const [selectedCat, setSelectedCat] = useState<AdminExamCategory | null>(null);
+
+  // Form fields
+  const [fname, setFname] = useState("");
+  const [fdesc, setFdesc] = useState("");
+  const [forder, setForder] = useState(0);
+  const [factive, setFactive] = useState(true);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await adminSyllabusApi.getCategories();
+      setCategories(data);
+    } catch {
+      toast.error("Failed to load categories");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const activeCategories = categories.filter(c => c.is_active).length;
-  const filteredCategories = searchTerm ? categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())) : categories;
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const handleCreateCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const closeModal = () => { setModalMode(null); setSelectedCat(null); };
+
+  const openCreate = () => {
+    setFname(""); setFdesc(""); setForder(categories.length); setFactive(true);
+    setSelectedCat(null);
+    setModalMode("create");
+  };
+
+  const openEdit = (cat: AdminExamCategory) => {
+    setFname(cat.name);
+    setFdesc(cat.description || "");
+    setForder(cat.order);
+    setFactive(cat.is_active);
+    setSelectedCat(cat);
+    setModalMode("edit");
+  };
+
+  const openDelete = (cat: AdminExamCategory) => {
+    setSelectedCat(cat);
+    setModalMode("delete");
+  };
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    if (!fname.trim()) { toast.error("Name is required"); return; }
+    setIsSaving(true);
     try {
-      await apiClient("/admin/syllabus/categories/", {
-        method: "POST",
-        body: JSON.stringify({
-          name: createFormData.name,
-          description: createFormData.description,
-          order: createFormData.order,
-          is_active: true,
-        }),
-      });
-      setShowCreateModal(false);
-      setCreateFormData({ name: "", description: "", order: 0 });
-      const data = await apiClient<any>("/admin/syllabus/categories/?page_size=50");
-      const cats = Array.isArray(data) ? data : (data.results || []);
-      setCategories(cats);
-      setTotalCategories(data.count || cats.length || 0);
-    } catch (error) {
-      console.error("Failed to create category", error);
-      alert("Failed to create category");
+      if (modalMode === "create") {
+        await adminSyllabusApi.createCategory({
+          name: fname, description: fdesc, order: forder, is_active: factive,
+        });
+        toast.success("Category created!");
+      } else if (modalMode === "edit" && selectedCat) {
+        await adminSyllabusApi.updateCategory(selectedCat.id, {
+          name: fname, description: fdesc, order: forder, is_active: factive,
+        });
+        toast.success("Category updated!");
+      }
+      closeModal();
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save category");
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  const handleDelete = async () => {
+    if (!selectedCat) return;
+    setIsSaving(true);
+    try {
+      await adminSyllabusApi.deleteCategory(selectedCat.id);
+      toast.success(`"${selectedCat.name}" deleted`);
+      closeModal();
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete category");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // ── Derived ────────────────────────────────────────────────────────────────
+  const filtered = searchTerm
+    ? categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    : categories;
+
+  const activeCount = categories.filter(c => c.is_active).length;
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
+
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
@@ -68,37 +131,41 @@ export default function ExamCategoriesPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-1">Manage examination categories.</p>
         </div>
-        <Button
-          onClick={() => setShowCreateModal(true)}
-          className="gap-2 bg-[#D4A72C] text-[#0B2545] hover:bg-[#C49B1F]"
-        >
-          <Plus className="w-4 h-4" />
-          New Category
+        <Button onClick={openCreate} className="gap-2 bg-[#D4A72C] text-[#0B2545] hover:bg-[#C49B1F]">
+          <Plus className="w-4 h-4" /> New Category
         </Button>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-slate-600 text-sm font-medium mb-1">Total Categories</p>
-          <p className="text-2xl font-bold text-[#0B2545]">{totalCategories}</p>
+          <p className="text-2xl font-bold text-[#0B2545]">{categories.length}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Active</p>
-          <p className="text-2xl font-bold text-emerald-600">{activeCategories}</p>
+          <p className="text-2xl font-bold text-emerald-600">{activeCount}</p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Inactive</p>
-          <p className="text-2xl font-bold text-blue-600">{totalCategories - activeCategories}</p>
+          <p className="text-2xl font-bold text-blue-600">{categories.length - activeCount}</p>
         </div>
       </div>
 
+      {/* Search */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="relative w-full">
           <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-          <Input placeholder="Search categories..." className="pl-9 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-600" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Input
+            placeholder="Search categories..."
+            className="pl-9 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-600"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
         </div>
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
@@ -118,35 +185,62 @@ export default function ExamCategoriesPage() {
                     <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
                   </TableCell>
                 </TableRow>
-              ) : filteredCategories.length === 0 ? (
+              ) : filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-32 text-center text-slate-500 bg-white">
                     No categories found.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredCategories.map((category) => (
-                  <TableRow key={category.id} className="hover:bg-slate-50/50 border-b border-slate-200">
+                filtered.map((cat) => (
+                  <TableRow key={cat.id} className="hover:bg-slate-50/50 border-b border-slate-200 group">
                     <TableCell>
-                      <p className="font-semibold text-[#0B2545]">{category.name}</p>
+                      <p className="font-semibold text-[#0B2545]">{cat.name}</p>
                     </TableCell>
                     <TableCell>
                       <p className="text-sm text-slate-600 max-w-xs truncate">
-                        {category.description || 'No description'}
+                        {cat.description || "No description"}
                       </p>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-slate-600">#{category.order}</span>
+                      <span className="text-sm text-slate-600">#{cat.order}</span>
                     </TableCell>
                     <TableCell>
-                      <span className={category.is_active ? 'bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-1 rounded' : 'bg-slate-100 text-slate-700 text-xs font-semibold px-2 py-1 rounded'}>
-                        {category.is_active ? 'Active' : 'Inactive'}
+                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
+                        cat.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"
+                      }`}>
+                        {cat.is_active ? "Active" : "Inactive"}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <MoreVertical className="h-4 w-4 text-slate-500" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-100"
+                          >
+                            <span className="sr-only">Open menu</span>
+                            <MoreVertical className="h-4 w-4 text-slate-500" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem
+                            className="cursor-pointer"
+                            onClick={() => openEdit(cat)}
+                          >
+                            <Edit className="w-4 h-4 mr-2" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                            onClick={() => openDelete(cat)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -156,62 +250,124 @@ export default function ExamCategoriesPage() {
         </div>
       </div>
 
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full mx-4 p-6">
-            <h2 className="text-xl font-bold text-[#0B2545] mb-4">Create New Category</h2>
-            <form onSubmit={handleCreateCategory} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Category Name *</label>
-                <Input
-                  type="text"
-                  placeholder="Enter category name"
-                  value={createFormData.name}
-                  onChange={(e) => setCreateFormData({ ...createFormData, name: e.target.value })}
-                  required
-                  className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Description</label>
-                <textarea
-                  placeholder="Enter category description (optional)"
-                  value={createFormData.description}
-                  onChange={(e) => setCreateFormData({ ...createFormData, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C] bg-slate-50 text-slate-900 placeholder:text-slate-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Order</label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={createFormData.order}
-                  onChange={(e) => setCreateFormData({ ...createFormData, order: parseInt(e.target.value) })}
-                  className="bg-slate-50 border-slate-200 text-slate-900"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <Button
-                  type="submit"
-                  className="flex-1 bg-[#D4A72C] text-[#0B2545] hover:bg-[#C49B1F]"
-                >
-                  Create Category
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
+      {/* ── Create / Edit Dialog ───────────────────────────────────────────────── */}
+      <Dialog
+        open={modalMode === "create" || modalMode === "edit"}
+        onOpenChange={(open) => { if (!open) closeModal(); }}
+      >
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>
+              {modalMode === "create" ? "Create New Category" : `Edit "${selectedCat?.name}"`}
+            </DialogTitle>
+            <DialogDescription>
+              {modalMode === "create"
+                ? "Add a new top-level exam category."
+                : "Update the category details below."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="cat_name">Name <span className="text-red-500">*</span></Label>
+              <Input
+                id="cat_name"
+                placeholder="e.g. Loksewa, Banking, Security"
+                value={fname}
+                onChange={e => setFname(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSave()}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cat_desc">Description</Label>
+              <Textarea
+                id="cat_desc"
+                placeholder="Optional description"
+                rows={3}
+                value={fdesc}
+                onChange={e => setFdesc(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cat_order">Order</Label>
+              <Input
+                id="cat_order"
+                type="number"
+                value={forder}
+                onChange={e => setForder(parseInt(e.target.value) || 0)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="cat_active"
+                checked={factive}
+                onChange={e => setFactive(e.target.checked)}
+                className="w-4 h-4 accent-[#0B2545]"
+              />
+              <Label htmlFor="cat_active" className="cursor-pointer">
+                Active (Visible to students)
+              </Label>
+            </div>
           </div>
-        </div>
-      )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={isSaving}>Cancel</Button>
+            <Button
+              className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                : modalMode === "create" ? "Create Category" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Confirmation Dialog ─────────────────────────────────────────── */}
+      <Dialog
+        open={modalMode === "delete"}
+        onOpenChange={(open) => { if (!open) closeModal(); }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Delete Category
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="pt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                <p>
+                  Are you sure you want to permanently delete{" "}
+                  <strong className="text-[#0B2545] dark:text-white font-semibold">
+                    {selectedCat ? `"${selectedCat.name}"` : "this category"}
+                  </strong>?
+                </p>
+                <p className="text-amber-600 font-medium">
+                  ⚠️ All positions, subjects, chapters and topics inside will also be deleted.
+                </p>
+                <p className="text-red-600 font-medium">This action cannot be undone.</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={isSaving}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDelete}
+              disabled={isSaving}
+            >
+              {isSaving
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting...</>
+                : "Yes, Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

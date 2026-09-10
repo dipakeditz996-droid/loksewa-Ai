@@ -144,3 +144,33 @@ class Invoice(models.Model):
 
     def __str__(self):
         return self.receipt_number
+
+
+class SubscriptionCourseSelection(models.Model):
+    """
+    Records exactly which Course(s) a student selected when purchasing a
+    MULTI-type SubscriptionPlan. At most `plan.allowed_preparation_count`
+    rows per payment.
+
+    When the admin approves the SubscriptionPayment, an Enrollment is
+    created for each row here — guaranteeing the student receives ONLY
+    the courses they actually selected (not every eligible course).
+    """
+    payment = models.ForeignKey(
+        SubscriptionPayment,
+        on_delete=models.CASCADE,
+        related_name='course_selections',
+    )
+    course = models.ForeignKey(
+        'courses.Course',
+        on_delete=models.CASCADE,
+        related_name='subscription_selections',
+    )
+    selected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('payment', 'course')
+        ordering = ['selected_at']
+
+    def __str__(self):
+        return f"{self.payment.student.username} → {self.course.title} (payment #{self.payment.id})"

@@ -2061,19 +2061,49 @@ class AdminStudyMaterialsView(APIView):
     def get(self, request):
         from notes.models import StudyMaterial
 
-        status_filter = request.query_params.get('status', 'published')  # 'draft', 'pending_review', 'published', 'all'
+        status_filter = request.query_params.get('status', 'all')  # 'draft', 'pending_review', 'published', 'all'
         material_type = request.query_params.get('type', '')
+        content_category = request.query_params.get('content_category', '')
+        note_type = request.query_params.get('note_type', '')
+        exam_id = request.query_params.get('exam') or request.query_params.get('exam_id')
+        level_id = request.query_params.get('level_id')
+        category_id = request.query_params.get('category_id')
+        subject_id = request.query_params.get('subject') or request.query_params.get('subject_id')
+        chapter_id = request.query_params.get('chapter') or request.query_params.get('chapter_id')
+        topic_id = request.query_params.get('topic') or request.query_params.get('topic_id')
         search = request.query_params.get('search', '')
         page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
+        page_size = int(request.query_params.get('page_size', 50))
 
         # Start with all materials ordered by creation date
         qs = StudyMaterial.objects.select_related(
-            'teacher', 'subject', 'exam'
+            'teacher', 'subject', 'chapter', 'topic', 'exam', 'exam__parent', 'exam__category', 'course'
         ).order_by('-created_at')
 
-        if status_filter != 'all':
+        if status_filter and status_filter != 'all':
             qs = qs.filter(status=status_filter)
+
+        if content_category:
+            qs = qs.filter(content_category=content_category)
+
+        if note_type:
+            qs = qs.filter(note_type=note_type)
+
+        if exam_id:
+            qs = qs.filter(exam_id=exam_id)
+        elif level_id:
+            qs = qs.filter(exam__parent_id=level_id)
+        elif category_id:
+            qs = qs.filter(exam__category_id=category_id)
+
+        if subject_id:
+            qs = qs.filter(subject_id=subject_id)
+
+        if chapter_id:
+            qs = qs.filter(chapter_id=chapter_id)
+
+        if topic_id:
+            qs = qs.filter(topic_id=topic_id)
 
         if material_type:
             qs = qs.filter(material_type=material_type)
@@ -2083,26 +2113,57 @@ class AdminStudyMaterialsView(APIView):
                 Q(title__icontains=search) |
                 Q(description__icontains=search) |
                 Q(teacher__username__icontains=search) |
-                Q(subject__name__icontains=search)
+                Q(subject__name__icontains=search) |
+                Q(exam__name__icontains=search)
             )
 
         total = qs.count()
         start = (page - 1) * page_size
         materials = qs[start:start + page_size]
 
+        import os
         data = []
         for material in materials:
+            file_url = None
+            file_name = None
+            if material.file:
+                try:
+                    file_url = request.build_absolute_uri(material.file.url)
+                    file_name = os.path.basename(material.file.name)
+                except Exception:
+                    file_url = material.file.url if hasattr(material.file, 'url') else None
+                    file_name = str(material.file)
+
             data.append({
                 "id": material.id,
                 "title": material.title,
-                "description": material.description[:100] if material.description else '',
+                "slug": material.slug,
+                "description": material.description or '',
+                "content": material.content or '',
                 "teacher": material.teacher.get_full_name() or material.teacher.username if material.teacher else 'Unknown',
-                "subject": material.subject.name if material.subject else 'N/A',
-                "exam": material.exam.name if material.exam else 'N/A',
+                "examId": material.exam_id,
+                "examName": material.exam.name if material.exam else 'N/A',
+                "levelId": material.exam.parent_id if material.exam and material.exam.parent else None,
+                "levelName": material.exam.parent.name if material.exam and material.exam.parent else None,
+                "categoryId": material.exam.category_id if material.exam else None,
+                "categoryName": material.exam.category.name if material.exam and material.exam.category else None,
+                "courseId": material.course_id,
+                "courseTitle": material.course.title if material.course else None,
+                "subjectId": material.subject_id,
+                "subjectName": material.subject.name if material.subject else None,
+                "chapterId": material.chapter_id,
+                "chapterName": material.chapter.title if material.chapter else None,
+                "topicId": material.topic_id,
+                "topicName": material.topic.name if material.topic else None,
+                "contentCategory": material.content_category,
+                "noteType": material.note_type,
                 "materialType": material.material_type,
                 "difficulty": material.difficulty,
                 "status": material.status,
                 "accessType": material.access_type,
+                "fileUrl": file_url,
+                "fileName": file_name,
+                "externalUrl": material.external_url,
                 "estimatedReadingTime": material.estimated_reading_time,
                 "availableToAiTutor": material.available_to_ai_tutor,
                 "createdAt": material.created_at.isoformat(),
@@ -2114,95 +2175,111 @@ class AdminStudyMaterialsView(APIView):
             "total": total,
             "page": page,
             "pageSize": page_size,
-            "totalPages": (total + page_size - 1) // page_size,
+            "totalPages": (total + page_size - 1) // page_size if page_size > 0 else 1,
         })
 
     def post(self, request):
         """Create a study material.
-
         Accepts JSON or multipart (when an actual file is attached).
         """
         from notes.models import StudyMaterial
+        from exams.models import Exam, Subject, Chapter, Topic
+        from courses.models import Course
 
         title = (request.data.get('title') or '').strip()
-        exam_id = request.data.get('exam')
-        subject_id = request.data.get('subject')
+        exam_id = request.data.get('exam') or request.data.get('exam_id')
 
-        missing = [f for f, v in (
-            ('title', title), ('exam', exam_id), ('subject', subject_id)
-        ) if not v]
-        if missing:
-            return Response(
-                {"error": f"Missing required field(s): {', '.join(missing)}."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if not title:
+            return Response({"error": "Title is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not exam_id:
+            return Response({"error": "Exam/Preparation is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             exam = Exam.objects.get(pk=exam_id)
         except (Exam.DoesNotExist, ValueError, TypeError):
             return Response({"error": "That exam does not exist."}, status=status.HTTP_400_BAD_REQUEST)
 
-        from exams.models import Subject as SubjectModel, Topic as TopicModel
-        try:
-            subject = SubjectModel.objects.get(pk=subject_id)
-        except (SubjectModel.DoesNotExist, ValueError, TypeError):
-            return Response({"error": "That subject does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+        content_category = (request.data.get('content_category') or 'subjective_topicwise').strip().lower()
+        if content_category not in dict(StudyMaterial.CONTENT_CATEGORY_CHOICES):
+            return Response({"error": f"Unsupported content_category: {content_category}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        note_type = (request.data.get('note_type') or 'standard').strip().lower()
+        if note_type not in dict(StudyMaterial.NOTE_TYPE_CHOICES):
+            return Response({"error": f"Unsupported note_type: {note_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        subject = None
+        subject_id = request.data.get('subject') or request.data.get('subject_id')
+        if subject_id:
+            try:
+                subject = Subject.objects.get(pk=subject_id)
+            except (Subject.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "That subject does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+
+        chapter = None
+        chapter_id = request.data.get('chapter') or request.data.get('chapter_id')
+        if chapter_id:
+            try:
+                chapter = Chapter.objects.get(pk=chapter_id)
+            except (Chapter.DoesNotExist, ValueError, TypeError):
+                return Response({"error": "That chapter does not exist."}, status=status.HTTP_400_BAD_REQUEST)
 
         topic = None
-        topic_id = request.data.get('topic')
+        topic_id = request.data.get('topic') or request.data.get('topic_id')
         if topic_id:
             try:
-                topic = TopicModel.objects.get(pk=topic_id)
-            except (TopicModel.DoesNotExist, ValueError, TypeError):
+                topic = Topic.objects.get(pk=topic_id)
+            except (Topic.DoesNotExist, ValueError, TypeError):
                 return Response({"error": "That topic does not exist."}, status=status.HTTP_400_BAD_REQUEST)
 
-        material_type = (request.data.get('material_type') or 'notes').strip().lower()
+        course = None
+        course_id = request.data.get('course') or request.data.get('course_id')
+        if course_id:
+            try:
+                course = Course.objects.get(pk=course_id)
+            except (Course.DoesNotExist, ValueError, TypeError):
+                pass
+        if not course:
+            course = Course.objects.filter(exam=exam).first()
+
+        material_type = (request.data.get('material_type') or 'pdf').strip().lower()
         if material_type not in dict(StudyMaterial.MATERIAL_TYPES):
-            return Response({"error": f"Unsupported material_type: {material_type}"}, status=status.HTTP_400_BAD_REQUEST)
+            material_type = 'pdf'
 
         difficulty = (request.data.get('difficulty') or 'beginner').strip().lower()
         if difficulty not in dict(StudyMaterial.DIFFICULTY_CHOICES):
-            return Response({"error": f"Unsupported difficulty: {difficulty}"}, status=status.HTTP_400_BAD_REQUEST)
+            difficulty = 'beginner'
 
         access_type = (request.data.get('access_type') or 'free').strip().lower()
         if access_type not in dict(StudyMaterial.ACCESS_TYPES):
-            return Response({"error": f"Unsupported access_type: {access_type}"}, status=status.HTTP_400_BAD_REQUEST)
+            access_type = 'free'
 
-        material_status = (request.data.get('status') or 'draft').strip().lower()
+        material_status = (request.data.get('status') or 'published').strip().lower()
         if material_status not in dict(StudyMaterial.STATUS_CHOICES):
-            return Response({"error": f"Unsupported status: {material_status}"}, status=status.HTTP_400_BAD_REQUEST)
+            material_status = 'published'
 
-        try:
-            reading_time = int(request.data.get('estimated_reading_time', 10))
-        except (TypeError, ValueError):
-            return Response({"error": "estimated_reading_time must be a number."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # A material has to carry something a student can actually open.
         upload = request.FILES.get('file')
-        external_url = (request.data.get('external_url') or '').strip()
         content = request.data.get('content') or ''
+        external_url = (request.data.get('external_url') or '').strip()
+
         if not upload and not external_url and not content.strip():
             return Response(
-                {"error": "Add file content, an external link, or written content."},
+                {"error": "Please attach a PDF file or provide content."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        from notes.models import MaterialCategory
-        category = None
-        category_id = request.data.get('category')
-        if category_id:
-            try:
-                category = MaterialCategory.objects.get(pk=category_id)
-            except (MaterialCategory.DoesNotExist, ValueError, TypeError):
-                return Response({"error": "That category does not exist."}, status=status.HTTP_400_BAD_REQUEST)
+        if upload:
+            material_type = 'pdf'
 
         material = StudyMaterial.objects.create(
             title=title,
             teacher=request.user,
             exam=exam,
+            course=course,
             subject=subject,
+            chapter=chapter,
             topic=topic,
-            category=category,
+            content_category=content_category,
+            note_type=note_type,
             description=request.data.get('description') or '',
             content=content,
             material_type=material_type,
@@ -2210,7 +2287,7 @@ class AdminStudyMaterialsView(APIView):
             access_type=access_type,
             status=material_status,
             external_url=external_url or None,
-            estimated_reading_time=reading_time,
+            estimated_reading_time=int(request.data.get('estimated_reading_time') or 10),
         )
         if upload:
             material.file = upload
@@ -2219,17 +2296,28 @@ class AdminStudyMaterialsView(APIView):
         AuditLog.objects.create(
             actor=request.user, action='CREATE_STUDY_MATERIAL',
             entity_type='StudyMaterial', entity_id=str(material.id),
-            details={"title": material.title, "status": material.status},
+            details={"title": material.title, "status": material.status, "category": content_category},
         )
+
+        file_url = request.build_absolute_uri(material.file.url) if material.file else None
 
         return Response({
             "id": material.id,
             "title": material.title,
             "slug": material.slug,
             "status": material.status,
+            "contentCategory": material.content_category,
+            "noteType": material.note_type,
             "materialType": material.material_type,
-            "subject": subject.name,
-            "exam": exam.name,
+            "examId": exam.id,
+            "examName": exam.name,
+            "subjectId": subject.id if subject else None,
+            "subjectName": subject.name if subject else None,
+            "chapterId": chapter.id if chapter else None,
+            "chapterName": chapter.title if chapter else None,
+            "topicId": topic.id if topic else None,
+            "topicName": topic.name if topic else None,
+            "fileUrl": file_url,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -2240,13 +2328,24 @@ class AdminStudyMaterialDetailView(APIView):
     def _get(self, pk):
         from notes.models import StudyMaterial
         return StudyMaterial.objects.select_related(
-            'teacher', 'subject', 'exam', 'topic'
+            'teacher', 'subject', 'chapter', 'topic', 'exam', 'exam__parent', 'exam__category', 'course'
         ).filter(pk=pk).first()
 
     def get(self, request, pk):
         material = self._get(pk)
         if not material:
             return Response({"error": "Study material not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        import os
+        file_url = None
+        file_name = None
+        if material.file:
+            try:
+                file_url = request.build_absolute_uri(material.file.url)
+                file_name = os.path.basename(material.file.name)
+            except Exception:
+                file_url = material.file.url if hasattr(material.file, 'url') else None
+                file_name = str(material.file)
 
         return Response({
             "id": material.id,
@@ -2257,17 +2356,28 @@ class AdminStudyMaterialDetailView(APIView):
             "teacher": (material.teacher.get_full_name() or material.teacher.username) if material.teacher else None,
             "exam": material.exam.name if material.exam else None,
             "examId": material.exam_id,
+            "levelId": material.exam.parent_id if material.exam and material.exam.parent else None,
+            "levelName": material.exam.parent.name if material.exam and material.exam.parent else None,
+            "categoryId": material.exam.category_id if material.exam else None,
+            "categoryName": material.exam.category.name if material.exam and material.exam.category else None,
             "subject": material.subject.name if material.subject else None,
             "subjectId": material.subject_id,
+            "chapter": material.chapter.title if material.chapter else None,
+            "chapterId": material.chapter_id,
             "topic": material.topic.name if material.topic else None,
             "topicId": material.topic_id,
+            "courseId": material.course_id,
+            "courseTitle": material.course.title if material.course else None,
+            "contentCategory": material.content_category,
+            "noteType": material.note_type,
             "materialType": material.material_type,
             "difficulty": material.difficulty,
             "accessType": material.access_type,
             "status": material.status,
             "reviewNote": material.review_note,
             "externalUrl": material.external_url,
-            "fileUrl": material.file.url if material.file else None,
+            "fileUrl": file_url,
+            "fileName": file_name,
             "estimatedReadingTime": material.estimated_reading_time,
             "availableToAiTutor": material.available_to_ai_tutor,
             "createdAt": material.created_at.isoformat(),
@@ -2276,6 +2386,7 @@ class AdminStudyMaterialDetailView(APIView):
 
     def patch(self, request, pk):
         from notes.models import StudyMaterial
+        from exams.models import Subject, Chapter, Topic
 
         material = self._get(pk)
         if not material:
@@ -2286,6 +2397,16 @@ class AdminStudyMaterialDetailView(APIView):
             if field in request.data:
                 setattr(material, field, request.data[field] or '')
 
+        if 'content_category' in request.data:
+            cat = str(request.data['content_category']).strip().lower()
+            if cat in dict(StudyMaterial.CONTENT_CATEGORY_CHOICES):
+                material.content_category = cat
+
+        if 'note_type' in request.data:
+            nt = str(request.data['note_type']).strip().lower()
+            if nt in dict(StudyMaterial.NOTE_TYPE_CHOICES):
+                material.note_type = nt
+
         choice_fields = {
             'material_type': StudyMaterial.MATERIAL_TYPES,
             'difficulty': StudyMaterial.DIFFICULTY_CHOICES,
@@ -2295,30 +2416,47 @@ class AdminStudyMaterialDetailView(APIView):
         for field, choices in choice_fields.items():
             if field in request.data:
                 value = str(request.data[field]).strip().lower()
-                if value not in dict(choices):
-                    return Response({"error": f"Unsupported {field}: {value}"}, status=status.HTTP_400_BAD_REQUEST)
-                setattr(material, field, value)
+                if value in dict(choices):
+                    setattr(material, field, value)
+
+        if 'subject' in request.data or 'subject_id' in request.data:
+            sid = request.data.get('subject') if 'subject' in request.data else request.data.get('subject_id')
+            if sid:
+                material.subject = Subject.objects.filter(pk=sid).first()
+            else:
+                material.subject = None
+
+        if 'chapter' in request.data or 'chapter_id' in request.data:
+            cid = request.data.get('chapter') if 'chapter' in request.data else request.data.get('chapter_id')
+            if cid:
+                material.chapter = Chapter.objects.filter(pk=cid).first()
+            else:
+                material.chapter = None
+
+        if 'topic' in request.data or 'topic_id' in request.data:
+            tid = request.data.get('topic') if 'topic' in request.data else request.data.get('topic_id')
+            if tid:
+                material.topic = Topic.objects.filter(pk=tid).first()
+            else:
+                material.topic = None
 
         if 'estimated_reading_time' in request.data:
             try:
                 material.estimated_reading_time = int(request.data['estimated_reading_time'])
             except (TypeError, ValueError):
-                return Response({"error": "estimated_reading_time must be a number."}, status=status.HTTP_400_BAD_REQUEST)
+                pass
 
         if 'external_url' in request.data:
             material.external_url = (request.data['external_url'] or '').strip() or None
 
         if request.FILES.get('file'):
             material.file = request.FILES['file']
+            material.material_type = 'pdf'
 
         if 'available_to_ai_tutor' in request.data:
             value = request.data['available_to_ai_tutor']
-            if not isinstance(value, bool):
-                return Response(
-                    {"error": "available_to_ai_tutor must be a boolean."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            material.available_to_ai_tutor = value
+            if isinstance(value, bool):
+                material.available_to_ai_tutor = value
 
         material.save()
 
@@ -2327,7 +2465,14 @@ class AdminStudyMaterialDetailView(APIView):
             entity_type='StudyMaterial', entity_id=str(material.id),
             details={"title": material.title, "status": material.status},
         )
-        return Response({"success": True, "id": material.id, "status": material.status})
+        file_url = request.build_absolute_uri(material.file.url) if material.file else None
+        return Response({
+            "success": True,
+            "id": material.id,
+            "title": material.title,
+            "status": material.status,
+            "fileUrl": file_url,
+        })
 
     def delete(self, request, pk):
         material = self._get(pk)
@@ -2342,6 +2487,154 @@ class AdminStudyMaterialDetailView(APIView):
             details={"title": title},
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class AdminStudyMaterialsHierarchyView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from django.db.models import Count, Q
+        from exams.models import ExamCategory, Exam
+        from notes.models import StudyMaterial
+        from courses.models import Course
+
+        canonical_cat_ids = [19, 20, 21, 22]
+        categories = ExamCategory.objects.filter(
+            is_active=True, id__in=canonical_cat_ids
+        ).order_by('order', 'id')
+
+        all_exams = Exam.objects.filter(category__in=categories, is_active=True)
+        exam_ids = all_exams.values_list('id', flat=True)
+
+        counts = StudyMaterial.objects.filter(exam_id__in=exam_ids).values('exam_id', 'content_category').annotate(count=Count('id'))
+        count_map = {}
+        for item in counts:
+            eid = item['exam_id']
+            if eid not in count_map:
+                count_map[eid] = {"syllabus": 0, "subjective_topicwise": 0, "objective_topicwise": 0, "revision_notes": 0, "total": 0}
+            cat = item['content_category']
+            if cat in count_map[eid]:
+                count_map[eid][cat] = item['count']
+            count_map[eid]["total"] += item['count']
+
+        courses = Course.objects.filter(exam_id__in=exam_ids, status__in=['published', 'coming_soon']).order_by('id')
+        course_map = {}
+        for c in courses:
+            if c.exam_id not in course_map:
+                course_map[c.exam_id] = c
+
+        tree = []
+        for cat in categories:
+            root_exams = all_exams.filter(category=cat, parent__isnull=True).order_by('order', 'id')
+            level_data = []
+            for root_exam in root_exams:
+                children = all_exams.filter(parent=root_exam).order_by('order', 'id')
+                if children.exists():
+                    prep_data = []
+                    for child in children:
+                        c = course_map.get(child.id)
+                        prep_data.append({
+                            "id": child.id, "name": child.name, "order": child.order,
+                            "courseId": c.id if c else None, "courseTitle": c.title if c else None,
+                            "courseStatus": c.status if c else None, "isComingSoon": (c.status == 'coming_soon') if c else False,
+                            "counts": count_map.get(child.id, {"syllabus": 0, "subjective_topicwise": 0, "objective_topicwise": 0, "revision_notes": 0, "total": 0})
+                        })
+                    level_data.append({"id": root_exam.id, "name": root_exam.name, "order": root_exam.order, "preparations": prep_data})
+                else:
+                    c = course_map.get(root_exam.id)
+                    level_data.append({
+                        "id": root_exam.id, "name": cat.name, "order": root_exam.order,
+                        "preparations": [{
+                            "id": root_exam.id, "name": root_exam.name, "order": root_exam.order,
+                            "courseId": c.id if c else None, "courseTitle": c.title if c else None,
+                            "courseStatus": c.status if c else None, "isComingSoon": (c.status == 'coming_soon') if c else False,
+                            "counts": count_map.get(root_exam.id, {"syllabus": 0, "subjective_topicwise": 0, "objective_topicwise": 0, "revision_notes": 0, "total": 0})
+                        }]
+                    })
+            tree.append({"id": cat.id, "name": cat.name, "order": cat.order, "levels": level_data})
+        return Response(tree)
+
+
+class AdminCourseStatusView(APIView):
+    """PATCH /api/admin/courses/<id>/status/ - flips a Course between
+    coming_soon/published/archived. Mirrors the CourseAdmin
+    mark_coming_soon/mark_published/mark_archived Django-admin actions so
+    there's one source of truth for what each status transition does."""
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        from courses.models import Course
+
+        new_status = request.data.get('status')
+        valid_statuses = {'draft', 'published', 'coming_soon', 'archived'}
+        if new_status not in valid_statuses:
+            return Response(
+                {"error": f"status must be one of {sorted(valid_statuses)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            course = Course.objects.get(pk=pk)
+        except Course.DoesNotExist:
+            return Response({"error": "Course not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        old_status = course.status
+        course.status = new_status
+        if new_status in ('coming_soon', 'archived'):
+            course.is_open_for_enrollment = False
+        course.save(update_fields=['status', 'is_open_for_enrollment', 'updated_at'])
+
+        AuditLog.objects.create(
+            actor=request.user, action='COURSE_STATUS_CHANGED',
+            entity_type='Course', entity_id=str(course.id),
+            details={"title": course.title, "from": old_status, "to": new_status},
+        )
+        return Response({"id": course.id, "status": course.status})
+
+
+class AdminPreparationAcademicTreeView(APIView):
+    """GET /api/admin/study-materials/academic-tree/?exam_id=<id>
+    Returns subjects, chapters, and topics for a selected preparation.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        from exams.models import Subject, Chapter, Topic
+
+        exam_id = request.query_params.get('exam_id') or request.query_params.get('exam')
+        if not exam_id:
+            return Response({"error": "exam_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        subjects = Subject.objects.filter(
+            Q(paper__exam_id=exam_id) | Q(paper__isnull=True)
+        ).prefetch_related('chapters__topics').order_by('order', 'id')
+
+        data = []
+        for s in subjects:
+            chap_data = []
+            for c in s.chapters.filter(is_active=True).order_by('order', 'id'):
+                topic_data = []
+                for t in c.topics.filter(is_active=True).order_by('order', 'id'):
+                    topic_data.append({
+                        "id": t.id,
+                        "name": t.name,
+                        "order": t.order,
+                    })
+                chap_data.append({
+                    "id": c.id,
+                    "title": c.title,
+                    "order": c.order,
+                    "topics": topic_data,
+                })
+            data.append({
+                "id": s.id,
+                "name": s.name,
+                "code": s.code,
+                "order": s.order,
+                "chapters": chap_data,
+            })
+
+        return Response(data)
 
 
 # ============================================================
@@ -3834,7 +4127,7 @@ class AdminPositionsView(APIView):
 
     def get(self, request):
         try:
-            positions = Position.objects.filter(is_active=True).values(
+            positions = Position.objects.all().values(
                 'id', 'name', 'code', 'description', 'category', 'order', 'is_active', 'created_at', 'updated_at'
             ).order_by('order', 'name')
 
@@ -3873,7 +4166,7 @@ class AdminPositionsView(APIView):
                 code=request.data.get('code', '').strip(),
                 category=request.data.get('category', '').strip(),
                 order=int(request.data.get('order', 0)),
-                is_active=True
+                is_active=bool(request.data.get('is_active', True))
             )
 
             return Response({
@@ -3891,6 +4184,79 @@ class AdminPositionsView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class AdminPositionDetailView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, pk):
+        try:
+            position = Position.objects.get(pk=pk)
+            return Response({
+                'id': position.id,
+                'name': position.name,
+                'code': position.code,
+                'description': position.description,
+                'category': position.category,
+                'order': position.order,
+                'is_active': position.is_active,
+                'created_at': position.created_at,
+                'updated_at': position.updated_at,
+            })
+        except Position.DoesNotExist:
+            return Response({'error': 'Position not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        try:
+            position = Position.objects.get(pk=pk)
+            name = request.data.get('name', '').strip()
+            if not name:
+                return Response({'error': 'Name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+            position.name = name
+            if 'code' in request.data:
+                position.code = request.data.get('code', '').strip()
+            if 'category' in request.data:
+                position.category = request.data.get('category', '').strip()
+            if 'description' in request.data:
+                position.description = request.data.get('description', '').strip()
+            if 'order' in request.data:
+                position.order = int(request.data.get('order', 0))
+            if 'is_active' in request.data:
+                position.is_active = bool(request.data.get('is_active', True))
+
+            position.save()
+
+            return Response({
+                'id': position.id,
+                'name': position.name,
+                'code': position.code,
+                'description': position.description,
+                'category': position.category,
+                'order': position.order,
+                'is_active': position.is_active,
+                'created_at': position.created_at,
+                'updated_at': position.updated_at,
+            })
+        except Position.DoesNotExist:
+            return Response({'error': 'Position not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        return self.put(request, pk)
+
+    def delete(self, request, pk):
+        try:
+            position = Position.objects.get(pk=pk)
+            position.delete()
+            return Response({'success': True, 'message': 'Position deleted successfully'})
+        except Position.DoesNotExist:
+            return Response({'error': 'Position not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class AdminTagsView(APIView):

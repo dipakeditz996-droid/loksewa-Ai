@@ -496,3 +496,166 @@ class ExpiryNotificationTaskTests(APITestCase):
         sent = NotificationService.notify_subscription_expired()
         self.assertEqual(sent, 1)
         self.assertTrue(Notification.objects.filter(recipient=self.student, title='Package Expired').exists())
+
+
+class PackageMatchingAndPurchaseFlowTests(APITestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username='admin_flow', password='pw', role='admin', is_staff=True)
+        self.student_a = User.objects.create_user(username='student_a', password='pw', role='student')
+        self.student_b = User.objects.create_user(username='student_b', password='pw', role='student')
+
+        from exams.models import ExamCategory, Exam
+        from support.models import StudentProfile
+
+        self.cat = ExamCategory.objects.create(name='PSC Category')
+        self.level5 = Exam.objects.create(name='5th Level Exam', category=self.cat)
+        self.exam_comp = Exam.objects.create(name='Computer Exam', category=self.cat, parent=self.level5)
+        self.exam_civ = Exam.objects.create(name='Civil Exam', category=self.cat, parent=self.level5)
+
+        self.course_comp = Course.objects.create(
+            title='PSC Computer Course', slug='psc-comp-course',
+            exam=self.exam_comp, status='published'
+        )
+        self.course_civ = Course.objects.create(
+            title='PSC Civil Course', slug='psc-civ-course',
+            exam=self.exam_civ, status='published'
+        )
+
+        self.profile_a, _ = StudentProfile.objects.get_or_create(
+            user=self.student_a,
+            defaults={
+                'target_category': self.cat,
+                'target_position': self.exam_comp,
+                'target_course': self.course_comp,
+                'is_verified': True
+            }
+        )
+        self.profile_a.target_category = self.cat
+        self.profile_a.target_position = self.exam_comp
+        self.profile_a.target_course = self.course_comp
+        self.profile_a.save()
+
+        self.method = PaymentMethod.objects.create(
+            display_name='eSewa Flow', method_type='ESEWA',
+            account_name='Admin Flow', account_number='9800000000',
+            is_active=True
+        )
+
+        self.plan_comp = SubscriptionPlan.objects.create(
+            name='PSC Computer 3M', description='', duration=90, price='2999.00',
+            package_type='SINGLE', course=self.course_comp, status='ACTIVE', display_order=1
+        )
+        self.plan_comp.eligible_courses.set([self.course_comp])
+
+        self.plan_civ = SubscriptionPlan.objects.create(
+            name='PSC Civil 3M', description='', duration=90, price='2999.00',
+            package_type='SINGLE', course=self.course_civ, status='ACTIVE', display_order=2
+        )
+        self.plan_civ.eligible_courses.set([self.course_civ])
+
+        self.plan_multi = SubscriptionPlan.objects.create(
+            name='Any 2 PSC Multi', description='', duration=90, price='4999.00',
+            package_type='MULTI', allowed_preparation_count=2, status='ACTIVE', display_order=3
+        )
+        self.plan_multi.eligible_courses.set([self.course_comp, self.course_civ])
+
+    def test_available_plans_filters_to_student_preparation(self):
+        self.client.force_authenticate(self.student_a)
+        resp = self.client.get('/api/subscriptions/plans/available/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+        data = resp.data
+        self.assertTrue(data['preparation']['has_preference'])
+        self.assertEqual(data['preparation']['course_title'], 'PSC Computer Course')
+
+        returned_plan_names = [p['name'] for p in data['plans']]
+        self.assertIn('PSC Computer 3M', returned_plan_names)
+        self.assertIn('Any 2 PSC Multi', returned_plan_names)
+        # Civil plan must NOT be returned because student is preparing for Computer
+        self.assertNotIn('PSC Civil 3M', returned_plan_names)
+
+    def test_multi_plan_submission_validation_and_admin_approval_unlocks_courses(self):
+        self.client.force_authenticate(self.student_a)
+
+        # 1. Attempt submitting with 3 courses when limit is 2 -> must fail
+        dummy_c3 = Course.objects.create(title='C3', slug='c3', status='published')
+        resp = self.client.post('/api/subscriptions/payments/', {
+            'plan': self.plan_multi.id,
+            'payment_method': self.method.id,
+            'transaction_id': 'TXN-MULTI-OVERLIMIT',
+            'screenshot': _dummy_screenshot('receipt.gif'),
+            'course_ids': [self.course_comp.id, self.course_civ.id, dummy_c3.id],
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 2. Submit valid multi selection (2 courses)
+        resp = self.client.post('/api/subscriptions/payments/', {
+            'plan': self.plan_multi.id,
+            'payment_method': self.method.id,
+            'transaction_id': 'TXN-MULTI-VALID-1',
+            'screenshot': _dummy_screenshot('receipt.gif'),
+            'course_ids': [self.course_comp.id, self.course_civ.id],
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        payment_id = resp.data['id']
+        self.assertEqual(resp.data['status'], 'PENDING')
+
+        # 3. Duplicate pending payment for same plan is blocked
+        resp_dup = self.client.post('/api/subscriptions/payments/', {
+            'plan': self.plan_multi.id,
+            'payment_method': self.method.id,
+            'transaction_id': 'TXN-MULTI-VALID-2',
+            'screenshot': _dummy_screenshot('receipt.gif'),
+            'course_ids': [self.course_comp.id],
+        }, format='multipart')
+        self.assertEqual(resp_dup.status_code, status.HTTP_400_BAD_REQUEST)
+
+        # 4. IDOR test: Student B cannot view or approve Student A's payment
+        self.client.force_authenticate(self.student_b)
+        resp_idor_get = self.client.get(f'/api/subscriptions/payments/{payment_id}/')
+        self.assertEqual(resp_idor_get.status_code, status.HTTP_404_NOT_FOUND)
+
+        resp_idor_approve = self.client.post(f'/api/subscriptions/payments/{payment_id}/approve/')
+        self.assertEqual(resp_idor_approve.status_code, status.HTTP_403_FORBIDDEN)
+
+        # 5. Admin approves payment
+        self.client.force_authenticate(self.admin)
+        resp_approve = self.client.post(f'/api/subscriptions/payments/{payment_id}/approve/')
+        self.assertEqual(resp_approve.status_code, status.HTTP_200_OK)
+
+        # 6. Verify enrollment & access for student A
+        self.client.force_authenticate(self.student_a)
+        self.assertTrue(Enrollment.objects.filter(student=self.student_a, course=self.course_comp, status='active').exists())
+        self.assertTrue(Enrollment.objects.filter(student=self.student_a, course=self.course_civ, status='active').exists())
+
+        # My courses API returns both courses
+        resp_courses = self.client.get('/api/courses/my-courses/')
+        self.assertEqual(resp_courses.status_code, status.HTTP_200_OK)
+        enrolled_slugs = [item['course']['slug'] for item in resp_courses.data]
+        self.assertIn('psc-comp-course', enrolled_slugs)
+        self.assertIn('psc-civ-course', enrolled_slugs)
+
+    def test_payment_rejection_stores_reason_and_leaves_unlocked_false(self):
+        self.client.force_authenticate(self.student_a)
+        resp = self.client.post('/api/subscriptions/payments/', {
+            'plan': self.plan_comp.id,
+            'payment_method': self.method.id,
+            'transaction_id': 'TXN-REJECT-TEST',
+            'screenshot': _dummy_screenshot('receipt.gif'),
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        payment_id = resp.data['id']
+
+        # Admin rejects with reason
+        self.client.force_authenticate(self.admin)
+        resp_reject = self.client.post(f'/api/subscriptions/payments/{payment_id}/reject/', {
+            'reason': 'Screenshot is blurred and transaction reference is unreadable.'
+        }, format='json')
+        self.assertEqual(resp_reject.status_code, status.HTTP_200_OK)
+
+        payment = SubscriptionPayment.objects.get(id=payment_id)
+        self.assertEqual(payment.status, 'REJECTED')
+        self.assertEqual(payment.rejection_reason, 'Screenshot is blurred and transaction reference is unreadable.')
+        self.assertIsNone(payment.subscription)
+        self.assertFalse(has_active_subscription(self.student_a))
+

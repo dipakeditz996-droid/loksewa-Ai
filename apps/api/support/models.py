@@ -55,6 +55,10 @@ class StudentProfile(models.Model):
         'exams.Exam', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='targeted_students'
     )
+    target_course = models.ForeignKey(
+        'courses.Course', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='targeted_students'
+    )
 
     # Permanent address, collected at registration. Plain strings, matching
     # the existing convention in marketplace.DeliveryAddress (district /

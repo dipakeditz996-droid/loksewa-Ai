@@ -9,12 +9,18 @@ export interface ApiExamCategory {
   position_count: number;
 }
 
+export type ExamStatus = "active" | "coming_soon" | "inactive";
+
 export interface ApiExam {
   id: number;
   category: number;
   category_name: string;
+  // Self-referential: null for a top-level "Level" (e.g. PSC's 5th Level),
+  // set to another exam's id for a "Preparation/Service" nested under it.
+  parent?: number | null;
   name: string;
   description: string;
+  status: ExamStatus;
   is_active: boolean;
   order: number;
   paper_count: number;

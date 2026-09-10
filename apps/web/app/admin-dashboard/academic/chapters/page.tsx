@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   BookOpen, Search, Plus, MoreVertical, Edit, Trash2, Eye,
-  Loader2, ChevronRight
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuLabel
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { adminApi, AdminChapter, AdminSubject } from "@/lib/api/admin";
 
 export default function AcademicChaptersPage() {
@@ -29,37 +33,12 @@ export default function AcademicChaptersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const fetchSubjects = async () => {
-    try {
-      const data = await adminApi.getSubjects({ pageSize: 100 });
-      const subjects = Array.isArray(data) ? data : (data.results || []);
-      setSubjects(subjects);
-      if (subjects && subjects.length > 0) {
-        setSelectedSubject(subjects[0].id);
-      }
-    } catch (error) {
-      console.error("Failed to fetch subjects", error);
-    }
-  };
+  // Delete state
+  const [deletingChapter, setDeletingChapter] = useState<AdminChapter | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const fetchChapters = async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.getChapters({
-        subject: selectedSubject || undefined,
-        page: currentPage,
-        pageSize: 20,
-      });
-      const chapters = Array.isArray(data) ? data : (data.results || []);
-      setChapters(chapters);
-      setTotalChapters(data.count || chapters.length || 0);
-    } catch (error) {
-      console.error("Failed to fetch chapters", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  // ── Fetch subjects on mount ──────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -75,27 +54,66 @@ export default function AcademicChaptersPage() {
     })();
   }, []);
 
+  // ── Fetch chapters whenever selected subject changes ─────────────
   useEffect(() => {
-    if (selectedSubject) {
-      setCurrentPage(1);
-      (async () => {
-        try {
-          const data = await adminApi.getChapters({
-            subject: selectedSubject,
-            page: 1,
-            pageSize: 20,
-          });
-          const chaps = Array.isArray(data) ? data : (data.results || []);
-          setChapters(chaps);
-          setTotalChapters(data.count || chaps.length || 0);
-        } catch (error) {
-          console.error("Failed to fetch chapters", error);
-        } finally {
-          setIsLoading(false);
-        }
-      })();
-    }
+    if (!selectedSubject) return;
+    setCurrentPage(1);
+    (async () => {
+      setIsLoading(true);
+      try {
+        const data = await adminApi.getChapters({
+          subject: selectedSubject,
+          page: 1,
+          pageSize: 20,
+        });
+        const chaps = Array.isArray(data) ? data : (data.results || []);
+        setChapters(chaps);
+        setTotalChapters((data as any).count || chaps.length || 0);
+      } catch (error) {
+        console.error("Failed to fetch chapters", error);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
   }, [selectedSubject]);
+
+  // ── Reload chapters (called after successful delete) ─────────────
+  const reloadChapters = async () => {
+    if (!selectedSubject) return;
+    try {
+      const data = await adminApi.getChapters({
+        subject: selectedSubject,
+        page: currentPage,
+        pageSize: 20,
+      });
+      const chaps = Array.isArray(data) ? data : (data.results || []);
+      setChapters(chaps);
+      setTotalChapters((data as any).count || chaps.length || 0);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ── Delete handler ───────────────────────────────────────────────
+  const handleDeleteConfirmed = async () => {
+    if (!deletingChapter) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await adminApi.deleteChapter(deletingChapter.id);
+      // Optimistically remove from list
+      setChapters(prev => prev.filter(c => c.id !== deletingChapter.id));
+      setTotalChapters(prev => Math.max(0, prev - 1));
+      setDeletingChapter(null);
+    } catch (err: any) {
+      setDeleteError(
+        err?.message ||
+        "Failed to delete chapter. It may have linked topics or questions."
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const activeChapters = chapters.filter(c => c.is_active).length;
 
@@ -207,7 +225,7 @@ export default function AcademicChaptersPage() {
                 </TableRow>
               ) : (
                 filteredChapters.map((chapter) => (
-                  <TableRow key={chapter.id} className="hover:bg-slate-50/50 border-b border-slate-200">
+                  <TableRow key={chapter.id} className="hover:bg-slate-50/50 border-b border-slate-200 group">
                     <TableCell>
                       <p className="font-semibold text-[#0B2545]">{chapter.title}</p>
                     </TableCell>
@@ -234,12 +252,12 @@ export default function AcademicChaptersPage() {
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100">
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100 opacity-0 group-hover:opacity-100 transition-opacity">
                             <span className="sr-only">Open menu</span>
                             <MoreVertical className="h-4 w-4 text-slate-500" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem asChild>
                             <Link href={`/admin-dashboard/academic/chapters/${chapter.id}`} className="cursor-pointer flex items-center">
@@ -249,7 +267,11 @@ export default function AcademicChaptersPage() {
                           <DropdownMenuItem className="cursor-pointer">
                             <Edit className="w-4 h-4 mr-2" /> Edit
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="cursor-pointer text-red-600">
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
+                            onClick={() => { setDeletingChapter(chapter); setDeleteError(null); }}
+                          >
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -287,6 +309,61 @@ export default function AcademicChaptersPage() {
           </Button>
         </div>
       )}
+
+      {/* ── Delete Confirmation Dialog ─────────────────────────────── */}
+      <Dialog
+        open={!!deletingChapter}
+        onOpenChange={(open) => {
+          if (!open) { setDeletingChapter(null); setDeleteError(null); }
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" /> Delete Chapter
+            </DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <span className="block">
+                Are you sure you want to permanently delete{" "}
+                <strong className="text-slate-900">&ldquo;{deletingChapter?.title}&rdquo;</strong>?
+              </span>
+              <span className="block text-amber-600 font-medium text-sm">
+                ⚠️ All topics and questions inside this chapter will also be permanently deleted.
+              </span>
+              <span className="block text-red-600 text-sm font-medium">
+                This action cannot be undone.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => { setDeletingChapter(null); setDeleteError(null); }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeleteConfirmed}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting...</>
+              ) : (
+                "Yes, Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

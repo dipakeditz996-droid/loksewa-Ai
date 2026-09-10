@@ -6,7 +6,7 @@ import { ArrowRight, BookOpen, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { publicApi } from "@/lib/api/public-api";
 import Link from "next/link";
-import bgImage from "../../../../media/signup.png";
+import bgImage from "@/media/signup.png";
 
 export default function PreparationSelectionPage() {
   const router = useRouter();

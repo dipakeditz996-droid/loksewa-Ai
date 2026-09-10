@@ -23,6 +23,10 @@ export interface AdminPosition {
   id: number;
   category: number | null;
   category_name: string;
+  // Self-referential: null for a top-level "Level" (e.g. PSC's 5th Level),
+  // set to another position's id for a "Service/Faculty" nested under it.
+  parent: number | null;
+  parent_name: string | null;
   name: string;
   description: string;
   is_active: boolean;

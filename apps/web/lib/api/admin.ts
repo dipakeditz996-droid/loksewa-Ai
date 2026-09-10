@@ -933,6 +933,10 @@ export const adminApi = {
     return apiClient<AdminChaptersResponse>(`/admin/syllabus/chapters/?${query.toString()}`);
   },
 
+  deleteChapter: async (id: number): Promise<void> => {
+    await apiClient(`/admin/syllabus/chapters/${id}/`, { method: "DELETE" });
+  },
+
   getSubjects: async (params?: {
     paper?: number;
     page?: number;
@@ -1210,10 +1214,34 @@ export const adminApi = {
     code?: string;
     category?: string;
     order?: number;
+    is_active?: boolean;
   }): Promise<AdminPosition> => {
     return apiClient<AdminPosition>("/admin/syllabus/positions/", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+
+  updatePosition: async (
+    id: number,
+    data: {
+      name?: string;
+      code?: string;
+      category?: string;
+      description?: string;
+      order?: number;
+      is_active?: boolean;
+    }
+  ): Promise<AdminPosition> => {
+    return apiClient<AdminPosition>(`/admin/syllabus/positions/${id}/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deletePosition: async (id: number): Promise<{ success: boolean; message?: string }> => {
+    return apiClient<{ success: boolean; message?: string }>(`/admin/syllabus/positions/${id}/`, {
+      method: "DELETE",
     });
   },
 

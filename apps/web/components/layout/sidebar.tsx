@@ -21,7 +21,8 @@ import {
   Users,
   Bell,
   MessageSquarePlus,
-  PenTool
+  PenTool,
+  CreditCard
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const studentLinks = [
     { href: "/student", label: "Dashboard", icon: LayoutDashboard },
     { href: "/student/courses", label: "My Courses", icon: BookOpen },
+    { href: "/student/purchases", label: "My Purchases", icon: CreditCard },
     { href: "/student/study-plan", label: "My Study Plan", icon: Target },
     { href: "/student/syllabus", label: "Syllabus", icon: BookOpen },
     { href: "/student/practice", label: "Practice", icon: Trophy },

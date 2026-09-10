@@ -109,4 +109,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         record_successful_login(user)
         data = super().validate(attrs)
+        data['user'] = {
+            'id': user.id,
+            'username': user.username,
+            'name': f"{user.first_name} {user.last_name}".strip() or user.username,
+            'email': user.email,
+            'role': user.role,
+        }
         return _apply_admin_session_timeout(data, user)
+

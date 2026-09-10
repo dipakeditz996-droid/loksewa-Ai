@@ -320,7 +320,7 @@ class AdminSettings(models.Model):
     password_require_special_chars = models.BooleanField(default=True)
     session_timeout_minutes = models.IntegerField(default=60)
     enable_two_factor_auth = models.BooleanField(default=False)
-    max_login_attempts = models.IntegerField(default=5)
+    max_login_attempts = models.IntegerField(default=6)
 
     # Feature Flags
     enable_ai_tutor = models.BooleanField(default=True)

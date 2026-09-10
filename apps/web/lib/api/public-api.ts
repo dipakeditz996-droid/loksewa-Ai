@@ -116,6 +116,14 @@ export interface PublicSyllabusPaper {
   subjects: PublicSyllabusSubject[];
 }
 
+export interface PublicSyllabusMaterial {
+  id: number;
+  title: string;
+  contentCategory: string;
+  fileUrl: string | null;
+  externalUrl: string | null;
+}
+
 export interface PublicSyllabusExam {
   id: number;
   name: string;
@@ -124,6 +132,10 @@ export interface PublicSyllabusExam {
   papersCount: number;
   subjectsCount: number;
   papers: PublicSyllabusPaper[];
+  // Official PDFs/notes an admin uploaded directly onto this node (e.g. the
+  // official syllabus PDF) - published + free materials only, since this is
+  // the anonymous-facing page.
+  materials: PublicSyllabusMaterial[];
   // Self-nesting: a "Level" (e.g. PSC's 5th Level) carries its nested
   // "Preparation/Service" (e.g. Civil Engineering) here, exactly mirroring
   // Exam.parent in the admin Syllabus Builder - never flattened.

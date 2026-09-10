@@ -2498,10 +2498,7 @@ class AdminStudyMaterialsHierarchyView(APIView):
         from notes.models import StudyMaterial
         from courses.models import Course
 
-        canonical_cat_ids = [19, 20, 21, 22]
-        categories = ExamCategory.objects.filter(
-            is_active=True, id__in=canonical_cat_ids
-        ).order_by('order', 'id')
+        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'id')
 
         all_exams = Exam.objects.filter(category__in=categories, is_active=True)
         exam_ids = all_exams.values_list('id', flat=True)
@@ -2531,6 +2528,22 @@ class AdminStudyMaterialsHierarchyView(APIView):
                 children = all_exams.filter(parent=root_exam).order_by('order', 'id')
                 if children.exists():
                     prep_data = []
+                    # A Level can also carry materials uploaded straight onto it
+                    # (e.g. a general syllabus PDF that applies regardless of
+                    # Preparation) rather than onto one of its children - the
+                    # Syllabus Builder's "Upload PDF" action allows that on any
+                    # exam node. Surface that as its own browsable "preparation"
+                    # here too, or those materials would be saved successfully
+                    # but never appear anywhere in this admin page.
+                    own_counts = count_map.get(root_exam.id)
+                    if own_counts and own_counts["total"] > 0:
+                        c_self = course_map.get(root_exam.id)
+                        prep_data.append({
+                            "id": root_exam.id, "name": f"{root_exam.name} (General)", "order": -1,
+                            "courseId": c_self.id if c_self else None, "courseTitle": c_self.title if c_self else None,
+                            "courseStatus": c_self.status if c_self else None, "isComingSoon": (c_self.status == 'coming_soon') if c_self else False,
+                            "counts": own_counts,
+                        })
                     for child in children:
                         c = course_map.get(child.id)
                         prep_data.append({

@@ -63,10 +63,35 @@ class PublicSyllabusTreeView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        from notes.models import StudyMaterial
+
         categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'name')
         exams = Exam.objects.filter(is_active=True, category__in=categories).select_related('category').prefetch_related(
             'papers__subjects__chapters__topics',
         ).order_by('order', 'name')
+
+        # Uploaded syllabus PDFs/notes, one query for every exam in the tree
+        # rather than one per node - only published + free materials are
+        # shown here since this page is anonymous-facing (no student/
+        # subscription context to check premium access against).
+        materials_by_exam: dict = {}
+        materials_qs = StudyMaterial.objects.filter(
+            exam__in=exams, status='published', access_type='free',
+        ).order_by('content_category', 'title')
+        for m in materials_qs:
+            file_url = None
+            if m.file:
+                try:
+                    file_url = request.build_absolute_uri(m.file.url)
+                except Exception:
+                    file_url = m.file.url
+            materials_by_exam.setdefault(m.exam_id, []).append({
+                'id': m.id,
+                'title': m.title,
+                'contentCategory': m.content_category,
+                'fileUrl': file_url,
+                'externalUrl': m.external_url or None,
+            })
 
         def build_papers(exam):
             papers = []
@@ -119,6 +144,7 @@ class PublicSyllabusTreeView(APIView):
                 'papersCount': len(papers),
                 'subjectsCount': subjects_count,
                 'papers': papers,
+                'materials': materials_by_exam.get(exam.id, []),
                 'children': [
                     serialize_exam(child, level_name)
                     for child in children_by_parent.get(exam.id, [])

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, SlidersHorizontal, ArrowRight, Download, Eye, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2 } from "lucide-react";
+import { Search, SlidersHorizontal, ArrowRight, Download, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navbar } from "@/components/layout/navbar";
@@ -49,6 +49,18 @@ export default function SyllabusPage() {
   // preparation under the level if one exists, otherwise the level itself.
   const selectedExam = selectedLevel?.children?.length ? selectedPrep : selectedLevel;
   const selectedPaper = selectedExam?.papers?.find((paper) => paper.id === selectedPaperId) || selectedExam?.papers?.[0];
+  // Official PDFs/notes an admin uploaded directly onto this exam node -
+  // the official syllabus document is surfaced first/separately since it's
+  // what the header's "Download" button links to.
+  const examMaterials = selectedExam?.materials ?? [];
+  const syllabusDoc = examMaterials.find((m) => m.contentCategory === "syllabus" && (m.fileUrl || m.externalUrl));
+  const otherMaterials = examMaterials.filter((m) => m !== syllabusDoc);
+  const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
+    syllabus: "Official Syllabus",
+    subjective_topicwise: "Subjective Notes",
+    objective_topicwise: "Objective Notes",
+    revision_notes: "Revision Notes",
+  };
 
   const handleCategoryChange = (categoryId: number) => {
     setSelectedCategoryId(categoryId);
@@ -250,15 +262,44 @@ export default function SyllabusPage() {
                 Complete paper-wise and subject-wise syllabus
               </p>
             </div>
-            <div className="flex gap-3">
-              <Button variant="outline" className="h-[44px] rounded-[10px] bg-white dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 font-[600]">
-                <Eye className="w-4 h-4 mr-2" /> View Full Syllabus
-              </Button>
-              <Button className="h-[44px] rounded-[10px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[700]">
-                <Download className="w-4 h-4 mr-2" /> Download PDF
-              </Button>
-            </div>
+            {syllabusDoc && (
+              <div className="flex gap-3">
+                <a href={syllabusDoc.fileUrl || syllabusDoc.externalUrl || "#"} target="_blank" rel="noopener noreferrer">
+                  <Button className="h-[44px] rounded-[10px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[700]">
+                    <Download className="w-4 h-4 mr-2" /> Download Official Syllabus PDF
+                  </Button>
+                </a>
+              </div>
+            )}
           </div>
+
+          {/* Uploaded materials for this exam - the real PDFs/notes an admin
+              attached in the Syllabus Builder, shown so a visitor doesn't
+              have to dig through the paper/subject explorer to find the
+              official document. */}
+          {examMaterials.length > 0 && (
+            <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[syllabusDoc, ...otherMaterials].filter(Boolean).map((mat: any) => (
+                <a
+                  key={mat.id}
+                  href={mat.fileUrl || mat.externalUrl || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-4 rounded-[12px] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1521] hover:border-[#D4A72C]/50 hover:shadow-sm transition-all"
+                >
+                  <div className="w-10 h-10 rounded-[10px] bg-[#163E6B]/10 dark:bg-white/10 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-[700] text-slate-900 dark:text-white truncate">{mat.title}</p>
+                    <p className="text-xs font-[500] text-slate-500 dark:text-slate-400">
+                      {MATERIAL_CATEGORY_LABELS[mat.contentCategory] || mat.contentCategory}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
 
           {(!selectedExam.papers || selectedExam.papers.length === 0) ? (
             <p className="text-slate-500 font-[500] py-8">No syllabus content has been published yet for this examination.</p>
@@ -458,9 +499,13 @@ export default function SyllabusPage() {
             Download the complete syllabus and use it as your preparation reference anytime. Access it fully integrated within our app.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button className="h-14 px-8 rounded-[12px] bg-white text-[#0B2545] hover:bg-slate-100 font-[800] text-[16px] transition-all">
-              <Download className="w-5 h-5 mr-2" /> Download Syllabus PDF
-            </Button>
+            {syllabusDoc && (
+              <a href={syllabusDoc.fileUrl || syllabusDoc.externalUrl || "#"} target="_blank" rel="noopener noreferrer">
+                <Button className="h-14 px-8 rounded-[12px] bg-white text-[#0B2545] hover:bg-slate-100 font-[800] text-[16px] transition-all">
+                  <Download className="w-5 h-5 mr-2" /> Download Syllabus PDF
+                </Button>
+              </a>
+            )}
             <Link href="/courses">
               <Button variant="outline" className="h-14 px-8 rounded-[12px] bg-transparent border-white/30 text-white hover:bg-white/10 font-[700] text-[16px]">
                 Explore Courses

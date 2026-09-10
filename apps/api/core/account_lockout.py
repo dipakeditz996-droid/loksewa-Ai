@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-LOCKOUT_DURATION_MINUTES = 15
+LOCKOUT_DURATION_MINUTES = 3
 
 
 def find_user_by_username_or_email(identifier):

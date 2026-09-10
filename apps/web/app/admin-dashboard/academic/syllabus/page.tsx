@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ChevronRight, ChevronDown, Folder, FileText, CheckSquare,
   BookOpen, Layers, Plus, Settings, Trash2, Loader2, X, UploadCloud,
+  Eye, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import {
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { adminAcademicApi, ExamStatus } from "@/lib/api/admin-academic-api";
-import { adminStudyMaterialApi, ContentCategory } from "@/lib/api/admin-study-materials";
+import { adminStudyMaterialApi, ContentCategory, StudyMaterialListItem } from "@/lib/api/admin-study-materials";
 import { toast } from "sonner";
 
 const CONTENT_CATEGORY_OPTIONS: { value: ContentCategory; label: string }[] = [
@@ -83,10 +84,10 @@ const NODE_TYPE_LABELS: Record<string, string> = {
 // ── Exam node (recursive: a "Level" can nest "Service/Preparation" children,
 // see exams.models.Exam) ────────────────────────────────────────────────────
 function ExamTreeNode({
-  node, level, expanded, toggleExpand, selectedNode, setSelectedNode, renderPapers,
+  node, level, isExpanded, toggleExpand, selectedNode, setSelectedNode, renderPapers,
 }: {
   node: any; level: number;
-  expanded: Record<string, boolean>;
+  isExpanded: (key: string) => boolean;
   toggleExpand: (id: string) => void;
   selectedNode: any;
   setSelectedNode: (n: any) => void;
@@ -98,7 +99,7 @@ function ExamTreeNode({
       label={node.name}
       icon={FileText}
       level={level}
-      isExpanded={expanded[`pos-${node.id}`]}
+      isExpanded={isExpanded(`pos-${node.id}`)}
       isSelected={selectedNode?.type === "position" && selectedNode?.id === node.id}
       onToggle={() => toggleExpand(`pos-${node.id}`)}
       onClick={() => setSelectedNode({ ...node, type: "position" })}
@@ -110,7 +111,7 @@ function ExamTreeNode({
               key={`pos-${child.id}`}
               node={child}
               level={level + 1}
-              expanded={expanded}
+              isExpanded={isExpanded}
               toggleExpand={toggleExpand}
               selectedNode={selectedNode}
               setSelectedNode={setSelectedNode}
@@ -277,6 +278,50 @@ function UploadPdfModal({
   );
 }
 
+// ── Search filtering ─────────────────────────────────────────────────────────
+// Keeps a node if its own name matches, or any descendant does (recursing
+// through the full Category -> Level -> Preparation -> Paper -> Subject ->
+// Chapter -> Topic chain). Once an ancestor itself matches, its whole
+// subtree is kept as-is so browsing a matched Level/Preparation still shows
+// everything under it, not just the literal text match.
+const textMatches = (name: string, query: string) =>
+  (name || "").toLowerCase().includes(query);
+
+function filterTopic(topic: any, query: string): any | null {
+  return textMatches(topic.name, query) ? topic : null;
+}
+
+function filterChapter(chapter: any, query: string): any | null {
+  if (textMatches(chapter.name || chapter.title, query)) return chapter;
+  const topics = (chapter.topics || []).map((t: any) => filterTopic(t, query)).filter(Boolean);
+  return topics.length > 0 ? { ...chapter, topics } : null;
+}
+
+function filterSubject(subject: any, query: string): any | null {
+  if (textMatches(subject.name, query)) return subject;
+  const chapters = (subject.chapters || []).map((c: any) => filterChapter(c, query)).filter(Boolean);
+  return chapters.length > 0 ? { ...subject, chapters } : null;
+}
+
+function filterPaper(paper: any, query: string): any | null {
+  if (textMatches(paper.name, query)) return paper;
+  const subjects = (paper.subjects || []).map((s: any) => filterSubject(s, query)).filter(Boolean);
+  return subjects.length > 0 ? { ...paper, subjects } : null;
+}
+
+function filterExam(exam: any, query: string): any | null {
+  if (textMatches(exam.name, query)) return exam;
+  const children = (exam.children || []).map((c: any) => filterExam(c, query)).filter(Boolean);
+  const papers = (exam.papers || []).map((p: any) => filterPaper(p, query)).filter(Boolean);
+  return (children.length > 0 || papers.length > 0) ? { ...exam, children, papers } : null;
+}
+
+function filterCategory(category: any, query: string): any | null {
+  if (textMatches(category.name, query)) return category;
+  const positions = (category.positions || []).map((p: any) => filterExam(p, query)).filter(Boolean);
+  return positions.length > 0 ? { ...category, positions } : null;
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SyllabusBuilderPage() {
   const [treeData, setTreeData] = useState<any[]>([]);
@@ -285,6 +330,28 @@ export default function SyllabusBuilderPage() {
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [uploadTarget, setUploadTarget] = useState<{ id: number; name: string } | null>(null);
+
+  // ── Search — filters the tree to matching Category/Level/Preparation/
+  // Paper/Subject/Chapter/Topic names, and auto-expands every visible node
+  // so results don't need manual clicking to reveal.
+  const [searchQuery, setSearchQuery] = useState("");
+  const isSearching = searchQuery.trim().length > 0;
+  const displayedTree = useMemo(() => {
+    if (!isSearching) return treeData;
+    const q = searchQuery.trim().toLowerCase();
+    return treeData.map(cat => filterCategory(cat, q)).filter(Boolean);
+  }, [treeData, searchQuery, isSearching]);
+  const isNodeExpanded = useCallback(
+    (key: string) => (isSearching ? true : !!expanded[key]),
+    [isSearching, expanded]
+  );
+
+  // Materials (PDFs/notes) already uploaded onto the currently selected
+  // exam/position node - shown inline so an upload's result is visible right
+  // where it was uploaded from, without navigating to Study Materials.
+  const [nodeMaterials, setNodeMaterials] = useState<StudyMaterialListItem[]>([]);
+  const [loadingNodeMaterials, setLoadingNodeMaterials] = useState(false);
+  const [deletingMaterialId, setDeletingMaterialId] = useState<number | null>(null);
 
   // form state
   const [formName, setFormName] = useState("");
@@ -315,6 +382,40 @@ export default function SyllabusBuilderPage() {
 
   useEffect(() => { fetchTree(); }, [fetchTree]);
 
+  // ── Materials uploaded onto the selected exam/position node ────────────────
+  const loadNodeMaterials = useCallback(async (examId: number) => {
+    setLoadingNodeMaterials(true);
+    try {
+      const res = await adminStudyMaterialApi.list({ exam: examId, pageSize: 100 });
+      setNodeMaterials(res.materials);
+    } catch {
+      setNodeMaterials([]);
+    } finally {
+      setLoadingNodeMaterials(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedNode && (selectedNode.type === "exam" || selectedNode.type === "position")) {
+      loadNodeMaterials(selectedNode.id);
+    } else {
+      setNodeMaterials([]);
+    }
+  }, [selectedNode?.id, selectedNode?.type, loadNodeMaterials]);
+
+  const handleDeleteMaterial = async (material: StudyMaterialListItem) => {
+    setDeletingMaterialId(material.id);
+    try {
+      await adminStudyMaterialApi.remove(material.id);
+      toast.success(`"${material.title}" deleted.`);
+      setNodeMaterials(prev => prev.filter(m => m.id !== material.id));
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete file.");
+    } finally {
+      setDeletingMaterialId(null);
+    }
+  };
+
   const toggleExpand = (id: string) =>
     setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
@@ -328,7 +429,7 @@ export default function SyllabusBuilderPage() {
         label={paper.name}
         icon={BookOpen}
         level={level}
-        isExpanded={expanded[`paper-${paper.id}`]}
+        isExpanded={isNodeExpanded(`paper-${paper.id}`)}
         isSelected={selectedNode?.type === "paper" && selectedNode?.id === paper.id}
         onToggle={() => toggleExpand(`paper-${paper.id}`)}
         onClick={() => setSelectedNode({ ...paper, type: "paper" })}
@@ -339,7 +440,7 @@ export default function SyllabusBuilderPage() {
             label={sub.name}
             icon={Layers}
             level={level + 1}
-            isExpanded={expanded[`sub-${sub.id}`]}
+            isExpanded={isNodeExpanded(`sub-${sub.id}`)}
             isSelected={selectedNode?.type === "subject" && selectedNode?.id === sub.id}
             onToggle={() => toggleExpand(`sub-${sub.id}`)}
             onClick={() => setSelectedNode({ ...sub, type: "subject" })}
@@ -350,7 +451,7 @@ export default function SyllabusBuilderPage() {
                 label={chap.title}
                 icon={Folder}
                 level={level + 2}
-                isExpanded={expanded[`chap-${chap.id}`]}
+                isExpanded={isNodeExpanded(`chap-${chap.id}`)}
                 isSelected={selectedNode?.type === "chapter" && selectedNode?.id === chap.id}
                 onToggle={() => toggleExpand(`chap-${chap.id}`)}
                 onClick={() => setSelectedNode({ ...chap, type: "chapter" })}
@@ -410,6 +511,17 @@ export default function SyllabusBuilderPage() {
           await adminAcademicApi.createTopic({ chapter: parentId, name: formName, description: formDesc, is_active: formActive });
         }
         toast.success(`${NODE_TYPE_LABELS[nodeType] || nodeType} created!`);
+        // Expand the parent it was just added under so the new item is
+        // immediately visible in the tree, instead of requiring a manual
+        // click to prove it actually nested in the right place.
+        const parentExpandKey: Record<string, string> = {
+          exam: `cat-${parentId}`, "sub-exam": `pos-${parentId}`, paper: `pos-${parentId}`,
+          subject: `paper-${parentId}`, chapter: `sub-${parentId}`, topic: `chap-${parentId}`,
+        };
+        const expandKey = parentExpandKey[nodeType];
+        if (expandKey) {
+          setExpanded(prev => ({ ...prev, [expandKey]: true }));
+        }
       } else if (modal?.mode === "edit") {
         const { node } = modal;
         const payload: any = { description: formDesc, is_active: formActive };
@@ -532,10 +644,29 @@ export default function SyllabusBuilderPage() {
       <div className="flex-1 flex flex-col md:flex-row gap-6 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {/* Left pane: Tree */}
         <div className="w-full md:w-1/3 border-r border-slate-200 flex flex-col h-full bg-slate-50/30">
-          <div className="p-4 border-b border-slate-200 bg-slate-50">
+          <div className="p-4 border-b border-slate-200 bg-slate-50 space-y-3">
             <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
               <Folder className="w-4 h-4 text-slate-500" /> Structure
             </h3>
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search syllabus (level, paper, subject, topic...)"
+                className="w-full h-9 rounded-md border border-slate-200 bg-white pl-8 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[#0B2545]"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-2">
             {loading ? (
@@ -544,14 +675,16 @@ export default function SyllabusBuilderPage() {
               </div>
             ) : treeData.length === 0 ? (
               <div className="p-4 text-sm text-slate-500">No syllabus data available.</div>
+            ) : isSearching && displayedTree.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500">No matches for &ldquo;{searchQuery}&rdquo;.</div>
             ) : (
-              treeData.map((cat: any) => (
+              displayedTree.map((cat: any) => (
                 <TreeItem
                   key={`cat-${cat.id}`}
                   label={cat.name}
                   icon={CheckSquare}
                   level={0}
-                  isExpanded={expanded[`cat-${cat.id}`]}
+                  isExpanded={isNodeExpanded(`cat-${cat.id}`)}
                   isSelected={selectedNode?.type === "category" && selectedNode?.id === cat.id}
                   onToggle={() => toggleExpand(`cat-${cat.id}`)}
                   onClick={() => setSelectedNode({ ...cat, type: "category" })}
@@ -561,7 +694,7 @@ export default function SyllabusBuilderPage() {
                       key={`pos-${pos.id}`}
                       node={pos}
                       level={1}
-                      expanded={expanded}
+                      isExpanded={isNodeExpanded}
                       toggleExpand={toggleExpand}
                       selectedNode={selectedNode}
                       setSelectedNode={setSelectedNode}
@@ -698,6 +831,75 @@ export default function SyllabusBuilderPage() {
                   </div>
                 </div>
               )}
+
+              {/* Uploaded Materials — every PDF/note attached directly to this
+                  node, so an upload's result is visible right where it was
+                  uploaded from instead of only in the separate Study
+                  Materials admin page. */}
+              {(selectedNode.type === "exam" || selectedNode.type === "position") && (
+                <div className="pt-6 border-t border-slate-100">
+                  <h4 className="text-sm font-medium text-slate-900 mb-4">
+                    Uploaded Materials {nodeMaterials.length > 0 && `(${nodeMaterials.length})`}
+                  </h4>
+                  {loadingNodeMaterials ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading...
+                    </div>
+                  ) : nodeMaterials.length === 0 ? (
+                    <p className="text-sm text-slate-400">No PDFs or notes uploaded here yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {nodeMaterials.map((mat) => (
+                        <div
+                          key={mat.id}
+                          className="flex items-center justify-between gap-3 p-3 border border-slate-100 rounded-lg bg-slate-50/50"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-800 truncate">{mat.title}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-slate-400">
+                                  {CONTENT_CATEGORY_OPTIONS.find(o => o.value === mat.contentCategory)?.label || mat.contentCategory}
+                                </span>
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                  mat.status === "published" ? "text-emerald-700 bg-emerald-50" : "text-slate-600 bg-slate-100"
+                                }`}>
+                                  {mat.status}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {mat.fileUrl && (
+                              <a
+                                href={mat.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 rounded-md text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                                title="View file"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              disabled={deletingMaterialId === mat.id}
+                              onClick={() => handleDeleteMaterial(mat)}
+                              className="p-2 rounded-md text-red-500 hover:bg-red-50 disabled:opacity-50"
+                              title="Delete"
+                            >
+                              {deletingMaterialId === mat.id
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -822,7 +1024,7 @@ export default function SyllabusBuilderPage() {
           examId={uploadTarget.id}
           examName={uploadTarget.name}
           onClose={() => setUploadTarget(null)}
-          onSuccess={() => { setUploadTarget(null); fetchTree(); }}
+          onSuccess={() => { setUploadTarget(null); fetchTree(); loadNodeMaterials(uploadTarget.id); }}
         />
       )}
     </div>

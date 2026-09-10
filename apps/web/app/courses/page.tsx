@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { BookOpen, Target, ArrowRight, Search, SlidersHorizontal, Sparkles, ChevronDown, CheckCircle2, BookMarked } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,23 +17,32 @@ export default function CoursesPage() {
   const [activeCategory, setActiveCategory] = useState("All Courses");
   const [courses, setCourses] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Distinguishes "the catalog is genuinely empty" from "the request just
+  // failed" - safeGet() in publicApi swallows network errors into a null
+  // return, which previously looked identical to zero real courses.
+  const [hasError, setHasError] = useState(false);
 
-  // Fetch courses on mount
-  useState(() => {
-    const fetchCourses = async () => {
-      try {
-        const data = await publicApi.getCourses();
-        if (data) {
-          setCourses(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch courses:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchCourses = useCallback(async () => {
+    setIsLoading(true);
+    setHasError(false);
+    try {
+      const data = await publicApi.getCourses();
+      if (data) {
+        setCourses(data);
+      } else {
+        setHasError(true);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch courses:", error);
+      setHasError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchCourses();
-  });
+  }, [fetchCourses]);
 
   // Format price helper
   const formatPrice = (price: number) => {
@@ -374,8 +383,27 @@ export default function CoursesPage() {
             </div>
           )}
           
-          {/* 13. EMPTY STATE */}
-          {!isLoading && courses.length === 0 && (
+          {/* 13a. ERROR STATE — the request itself failed; never show this as
+              a silent "no courses" so a transient network/server hiccup
+              can't look like the catalog was wiped. */}
+          {!isLoading && hasError && (
+            <div className="flex flex-col items-center justify-center py-24 px-4 text-center border border-red-200 dark:border-red-900/30 rounded-[24px] bg-red-50/50 dark:bg-red-950/10 backdrop-blur-sm">
+              <div className="w-20 h-20 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                <Search className="w-8 h-8 text-red-400" />
+              </div>
+              <h3 className="text-2xl font-[800] text-slate-900 dark:text-white mb-2">Couldn't load courses</h3>
+              <p className="text-[15px] text-slate-500 dark:text-slate-400 max-w-md mb-8">
+                We hit a problem reaching the server. Your courses are safe — this is a connection issue, not missing data.
+              </p>
+              <Button onClick={fetchCourses} className="h-[44px] px-6 rounded-[10px] bg-[#0B2545] dark:bg-white text-white dark:text-[#0A1118] font-[700]">
+                Try Again
+              </Button>
+            </div>
+          )}
+
+          {/* 13b. EMPTY STATE — the request succeeded and the catalog (or
+              current filter) genuinely has nothing to show. */}
+          {!isLoading && !hasError && courses.length === 0 && (
             <div className="flex flex-col items-center justify-center py-24 px-4 text-center border border-slate-200 dark:border-white/5 rounded-[24px] bg-white/50 dark:bg-white/5 backdrop-blur-sm">
               <div className="w-20 h-20 bg-slate-100 dark:bg-[#0B1521] rounded-full flex items-center justify-center mb-6 shadow-inner">
                 <Search className="w-8 h-8 text-slate-400" />

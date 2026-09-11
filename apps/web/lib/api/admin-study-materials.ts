@@ -108,6 +108,7 @@ export interface StudyMaterialListItem {
   externalUrl: string | null;
   estimatedReadingTime: number;
   availableToAiTutor: boolean;
+  order: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -141,6 +142,7 @@ export interface CreateStudyMaterialPayload {
   status?: MaterialStatus;
   external_url?: string;
   estimated_reading_time?: number;
+  order?: number;
   file?: File | null;
 }
 

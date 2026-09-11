@@ -196,3 +196,36 @@ export async function downloadFile(
     URL.revokeObjectURL(objectUrl);
   }
 }
+
+/**
+ * Downloads a file from an already-absolute, public (no-auth) URL - e.g. the
+ * `/api/media/drive/<id>/` links returned by public endpoints like the
+ * syllabus page. A plain `<a href target="_blank">` only opens the browser's
+ * PDF viewer instead of actually saving the file, so this fetches the bytes
+ * and hands them to a temporary object URL the same way downloadFile() does
+ * for authenticated downloads.
+ */
+export async function downloadPublicFile(url: string, fallbackFilename: string): Promise<void> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new ApiError(response.status, { detail: response.statusText });
+  }
+
+  let filename = fallbackFilename;
+  const disposition = response.headers.get("Content-Disposition");
+  const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (match?.[1]) filename = decodeURIComponent(match[1]);
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}

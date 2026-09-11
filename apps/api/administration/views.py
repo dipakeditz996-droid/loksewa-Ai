@@ -2075,10 +2075,11 @@ class AdminStudyMaterialsView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 50))
 
-        # Start with all materials ordered by creation date
+        # Admin-controlled order first (Syllabus Builder reordering), newest
+        # first as a tiebreak among equal/unset orders.
         qs = StudyMaterial.objects.select_related(
             'teacher', 'subject', 'chapter', 'topic', 'exam', 'exam__parent', 'exam__category', 'course'
-        ).order_by('-created_at')
+        ).order_by('order', '-created_at')
 
         if status_filter and status_filter != 'all':
             qs = qs.filter(status=status_filter)
@@ -2166,6 +2167,7 @@ class AdminStudyMaterialsView(APIView):
                 "externalUrl": material.external_url,
                 "estimatedReadingTime": material.estimated_reading_time,
                 "availableToAiTutor": material.available_to_ai_tutor,
+                "order": material.order,
                 "createdAt": material.created_at.isoformat(),
                 "updatedAt": material.updated_at.isoformat(),
             })
@@ -2257,6 +2259,11 @@ class AdminStudyMaterialsView(APIView):
         if material_status not in dict(StudyMaterial.STATUS_CHOICES):
             material_status = 'published'
 
+        try:
+            order = int(request.data.get('order') or 0)
+        except (TypeError, ValueError):
+            order = 0
+
         upload = request.FILES.get('file')
         content = request.data.get('content') or ''
         external_url = (request.data.get('external_url') or '').strip()
@@ -2288,6 +2295,7 @@ class AdminStudyMaterialsView(APIView):
             status=material_status,
             external_url=external_url or None,
             estimated_reading_time=int(request.data.get('estimated_reading_time') or 10),
+            order=order,
         )
         if upload:
             material.file = upload
@@ -2318,6 +2326,7 @@ class AdminStudyMaterialsView(APIView):
             "topicId": topic.id if topic else None,
             "topicName": topic.name if topic else None,
             "fileUrl": file_url,
+            "order": material.order,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -2380,6 +2389,7 @@ class AdminStudyMaterialDetailView(APIView):
             "fileName": file_name,
             "estimatedReadingTime": material.estimated_reading_time,
             "availableToAiTutor": material.available_to_ai_tutor,
+            "order": material.order,
             "createdAt": material.created_at.isoformat(),
             "updatedAt": material.updated_at.isoformat(),
         })
@@ -2449,6 +2459,12 @@ class AdminStudyMaterialDetailView(APIView):
         if 'external_url' in request.data:
             material.external_url = (request.data['external_url'] or '').strip() or None
 
+        if 'order' in request.data:
+            try:
+                material.order = int(request.data['order'])
+            except (TypeError, ValueError):
+                pass
+
         if request.FILES.get('file'):
             material.file = request.FILES['file']
             material.material_type = 'pdf'
@@ -2472,6 +2488,7 @@ class AdminStudyMaterialDetailView(APIView):
             "title": material.title,
             "status": material.status,
             "fileUrl": file_url,
+            "order": material.order,
         })
 
     def delete(self, request, pk):

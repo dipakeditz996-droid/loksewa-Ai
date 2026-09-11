@@ -2,13 +2,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { Search, SlidersHorizontal, ArrowRight, Download, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { publicApi, type PublicSyllabusCategory, type PublicSyllabusExam } from "@/lib/api/public-api";
+import { downloadPublicFile } from "@/lib/api/client";
+import { toast } from "sonner";
 
 export default function SyllabusPage() {
   // The hierarchy is Category -> Level (top-level Exam) -> nested
@@ -54,12 +55,32 @@ export default function SyllabusPage() {
   // what the header's "Download" button links to.
   const examMaterials = selectedExam?.materials ?? [];
   const syllabusDoc = examMaterials.find((m) => m.contentCategory === "syllabus" && (m.fileUrl || m.externalUrl));
-  const otherMaterials = examMaterials.filter((m) => m !== syllabusDoc);
   const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
     syllabus: "Official Syllabus",
     subjective_topicwise: "Subjective Notes",
     objective_topicwise: "Objective Notes",
     revision_notes: "Revision Notes",
+  };
+
+  // Actually saves the file instead of just opening the browser's PDF
+  // viewer, which is what a plain <a target="_blank"> did before. Falls
+  // back to opening the link directly if the fetch itself fails (e.g. no
+  // file behind an external_url).
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const handleDownloadMaterial = async (mat: { id: number; title: string; fileUrl: string | null; externalUrl: string | null }) => {
+    if (!mat.fileUrl) {
+      if (mat.externalUrl) window.open(mat.externalUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setDownloadingId(mat.id);
+    try {
+      await downloadPublicFile(mat.fileUrl, `${mat.title}.pdf`);
+    } catch {
+      toast.error("Couldn't download the file. Opening it instead.");
+      window.open(mat.fileUrl, "_blank", "noopener,noreferrer");
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const handleCategoryChange = (categoryId: number) => {
@@ -136,7 +157,7 @@ export default function SyllabusPage() {
       </section>
 
       {/* 2. EXAM SELECTOR */}
-      <section className="py-12 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5">
+      <section id="exam-selector" className="py-12 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <h2 className="text-2xl font-[800] text-slate-900 dark:text-white mb-6 text-center">Choose Your Examination</h2>
 
@@ -196,23 +217,14 @@ export default function SyllabusPage() {
                   <div className={`text-sm font-[600] mb-4 ${isSelected ? 'text-[#D4A72C]' : 'text-[#163E6B] dark:text-slate-400'}`}>
                     {exam.level}
                   </div>
-                  <div className={`flex gap-4 text-sm font-[500] mb-4 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {hasPreparations ? (
+                  {hasPreparations && (
+                    <div className={`flex gap-4 text-sm font-[500] mb-4 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
                       <span>{exam.children.length} Preparation{exam.children.length !== 1 ? 's' : ''}</span>
-                    ) : (
-                      <>
-                        <span>{exam.papersCount} Papers</span>
-                        <span>•</span>
-                        <span>{exam.subjectsCount} Subjects</span>
-                      </>
-                    )}
-                  </div>
-                  <p className={`text-sm leading-relaxed mb-6 ${isSelected ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    </div>
+                  )}
+                  <p className={`text-sm leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'}`}>
                     {exam.description}
                   </p>
-                  <div className={`text-sm font-[700] flex items-center gap-1 ${isSelected ? 'text-[#D4A72C]' : 'text-slate-700 dark:text-slate-300'}`}>
-                    View Syllabus <ArrowRight className="w-4 h-4 ml-1" />
-                  </div>
                 </div>
               );
             })}
@@ -264,11 +276,16 @@ export default function SyllabusPage() {
             </div>
             {syllabusDoc && (
               <div className="flex gap-3">
-                <a href={syllabusDoc.fileUrl || syllabusDoc.externalUrl || "#"} target="_blank" rel="noopener noreferrer">
-                  <Button className="h-[44px] rounded-[10px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[700]">
-                    <Download className="w-4 h-4 mr-2" /> Download Official Syllabus PDF
-                  </Button>
-                </a>
+                <Button
+                  onClick={() => handleDownloadMaterial(syllabusDoc)}
+                  disabled={downloadingId === syllabusDoc.id}
+                  className="h-[44px] rounded-[10px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[700] disabled:opacity-70"
+                >
+                  {downloadingId === syllabusDoc.id
+                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    : <Download className="w-4 h-4 mr-2" />}
+                  Download Official Syllabus PDF
+                </Button>
               </div>
             )}
           </div>
@@ -279,16 +296,22 @@ export default function SyllabusPage() {
               official document. */}
           {examMaterials.length > 0 && (
             <div className="mb-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {[syllabusDoc, ...otherMaterials].filter(Boolean).map((mat: any) => (
-                <a
+              {/* Order comes straight from the backend, which sorts by the
+                  admin-set StudyMaterial.order - never re-sorted here, so
+                  the display sequence matches exactly what the admin chose
+                  in the Syllabus Builder. */}
+              {examMaterials.map((mat: any) => (
+                <button
                   key={mat.id}
-                  href={mat.fileUrl || mat.externalUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-4 rounded-[12px] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1521] hover:border-[#D4A72C]/50 hover:shadow-sm transition-all"
+                  type="button"
+                  onClick={() => handleDownloadMaterial(mat)}
+                  disabled={downloadingId === mat.id}
+                  className="flex items-center gap-3 p-4 rounded-[12px] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B1521] hover:border-[#D4A72C]/50 hover:shadow-sm transition-all text-left disabled:opacity-70"
                 >
                   <div className="w-10 h-10 rounded-[10px] bg-[#163E6B]/10 dark:bg-white/10 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C]" />
+                    {downloadingId === mat.id
+                      ? <Loader2 className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C] animate-spin" />
+                      : <FileText className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C]" />}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-[700] text-slate-900 dark:text-white truncate">{mat.title}</p>
@@ -296,7 +319,7 @@ export default function SyllabusPage() {
                       {MATERIAL_CATEGORY_LABELS[mat.contentCategory] || mat.contentCategory}
                     </p>
                   </div>
-                </a>
+                </button>
               ))}
             </div>
           )}
@@ -500,17 +523,17 @@ export default function SyllabusPage() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             {syllabusDoc && (
-              <a href={syllabusDoc.fileUrl || syllabusDoc.externalUrl || "#"} target="_blank" rel="noopener noreferrer">
-                <Button className="h-14 px-8 rounded-[12px] bg-white text-[#0B2545] hover:bg-slate-100 font-[800] text-[16px] transition-all">
-                  <Download className="w-5 h-5 mr-2" /> Download Syllabus PDF
-                </Button>
-              </a>
-            )}
-            <Link href="/courses">
-              <Button variant="outline" className="h-14 px-8 rounded-[12px] bg-transparent border-white/30 text-white hover:bg-white/10 font-[700] text-[16px]">
-                Explore Courses
+              <Button
+                onClick={() => handleDownloadMaterial(syllabusDoc)}
+                disabled={downloadingId === syllabusDoc.id}
+                className="h-14 px-8 rounded-[12px] bg-white text-[#0B2545] hover:bg-slate-100 font-[800] text-[16px] transition-all disabled:opacity-70"
+              >
+                {downloadingId === syllabusDoc.id
+                  ? <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  : <Download className="w-5 h-5 mr-2" />}
+                Download Syllabus PDF
               </Button>
-            </Link>
+            )}
           </div>
         </div>
       </section>
@@ -525,24 +548,19 @@ export default function SyllabusPage() {
           </div>
           
           <h2 className="text-4xl md:text-5xl font-[900] text-slate-900 dark:text-white mb-6 tracking-tight">
-            Turn Your Syllabus Into a Preparation Strategy.
+            Know Every Examination&apos;s Syllabus, In One Place.
           </h2>
-          
+
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 font-[500] mb-10 leading-relaxed">
-            Explore courses, practice questions, mock exams, and AI-powered learning tools built around your Loksewa target.
+            Switch between examinations, preparations, papers, and topics to see exactly what each one covers.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/courses">
+            <a href="#exam-selector">
               <Button className="h-14 px-8 rounded-[12px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[800] text-[16px] transition-all shadow-[0_0_20px_rgba(212,167,44,0.2)] hover:shadow-[0_0_30px_rgba(212,167,44,0.4)] flex items-center justify-center gap-2 group/btn">
-                Explore Courses <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
+                Browse All Examinations <ArrowRight className="w-5 h-5 group-hover/btn:translate-x-1 transition-transform" />
               </Button>
-            </Link>
-            <Link href="/courses">
-              <Button variant="outline" className="h-14 px-8 rounded-[12px] bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-900 dark:text-white font-[700] text-[16px]">
-                Start Preparing <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </Link>
+            </a>
           </div>
         </div>
       </section>

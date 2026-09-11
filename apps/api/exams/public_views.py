@@ -77,7 +77,7 @@ class PublicSyllabusTreeView(APIView):
         materials_by_exam: dict = {}
         materials_qs = StudyMaterial.objects.filter(
             exam__in=exams, status='published', access_type='free',
-        ).order_by('content_category', 'title')
+        ).order_by('order', 'title')
         for m in materials_qs:
             file_url = None
             if m.file:

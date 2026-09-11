@@ -137,7 +137,12 @@ class StudyMaterial(models.Model):
     access_type = models.CharField(max_length=20, choices=ACCESS_TYPES, default='free')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     review_note = models.TextField(blank=True, help_text="Admin feedback when changes are requested or rejected")
-    
+    order = models.IntegerField(
+        default=0, db_index=True,
+        help_text="Admin-controlled display order within its exam node (lower shows first) - "
+                   "used by the Syllabus Builder's material list and the public syllabus page.",
+    )
+
     estimated_reading_time = models.IntegerField(default=10, help_text="Estimated time in minutes")
 
     available_to_ai_tutor = models.BooleanField(

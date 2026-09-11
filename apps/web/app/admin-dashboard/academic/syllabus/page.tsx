@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ChevronRight, ChevronDown, Folder, FileText, CheckSquare,
   BookOpen, Layers, Plus, Settings, Trash2, Loader2, X, UploadCloud,
-  Eye, Search,
+  Eye, Search, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -322,6 +322,62 @@ function filterCategory(category: any, query: string): any | null {
   return positions.length > 0 ? { ...category, positions } : null;
 }
 
+// ── Node reordering — finds the actual sibling array a selected node lives
+// in (category list, an exam's children/papers, a paper's subjects, a
+// subject's chapters, or a chapter's topics), so "Move up"/"Move down" can
+// swap it within that array and persist the whole array's new order via the
+// syllabus app's generic bulk /reorder/ endpoints.
+function findSiblingArray(treeData: any[], type: string, id: number): any[] | null {
+  if (type === "category") {
+    return treeData.some((c: any) => c.id === id) ? treeData : null;
+  }
+
+  const inChapterList = (list: any[]): any[] | null => {
+    if (type === "chapter" && list.some((c: any) => c.id === id)) return list;
+    for (const c of list) {
+      if (type === "topic" && (c.topics || []).some((t: any) => t.id === id)) return c.topics;
+    }
+    return null;
+  };
+  const inSubjectList = (list: any[]): any[] | null => {
+    if (type === "subject" && list.some((s: any) => s.id === id)) return list;
+    for (const s of list) {
+      const found = inChapterList(s.chapters || []);
+      if (found) return found;
+    }
+    return null;
+  };
+  const inPaperList = (list: any[]): any[] | null => {
+    if (type === "paper" && list.some((p: any) => p.id === id)) return list;
+    for (const p of list) {
+      const found = inSubjectList(p.subjects || []);
+      if (found) return found;
+    }
+    return null;
+  };
+  const inExamList = (list: any[]): any[] | null => {
+    if ((type === "exam" || type === "position") && list.some((n: any) => n.id === id)) return list;
+    for (const n of list) {
+      const childFound = inExamList(n.children || []);
+      if (childFound) return childFound;
+      const paperFound = inPaperList(n.papers || []);
+      if (paperFound) return paperFound;
+    }
+    return null;
+  };
+
+  for (const cat of treeData) {
+    const found = inExamList(cat.positions || []);
+    if (found) return found;
+  }
+  return null;
+}
+
+const REORDER_ENDPOINT: Record<string, string> = {
+  category: "categories", exam: "exams", position: "exams",
+  paper: "papers", subject: "subjects", chapter: "chapters", topic: "topics",
+};
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function SyllabusBuilderPage() {
   const [treeData, setTreeData] = useState<any[]>([]);
@@ -402,6 +458,30 @@ export default function SyllabusBuilderPage() {
       setNodeMaterials([]);
     }
   }, [selectedNode?.id, selectedNode?.type, loadNodeMaterials]);
+
+  // Reorders the list locally then persists sequential order values (0..n-1)
+  // for everyone in it - simpler and always consistent than trying to swap
+  // two possibly-equal/unset order numbers. This is what controls the order
+  // materials appear in on the public syllabus page for this exam node.
+  const [reorderingMaterials, setReorderingMaterials] = useState(false);
+  const handleMoveMaterial = async (index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= nodeMaterials.length || reorderingMaterials) return;
+    const reordered = [...nodeMaterials];
+    const temp = reordered[index]!;
+    reordered[index] = reordered[newIndex]!;
+    reordered[newIndex] = temp;
+    setNodeMaterials(reordered);
+    setReorderingMaterials(true);
+    try {
+      await Promise.all(reordered.map((m, i) => adminStudyMaterialApi.update(m.id, { order: i })));
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save new order.");
+      if (selectedNode) loadNodeMaterials(selectedNode.id);
+    } finally {
+      setReorderingMaterials(false);
+    }
+  };
 
   const handleDeleteMaterial = async (material: StudyMaterialListItem) => {
     setDeletingMaterialId(material.id);
@@ -618,6 +698,48 @@ export default function SyllabusBuilderPage() {
 
   const addActions = getAddActions(selectedNode);
 
+  // ── Reorder the selected node among its siblings (Level under a Category,
+  // Preparation under a Level, Paper under an Exam, Subject under a Paper,
+  // Chapter under a Subject, Topic under a Chapter) - this is what lets an
+  // admin control the exact order everything shows in, both here and on the
+  // public syllabus page.
+  const [isReorderingNode, setIsReorderingNode] = useState(false);
+  const nodeSiblingInfo = useMemo(() => {
+    if (!selectedNode) return null;
+    const siblings = findSiblingArray(treeData, selectedNode.type, selectedNode.id);
+    if (!siblings) return null;
+    const index = siblings.findIndex((n: any) => n.id === selectedNode.id);
+    if (index === -1) return null;
+    return { siblings, index };
+  }, [treeData, selectedNode]);
+
+  const handleMoveNode = async (direction: -1 | 1) => {
+    if (!selectedNode || !nodeSiblingInfo || isReorderingNode) return;
+    const { siblings, index } = nodeSiblingInfo;
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= siblings.length) return;
+    const endpoint = REORDER_ENDPOINT[selectedNode.type];
+    if (!endpoint) return;
+
+    const reordered = [...siblings];
+    const temp = reordered[index]!;
+    reordered[index] = reordered[newIndex]!;
+    reordered[newIndex] = temp;
+
+    setIsReorderingNode(true);
+    try {
+      await adminAcademicApi.reorderItems(
+        endpoint,
+        reordered.map((n: any, i: number) => ({ id: n.id, order: i }))
+      );
+      await fetchTree();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save new order.");
+    } finally {
+      setIsReorderingNode(false);
+    }
+  };
+
   // ── Modal title ─────────────────────────────────────────────────────────────
   const modalTitle = modal
     ? modal.mode === "add"
@@ -727,6 +849,28 @@ export default function SyllabusBuilderPage() {
                   </h3>
                 </div>
                 <div className="flex gap-2">
+                  {nodeSiblingInfo && (
+                    <div className="flex border border-slate-200 rounded-md overflow-hidden">
+                      <button
+                        type="button"
+                        disabled={nodeSiblingInfo.index === 0 || isReorderingNode}
+                        onClick={() => handleMoveNode(-1)}
+                        className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent border-r border-slate-200"
+                        title="Move up"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={nodeSiblingInfo.index === nodeSiblingInfo.siblings.length - 1 || isReorderingNode}
+                        onClick={() => handleMoveNode(1)}
+                        className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                        title="Move down"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                   {selectedNode.type !== "category" && (
                     <>
                       <Button
@@ -849,12 +993,32 @@ export default function SyllabusBuilderPage() {
                     <p className="text-sm text-slate-400">No PDFs or notes uploaded here yet.</p>
                   ) : (
                     <div className="space-y-2">
-                      {nodeMaterials.map((mat) => (
+                      {nodeMaterials.map((mat, index) => (
                         <div
                           key={mat.id}
                           className="flex items-center justify-between gap-3 p-3 border border-slate-100 rounded-lg bg-slate-50/50"
                         >
                           <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex flex-col shrink-0 -my-1">
+                              <button
+                                type="button"
+                                disabled={index === 0 || reorderingMaterials}
+                                onClick={() => handleMoveMaterial(index, -1)}
+                                className="p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
+                                title="Move up"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={index === nodeMaterials.length - 1 || reorderingMaterials}
+                                onClick={() => handleMoveMaterial(index, 1)}
+                                className="p-0.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-200 disabled:opacity-30 disabled:hover:bg-transparent"
+                                title="Move down"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                             <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-slate-800 truncate">{mat.title}</p>

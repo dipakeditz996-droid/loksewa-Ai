@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname, useParams } from "next/navigation";
+import { usePathname, useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { BarChart3, ChevronLeft, FileText, ListTodo, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,10 +31,16 @@ export default function ExamDetailLayout({ children }: { children: React.ReactNo
     retry: false,
   });
 
+  const searchParams = useSearchParams();
+  const collectionParam = searchParams.get("collection");
+  // Carried from "Use in Mock Exam" on the Collections page, through exam
+  // creation, so the Questions tab arrives with the Collection preselected.
+  const questionsHref = `${`/admin-dashboard/exams/${params?.id}`}/questions${collectionParam ? `?collection=${collectionParam}` : ""}`;
+
   const base = `/admin-dashboard/exams/${params?.id}`;
   const tabs = [
     { label: "Overview", href: base, icon: FileText, exact: true },
-    { label: "Questions", href: `${base}/questions`, icon: ListTodo },
+    { label: "Questions", href: questionsHref, icon: ListTodo },
     { label: "Analytics", href: `${base}/analytics`, icon: BarChart3 },
     { label: "Results", href: `${base}/results`, icon: Trophy },
   ];

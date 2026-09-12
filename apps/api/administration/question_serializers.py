@@ -1,7 +1,24 @@
 from rest_framework import serializers
-from exams.models import Question, Topic
+from exams.models import Question, Topic, QuestionCollection
 
 class AdminQuestionSerializer(serializers.ModelSerializer):
+    # Read: {id, name} per collection this question already belongs to.
+    # Write: optional list of QuestionCollection ids under `collection_ids`
+    # (source='collections') - a question does not need to belong to any
+    # collection. `collections` is a real ManyToManyField on Question, so
+    # DRF's default ModelSerializer.update()/create() already knows how to
+    # set it (via .set()) once the write field points at that source - no
+    # custom create/update override needed here.
+    collections = serializers.SerializerMethodField()
+    collection_ids = serializers.PrimaryKeyRelatedField(
+        queryset=QuestionCollection.objects.all(), many=True, required=False,
+        write_only=True, source='collections',
+        help_text="Optional QuestionCollection IDs to add this question to.",
+    )
+
+    def get_collections(self, obj):
+        return list(obj.collections.values('id', 'name'))
+
     topic_name = serializers.SerializerMethodField()
     chapter_name = serializers.SerializerMethodField()
     subject_name = serializers.SerializerMethodField()
@@ -91,8 +108,9 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             'chapter_id', 'subject_id', 'position_id', 'category_id',
             'text', 'option_a', 
             'option_b', 'option_c', 'option_d', 'correct_option', 'model_answer',
-            'marks', 'negative_marks', 'expected_time_minutes', 'explanation', 
-            'difficulty', 'tags', 'usage_count', 'created_at', 'updated_at'
+            'marks', 'negative_marks', 'expected_time_minutes', 'explanation',
+            'difficulty', 'tags', 'usage_count', 'created_at', 'updated_at',
+            'collections', 'collection_ids',
         ]
         read_only_fields = ['question_id']
 

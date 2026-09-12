@@ -7,11 +7,14 @@ import { toast } from 'react-hot-toast';
 interface AiSetGeneratorProps {
   questionSetId: number;
   distribution: { easy?: number; medium?: number; hard?: number };
+  /** Restrict generation to one QuestionCollection, e.g. arrived here via
+   *  "Use in Practice" on the admin Collections page. */
+  collectionId?: number;
   onAccept: (questionIds: number[]) => void;
   onCancel: () => void;
 }
 
-export function AiSetGenerator({ questionSetId, distribution, onAccept, onCancel }: AiSetGeneratorProps) {
+export function AiSetGenerator({ questionSetId, distribution, collectionId, onAccept, onCancel }: AiSetGeneratorProps) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<AdminQuestion[]>([]);
   const [error, setError] = useState('');
@@ -20,7 +23,7 @@ export function AiSetGenerator({ questionSetId, distribution, onAccept, onCancel
     setLoading(true);
     setError('');
     try {
-      const res = await adminQuestionSetApi.generateQuestions(questionSetId);
+      const res = await adminQuestionSetApi.generateQuestions(questionSetId, collectionId);
       if (res.error) {
         setError(res.error);
       } else if (res.preview_questions) {
@@ -46,6 +49,9 @@ export function AiSetGenerator({ questionSetId, distribution, onAccept, onCancel
             Generate a balanced question set based on your difficulty distribution:
             <span className="font-medium ml-1">E: {distribution.easy}%, M: {distribution.medium}%, H: {distribution.hard}%</span>
           </p>
+          {collectionId && (
+            <p className="text-xs text-blue-100/80 mt-1">Restricted to Collection #{collectionId}</p>
+          )}
         </div>
         <button onClick={onCancel} className="text-white/70 hover:text-white">
           <X className="w-5 h-5" />

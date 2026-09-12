@@ -78,6 +78,9 @@ def _selection_kwargs(request, examination):
         'topic_id': _int_or_none(params.get('topic')),
         'question_type': (params.get('question_type') or '').strip() or None,
         'tags': (params.get('tags') or '').strip() or None,
+        # "Use in Mock Exam" from the admin Collections page - narrows the
+        # bank to one QuestionCollection, same approval gate as everything else.
+        'collection_id': _int_or_none(params.get('collection')),
     }
 
 

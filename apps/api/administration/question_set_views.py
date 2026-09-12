@@ -179,6 +179,9 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
         with the rest of the Master Question Bank selection logic.
         """
         qset = self.get_object()
+        # Optional: restrict the whole generation to a QuestionCollection
+        # (e.g. "Use in Practice Set" from the admin Collections page).
+        collection_id = request.data.get('collection_id') or request.data.get('collection')
 
         # Determine how many questions are needed per difficulty
         distribution = qset.difficulty_distribution or {}
@@ -207,7 +210,7 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
                 count = int(count_str)
                 if count <= 0: continue
                 subj_id = int(subj_id_str)
-                result = service.select(subject_id=subj_id, count=count, randomize=True)
+                result = service.select(subject_id=subj_id, collection_id=collection_id, count=count, randomize=True)
                 if not result['satisfied']:
                     return Response(
                         {"error": f"Not enough questions for Subject ID {subj_id}. Needed {count}, found {result['available']}."},
@@ -235,6 +238,7 @@ class QuestionSetViewSet(viewsets.ModelViewSet):
 
             result = service.select(
                 difficulty_distribution={'easy': easy_needed, 'medium': medium_needed, 'hard': hard_needed},
+                collection_id=collection_id,
                 randomize=True,
                 **filters,
             )

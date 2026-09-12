@@ -371,6 +371,8 @@ export interface BankScopeParams {
   topic?: number;
   question_type?: string;
   tags?: string;
+  /** Restrict to one QuestionCollection - "Use in Mock Exam" from Collections. */
+  collection?: number;
 }
 
 export interface BankQueryParams extends BankScopeParams {

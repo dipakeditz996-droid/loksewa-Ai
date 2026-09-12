@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Edit, Trash2, Plus, X, Loader2, BookOpen,
-  CheckSquare, Zap, RefreshCw, Search, AlertTriangle
+  CheckSquare, Zap, RefreshCw, Search, AlertTriangle, ClipboardList, FileEdit
 } from 'lucide-react';
 import { adminCollectionsApi, QuestionCollection, CollectionQuestion } from '@/lib/api/admin-collections';
 import { adminQuestionApi } from '@/lib/api/admin-questions';
@@ -327,6 +327,18 @@ export default function CollectionDetailPage() {
           >
             <Plus className="w-4 h-4" /> Add Questions
           </button>
+          <Link
+            href={`/admin-dashboard/academic/question-sets/create?collection=${collectionId}`}
+            className="px-3 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+          >
+            <ClipboardList className="w-4 h-4" /> Use in Practice
+          </Link>
+          <Link
+            href={`/admin-dashboard/exams/new?collection=${collectionId}`}
+            className="px-3 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+          >
+            <FileEdit className="w-4 h-4" /> Use in Mock Exam
+          </Link>
           {selectedQIds.size > 0 && (
             <button
               onClick={handleRemoveSelected}

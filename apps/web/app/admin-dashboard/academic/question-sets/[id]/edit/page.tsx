@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { QuestionSetForm } from '@/components/admin/question-sets/QuestionSetForm';
 import { QuestionSelector } from '@/components/admin/question-sets/QuestionSelector';
@@ -15,7 +15,10 @@ export default function EditQuestionSetPage() {
   const router = useRouter();
   const params = useParams();
   const id = Number(params.id);
-  
+  const searchParams = useSearchParams();
+  const collectionParam = searchParams.get('collection');
+  const collectionId = collectionParam ? Number(collectionParam) : undefined;
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<QuestionSet | null>(null);
@@ -257,9 +260,10 @@ export default function EditQuestionSetPage() {
       {/* Modals */}
       {showAiModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <AiSetGenerator 
+          <AiSetGenerator
             questionSetId={data.id}
             distribution={data.difficulty_distribution}
+            collectionId={collectionId}
             onAccept={handleAddQuestions}
             onCancel={() => setShowAiModal(false)}
           />

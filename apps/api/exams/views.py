@@ -167,6 +167,10 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         difficulty = request.data.get('difficulty')
         mode = request.data.get('mode', 'flexible')
         total_questions = int(request.data.get('total_questions', 20))
+        # Optional: draw only from a QuestionCollection (e.g. "Use in Practice"
+        # from the admin Collections page) instead of/alongside the syllabus
+        # filters above - approval status is still enforced by the service.
+        collection_id = request.data.get('collection')
         
         # Enforce Enrollment Access Control
         # If a course is provided, ensure the student is enrolled.
@@ -194,6 +198,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
             subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
             topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
+            collection_id=collection_id if collection_id and str(collection_id) != 'all' else None,
             count=total_questions,
             difficulty_distribution=difficulty_distribution,
             randomize=True,

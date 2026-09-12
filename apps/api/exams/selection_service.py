@@ -70,6 +70,8 @@ class QuestionSelectionService:
         difficulty: Optional[str] = None,
         question_type: Optional[str] = None,
         tags: Optional[str] = None,
+        collection_id: Optional[int] = None,
+        collection_ids: Optional[list] = None,
         exclude_ids: Optional[list] = None,
     ) -> QuerySet:
         """Apply academic-hierarchy and metadata filters to a queryset."""
@@ -98,6 +100,10 @@ class QuestionSelectionService:
             # Tags are stored comma-separated; filter by any matching tag
             for tag in [t.strip() for t in tags.split(",") if t.strip()]:
                 qs = qs.filter(tags__icontains=tag)
+        if collection_id:
+            qs = qs.filter(collections__id=collection_id)
+        if collection_ids:
+            qs = qs.filter(collections__id__in=collection_ids)
         if exclude_ids:
             qs = qs.exclude(id__in=exclude_ids)
         return qs.distinct()
@@ -115,6 +121,8 @@ class QuestionSelectionService:
         difficulty=None,
         question_type=None,
         tags=None,
+        collection_id=None,
+        collection_ids=None,
         exclude_ids=None,
     ) -> dict:
         """
@@ -140,6 +148,8 @@ class QuestionSelectionService:
             difficulty=difficulty,
             question_type=question_type,
             tags=tags,
+            collection_id=collection_id,
+            collection_ids=collection_ids,
             exclude_ids=exclude_ids,
         )
         total = qs.count()
@@ -165,6 +175,8 @@ class QuestionSelectionService:
         # Content filters
         question_type=None,
         tags=None,
+        collection_id=None,
+        collection_ids=None,
         # Selection config
         count: int = 0,
         difficulty_distribution: Optional[dict] = None,
@@ -183,6 +195,10 @@ class QuestionSelectionService:
             topic_id: Filter by specific topic
             question_type: 'mcq', 'true_false', 'subjective', etc.
             tags: Comma-separated tags to filter by
+            collection_id / collection_ids: Restrict to question(s) that belong to
+                a QuestionCollection (or any of several). Collection membership is
+                a pool filter only - it never bypasses the approved-status gate
+                already enforced by get_base_queryset().
             count: Total number of questions to select (used when no distribution given)
             difficulty_distribution: Dict mapping difficulty → count.
                 e.g. {"easy": 6, "medium": 10, "hard": 4}
@@ -218,6 +234,8 @@ class QuestionSelectionService:
             difficulty=difficulty,
             question_type=question_type,
             tags=tags,
+            collection_id=collection_id,
+            collection_ids=collection_ids,
             exclude_ids=exclude_ids,
         )
         total_available = base_qs.count()

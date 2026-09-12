@@ -15,6 +15,8 @@ export interface AdminQuestion {
   expected_time_minutes: number;
   usage_count: number;
   collections?: { id: number, name: string }[];
+  /** Write-only: optional QuestionCollection ids to set on create/update. */
+  collection_ids?: number[];
   ai_status?: string;
   [key: string]: any;
 }

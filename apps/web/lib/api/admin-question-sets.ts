@@ -140,9 +140,12 @@ export const adminQuestionSetApi = {
     });
   },
 
-  generateQuestions: async (id: number) => {
+  /** collectionId optionally restricts generation to one QuestionCollection
+   *  ("Use in Practice" from the admin Collections page). */
+  generateQuestions: async (id: number, collectionId?: number) => {
     return apiClient<{ success: boolean; generated_count: number; preview_questions: AdminQuestion[]; error?: string }>(`/admin/question-sets/${id}/generate/`, {
       method: 'POST',
+      body: JSON.stringify(collectionId ? { collection_id: collectionId } : {}),
     });
   }
 };

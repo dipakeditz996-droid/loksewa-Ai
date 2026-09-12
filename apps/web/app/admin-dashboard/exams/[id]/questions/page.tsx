@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle } from "lucide-react";
 import { QuestionSelectionWorkspace } from "@/components/admin/exams/QuestionSelectionWorkspace";
 import { adminExamApi, Examination } from "@/lib/api/admin-exams";
@@ -9,6 +9,9 @@ import { adminExamApi, Examination } from "@/lib/api/admin-exams";
 export default function ExamQuestionsPage() {
   const params = useParams();
   const examId = Number(params?.id);
+  const searchParams = useSearchParams();
+  const collectionParam = searchParams.get("collection");
+  const defaultCollectionId = collectionParam ? Number(collectionParam) : null;
 
   const [exam, setExam] = useState<Examination | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +87,7 @@ export default function ExamQuestionsPage() {
       <QuestionSelectionWorkspace
         examinationId={examId}
         defaultSubjectId={exam.subject ?? null}
+        defaultCollectionId={defaultCollectionId}
         onSelectionChange={handleSelectionChange}
       />
     </div>

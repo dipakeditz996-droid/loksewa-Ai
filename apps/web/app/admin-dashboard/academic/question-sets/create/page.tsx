@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { QuestionSetForm } from '@/components/admin/question-sets/QuestionSetForm';
 import { adminQuestionSetApi, QuestionSet } from '@/lib/api/admin-question-sets';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
@@ -10,6 +10,10 @@ import { toast } from 'react-hot-toast';
 
 export default function CreateQuestionSetPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // "Use in Practice" from the admin Collections page - carried through to
+  // the edit page so the AI generator can restrict to this Collection.
+  const collectionParam = searchParams.get('collection');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Partial<QuestionSet>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -58,7 +62,9 @@ export default function CreateQuestionSetPage() {
       toast.success('Question Set created successfully');
       
       if (redirectNext) {
-        router.push(`/admin-dashboard/academic/question-sets/${res.id}/edit`);
+        router.push(
+          `/admin-dashboard/academic/question-sets/${res.id}/edit${collectionParam ? `?collection=${collectionParam}` : ''}`
+        );
       } else {
         router.push('/admin-dashboard/academic/question-sets');
       }

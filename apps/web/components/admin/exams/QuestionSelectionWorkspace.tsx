@@ -10,12 +10,16 @@ import {
   PaginatedBank, QuestionAvailability,
 } from "@/lib/api/admin-exams";
 import { adminSyllabusApi } from "@/lib/api/admin-syllabus";
+import { adminCollectionsApi, QuestionCollection } from "@/lib/api/admin-collections";
 import toast from "react-hot-toast";
 
 interface Props {
   examinationId: number;
   /** The exam's own academic targeting, used as the default bank scope. */
   defaultSubjectId?: number | null;
+  /** Pre-selects a QuestionCollection as the bank source - set when arriving
+   *  here via "Use in Mock Exam" from the admin Collections page. */
+  defaultCollectionId?: number | null;
   onSelectionChange?: (count: number, totalMarks: number) => void;
 }
 
@@ -26,7 +30,7 @@ const DIFFICULTY_TONE: Record<string, string> = {
 };
 
 export function QuestionSelectionWorkspace({
-  examinationId, defaultSubjectId, onSelectionChange,
+  examinationId, defaultSubjectId, defaultCollectionId, onSelectionChange,
 }: Props) {
   // Bank (left)
   const [bank, setBank] = useState<PaginatedBank | null>(null);
@@ -46,6 +50,11 @@ export function QuestionSelectionWorkspace({
   const [subjects, setSubjects] = useState<any[]>([]);
   const [chapters, setChapters] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
+  const [collectionId, setCollectionId] = useState<number | undefined>(defaultCollectionId ?? undefined);
+  const [collections, setCollections] = useState<QuestionCollection[]>([]);
+  useEffect(() => {
+    adminCollectionsApi.getCollections().then(setCollections).catch(() => setCollections([]));
+  }, []);
 
   // Assigned (right)
   const [assigned, setAssigned] = useState<AssignedQuestion[]>([]);
@@ -74,7 +83,8 @@ export function QuestionSelectionWorkspace({
     chapter: chapterId,
     topic: topicId,
     question_type: questionType || undefined,
-  }), [subjectId, chapterId, topicId, questionType]);
+    collection: collectionId,
+  }), [subjectId, chapterId, topicId, questionType, collectionId]);
 
   // ── Debounce search so typing doesn't hammer the API ──────────────────────
   useEffect(() => {
@@ -467,6 +477,19 @@ export function QuestionSelectionWorkspace({
               {bank && <span className="text-xs text-slate-500">{bank.count} in scope</span>}
             </div>
             <div className="flex items-center gap-2 mt-3">
+              {collections.length > 0 && (
+                <select
+                  value={collectionId ?? ""}
+                  onChange={(e) => { setCollectionId(e.target.value ? Number(e.target.value) : undefined); setPage(1); }}
+                  className="px-2.5 py-2 border border-slate-200 rounded-lg text-sm bg-white text-slate-900 shrink-0"
+                  title="Restrict the bank to one Collection"
+                >
+                  <option value="">Master Question Bank</option>
+                  {collections.map(c => (
+                    <option key={c.id} value={c.id}>Collection: {c.name}</option>
+                  ))}
+                </select>
+              )}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input

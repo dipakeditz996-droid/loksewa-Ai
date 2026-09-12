@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminQuestionApi, AdminQuestion } from '@/lib/api/admin-questions';
+import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
 import { Save, FileText, Wand2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
@@ -62,6 +63,24 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
   const [selSubject, setSelSubject] = useState(initialData?.subject_id || '');
   const [selChapter, setSelChapter] = useState(initialData?.chapter_id || '');
   const [selTopic, setSelTopic] = useState(initialData?.topic || '');
+
+  // Add to Collection (Optional) - a question can belong to zero, one, or
+  // several reusable QuestionCollections. Loaded from the real backend list,
+  // never hardcoded.
+  const [collections, setCollections] = useState<QuestionCollection[]>([]);
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>(
+    (initialData?.collections || []).map((c: any) => c.id)
+  );
+  useEffect(() => {
+    adminCollectionsApi.getCollections()
+      .then(setCollections)
+      .catch(() => setCollections([]));
+  }, []);
+  const toggleCollection = (id: number) => {
+    setSelectedCollectionIds(prev =>
+      prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
+    );
+  };
 
   const handleAcademicChange = (field: string, value: any) => {
     if (field === 'category') {
@@ -126,7 +145,8 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         marks: Number(marks),
         negative_marks: Number(negativeMarks),
         expected_time_minutes: Number(expectedTime),
-        explanation
+        explanation,
+        collection_ids: selectedCollectionIds,
       };
 
       if (qType === 'mcq') {
@@ -218,6 +238,34 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
             <label className="block text-sm font-medium text-gray-700 mb-2">Expected Time (min)</label>
             <input type="number" value={expectedTime} onChange={e => setExpectedTime(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2" required />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Add to Collection (Optional)</label>
+          {collections.length === 0 ? (
+            <p className="text-sm text-gray-400">No collections yet — create one under Academic Management → Collections.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {collections.map(c => (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer ${
+                    selectedCollectionIds.includes(c.id)
+                      ? 'bg-[#0B2545] text-white border-[#0B2545]'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={selectedCollectionIds.includes(c.id)}
+                    onChange={() => toggleCollection(c.id)}
+                  />
+                  {c.name}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

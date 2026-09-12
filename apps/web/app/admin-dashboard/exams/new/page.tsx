@@ -51,6 +51,9 @@ export default function CreateExamPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const draftParam = searchParams?.get("draft");
+  // "Use in Mock Exam" from the admin Collections page arrives here.
+  const collectionParam = searchParams?.get("collection");
+  const defaultCollectionId = collectionParam ? Number(collectionParam) : null;
 
   const [step, setStep] = useState(1);
   const [examId, setExamId] = useState<number | null>(draftParam ? Number(draftParam) : null);
@@ -452,6 +455,7 @@ export default function CreateExamPage() {
           <QuestionSelectionWorkspace
             examinationId={examId}
             defaultSubjectId={subjectId ?? null}
+            defaultCollectionId={defaultCollectionId}
             onSelectionChange={handleSelectionChange}
           />
         ) : (

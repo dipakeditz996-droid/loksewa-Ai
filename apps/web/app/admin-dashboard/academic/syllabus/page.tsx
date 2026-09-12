@@ -740,6 +740,46 @@ export default function SyllabusBuilderPage() {
     }
   };
 
+  // ── Jump straight to a position number instead of clicking "move up"
+  // repeatedly - e.g. typing "1" moves the node to the very top in one go.
+  const [positionInput, setPositionInput] = useState("");
+  useEffect(() => {
+    setPositionInput(nodeSiblingInfo ? String(nodeSiblingInfo.index + 1) : "");
+  }, [nodeSiblingInfo?.index, selectedNode?.id]);
+
+  const handleMoveToPosition = async () => {
+    if (!selectedNode || !nodeSiblingInfo || isReorderingNode) return;
+    const { siblings, index } = nodeSiblingInfo;
+    const endpoint = REORDER_ENDPOINT[selectedNode.type];
+    if (!endpoint) return;
+
+    const parsed = parseInt(positionInput, 10);
+    if (isNaN(parsed)) {
+      toast.error("Enter a valid position number.");
+      return;
+    }
+    const targetIndex = Math.min(Math.max(parsed, 1), siblings.length) - 1;
+    if (targetIndex === index) return;
+
+    const reordered = [...siblings];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    setIsReorderingNode(true);
+    try {
+      await adminAcademicApi.reorderItems(
+        endpoint,
+        reordered.map((n: any, i: number) => ({ id: n.id, order: i }))
+      );
+      await fetchTree();
+      toast.success(`Moved to position ${targetIndex + 1}.`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save new order.");
+    } finally {
+      setIsReorderingNode(false);
+    }
+  };
+
   // ── Modal title ─────────────────────────────────────────────────────────────
   const modalTitle = modal
     ? modal.mode === "add"
@@ -850,25 +890,49 @@ export default function SyllabusBuilderPage() {
                 </div>
                 <div className="flex gap-2">
                   {nodeSiblingInfo && (
-                    <div className="flex border border-slate-200 rounded-md overflow-hidden">
-                      <button
-                        type="button"
-                        disabled={nodeSiblingInfo.index === 0 || isReorderingNode}
-                        onClick={() => handleMoveNode(-1)}
-                        className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent border-r border-slate-200"
-                        title="Move up"
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={nodeSiblingInfo.index === nodeSiblingInfo.siblings.length - 1 || isReorderingNode}
-                        onClick={() => handleMoveNode(1)}
-                        className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
-                        title="Move down"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex border border-slate-200 rounded-md overflow-hidden">
+                        <button
+                          type="button"
+                          disabled={nodeSiblingInfo.index === 0 || isReorderingNode}
+                          onClick={() => handleMoveNode(-1)}
+                          className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent border-r border-slate-200"
+                          title="Move up"
+                        >
+                          <ChevronUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={nodeSiblingInfo.index === nodeSiblingInfo.siblings.length - 1 || isReorderingNode}
+                          onClick={() => handleMoveNode(1)}
+                          className="p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:hover:bg-transparent"
+                          title="Move down"
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {/* Jump straight to a position instead of clicking
+                          "move up/down" repeatedly for a long list. */}
+                      <div className="flex items-center gap-1" title={`Position (1-${nodeSiblingInfo.siblings.length})`}>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={nodeSiblingInfo.siblings.length}
+                          value={positionInput}
+                          onChange={(e) => setPositionInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleMoveToPosition()}
+                          disabled={isReorderingNode}
+                          className="w-16 h-9 text-sm text-center px-1"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isReorderingNode}
+                          onClick={handleMoveToPosition}
+                        >
+                          Go
+                        </Button>
+                      </div>
                     </div>
                   )}
                   {selectedNode.type !== "category" && (

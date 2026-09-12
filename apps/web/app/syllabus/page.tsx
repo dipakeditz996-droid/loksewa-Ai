@@ -28,7 +28,7 @@ export default function SyllabusPage() {
     let mounted = true;
     publicApi.getSyllabusTree().then((data) => {
       if (!mounted) return;
-      const cats = (data || []).filter((c) => c.exams.length > 0);
+      const cats = data || [];
       setCategories(cats);
       const firstCat = cats[0];
       const firstLevel = firstCat?.exams?.[0];
@@ -44,7 +44,7 @@ export default function SyllabusPage() {
   }, []);
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || categories[0];
-  const selectedLevel = selectedCategory?.exams.find((e) => e.id === selectedLevelId) || selectedCategory?.exams[0];
+  const selectedLevel = selectedCategory?.exams?.find((e) => e.id === selectedLevelId) || selectedCategory?.exams?.[0];
   const selectedPrep = selectedLevel?.children?.find((c) => c.id === selectedPrepId) || selectedLevel?.children?.[0];
   // The actual leaf node whose papers/subjects/topics are shown: the
   // preparation under the level if one exists, otherwise the level itself.
@@ -192,43 +192,57 @@ export default function SyllabusPage() {
           )}
 
           {/* Level cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {selectedCategory?.exams.map((exam) => {
-              const isSelected = exam.id === selectedLevelId;
-              const hasPreparations = (exam.children?.length ?? 0) > 0;
-              return (
-                <div
-                  key={exam.id}
-                  onClick={() => handleExamChange(exam.id)}
-                  className={`relative p-6 rounded-[16px] cursor-pointer transition-all duration-300 border ${
-                    isSelected
-                      ? "bg-[#0B2545] dark:bg-[#163E6B]/40 border-[#D4A72C]/50 shadow-[0_8px_30px_rgba(212,167,44,0.15)]"
-                      : "bg-slate-50 dark:bg-[#0A1118] border-slate-200 dark:border-white/10 hover:border-[#163E6B]/30 dark:hover:border-white/20 hover:shadow-md"
-                  }`}
-                >
-                  {isSelected && (
-                    <div className="absolute top-0 right-0 p-4">
-                      <CheckCircle2 className="w-6 h-6 text-[#D4A72C]" />
+          {(!selectedCategory?.exams || selectedCategory.exams.length === 0) ? (
+            <div className="text-center py-16 px-4 rounded-[20px] border border-dashed border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.02] max-w-xl mx-auto my-4">
+              <div className="w-14 h-14 rounded-2xl bg-[#163E6B]/10 dark:bg-white/10 flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="w-7 h-7 text-[#163E6B] dark:text-[#D4A72C]" />
+              </div>
+              <h3 className="text-xl font-[800] text-slate-900 dark:text-white mb-2">
+                {selectedCategory?.name} Syllabus Coming Soon
+              </h3>
+              <p className="text-sm font-[500] text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                Curriculum, papers, and subjects for {selectedCategory?.name} are being prepared. Check back soon for the updated syllabus.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {selectedCategory.exams.map((exam) => {
+                const isSelected = exam.id === selectedLevelId;
+                const hasPreparations = (exam.children?.length ?? 0) > 0;
+                return (
+                  <div
+                    key={exam.id}
+                    onClick={() => handleExamChange(exam.id)}
+                    className={`relative p-6 rounded-[16px] cursor-pointer transition-all duration-300 border ${
+                      isSelected
+                        ? "bg-[#0B2545] dark:bg-[#163E6B]/40 border-[#D4A72C]/50 shadow-[0_8px_30px_rgba(212,167,44,0.15)]"
+                        : "bg-slate-50 dark:bg-[#0A1118] border-slate-200 dark:border-white/10 hover:border-[#163E6B]/30 dark:hover:border-white/20 hover:shadow-md"
+                    }`}
+                  >
+                    {isSelected && (
+                      <div className="absolute top-0 right-0 p-4">
+                        <CheckCircle2 className="w-6 h-6 text-[#D4A72C]" />
+                      </div>
+                    )}
+                    <h3 className={`text-xl font-[800] mb-1 ${isSelected ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+                      {exam.name}
+                    </h3>
+                    <div className={`text-sm font-[600] mb-4 ${isSelected ? 'text-[#D4A72C]' : 'text-[#163E6B] dark:text-slate-400'}`}>
+                      {exam.level}
                     </div>
-                  )}
-                  <h3 className={`text-xl font-[800] mb-1 ${isSelected ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
-                    {exam.name}
-                  </h3>
-                  <div className={`text-sm font-[600] mb-4 ${isSelected ? 'text-[#D4A72C]' : 'text-[#163E6B] dark:text-slate-400'}`}>
-                    {exam.level}
+                    {hasPreparations && (
+                      <div className={`flex gap-4 text-sm font-[500] mb-4 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                        <span>{exam.children.length} Preparation{exam.children.length !== 1 ? 's' : ''}</span>
+                      </div>
+                    )}
+                    <p className={`text-sm leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                      {exam.description}
+                    </p>
                   </div>
-                  {hasPreparations && (
-                    <div className={`flex gap-4 text-sm font-[500] mb-4 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                      <span>{exam.children.length} Preparation{exam.children.length !== 1 ? 's' : ''}</span>
-                    </div>
-                  )}
-                  <p className={`text-sm leading-relaxed ${isSelected ? 'text-slate-300' : 'text-slate-600 dark:text-slate-400'}`}>
-                    {exam.description}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Preparation / Service selector — only when the selected Level nests them */}
           {(selectedLevel?.children?.length ?? 0) > 0 && (

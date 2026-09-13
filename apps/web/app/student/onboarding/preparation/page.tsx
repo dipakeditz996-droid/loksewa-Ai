@@ -5,33 +5,77 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpen, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { publicApi } from "@/lib/api/public-api";
+import { studentSettingsApi } from "@/lib/api/student-settings";
 import Link from "next/link";
 import bgImage from "@/media/signup.png";
+
+// Finds the exam node matching `examId` anywhere in the hierarchy tree
+// (categories -> root exams -> nested children) and returns its courses.
+function findCoursesForExam(categories: any[], examId: number): any[] | null {
+  for (const cat of categories) {
+    for (const exam of cat.exams || []) {
+      const stack = [exam];
+      while (stack.length) {
+        const node = stack.pop();
+        if (node.id === examId) return node.courses || [];
+        stack.push(...(node.children || []));
+      }
+    }
+  }
+  return null;
+}
 
 export default function PreparationSelectionPage() {
   const router = useRouter();
 
   const [hierarchy, setHierarchy] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // True while checking whether the student's registration-time preparation
+  // choice (StudentProfile.target_position) already matches real courses -
+  // if it does, this page redirects straight to Packages instead of asking
+  // the student to pick their preparation a second time.
+  const [checkingAutoSelect, setCheckingAutoSelect] = useState(true);
 
   // Path tracks the current drill-down state.
   // [category, exam_level1, exam_level2, ...]
   const [path, setPath] = useState<any[]>([]);
-  
+
   // For Flexible selection mode (multiple courses)
   const [selectedCourses, setSelectedCourses] = useState<any[]>([]);
 
   useEffect(() => {
-    publicApi.getCourseHierarchy()
-      .then(res => {
-        setHierarchy(res || []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setHierarchy([]);
-        setLoading(false);
-      });
-  }, []);
+    let cancelled = false;
+
+    Promise.all([
+      publicApi.getCourseHierarchy(),
+      studentSettingsApi.getProfile().catch(() => null),
+    ]).then(([hierarchyRes, profile]) => {
+      if (cancelled) return;
+      const categories = hierarchyRes || [];
+      setHierarchy(categories);
+      setLoading(false);
+
+      const targetPosition = profile?.target_position;
+      if (targetPosition) {
+        const matchedCourses = findCoursesForExam(categories, targetPosition);
+        if (matchedCourses && matchedCourses.length > 0) {
+          localStorage.setItem("onboarding_selected_courses", JSON.stringify(matchedCourses));
+          router.replace("/student/onboarding/packages");
+          return;
+        }
+      }
+      // No stored preparation, or it doesn't match any course yet -
+      // fall back to letting the student pick manually below.
+      setCheckingAutoSelect(false);
+    }).catch(() => {
+      if (cancelled) return;
+      setHierarchy([]);
+      setLoading(false);
+      setCheckingAutoSelect(false);
+    });
+
+    return () => { cancelled = true; };
+  }, [router]);
 
   const handleSelectNode = (node: any, depth: number) => {
     const newPath = path.slice(0, depth);
@@ -138,7 +182,7 @@ export default function PreparationSelectionPage() {
 
               {/* Right content area: options & courses */}
               <div className="w-2/3 p-6 flex flex-col">
-                {loading ? (
+                {loading || checkingAutoSelect ? (
                   <div className="flex-1 flex items-center justify-center">
                     <div className="w-8 h-8 border-2 border-[#D4A72C] border-t-transparent rounded-full animate-spin"></div>
                   </div>

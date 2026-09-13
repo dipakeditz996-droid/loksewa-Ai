@@ -127,7 +127,7 @@ class UploadValidationTests(QuestionImportTestBase):
         ])
         row = response.data['report_data'][0]
         self.assertEqual(row['status'], 'error')
-        self.assertTrue(any('Correct Answer must be A, B, C, or D' in e for e in row['errors']))
+        self.assertTrue(any('Correct Answer must be 1, 2, 3, 4' in e for e in row['errors']))
 
     def test_correct_answer_lowercase_normalized(self):
         response = self.upload([

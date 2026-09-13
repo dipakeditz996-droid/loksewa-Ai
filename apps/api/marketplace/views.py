@@ -6,6 +6,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from django.db import transaction
 from decimal import Decimal
+from core.pagination import StandardResultsSetPagination
 
 from .models import (
     Product, PaymentMethod, PaymentSubmission, Purchase,
@@ -292,9 +293,13 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AdminPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
+    # Safe to paginate: adminGetPurchases() in lib/api/marketplace.ts is
+    # defined but has no frontend caller today (grepped the whole apps/web
+    # tree), so there's no array-typed consumer this would break.
     queryset = Purchase.objects.all().order_by('-created_at')
     serializer_class = PurchaseSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = StandardResultsSetPagination
 
     @action(detail=True, methods=['post'])
     def revoke(self, request, pk=None):

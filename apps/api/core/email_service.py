@@ -1,9 +1,55 @@
 import logging
 
+import requests
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
 logger = logging.getLogger(__name__)
+
+RESEND_API_URL = 'https://api.resend.com/emails'
+RESEND_API_TIMEOUT_SECONDS = 10
+
+
+def _send_email(subject, text_body, html_body, to_email):
+    """Sends one email, preferring Resend's HTTPS API (RESEND_API_KEY) over
+    Django's configured mail backend when both are available. The HTTPS API
+    call is bounded by RESEND_API_TIMEOUT_SECONDS regardless of platform
+    network config, unlike the SMTP backend which can hang indefinitely if
+    the host throttles/blocks outbound SMTP - see settings.py's
+    RESEND_API_KEY comment. Never raises: callers treat "did it actually
+    send" as best-effort and always keep the OTP row so a resend is
+    possible either way.
+    """
+    if settings.RESEND_API_KEY:
+        try:
+            response = requests.post(
+                RESEND_API_URL,
+                headers={'Authorization': f'Bearer {settings.RESEND_API_KEY}'},
+                json={
+                    'from': settings.DEFAULT_FROM_EMAIL,
+                    'to': [to_email],
+                    'subject': subject,
+                    'html': html_body,
+                    'text': text_body,
+                },
+                timeout=RESEND_API_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+            return
+        except Exception:
+            logger.exception('Resend API email send failed for %s', to_email)
+            return
+
+    try:
+        message = EmailMultiAlternatives(
+            subject=subject, body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL, to=[to_email],
+        )
+        message.attach_alternative(html_body, 'text/html')
+        message.send(fail_silently=False)
+    except Exception:
+        logger.exception('SMTP email send failed for %s', to_email)
+
 
 _PURPOSE_COPY = {
     'signup': (
@@ -98,23 +144,14 @@ def send_account_created_email(to_email, username):
     text_body = _ACCOUNT_CREATED_TEXT.format(username=username, login_url=login_url)
     html_body = _ACCOUNT_CREATED_HTML.format(username=username, login_url=login_url)
 
-    try:
-        message = EmailMultiAlternatives(
-            subject='Your LoksewaAI account has been created',
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[to_email],
-        )
-        message.attach_alternative(html_body, 'text/html')
-        message.send(fail_silently=False)
-    except Exception:
-        logger.exception('Account-created email send failed for %s', to_email)
+    _send_email('Your LoksewaAI account has been created', text_body, html_body, to_email)
 
 
 def send_otp_email(to_email, code, purpose):
-    """Sends a one-time code through Django's configured email backend
-    (SMTP via Resend in production, console backend in local dev when
-    EMAIL_HOST is unset - see backend/settings.py).
+    """Sends a one-time code via Resend's HTTPS API when RESEND_API_KEY is
+    set, else Django's configured mail backend (SMTP via Resend, or the
+    console backend in local dev when EMAIL_HOST is unset too - see
+    backend/settings.py).
 
     Never raises - a delivery failure is logged, not surfaced to the
     caller, matching how the auth views already treat "did the email
@@ -126,14 +163,4 @@ def send_otp_email(to_email, code, purpose):
     text_body = _TEXT_TEMPLATE.format(intro=intro, code=code, ttl=_OTP_TTL_MINUTES)
     html_body = _HTML_TEMPLATE.format(intro=intro, code=code, ttl=_OTP_TTL_MINUTES)
 
-    try:
-        message = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[to_email],
-        )
-        message.attach_alternative(html_body, 'text/html')
-        message.send(fail_silently=False)
-    except Exception:
-        logger.exception('OTP email send failed (purpose=%s) for %s', purpose, to_email)
+    _send_email(subject, text_body, html_body, to_email)

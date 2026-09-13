@@ -398,6 +398,14 @@ if EMAIL_HOST:
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
     EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', True)
     EMAIL_USE_TLS = False if EMAIL_USE_SSL else _env_bool('EMAIL_USE_TLS', False)
+    # Without this, a blocked/slow outbound SMTP connection (common on PaaS
+    # free/starter tiers that throttle port 465/587) hangs with no default
+    # socket timeout - the whole signup/OTP request then hangs until the
+    # platform's own proxy kills it, which the browser reports as a
+    # misleading CORS/"Failed to fetch" error instead of a real one. Bounding
+    # it here makes email_service.py's send_otp_email fail fast and return a
+    # normal response instead.
+    EMAIL_TIMEOUT = int(os.environ.get('EMAIL_TIMEOUT', '10'))
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 # onboarding@resend.dev is Resend's shared sender for accounts that haven't
@@ -405,6 +413,15 @@ else:
 # Switch to a verified-domain address in production once one exists; no
 # code change needed, just DEFAULT_FROM_EMAIL.
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'onboarding@resend.dev')
+
+# When set, core/email_service.py sends OTP/account-created emails through
+# Resend's HTTPS API instead of the SMTP backend above. Many PaaS hosts
+# throttle or block outbound SMTP (port 465/587) while leaving plain HTTPS
+# (443) untouched, which otherwise turns "the email didn't arrive" into "the
+# whole signup request hangs until the platform's proxy kills it." Reuse the
+# same Resend API key already used for EMAIL_HOST_PASSWORD - it's the same
+# credential either way, just a different transport.
+RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 
 # Used to build the password-reset link emailed to the user (the API server
 # has no other way to know its own frontend's origin).

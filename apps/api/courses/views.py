@@ -59,8 +59,18 @@ class TeacherDashboardView(APIView):
         user = request.user
         
         # 1. Assigned Courses & Total Students
-        # Fetch the courses assigned to the teacher
-        assigned_assignments = TeacherCourseAssignment.objects.filter(teacher=user).select_related('course')
+        # Fetch the courses assigned to the teacher. active_student_count is
+        # annotated here (one query for every assigned course) instead of
+        # calling course.enrollments.filter(...).count() per course in the
+        # loop below, which ran one extra query per assigned course.
+        from django.db.models import Count, Q as DjangoQ
+        assigned_assignments = TeacherCourseAssignment.objects.filter(teacher=user).select_related('course').annotate(
+            active_student_count=Count(
+                'course__enrollments',
+                filter=DjangoQ(course__enrollments__status='active'),
+                distinct=True,
+            )
+        )
 
         from analytics.services.teacher_analytics_service import TeacherAnalyticsService
         performance_by_course = {
@@ -74,7 +84,7 @@ class TeacherDashboardView(APIView):
             course_ids.append(course.id)
 
             # Simple student count per course
-            student_count = course.enrollments.filter(status='active').count()
+            student_count = assignment.active_student_count
 
             thumbnail_url = None
             if course.thumbnail:

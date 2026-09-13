@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   BookOpen, Search, FileText, Eye, Edit, Trash2, Plus, Loader2,
   UploadCloud, CheckCircle2, AlertCircle, RefreshCw, ChevronRight,
@@ -29,11 +30,6 @@ const SECTION_CONFIG: {
   subTypes: { value: NoteType; label: string }[];
 }[] = [
   {
-    id: "syllabus",
-    label: "Syllabus",
-    subTypes: [{ value: "standard", label: "Official PDF" }],
-  },
-  {
     id: "subjective_topicwise",
     label: "Subjective Topicwise Notes [Detailed]",
     subTypes: [
@@ -59,7 +55,9 @@ const SECTION_CONFIG: {
   },
 ];
 
-export default function AdminSyllabusNotesPage() {
+export function AdminContentManager() {
+  const visibleSections = SECTION_CONFIG;
+
   // Hierarchy state
   const [hierarchy, setHierarchy] = useState<CategoryHierarchyItem[]>([]);
   const [loadingHierarchy, setLoadingHierarchy] = useState(true);
@@ -69,7 +67,7 @@ export default function AdminSyllabusNotesPage() {
   const [selectedPrepId, setSelectedPrepId] = useState<number | null>(null);
 
   // Content navigation state
-  const [activeSection, setActiveSection] = useState<ContentCategory>("syllabus");
+  const [activeSection, setActiveSection] = useState<ContentCategory>("subjective_topicwise");
   const [activeSubType, setActiveSubType] = useState<string>("all"); // 'all' or NoteType
   const [statusFilter, setStatusFilter] = useState<string>("all"); // 'all', 'published', 'draft'
   const [searchQuery, setSearchQuery] = useState("");
@@ -334,10 +332,10 @@ export default function AdminSyllabusNotesPage() {
             <Layers className="w-4 h-4" /> Real Content Management System
           </div>
           <h1 className="text-2xl font-extrabold text-[#0B2545] dark:text-white mt-1">
-            Syllabus & Notes Management
+            Notes Management
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage official syllabus PDFs, topicwise detailed notes (Standard / AI), and revision notes.
+            Manage topicwise detailed notes (Standard / AI) and revision notes.
           </p>
         </div>
 
@@ -360,7 +358,7 @@ export default function AdminSyllabusNotesPage() {
             disabled={!activePreparation}
             className="bg-[#0B2545] hover:bg-[#163E6C] text-white shadow-md flex items-center gap-2"
           >
-            <Plus className="w-4 h-4" /> Upload Material
+            <Plus className="w-4 h-4" /> Upload Note
           </Button>
         </div>
       </div>
@@ -587,15 +585,7 @@ export default function AdminSyllabusNotesPage() {
                 </div>
 
                 {/* Real Counts Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-                  <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-xl border border-white/10">
-                    <div className="text-xs text-white/70 font-medium">Syllabus</div>
-                    <div className="text-2xl font-black text-[#C4A45C] mt-0.5">
-                      {activePreparation.counts.syllabus}
-                    </div>
-                    <div className="text-[11px] text-white/50">official files</div>
-                  </div>
-
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
                   <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-xl border border-white/10">
                     <div className="text-xs text-white/70 font-medium">Subjective Notes</div>
                     <div className="text-2xl font-black text-white mt-0.5">
@@ -625,7 +615,7 @@ export default function AdminSyllabusNotesPage() {
               {/* Section Tabs */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4">
                 <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto pb-1 gap-2">
-                  {SECTION_CONFIG.map(sec => {
+                  {visibleSections.map(sec => {
                     const isTabActive = activeSection === sec.id;
                     const count = activePreparation.counts[sec.id] || 0;
                     return (
@@ -716,14 +706,14 @@ export default function AdminSyllabusNotesPage() {
                       <FileText className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
                       <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">No content in this section</h4>
                       <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4">
-                        Upload official syllabus documents or notes specifically for {activePreparation.name}.
+                        Upload notes specifically for {activePreparation.name}.
                       </p>
                       <Button
                         onClick={() => setShowUploadModal(true)}
                         size="sm"
                         className="bg-[#0B2545] hover:bg-[#163E6C] text-white"
                       >
-                        <Plus className="w-4 h-4 mr-1.5" /> Upload Material
+                        <Plus className="w-4 h-4 mr-1.5" /> Upload Note
                       </Button>
                     </div>
                   ) : (
@@ -992,7 +982,7 @@ export default function AdminSyllabusNotesPage() {
               Add Preparation/Service to {activeLevel.name}
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Creates a new preparation (e.g. "Civil", "Computer") under this level. You'll be able to upload syllabus and notes for it right away.
+              Creates a new preparation (e.g. "Civil", "Computer") under this level. You'll be able to upload notes for it right away.
             </p>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">
@@ -1039,7 +1029,7 @@ export default function AdminSyllabusNotesPage() {
               Are you sure you want to delete <strong className="text-slate-900 dark:text-white">"{deleteNodeTarget.name}"</strong>?
               {deleteNodeTarget.type === "level"
                 ? " This also deletes every preparation, course link, and uploaded material under this level."
-                : " This also deletes every syllabus/notes file uploaded for this preparation."
+                : " This also deletes every notes file uploaded for this preparation."
               } This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2 pt-2">
@@ -1060,6 +1050,14 @@ export default function AdminSyllabusNotesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminNotesPage() {
+  return (
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading notes...</div>}>
+      <AdminContentManager />
+    </React.Suspense>
   );
 }
 

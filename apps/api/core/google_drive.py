@@ -165,6 +165,7 @@ _CATEGORY_FOLDERS = {
     'study_materials': 'study-materials',
     'question-images': 'question-images',
     'subjective-answers': 'subjective-answers',
+    'marketplace': 'marketplace',
 }
 
 

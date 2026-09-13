@@ -30,6 +30,13 @@ class CSVImport(models.Model):
     )
     question_type = models.CharField(max_length=20, default='mcq')
     difficulty = models.CharField(max_length=10, default='medium')
+    # Optional: imported questions can be added to a Collection and/or tagged.
+    # Membership/tagging does not bypass approval - see commit() in import_views.py.
+    collection = models.ForeignKey(
+        'exams.QuestionCollection', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='csv_imports',
+    )
+    tag_objects = models.ManyToManyField('core.Tag', blank=True, related_name='csv_imports')
     total_rows = models.IntegerField(default=0)
     valid_rows = models.IntegerField(default=0)
     duplicate_rows = models.IntegerField(default=0)

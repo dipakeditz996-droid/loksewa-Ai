@@ -60,6 +60,7 @@ from .views import (
     AdminPositionsView,
     AdminPositionDetailView,
     AdminTagsView,
+    AdminTagDetailView,
     AdminStorageHealthView,
 )
 from .syllabus_views import (
@@ -190,6 +191,7 @@ urlpatterns = [
     path('syllabus/positions/<int:pk>/', AdminPositionDetailView.as_view(), name='admin-position-detail'),
     # Tags
     path('syllabus/tags/', AdminTagsView.as_view(), name='admin-tags'),
+    path('syllabus/tags/<int:pk>/', AdminTagDetailView.as_view(), name='admin-tag-detail'),
     # Course applications / enrollment management
     path('course-applications/', AdminCourseApplicationView.as_view(), name='admin-course-applications'),
     path('course-applications/<int:pk>/', AdminCourseApplicationDetailView.as_view(), name='admin-course-application-detail'),

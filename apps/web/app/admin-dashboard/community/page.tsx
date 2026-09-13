@@ -126,6 +126,13 @@ function DiscussionsTab() {
   const [loading, setLoading] = useState(true);
   
   const [search, setSearch] = useState("");
+  // Debounce search: wait for typing to pause before hitting the API,
+  // instead of firing a request on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timeout);
+  }, [search]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
 
@@ -133,7 +140,7 @@ function DiscussionsTab() {
     setLoading(true);
     try {
       const data = await communityApi.getPosts({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         post_type: typeFilter !== "all" ? (typeFilter as "question" | "discussion") : undefined,
       });
@@ -143,7 +150,7 @@ function DiscussionsTab() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, typeFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter]);
 
   useEffect(() => {
     load();
@@ -151,7 +158,8 @@ function DiscussionsTab() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    load();
+    // Bypass the debounce timer on explicit submit (Enter key).
+    setDebouncedSearch(search);
   };
 
   return (

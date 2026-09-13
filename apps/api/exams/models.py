@@ -166,6 +166,7 @@ class Question(models.Model):
     negative_marks = models.FloatField(default=0)
     expected_time_minutes = models.IntegerField(default=1)
     explanation = models.TextField(blank=True)
+    hint = models.TextField(blank=True, help_text="Optional hint shown to help the student answer")
     difficulty = models.CharField(max_length=10, choices=DIFFICULTY_CHOICES, default='medium')
     # AI Fields
     ai_generate_options = models.BooleanField(default=False)
@@ -177,6 +178,17 @@ class Question(models.Model):
     
     # Moderation & Workflow Fields
     tags = models.CharField(max_length=255, blank=True, help_text="Comma-separated tags")
+    # Structured, reusable tags for search/filter/discovery - distinct from the
+    # free-text `tags` field above, which is left untouched. Backed by the
+    # same core.Tag model the existing "Academic Management > Tags" admin
+    # page already manages, so no duplicate tag system is introduced. This is
+    # a search/filter concern only - it is NOT a reusable question group like
+    # QuestionCollection, and must never be used as a Practice/Mock source on
+    # its own the way a Collection is.
+    tag_objects = models.ManyToManyField(
+        'core.Tag', related_name='questions', blank=True,
+        help_text="Structured tags for search, filtering and discovery.",
+    )
     reference = models.CharField(max_length=255, blank=True, help_text="Source or reference material")
     reviewer_comment = models.TextField(blank=True)
     reviewed_by = models.ForeignKey(

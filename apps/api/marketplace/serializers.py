@@ -39,6 +39,7 @@ class SafeSellerSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(required=False, allow_blank=True, default='')
     final_price = serializers.ReadOnlyField()
     is_seller_listing = serializers.ReadOnlyField()
     images = ProductImageSerializer(many=True, read_only=True)
@@ -79,6 +80,7 @@ class SellerListingSerializer(serializers.ModelSerializer):
     should control (is_published, listing_status, seller, rejection_reason).
     Images are handled separately via the view.
     """
+    description = serializers.CharField(required=False, allow_blank=True, default='')
     final_price = serializers.ReadOnlyField()
     is_seller_listing = serializers.ReadOnlyField()
     images = ProductImageSerializer(many=True, read_only=True)
@@ -260,8 +262,12 @@ class SellerSaleSerializer(serializers.ModelSerializer):
         )
 
     def get_my_items(self, obj):
+        # Filtering in Python off the prefetched obj.items.all() cache -
+        # obj.items.filter(...) would build a new queryset that bypasses the
+        # view's prefetch_related('items__product'), re-querying once per
+        # order row in a seller's sales list.
         seller = self.context['request'].user
-        my_items = obj.items.filter(product__seller=seller)
+        my_items = [item for item in obj.items.all() if item.product.seller_id == seller.id]
         return SellerOrderItemSerializer(my_items, many=True, context=self.context).data
 
     def get_buyer_display(self, obj):

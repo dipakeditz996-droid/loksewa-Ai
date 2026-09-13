@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminQuestionApi, AdminQuestion } from '@/lib/api/admin-questions';
 import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
+import { adminApi, AdminTag } from '@/lib/api/admin';
 import { Save, FileText, Wand2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
@@ -41,6 +42,7 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
   const [negativeMarks, setNegativeMarks] = useState(initialData?.negative_marks || 0);
   const [expectedTime, setExpectedTime] = useState(initialData?.expected_time_minutes || 1);
   const [explanation, setExplanation] = useState(initialData?.explanation || '');
+  const [hint, setHint] = useState(initialData?.hint || '');
   
   // AI Generation
   const [aiGenerate, setAiGenerate] = useState(false);
@@ -81,6 +83,25 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
       prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
     );
   };
+
+  // Tags (Optional) - search/filter/discovery metadata, independent of
+  // Collections. Only active tags are offered for NEW selection; a tag
+  // already on this question (even if since deactivated) stays checked.
+  const [tags, setTags] = useState<AdminTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>(
+    (initialData?.tag_objects || []).map((t: any) => t.id)
+  );
+  useEffect(() => {
+    adminApi.getTags({ pageSize: 200 })
+      .then(res => setTags(res.results || []))
+      .catch(() => setTags([]));
+  }, []);
+  const toggleTag = (id: number) => {
+    setSelectedTagIds(prev =>
+      prev.includes(id) ? prev.filter(existing => existing !== id) : [...prev, id]
+    );
+  };
+  const selectableTags = tags.filter(t => t.is_active || selectedTagIds.includes(t.id));
 
   const handleAcademicChange = (field: string, value: any) => {
     if (field === 'category') {
@@ -146,7 +167,9 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         negative_marks: Number(negativeMarks),
         expected_time_minutes: Number(expectedTime),
         explanation,
+        hint,
         collection_ids: selectedCollectionIds,
+        tag_ids: selectedTagIds,
       };
 
       if (qType === 'mcq') {
@@ -267,6 +290,36 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
             </div>
           )}
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Tags (Optional)</label>
+          <p className="text-xs text-gray-400 mb-2">Search &amp; filter metadata - separate from Collections.</p>
+          {selectableTags.length === 0 ? (
+            <p className="text-sm text-gray-400">No tags yet — create one under Academic Management → Tags.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {selectableTags.map(t => {
+                const checked = selectedTagIds.includes(t.id);
+                return (
+                  <label
+                    key={t.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors"
+                    style={checked ? { backgroundColor: t.color, borderColor: t.color, color: '#fff' } : { borderColor: '#e5e7eb' }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={checked}
+                      onChange={() => toggleTag(t.id)}
+                    />
+                    {t.name}
+                    {!t.is_active && <span className="text-[10px] opacity-70">(inactive)</span>}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Syllabus Selection */}
@@ -380,6 +433,16 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
             onChange={e => setExplanation(e.target.value)} 
             className="w-full border border-gray-200 rounded-lg px-3 py-2 min-h-[100px]" 
             placeholder="Provide a detailed explanation for the correct answer..."
+          />
+        </div>
+
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-2">Hint (Optional)</h2>
+          <textarea
+            value={hint}
+            onChange={e => setHint(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 min-h-[80px]"
+            placeholder="A short hint to help the student answer..."
           />
         </div>
       </div>

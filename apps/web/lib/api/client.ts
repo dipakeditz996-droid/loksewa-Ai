@@ -1,8 +1,29 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
+function extractErrorMessage(data: any): string {
+  if (!data) return "An API error occurred";
+  if (typeof data === "string") return data;
+  if (data.detail && typeof data.detail === "string") return data.detail;
+  if (data.error && typeof data.error === "string") return data.error;
+  if (data.message && typeof data.message === "string") return data.message;
+  if (typeof data === "object") {
+    const parts: string[] = [];
+    for (const [key, val] of Object.entries(data)) {
+      const field = key === "non_field_errors" || key === "detail" ? "" : `${key.replace(/_/g, " ")}: `;
+      if (Array.isArray(val)) {
+        parts.push(`${field}${val.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ")}`);
+      } else if (typeof val === "string") {
+        parts.push(`${field}${val}`);
+      }
+    }
+    if (parts.length > 0) return parts.join(" | ");
+  }
+  return "An API error occurred";
+}
+
 export class ApiError extends Error {
   constructor(public status: number, public data: any) {
-    super(data?.detail || data?.error || data?.message || "An API error occurred");
+    super(extractErrorMessage(data));
     this.name = "ApiError";
   }
 }

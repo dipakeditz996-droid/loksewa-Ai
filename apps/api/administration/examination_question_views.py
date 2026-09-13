@@ -81,6 +81,9 @@ def _selection_kwargs(request, examination):
         # "Use in Mock Exam" from the admin Collections page - narrows the
         # bank to one QuestionCollection, same approval gate as everything else.
         'collection_id': _int_or_none(params.get('collection')),
+        # Optional structured-Tag filter (search/discovery metadata, not a
+        # question source the way collection_id is).
+        'tag_id': _int_or_none(params.get('tag')),
     }
 
 

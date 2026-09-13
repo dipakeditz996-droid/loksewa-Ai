@@ -744,6 +744,8 @@ export interface AdminTag {
   description?: string;
   color: string;
   is_active: boolean;
+  /** Real count of questions carrying this tag - never a placeholder. */
+  question_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -1248,10 +1250,25 @@ export const adminApi = {
   createTag: async (data: {
     name: string;
     color?: string;
+    description?: string;
   }): Promise<AdminTag> => {
     return apiClient<AdminTag>("/admin/syllabus/tags/", {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+
+  updateTag: async (
+    id: number,
+    data: { name?: string; color?: string; description?: string; is_active?: boolean }
+  ): Promise<AdminTag> => {
+    return apiClient<AdminTag>(`/admin/syllabus/tags/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteTag: async (id: number): Promise<void> => {
+    return apiClient<void>(`/admin/syllabus/tags/${id}/`, { method: "DELETE" });
   },
 };

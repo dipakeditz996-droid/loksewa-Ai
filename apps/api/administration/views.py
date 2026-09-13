@@ -4294,9 +4294,13 @@ class AdminTagsView(APIView):
 
     def get(self, request):
         try:
-            tags = Tag.objects.filter(is_active=True).values(
-                'id', 'name', 'slug', 'description', 'color', 'is_active', 'created_at', 'updated_at'
-            ).order_by('name')
+            include_inactive = request.query_params.get('include_inactive') == '1'
+            tags = Tag.objects.all()
+            if not include_inactive:
+                tags = tags.filter(is_active=True)
+            # Real usage count from the actual Question<->Tag relationship -
+            # never a placeholder number.
+            tags = tags.annotate(question_count=Count('questions', distinct=True)).order_by('name')
 
             page = int(request.query_params.get('page', 1))
             page_size = int(request.query_params.get('page_size', 20))
@@ -4307,7 +4311,11 @@ class AdminTagsView(APIView):
                     Q(name__icontains=search) | Q(slug__icontains=search)
                 )
 
-            paginator = Paginator(list(tags), page_size)
+            values = tags.values(
+                'id', 'name', 'slug', 'description', 'color', 'is_active',
+                'created_at', 'updated_at', 'question_count',
+            )
+            paginator = Paginator(list(values), page_size)
             page_obj = paginator.get_page(page)
 
             return Response({
@@ -4332,6 +4340,7 @@ class AdminTagsView(APIView):
             tag = Tag.objects.create(
                 name=name,
                 slug=slugify(name),
+                description=request.data.get('description', ''),
                 color=request.data.get('color', '#6366f1'),
                 is_active=True
             )
@@ -4340,8 +4349,10 @@ class AdminTagsView(APIView):
                 'id': tag.id,
                 'name': tag.name,
                 'slug': tag.slug,
+                'description': tag.description,
                 'color': tag.color,
                 'is_active': tag.is_active,
+                'question_count': 0,
                 'created_at': tag.created_at,
                 'updated_at': tag.updated_at,
             }, status=status.HTTP_201_CREATED)
@@ -4350,6 +4361,73 @@ class AdminTagsView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+
+class AdminTagDetailView(APIView):
+    """Retrieve, update, or delete a single Tag.
+
+    Delete is a hard delete of the Tag row only - Django simply drops the
+    join rows in the Question<->Tag through table; Questions, Collections,
+    ExaminationQuestion and Practice history are never touched.
+    """
+    permission_classes = [IsAdminUser]
+
+    def _get(self, pk):
+        return Tag.objects.annotate(
+            question_count=Count('questions', distinct=True)
+        ).filter(pk=pk).first()
+
+    def _serialize(self, tag):
+        return {
+            'id': tag.id,
+            'name': tag.name,
+            'slug': tag.slug,
+            'description': tag.description,
+            'color': tag.color,
+            'is_active': tag.is_active,
+            'question_count': tag.question_count,
+            'created_at': tag.created_at,
+            'updated_at': tag.updated_at,
+        }
+
+    def get(self, request, pk):
+        tag = self._get(pk)
+        if not tag:
+            return Response({'error': 'Tag not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self._serialize(tag))
+
+    def patch(self, request, pk):
+        tag = self._get(pk)
+        if not tag:
+            return Response({'error': 'Tag not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if 'name' in request.data:
+            name = (request.data.get('name') or '').strip()
+            if not name:
+                return Response({'error': 'Name cannot be empty.'}, status=status.HTTP_400_BAD_REQUEST)
+            tag.name = name
+            if request.data.get('regenerate_slug'):
+                from django.utils.text import slugify
+                tag.slug = slugify(name)
+        if 'slug' in request.data and request.data.get('slug'):
+            tag.slug = request.data['slug'].strip()
+        if 'description' in request.data:
+            tag.description = request.data.get('description') or ''
+        if 'color' in request.data and request.data.get('color'):
+            tag.color = request.data['color']
+        if 'is_active' in request.data:
+            tag.is_active = bool(request.data['is_active'])
+
+        tag.save()
+        tag.question_count = tag.questions.count()
+        return Response(self._serialize(tag))
+
+    def delete(self, request, pk):
+        tag = Tag.objects.filter(pk=pk).first()
+        if not tag:
+            return Response({'error': 'Tag not found.'}, status=status.HTTP_404_NOT_FOUND)
+        tag.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class AdminStorageHealthView(APIView):

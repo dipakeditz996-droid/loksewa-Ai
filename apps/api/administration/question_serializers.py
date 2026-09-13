@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from exams.models import Question, Topic, QuestionCollection
+from core.models import Tag
 
 class AdminQuestionSerializer(serializers.ModelSerializer):
     # Read: {id, name} per collection this question already belongs to.
@@ -17,7 +18,28 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     )
 
     def get_collections(self, obj):
-        return list(obj.collections.values('id', 'name'))
+        # Reads from the queryset's prefetch_related('collections') cache via
+        # .all() - calling .values() here would silently bypass that cache
+        # and re-query the database once per question in the list.
+        return [{'id': c.id, 'name': c.name} for c in obj.collections.all()]
+
+    # Structured search/filter tags - independent of Collections and of the
+    # legacy free-text `tags` CharField (left untouched, still writable
+    # below). Same optional-many-to-many pattern as collections above.
+    tag_objects = serializers.SerializerMethodField()
+    tag_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Tag.objects.all(), many=True, required=False,
+        write_only=True, source='tag_objects',
+        help_text="Optional Tag IDs (from Academic Management > Tags) for search/filtering.",
+    )
+
+    def get_tag_objects(self, obj):
+        # Inactive tags stay visible on questions that already carry them
+        # (historical metadata), just excluded from new-question selectors.
+        # Reads from the prefetch_related('tag_objects') cache via .all() -
+        # same reasoning as get_collections above.
+        tags = sorted(obj.tag_objects.all(), key=lambda t: t.name)
+        return [{'id': t.id, 'name': t.name, 'slug': t.slug, 'color': t.color, 'is_active': t.is_active} for t in tags]
 
     topic_name = serializers.SerializerMethodField()
     chapter_name = serializers.SerializerMethodField()
@@ -30,7 +52,16 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     position_id = serializers.SerializerMethodField()
     category_id = serializers.SerializerMethodField()
     
-    usage_count = serializers.IntegerField(read_only=True)
+    usage_count = serializers.SerializerMethodField()
+
+    def get_usage_count(self, obj):
+        # Prefer the annotated value the viewset's queryset attaches
+        # (usage_count_computed) - one query for the whole page instead of
+        # two COUNT queries per row via the Question.usage_count property.
+        # Falls back to the property so this serializer still works
+        # correctly against any queryset that didn't add the annotation.
+        annotated = getattr(obj, 'usage_count_computed', None)
+        return annotated if annotated is not None else obj.usage_count
 
     def get_topic_name(self, obj):
         try:
@@ -108,9 +139,9 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             'chapter_id', 'subject_id', 'position_id', 'category_id',
             'text', 'option_a', 
             'option_b', 'option_c', 'option_d', 'correct_option', 'model_answer',
-            'marks', 'negative_marks', 'expected_time_minutes', 'explanation',
+            'marks', 'negative_marks', 'expected_time_minutes', 'explanation', 'hint',
             'difficulty', 'tags', 'usage_count', 'created_at', 'updated_at',
-            'collections', 'collection_ids',
+            'collections', 'collection_ids', 'tag_objects', 'tag_ids',
         ]
         read_only_fields = ['question_id']
 

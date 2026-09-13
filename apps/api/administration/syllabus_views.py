@@ -116,6 +116,16 @@ class SyllabusTreeView(APIView):
             'exams__papers__subjects__chapters__topics',
         ).order_by('order', 'id')
 
+        # Chaining .order_by()/.filter() onto an already-prefetched relation
+        # manager (e.g. `paper.subjects.all().order_by(...)`) builds a brand
+        # new queryset that bypasses prefetch_related's cache entirely,
+        # silently turning this back into an N+1 - one query per subject,
+        # chapter, topic, exam and paper. Sorting/filtering the already-cached
+        # list in Python instead reads from that cache, keeping the whole
+        # tree at the handful of queries the prefetch_related above set up.
+        def _sorted(items):
+            return sorted(items, key=lambda o: (o.order, o.id))
+
         def build_paper(paper):
             paper_data = {
                 'id': paper.id,
@@ -123,21 +133,21 @@ class SyllabusTreeView(APIView):
                 'is_active': paper.is_active,
                 'subjects': [],
             }
-            for sub in paper.subjects.all().order_by('order', 'id'):
+            for sub in _sorted(paper.subjects.all()):
                 sub_data = {
                     'id': sub.id,
                     'name': sub.name,
                     'is_active': sub.is_active,
                     'chapters': [],
                 }
-                for chap in sub.chapters.all().order_by('order', 'id'):
+                for chap in _sorted(sub.chapters.all()):
                     chap_data = {
                         'id': chap.id,
                         'name': chap.title,
                         'is_active': chap.is_active,
                         'topics': [
                             {'id': topic.id, 'name': topic.name, 'is_active': topic.is_active}
-                            for topic in chap.topics.all().order_by('order', 'id')
+                            for topic in _sorted(chap.topics.all())
                         ],
                     }
                     sub_data['chapters'].append(chap_data)
@@ -158,10 +168,10 @@ class SyllabusTreeView(APIView):
                 'is_active': exam.is_active,
                 'category_id': exam.category_id,
                 'children': [
-                    build_exam(child) for child in exam.children.all().order_by('order', 'id')
+                    build_exam(child) for child in _sorted(exam.children.all())
                 ],
                 'papers': [
-                    build_paper(paper) for paper in exam.papers.all().order_by('order', 'id')
+                    build_paper(paper) for paper in _sorted(exam.papers.all())
                 ],
             }
 
@@ -173,7 +183,8 @@ class SyllabusTreeView(APIView):
                 'is_active': cat.is_active,
                 'positions': [
                     build_exam(exam)
-                    for exam in cat.exams.filter(parent__isnull=True).order_by('order', 'id')
+                    for exam in _sorted(cat.exams.all())
+                    if exam.parent_id is None
                 ],
             }
             tree_data.append(cat_data)

@@ -5,13 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { 
-  BookOpen, LayoutDashboard, PlusCircle, UploadCloud, FolderTree, Menu, X
+  Bookmark, LayoutDashboard, PlusCircle, UploadCloud, FolderTree, Menu, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const MATERIAL_NAV = [
   { title: "Overview", href: "/admin-dashboard/study-materials", icon: LayoutDashboard, exact: true },
-  { title: "Add Material", href: "/admin-dashboard/study-materials/new", icon: PlusCircle },
+  { title: "Add Note", href: "/admin-dashboard/study-materials/new", icon: PlusCircle },
   { title: "Bulk Upload", href: "/admin-dashboard/study-materials/bulk-upload", icon: UploadCloud },
   { title: "Categories & Collections", href: "/admin-dashboard/study-materials/categories", icon: FolderTree },
 ];
@@ -36,10 +36,10 @@ export default function StudyMaterialsLayout({ children }: { children: React.Rea
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8">
             <div>
               <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
-                <BookOpen className="w-6 h-6 text-[#D4A72C]" />
-                Study Materials
+                <Bookmark className="w-6 h-6 text-[#D4A72C]" />
+                Notes
               </h1>
-              <p className="text-slate-500 text-sm mt-1">Create, organize and manage learning resources.</p>
+              <p className="text-slate-500 text-sm mt-1">Create, organize and manage topicwise notes and study resources.</p>
             </div>
 
             <div className="hidden md:flex bg-slate-100 p-1 rounded-lg">

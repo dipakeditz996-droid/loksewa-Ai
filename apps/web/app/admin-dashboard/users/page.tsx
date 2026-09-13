@@ -56,6 +56,13 @@ interface UserData {
 
 export default function UsersManagementPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  // Debounce search: wait for typing to pause before hitting the API,
+  // instead of firing a request on every keystroke.
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearchTerm(searchTerm), 350);
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
   const [filterRole, setFilterRole] = useState("All Roles");
   
   const [users, setUsers] = useState<UserData[]>([]);
@@ -156,8 +163,8 @@ export default function UsersManagementPage() {
       if (filterRole !== "All Roles") {
         url += `&role=${filterRole.toLowerCase()}`;
       }
-      if (searchTerm) {
-        url += `&search=${encodeURIComponent(searchTerm)}`;
+      if (debouncedSearchTerm) {
+        url += `&search=${encodeURIComponent(debouncedSearchTerm)}`;
       }
       const data = await apiClient<{users: UserData[], total: number}>(url);
       setUsers(data.users);
@@ -171,7 +178,7 @@ export default function UsersManagementPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, [filterRole, searchTerm]);
+  }, [filterRole, debouncedSearchTerm]);
 
   const activeUsers = users.filter(u => u.isActive).length;
   const inactiveUsers = users.filter(u => !u.isActive).length;

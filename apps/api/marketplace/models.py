@@ -39,7 +39,7 @@ class Product(models.Model):
     )
 
     title = models.CharField(max_length=255)
-    description = models.TextField()
+    description = models.TextField(blank=True, default='')
     features = models.JSONField(default=list, blank=True, help_text="List of features included")
     category = models.CharField(max_length=50, choices=PRODUCT_TYPES)
 

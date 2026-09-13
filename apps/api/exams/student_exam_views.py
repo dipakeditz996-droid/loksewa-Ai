@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
+from django.core.cache import cache
 from .models import Examination, ExaminationAttempt, StudentAnswer, Question, CalmSessionLog
 from .selection_service import QuestionSelectionService
 from .attempt_timing import (
@@ -553,6 +554,18 @@ def _build_leaderboard_data(request):
     ranking_type = request.query_params.get('ranking_type', 'overall')
     search_query = request.query_params.get('search', '').strip()
 
+    # A single leaderboard page view hits list, my-rank and stats
+    # independently, and each used to redo this same full-table scan and
+    # in-memory ranking from scratch. The ranking only needs to reflect
+    # recently submitted exams, not the current second, so a short cache
+    # keyed by the exact filter combination lets those three calls (and
+    # back-to-back requests from other students browsing the same filters)
+    # share one computed ranking instead of recomputing it every time.
+    cache_key = 'leaderboard:' + '|'.join([exam_id_param, time_filter, ranking_type, search_query])
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     now = timezone.now()
     
     # ---- ExaminationAttempt ----
@@ -640,7 +653,8 @@ def _build_leaderboard_data(request):
             'percentage': round(s['avg_percentage' if ranking_type == 'overall' else 'best_percentage'], 2),
             'total_exams': s['total_exams'],
         })
-    
+
+    cache.set(cache_key, ranked, 30)
     return ranked
 
 

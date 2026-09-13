@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { adminQuestionApi, ImportReport, ImportRow } from '@/lib/api/admin-questions';
+import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
+import { adminApi, AdminTag } from '@/lib/api/admin';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
 import Link from 'next/link';
-import { ArrowLeft, UploadCloud, AlertCircle, CheckCircle, FileText, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowLeft, UploadCloud, AlertCircle, CheckCircle, FileText, ChevronRight, Sparkles, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const MISSING_LABELS: Record<string, string> = {
@@ -28,6 +30,23 @@ export default function ImportQuestionsPage() {
   const [topic, setTopic] = useState<number | undefined>();
   const [questionType, setQuestionType] = useState<'mcq' | 'true_false' | 'subjective'>('mcq');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+
+  // Collection & Tags (Optional) - if set, every successfully imported
+  // question is added to the Collection and/or receives the Tags. Neither
+  // is required; approval status is unaffected either way.
+  const [collections, setCollections] = useState<QuestionCollection[]>([]);
+  const [collectionId, setCollectionId] = useState<number | undefined>();
+  const [tags, setTags] = useState<AdminTag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    adminCollectionsApi.getCollections().then(setCollections).catch(() => setCollections([]));
+    adminApi.getTags({ pageSize: 200 }).then((res) => setTags(res.results || [])).catch(() => setTags([]));
+  }, []);
+
+  const toggleTag = (id: number) => {
+    setSelectedTagIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const handleAcademicChange = (field: string, value: any) => {
     if (field === 'category') {
@@ -63,12 +82,14 @@ export default function ImportQuestionsPage() {
         topic,
         question_type: questionType,
         difficulty,
+        collection_id: collectionId,
+        tag_ids: selectedTagIds,
       });
       setReport(res);
       setStep(2);
       toast.success(`Analyzed ${res.total_rows} rows`);
     } catch (error: any) {
-      toast.error(error?.data?.error || error.message || 'Failed to analyze CSV');
+      toast.error(error?.data?.error || error.message || 'Failed to analyze the file');
     } finally {
       setBusy(false);
     }
@@ -107,6 +128,15 @@ export default function ImportQuestionsPage() {
     setStep(1); setFile(null); setReport(null); setImportedCount(0);
   };
 
+  const downloadErrorReport = async () => {
+    if (!report) return;
+    try {
+      await adminQuestionApi.downloadErrorReport(report.import_id);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to download error report');
+    }
+  };
+
   const rowTone = (status: ImportRow['status']) => {
     if (status === 'valid') return 'bg-green-50/50 border-green-100';
     if (status === 'incomplete') return 'bg-blue-50/50 border-blue-100';
@@ -124,9 +154,9 @@ export default function ImportQuestionsPage() {
           <ArrowLeft className="w-5 h-5 text-gray-500" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Import Questions</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Import Excel</h1>
           <p className="text-gray-500 mt-1">
-            Choose where the questions belong, then upload a CSV of question content.
+            Choose where the questions belong, then upload an Excel (.xlsx) file of question content.
           </p>
         </div>
       </div>
@@ -200,38 +230,82 @@ export default function ImportQuestionsPage() {
             </div>
           </div>
 
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Collection &amp; Tags (Optional)</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Add to Collection</label>
+                <select
+                  value={collectionId ?? ''}
+                  onChange={(e) => setCollectionId(e.target.value ? Number(e.target.value) : undefined)}
+                  className="w-full p-2.5 border border-gray-200 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20"
+                >
+                  <option value="">— None —</option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+                {tags.length === 0 ? (
+                  <p className="text-sm text-gray-400 mt-2">No tags yet.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {tags.map((t) => {
+                      const checked = selectedTagIds.includes(t.id);
+                      return (
+                        <label
+                          key={t.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm cursor-pointer transition-colors"
+                          style={checked ? { backgroundColor: t.color, borderColor: t.color, color: '#fff' } : { borderColor: '#e5e7eb' }}
+                        >
+                          <input type="checkbox" className="hidden" checked={checked} onChange={() => toggleTag(t.id)} />
+                          {t.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
             <div className="max-w-xl mx-auto flex flex-col items-center">
               <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mb-6">
                 <UploadCloud className="w-8 h-8 text-blue-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Upload CSV File</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Upload Excel File</h2>
               <p className="text-gray-500 text-center mb-2">
-                The file needs a <code className="text-sm bg-gray-100 px-1 rounded">question</code> column.
-                Options, answer and explanation are optional.
+                Columns: <code className="text-sm bg-gray-100 px-1 rounded">SN, Questions, Mark, Option A-D, Correct Answer, Explanation, Hint</code>.
+                Only Questions, Mark, the four Options and Correct Answer are required.
+              </p>
+              <p className="text-gray-500 text-center mb-2 text-sm">
+                Correct Answer: write the option number <strong>1, 2, 3, or 4</strong> (matching Option A-D in order) — letters A-D also still work.
               </p>
               <p className="text-gray-500 text-center mb-8 text-sm">
-                Leave any of them blank and the AI can fill them in on the next step.
+                Leave Explanation or Hint blank and the AI can fill them in on the next step.
               </p>
 
               <button
                 onClick={downloadTemplate}
                 className="text-[#0B2545] font-medium hover:underline flex items-center gap-2 mb-8"
               >
-                <FileText className="w-4 h-4" /> Download CSV Template
+                <FileText className="w-4 h-4" /> Download Excel Template
               </button>
 
               <div className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 hover:bg-gray-50 transition-colors text-center relative">
                 <input
                   type="file"
-                  accept=".csv"
+                  accept=".xlsx,.xls,.csv"
                   onChange={handleFileSelect}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
                 {!file ? (
                   <div>
                     <p className="font-medium text-gray-700">Click to browse or drag and drop</p>
-                    <p className="text-sm text-gray-500 mt-1">.csv format only</p>
+                    <p className="text-sm text-gray-500 mt-1">.xlsx format (legacy .csv also supported)</p>
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-3">
@@ -252,7 +326,7 @@ export default function ImportQuestionsPage() {
                 onClick={handleUpload}
                 className="w-full mt-6 bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2"
               >
-                {busy ? 'Analyzing...' : 'Analyze CSV'}
+                {busy ? 'Analyzing...' : 'Analyze File'}
                 {!busy && <ChevronRight className="w-5 h-5" />}
               </button>
             </div>
@@ -326,7 +400,7 @@ export default function ImportQuestionsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900">
-                      Row {row.row_index}: {row.data.question || '(no question text)'}
+                      Row {row.row_index} (SN {row.sn ?? row.row_index}): {row.data.question || '(no question text)'}
                     </p>
 
                     {row.missing?.length > 0 && (
@@ -354,6 +428,14 @@ export default function ImportQuestionsPage() {
           </div>
 
           <div className="flex justify-end gap-3">
+            {report.error_rows + report.duplicate_rows > 0 && (
+              <button
+                onClick={downloadErrorReport}
+                className="px-6 py-3 font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" /> Download Error Report
+              </button>
+            )}
             <button
               onClick={resetAll}
               className="px-6 py-3 font-medium text-gray-700 hover:bg-gray-100 rounded-xl transition-colors"

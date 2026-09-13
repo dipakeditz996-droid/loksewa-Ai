@@ -3,21 +3,47 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
-from django.db.models import Count
+from django.db.models import Count, F
 from exams.models import Question
+from rest_framework.pagination import PageNumberPagination
 from .question_serializers import AdminQuestionSerializer
 
+
+class QuestionBankPagination(PageNumberPagination):
+    # A data table, not cards - a bigger default page than the platform's
+    # standard card-grid pagination reads better here. max_page_size is high
+    # because QuestionSelector.tsx relies on `page_size=500` to pull an
+    # entire syllabus-scoped pool for its random-draw mode, not a UI page.
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
 class AdminQuestionViewSet(viewsets.ModelViewSet):
+    # Performance: without these, every row in the list triggers its own
+    # round trip - Question.usage_count alone ran 2 COUNT queries per row,
+    # and the serializer's collections/tags fields each ran another. For a
+    # 100-row page that was 400+ extra queries. Annotating usage_count and
+    # prefetching the M2M relations collapses all of that into a handful of
+    # queries total, independent of how many rows are returned.
+    # .distinct() guards against duplicate rows once tag_objects/collections
+    # (both M2M) are joined into search/filter - without it, a question that
+    # matches on two tags would otherwise appear twice in the list.
     queryset = Question.objects.select_related(
         'topic', 'topic__chapter', 'topic__chapter__subject',
         'topic__chapter__subject__paper', 'topic__chapter__subject__paper__exam',
         'topic__chapter__subject__paper__exam__category',
-    ).all().order_by('-created_at')
+    ).prefetch_related('collections', 'tag_objects').annotate(
+        question_sets_count=Count('question_sets', distinct=True),
+        examinations_count=Count('examinations_set', distinct=True),
+    ).annotate(
+        usage_count_computed=F('question_sets_count') + F('examinations_count'),
+    ).order_by('-created_at').distinct()
     serializer_class = AdminQuestionSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = QuestionBankPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
-    # Enable filtering by syllabus hierarchy and collections
+    # Enable filtering by syllabus hierarchy, collections and tags.
     filterset_fields = {
         'question_type': ['exact'],
         'status': ['exact'],
@@ -25,14 +51,36 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
         'difficulty': ['exact'],
         'topic': ['exact'],
         'collections': ['exact'],
+        'tag_objects': ['exact'],
         'topic__chapter': ['exact'],
         'topic__chapter__subject': ['exact'],
         'topic__chapter__subject__paper': ['exact'],
         'topic__chapter__subject__paper__exam': ['exact'],
         'topic__chapter__subject__paper__exam__category': ['exact'],
     }
-    search_fields = ['text', 'explanation', 'model_answer']
+    # Tags, Collection name, and the syllabus hierarchy are all searchable
+    # alongside question text, so e.g. searching "PYQ" or "Constitution"
+    # finds questions tagged that way even if the text doesn't mention it.
+    search_fields = [
+        'text', 'explanation', 'model_answer', 'tags',
+        'tag_objects__name', 'collections__name',
+        'topic__name', 'topic__chapter__title', 'topic__chapter__subject__name',
+    ]
     ordering_fields = ['created_at', 'marks', 'difficulty']
+
+    def get_queryset(self):
+        # Multi-tag filter: matches ANY of the selected tags, per the product
+        # convention documented on the frontend Tag filter dropdown.
+        # Implemented manually (django-filter's auto-generated `in` lookup for
+        # a ManyToMany field errors on valid CSV input - a library gotcha,
+        # not a data problem) rather than via filterset_fields.
+        qs = super().get_queryset()
+        raw_ids = self.request.query_params.get('tag_objects__in')
+        if raw_ids:
+            tag_ids = [int(v) for v in raw_ids.split(',') if v.strip().isdigit()]
+            if tag_ids:
+                qs = qs.filter(tag_objects__id__in=tag_ids).distinct()
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -99,7 +147,7 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     def bulk_action(self, request):
         """
         Perform a bulk action on a list of question IDs.
-        Payload: { action: 'approve'|'draft'|'archive'|'delete'|'add_to_collection'|'remove_from_collection', ids: [1, 2, 3], collection_ids: [1,2] }
+        Payload: { action: 'approve'|'draft'|'archive'|'delete'|'add_to_collection'|'remove_from_collection'|'add_tags'|'remove_tags', ids: [1, 2, 3], collection_ids: [1,2], tag_ids: [1,2] }
         """
         action_type = request.data.get('action')
         ids = request.data.get('ids', [])
@@ -152,6 +200,24 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
             AuditLog.objects.create(
                 actor=request.user, action=f'BULK_{action_type.upper()}', entity_type='Question', entity_id=None,
                 details={"ids": ids, "count": count, "collection_ids": collection_ids}
+            )
+        elif action_type in ['add_tags', 'remove_tags']:
+            tag_ids = request.data.get('tag_ids', [])
+            if not tag_ids:
+                return Response({"error": "tag_ids required for this action"}, status=400)
+
+            from core.models import Tag
+            tag_qs = Tag.objects.filter(id__in=tag_ids)
+
+            for q in questions:
+                if action_type == 'add_tags':
+                    q.tag_objects.add(*tag_qs)
+                else:
+                    q.tag_objects.remove(*tag_qs)
+
+            AuditLog.objects.create(
+                actor=request.user, action=f'BULK_{action_type.upper()}', entity_type='Question', entity_id=None,
+                details={"ids": ids, "count": count, "tag_ids": tag_ids}
             )
         else:
             return Response({"error": "Invalid action"}, status=400)

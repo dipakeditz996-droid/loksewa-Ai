@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { adminQuestionApi, AdminQuestion, QuestionStats } from '@/lib/api/admin-questions';
 import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
+import { adminApi, AdminTag } from '@/lib/api/admin';
 import Link from 'next/link';
-import { 
+import {
   FileText, CheckSquare, Plus, Search, Filter, Upload,
   MoreVertical, Edit2, Trash2, Copy, BookOpen, Layers,
-  Wand2, FolderPlus, ClipboardCheck
+  Wand2, FolderPlus, ClipboardCheck, Tag as TagIcon, ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -17,21 +18,27 @@ export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
   const [stats, setStats] = useState<QuestionStats | null>(null);
   const [collections, setCollections] = useState<QuestionCollection[]>([]);
+  const [tags, setTags] = useState<AdminTag[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  
+
   // Modals
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
-  
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [selectedBulkTagIds, setSelectedBulkTagIds] = useState<number[]>([]);
+
   // Filters
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
   const [selectedAiStatus, setSelectedAiStatus] = useState('');
+  // Tag filter: multi-select, matches ANY of the selected tags
+  // (tag_objects__in on the backend) - see QuestionSelectionService docs.
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   
   // Pagination
   const [page, setPage] = useState(1);
@@ -43,11 +50,24 @@ export default function QuestionBankPage() {
   useEffect(() => {
     fetchStats();
     fetchCollections();
+    fetchTags();
   }, []);
+
+  // Debounce search: wait for typing to pause before hitting the API,
+  // instead of firing a request on every keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds]);
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, search, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus]);
+  }, [page, debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds]);
 
   const fetchStats = async () => {
     try {
@@ -67,16 +87,27 @@ export default function QuestionBankPage() {
     }
   };
 
+  const fetchTags = async () => {
+    try {
+      const data = await adminApi.getTags({ pageSize: 200 });
+      setTags(data.results || []);
+    } catch (error) {
+      console.error('Failed to load tags', error);
+    }
+  };
+
   const fetchQuestions = async () => {
     const requestId = ++latestRequestId.current;
     setLoading(true);
     try {
       const data = await adminQuestionApi.getQuestions({
-        search: search || undefined,
+        page,
+        search: debouncedSearch || undefined,
         question_type: selectedType || undefined,
         status: selectedStatus || undefined,
         difficulty: selectedDifficulty || undefined,
         ai_status: selectedAiStatus || undefined,
+        tag_objects__in: selectedTagIds.length > 0 ? selectedTagIds.join(',') : undefined,
       });
       // A slower earlier request must not overwrite a newer one's results.
       if (requestId !== latestRequestId.current) return;
@@ -94,8 +125,9 @@ export default function QuestionBankPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    // Bypass the debounce timer on explicit submit (Enter key).
+    setDebouncedSearch(search);
     setPage(1);
-    fetchQuestions();
   };
 
   const handleDuplicate = async (id: number) => {
@@ -121,12 +153,16 @@ export default function QuestionBankPage() {
     }
   };
   
-  const handleBulkAction = async (action: 'publish' | 'draft' | 'archive' | 'delete' | 'add_to_collection' | 'remove_from_collection', collectionIds?: number[]) => {
+  const handleBulkAction = async (
+    action: 'publish' | 'draft' | 'archive' | 'delete' | 'add_to_collection' | 'remove_from_collection' | 'add_tags' | 'remove_tags',
+    collectionIds?: number[],
+    tagIds?: number[]
+  ) => {
     if (selectedIds.size === 0) return;
     if (action === 'delete' && !confirm(`Are you sure you want to delete ${selectedIds.size} questions?`)) return;
-    
+
     try {
-      const res = await adminQuestionApi.bulkAction(action, Array.from(selectedIds), collectionIds);
+      const res = await adminQuestionApi.bulkAction(action, Array.from(selectedIds), collectionIds, tagIds);
       if (res.error) {
         toast.error(res.error);
       } else {
@@ -134,6 +170,8 @@ export default function QuestionBankPage() {
         fetchStats();
         fetchQuestions();
         setIsCollectionModalOpen(false);
+        setIsTagModalOpen(false);
+        setSelectedBulkTagIds([]);
       }
     } catch (error) {
       toast.error(`Failed to perform bulk action`);
@@ -155,6 +193,34 @@ export default function QuestionBankPage() {
     setSelectedIds(newSet);
   };
 
+  // Group the current (filtered/paginated) results by Collection: a question
+  // in one or more Collections is shown once under its first Collection
+  // instead of as its own row, so the list reads as "collections, then
+  // uncategorized questions" rather than a flat mix of both. Opening a
+  // collection's own page (linked below) lists every question inside it.
+  const collectionGroups: { collection: QuestionCollection; questions: AdminQuestion[] }[] = [];
+  const uncategorized: AdminQuestion[] = [];
+  {
+    const groupsById = new Map<number, AdminQuestion[]>();
+    for (const q of questions) {
+      const first = q.collections && q.collections.length > 0 ? q.collections[0] : null;
+      if (!first) {
+        uncategorized.push(q);
+        continue;
+      }
+      if (!groupsById.has(first.id)) groupsById.set(first.id, []);
+      groupsById.get(first.id)!.push(q);
+    }
+    for (const [collectionId, qs] of groupsById) {
+      const collection = collections.find(c => c.id === collectionId);
+      if (collection) {
+        collectionGroups.push({ collection, questions: qs });
+      } else {
+        uncategorized.push(...qs);
+      }
+    }
+  }
+
   return (
     <div className="p-5 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex flex-wrap justify-between items-start gap-4">
@@ -168,7 +234,7 @@ export default function QuestionBankPage() {
             className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap"
           >
             <Upload className="w-4 h-4" />
-            Import CSV
+            Import Excel
           </Link>
           <Link
             href="/admin-dashboard/academic/questions/create"
@@ -250,6 +316,7 @@ export default function QuestionBankPage() {
               <span className="text-sm font-medium text-navy-800">{selectedIds.size} selected</span>
               <div className="h-4 w-px bg-navy-200 mx-1"></div>
               <button onClick={() => setIsCollectionModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1"><FolderPlus className="w-3 h-3"/> Add to Collection</button>
+              <button onClick={() => setIsTagModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1 ml-1"><TagIcon className="w-3 h-3"/> Add Tags</button>
               <button onClick={() => handleBulkAction('publish')} className="text-xs font-medium text-green-700 hover:text-green-800 ml-1">Publish</button>
               <button onClick={() => handleBulkAction('draft')} className="text-xs font-medium text-gray-600 hover:text-gray-800 ml-1">Draft</button>
               <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-red-600 hover:text-red-800 ml-1">Delete</button>
@@ -288,6 +355,41 @@ export default function QuestionBankPage() {
             <option value="rejected">Rejected</option>
             <option value="archived">Archived</option>
           </select>
+          {tags.length > 0 && (
+            <details className="relative">
+              <summary className="list-none cursor-pointer border border-gray-200 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5">
+                <TagIcon className="w-3.5 h-3.5" />
+                {selectedTagIds.length > 0 ? `${selectedTagIds.length} Tag${selectedTagIds.length > 1 ? 's' : ''}` : 'All Tags'}
+              </summary>
+              <div className="absolute right-0 mt-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-56 max-h-64 overflow-y-auto">
+                {tags.filter(t => t.is_active).map(t => (
+                  <label key={t.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={selectedTagIds.includes(t.id)}
+                      onChange={() => {
+                        setSelectedTagIds(prev =>
+                          prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                        );
+                        setPage(1);
+                      }}
+                    />
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                    {t.name}
+                  </label>
+                ))}
+                {selectedTagIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedTagIds([]); setPage(1); }}
+                    className="text-xs text-gray-500 hover:text-gray-700 mt-1 px-2"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </details>
+          )}
         </div>
       </div>
 
@@ -338,6 +440,46 @@ export default function QuestionBankPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isTagModalOpen} onOpenChange={setIsTagModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Tags to {selectedIds.size} Question{selectedIds.size !== 1 ? 's' : ''}</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-1 max-h-60 overflow-y-auto">
+            {tags.filter(t => t.is_active).length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">
+                No tags yet. <Link href="/admin-dashboard/academic/tags" className="text-[#0B2545] underline">Create one first.</Link>
+              </p>
+            ) : (
+              tags.filter(t => t.is_active).map(t => (
+                <label key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedBulkTagIds.includes(t.id)}
+                    onChange={() => setSelectedBulkTagIds(prev =>
+                      prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                    )}
+                    className="w-4 h-4"
+                  />
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                  <p className="text-sm font-medium text-gray-800">{t.name}</p>
+                </label>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsTagModalOpen(false); setSelectedBulkTagIds([]); }}>Cancel</Button>
+            <Button
+              onClick={() => handleBulkAction('add_tags', undefined, selectedBulkTagIds)}
+              disabled={selectedBulkTagIds.length === 0}
+              className="bg-[#0B2545] hover:bg-[#163E6C] text-white"
+            >
+              Add Tags
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Data Table */}
       <div className="bg-white border border-gray-100 shadow-sm rounded-xl overflow-hidden">
@@ -377,7 +519,39 @@ export default function QuestionBankPage() {
                   </td>
                 </tr>
               ) : (
-                questions.map((q) => (
+                <>
+                {collectionGroups.map(({ collection, questions: groupQuestions }) => (
+                  <tr key={`collection-${collection.id}`} className="hover:bg-indigo-50/40 transition-colors">
+                    <td className="p-4"></td>
+                    <td colSpan={5} className="p-0">
+                      <Link
+                        href={`/admin-dashboard/academic/collections/${collection.id}`}
+                        className="flex items-center justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold shrink-0"
+                            style={{ backgroundColor: collection.color || '#0B2545' }}
+                          >
+                            {collection.name[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                              <FolderPlus className="w-4 h-4 text-indigo-500" /> {collection.name}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {groupQuestions.length} question{groupQuestions.length === 1 ? '' : 's'} in this view
+                              {typeof collection.question_count === 'number' && collection.question_count !== groupQuestions.length
+                                ? ` • ${collection.question_count} total in collection` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+                {uncategorized.map((q) => (
                   <tr key={q.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.has(q.id) ? 'bg-blue-50/50' : ''}`}>
                     <td className="p-4">
                       <input 
@@ -406,6 +580,20 @@ export default function QuestionBankPage() {
                             {q.collections && q.collections.length > 0 && (
                               <span className="text-indigo-600 bg-indigo-50 px-1.5 rounded-full flex items-center gap-1">
                                 <FolderPlus className="w-3 h-3" /> {q.collections.length} Collections
+                              </span>
+                            )}
+                            {q.tag_objects && q.tag_objects.slice(0, 3).map(t => (
+                              <span
+                                key={t.id}
+                                className="px-1.5 rounded-full text-white"
+                                style={{ backgroundColor: t.color }}
+                              >
+                                {t.name}
+                              </span>
+                            ))}
+                            {q.tag_objects && q.tag_objects.length > 3 && (
+                              <span className="text-gray-500 bg-gray-100 px-1.5 rounded-full">
+                                +{q.tag_objects.length - 3}
                               </span>
                             )}
                             {q.ai_status === 'pending' && (
@@ -486,11 +674,31 @@ export default function QuestionBankPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                ))}
+                </>
               )}
             </tbody>
           </table>
         </div>
+        {(hasMore || page > 1) && (
+          <div className="flex items-center justify-center gap-4 p-4 border-t border-gray-100">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-gray-500">Page {page}</span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={!hasMore || loading}
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

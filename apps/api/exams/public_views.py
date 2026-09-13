@@ -65,7 +65,7 @@ class PublicSyllabusTreeView(APIView):
     def get(self, request):
         from notes.models import StudyMaterial
 
-        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'name')
+        categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'id')
         exams = Exam.objects.filter(is_active=True, category__in=categories).select_related('category').prefetch_related(
             'papers__subjects__chapters__topics',
         ).order_by('order', 'name')

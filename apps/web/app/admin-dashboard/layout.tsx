@@ -43,6 +43,7 @@ import {
   ShieldCheck,
   Globe,
   Package,
+  Bookmark,
 } from "lucide-react";
 
 // ===== Sidebar Nav Config =====
@@ -85,7 +86,7 @@ const SIDEBAR_NAV: NavSection[] = [
       { title: "Collections", href: "/admin-dashboard/academic/collections", icon: ListTodo },
       { title: "Question Sets", href: "/admin-dashboard/academic/question-sets", icon: Layers },
       { title: "Study Plans", href: "/admin-dashboard/study-plans", icon: CalendarDays },
-      { title: "Syllabus & Notes", href: "/admin-dashboard/study-materials", icon: BookOpen as any },
+      { title: "Notes", href: "/admin-dashboard/study-materials", icon: Bookmark as any },
     ],
   },
   {

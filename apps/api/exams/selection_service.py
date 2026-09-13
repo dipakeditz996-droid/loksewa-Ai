@@ -72,6 +72,8 @@ class QuestionSelectionService:
         tags: Optional[str] = None,
         collection_id: Optional[int] = None,
         collection_ids: Optional[list] = None,
+        tag_id: Optional[int] = None,
+        tag_ids: Optional[list] = None,
         exclude_ids: Optional[list] = None,
     ) -> QuerySet:
         """Apply academic-hierarchy and metadata filters to a queryset."""
@@ -104,6 +106,12 @@ class QuestionSelectionService:
             qs = qs.filter(collections__id=collection_id)
         if collection_ids:
             qs = qs.filter(collections__id__in=collection_ids)
+        # Structured Tag (core.Tag, via Question.tag_objects) - search/filter
+        # metadata, never a reusable question group the way collection_id is.
+        if tag_id:
+            qs = qs.filter(tag_objects__id=tag_id)
+        if tag_ids:
+            qs = qs.filter(tag_objects__id__in=tag_ids)
         if exclude_ids:
             qs = qs.exclude(id__in=exclude_ids)
         return qs.distinct()
@@ -123,6 +131,8 @@ class QuestionSelectionService:
         tags=None,
         collection_id=None,
         collection_ids=None,
+        tag_id=None,
+        tag_ids=None,
         exclude_ids=None,
     ) -> dict:
         """
@@ -150,6 +160,8 @@ class QuestionSelectionService:
             tags=tags,
             collection_id=collection_id,
             collection_ids=collection_ids,
+            tag_id=tag_id,
+            tag_ids=tag_ids,
             exclude_ids=exclude_ids,
         )
         total = qs.count()
@@ -177,6 +189,8 @@ class QuestionSelectionService:
         tags=None,
         collection_id=None,
         collection_ids=None,
+        tag_id=None,
+        tag_ids=None,
         # Selection config
         count: int = 0,
         difficulty_distribution: Optional[dict] = None,
@@ -199,6 +213,10 @@ class QuestionSelectionService:
                 a QuestionCollection (or any of several). Collection membership is
                 a pool filter only - it never bypasses the approved-status gate
                 already enforced by get_base_queryset().
+            tag_id / tag_ids: Restrict to question(s) carrying a structured Tag
+                (or any of several) - search/discovery metadata, same "pool
+                filter only" rule as collections. Not a substitute for
+                collection_id as a Practice/Mock question *source*.
             count: Total number of questions to select (used when no distribution given)
             difficulty_distribution: Dict mapping difficulty → count.
                 e.g. {"easy": 6, "medium": 10, "hard": 4}
@@ -236,6 +254,8 @@ class QuestionSelectionService:
             tags=tags,
             collection_id=collection_id,
             collection_ids=collection_ids,
+            tag_id=tag_id,
+            tag_ids=tag_ids,
             exclude_ids=exclude_ids,
         )
         total_available = base_qs.count()

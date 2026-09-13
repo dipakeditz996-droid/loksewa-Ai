@@ -24,7 +24,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
-import { adminAcademicApi, ApiSubject, ApiExamCategory } from "@/lib/api/admin-academic-api";
+import { adminAcademicApi, ApiSubject, ApiExamCategory, ApiExam, ApiPaper } from "@/lib/api/admin-academic-api";
+import { toast } from "sonner";
 import Link from "next/link";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -41,6 +42,73 @@ export default function SubjectsPage() {
   const [deletingSubject, setDeletingSubject] = useState<ApiSubject | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // ── Add Subject form — a Subject's real parent is a Paper (not a Category
+  // directly), reached via Category -> Level/Position -> Paper. All three
+  // are required for a Paper to exist to attach the new Subject to.
+  const [formName, setFormName] = useState("");
+  const [formCode, setFormCode] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
+  const [formCategoryId, setFormCategoryId] = useState<string>("");
+  const [formExamId, setFormExamId] = useState<string>("");
+  const [formPaperId, setFormPaperId] = useState<string>("");
+  const [exams, setExams] = useState<ApiExam[]>([]);
+  const [papers, setPapers] = useState<ApiPaper[]>([]);
+  const [loadingExams, setLoadingExams] = useState(false);
+  const [loadingPapers, setLoadingPapers] = useState(false);
+  const [isSavingSubject, setIsSavingSubject] = useState(false);
+  const [addSubjectError, setAddSubjectError] = useState<string | null>(null);
+
+  const resetAddSubjectForm = () => {
+    setFormName(""); setFormCode(""); setFormDescription(""); setFormStatus("active");
+    setFormCategoryId(""); setFormExamId(""); setFormPaperId("");
+    setExams([]); setPapers([]); setAddSubjectError(null);
+  };
+
+  useEffect(() => {
+    if (!formCategoryId) { setExams([]); setFormExamId(""); return; }
+    setLoadingExams(true);
+    setFormExamId(""); setFormPaperId(""); setPapers([]);
+    adminAcademicApi.getExams(Number(formCategoryId))
+      .then(setExams)
+      .catch(() => setExams([]))
+      .finally(() => setLoadingExams(false));
+  }, [formCategoryId]);
+
+  useEffect(() => {
+    if (!formExamId) { setPapers([]); setFormPaperId(""); return; }
+    setLoadingPapers(true);
+    setFormPaperId("");
+    adminAcademicApi.getPapers(Number(formExamId))
+      .then(setPapers)
+      .catch(() => setPapers([]))
+      .finally(() => setLoadingPapers(false));
+  }, [formExamId]);
+
+  const handleCreateSubject = async () => {
+    if (!formName.trim()) { setAddSubjectError("Subject name is required."); return; }
+    if (!formPaperId) { setAddSubjectError("Select a Category, Level, and Paper for this subject."); return; }
+    setIsSavingSubject(true);
+    setAddSubjectError(null);
+    try {
+      const created = await adminAcademicApi.createSubject({
+        paper: Number(formPaperId),
+        name: formName.trim(),
+        code: formCode.trim(),
+        description: formDescription.trim(),
+        is_active: formStatus === "active",
+      });
+      setSubjects(prev => [created, ...prev]);
+      toast.success(`"${created.name}" created.`);
+      setIsAddModalOpen(false);
+      resetAddSubjectForm();
+    } catch (err: any) {
+      setAddSubjectError(err?.message || "Failed to create subject.");
+    } finally {
+      setIsSavingSubject(false);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -309,7 +377,7 @@ export default function SubjectsPage() {
       </div>
 
       {/* Add Subject Modal */}
-      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+      <Dialog open={isAddModalOpen} onOpenChange={(open) => { setIsAddModalOpen(open); if (!open) resetAddSubjectForm(); }}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Add New Subject</DialogTitle>
@@ -321,25 +389,28 @@ export default function SubjectsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Subject Name <span className="text-red-500">*</span></Label>
-                <Input id="name" placeholder="e.g. General Knowledge" />
+                <Input id="name" placeholder="e.g. General Knowledge" value={formName} onChange={(e) => setFormName(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="code">Subject Code</Label>
-                <Input id="code" placeholder="e.g. GK-101" />
+                <Input id="code" placeholder="e.g. GK-101" value={formCode} onChange={(e) => setFormCode(e.target.value)} />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" placeholder="Brief overview of the subject..." rows={3} />
+              <Textarea id="description" placeholder="Brief overview of the subject..." rows={3} value={formDescription} onChange={(e) => setFormDescription(e.target.value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* A Subject attaches to a Paper, which belongs to a Level/Position
+                under a Category - all three must be picked to know which
+                Paper the new Subject goes under. */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="category">Exam Category</Label>
-                <Select>
+                <Label htmlFor="category">Exam Category <span className="text-red-500">*</span></Label>
+                <Select value={formCategoryId} onValueChange={setFormCategoryId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select categories" />
+                    <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map(cat => (
@@ -347,26 +418,72 @@ export default function SubjectsPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-slate-500">You can link multiple categories later.</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select defaultValue="active">
+                <Label htmlFor="level">Level / Position <span className="text-red-500">*</span></Label>
+                <Select value={formExamId} onValueChange={setFormExamId} disabled={!formCategoryId || loadingExams}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Status" />
+                    <SelectValue placeholder={loadingExams ? "Loading..." : "Select level"} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    {exams.map(exam => (
+                      <SelectItem key={exam.id} value={exam.id.toString()}>
+                        {exam.parent ? `↳ ${exam.name}` : exam.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {formCategoryId && !loadingExams && exams.length === 0 && (
+                  <p className="text-xs text-amber-600">No levels under this category yet.</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paper">Paper <span className="text-red-500">*</span></Label>
+                <Select value={formPaperId} onValueChange={setFormPaperId} disabled={!formExamId || loadingPapers}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingPapers ? "Loading..." : "Select paper"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {papers.map(paper => (
+                      <SelectItem key={paper.id} value={paper.id.toString()}>{paper.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formExamId && !loadingPapers && papers.length === 0 && (
+                  <p className="text-xs text-amber-600">
+                    No papers under this level yet — add one first in Syllabus Builder.
+                  </p>
+                )}
               </div>
             </div>
+
+            <div className="space-y-2 max-w-[200px]">
+              <Label htmlFor="status">Status</Label>
+              <Select value={formStatus} onValueChange={(v) => setFormStatus(v as "active" | "inactive")}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {addSubjectError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {addSubjectError}
+              </div>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>Cancel</Button>
-            <Button className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white" onClick={() => setIsAddModalOpen(false)}>
-              Create Subject
+            <Button variant="outline" onClick={() => setIsAddModalOpen(false)} disabled={isSavingSubject}>Cancel</Button>
+            <Button
+              className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white"
+              onClick={handleCreateSubject}
+              disabled={isSavingSubject}
+            >
+              {isSavingSubject ? "Creating..." : "Create Subject"}
             </Button>
           </DialogFooter>
         </DialogContent>

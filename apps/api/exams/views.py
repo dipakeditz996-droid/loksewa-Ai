@@ -171,7 +171,11 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         # from the admin Collections page) instead of/alongside the syllabus
         # filters above - approval status is still enforced by the service.
         collection_id = request.data.get('collection')
-        
+        # Optional structured-Tag filter (search/discovery metadata) - can be
+        # combined with the syllabus filters above; never a substitute for
+        # collection_id as a question source.
+        tag_id = request.data.get('tag')
+
         # Enforce Enrollment Access Control
         # If a course is provided, ensure the student is enrolled.
         if course_id:
@@ -199,6 +203,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
             topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
             collection_id=collection_id if collection_id and str(collection_id) != 'all' else None,
+            tag_id=tag_id if tag_id and str(tag_id) != 'all' else None,
             count=total_questions,
             difficulty_distribution=difficulty_distribution,
             randomize=True,

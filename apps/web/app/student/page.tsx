@@ -17,7 +17,6 @@ import { gamificationService, ReferralProfile, ReferralStats, ReferralSettings }
 import { courseEnrollmentApi, EnrollmentStatus } from "@/lib/api/enrollment";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   DndContext,
   DragEndEvent,

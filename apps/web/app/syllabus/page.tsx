@@ -4,7 +4,6 @@
 import React, { useState, useEffect } from "react";
 import { Search, SlidersHorizontal, ArrowRight, Download, Eye, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { publicApi, type PublicSyllabusCategory, type PublicSyllabusExam } from "@/lib/api/public-api";
@@ -22,7 +21,6 @@ export default function SyllabusPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedLevelId, setSelectedLevelId] = useState<number | null>(null);
   const [selectedPrepId, setSelectedPrepId] = useState<number | null>(null);
-  const [selectedPaperId, setSelectedPaperId] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -33,11 +31,9 @@ export default function SyllabusPage() {
       const firstCat = cats[0];
       const firstLevel = firstCat?.exams?.[0];
       const firstPrep = firstLevel?.children?.[0];
-      const firstLeaf = firstPrep || firstLevel;
       setSelectedCategoryId(firstCat?.id ?? null);
       setSelectedLevelId(firstLevel?.id ?? null);
       setSelectedPrepId(firstPrep?.id ?? null);
-      setSelectedPaperId(firstLeaf?.papers?.[0]?.id ?? null);
       setIsLoading(false);
     });
     return () => { mounted = false; };
@@ -49,7 +45,6 @@ export default function SyllabusPage() {
   // The actual leaf node whose papers/subjects/topics are shown: the
   // preparation under the level if one exists, otherwise the level itself.
   const selectedExam = selectedLevel?.children?.length ? selectedPrep : selectedLevel;
-  const selectedPaper = selectedExam?.papers?.find((paper) => paper.id === selectedPaperId) || selectedExam?.papers?.[0];
   // Official PDFs/notes an admin uploaded directly onto this exam node -
   // the official syllabus document is surfaced first/separately since it's
   // what the header's "Download" button links to.
@@ -88,25 +83,19 @@ export default function SyllabusPage() {
     const newCat = categories.find((c) => c.id === categoryId);
     const newLevel = newCat?.exams?.[0];
     const newPrep = newLevel?.children?.[0];
-    const newLeaf = newPrep || newLevel;
     setSelectedLevelId(newLevel?.id ?? null);
     setSelectedPrepId(newPrep?.id ?? null);
-    setSelectedPaperId(newLeaf?.papers?.[0]?.id ?? null);
   };
 
   const handleExamChange = (examId: number) => {
     setSelectedLevelId(examId);
     const newLevel = selectedCategory?.exams.find((e) => e.id === examId);
     const newPrep = newLevel?.children?.[0];
-    const newLeaf = newPrep || newLevel;
     setSelectedPrepId(newPrep?.id ?? null);
-    setSelectedPaperId(newLeaf?.papers?.[0]?.id ?? null);
   };
 
   const handlePrepChange = (prepId: number) => {
     setSelectedPrepId(prepId);
-    const newPrep = selectedLevel?.children?.find((c) => c.id === prepId);
-    setSelectedPaperId(newPrep?.papers?.[0]?.id ?? null);
   };
 
   return (
@@ -345,96 +334,6 @@ export default function SyllabusPage() {
             </div>
           )}
 
-          {(!selectedExam.papers || selectedExam.papers.length === 0) ? (
-            <p className="text-slate-500 font-[500] py-8">No syllabus content has been published yet for this examination.</p>
-          ) : (
-          <>
-          {/* Paper Navigation */}
-          <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-10 border-b border-slate-200 dark:border-white/10 pb-[1px]">
-            {selectedExam?.papers.map((paper) => {
-              const isSelected = paper.id === selectedPaperId;
-              return (
-                <button
-                  key={paper.id}
-                  onClick={() => setSelectedPaperId(paper.id)}
-                  className={`relative px-6 py-4 font-[700] text-[15px] whitespace-nowrap transition-colors ${
-                    isSelected 
-                      ? "text-slate-900 dark:text-white" 
-                      : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  }`}
-                >
-                  {paper.name}
-                  {isSelected && (
-                    <div className="absolute bottom-0 left-0 w-full h-[3px] bg-[#D4A72C] rounded-t-full shadow-[0_0_10px_rgba(212,167,44,0.5)]"></div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 5. SUBJECT LIST & 6. TOPIC EXPLORER */}
-          <div className="max-w-[900px]">
-            <div className="mb-6">
-              <h3 className="text-xl font-[800] text-slate-900 dark:text-white">
-                {selectedPaper?.title}
-              </h3>
-            </div>
-
-            <Accordion type="multiple" className="space-y-4">
-              {selectedPaper?.subjects.map((subject) => (
-                <AccordionItem
-                  key={subject.id}
-                  value={String(subject.id)}
-                  className="bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/10 rounded-[12px] overflow-hidden data-[state=open]:shadow-md transition-shadow"
-                >
-                  <AccordionTrigger className="px-6 py-5 hover:no-underline [&[data-state=open]>div>div>svg]:rotate-180">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between w-full text-left gap-4 pr-6">
-                      <div>
-                        <h4 className="text-xl font-[800] text-slate-900 dark:text-white mb-1">
-                          {subject.name}
-                        </h4>
-                        <div className="text-[14px] font-[500] text-slate-500 dark:text-slate-400 flex items-center gap-3">
-                          <span className="flex items-center gap-1.5"><FileText className="w-4 h-4" /> {subject.topicsCount} Topics</span>
-                          <span>•</span>
-                          <span className="flex items-center gap-1.5"><Target className="w-4 h-4" /> {subject.questionsCount}+ Practice Questions</span>
-                        </div>
-                      </div>
-                      <div className="text-[14px] font-[700] text-[#163E6B] dark:text-[#D4A72C] flex items-center shrink-0">
-                        Explore Topics <ArrowRight className="w-4 h-4 ml-1.5" />
-                      </div>
-                    </div>
-                  </AccordionTrigger>
-                  
-                  <AccordionContent className="px-6 pb-6 pt-2 bg-slate-50/50 dark:bg-white/[0.02]">
-                    <div className="space-y-6 mt-4">
-                      {subject.topicGroups.map((group) => (
-                        <div key={group.id} className="border-l-2 border-slate-200 dark:border-white/10 pl-5 relative">
-                          <div className="absolute w-2.5 h-2.5 bg-[#D4A72C] rounded-full -left-[7px] top-1.5"></div>
-                          <h5 className="text-[16px] font-[800] text-slate-900 dark:text-white mb-3">
-                            {group.name}
-                          </h5>
-                          <ul className="space-y-3">
-                            {group.topics.map((topic, i) => (
-                              <li key={i} className="flex items-start gap-3 group/topic cursor-default">
-                                <div className="mt-1 flex-shrink-0 w-5 h-5 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-400">
-                                  {i + 1}
-                                </div>
-                                <span className="text-[15px] font-[500] text-slate-600 dark:text-slate-300 group-hover/topic:text-slate-900 dark:group-hover/topic:text-white transition-colors">
-                                  {topic}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          </div>
-          </>
-          )}
         </div>
       </section>
       )}

@@ -12,6 +12,7 @@ from .views import (
 from .student_exam_views import (
     StudentExaminationViewSet,
     StudentExaminationAttemptViewSet,
+    TeacherExaminationAttemptViewSet,
     LeaderboardViewSet,
     CalmSessionLogView
 )
@@ -54,6 +55,7 @@ router.register(r'teacher/mock-exams', TeacherMockExamViewSet, basename='teacher
 router.register(r'admin/questions/review-queue', AdminQuestionReviewViewSet, basename='admin-question-review')
 router.register(r'admin/practice-sets/review-queue', AdminPracticeSetReviewViewSet, basename='admin-practice-set-review')
 router.register(r'admin/mock-exams/review-queue', AdminExaminationReviewViewSet, basename='admin-mock-exam-review')
+router.register(r'teacher/examination-attempts', TeacherExaminationAttemptViewSet, basename='teacher-examination-attempt')
 
 # Student Exam routes
 router.register(r'student/exams', StudentExaminationViewSet, basename='student-exam')

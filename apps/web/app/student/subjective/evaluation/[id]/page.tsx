@@ -3,8 +3,8 @@
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { 
-  ArrowLeft, FileText, CheckCircle2, MessageSquare, PlayCircle, Target, Award, User, Clock
+import {
+  ArrowLeft, FileText, CheckCircle2, MessageSquare, PlayCircle, Target, Award, User, Clock, HelpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { subjectiveApi, SubjectiveAttempt } from "@/lib/api/subjective";
@@ -182,6 +182,12 @@ export default function SubjectiveEvaluationView() {
                 <div className="flex items-center gap-2 text-[13px] font-bold text-muted-foreground">
                   <Target className="w-4 h-4" /> Max Marks: {selectedAnswer.question.marks}
                 </div>
+                <Link
+                  href={`/student/community/ask?question_id=${selectedAnswer.question.id}&question_text=${encodeURIComponent(selectedAnswer.question.text)}&question_type=subjective${selectedAnswer.question.topic ? `&topic_id=${selectedAnswer.question.topic}` : ""}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline mt-3"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" /> Still confused? Ask the Community
+                </Link>
               </div>
 
               {/* Status Header */}

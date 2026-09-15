@@ -86,6 +86,7 @@ const SIDEBAR_NAV: NavSection[] = [
       { title: "Collections", href: "/admin-dashboard/academic/collections", icon: ListTodo },
       { title: "Question Sets", href: "/admin-dashboard/academic/question-sets", icon: Layers },
       { title: "Study Plans", href: "/admin-dashboard/study-plans", icon: CalendarDays },
+      { title: "Syllabus", href: "/admin-dashboard/study-materials?section=syllabus", icon: FileText as any },
       { title: "Notes", href: "/admin-dashboard/study-materials", icon: Bookmark as any },
     ],
   },
@@ -137,8 +138,16 @@ function AdminSidebar({
   setMobileOpen: (v: boolean) => void;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const isActive = (href: string, exact?: boolean) => {
+    const [hrefPath, hrefQuery] = href.split("?");
+    if (hrefQuery !== undefined) {
+      // Distinguishes nav items that share a pathname but differ only by
+      // query string (e.g. Syllabus vs. Notes both route to
+      // /admin-dashboard/study-materials).
+      return pathname === hrefPath && searchParams.toString() === hrefQuery;
+    }
     if (exact) return pathname === href;
     return pathname === href || pathname.startsWith(href + "/");
   };

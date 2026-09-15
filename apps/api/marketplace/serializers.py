@@ -1,4 +1,5 @@
 # pyrefly: ignore [missing-import]
+from decimal import Decimal
 from rest_framework import serializers
 from .models import (
     Product, PaymentMethod, PaymentSubmission, Purchase, ProductImage,
@@ -79,6 +80,13 @@ class SellerListingSerializer(serializers.ModelSerializer):
     Serializer for student sellers — strips fields that only admins/platform
     should control (is_published, listing_status, seller, rejection_reason).
     Images are handled separately via the view.
+
+    Pricing rule (client requirement): a used book's asking price
+    (`price`) must not exceed `max_used_book_price_percent` (default 65%,
+    admin-configurable via MarketplaceSettings) of its `marked_price` (the
+    price printed on the book). This is the authoritative check - the
+    frontend's live calculator is a convenience, not the enforcement point,
+    so a direct API call can't bypass it.
     """
     description = serializers.CharField(required=False, allow_blank=True, default='')
     final_price = serializers.ReadOnlyField()
@@ -88,6 +96,20 @@ class SellerListingSerializer(serializers.ModelSerializer):
     condition_display = serializers.SerializerMethodField()
     listing_status_display = serializers.SerializerMethodField()
 
+    # Both re-declared as required + > 0: the model allows price=0/marked_price=null
+    # for other product flows (e.g. admin-entered platform stock), but a
+    # student listing must always state both to make the 65% rule meaningful.
+    marked_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=True,
+        min_value=Decimal('0.01'),
+        error_messages={'min_value': 'Marked price must be greater than 0.'},
+    )
+    price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=True,
+        min_value=Decimal('0.01'),
+        error_messages={'min_value': 'Offer price must be greater than 0.'},
+    )
+
     class Meta:
         model = Product
         exclude = ()
@@ -95,6 +117,30 @@ class SellerListingSerializer(serializers.ModelSerializer):
             'seller', 'is_published', 'listing_status', 'rejection_reason',
             'created_at', 'updated_at',
         )
+
+    def validate(self, data):
+        # On PATCH, a field not included in this request falls back to the
+        # existing instance value so partial updates still get checked
+        # against the real current pair, not a missing one.
+        marked_price = data.get('marked_price', getattr(self.instance, 'marked_price', None))
+        price = data.get('price', getattr(self.instance, 'price', None))
+
+        if marked_price is not None and price is not None:
+            # Same str()-roundtrip as OrderViewSet's commission calculation
+            # (marketplace/views.py) - MarketplaceSettings fields can come
+            # back as a plain float (e.g. right after get_or_create() applies
+            # the model's Python-level default, before any DB round-trip
+            # coerces it), and Decimal * float raises TypeError.
+            max_percent = Decimal(str(MarketplaceSettings.get_settings().max_used_book_price_percent))
+            max_allowed = (marked_price * max_percent / Decimal('100')).quantize(Decimal('0.01'))
+            if price > max_allowed:
+                raise serializers.ValidationError({
+                    'price': [
+                        f"Offer price cannot exceed {max_percent.normalize()}% of the marked price "
+                        f"(maximum allowed: Rs. {max_allowed})."
+                    ]
+                })
+        return data
 
     def get_seller_details(self, obj):
         if obj.seller:
@@ -288,6 +334,19 @@ class MarketplaceSettingsSerializer(serializers.ModelSerializer):
         model = MarketplaceSettings
         fields = '__all__'
         read_only_fields = ('updated_at',)
+
+
+class MarketplacePricingPolicySerializer(serializers.ModelSerializer):
+    """
+    Read-only, student-facing subset of MarketplaceSettings - just the two
+    fields a seller needs to price a used-book listing honestly: the real
+    configured commission rate and the real 65%-style price cap. Deliberately
+    excludes admin-only settings (allow_student_listings, minimum_payout_amount,
+    etc.) that AdminMarketplaceSettingsView exposes.
+    """
+    class Meta:
+        model = MarketplaceSettings
+        fields = ('platform_commission_percentage', 'max_used_book_price_percent')
 
 
 # ---------------------------------------------------------------------------

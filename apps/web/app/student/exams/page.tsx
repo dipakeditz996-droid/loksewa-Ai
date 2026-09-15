@@ -39,6 +39,11 @@ export default function ExamsListingPage() {
   const oldPastExams = activeExams.filter(e => e.effective_category === "old_past");
   const modelExams = activeExams.filter(e => e.effective_category === "model");
   const liveExams = activeExams.filter(e => e.effective_category === "live");
+  // Subjective exams sit outside the old_past/model/live/custom scheme
+  // entirely (objective_category is always null for exam_type='subjective')
+  // - grouped by exam_type instead, same canonical Examination record type
+  // as every other tab here, not a separate legacy data source.
+  const subjectiveExams = activeExams.filter(e => e.exam_type === "subjective");
 
   const ExamGrid = ({ list, emptyTitle, emptyBody }: { list: any[]; emptyTitle: string; emptyBody: string }) => (
     list.length === 0 ? (
@@ -129,6 +134,7 @@ export default function ExamsListingPage() {
           <TabsTrigger value="old_past">Old Past Exams</TabsTrigger>
           <TabsTrigger value="model">Model Exams</TabsTrigger>
           <TabsTrigger value="live">Live Exams</TabsTrigger>
+          <TabsTrigger value="subjective">Subjective Exams</TabsTrigger>
           <TabsTrigger value="past">Past Results</TabsTrigger>
           <TabsTrigger value="custom">Create Your Own</TabsTrigger>
         </TabsList>
@@ -157,6 +163,14 @@ export default function ExamsListingPage() {
           />
         </TabsContent>
 
+        <TabsContent value="subjective" className="space-y-6">
+          <ExamGrid
+            list={subjectiveExams}
+            emptyTitle="No Subjective Exams"
+            emptyBody="Descriptive/written model exams will show up here once published."
+          />
+        </TabsContent>
+
         <TabsContent value="past" className="space-y-6">
           {pastExams.length === 0 ? (
             <Card className="border-border/60 border-dashed flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
@@ -170,16 +184,24 @@ export default function ExamsListingPage() {
                 <Card key={attempt.id} className="border-border/60 flex flex-col hover:border-primary/30 transition-colors">
                   <CardHeader>
                     <div className="flex justify-between items-start mb-2">
-                      <Badge variant={attempt.passed ? "default" : "destructive"}>
-                        {attempt.passed ? "PASSED" : "FAILED"}
-                      </Badge>
+                      {attempt.needs_evaluation ? (
+                        <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400">
+                          Evaluation Pending
+                        </Badge>
+                      ) : (
+                        <Badge variant={attempt.passed ? "default" : "destructive"}>
+                          {attempt.passed ? "PASSED" : "FAILED"}
+                        </Badge>
+                      )}
                       <span className="text-xs text-muted-foreground font-medium">
                         {new Date(attempt.submitted_at).toLocaleDateString()}
                       </span>
                     </div>
                     <CardTitle className="text-xl line-clamp-2">{attempt.examination_title}</CardTitle>
                     <CardDescription className="text-primary font-medium mt-1">
-                      Score: {attempt.score} ({Math.round(attempt.percentage)}%)
+                      {attempt.needs_evaluation
+                        ? "Awaiting evaluation from a teacher"
+                        : `Score: ${attempt.score} (${Math.round(attempt.percentage)}%)`}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1">

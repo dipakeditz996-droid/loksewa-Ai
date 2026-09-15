@@ -123,3 +123,40 @@ def enforce_expiry(attempt):
         finalize_attempt(attempt, auto=True)
         return True
     return False
+
+
+@transaction.atomic
+def recompute_after_evaluation(attempt):
+    """
+    Re-derive score/percentage/passed/status after a teacher grades one or
+    more subjective StudentAnswers on an already-submitted attempt.
+
+    Mirrors finalize_attempt's scoring (sum of per-question marks_awarded)
+    but never touches submitted_at/time_taken - the attempt was already
+    submitted; this only accounts for marks a human has since assigned.
+    Status becomes 'evaluated' once every subjective answer on the attempt
+    has been graded (evaluated_at set); otherwise it stays 'submitted' so
+    the student sees "Evaluation Pending" rather than a partial score.
+    """
+    from .models import Question
+
+    attempt.refresh_from_db()
+    answers = list(StudentAnswer.objects.filter(attempt=attempt).select_related('question'))
+
+    attempt.score = max(0, sum(a.marks_awarded for a in answers))
+    total_possible = attempt.examination.total_marks
+    attempt.percentage = round((attempt.score / total_possible * 100), 2) if total_possible > 0 else 0
+    attempt.passed = attempt.score >= attempt.examination.passing_marks
+
+    pending = any(
+        a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
+        for a in answers
+    )
+    attempt.status = 'submitted' if pending else 'evaluated'
+    attempt.save()
+
+    if not pending:
+        from core.notification_service import NotificationService
+        transaction.on_commit(lambda: NotificationService.notify_result_published(attempt))
+
+    return attempt

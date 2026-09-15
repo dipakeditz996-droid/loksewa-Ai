@@ -9,6 +9,7 @@ import {
   Product,
   SellerSale,
   MarketplaceSettings,
+  MarketplacePricingPolicy,
 } from "@/lib/api/marketplace";
 import {
   BookOpen,
@@ -120,10 +121,16 @@ const ORDER_STATUS_COLOR: Record<string, string> = {
 // Blank form state
 // ---------------------------------------------------------------------------
 
+// Documented business-rule default (also the MarketplaceSettings.max_used_book_price_percent
+// default on the backend) - used only as a display fallback while the real,
+// admin-configured value is loading. The backend is always the source of truth.
+const DEFAULT_MAX_PRICE_PERCENT = 65;
+
 const BLANK_FORM = {
   title: "",
   description: "",
   category: "USED_BOOK",
+  marked_price: "",
   price: "",
   condition: "GOOD",
   stock: "1",
@@ -158,6 +165,8 @@ export default function SellerDashboardPage() {
   const [sales, setSales] = useState<SellerSale[]>([]);
   const [marketSettings, setMarketSettings] =
     useState<MarketplaceSettings | null>(null);
+  const [pricingPolicy, setPricingPolicy] =
+    useState<MarketplacePricingPolicy | null>(null);
   const [loading, setLoading] = useState(true);
   const [salesLoading, setSalesLoading] = useState(false);
 
@@ -172,6 +181,30 @@ export default function SellerDashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const maxImages = marketSettings?.max_listing_images ?? 6;
+
+  const maxPricePercent = pricingPolicy?.max_used_book_price_percent
+    ? parseFloat(pricingPolicy.max_used_book_price_percent)
+    : DEFAULT_MAX_PRICE_PERCENT;
+
+  const markedPriceNum = parseFloat(form.marked_price);
+  const offerPriceNum = parseFloat(form.price);
+  const hasValidMarkedPrice = !isNaN(markedPriceNum) && markedPriceNum > 0;
+  const maxAllowedPrice = hasValidMarkedPrice
+    ? Math.round(markedPriceNum * (maxPricePercent / 100) * 100) / 100
+    : null;
+  const offerExceedsMax =
+    hasValidMarkedPrice &&
+    !isNaN(offerPriceNum) &&
+    offerPriceNum > 0 &&
+    offerPriceNum > (maxAllowedPrice as number);
+
+  const estimatedCommissionPct = pricingPolicy?.platform_commission_percentage
+    ? parseFloat(pricingPolicy.platform_commission_percentage)
+    : null;
+  const estimatedEarning =
+    estimatedCommissionPct !== null && !isNaN(offerPriceNum) && offerPriceNum > 0
+      ? Math.round(offerPriceNum * (1 - estimatedCommissionPct / 100) * 100) / 100
+      : null;
 
   // ---------------------------------------------------------------------------
   // Fetch helpers
@@ -205,6 +238,10 @@ export default function SellerDashboardPage() {
         .adminGetMarketplaceSettings()
         .catch(() => null)
         .then((s) => s && setMarketSettings(s)),
+      marketplaceApi
+        .getPricingPolicy()
+        .catch(() => null)
+        .then((p) => p && setPricingPolicy(p)),
     ]).finally(() => setLoading(false));
   }, [fetchListings]);
 
@@ -234,6 +271,7 @@ export default function SellerDashboardPage() {
       title: listing.title,
       description: listing.description,
       category: listing.category,
+      marked_price: listing.marked_price || "",
       price: listing.price,
       condition: listing.condition || "GOOD",
       stock: String(listing.stock ?? 1),
@@ -280,8 +318,16 @@ export default function SellerDashboardPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
     setFormError("");
+
+    if (offerExceedsMax) {
+      setFormError(
+        `Offer price cannot exceed ${maxPricePercent}% of the marked price.`
+      );
+      return;
+    }
+
+    setSubmitting(true);
 
     try {
       const fd = new FormData();
@@ -289,6 +335,7 @@ export default function SellerDashboardPage() {
       fd.append("title", form.title);
       fd.append("description", form.description);
       fd.append("category", form.category);
+      fd.append("marked_price", form.marked_price);
       fd.append("price", form.price);
       fd.append("condition", form.condition);
       fd.append("stock", form.stock);
@@ -560,18 +607,108 @@ export default function SellerDashboardPage() {
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="label-style">Price (Rs.) *</label>
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    value={form.price}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, price: e.target.value }))
-                    }
-                    className="input-style"
-                  />
+                <div className="md:col-span-2 border border-slate-200 dark:border-white/10 rounded-xl p-4 space-y-4 bg-slate-50/60 dark:bg-white/[0.03]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="label-style">Marked Price (Rs.) *</label>
+                      <input
+                        required
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={form.marked_price}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, marked_price: e.target.value }))
+                        }
+                        className="input-style"
+                        placeholder="Price printed on the book"
+                      />
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Original price printed on the book
+                      </p>
+                    </div>
+                    <div>
+                      <label className="label-style">Offer Price (Rs.) *</label>
+                      <input
+                        required
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={form.price}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, price: e.target.value }))
+                        }
+                        className="input-style"
+                        placeholder="Your selling price"
+                      />
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Your selling price
+                      </p>
+                    </div>
+                  </div>
+
+                  {hasValidMarkedPrice && (
+                    <p className="text-xs font-semibold text-[#163E6B] dark:text-[#D4A72C]">
+                      Maximum allowed selling price: Rs. {maxAllowedPrice?.toFixed(2)}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Used books can be listed for up to {maxPricePercent}% of the marked price.
+                  </p>
+                  {offerExceedsMax && (
+                    <p className="flex items-start gap-1.5 text-xs font-semibold text-red-600 dark:text-red-400">
+                      <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      Offer price cannot exceed {maxPricePercent}% of the marked price.
+                    </p>
+                  )}
+
+                  {hasValidMarkedPrice && !isNaN(offerPriceNum) && offerPriceNum > 0 && (
+                    <div className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-3 text-xs space-y-1.5">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 dark:text-slate-400">Marked Price</span>
+                        <span className="font-semibold">Rs. {markedPriceNum.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 dark:text-slate-400">Maximum Allowed Price</span>
+                        <span className="font-semibold">Rs. {maxAllowedPrice?.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500 dark:text-slate-400">Your Offer Price</span>
+                        <span className={`font-semibold ${offerExceedsMax ? "text-red-600 dark:text-red-400" : ""}`}>
+                          Rs. {offerPriceNum.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="h-px bg-slate-100 dark:bg-white/10 my-1" />
+                      {estimatedCommissionPct !== null ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">
+                              Platform Commission ({estimatedCommissionPct}%)
+                            </span>
+                            <span className="font-semibold">
+                              Rs. {(offerPriceNum - (estimatedEarning ?? 0)).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-500 dark:text-slate-400">Estimated Seller Earning</span>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              Rs. {estimatedEarning?.toFixed(2)}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500 dark:text-slate-400">Potential Sale</span>
+                          <span className="font-semibold">Rs. {offerPriceNum.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {estimatedCommissionPct === null && (
+                        <p className="text-[11px] text-slate-400 dark:text-slate-500 pt-1">
+                          Platform commission may apply according to marketplace policy.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="label-style">Stock / Copies *</label>
@@ -830,7 +967,7 @@ export default function SellerDashboardPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || offerExceedsMax}
                   className="bg-[#D4A72C] hover:bg-[#c49a20] text-[#0A1118] font-bold px-8"
                 >
                   {submitting && (

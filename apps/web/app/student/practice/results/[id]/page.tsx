@@ -163,7 +163,10 @@ export default function PracticeResultPage() {
 
                      {!isCorrect && (
                        <Link
-                         href={`/student/community/ask?question_id=${attempt.question.id}&question_text=${encodeURIComponent(attempt.question.text)}${result.session.topic ? `&topic_id=${result.session.topic}` : ""}`}
+                         href={`/student/community/ask?question_id=${attempt.question.id}&question_text=${encodeURIComponent(attempt.question.text)}&question_type=mcq${(['a', 'b', 'c', 'd'] as const).map(opt => {
+                           const optText = attempt.question[`option_${opt}` as keyof typeof attempt.question];
+                           return optText ? `&option_${opt}=${encodeURIComponent(optText as string)}` : "";
+                         }).join("")}${result.session.topic ? `&topic_id=${result.session.topic}` : ""}`}
                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
                        >
                          <HelpCircle className="w-3.5 h-3.5" /> Still confused? Ask the Community

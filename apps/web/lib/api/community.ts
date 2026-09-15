@@ -14,14 +14,28 @@ export interface CommunityTopic {
   subject_name: string;
 }
 
+export type CommunityQuestionType =
+  | "mcq"
+  | "true_false"
+  | "short_answer"
+  | "long_answer"
+  | "subjective";
+
+// Derived server-side from source_question.question_type (never stored) -
+// 'general' means the post has no linked Question at all.
+export type CommunityQuestionCategory = "objective" | "subjective" | "general";
+
 export interface CommunitySourceQuestion {
   id: number;
   question_id: string;
   text: string;
-  option_a: string;
-  option_b: string;
-  option_c: string;
-  option_d: string;
+  question_type: CommunityQuestionType;
+  // Always null for a subjective/general source question - the backend
+  // strips these server-side, not just by leaving them unset.
+  option_a: string | null;
+  option_b: string | null;
+  option_c: string | null;
+  option_d: string | null;
 }
 
 export interface CommunityPostListItem {
@@ -36,6 +50,7 @@ export interface CommunityPostListItem {
   view_count: number;
   reply_count: number;
   has_best_answer: boolean;
+  question_category: CommunityQuestionCategory;
   created_at: string;
 }
 
@@ -89,6 +104,7 @@ export interface CommunityPostFilters {
   topic?: number;
   subject?: number;
   post_type?: "question" | "discussion";
+  category?: CommunityQuestionCategory;
   unanswered?: boolean;
   mine?: boolean;
   bookmarked?: boolean;

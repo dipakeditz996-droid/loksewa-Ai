@@ -80,6 +80,10 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 'confirm_password': "New passwords do not match."
             })
+        if data['new_password'] == data['current_password']:
+            raise serializers.ValidationError({
+                'new_password': "New password must be different from your current password."
+            })
         # Run Django's built-in password validators
         password_validation.validate_password(
             data['new_password'], self.context['request'].user

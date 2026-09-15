@@ -26,8 +26,16 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Create Your Own",
 };
 
-const CategoryBadge = ({ category }: { category: ObjectiveCategory }) => {
-  if (!category) return <span className="text-xs text-slate-400 italic">Uncategorized</span>;
+const CategoryBadge = ({ category, examType }: { category: ObjectiveCategory; examType?: string }) => {
+  if (!category) {
+    // objective_category is null by design for subjective exams (they sit
+    // outside the old_past/model/live/custom scheme) - showing "Uncategorized"
+    // there reads as a data gap rather than the intentional state it is.
+    if (examType === "subjective") {
+      return <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">Subjective</Badge>;
+    }
+    return <span className="text-xs text-slate-400 italic">Uncategorized</span>;
+  }
   const styles: Record<string, string> = {
     old_past: "bg-slate-100 text-slate-700 border-slate-200",
     model: "bg-blue-50 text-blue-700 border-blue-200",
@@ -99,7 +107,10 @@ export default function ExamsOverviewPage() {
       e.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (e.category_name || '').toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .filter(e => categoryFilter === "all" || e.objective_category === categoryFilter);
+    .filter(e =>
+      categoryFilter === "all" ||
+      (categoryFilter === "subjective" ? e.exam_type === "subjective" : e.objective_category === categoryFilter)
+    );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -161,6 +172,7 @@ export default function ExamsOverviewPage() {
               <option value="model">Model Exams</option>
               <option value="live">Live Exams</option>
               <option value="custom">Create Your Own</option>
+              <option value="subjective">Subjective Exams</option>
             </select>
           </div>
           <Button variant="outline" size="sm" className="bg-slate-50 text-slate-600 border-slate-200">
@@ -228,7 +240,7 @@ export default function ExamsOverviewPage() {
                     </TableCell>
 
                     <TableCell className="align-top">
-                      <CategoryBadge category={exam.objective_category} />
+                      <CategoryBadge category={exam.objective_category} examType={exam.exam_type} />
                     </TableCell>
 
                     <TableCell className="align-top">

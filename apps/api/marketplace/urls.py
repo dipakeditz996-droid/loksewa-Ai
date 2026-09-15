@@ -23,6 +23,7 @@ from .views import (
     OrderViewSet,
     SellerListingViewSet,
     SellerSalesViewSet,
+    MarketplacePricingPolicyView,
     StudentDeliveryAddressViewSet,
     StudentListingReportViewSet,
     StudentReviewViewSet,
@@ -68,5 +69,6 @@ urlpatterns = [
     path('admin/settings/', AdminMarketplaceSettingsView.as_view(), name='admin-marketplace-settings'),
     path('admin/', include(admin_router.urls)),
     path('student/cart/items/<int:pk>/', CartItemDetailView.as_view(), name='student-cart-item-detail'),
+    path('student/pricing-policy/', MarketplacePricingPolicyView.as_view(), name='student-pricing-policy'),
     path('student/', include(student_router.urls)),
 ]

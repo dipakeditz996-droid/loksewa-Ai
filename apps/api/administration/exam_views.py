@@ -1,7 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
 from django.db.models import Count, Avg
 from django.utils import timezone
 import copy
@@ -9,6 +8,12 @@ import copy
 from exams.models import Examination, ExaminationAttempt, QuestionSet
 from .exam_serializers import ExaminationSerializer, ExaminationAttemptSerializer
 from .examination_question_views import ExaminationQuestionMixin
+# rest_framework.permissions.IsAdminUser checks Django's is_staff flag, which
+# this app's admin accounts don't necessarily have - every other admin
+# viewset here gates on role (admin/super-admin) via this app's own
+# IsAdminUser instead. Using the DRF one 403'd every admin whose account
+# wasn't separately flagged is_staff, silently blocking exam creation.
+from .permissions import IsAdminUser
 
 class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
     queryset = Examination.objects.all().select_related('category', 'exam', 'subject', 'question_set').order_by('-created_at')
@@ -167,9 +172,13 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         exam = self.get_object()
         
         # Using Window function for rank
+        # A subjective answer has no selected_option even when the student
+        # wrote a full response - answer_text is what "answered" means there,
+        # so "skipped" must check both or every subjective submission in a
+        # Subjective Model Exam's results table reads as unattempted.
         attempts = exam.attempts.select_related('student').annotate(
             correct_answers=Count('answers', filter=Q(answers__is_correct=True)),
-            skipped_answers=Count('answers', filter=Q(answers__selected_option__isnull=True)),
+            skipped_answers=Count('answers', filter=Q(answers__selected_option__isnull=True) & Q(answers__answer_text='')),
             incorrect_answers=Count('answers', filter=Q(answers__is_correct=False) & Q(answers__selected_option__isnull=False)),
             rank=Window(
                 expression=Rank(),

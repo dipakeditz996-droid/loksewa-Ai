@@ -12,7 +12,14 @@ const buttonVariants = cva(
         destructive: "bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] hover:bg-[hsl(var(--destructive))]/90",
         outline: "border border-[hsl(var(--input))] bg-[hsl(var(--background))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))]",
         secondary: "bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))] hover:bg-[hsl(var(--secondary))]/80",
-        ghost: "hover:bg-[hsl(var(--accent))]/10 hover:text-[hsl(var(--accent-foreground))]",
+        // accent-foreground is tuned to pair with a FULL-strength accent
+        // background (see the `outline` variant above and SelectItem) - it's
+        // near-black even in dark mode. Pairing it with this variant's
+        // low-opacity accent wash (which stays dark in dark mode) produced
+        // invisible dark-on-dark hover text. foreground is the correct pair
+        // here since it's identical to accent-foreground in light mode (no
+        // visual change there) but flips to near-white in dark mode.
+        ghost: "hover:bg-[hsl(var(--accent))]/10 hover:text-[hsl(var(--foreground))]",
         link: "text-[hsl(var(--primary))] underline-offset-4 hover:underline",
       },
       size: {

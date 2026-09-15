@@ -4,8 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { 
-  Settings, Globe, Search,
+import {
+  Settings, Globe, Search, Shield,
   Menu, X
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,10 @@ const SETTINGS_NAV = [
   { title: "Overview", href: "/admin-dashboard/settings", icon: Settings, exact: true },
   // Referrals: backed by GET/PUT /api/gamification/settings/referrals/ (IsAdminUser)
   { title: "Referral & Gamification", href: "/admin-dashboard/settings/referrals", icon: Globe },
+  // Security: change-your-own-password, backed by POST /api/admin/change-password/
+  // (IsAdminUser). Distinct from the platform-wide password *policy* fields
+  // already on the Overview tab's "security" block.
+  { title: "Security", href: "/admin-dashboard/settings/security", icon: Shield },
   // BACKEND GAP — the following settings have no Django model, serializer, or API endpoint.
   // They are intentionally excluded until backend support is implemented:
   // - General     (/settings/general)
@@ -24,7 +28,6 @@ const SETTINGS_NAV = [
   // - AI Tutor    (/settings/ai)
   // - Notifications (/settings/notifications)
   // - Marketplace (/settings/marketplace)
-  // - Security    (/settings/security)
   // - Storage     (/settings/storage)
   // - Appearance  (/settings/appearance)
   // - Maintenance (/settings/maintenance)

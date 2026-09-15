@@ -9,8 +9,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { studentExamsApi } from "@/lib/api/student-exams";
+import { studentExamsApi, isSubjectiveQuestionType } from "@/lib/api/student-exams";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { Textarea } from "@/components/ui/textarea";
 import toast from "react-hot-toast";
 
 
@@ -31,6 +32,10 @@ export default function ExamAttemptPage() {
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  // Subjective (descriptive) answers, keyed the same way as `answers` but
+  // kept separate since they save via a different endpoint payload
+  // (answer_text, not selected_option) and never share a question index.
+  const [textAnswers, setTextAnswers] = useState<Record<number, string>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
@@ -59,8 +64,16 @@ export default function ExamAttemptPage() {
   });
 
   const saveAnswerMutation = useMutation({
-    mutationFn: (data: { questionId: number, selectedOption: string }) => 
+    mutationFn: (data: { questionId: number, selectedOption: string }) =>
       studentExamsApi.saveAnswer(attemptId, data.questionId, data.selectedOption),
+    onError: () => {
+      toast.error("Failed to save answer. Retrying...");
+    }
+  });
+
+  const saveTextAnswerMutation = useMutation({
+    mutationFn: (data: { questionId: number, answerText: string }) =>
+      studentExamsApi.saveAnswerText(attemptId, data.questionId, data.answerText),
     onError: () => {
       toast.error("Failed to save answer. Retrying...");
     }
@@ -82,16 +95,18 @@ export default function ExamAttemptPage() {
   useEffect(() => {
     if (attempt && attempt.answers) {
       const initialAnswers: Record<number, string> = {};
-      
+      const initialTextAnswers: Record<number, string> = {};
+
       // If we have questions loaded, map the saved answers to their indices
       if (questions) {
         attempt.answers.forEach((ans: any) => {
           const qIdx = questions.findIndex((q: any) => q.id === ans.question);
-          if (qIdx !== -1 && ans.selected_option) {
-            initialAnswers[qIdx] = ans.selected_option;
-          }
+          if (qIdx === -1) return;
+          if (ans.selected_option) initialAnswers[qIdx] = ans.selected_option;
+          if (ans.answer_text) initialTextAnswers[qIdx] = ans.answer_text;
         });
         setAnswers(initialAnswers);
+        setTextAnswers(initialTextAnswers);
       }
     }
   }, [attempt, questions]);
@@ -186,12 +201,21 @@ export default function ExamAttemptPage() {
 
   const handleSelectOption = (optionLetter: string) => {
     setAnswers({ ...answers, [currentIdx]: optionLetter });
-    
+
     // Autosave with debounce
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       saveAnswerMutation.mutate({ questionId: question.id, selectedOption: optionLetter });
     }, 500);
+  };
+
+  const handleTextAnswerChange = (text: string) => {
+    setTextAnswers({ ...textAnswers, [currentIdx]: text });
+
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTextAnswerMutation.mutate({ questionId: question.id, answerText: text });
+    }, 800);
   };
 
   const toggleReviewMark = () => {
@@ -204,9 +228,12 @@ export default function ExamAttemptPage() {
     submitMutation.mutate();
   };
 
-  const answeredCount = Object.keys(answers).length;
+  const isAnsweredAt = (idx: number) =>
+    answers[idx] !== undefined || (textAnswers[idx] !== undefined && textAnswers[idx].trim().length > 0);
+  const answeredCount = questions.reduce((n, _q, idx) => n + (isAnsweredAt(idx) ? 1 : 0), 0);
   const reviewCount = Object.values(markedForReview).filter(Boolean).length;
   const optionsMap = ['A', 'B', 'C', 'D'];
+  const isSubjective = isSubjectiveQuestionType(question.question_type);
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -263,32 +290,46 @@ export default function ExamAttemptPage() {
                  <div dangerouslySetInnerHTML={{ __html: question.text }} />
               </div>
 
-              <div className="space-y-4">
-                {[question.option_a, question.option_b, question.option_c, question.option_d].map((optionText, idx) => {
-                  if (!optionText) return null;
-                  const letter = optionsMap[idx] as string;
-                  const isSelected = answers[currentIdx] === letter;
-                  
-                  return (
-                    <button
-                      key={letter}
-                      onClick={() => handleSelectOption(letter)}
-                      className={cn(
-                        "w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-4 hover:border-primary/50",
-                        isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-card"
-                      )}
-                    >
-                      <div className={cn(
-                        "w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center text-xs font-medium mt-0.5",
-                        isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30 text-muted-foreground"
-                      )}>
-                        {letter}
-                      </div>
-                      <span className="text-base leading-relaxed select-none">{optionText}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {isSubjective ? (
+                <div className="space-y-3">
+                  <Textarea
+                    value={textAnswers[currentIdx] || ""}
+                    onChange={(e) => handleTextAnswerChange(e.target.value)}
+                    placeholder="Write your answer here..."
+                    className="min-h-[280px] text-base leading-relaxed"
+                  />
+                  <p className="text-xs text-muted-foreground text-right">
+                    {(textAnswers[currentIdx] || "").trim().split(/\s+/).filter(Boolean).length} words
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {[question.option_a, question.option_b, question.option_c, question.option_d].map((optionText, idx) => {
+                    if (!optionText) return null;
+                    const letter = optionsMap[idx] as string;
+                    const isSelected = answers[currentIdx] === letter;
+
+                    return (
+                      <button
+                        key={letter}
+                        onClick={() => handleSelectOption(letter)}
+                        className={cn(
+                          "w-full text-left p-4 rounded-xl border-2 transition-all flex items-start gap-4 hover:border-primary/50",
+                          isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border bg-card"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center text-xs font-medium mt-0.5",
+                          isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30 text-muted-foreground"
+                        )}>
+                          {letter}
+                        </div>
+                        <span className="text-base leading-relaxed select-none">{optionText}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
           
@@ -348,7 +389,7 @@ export default function ExamAttemptPage() {
           <ScrollArea className="flex-1 p-4">
             <div className="grid grid-cols-5 gap-2">
               {Array.from({ length: totalQuestions }).map((_, idx) => {
-                const isAnswered = answers[idx] !== undefined;
+                const isAnswered = isAnsweredAt(idx);
                 const isReview = markedForReview[idx];
                 const isCurrent = currentIdx === idx;
                 

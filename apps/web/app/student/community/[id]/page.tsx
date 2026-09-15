@@ -269,6 +269,11 @@ export default function CommunityPostPage({ params }: { params: Promise<{ id: st
           {post.is_pinned && <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600"><Pin className="w-3.5 h-3.5" /> Pinned</span>}
           {post.is_locked && <span className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground"><Lock className="w-3.5 h-3.5" /> Locked</span>}
           <Badge variant="outline" className="text-[10px] uppercase">{post.post_type}</Badge>
+          {post.question_category !== "general" && (
+            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+              {post.question_category}
+            </Badge>
+          )}
           {post.topic && <span className="text-[11px] text-muted-foreground">{post.topic.subject_name} · {post.topic.name}</span>}
         </div>
 
@@ -286,6 +291,20 @@ export default function CommunityPostPage({ params }: { params: Promise<{ id: st
           <div className="mt-4 p-3 rounded-lg bg-muted/50 border border-border text-sm">
             <p className="text-[11px] font-bold uppercase text-muted-foreground mb-1">Original Exam Question</p>
             <p className="text-foreground">{post.source_question.text}</p>
+            {post.question_category === "objective" && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(["option_a", "option_b", "option_c", "option_d"] as const).map((key, i) =>
+                  post.source_question![key] ? (
+                    <div key={key} className="flex items-start gap-2 text-foreground">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-background border border-border text-[11px] font-bold flex items-center justify-center">
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                      <span>{post.source_question![key]}</span>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            )}
           </div>
         )}
 

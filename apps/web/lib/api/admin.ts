@@ -1173,6 +1173,22 @@ export const adminApi = {
     return apiClient<AdminSettingsResponse>("/admin/settings/");
   },
 
+  // Self-service password change for the currently logged-in admin/super-admin
+  // (administration.self_service_views.AdminChangePasswordView) - distinct
+  // from the `security` block above, which configures platform-wide policy
+  // (min length, 2FA requirement, etc.) rather than changing anyone's actual
+  // password.
+  changePassword: async (data: {
+    current_password: string;
+    new_password: string;
+    confirm_password: string;
+  }): Promise<{ detail: string }> => {
+    return apiClient<{ detail: string }>("/admin/change-password/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
   updateSettings: async (data: {
     platform?: Partial<AdminSettingsData["platform"]>;
     email?: Partial<AdminSettingsData["email"]>;

@@ -13,7 +13,9 @@ from .attempt_timing import (
     attempt_is_expired,
     enforce_expiry,
     finalize_attempt,
+    recompute_after_evaluation,
 )
+from administration.permissions import IsEvaluatorUser
 from .student_serializers import (
     StudentExaminationSerializer, 
     StudentExaminationAttemptSerializer, 
@@ -473,25 +475,39 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
 
         question_id = request.data.get('question')
         selected_option = request.data.get('selected_option')
-        
+        # Descriptive answer for short_answer/long_answer/subjective questions.
+        # 'answer_text' not present in the payload at all (vs explicitly "")
+        # distinguishes "this request didn't touch the text answer" from "the
+        # student cleared it" - relevant since MCQ saves only ever send
+        # selected_option and must never blank out a text answer that isn't
+        # part of this request.
+        answer_text_provided = 'answer_text' in request.data
+        answer_text = request.data.get('answer_text', '')
+
         if not question_id:
             return Response({'detail': 'Question ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
         try:
             question = Question.objects.get(pk=question_id)
         except Question.DoesNotExist:
             return Response({'detail': 'Question not found.'}, status=status.HTTP_404_NOT_FOUND)
-            
+
+        defaults = {'selected_option': selected_option}
+        if answer_text_provided:
+            defaults['answer_text'] = answer_text
+
         student_answer, created = StudentAnswer.objects.get_or_create(
             attempt=attempt,
             question=question,
-            defaults={'selected_option': selected_option}
+            defaults=defaults,
         )
-        
+
         if not created:
             student_answer.selected_option = selected_option
+            if answer_text_provided:
+                student_answer.answer_text = answer_text
             student_answer.save()
-            
+
         return Response({'status': 'saved'})
 
     @action(detail=True, methods=['post'])
@@ -538,6 +554,107 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             
         serializer = self.get_serializer(attempt)
         return Response(serializer.data)
+
+
+class TeacherExaminationAttemptViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Subjective evaluation queue for the canonical Examination architecture.
+
+    Read + one write action (evaluate) rather than a full ModelViewSet -
+    grading assigns marks to existing StudentAnswer rows, it never creates
+    or deletes attempts. Any teacher/admin may grade any attempt (mirrors
+    the existing legacy SubjectiveAnswer evaluation queue's access model -
+    evaluation is a shared queue, not scoped to "your own students").
+    """
+    permission_classes = [IsAuthenticated, IsEvaluatorUser]
+    # The 'pending' list filter below returns a plain Python list (built
+    # from a per-answer check that can't be expressed as a queryset filter
+    # without duplicating SUBJECTIVE_TYPES into SQL) - this queue is small
+    # (submitted subjective attempts only), so pagination is skipped rather
+    # than built around a list.
+    pagination_class = None
+
+    def get_serializer_class(self):
+        from .serializers import (
+            ExaminationAttemptEvaluationListSerializer,
+            ExaminationAttemptEvaluationSerializer,
+        )
+        if self.action == 'list':
+            return ExaminationAttemptEvaluationListSerializer
+        return ExaminationAttemptEvaluationSerializer
+
+    def get_queryset(self):
+        # Only attempts on exams that actually contain a subjective question
+        # belong in this queue - a pure-MCQ attempt is already fully scored.
+        qs = (
+            ExaminationAttempt.objects
+            .filter(
+                status__in=['submitted', 'evaluated'],
+                examination__exam_type='subjective',
+            )
+            .select_related('examination', 'student')
+            .prefetch_related('answers__question')
+            .order_by('-submitted_at')
+        )
+        status_param = self.request.query_params.get('status')
+        if status_param == 'pending':
+            # Can't filter "has an ungraded subjective answer" in the DB
+            # without duplicating the SUBJECTIVE_TYPES check into a query -
+            # this queue is small enough (submitted subjective attempts
+            # only) that an in-Python filter here is simpler and correct.
+            qs = [a for a in qs if any(
+                ans.question.question_type in Question.SUBJECTIVE_TYPES and ans.evaluated_at is None
+                for ans in a.answers.all()
+            )]
+        return qs
+
+    @action(detail=True, methods=['post'])
+    def evaluate(self, request, pk=None):
+        """
+        Body: {"answers": [{"answer_id": 1, "marks_awarded": 8}, ...]}
+        Each answer_id must belong to this attempt and be a subjective
+        question - MCQ answers are auto-graded and cannot be overridden here.
+        """
+        attempt = self.get_object()
+        entries = request.data.get('answers', [])
+        if not entries:
+            return Response({'detail': 'answers is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        answers_by_id = {a.id: a for a in attempt.answers.select_related('question').all()}
+        now = timezone.now()
+        updated = 0
+
+        for entry in entries:
+            answer_id = entry.get('answer_id')
+            marks = entry.get('marks_awarded')
+            answer = answers_by_id.get(answer_id)
+            if not answer or marks is None:
+                continue
+            if answer.question.question_type not in Question.SUBJECTIVE_TYPES:
+                return Response(
+                    {'detail': f'Question {answer.question_id} is objective and auto-graded - it cannot be manually evaluated.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                marks = float(marks)
+            except (TypeError, ValueError):
+                return Response({'detail': f'Invalid marks_awarded for answer {answer_id}.'}, status=status.HTTP_400_BAD_REQUEST)
+            if marks < 0 or marks > answer.question.marks:
+                return Response(
+                    {'detail': f'marks_awarded for answer {answer_id} must be between 0 and {answer.question.marks}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            answer.marks_awarded = marks
+            answer.evaluated_at = now
+            answer.save(update_fields=['marks_awarded', 'evaluated_at'])
+            updated += 1
+
+        if updated == 0:
+            return Response({'detail': 'No valid answers to evaluate.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        recompute_after_evaluation(attempt)
+        serializer_class = self.get_serializer_class()
+        return Response(serializer_class(attempt, context={'request': request}).data)
 
 
 def _build_leaderboard_data(request):

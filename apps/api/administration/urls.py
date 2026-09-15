@@ -5,6 +5,7 @@ from .registration_views import (
     AdminResendRegistrationOTPView,
     AdminGenerateRecoveryCodeView,
 )
+from .self_service_views import AdminChangePasswordView
 from .views import (
     AdminDashboardStatsView,
     AdminAnalyticsView,
@@ -184,6 +185,7 @@ urlpatterns = [
     path('support/tickets/<int:pk>/status/', AdminTicketUpdateStatusView.as_view(), name='admin-ticket-status'),
     # Settings
     path('settings/', AdminSettingsView.as_view(), name='admin-settings'),
+    path('change-password/', AdminChangePasswordView.as_view(), name='admin-change-password'),
     # Storage health check
     path('storage/health/', AdminStorageHealthView.as_view(), name='admin-storage-health'),
     # Positions

@@ -130,6 +130,13 @@ class Question(models.Model):
         ('long_answer', 'Long Answer'),
         ('subjective', 'Subjective'),
     )
+    # Which QUESTION_TYPES are auto-gradable via correct_option (objective)
+    # vs require a human to read the answer and assign marks (subjective).
+    # Single source of truth for that split - ExaminationAttempt scoring and
+    # the subjective evaluation queue both branch on this instead of each
+    # hardcoding its own list of type strings.
+    OBJECTIVE_TYPES = ('mcq', 'true_false')
+    SUBJECTIVE_TYPES = ('short_answer', 'long_answer', 'subjective')
     STATUS_CHOICES = (
         ('draft', 'Draft'),
         ('pending_review', 'Pending Review'),
@@ -736,7 +743,12 @@ class StudentAnswer(models.Model):
     answer_text = models.TextField(blank=True)
     is_correct = models.BooleanField(default=False)
     marks_awarded = models.FloatField(default=0)
-    
+    # Set once a teacher/admin has graded a subjective answer - distinguishes
+    # "0 marks because nobody has graded this yet" from "0 marks, graded".
+    # MCQ answers are auto-scored in attempt_timing.finalize_attempt and never
+    # need this set - their correctness is derived, not manually judged.
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         unique_together = ('attempt', 'question')
         

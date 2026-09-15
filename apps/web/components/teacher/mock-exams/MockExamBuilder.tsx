@@ -60,11 +60,16 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
   });
 
   const examTypes = [
-    { value: "mock", label: "Mock Test" },
-    { value: "practice", label: "Practice Test" },
-    { value: "full", label: "Full-Length Exam" },
-    { value: "subject", label: "Subject Test" },
+    { value: "mock", label: "Mock Test (Objective)" },
+    { value: "practice", label: "Practice Test (Objective)" },
+    { value: "full", label: "Full-Length Exam (Objective)" },
+    { value: "subject", label: "Subject Test (Objective)" },
+    { value: "subjective", label: "Subjective Exam" },
   ];
+  // Everything except 'subjective' is an MCQ-style exam in this builder -
+  // scopes the question bank and auto-generate to the matching question pool
+  // instead of showing MCQ questions for a descriptive exam or vice versa.
+  const isSubjectiveExam = formData.exam_type === "subjective";
 
   useEffect(() => {
     fetchTaxonomy();
@@ -83,11 +88,15 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
     if (currentStep === 2) {
       loadQuestionBank();
     }
-  }, [currentStep]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, isSubjectiveExam]);
 
   const loadQuestionBank = async () => {
     try {
-      const data = await getQuestions({ page_size: 100 });
+      const data = await getQuestions({
+        page_size: 100,
+        question_type: isSubjectiveExam ? "subjective" : "mcq",
+      });
       setQuestions(data.results.filter((q: any) => q.status === "approved"));
     } catch (error) {
       toast.error("Failed to load question bank");
@@ -199,6 +208,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
     try {
       const result = await teacherMockExamsApi.autoGenerate(examId, {
         subject_id: formData.subject,
+        question_type: isSubjectiveExam ? "subjective" : "mcq",
         counts: autoGenConfig
       });
       toast.success(result.status);
@@ -263,6 +273,23 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
               </SelectContent>
             </Select>
           </div>
+          {!isSubjectiveExam && (
+            <div className="space-y-2">
+              <Label>Objective Exam Category</Label>
+              <Select
+                value={formData.objective_category || "none"}
+                onValueChange={(val) => setFormData({ ...formData, objective_category: val === "none" ? null : (val as any) })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not applicable</SelectItem>
+                  <SelectItem value="old_past">Old Past Exam</SelectItem>
+                  <SelectItem value="model">Model Exam</SelectItem>
+                  <SelectItem value="live">Live Exam</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Category</Label>
             <Select 

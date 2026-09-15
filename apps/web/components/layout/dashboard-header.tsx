@@ -154,7 +154,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
             <DropdownMenuItem className="text-[13px]">Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
-              className="text-[13px] text-red-600 focus:bg-red-50 focus:text-red-700 cursor-pointer"
+              className="text-[13px] text-red-600 dark:text-red-400 focus:bg-red-50 focus:text-red-700 dark:focus:bg-red-950/30 dark:focus:text-red-400 cursor-pointer"
               onClick={() => {
                 logout();
                 window.location.href = "/login";

@@ -125,6 +125,18 @@ class NotificationService:
             # lands with the email-sending setup - there is no email backend yet.
 
     @classmethod
+    def notify_password_changed(cls, user):
+        cls._create_if_allowed(
+            recipient=user,
+            notif_type='account',
+            preference_key='security_alerts',
+            title="Password Changed",
+            message="Your password was changed successfully. If this wasn't you, contact an administrator immediately.",
+            action_url=None,
+            priority='important',
+        )
+
+    @classmethod
     def notify_question_review(cls, teacher, question_title, status, feedback=None, action_url=None):
         title = "Question Requires Changes" if status == 'rejected' else "Question Approved"
         priority = 'important' if status == 'rejected' else 'normal'

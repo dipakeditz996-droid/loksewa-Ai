@@ -147,6 +147,46 @@ def send_account_created_email(to_email, username):
     _send_email('Your LoksewaAI account has been created', text_body, html_body, to_email)
 
 
+_PASSWORD_CHANGED_HTML = """\
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f2937;">
+  <h2 style="color:#4f46e5;margin:0 0 16px;">LoksewaAI</h2>
+  <p style="font-size:15px;line-height:1.5;margin:0 0 16px;">
+    Your LoksewaAI {role} password was changed successfully.
+  </p>
+  <p style="font-size:13px;color:#6b7280;line-height:1.5;margin:0 0 20px;">
+    If you made this change, no further action is needed. If you did not
+    change your password, contact your platform administrator immediately -
+    your account may be compromised.
+  </p>
+  <p style="font-size:13px;color:#9ca3af;margin-top:32px;">LoksewaAI Team</p>
+</div>
+"""
+
+_PASSWORD_CHANGED_TEXT = """\
+LoksewaAI
+
+Your LoksewaAI {role} password was changed successfully.
+
+If you made this change, no further action is needed. If you did not
+change your password, contact your platform administrator immediately -
+your account may be compromised.
+
+LoksewaAI Team
+"""
+
+
+def send_password_changed_email(to_email, role='account'):
+    """Best-effort security notice after a self-service password change
+    (administration.self_service_views.AdminChangePasswordView). Never
+    includes the old or new password. Never raises - a delivery failure
+    must not undo an already-successful password change, same contract as
+    every other function in this module.
+    """
+    text_body = _PASSWORD_CHANGED_TEXT.format(role=role)
+    html_body = _PASSWORD_CHANGED_HTML.format(role=role)
+    _send_email('Your LoksewaAI password was changed', text_body, html_body, to_email)
+
+
 def send_otp_email(to_email, code, purpose):
     """Sends a one-time code via Resend's HTTPS API when RESEND_API_KEY is
     set, else Django's configured mail backend (SMTP via Resend, or the

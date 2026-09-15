@@ -356,3 +356,76 @@ class AdminExaminationReviewSerializer(serializers.ModelSerializer):
         if obj.created_by:
             return obj.created_by.get_full_name() or obj.created_by.username
         return "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# Subjective evaluation queue (teacher/admin) - grades StudentAnswer rows on
+# a canonical ExaminationAttempt. Deliberately reuses StudentAnswer/
+# ExaminationAttempt rather than the legacy SubjectiveAnswer/Evaluation pair,
+# which stays untouched for the older SubjectivePracticeSet/SubjectiveModelExam
+# flows it still serves.
+# ---------------------------------------------------------------------------
+
+class EvaluationQuestionSerializer(serializers.ModelSerializer):
+    """What an evaluator needs to grade a subjective answer - includes the
+    reference model_answer, which must never reach a student-facing
+    serializer."""
+    class Meta:
+        from .models import Question
+        model = Question
+        fields = ['id', 'text', 'question_type', 'marks', 'model_answer']
+
+
+class EvaluationAnswerSerializer(serializers.ModelSerializer):
+    question_detail = EvaluationQuestionSerializer(source='question', read_only=True)
+
+    class Meta:
+        from .models import StudentAnswer
+        model = StudentAnswer
+        fields = ['id', 'question', 'question_detail', 'answer_text', 'marks_awarded', 'evaluated_at']
+        read_only_fields = ['question', 'question_detail']
+
+
+class ExaminationAttemptEvaluationSerializer(serializers.ModelSerializer):
+    """Detail view for one attempt's evaluation queue entry - the student's
+    subjective answers alongside the exam context, nothing else."""
+    examination_title = serializers.CharField(source='examination.title', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    answers = EvaluationAnswerSerializer(many=True, read_only=True)
+
+    class Meta:
+        from .models import ExaminationAttempt
+        model = ExaminationAttempt
+        fields = [
+            'id', 'examination', 'examination_title', 'student', 'student_name',
+            'submitted_at', 'status', 'score', 'percentage', 'answers',
+        ]
+
+    def get_student_name(self, obj):
+        return obj.student.get_full_name() or obj.student.username
+
+
+class ExaminationAttemptEvaluationListSerializer(serializers.ModelSerializer):
+    """Lightweight queue-row version - no answer bodies, just enough to
+    triage which attempts still need grading."""
+    examination_title = serializers.CharField(source='examination.title', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    pending_count = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import ExaminationAttempt
+        model = ExaminationAttempt
+        fields = [
+            'id', 'examination', 'examination_title', 'student', 'student_name',
+            'submitted_at', 'status', 'score', 'percentage', 'pending_count',
+        ]
+
+    def get_student_name(self, obj):
+        return obj.student.get_full_name() or obj.student.username
+
+    def get_pending_count(self, obj):
+        from .models import Question
+        return sum(
+            1 for a in obj.answers.all()
+            if a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
+        )

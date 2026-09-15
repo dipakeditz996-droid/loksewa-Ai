@@ -29,7 +29,19 @@ class CommunityTopicSerializer(serializers.ModelSerializer):
 class CommunitySourceQuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
-        fields = ['id', 'question_id', 'text', 'option_a', 'option_b', 'option_c', 'option_d']
+        fields = ['id', 'question_id', 'text', 'question_type', 'option_a', 'option_b', 'option_c', 'option_d']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # A subjective question's option_a..d are always blank in practice,
+        # but strip them explicitly rather than relying on that - the
+        # frontend branches its whole layout on question_type, and this
+        # makes "subjective never carries MCQ options" a backend guarantee
+        # instead of an accident of unrelated data. correct_option is never
+        # in `fields` above, so it's never exposed here either way.
+        if instance.question_type not in CommunityPost.OBJECTIVE_QUESTION_TYPES:
+            data['option_a'] = data['option_b'] = data['option_c'] = data['option_d'] = None
+        return data
 
 
 class CommunityReplySerializer(serializers.ModelSerializer):
@@ -75,13 +87,14 @@ class CommunityPostListSerializer(serializers.ModelSerializer):
     # queries per post (an N+1) when serializing a list.
     reply_count = serializers.IntegerField(source='reply_count_annotated', read_only=True)
     has_best_answer = serializers.BooleanField(source='has_best_answer_annotated', read_only=True)
+    question_category = serializers.CharField(read_only=True)
 
     class Meta:
         model = CommunityPost
         fields = [
             'id', 'title', 'post_type', 'author', 'topic', 'status',
             'is_pinned', 'is_locked', 'view_count', 'reply_count',
-            'has_best_answer', 'created_at',
+            'has_best_answer', 'question_category', 'created_at',
         ]
 
 
@@ -91,6 +104,7 @@ class CommunityPostDetailSerializer(serializers.ModelSerializer):
     source_question = CommunitySourceQuestionSerializer(read_only=True)
     reply_count = serializers.IntegerField(source='reply_count_annotated', read_only=True)
     has_best_answer = serializers.BooleanField(source='has_best_answer_annotated', read_only=True)
+    question_category = serializers.CharField(read_only=True)
     is_bookmarked_by_me = serializers.SerializerMethodField()
 
     class Meta:
@@ -98,7 +112,7 @@ class CommunityPostDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'body', 'post_type', 'author', 'topic', 'source_question',
             'status', 'is_pinned', 'is_locked', 'view_count',
-            'reply_count', 'has_best_answer', 'is_bookmarked_by_me',
+            'reply_count', 'has_best_answer', 'question_category', 'is_bookmarked_by_me',
             'created_at', 'updated_at',
         ]
 
@@ -110,9 +124,11 @@ class CommunityPostDetailSerializer(serializers.ModelSerializer):
 
 
 class CommunityPostWriteSerializer(serializers.ModelSerializer):
+    question_category = serializers.CharField(read_only=True)
+
     class Meta:
         model = CommunityPost
-        fields = ['id', 'title', 'body', 'post_type', 'topic', 'source_question']
+        fields = ['id', 'title', 'body', 'post_type', 'topic', 'source_question', 'question_category']
 
     def validate_title(self, value):
         if len(value.strip()) < 5:

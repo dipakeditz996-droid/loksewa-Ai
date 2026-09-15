@@ -105,8 +105,8 @@ class StudentSecureQuestionSerializer(serializers.ModelSerializer):
 class StudentAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentAnswer
-        fields = ['id', 'question', 'selected_option', 'is_correct', 'marks_awarded']
-        read_only_fields = ['is_correct', 'marks_awarded']
+        fields = ['id', 'question', 'selected_option', 'answer_text', 'is_correct', 'marks_awarded', 'evaluated_at']
+        read_only_fields = ['is_correct', 'marks_awarded', 'evaluated_at']
 
 class AttemptTimingMixin(serializers.Serializer):
     """
@@ -201,15 +201,23 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
     correct_answers = serializers.SerializerMethodField()
     wrong_answers = serializers.SerializerMethodField()
     unanswered = serializers.SerializerMethodField()
+    needs_evaluation = serializers.SerializerMethodField()
 
     class Meta:
         model = ExaminationAttempt
         fields = [
             'id', 'examination', 'examination_title', 'total_marks', 'started_at', 'submitted_at',
             'status', 'score', 'percentage', 'passed', 'time_taken_seconds',
-            'total_questions', 'correct_answers', 'wrong_answers', 'unanswered',
+            'total_questions', 'correct_answers', 'wrong_answers', 'unanswered', 'needs_evaluation',
             'rank', 'total_participants'
         ] + TIMING_FIELDS
+
+    def get_needs_evaluation(self, obj):
+        from .models import Question
+        return obj.status != 'in-progress' and any(
+            a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
+            for a in obj.answers.all()
+        )
 
     def get_total_questions(self, obj):
         return obj.examination.total_questions
@@ -221,21 +229,37 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
         return sum(1 for a in obj.answers.all() if not a.is_correct and a.selected_option)
 
     def get_unanswered(self, obj):
-        return sum(1 for a in obj.answers.all() if not a.selected_option)
+        # A subjective answer has no selected_option even when the student
+        # wrote a full response - answer_text is what "answered" means there.
+        return sum(1 for a in obj.answers.all() if not a.selected_option and not a.answer_text)
 
 class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin, serializers.ModelSerializer):
     """Includes correct answers and explanations for completed exams."""
     examination_title = serializers.CharField(source='examination.title', read_only=True)
+    examination_exam_type = serializers.CharField(source='examination.exam_type', read_only=True)
     total_marks = serializers.FloatField(source='examination.total_marks', read_only=True)
     answers = StudentAnswerSerializer(many=True, read_only=True)
+    # True while any subjective answer on this (already-submitted) attempt
+    # still needs a teacher's marks - the score/percentage above are real but
+    # necessarily partial until then, so the frontend shows "Evaluation
+    # Pending" instead of presenting them as final.
+    needs_evaluation = serializers.SerializerMethodField()
 
     class Meta:
         model = ExaminationAttempt
         fields = [
-            'id', 'examination', 'examination_title', 'total_marks', 'started_at', 'submitted_at',
-            'status', 'score', 'percentage', 'passed', 'time_taken_seconds', 'answers',
+            'id', 'examination', 'examination_title', 'examination_exam_type', 'total_marks',
+            'started_at', 'submitted_at', 'status', 'score', 'percentage', 'passed',
+            'time_taken_seconds', 'answers', 'needs_evaluation',
             'rank', 'total_participants'
         ] + TIMING_FIELDS
+
+    def get_needs_evaluation(self, obj):
+        from .models import Question
+        return obj.status != 'in-progress' and any(
+            a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
+            for a in obj.answers.all()
+        )
 
 class StudentLeaderboardSerializer(serializers.Serializer):
     rank = serializers.IntegerField()

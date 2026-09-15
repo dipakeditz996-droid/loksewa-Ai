@@ -135,6 +135,7 @@ function DiscussionsTab() {
   }, [search]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -143,6 +144,7 @@ function DiscussionsTab() {
         search: debouncedSearch || undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         post_type: typeFilter !== "all" ? (typeFilter as "question" | "discussion") : undefined,
+        category: categoryFilter !== "all" ? (categoryFilter as "objective" | "subjective" | "general") : undefined,
       });
       setPosts((data as any).results || data);
     } catch {
@@ -150,7 +152,7 @@ function DiscussionsTab() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, statusFilter, typeFilter]);
+  }, [debouncedSearch, statusFilter, typeFilter, categoryFilter]);
 
   useEffect(() => {
     load();
@@ -193,6 +195,16 @@ function DiscussionsTab() {
             <option value="question">Question</option>
             <option value="discussion">Discussion</option>
           </select>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-10 px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 focus:border-[#0B2545]"
+          >
+            <option value="all">All Categories</option>
+            <option value="objective">Objective</option>
+            <option value="subjective">Subjective</option>
+            <option value="general">General</option>
+          </select>
         </div>
       </div>
 
@@ -226,6 +238,11 @@ function DiscussionsTab() {
                     <Badge variant="outline" className="text-[10px] h-5 border-slate-200 text-slate-500 uppercase tracking-wider bg-slate-50">
                       {post.post_type}
                     </Badge>
+                    {post.question_category !== "general" && (
+                      <Badge variant="outline" className="text-[10px] h-5 border-slate-200 text-slate-500 uppercase tracking-wider bg-slate-50">
+                        {post.question_category}
+                      </Badge>
+                    )}
                     {post.topic && (
                       <Badge variant="outline" className="text-[10px] h-5 border-blue-100 text-blue-600 bg-blue-50/50">
                         {post.topic.name}

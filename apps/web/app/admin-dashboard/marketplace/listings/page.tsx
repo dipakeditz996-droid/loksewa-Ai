@@ -41,6 +41,7 @@ export default function ListingModerationPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
+  const [maxPricePercent, setMaxPricePercent] = useState<number | null>(null);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -57,6 +58,13 @@ export default function ListingModerationPage() {
   }, []);
 
   useEffect(() => { fetch(); }, [fetch]);
+
+  useEffect(() => {
+    marketplaceApi
+      .adminGetMarketplaceSettings()
+      .then((s) => setMaxPricePercent(parseFloat(s.max_used_book_price_percent)))
+      .catch(() => setMaxPricePercent(null));
+  }, []);
 
   const filtered = listings.filter(
     (l) =>
@@ -240,8 +248,14 @@ export default function ListingModerationPage() {
                 <div className="flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">
                   <span className="flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5" />
-                    Rs. {listing.price}
+                    Offer: Rs. {listing.price}
                   </span>
+                  {listing.marked_price && (
+                    <span className="flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5" />
+                      Marked: Rs. {listing.marked_price}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1.5">
                     <User className="w-3.5 h-3.5" />
                     {listing.seller_details?.first_name || "Unknown Seller"}
@@ -265,6 +279,26 @@ export default function ListingModerationPage() {
                     {new Date(listing.created_at).toLocaleDateString("en-NP")}
                   </span>
                 </div>
+
+                {/* Pricing rule compliance */}
+                {listing.marked_price && maxPricePercent !== null && (() => {
+                  const marked = parseFloat(listing.marked_price);
+                  const offer = parseFloat(listing.price);
+                  const maxAllowed = Math.round(marked * (maxPricePercent / 100) * 100) / 100;
+                  const compliant = offer <= maxAllowed;
+                  return (
+                    <p
+                      className={`text-[11px] font-semibold mt-2 ${
+                        compliant
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      Maximum allowed (at {maxPricePercent}%): Rs. {maxAllowed.toFixed(2)} —{" "}
+                      {compliant ? "within pricing policy" : "exceeds pricing policy"}
+                    </p>
+                  );
+                })()}
 
                 {/* Description preview */}
                 <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-2.5 line-clamp-2">

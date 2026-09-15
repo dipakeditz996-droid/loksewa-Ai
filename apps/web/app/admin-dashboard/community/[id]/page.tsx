@@ -187,6 +187,11 @@ export default function AdminDiscussionDetailPage() {
               <Badge variant="outline" className="border-slate-200 text-slate-500 uppercase tracking-wider bg-slate-50">
                 {post.post_type}
               </Badge>
+              {post.question_category !== "general" && (
+                <Badge variant="outline" className="border-slate-200 text-slate-500 uppercase tracking-wider bg-slate-50">
+                  {post.question_category}
+                </Badge>
+              )}
               {post.topic && (
                 <Badge variant="outline" className="border-blue-100 text-blue-600 bg-blue-50/50">
                   {post.topic.name}
@@ -245,9 +250,23 @@ export default function AdminDiscussionDetailPage() {
         {post.source_question && (
           <div className="mt-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-              <ShieldAlert className="w-3.5 h-3.5" /> Linked Question Context
+              <ShieldAlert className="w-3.5 h-3.5" /> Linked Question Context ({post.question_category})
             </p>
             <p className="text-sm font-medium text-slate-800">{post.source_question.text}</p>
+            {post.question_category === "objective" && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(["option_a", "option_b", "option_c", "option_d"] as const).map((key, i) =>
+                  post.source_question![key] ? (
+                    <div key={key} className="flex items-start gap-2 text-sm text-slate-700">
+                      <span className="shrink-0 w-5 h-5 rounded-full bg-white border border-slate-300 text-[11px] font-bold flex items-center justify-center">
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                      <span>{post.source_question![key]}</span>
+                    </div>
+                  ) : null
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

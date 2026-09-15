@@ -82,6 +82,13 @@ class CommunityPostViewSet(viewsets.ModelViewSet):
         post_type = params.get('post_type')
         if post_type:
             qs = qs.filter(post_type=post_type)
+        category = params.get('category')
+        if category == 'objective':
+            qs = qs.filter(source_question__question_type__in=CommunityPost.OBJECTIVE_QUESTION_TYPES)
+        elif category == 'subjective':
+            qs = qs.filter(source_question__question_type__in=CommunityPost.SUBJECTIVE_QUESTION_TYPES)
+        elif category == 'general':
+            qs = qs.filter(source_question__isnull=True)
         if params.get('unanswered') == 'true':
             qs = qs.exclude(replies__is_best_answer=True, replies__status='published')
         if params.get('mine') == 'true':

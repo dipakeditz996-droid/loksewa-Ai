@@ -109,6 +109,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
       links: [
         { href: "/teacher/evaluations", label: "Evaluations", icon: MessageSquare },
         { href: "/teacher/evaluate", label: "Subjective Exam Grading", icon: PenTool },
+        { href: "/teacher/exam-evaluations", label: "Subjective Model Exams", icon: PenTool },
         { href: "/teacher/analytics", label: "Analytics", icon: History },
       ]
     }

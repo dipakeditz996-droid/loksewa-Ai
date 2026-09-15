@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { User, Phone, MapPin, GraduationCap, ArrowRight, BookOpen, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { User, Phone, MapPin, GraduationCap, ArrowRight, BookOpen, CheckCircle2, Gift, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authApi } from "@/lib/api/auth";
+import { apiClient } from "@/lib/api/client";
 import { examPreferencesApi, ExamPreferenceCategory, ExamPreferenceNode } from "@/lib/api/exam-preferences";
 import { ALL_NEPAL_DISTRICTS } from "@/lib/constants/nepal-districts";
 import { DistrictSelector } from "@/components/DistrictSelector";
@@ -17,13 +18,16 @@ function isValidNepalPhone(phone: string): boolean {
   return /^9[678]\d{8}$/.test(cleaned);
 }
 
-export default function OnboardingPage() {
+function OnboardingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [fullName, setFullName] = useState("");
   const [mobile, setMobile] = useState("");
   const [district, setDistrict] = useState("");
   const [localLevel, setLocalLevel] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralStatus, setReferralStatus] = useState<"idle" | "validating" | "valid" | "invalid">("idle");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -39,6 +43,34 @@ export default function OnboardingPage() {
       .catch(() => setExamTree([]))
       .finally(() => setExamTreeLoading(false));
   }, [router]);
+
+  // A referral link (e.g. /student/onboarding?ref=CODE) can land a
+  // brand-new Google sign-up here directly, same as the email/password
+  // registration page already handles.
+  useEffect(() => {
+    const ref = searchParams.get("ref");
+    if (ref) {
+      setReferralCode(ref);
+      validateReferral(ref);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const validateReferral = async (code: string) => {
+    if (!code.trim()) {
+      setReferralStatus("idle");
+      return;
+    }
+    setReferralStatus("validating");
+    try {
+      const res = await apiClient<{ valid: boolean }>(
+        `/gamification/referrals/validate/?code=${encodeURIComponent(code)}`
+      );
+      setReferralStatus(res.valid ? "valid" : "invalid");
+    } catch {
+      setReferralStatus("invalid");
+    }
+  };
 
   const selectedExamCategory = examTree.find((c) => c.id === examCategoryId) || null;
   const examOptionsAtDepth = (depth: number): ExamPreferenceNode[] => {
@@ -69,6 +101,7 @@ export default function OnboardingPage() {
     if (!isValidNepalPhone(mobile)) { setError("Please enter a valid 10-digit Nepali mobile number."); return; }
     if (!district.trim() || !localLevel.trim()) { setError("Please provide your permanent address (District and Local Level)."); return; }
     if (!examCategoryId) { setError("Please select what you are preparing for."); return; }
+    if (referralCode && referralStatus === "invalid") { setError("Please provide a valid referral code or remove it."); return; }
 
     setIsLoading(true);
     try {
@@ -79,6 +112,7 @@ export default function OnboardingPage() {
         permanent_local_level: localLevel,
         exam_category_id: examCategoryId,
         exam_position_id: selectedExamPosition ? selectedExamPosition.id : null,
+        ref: referralCode.trim(),
       });
       setSuccess(true);
       setTimeout(() => {
@@ -221,6 +255,30 @@ export default function OnboardingPage() {
                     )}
                   </div>
 
+                  {/* Referral Code (Optional) */}
+                  <div className="relative group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors"><Gift className="h-4 w-4" strokeWidth={1.5} /></div>
+                    <Input
+                      id="referralCode"
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                      onBlur={() => validateReferral(referralCode)}
+                      placeholder="Referral Code (Optional)"
+                      className={`h-[48px] w-full pl-11 pr-10 bg-transparent text-[13px] text-white focus:bg-white/5 rounded-[10px] transition-all placeholder:text-white/40 ${
+                        referralStatus === "invalid"
+                          ? "border-red-500 focus:border-red-500"
+                          : referralStatus === "valid"
+                          ? "border-[#22c55e] focus:border-[#22c55e]"
+                          : "border-white/20 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C]"
+                      }`}
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                      {referralStatus === "valid" && <Check className="h-4 w-4 text-[#22c55e]" strokeWidth={2} />}
+                      {referralStatus === "invalid" && <X className="h-4 w-4 text-red-500" strokeWidth={2} />}
+                    </div>
+                  </div>
+
                   <Button type="submit" disabled={isLoading} className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none mt-6">
                     {isLoading ? "Saving..." : (<>Complete Profile <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2} /></>)}
                   </Button>
@@ -231,5 +289,13 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0A1118]" />}>
+      <OnboardingForm />
+    </Suspense>
   );
 }

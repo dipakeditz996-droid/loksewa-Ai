@@ -168,6 +168,7 @@ export const authApi = {
     permanent_local_level: string;
     exam_category_id: number;
     exam_position_id?: number | null;
+    ref?: string;
   }) => {
     return apiClient<{ profile_complete: boolean }>("/auth/complete-profile/", {
       method: "POST",

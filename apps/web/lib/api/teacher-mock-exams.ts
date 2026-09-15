@@ -14,6 +14,7 @@ export interface MockExam {
   title: string;
   description: string;
   exam_type: string;
+  objective_category?: "old_past" | "model" | "live" | "custom" | null;
   category: number;
   category_name?: string;
   exam: number;
@@ -159,6 +160,7 @@ export const teacherMockExamsApi = {
   autoGenerate: async (id: number, config: {
     subject_id?: number;
     topic_id?: number;
+    question_type?: string;
     counts: { easy: number; medium: number; hard: number; };
   }) => {
     return apiClient<{ status: string; added: number; missing: any }>(`/teacher/mock-exams/${id}/auto_generate/`, {

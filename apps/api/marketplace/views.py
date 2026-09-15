@@ -22,7 +22,7 @@ from .serializers import (
     CartSerializer, CartItemSerializer,
     OrderSerializer,
     DeliveryAddressSerializer, DeliveryFeeRuleSerializer,
-    MarketplaceSettingsSerializer, MarketplaceListingReportSerializer,
+    MarketplaceSettingsSerializer, MarketplacePricingPolicySerializer, MarketplaceListingReportSerializer,
     SellerSaleSerializer,
     ReviewSerializer, DisputeSerializer, DisputeEvidenceSerializer,
 )
@@ -554,6 +554,22 @@ class StudentPaymentMethodViewSet(viewsets.ReadOnlyModelViewSet):
         if not _marketplace_enabled():
             raise PermissionDenied("The marketplace is currently disabled by the administrator.")
         return PaymentMethod.objects.filter(is_active=True)
+
+
+class MarketplacePricingPolicyView(APIView):
+    """
+    GET /api/marketplace/student/pricing-policy/
+
+    Read-only, any authenticated student. Lets the Sell Book form show the
+    real configured commission rate and used-book price cap instead of
+    guessing or hardcoding - AdminMarketplaceSettingsView (above) can't be
+    used for this since it's IsAdminUser-only.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        settings = MarketplaceSettings.get_settings()
+        return Response(MarketplacePricingPolicySerializer(settings).data)
 
 
 class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { studentExamsApi } from "@/lib/api/student-exams";
+import { studentExamsApi, isSubjectiveQuestionType } from "@/lib/api/student-exams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -60,7 +60,7 @@ export default function ExamResultPage() {
   const totalQuestions = questions?.length || 0;
   const correctCount = result.answers.filter((a: any) => a.is_correct).length;
   const incorrectCount = result.answers.filter((a: any) => a.is_correct === false && a.selected_option).length;
-  const unattemptedCount = totalQuestions - result.answers.filter((a: any) => a.selected_option).length;
+  const unattemptedCount = totalQuestions - result.answers.filter((a: any) => a.selected_option || a.answer_text).length;
 
   const currentQuestion = questions?.[currentIdx];
   const currentAnswer = result.answers.find((a: any) => a.question === currentQuestion?.id);
@@ -84,19 +84,33 @@ export default function ExamResultPage() {
           {/* Summary Card */}
           <Card className="border-border/60 shadow-sm bg-muted/10">
             <CardHeader className="text-center pb-4">
-              <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-background border shadow-sm">
-                {result.passed ? (
-                  <CheckCircle2 className="h-8 w-8 text-green-500" />
-                ) : (
-                  <XCircle className="h-8 w-8 text-destructive" />
-                )}
-              </div>
-              <CardTitle className="text-2xl font-bold">
-                {result.passed ? "Congratulations, you passed!" : "Keep practicing, you failed."}
-              </CardTitle>
-              <CardDescription className="text-base mt-1">
-                You scored <span className="font-bold text-foreground">{result.score}</span> marks ({Math.round(result.percentage)}%).
-              </CardDescription>
+              {result.needs_evaluation ? (
+                <>
+                  <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-amber-500/10 border border-amber-500/30">
+                    <Loader2 className="h-8 w-8 text-amber-500" />
+                  </div>
+                  <CardTitle className="text-2xl font-bold">Evaluation Pending</CardTitle>
+                  <CardDescription className="text-base mt-1">
+                    Your descriptive answers are awaiting review from a teacher. Your final score will be available once evaluation is complete.
+                  </CardDescription>
+                </>
+              ) : (
+                <>
+                  <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-background border shadow-sm">
+                    {result.passed ? (
+                      <CheckCircle2 className="h-8 w-8 text-green-500" />
+                    ) : (
+                      <XCircle className="h-8 w-8 text-destructive" />
+                    )}
+                  </div>
+                  <CardTitle className="text-2xl font-bold">
+                    {result.passed ? "Congratulations, you passed!" : "Keep practicing, you failed."}
+                  </CardTitle>
+                  <CardDescription className="text-base mt-1">
+                    You scored <span className="font-bold text-foreground">{result.score}</span> marks ({Math.round(result.percentage)}%).
+                  </CardDescription>
+                </>
+              )}
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -128,9 +142,21 @@ export default function ExamResultPage() {
                   Question {currentIdx + 1}
                 </CardTitle>
                 <div className="flex gap-2">
-                  {currentAnswer?.is_correct === true && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">Correct (+{currentAnswer.marks_awarded})</Badge>}
-                  {currentAnswer?.is_correct === false && <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10">Incorrect ({currentAnswer.marks_awarded})</Badge>}
-                  {!currentAnswer?.selected_option && <Badge variant="outline" className="text-muted-foreground">Unattempted</Badge>}
+                  {isSubjectiveQuestionType(currentQuestion.question_type) ? (
+                    currentAnswer?.evaluated_at ? (
+                      <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">Evaluated (+{currentAnswer.marks_awarded})</Badge>
+                    ) : currentAnswer?.answer_text ? (
+                      <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-500/10">Evaluation Pending</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Unattempted</Badge>
+                    )
+                  ) : (
+                    <>
+                      {currentAnswer?.is_correct === true && <Badge variant="outline" className="text-green-500 border-green-500/30 bg-green-500/10">Correct (+{currentAnswer.marks_awarded})</Badge>}
+                      {currentAnswer?.is_correct === false && currentAnswer?.selected_option && <Badge variant="outline" className="text-destructive border-destructive/30 bg-destructive/10">Incorrect ({currentAnswer.marks_awarded})</Badge>}
+                      {!currentAnswer?.selected_option && <Badge variant="outline" className="text-muted-foreground">Unattempted</Badge>}
+                    </>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
@@ -138,41 +164,63 @@ export default function ExamResultPage() {
                    <div dangerouslySetInnerHTML={{ __html: currentQuestion.text }} />
                 </div>
 
-                <div className="space-y-4">
-                  {['A', 'B', 'C', 'D'].map((letter, idx) => {
-                    const optionKey = `option_${letter.toLowerCase()}` as keyof typeof currentQuestion;
-                    const optionText = currentQuestion[optionKey];
-                    if (!optionText) return null;
-                    
-                    const isSelected = currentAnswer?.selected_option === letter;
-                    // Security note: if backend didn't return correct option to students, we can't show it.
-                    // Assuming for result view, backend included correct_option if result_visibility == 'immediate'.
-                    // For now, if we don't have correct_option, we just show what they selected.
-                    // (To make this perfect, the StudentSecureQuestionSerializer should be swapped with a full one for result API).
-                    
-                    return (
-                      <div
-                        key={letter}
-                        className={cn(
-                          "w-full text-left p-4 rounded-xl border-2 flex items-start gap-4",
-                          isSelected ? (currentAnswer.is_correct ? "border-green-500 bg-green-500/5" : "border-destructive bg-destructive/5") : "border-border bg-card"
-                        )}
-                      >
-                        <div className={cn(
-                          "w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center text-xs font-medium mt-0.5",
-                          isSelected ? (currentAnswer.is_correct ? "border-green-500 bg-green-500 text-white" : "border-destructive bg-destructive text-white") : "border-muted-foreground/30 text-muted-foreground"
-                        )}>
-                          {letter}
-                        </div>
-                        <span className="text-base leading-relaxed">{String(optionText)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {isSubjectiveQuestionType(currentQuestion.question_type) ? (
+                  <div className="rounded-xl border border-border bg-muted/20 p-4">
+                    <p className="text-xs font-bold uppercase text-muted-foreground mb-2">Your Answer</p>
+                    {currentAnswer?.answer_text ? (
+                      <p className="text-base leading-relaxed whitespace-pre-wrap">{currentAnswer.answer_text}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">You did not answer this question.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {['A', 'B', 'C', 'D'].map((letter, idx) => {
+                      const optionKey = `option_${letter.toLowerCase()}` as keyof typeof currentQuestion;
+                      const optionText = currentQuestion[optionKey];
+                      if (!optionText) return null;
 
-                {currentAnswer?.is_correct !== true && (
+                      const isSelected = currentAnswer?.selected_option === letter;
+                      // Security note: if backend didn't return correct option to students, we can't show it.
+                      // Assuming for result view, backend included correct_option if result_visibility == 'immediate'.
+                      // For now, if we don't have correct_option, we just show what they selected.
+                      // (To make this perfect, the StudentSecureQuestionSerializer should be swapped with a full one for result API).
+
+                      return (
+                        <div
+                          key={letter}
+                          className={cn(
+                            "w-full text-left p-4 rounded-xl border-2 flex items-start gap-4",
+                            isSelected ? (currentAnswer.is_correct ? "border-green-500 bg-green-500/5" : "border-destructive bg-destructive/5") : "border-border bg-card"
+                          )}
+                        >
+                          <div className={cn(
+                            "w-6 h-6 rounded-full border flex-shrink-0 flex items-center justify-center text-xs font-medium mt-0.5",
+                            isSelected ? (currentAnswer.is_correct ? "border-green-500 bg-green-500 text-white" : "border-destructive bg-destructive text-white") : "border-muted-foreground/30 text-muted-foreground"
+                          )}>
+                            {letter}
+                          </div>
+                          <span className="text-base leading-relaxed">{String(optionText)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!isSubjectiveQuestionType(currentQuestion.question_type) && currentAnswer?.is_correct !== true && (
                   <Link
-                    href={`/student/community/ask?question_id=${currentQuestion.id}&question_text=${encodeURIComponent(currentQuestion.text.replace(/<[^>]*>/g, ""))}`}
+                    href={`/student/community/ask?question_id=${currentQuestion.id}&question_text=${encodeURIComponent(currentQuestion.text.replace(/<[^>]*>/g, ""))}&question_type=mcq${(['a', 'b', 'c', 'd'] as const).map(opt => {
+                      const optText = currentQuestion[`option_${opt}` as keyof typeof currentQuestion];
+                      return optText ? `&option_${opt}=${encodeURIComponent(String(optText))}` : "";
+                    }).join("")}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline mt-4"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" /> Still confused? Ask the Community
+                  </Link>
+                )}
+                {isSubjectiveQuestionType(currentQuestion.question_type) && (
+                  <Link
+                    href={`/student/community/ask?question_id=${currentQuestion.id}&question_text=${encodeURIComponent(currentQuestion.text.replace(/<[^>]*>/g, ""))}&question_type=subjective`}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline mt-4"
                   >
                     <HelpCircle className="h-3.5 w-3.5" /> Still confused? Ask the Community

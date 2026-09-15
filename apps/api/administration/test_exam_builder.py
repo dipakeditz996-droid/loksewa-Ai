@@ -18,12 +18,13 @@ class ExamBuilderTestBase(APITestCase):
     def setUp(self):
         self.student = User.objects.create_user(username='s1', password='pw', role='student')
         self.teacher = User.objects.create_user(username='t1', password='pw', role='teacher')
-        # ExaminationViewSet gates on DRF's IsAdminUser, which checks is_staff.
-        # Both real admin accounts carry is_staff=True, so the tests mirror that.
         self.admin = User.objects.create_user(
             username='a1', password='pw', role='admin', is_staff=True
         )
-        # A role-admin without is_staff, used to pin down the current gate.
+        # A role-admin without is_staff - ExaminationViewSet gates on this
+        # app's role-based IsAdminUser (like every other admin module), not
+        # Django's is_staff flag, so this account must be treated identically
+        # to self.admin.
         self.role_only_admin = User.objects.create_user(
             username='a2', password='pw', role='admin'
         )
@@ -95,14 +96,14 @@ class PermissionTests(ExamBuilderTestBase):
                                {'question_ids': [self.approved[0].id]}, format='json')
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_exam_management_currently_requires_is_staff(self):
-        """Documents the live gate: ExaminationViewSet uses DRF's IsAdminUser
-        (is_staff), while most other admin modules use the project's role-based
-        check. Both shipping admin accounts are is_staff, so this passes today —
-        the test exists so a future permission change is a deliberate one."""
+    def test_role_admin_without_is_staff_can_access_exam_management(self):
+        """ExaminationViewSet gates on role (admin/super-admin), matching
+        every other admin module - an admin account only ever missing
+        Django's separate is_staff flag must not be locked out of exam
+        creation, the same as it isn't locked out of anything else."""
         self.client.force_authenticate(user=self.role_only_admin)
         self.assertEqual(self.client.get('/api/admin/exams/').status_code,
-                         status.HTTP_403_FORBIDDEN)
+                         status.HTTP_200_OK)
 
     def test_admin_can_create_examination(self):
         self.as_admin()

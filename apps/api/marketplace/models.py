@@ -79,6 +79,13 @@ class Product(models.Model):
 
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    # Original price printed on the physical book, distinct from `price`
+    # (what the seller is actually asking). Required at the SellerListingSerializer
+    # level for student-to-student listings, which enforce
+    # price <= marked_price * MarketplaceSettings.max_used_book_price_percent.
+    # Nullable here because non-seller (platform) products predate this field
+    # and don't carry a printed MRP concept the same way.
+    marked_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     cover_image = models.ImageField(
         upload_to='marketplace/covers/', null=True, blank=True,
@@ -393,6 +400,15 @@ class MarketplaceSettings(models.Model):
         max_digits=5, decimal_places=2, default=5.00,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Platform fee deducted from seller earnings (%). 0 = no fee."
+    )
+    max_used_book_price_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=65.00,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text=(
+            "A student-listed used book's asking price (Product.price) cannot "
+            "exceed this percentage of its marked/printed price (Product.marked_price). "
+            "Enforced in SellerListingSerializer."
+        )
     )
     max_listing_images = models.PositiveIntegerField(
         default=6,

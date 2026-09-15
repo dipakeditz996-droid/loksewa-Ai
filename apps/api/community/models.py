@@ -74,6 +74,24 @@ class CommunityPost(models.Model):
     def has_best_answer(self):
         return self.replies.filter(status='published', is_best_answer=True).exists()
 
+    # Objective/Subjective/General is entirely derived from the linked
+    # exams.Question.question_type - never stored here, so it can never drift
+    # from the canonical Question record. A post with no source_question
+    # (a general discussion like "How should I prepare for X?") is 'general'.
+    OBJECTIVE_QUESTION_TYPES = ('mcq', 'true_false')
+    SUBJECTIVE_QUESTION_TYPES = ('short_answer', 'long_answer', 'subjective')
+
+    @property
+    def question_category(self):
+        if not self.source_question_id:
+            return 'general'
+        qtype = self.source_question.question_type
+        if qtype in self.OBJECTIVE_QUESTION_TYPES:
+            return 'objective'
+        if qtype in self.SUBJECTIVE_QUESTION_TYPES:
+            return 'subjective'
+        return 'general'
+
 
 class CommunityReply(models.Model):
     STATUS_CHOICES = (

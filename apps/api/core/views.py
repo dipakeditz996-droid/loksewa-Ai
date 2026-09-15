@@ -817,6 +817,7 @@ class CompleteGoogleProfileView(APIView):
         permanent_local_level str  required
         exam_category_id      int  required
         exam_position_id      int  optional
+        ref                   str  optional referral code (see StudentSignupView)
 
     Returns:
         { profile_complete: true }
@@ -833,6 +834,7 @@ class CompleteGoogleProfileView(APIView):
         exam_category_id = request.data.get('exam_category_id')
         exam_position_id = request.data.get('exam_position_id')
         course_id = request.data.get('course_id')
+        referral_code = (request.data.get('ref') or '').strip()
 
         missing = []
         if not full_name: missing.append('full_name')
@@ -845,6 +847,12 @@ class CompleteGoogleProfileView(APIView):
                 {'error': f"Please provide: {', '.join(missing)}.", 'missing_fields': missing},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Validate before writing anything, matching StudentSignupView.
+        if referral_code:
+            from gamification.models import GamificationProfile
+            if not GamificationProfile.objects.filter(referral_code=referral_code).exists():
+                return Response({'error': 'Invalid referral code.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from .validators import is_valid_nepal_phone, is_valid_nepal_district
         if not is_valid_nepal_phone(phone):
@@ -899,6 +907,18 @@ class CompleteGoogleProfileView(APIView):
             profile.is_verified = True
             profile.verified_at = tz.now()
         profile.save()
+
+        # Social sign-up (core/social_auth.py) never creates a
+        # GamificationProfile for a new user the way StudentSignupView does -
+        # this is the first point in the Google flow where one can exist, so
+        # create it here (get_or_create is safe if it already exists from a
+        # resubmit) and register the referral only on first creation, same
+        # "once per account" guarantee as the email/password signup flow.
+        from gamification.models import GamificationProfile
+        gamification_profile, gamification_profile_created = GamificationProfile.objects.get_or_create(user=user)
+        if gamification_profile_created and referral_code:
+            from gamification.services import register_referral
+            register_referral(user, referral_code)
 
         from administration.models import AuditLog
         AuditLog.objects.create(

@@ -43,8 +43,10 @@ export interface StudentAnswer {
   id: number;
   question: number;
   selected_option: string | null;
+  answer_text?: string;
   is_correct?: boolean;
   marks_awarded?: number;
+  evaluated_at?: string | null;
 }
 
 export interface StudentExamAttempt {
@@ -62,11 +64,17 @@ export interface StudentExamAttempt {
   correct_answers?: number;
   wrong_answers?: number;
   unanswered?: number;
+  needs_evaluation?: boolean;
   answers: StudentAnswer[];
 }
 
 export interface StudentExamResult extends StudentExamAttempt {
   answers: StudentAnswer[];
+  examination_exam_type?: string;
+  // True while a teacher still has to grade at least one subjective answer
+  // on this (already-submitted) attempt - score/percentage are real numbers
+  // even then, but necessarily partial until evaluation finishes.
+  needs_evaluation?: boolean;
 }
 
 export interface Question {
@@ -80,6 +88,9 @@ export interface Question {
   difficulty: string;
   question_type: string;
 }
+
+export const OBJECTIVE_QUESTION_TYPES = ["mcq", "true_false"];
+export const isSubjectiveQuestionType = (t: string) => !OBJECTIVE_QUESTION_TYPES.includes(t);
 
 export interface AcademicHierarchyNode {
   id: number;
@@ -171,6 +182,16 @@ export const studentExamsApi = {
       body: JSON.stringify({
         question: questionId,
         selected_option: selectedOption
+      })
+    });
+  },
+
+  saveAnswerText: async (attemptId: number, questionId: number, answerText: string) => {
+    return await apiClient(`/student/exam-attempts/${attemptId}/answer/`, {
+      method: 'POST',
+      body: JSON.stringify({
+        question: questionId,
+        answer_text: answerText,
       })
     });
   },

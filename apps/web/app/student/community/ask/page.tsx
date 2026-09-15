@@ -14,11 +14,24 @@ function AskCommunityForm() {
 
   // Prefilled from Practice/Mock Exam's "Ask Community" button - the real
   // question the student got stuck on, carried over as-is rather than
-  // making them retype it. See student/practice/results and
-  // student/exams/[id]/result for the linking side.
+  // making them retype it. See student/practice/results,
+  // student/exams/[id]/result, and student/subjective/* for the linking
+  // side. question_type decides whether the MCQ options block renders -
+  // never shown for a subjective question, which has no options at all.
   const questionId = searchParams.get("question_id");
   const questionText = searchParams.get("question_text");
   const topicId = searchParams.get("topic_id");
+  const questionType = searchParams.get("question_type");
+  const isObjectiveSource =
+    questionType === "mcq" || questionType === "true_false";
+  const options = isObjectiveSource
+    ? (["option_a", "option_b", "option_c", "option_d"] as const)
+        .map((key, i) => ({
+          letter: String.fromCharCode(65 + i),
+          text: searchParams.get(key),
+        }))
+        .filter((o) => !!o.text)
+    : [];
 
   const [postType, setPostType] = useState<"question" | "discussion">("question");
   const [title, setTitle] = useState("");
@@ -29,7 +42,7 @@ function AskCommunityForm() {
   useEffect(() => {
     if (questionText) {
       setTitle(`Doubt: ${questionText.slice(0, 80)}${questionText.length > 80 ? "..." : ""}`);
-      setBody(`I'm stuck on this question:\n\n"${questionText}"\n\nCan someone explain the correct approach?`);
+      setBody("");
     }
   }, [questionText]);
 
@@ -78,6 +91,28 @@ function AskCommunityForm() {
         </p>
       </div>
 
+      {questionId && questionText && (
+        <div className="bg-card border border-border rounded-xl p-5 space-y-3">
+          <p className="text-[11px] font-bold uppercase text-muted-foreground">Question</p>
+          <p className="text-foreground text-sm">{questionText}</p>
+          {options.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <p className="text-[11px] font-bold uppercase text-muted-foreground">Options</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {options.map((o) => (
+                  <div key={o.letter} className="flex items-start gap-2 text-sm text-foreground">
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-muted border border-border text-[11px] font-bold flex items-center justify-center">
+                      {o.letter}
+                    </span>
+                    <span>{o.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="bg-card border border-border rounded-xl p-5 space-y-5">
         {error && (
           <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/40 rounded-lg text-red-700 dark:text-red-400 text-sm">
@@ -114,11 +149,17 @@ function AskCommunityForm() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">Details</label>
+          <label className="text-sm font-semibold text-foreground">
+            {questionId ? "Your Question / Doubt" : "Details"}
+          </label>
           <Textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Describe your question or what you'd like to discuss..."
+            placeholder={
+              questionId
+                ? "What exactly are you stuck on? Explain your doubt..."
+                : "Describe your question or what you'd like to discuss..."
+            }
             className="min-h-[160px] bg-background"
             required
           />

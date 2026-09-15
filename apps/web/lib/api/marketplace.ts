@@ -35,6 +35,7 @@ export interface Product {
   target_position: string;
   price: string;
   discount_price: string | null;
+  marked_price?: string | null;
   final_price: string;
   cover_image: string | null;
   is_published: boolean;
@@ -263,9 +264,18 @@ export interface MarketplaceListingReport {
 export interface MarketplaceSettings {
   id: number;
   platform_commission_percentage: string;
+  max_used_book_price_percent: string;
   max_listing_images: number;
   allow_student_listings: boolean;
   updated_at: string;
+}
+
+// Read-only subset of MarketplaceSettings that any authenticated student can
+// fetch (MarketplaceSettings itself is admin-only) - just enough for the
+// Sell Book form to show the real commission rate and price cap.
+export interface MarketplacePricingPolicy {
+  platform_commission_percentage: string;
+  max_used_book_price_percent: string;
 }
 
 export interface MarketplaceRevenueTrendPoint {
@@ -739,6 +749,13 @@ export const marketplaceApi = {
       method: "PATCH",
       body: JSON.stringify(data),
     });
+  },
+
+  // Student - Pricing policy (real commission %, real used-book price cap)
+  getPricingPolicy: async () => {
+    return apiClient<MarketplacePricingPolicy>(
+      "/marketplace/student/pricing-policy/"
+    );
   },
 
   // Admin - Listing Reports

@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { communityApi, CommunityPostListItem } from "@/lib/api/community";
+import { communityApi, CommunityPostListItem, CommunityQuestionCategory } from "@/lib/api/community";
 
 function RoleBadge({ role }: { role: string }) {
   if (role === "teacher") {
@@ -28,6 +28,23 @@ const FILTERS = [
   { key: "bookmarked", label: "Bookmarked" },
 ];
 
+const CATEGORY_FILTERS: { key: "all" | CommunityQuestionCategory; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "objective", label: "Objective" },
+  { key: "subjective", label: "Subjective" },
+  { key: "general", label: "General" },
+];
+
+function CategoryBadge({ category }: { category: CommunityQuestionCategory }) {
+  if (category === "objective") {
+    return <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Objective</Badge>;
+  }
+  if (category === "subjective") {
+    return <Badge variant="outline" className="text-[10px] uppercase tracking-wide">Subjective</Badge>;
+  }
+  return null;
+}
+
 export default function CommunityPage() {
   const router = useRouter();
   const [posts, setPosts] = useState<CommunityPostListItem[]>([]);
@@ -35,6 +52,7 @@ export default function CommunityPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [activeCategory, setActiveCategory] = useState<"all" | CommunityQuestionCategory>("all");
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -45,6 +63,7 @@ export default function CommunityPage() {
       if (activeFilter === "unanswered") filters.unanswered = true;
       if (activeFilter === "mine") filters.mine = true;
       if (activeFilter === "bookmarked") filters.bookmarked = true;
+      if (activeCategory !== "all") filters.category = activeCategory;
       const data = await communityApi.getPosts(filters);
       setPosts(data.results);
     } catch (err: any) {
@@ -52,7 +71,7 @@ export default function CommunityPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, activeFilter]);
+  }, [search, activeFilter, activeCategory]);
 
   useEffect(() => {
     const timer = setTimeout(fetchPosts, 300);
@@ -83,6 +102,22 @@ export default function CommunityPage() {
           placeholder="Search discussions by title or content..."
           className="pl-10 h-11 bg-card border-border"
         />
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {CATEGORY_FILTERS.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setActiveCategory(c.key)}
+            className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors border ${
+              activeCategory === c.key
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-muted-foreground border-border hover:bg-muted"
+            }`}
+          >
+            {c.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -129,6 +164,7 @@ export default function CommunityPage() {
                     {post.is_pinned && <Pin className="w-3.5 h-3.5 text-amber-500" />}
                     {post.is_locked && <Lock className="w-3.5 h-3.5 text-muted-foreground" />}
                     <Badge variant="outline" className="text-[10px] uppercase">{post.post_type}</Badge>
+                    <CategoryBadge category={post.question_category} />
                     {post.topic && (
                       <span className="text-[11px] text-muted-foreground">{post.topic.subject_name} · {post.topic.name}</span>
                     )}

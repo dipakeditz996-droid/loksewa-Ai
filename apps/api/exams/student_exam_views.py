@@ -320,6 +320,10 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     if not resolved_exam:
                         return Response({'detail': 'No exam found under this category.'}, status=status.HTTP_400_BAD_REQUEST)
 
+                # Scoring awards each question's own marks (Question.marks), so
+                # the exam total must be the sum of those - not the question
+                # count - or a 2-mark question can push a score past 100%.
+                total_marks = sum(q.marks for q in questions)
                 custom_exam = Examination.objects.create(
                     title=f"Custom Exam - {timezone.now().strftime('%Y-%m-%d %H:%M')}",
                     exam_type='custom',
@@ -328,14 +332,14 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     exam=resolved_exam,
                     total_questions=len(questions),
                     time_limit=len(questions),
-                    total_marks=len(questions),
-                    passing_marks=len(questions) * 0.4,
+                    total_marks=total_marks,
+                    passing_marks=total_marks * 0.4,
                     status='published',
                     created_by=request.user
                 )
 
                 exam_questions = [
-                    ExaminationQuestion(examination=custom_exam, question=q, order=i, marks=1)
+                    ExaminationQuestion(examination=custom_exam, question=q, order=i, marks=q.marks)
                     for i, q in enumerate(questions)
                 ]
                 ExaminationQuestion.objects.bulk_create(exam_questions)

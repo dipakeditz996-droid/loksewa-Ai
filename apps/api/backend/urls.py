@@ -9,7 +9,7 @@ from core.serializers import CustomTokenObtainPairSerializer
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
 
-from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, ResetPasswordConfirmView, StudentSignupView, SignupRequestOTPView, VerifyEmailOTPView, VerifyRecoveryCodeView, StudentDashboardView, SocialLoginView, CompleteGoogleProfileView
+from core.views import UserMeView, AdminLoginView, AuthLogoutView, ForgotPasswordView, ResetPasswordConfirmView, StudentSignupView, SignupRequestOTPView, VerifyEmailOTPView, VerifyRecoveryCodeView, StudentDashboardView, StudentPackageStatusView, SocialLoginView, CompleteGoogleProfileView
 from core.media_views import drive_media_proxy
 from core.feedback_views import StudentFeedbackListView
 from core.teacher_views import (
@@ -47,6 +47,7 @@ urlpatterns = [
     path('api/auth/2fa/disable/', TwoFactorDisableView.as_view(), name='auth_2fa_disable'),
     path('api/auth/2fa/login/', TwoFactorLoginView.as_view(), name='auth_2fa_login'),
     path('api/dashboard/', StudentDashboardView.as_view(), name='student_dashboard'),
+    path('api/dashboard/package-status/', StudentPackageStatusView.as_view(), name='student_package_status'),
     path('api/media/drive/<str:file_id>/', drive_media_proxy, name='drive_media_proxy'),
     path('api/student/feedback/', StudentFeedbackListView.as_view(), name='student_feedback_list'),
 

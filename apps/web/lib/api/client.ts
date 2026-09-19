@@ -28,6 +28,8 @@ export class ApiError extends Error {
   }
 }
 
+export const API_MUTATION_EVENT = "api-mutation-succeeded";
+
 export const getAuthToken = () => {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("access_token");
@@ -45,7 +47,23 @@ export const clearAuthToken = () => {
   localStorage.removeItem("refresh_token");
 };
 
-async function refreshToken(): Promise<string | null> {
+// Single-flight: the backend rotates and blacklists a refresh token on first
+// use (ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION), so when several
+// requests hit 401 at the same time only ONE refresh call may be made - the
+// rest must await it. Parallel calls with the same refresh token made all but
+// the first fail, which then cleared the session and logged the user out.
+let refreshInFlight: Promise<string | null> | null = null;
+
+function refreshToken(): Promise<string | null> {
+  if (!refreshInFlight) {
+    refreshInFlight = doRefreshToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+async function doRefreshToken(): Promise<string | null> {
   try {
     const refresh = localStorage.getItem("refresh_token");
     if (!refresh) return null;
@@ -63,9 +81,13 @@ async function refreshToken(): Promise<string | null> {
 
     const data = await response.json();
     localStorage.setItem("access_token", data.access);
+    // The rotated refresh token replaces the old one (which is now
+    // blacklisted); without storing it the next refresh would fail.
+    if (data.refresh) localStorage.setItem("refresh_token", data.refresh);
     return data.access;
-  } catch (err) {
-    clearAuthToken();
+  } catch {
+    // Network error: keep the session; the caller's request will fail
+    // normally and can be retried.
     return null;
   }
 }
@@ -143,6 +165,13 @@ export async function apiClient<T>(
     }
 
     throw new ApiError(response.status, errorData);
+  }
+
+  // Any successful write may change dashboard aggregates; let the query
+  // layer (see app/providers.tsx) revalidate the affected cached queries.
+  const method = (options.method || "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(API_MUTATION_EVENT));
   }
 
   if (response.status === 204) {

@@ -136,9 +136,11 @@ export default function ExamsOverviewPage() {
           </div>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <Button variant="outline" className="w-1/2 md:w-auto">
-            <DownloadCloud className="w-4 h-4 mr-2" /> Import Exam
-          </Button>
+          <Link href="/admin-dashboard/exams/import" className="w-1/2 md:w-auto">
+            <Button variant="outline" className="w-full">
+              <DownloadCloud className="w-4 h-4 mr-2" /> Import Exam
+            </Button>
+          </Link>
           <Link href="/admin-dashboard/exams/new" className="w-1/2 md:w-auto">
             <Button className="w-full bg-[#0B2545] text-white hover:bg-[#163E6C]">
               <PlusCircle className="w-4 h-4 mr-2" /> Create Exam

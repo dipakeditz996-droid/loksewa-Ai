@@ -97,7 +97,16 @@ class QuestionSelectionService:
         if difficulty:
             qs = qs.filter(difficulty=difficulty)
         if question_type:
-            qs = qs.filter(question_type=question_type)
+            from .models import Question
+            # 'objective' / 'subjective' select a whole family using
+            # Question.OBJECTIVE_TYPES / SUBJECTIVE_TYPES (the single source
+            # of truth for the split); anything else is an exact type.
+            if question_type == 'objective':
+                qs = qs.filter(question_type__in=Question.OBJECTIVE_TYPES)
+            elif question_type == 'subjective':
+                qs = qs.filter(question_type__in=Question.SUBJECTIVE_TYPES)
+            else:
+                qs = qs.filter(question_type=question_type)
         if tags:
             # Tags are stored comma-separated; filter by any matching tag
             for tag in [t.strip() for t in tags.split(",") if t.strip()]:
@@ -207,7 +216,8 @@ class QuestionSelectionService:
             subject_id: Filter by subject
             chapter_id: Filter by chapter
             topic_id: Filter by specific topic
-            question_type: 'mcq', 'true_false', 'subjective', etc.
+            question_type: 'mcq', 'true_false', ... or the family names
+                'objective' (mcq + true_false) / 'subjective' (all written-answer types)
             tags: Comma-separated tags to filter by
             collection_id / collection_ids: Restrict to question(s) that belong to
                 a QuestionCollection (or any of several). Collection membership is

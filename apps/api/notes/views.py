@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, status
+from administration.permissions import IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -484,7 +485,7 @@ class TeacherStudyMaterialViewSet(viewsets.ModelViewSet):
 
 
 class AdminStudyMaterialViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
     serializer_class = AdminStudyMaterialSerializer
     queryset = StudyMaterial.objects.all().order_by('-updated_at')
 

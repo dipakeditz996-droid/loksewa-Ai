@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { BookOpen, Loader2, RotateCcw, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BookOpen, Loader2, RotateCcw, Sparkles, ChevronRight as ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { syllabusApi, Exam } from "@/lib/api/syllabus";
 import { practiceApi, StudySessionResponse } from "@/lib/api/practice";
-import { StudyQuestionBrowser } from "@/components/practice/StudyQuestionBrowser";
+import { TopicPracticeBrowser } from "@/components/practice/TopicPracticeBrowser";
 
 export default function TopicStudyPage() {
+  const router = useRouter();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loadingExams, setLoadingExams] = useState(true);
   const [exam, setExam] = useState("");
@@ -39,6 +41,10 @@ export default function TopicStudyPage() {
   const activeExam = useMemo(() => exams.find(e => e.id.toString() === exam), [exam, exams]);
   const activeSubject = useMemo(() => activeExam?.subjects?.find(s => s.id.toString() === subject), [activeExam, subject]);
   const allTopics = useMemo(() => activeSubject?.units?.flatMap(u => u.topics) || [], [activeSubject]);
+  const activeUnit = useMemo(
+    () => activeSubject?.units?.find(u => u.topics.some(t => t.id.toString() === topic)),
+    [activeSubject, topic]
+  );
 
   const handleStart = async (restart = false) => {
     if (!topic) return;
@@ -70,13 +76,23 @@ export default function TopicStudyPage() {
     const topicName = allTopics.find(t => t.id.toString() === topic)?.name;
     return (
       <div className="p-4 md:p-8 max-w-[1200px] mx-auto space-y-6 animate-in fade-in-50 duration-500">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
+            <nav className="flex items-center flex-wrap gap-1 text-[12px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+              {[activeExam?.title, activeSubject?.name, activeUnit?.title, "Topic-wise Practice"]
+                .filter(Boolean)
+                .map((crumb, i, arr) => (
+                  <span key={i} className="flex items-center gap-1">
+                    {crumb}
+                    {i < arr.length - 1 && <ChevronRightIcon className="w-3 h-3" />}
+                  </span>
+                ))}
+            </nav>
             <h1 className="text-[22px] font-bold tracking-tight text-primary dark:text-foreground">
-              Studying: {topicName || "Topic"}
+              {topicName || "Topic"}
             </h1>
             <p className="text-muted-foreground text-[14px]">
-              Browse freely — no timer, no fixed count. Answer if you're confident, or Show Answer to just learn it.
+              Browse freely — no timer, no fixed count. Answer if you're confident, or View Answer to just learn it.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -94,12 +110,25 @@ export default function TopicStudyPage() {
           </div>
         </div>
 
-        <StudyQuestionBrowser
+        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+
+        <TopicPracticeBrowser
+          key={session.session.id}
           sessionId={session.session.id}
           questions={session.questions}
+          initialAttempts={session.attempts}
           initialIndex={session.resume_index}
           savedQuestionIds={savedQuestionIds}
           onToggleSave={toggleSave}
+          onFinish={async () => {
+            try {
+              await practiceApi.submitSession(session.session.id, 0);
+              router.push(`/student/practice/results/${session.session.id}`);
+            } catch (e) {
+              console.error(e);
+              setError("Couldn't finish the practice session. Please try again.");
+            }
+          }}
         />
       </div>
     );

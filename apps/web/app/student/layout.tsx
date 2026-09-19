@@ -45,8 +45,8 @@ export default function StudentLayout({
     // Since HasActiveSubscription is enforced on backend, we could wait for 403s,
     // but proactive redirect provides a better UX.
     import("@/lib/api/dashboard").then(({ dashboardApi }) => {
-      dashboardApi.getStudentDashboard().then(data => {
-        if (data.package?.enforcementEnabled && !data.package?.hasActivePackage) {
+      dashboardApi.getPackageStatus().then(({ package: pkg }) => {
+        if (pkg?.enforcementEnabled && !pkg?.hasActivePackage) {
           setPackageLocked(true);
         }
       }).catch(() => {});

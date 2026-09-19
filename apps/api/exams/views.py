@@ -148,6 +148,7 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
             count=limit,
             difficulty_distribution=difficulty_distribution,
             randomize=True,
+            question_type='objective',  # MCQ practice UI: never written-answer questions
         )
         serializer = self.get_serializer(result['questions'], many=True)
         return Response(serializer.data)
@@ -207,6 +208,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             count=total_questions,
             difficulty_distribution=difficulty_distribution,
             randomize=True,
+            question_type='objective',  # MCQ practice UI: never written-answer questions
         )
 
         questions = result['questions']
@@ -373,11 +375,13 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 topic_id=topic_id,
                 count=500,  # effectively "every approved question in this topic"
                 randomize=False,
+                # Written-answer questions (all of Question.SUBJECTIVE_TYPES,
+                # not just 'subjective') have no options / correct_option and
+                # belong to the subjective-answer system - they can't be shown
+                # in an MCQ browsing screen.
+                question_type='objective',
             )
-            # Subjective (free-text) questions have no options or
-            # correct_option and belong to a separate written-answer system —
-            # they can't be shown in an MCQ browsing screen.
-            questions = [q for q in result['questions'] if q.question_type != 'subjective']
+            questions = result['questions']
             if not questions:
                 return Response({'detail': 'No approved questions are available for this topic yet.'}, status=400)
 
@@ -400,10 +404,28 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         attempts = list(QuestionAttempt.objects.filter(session=session).select_related('question').order_by('id'))
         resume_index = next((i for i, a in enumerate(attempts) if not a.is_viewed), 0)
 
+        # Rehydrate per-question state so a page refresh doesn't lose already
+        # answered/revealed questions — only viewed questions get their
+        # correct_option/explanation back, never questions the student
+        # hasn't interacted with yet.
+        attempt_state = []
+        for a in attempts:
+            entry = {
+                'question_id': a.question_id,
+                'selected_option': a.selected_option,
+                'is_correct': a.is_correct if a.selected_option else None,
+                'is_viewed': a.is_viewed,
+            }
+            if a.is_viewed:
+                entry['correct_option'] = a.question.correct_option
+                entry['explanation'] = a.question.explanation
+            attempt_state.append(entry)
+
         from .serializers import SecureQuestionSerializer
         return Response({
             'session': PracticeSessionSerializer(session).data,
             'questions': SecureQuestionSerializer([a.question for a in attempts], many=True).data,
+            'attempts': attempt_state,
             'resume_index': resume_index,
             'resumed': existing is not None,
         })
@@ -553,7 +575,8 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 exam_id=enrolled_exam_id,
                 topic_ids=weak_topic_ids,
                 exclude_ids=list(recently_seen_ids),
-                count=DAILY_SIZE
+                count=DAILY_SIZE,
+                question_type='objective',
             )
             weak_questions = res1['questions']
 
@@ -570,7 +593,8 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             res2 = QuestionSelectionService().select(
                 exam_id=enrolled_exam_id,
                 exclude_ids=list(ever_seen_ids) + already_picked,
-                count=need
+                count=need,
+                question_type='objective',
             )
             unseen_questions = res2['questions']
 
@@ -583,7 +607,8 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             res3 = QuestionSelectionService().select(
                 exam_id=enrolled_exam_id,
                 exclude_ids=already_picked,
-                count=need
+                count=need,
+                question_type='objective',
             )
             fallback_questions = res3['questions']
 
@@ -618,40 +643,85 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
         session = self.get_object()
+        from .serializers import QuestionFullSerializer
+
+        def _attempts_data(attempts):
+            return [{
+                'attempt_id': attempt.id,
+                'question': QuestionFullSerializer(attempt.question).data,
+                'selected_option': attempt.selected_option,
+                'is_correct': attempt.is_correct,
+                'is_marked_for_review': attempt.is_marked_for_review,
+            } for attempt in attempts]
+
+        # QuestionFullSerializer('__all__') includes the tag_objects M2M, so
+        # every attempts fetch here needs both select_related('question') -
+        # for the per-attempt scoring/serialization access to attempt.question
+        # below - and prefetch_related('question__tag_objects') - otherwise
+        # each is a separate query per attempt (an O(n) round trip each on a
+        # 100+ question session was the original cause of ~30s submits).
         if session.completed:
-            return Response(self.get_serializer(session).data)
-            
+            # Idempotent re-fetch (e.g. the result page re-requesting a
+            # session that was already finalized) — still return the full
+            # attempts payload the result page needs, not just the session.
+            attempts = QuestionAttempt.objects.filter(session=session).select_related('question').prefetch_related('question__tag_objects')
+            return Response({
+                'session': self.get_serializer(session).data,
+                'attempts': _attempts_data(attempts),
+            })
+
         time_taken_seconds = int(request.data.get('time_taken_seconds', 0))
-        attempts = QuestionAttempt.objects.filter(session=session)
-        
-        correct = 0
-        incorrect = 0
-        unanswered = 0
-        
-        for attempt in attempts:
-            if not attempt.selected_option:
-                unanswered += 1
-            # correct_option is stored uppercase in the DB while the frontend
-            # sends lowercase option letters — compare case-insensitively or
-            # every correct answer is scored as wrong.
-            elif attempt.question.correct_option and attempt.selected_option.upper() == attempt.question.correct_option.upper():
-                attempt.is_correct = True
-                correct += 1
-                attempt.save()
-            else:
-                attempt.is_correct = False
-                incorrect += 1
-                attempt.save()
-                
-        session.correct_count = correct
-        session.incorrect_count = incorrect
-        session.unanswered_count = unanswered
-        session.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
-        session.score = correct # No negative marking by default unless specified
-        session.time_taken_seconds = time_taken_seconds
-        session.completed = True
-        session.save()
-        
+
+        from django.db import transaction
+
+        # Score every attempt in Python first, then write the results in one
+        # bulk_update instead of one UPDATE per answered attempt - on a
+        # fully-answered 100+ question session that was 100+ individual
+        # writes. QuestionAttempt has no save()-override, signals, or
+        # auto_now fields to preserve (confirmed against the model), so
+        # batching the write is behavior-identical to calling .save() per
+        # attempt. Wrapped in transaction.atomic() so the attempt scores and
+        # the session totals commit together - a mid-submit failure leaves
+        # the previous state intact rather than a half-scored session.
+        with transaction.atomic():
+            attempts = list(
+                QuestionAttempt.objects.filter(session=session)
+                .select_related('question')
+                .prefetch_related('question__tag_objects')
+            )
+
+            correct = 0
+            incorrect = 0
+            unanswered = 0
+            to_score = []
+
+            for attempt in attempts:
+                if not attempt.selected_option:
+                    unanswered += 1
+                    continue
+                # correct_option is stored uppercase in the DB while the frontend
+                # sends lowercase option letters — compare case-insensitively or
+                # every correct answer is scored as wrong.
+                if attempt.question.correct_option and attempt.selected_option.upper() == attempt.question.correct_option.upper():
+                    attempt.is_correct = True
+                    correct += 1
+                else:
+                    attempt.is_correct = False
+                    incorrect += 1
+                to_score.append(attempt)
+
+            if to_score:
+                QuestionAttempt.objects.bulk_update(to_score, ['is_correct'])
+
+            session.correct_count = correct
+            session.incorrect_count = incorrect
+            session.unanswered_count = unanswered
+            session.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
+            session.score = correct # No negative marking by default unless specified
+            session.time_taken_seconds = time_taken_seconds
+            session.completed = True
+            session.save()
+
         # Award XP for practice session
         try:
             from gamification.services import award_xp
@@ -659,22 +729,11 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 award_xp(session.user, correct, "Practice Session Completed")
         except Exception:
             pass
-        
+
         # After submission, return full data including answers
-        attempts_data = []
-        from .serializers import QuestionFullSerializer
-        for attempt in attempts:
-            attempts_data.append({
-                'attempt_id': attempt.id,
-                'question': QuestionFullSerializer(attempt.question).data,
-                'selected_option': attempt.selected_option,
-                'is_correct': attempt.is_correct,
-                'is_marked_for_review': attempt.is_marked_for_review,
-            })
-            
         return Response({
             'session': self.get_serializer(session).data,
-            'attempts': attempts_data
+            'attempts': _attempts_data(attempts)
         })
 
 class BookmarkViewSet(viewsets.ModelViewSet):
@@ -946,7 +1005,7 @@ class SubjectiveQuestionViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         # Security: only approved questions are student-facing
-        qs = self.Question.objects.filter(status='approved', question_type='subjective')
+        qs = self.Question.objects.filter(status='approved', question_type__in=self.Question.SUBJECTIVE_TYPES)
         topic_id = self.request.query_params.get('topic')
         if topic_id:
             qs = qs.filter(topic_id=topic_id)
@@ -985,7 +1044,8 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
             attempt = SubjectiveAttempt.objects.create(
                 student=request.user, practice_set=ps, mode='practice'
             )
-            for q in ps.questions.all():
+            # Only approved questions ever reach a student attempt.
+            for q in ps.questions.filter(status='approved'):
                 SubjectiveAnswer.objects.create(attempt=attempt, question=q)
 
         elif mode == 'model_exam' and model_exam_id:
@@ -1014,7 +1074,7 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
             attempt = SubjectiveAttempt.objects.create(
                 student=request.user, model_exam=me, mode='model_exam'
             )
-            for q in me.questions.all():
+            for q in me.questions.filter(status='approved'):
                 SubjectiveAnswer.objects.create(attempt=attempt, question=q)
 
         elif mode == 'topic' and question_ids:
@@ -1023,7 +1083,7 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
             )
             for qid in question_ids:
                 try:
-                    q = Question.objects.get(id=qid, status='published', question_type='subjective')
+                    q = Question.objects.get(id=qid, status='approved', question_type__in=Question.SUBJECTIVE_TYPES)
                     SubjectiveAnswer.objects.create(attempt=attempt, question=q)
                 except Question.DoesNotExist:
                     pass
@@ -1052,6 +1112,12 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
 
         try:
             ans = SubjectiveAnswer.objects.get(attempt=attempt, question_id=question_id)
+            # A debounced autosave can land right after the student pressed
+            # Submit. It must never pull a submitted (or already evaluated)
+            # answer back to 'draft' - that would drop it from the
+            # evaluation queue, which lists status='submitted'.
+            if ans.status in ('submitted', 'evaluated'):
+                return Response({'detail': 'Answer already submitted.'}, status=400)
             ans.answer_text = answer_text
             ans.word_count = word_count
             ans.status = 'draft'
@@ -1079,6 +1145,23 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
             ans.status = 'submitted'
             ans.submitted_at = timezone.now()
             ans.save()
+
+            # Topic practice submits one answer at a time and never calls
+            # submit(). Once nothing is left in draft the attempt is complete:
+            # finalise it so the student's history shows the submission and
+            # its evaluation instead of a perpetual "Continue Draft", and
+            # admins are told there is something to evaluate.
+            if attempt.mode == 'topic' and not attempt.answers.filter(status='draft').exists():
+                attempt.status = 'submitted'
+                attempt.submitted_at = timezone.now()
+                attempt.save()
+                from core.notification_service import NotificationService
+                NotificationService.notify_admins(
+                    notif_type='evaluation',
+                    title='New Submission Awaiting Evaluation',
+                    message=f"{attempt.student.get_full_name() or attempt.student.username} submitted a topic practice answer that needs evaluation.",
+                    action_url='/admin-dashboard/evaluations',
+                )
             return Response({'status': 'submitted'})
         except SubjectiveAnswer.DoesNotExist:
             return Response({'detail': 'Question not in this attempt.'}, status=404)

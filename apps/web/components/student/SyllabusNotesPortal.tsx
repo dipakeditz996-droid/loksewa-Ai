@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { 
-  BookOpen, FileText, Download, Eye, Sparkles, 
-  Search, Filter, ChevronRight, Layers, CheckCircle2, 
-  ExternalLink, X, Maximize2, Minimize2, Clock, AlertCircle, RefreshCw
+import { useQuery } from "@tanstack/react-query";
+import {
+  BookOpen, FileText, Download, Eye, Sparkles,
+  Search, Filter, ChevronRight, Layers, CheckCircle2,
+  ExternalLink, X, Maximize2, Minimize2, Clock, AlertCircle, RefreshCw, Loader2
 } from "lucide-react";
-import { notesApi, StudentPortalResponse, StudentPortalPrep, StudyMaterial } from "@/lib/api/notes";
+import { notesApi, StudyMaterial } from "@/lib/api/notes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -25,12 +26,39 @@ export default function SyllabusNotesPortal({
   pageTitle = "Syllabus & Notes",
   pageSubtitle = "Access your official syllabus, topicwise detailed notes, and revision materials."
 }: SyllabusNotesPortalProps) {
-  const [data, setData] = useState<StudentPortalResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Active preparation ID
+  // Active preparation ID - also doubles as the React Query cache key
+  // discriminator, so switching back to a previously-viewed preparation is
+  // itself an instant cache hit, not just the default view.
   const [activePrepId, setActivePrepId] = useState<number | null>(null);
+
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+    error: queryError,
+    refetch,
+  } = useQuery({
+    // Syllabus/notes portal content is teacher/admin-authored and changes
+    // infrequently - a 5 minute staleTime means returning to this page
+    // shortly after leaving it (e.g. Dashboard -> Syllabus -> Dashboard ->
+    // Syllabus) shows the cached real data immediately with no loading
+    // state at all, only refetching in the background once actually stale.
+    queryKey: ["syllabus-notes-portal", activePrepId],
+    queryFn: () => notesApi.getStudentPortalView(activePrepId ?? undefined),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // React Query v5 dropped useQuery's onSuccess callback - react to the
+  // resolved data instead, same effect as the old callback (adopt the
+  // server's default-selected preparation into the query key once known).
+  useEffect(() => {
+    if (data?.selectedPreparation && data.selectedPreparation.id !== activePrepId) {
+      setActivePrepId(data.selectedPreparation.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const error = queryError instanceof Error ? queryError.message : (queryError ? "Failed to load syllabus and notes. Please try again." : null);
 
   // Active section tab
   const [activeSection, setActiveSection] = useState<'syllabus' | 'subjective_topicwise' | 'objective_topicwise' | 'revision_notes'>(initialSection);
@@ -48,30 +76,11 @@ export default function SyllabusNotesPortal({
   const [viewingMaterial, setViewingMaterial] = useState<StudyMaterial | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
 
-  const fetchPortalData = async (examId?: number) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await notesApi.getStudentPortalView(examId);
-      setData(res);
-      if (res.selectedPreparation) {
-        setActivePrepId(res.selectedPreparation.id);
-      }
-    } catch (err: any) {
-      console.error("Error loading student portal data:", err);
-      setError(err?.message || "Failed to load syllabus and notes. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPortalData();
-  }, []);
-
   const handlePrepChange = (prepId: number) => {
+    // Just switches the query key - React Query serves cached data
+    // instantly if this prep was viewed before in this session, otherwise
+    // fetches it fresh, same as the very first load.
     setActivePrepId(prepId);
-    fetchPortalData(prepId);
   };
 
   // Get active materials based on section and sub-type
@@ -156,7 +165,7 @@ export default function SyllabusNotesPortal({
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-2">Access Restricted</h2>
         <p className="text-muted-foreground max-w-md mx-auto mb-6">{error}</p>
-        <Button onClick={() => fetchPortalData(activePrepId || undefined)} className="bg-[#1A2E44] text-white">
+        <Button onClick={() => refetch()} className="bg-[#1A2E44] text-white">
           <RefreshCw className="w-4 h-4 mr-2" /> Try Again
         </Button>
       </div>
@@ -186,10 +195,19 @@ export default function SyllabusNotesPortal({
 
   return (
     <div className="max-w-[1400px] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-8">
-      
+
       {/* 1. HEADER & PREPARATION SELECTOR */}
       <div className="bg-gradient-to-br from-[#0F1E2E] via-[#162A3E] to-[#1E3A58] text-white rounded-2xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
         <div className="absolute right-0 top-0 w-96 h-full bg-gradient-to-l from-white/5 to-transparent pointer-events-none" />
+        {/* Cached content stays on screen during a background revalidation
+            (e.g. returning to this page after the 5 min staleTime) - this is
+            the only visible sign a refresh is happening, never a full-page
+            reload back to the loading state. */}
+        {isFetching && !loading && (
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 text-[11px] font-medium text-white/60 bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-sm">
+            <Loader2 className="w-3 h-3 animate-spin" /> Updating...
+          </div>
+        )}
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>

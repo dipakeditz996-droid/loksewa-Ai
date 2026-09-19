@@ -84,7 +84,17 @@ export interface RevealResult {
   explanation: string;
 }
 
+export interface AttemptState {
+  question_id: number;
+  selected_option: string | null;
+  is_correct: boolean | null;
+  is_viewed: boolean;
+  correct_option?: string;
+  explanation?: string;
+}
+
 export interface StudySessionResponse extends PracticeSessionResponse {
+  attempts: AttemptState[];
   resume_index: number;
   resumed: boolean;
 }

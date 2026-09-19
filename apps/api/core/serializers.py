@@ -2,16 +2,17 @@ from datetime import timedelta
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import AccessToken
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import exceptions
 
 
-def _apply_admin_session_timeout(data, user):
+def _apply_admin_session_timeout(data, user, admin_settings=None):
     """Re-issues the access token with a lifetime pulled from
     AdminSettings.session_timeout_minutes (Admin Settings > Security), which
     the static SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'] setting cannot express
     since it's fixed at process start, not per-request."""
     from .models import AdminSettings
-    minutes = AdminSettings.get_settings().session_timeout_minutes
+    minutes = (admin_settings or AdminSettings.get_settings()).session_timeout_minutes
     access = AccessToken.for_user(user)
     access.set_exp(lifetime=timedelta(minutes=minutes))
     data['access'] = str(access)
@@ -39,29 +40,34 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'account_locked',
             )
 
-        try:
-            data = super().validate(attrs)
-        except exceptions.AuthenticationFailed as e:
-            # If the user is inactive, authenticate() returns None and SimpleJWT raises AuthenticationFailed.
-            # But we also need to distinguish between wrong password and disabled account.
-            # By default, Django's authenticate returns None for both wrong password and disabled account
-            # if user_can_authenticate() returns False, unless we catch it.
-            # Wait, `EmailOrUsernameModelBackend` calls `self.user_can_authenticate(user)`, which returns False if `is_active` is False.
-            # To provide a distinct message for inactive users, we can check manually here before calling super().
-            pass
-
-        # Manual check to distinguish inactive vs wrong password
         from django.contrib.auth import authenticate
 
-        user = authenticate(request=self.context.get('request'), username=username, password=password)
-
-        if user is None:
-            if looked_up_user and looked_up_user.check_password(password) and not looked_up_user.is_active:
+        # Inactive account: verify the password once here (authenticate()
+        # would reject it after hashing, and re-checking would hash again) so
+        # a disabled account is told apart from a wrong password only when
+        # the password itself was correct.
+        if looked_up_user is not None and not looked_up_user.is_active:
+            if looked_up_user.check_password(password):
                 raise exceptions.AuthenticationFailed(
                     'Your account has been disabled. Please contact support.',
                     'account_disabled'
                 )
+            record_failed_attempt(looked_up_user)
+            raise exceptions.AuthenticationFailed(
+                'Invalid email/username or password.',
+                'no_active_account'
+            )
 
+        # The account was already resolved above (one query); hand it to the
+        # backend so it neither looks it up again nor skips verification.
+        user = authenticate(
+            request=self.context.get('request'),
+            username=username,
+            password=password,
+            user=looked_up_user,
+        )
+
+        if user is None:
             # A wrong password against a real account counts toward lockout.
             # A username/email that doesn't exist at all never does - there's
             # no account to protect, and it would let someone lock out a
@@ -79,8 +85,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # checked only after the password is confirmed correct, so a wrong
         # password never leaks whether an account is verified.
         if user.role == 'student':
-            from support.models import StudentProfile
-            profile = StudentProfile.objects.filter(user=user).only('is_verified').first()
+            # Loaded together with the user by find_user_by_username_or_email.
+            try:
+                profile = user.student_profile
+            except ObjectDoesNotExist:
+                profile = None
             if profile and not profile.is_verified:
                 raise exceptions.AuthenticationFailed(
                     'Please verify your email before logging in. Check your inbox for the verification code, '
@@ -95,7 +104,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         # is what makes 2FA apply no matter which portal the user typed
         # their password into.
         from .models import AdminSettings
-        if AdminSettings.get_settings().enable_two_factor_auth and user.is_2fa_enabled:
+        admin_settings = AdminSettings.get_settings()
+        if admin_settings.enable_two_factor_auth and user.is_2fa_enabled:
             from .two_factor_views import TwoFactorPendingToken
             pending = TwoFactorPendingToken.for_user(user)
             return {
@@ -103,18 +113,30 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'pendingToken': str(pending),
             }
 
-        # If user is valid, we still use the super().validate() to get the tokens,
-        # but we must pass the actual username because the provided username might be an email.
-        attrs[username_field] = user.username
-
+        # The user was authenticated above (one password verification).
+        # Issue tokens for that user directly - re-running
+        # TokenObtainPairSerializer.validate() here would authenticate a
+        # second time, re-hashing the password for no security benefit.
+        from django.contrib.auth.models import update_last_login
+        from rest_framework_simplejwt.settings import api_settings
+        if not api_settings.USER_AUTHENTICATION_RULE(user):
+            raise exceptions.AuthenticationFailed(
+                self.error_messages['no_active_account'], 'no_active_account'
+            )
+        self.user = user
         record_successful_login(user)
-        data = super().validate(attrs)
+        refresh = self.get_token(user)
+        data = {'refresh': str(refresh), 'access': str(refresh.access_token)}
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(None, user)
         data['user'] = {
             'id': user.id,
             'username': user.username,
             'name': f"{user.first_name} {user.last_name}".strip() or user.username,
             'email': user.email,
             'role': user.role,
+            'is_active': user.is_active,
+            'avatar': user.avatar,
         }
-        return _apply_admin_session_timeout(data, user)
+        return _apply_admin_session_timeout(data, user, admin_settings)
 

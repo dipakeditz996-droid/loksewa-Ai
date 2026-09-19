@@ -122,7 +122,7 @@ function SubjectiveAnswerContent() {
 
   // Debounced auto-save
   useEffect(() => {
-    if (!attempt || !attempt.answers[currentIndex]) return;
+    if (!attempt || !attempt.answers[currentIndex] || submitting) return;
     const currentQId = attempt.answers[currentIndex].question.id;
     const text = answers[currentQId];
 
@@ -135,7 +135,7 @@ function SubjectiveAnswerContent() {
     }, 3000);
 
     return () => clearTimeout(handler);
-  }, [answers, currentIndex, attempt]);
+  }, [answers, currentIndex, attempt, submitting]);
 
 
   const handleManualSubmit = async () => {
@@ -292,7 +292,7 @@ function SubjectiveAnswerContent() {
               </div>
               <div className="bg-white border border-slate-200 rounded-[12px] p-4 flex items-center justify-between">
                 <div className="text-[12px] font-bold text-slate-500 uppercase tracking-wider">Suggested Time</div>
-                <div className="text-[16px] font-bold text-[#0B2545]">{currentQ.suggested_time_minutes} Mins</div>
+                <div className="text-[16px] font-bold text-[#0B2545]">{currentQ.expected_time_minutes} Mins</div>
               </div>
             </div>
           </div>

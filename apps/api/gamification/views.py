@@ -1,5 +1,6 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from administration.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import viewsets
@@ -40,17 +41,19 @@ def student_referral_dashboard(request):
     # 1. Rank (Real DB Calculation)
     rank = GamificationProfile.objects.filter(xp__gt=profile.xp).count() + 1
     
-    # 2. 7-Day Streak Array Calculation
+    # 2. 7-Day Streak Array Calculation - one query for the whole window
+    # instead of one .exists() per day (was 7 identical-shaped queries).
     from datetime import timedelta
     today = timezone.now().date()
-    streak_days = [False] * 7
-    for i in range(7):
-        day = today - timedelta(days=6 - i)
-        has_activity = XPTransaction.objects.filter(
+    window_start = today - timedelta(days=6)
+    active_dates = set(
+        XPTransaction.objects.filter(
             user=request.user,
-            created_at__date=day
-        ).exists()
-        streak_days[i] = has_activity
+            created_at__date__gte=window_start,
+            created_at__date__lte=today,
+        ).values_list('created_at__date', flat=True).distinct()
+    )
+    streak_days = [(today - timedelta(days=6 - i)) in active_dates for i in range(7)]
         
     # 3. Games stats
     games_played = 0

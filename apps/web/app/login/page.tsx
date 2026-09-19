@@ -11,7 +11,7 @@ import rightBranchImg from "../../media/right-branch.png";
 import Image from "next/image";
 
 import { useRouter } from "next/navigation";
-import { authApi } from "../../lib/api/auth";
+import { authApi, User as AuthUser } from "../../lib/api/auth";
 import { useAuth } from "../../contexts/AuthContext";
 import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
 
@@ -23,7 +23,8 @@ function LoginContent() {
   const [pendingToken, setPendingToken] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const router = useRouter();
-  const { user, loading: authLoading, refreshUser } = useAuth();
+  const { user, loading: authLoading, signIn } = useAuth();
+  const redirectedRef = React.useRef(false);
   const loginCardRef = useRef<HTMLDivElement>(null);
 
   // On mobile the brand/hero copy stacks above the login form, so jump
@@ -44,7 +45,7 @@ function LoginContent() {
   // `user.role` comes from AuthContext's /api/auth/me/ call, i.e. the
   // backend, never from anything client-supplied.
   useEffect(() => {
-    if (authLoading || !user) return;
+    if (authLoading || !user || redirectedRef.current) return;
     if (user.role === "teacher") {
       router.replace("/teacher");
     } else if (user.role === "admin" || user.role === "super-admin") {
@@ -59,7 +60,8 @@ function LoginContent() {
     setError("");
     try {
       const result = await authApi.socialLogin(provider, token);
-      await refreshUser();
+      redirectedRef.current = true;
+      await signIn(result.user);
 
       // Non-student roles go straight to their dashboard
       if (result.user?.role === "teacher") {
@@ -90,13 +92,15 @@ function LoginContent() {
     onError: () => setError("Google login failed")
   });
 
-  const redirectByRole = async () => {
-    await refreshUser(); // update context
-    const user = await authApi.me();
+  // `loginUser` is the user object the login response already returned, so
+  // the redirect needs no extra /auth/me/ round trips.
+  const redirectByRole = async (loginUser: AuthUser) => {
+    redirectedRef.current = true;
+    const signedIn = (await signIn(loginUser)) ?? loginUser;
 
-    if (user.role === "teacher") {
+    if (signedIn.role === "teacher") {
       router.push("/teacher");
-    } else if (user.role === "admin" || user.role === "super-admin") {
+    } else if (signedIn.role === "admin" || signedIn.role === "super-admin") {
       router.push("/admin-dashboard");
     } else {
       router.push("/student");
@@ -119,7 +123,7 @@ function LoginContent() {
         setIsLoading(false);
         return;
       }
-      await redirectByRole();
+      await redirectByRole(result.user ?? (await authApi.me()));
     } catch (err: any) {
       setError(err.message || err.detail || "Invalid credentials. Please try again.");
       setIsLoading(false);
@@ -131,8 +135,8 @@ function LoginContent() {
     setIsLoading(true);
     setError("");
     try {
-      await authApi.completeTwoFactorLogin(pendingToken, twoFactorCode);
-      await redirectByRole();
+      const twoFactorResult = await authApi.completeTwoFactorLogin(pendingToken, twoFactorCode);
+      await redirectByRole(twoFactorResult.user);
     } catch (err: any) {
       setError(err?.data?.error || err.message || "Invalid or expired code. Please try again.");
       setIsLoading(false);

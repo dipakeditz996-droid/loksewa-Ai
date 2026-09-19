@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { studentExamsApi, isSubjectiveQuestionType } from "@/lib/api/student-exams";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import toast from "react-hot-toast";
 
 export default function ExamAttemptPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { beginExamFocus, endExamFocus } = useFocusMode();
 
   // Next.js 15 passes route params as a Promise to Server Components; in a
@@ -83,6 +84,11 @@ export default function ExamAttemptPage() {
     mutationFn: () => studentExamsApi.submitAttempt(attemptId),
     onSuccess: () => {
       toast.success("Exam submitted successfully!");
+      // The dashboard's stats (XP, streak, accuracy) and leaderboard both
+      // just changed server-side - without this, either would keep showing
+      // pre-submission numbers for up to their staleTime on next visit.
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-overview"] });
       router.replace(`/student/exams/${examId}/result/${attemptId}`);
     },
     onError: () => {

@@ -11,14 +11,23 @@ LOCKOUT_DURATION_MINUTES = 3
 
 
 def find_user_by_username_or_email(identifier):
+    """Resolves a login identifier to a user with ONE query (the profile
+    needed by the login's verification check is joined in, not fetched
+    separately). An exact username match wins over an email match. An
+    identifier that is ambiguous by email (several accounts share it) is
+    treated as unknown rather than guessing which account was meant."""
+    from django.db.models import Q
     from core.models import User
-    try:
-        return User.objects.get(username=identifier)
-    except User.DoesNotExist:
-        try:
-            return User.objects.get(email=identifier)
-        except User.DoesNotExist:
-            return None
+    if not identifier:
+        return None
+    candidates = list(
+        User.objects.select_related('student_profile')
+        .filter(Q(username=identifier) | Q(email=identifier))[:3]
+    )
+    for candidate in candidates:
+        if candidate.username == identifier:
+            return candidate
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def is_locked(user):

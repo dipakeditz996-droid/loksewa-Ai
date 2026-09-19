@@ -23,6 +23,7 @@ export const authApi = {
       refresh?: string;
       twoFactorRequired?: boolean;
       pendingToken?: string;
+      user?: User;
     }>("/token/", {
       method: "POST",
       body: JSON.stringify(credentials),

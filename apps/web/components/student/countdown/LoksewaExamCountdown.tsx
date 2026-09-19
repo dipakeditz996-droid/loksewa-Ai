@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Calendar, Clock, ExternalLink, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,10 +15,18 @@ interface TimeLeft {
   isExpired: boolean;
 }
 
+// Shared with the dashboard page so it can start this request the moment the
+// page mounts, in parallel with the main dashboard request, instead of only
+// once this (later-mounted) widget renders.
+export const nextOfficialExamQuery = {
+  queryKey: ["next-official-exam"],
+  queryFn: () => schedulesApi.getNextOfficialExam(),
+  staleTime: 5 * 60 * 1000,
+} as const;
+
 export function LoksewaExamCountdown({ className = "" }: { className?: string }) {
-  const [schedule, setSchedule] = useState<OfficialExamSchedule | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const { data, isLoading: loading, isError: error, refetch } = useQuery(nextOfficialExamQuery);
+  const schedule = data?.schedule ?? null;
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
@@ -28,39 +37,10 @@ export function LoksewaExamCountdown({ className = "" }: { className?: string })
   });
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function fetchSchedule() {
-      try {
-        setLoading(true);
-        setError(false);
-        const res = await schedulesApi.getNextOfficialExam();
-        if (!isMounted) return;
-
-        if (res.schedule) {
-          setSchedule(res.schedule);
-          if (res.server_time) {
-            const serverMs = new Date(res.server_time).getTime();
-            const clientMs = Date.now();
-            setServerOffsetMs(serverMs - clientMs);
-          }
-        } else {
-          setSchedule(null);
-        }
-      } catch (err) {
-        console.warn("Failed to load official exam schedule", err);
-        if (isMounted) setError(true);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
+    if (data?.server_time) {
+      setServerOffsetMs(new Date(data.server_time).getTime() - Date.now());
     }
-
-    fetchSchedule();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [data]);
 
   useEffect(() => {
     if (!schedule || !schedule.exam_date) return;
@@ -128,6 +108,7 @@ export function LoksewaExamCountdown({ className = "" }: { className?: string })
         <CardContent className="p-5 flex items-center gap-3 text-muted-foreground">
           <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
           <p className="text-xs">Unable to load exam schedule right now.</p>
+          <button type="button" onClick={() => refetch()} className="ml-auto text-xs font-semibold underline text-foreground">Retry</button>
         </CardContent>
       </Card>
     );

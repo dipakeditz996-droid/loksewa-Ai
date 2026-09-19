@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { Clock, Play, AlertCircle, FileText, CheckCircle2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,11 +17,17 @@ interface TimeLeft {
   isZero: boolean;
 }
 
+// Shared with the dashboard page (see LoksewaExamCountdown).
+export const upcomingMockExamQuery = {
+  queryKey: ["upcoming-mock-exam"],
+  queryFn: () => schedulesApi.getUpcomingMockExam(),
+  staleTime: 60 * 1000,
+} as const;
+
 export function MockExamCountdown({ className = "" }: { className?: string }) {
-  const [mockExam, setMockExam] = useState<UpcomingMockExam | null>(null);
+  const { data, isLoading: loading, isError: error, refetch } = useQuery(upcomingMockExamQuery);
+  const mockExam = data?.mock_exam ?? null;
   const [status, setStatus] = useState<"UPCOMING" | "LIVE" | "COMPLETED" | "NONE">("NONE");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     days: 0,
@@ -30,34 +37,13 @@ export function MockExamCountdown({ className = "" }: { className?: string }) {
     isZero: false,
   });
 
-  const fetchUpcomingMock = async () => {
-    try {
-      setLoading(true);
-      setError(false);
-      const res = await schedulesApi.getUpcomingMockExam();
-      if (res.mock_exam) {
-        setMockExam(res.mock_exam);
-        setStatus(res.status);
-        if (res.server_time) {
-          const serverMs = new Date(res.server_time).getTime();
-          const clientMs = Date.now();
-          setServerOffsetMs(serverMs - clientMs);
-        }
-      } else {
-        setMockExam(null);
-        setStatus("NONE");
-      }
-    } catch (err) {
-      console.error("Failed to load upcoming mock exam", err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchUpcomingMock();
-  }, []);
+    if (!data) return;
+    setStatus(data.mock_exam ? data.status : "NONE");
+    if (data.server_time) {
+      setServerOffsetMs(new Date(data.server_time).getTime() - Date.now());
+    }
+  }, [data]);
 
   useEffect(() => {
     if (!mockExam || !mockExam.start_time) return;
@@ -109,7 +95,19 @@ export function MockExamCountdown({ className = "" }: { className?: string }) {
     );
   }
 
-  if (error || !mockExam || status === "NONE") {
+  if (error) {
+    return (
+      <Card className={`bg-card border-border shadow-sm ${className}`}>
+        <CardContent className="p-5 flex items-center gap-3 text-muted-foreground">
+          <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+          <p className="text-xs">Unable to load upcoming mock exam.</p>
+          <button type="button" onClick={() => refetch()} className="ml-auto text-xs font-semibold underline text-foreground">Retry</button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!mockExam || status === "NONE") {
     return null; // Gracefully hidden if no upcoming mock test exists
   }
 

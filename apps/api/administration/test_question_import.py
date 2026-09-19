@@ -127,7 +127,7 @@ class UploadValidationTests(QuestionImportTestBase):
         ])
         row = response.data['report_data'][0]
         self.assertEqual(row['status'], 'error')
-        self.assertTrue(any('Correct Answer must be 1, 2, 3, 4' in e for e in row['errors']))
+        self.assertTrue(any('is invalid. Expected A, B, C or D' in e for e in row['errors']))
 
     def test_correct_answer_lowercase_normalized(self):
         response = self.upload([
@@ -199,6 +199,14 @@ class CommitTests(QuestionImportTestBase):
         self.assertEqual(commit_response.data['imported_count'], 1)
         self.assertEqual(Question.objects.filter(text='Capital of Nepal?').count(), 1)
         self.assertFalse(Question.objects.filter(text='Bad row').exists())
+
+    def test_commit_returns_created_question_ids(self):
+        response = self.upload([
+            [1, 'Capital of Nepal?', 1, 'Kathmandu', 'Pokhara', 'Lalitpur', 'Biratnagar', 'A', 'x', ''],
+        ])
+        commit_response = self.client.post(commit_url(response.data['import_id']))
+        created = Question.objects.get(text='Capital of Nepal?')
+        self.assertEqual(commit_response.data['question_ids'], [created.pk])
 
     def test_commit_sets_approved_status(self):
         response = self.upload([

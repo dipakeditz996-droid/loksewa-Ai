@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { 
   BookOpen, Target, Clock, Calendar, CheckCircle2, Circle, 
@@ -12,9 +13,10 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RetryImage } from "@/components/ui/retry-image";
-import { dashboardApi, DashboardData, AnalyticsOverview, DailyMotivation, QUICK_ACTIONS } from "@/lib/api/dashboard";
-import { gamificationService, ReferralProfile, ReferralStats, ReferralSettings } from "@/lib/api/gamification";
-import { courseEnrollmentApi, EnrollmentStatus } from "@/lib/api/enrollment";
+import { dashboardApi, QUICK_ACTIONS } from "@/lib/api/dashboard";
+import { gamificationService } from "@/lib/api/gamification";
+import { courseEnrollmentApi } from "@/lib/api/enrollment";
+import { notesApi } from "@/lib/api/notes";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import {
@@ -37,9 +39,9 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { LoksewaExamCountdown } from "@/components/student/countdown/LoksewaExamCountdown";
-import { MockExamCountdown } from "@/components/student/countdown/MockExamCountdown";
-import { AttractiveLoader } from "@/components/ui/attractive-loader";
+import { LoksewaExamCountdown, nextOfficialExamQuery } from "@/components/student/countdown/LoksewaExamCountdown";
+import { MockExamCountdown, upcomingMockExamQuery } from "@/components/student/countdown/MockExamCountdown";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // ─── Widget IDs ────────────────────────────────────────────────────────────────
 const FULL_WIDTH_WIDGETS = [
@@ -117,14 +119,77 @@ function WidgetDragGhost({ label }: { label: string }) {
 
 export default function StudentDashboardPage() {
   const { user } = useAuth();
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
-  const [motivation, setMotivation] = useState<DailyMotivation | null>(null);
-  const [referralData, setReferralData] = useState<{ profile: ReferralProfile, stats: ReferralStats, settings?: ReferralSettings } | null>(null);
-  const [referralHistory, setReferralHistory] = useState<any[]>([]);
-  const [enrollmentStatus, setEnrollmentStatus] = useState<EnrollmentStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+
+  // Critical: the data that actually gates/drives this page's render (the
+  // locked-vs-full-dashboard branch below reads data.package directly).
+  // Moderately-dynamic staleTime - short enough that finishing a practice
+  // session and coming straight back still feels fresh, long enough that
+  // Dashboard -> Syllabus -> Dashboard within the window is an instant
+  // cache hit with zero loading state, matching the rest of this page's
+  // existing "critical vs background" split (see the queries below).
+  const {
+    data,
+    isLoading: loading,
+    isFetching: dashboardFetching,
+    isError,
+    refetch: refetchDashboard,
+  } = useQuery({
+    queryKey: ["student-dashboard"],
+    queryFn: () => dashboardApi.getStudentDashboard(),
+    staleTime: 45 * 1000,
+  });
+  const error = isError && !data;
+
+  // Background/secondary data - each cached independently so, e.g., a
+  // stale referral list doesn't block a fresh analytics overview. All keep
+  // the exact same "swallow errors, render nothing" behavior the previous
+  // useState+.catch(() => null) version had, so no UI branch changes -
+  // only the caching/refetch layer underneath them does.
+  // Start the two countdown widgets' requests now, in parallel with the main
+  // dashboard request - they only mount once the dashboard data has arrived,
+  // so without this they would start after it and queue behind it.
+  useQuery(nextOfficialExamQuery);
+  useQuery(upcomingMockExamQuery);
+  const { data: motivation } = useQuery({
+    // Same quote all day - safe to treat as very stable.
+    queryKey: ["daily-motivation"],
+    queryFn: () => dashboardApi.getDailyMotivation().catch(() => null),
+    staleTime: 10 * 60 * 1000,
+  });
+  const { data: referralData, refetch: refetchReferral } = useQuery({
+    queryKey: ["referral-dashboard"],
+    queryFn: () => gamificationService.getStudentReferralDashboard().catch(() => null),
+    staleTime: 60 * 1000,
+  });
+  const { data: referralHistory = [] } = useQuery({
+    queryKey: ["referral-history"],
+    queryFn: () => gamificationService.getStudentReferralHistory().catch(() => []),
+    staleTime: 60 * 1000,
+  });
+  const { data: enrollmentStatus } = useQuery({
+    // Enrollment changes only on a purchase/enrollment action, not passively -
+    // safe to treat as fairly stable; the purchase flow invalidates this key
+    // directly (see courseEnrollmentApi usages) rather than relying on TTL.
+    queryKey: ["my-enrollment"],
+    queryFn: () => courseEnrollmentApi.getMyEnrollment().catch(() => null),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Background data warming: once the dashboard itself has rendered, quietly
+  // pre-fetch Syllabus's own data (the most-visited next destination from
+  // here) into the shared cache so that navigating there lands on an instant
+  // cache hit instead of a fresh loading state. prefetchQuery is a no-op if
+  // this key is already cached and fresh, so this never causes extra network
+  // traffic on a warm return visit.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!data) return;
+    queryClient.prefetchQuery({
+      queryKey: ["syllabus-notes-portal", null],
+      queryFn: () => notesApi.getStudentPortalView(undefined),
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [data, queryClient]);
 
   // ── DnD state ──────────────────────────────────────────────────────────────
   const [fullOrder, setFullOrder] = useState<FullWidthId[]>(() =>
@@ -166,37 +231,26 @@ export default function StudentDashboardPage() {
     });
   }, []);
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      setError(false);
-
-      // 1. Kick off non-critical background fetches (parallel processing without blocking)
-      gamificationService.getStudentReferralDashboard().then(res => { if (res) setReferralData(res); }).catch(() => null);
-      gamificationService.getStudentReferralHistory().then(res => { if (res) setReferralHistory(res); }).catch(() => setReferralHistory([]));
-      courseEnrollmentApi.getMyEnrollment().then(res => { if (res) setEnrollmentStatus(res); }).catch(() => null);
-      dashboardApi.getAnalyticsOverview().then(res => { if (res) setAnalytics(res); }).catch(() => null);
-      dashboardApi.getDailyMotivation().then(res => { if (res) setMotivation(res); }).catch(() => null);
-
-      // 2. Await ONLY the critical dashboard data
-      const res = await dashboardApi.getStudentDashboard();
-      setData(res);
-    } catch (err) {
-      console.error(err);
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading) {
+    // Section-shaped placeholders (no data is shown until it is real).
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <AttractiveLoader />
+      <div className="p-4 md:p-8 space-y-6" aria-busy="true" aria-label="Loading your dashboard">
+        <div className="rounded-2xl border border-border bg-card p-6 space-y-5">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-14 w-14 rounded-full" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        </div>
+        <Skeleton className="h-40 rounded-2xl" />
+        <div className="grid md:grid-cols-3 gap-4">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}
+        </div>
       </div>
     );
   }
@@ -206,10 +260,14 @@ export default function StudentDashboardPage() {
       <div className="p-12 text-center max-w-lg mx-auto">
         <h2 className="text-2xl font-bold mb-2">Dashboard Unavailable</h2>
         <p className="text-muted-foreground mb-6">We couldn't load your dashboard data at this moment.</p>
-        <Button onClick={loadDashboard}>Retry</Button>
+        <Button onClick={() => refetchDashboard()}>Retry</Button>
       </div>
     );
   }
+
+  // Journey progress / active course come from the dashboard response itself
+  // (same overview computation) - no separate analytics request.
+  const analytics = { journey_progress: data.stats.progress, active_course: data.activeCourse };
 
   // Server-enforced package lock (subscriptions.permissions.HasActiveSubscription
   // is the real gate on protected endpoints - this is just the matching UI
@@ -337,8 +395,16 @@ export default function StudentDashboardPage() {
     <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-8 bg-muted/50 min-h-[calc(100vh-72px)]">
       
       {/* 1. HEADER (not draggable — always pinned at top) */}
-      <section className="bg-card p-6 md:p-8 rounded-[16px] border border-border shadow-sm flex flex-col xl:flex-row justify-between gap-8">
-        
+      <section className="bg-card p-6 md:p-8 rounded-[16px] border border-border shadow-sm flex flex-col xl:flex-row justify-between gap-8 relative">
+        {/* Returning to this page within the 45s staleTime shows this cached
+            data immediately (no skeleton) while a background refresh runs -
+            this is the only visible trace of that refresh. */}
+        {dashboardFetching && !loading && (
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
+            <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Updating...
+          </div>
+        )}
+
         {/* Left Side: Avatar & Gamification */}
         <div className="flex-1 flex flex-col justify-between gap-6">
           <div className="flex gap-4 items-center">
@@ -422,7 +488,13 @@ export default function StudentDashboardPage() {
               <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
                  <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP</div>
                  <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
-                 <div className="text-[10px] text-muted-foreground font-medium">Unable to load</div>
+                 <div className="text-[10px] text-muted-foreground font-medium">
+                   {referralData === undefined ? "Loading..." : (
+                     <>Unable to load{" "}
+                       <button type="button" onClick={() => refetchReferral()} className="underline font-semibold text-foreground">Retry</button>
+                     </>
+                   )}
+                 </div>
               </div>
               <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
                  <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Target className="w-3.5 h-3.5 text-blue-500" /> Current Level</div>

@@ -1,15 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
-import {
-  adminApi,
-  AdminStats,
-  AdminExamsOverview,
-  AdminAITutorOverview,
-  AdminMarketplaceOverview,
-  AnalyticsDataPoint,
-} from "@/lib/api/admin";
+import dynamic from "next/dynamic";
+import { adminApi } from "@/lib/api/admin";
 import { StatCard } from "@/components/admin/stat-card";
 import { ActivityFeed } from "@/components/admin/activity-feed";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,17 +29,18 @@ import {
   TrendingUp,
   Activity,
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+
+
+// recharts (~110 KB gzip) is deferred: it is below the stat cards, so the
+// dashboard's first meaningful content no longer waits for it.
+const PlatformActivityChart = dynamic(
+  () => import("@/components/admin/dashboard-charts").then((m) => m.PlatformActivityChart),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse rounded-lg bg-slate-100" /> }
+);
+const AiTrendMiniChart = dynamic(
+  () => import("@/components/admin/dashboard-charts").then((m) => m.AiTrendMiniChart),
+  { ssr: false, loading: () => <div className="h-full w-full animate-pulse rounded bg-slate-100" /> }
+);
 
 // ===== Time period filter =====
 const PERIODS = [
@@ -76,6 +73,7 @@ function SectionCard({
   actionHref,
   loading,
   error,
+  onRetry,
   className = "",
 }: {
   title: string;
@@ -85,6 +83,7 @@ function SectionCard({
   actionHref?: string;
   loading?: boolean;
   error?: boolean;
+  onRetry?: () => void;
   className?: string;
 }) {
   return (
@@ -107,7 +106,15 @@ function SectionCard({
         {error ? (
           <div className="flex items-center gap-2 py-4 text-red-500 text-sm">
             <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>Failed to load data.</span>
+            <span>Unable to load</span>
+            {onRetry && (
+              <button
+                onClick={onRetry}
+                className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 text-[12px] font-semibold text-[#0B2545] border border-slate-200 rounded-md hover:bg-slate-50"
+              >
+                <RefreshCw className="h-3 w-3" /> Retry
+              </button>
+            )}
           </div>
         ) : (
           children
@@ -136,93 +143,93 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// Custom tooltip for recharts
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs">
-      <p className="font-semibold text-slate-600 mb-2">{label}</p>
-      {payload.map((p) => (
-        <div key={p.name} className="flex items-center gap-2 py-0.5">
-          <div className="h-2 w-2 rounded-full" style={{ background: p.color }} />
-          <span className="text-slate-500">{p.name}:</span>
-          <span className="font-bold text-slate-800">{p.value.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 // ===== MAIN PAGE =====
 export default function AdminDashboardOverview() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [examsData, setExamsData] = useState<AdminExamsOverview | null>(null);
-  const [aiData, setAiData] = useState<AdminAITutorOverview | null>(null);
-  const [marketData, setMarketData] = useState<AdminMarketplaceOverview | null>(null);
-  const [chartData, setChartData] = useState<AnalyticsDataPoint[]>([]);
-
-  const [loadingStats, setLoadingStats] = useState(true);
-  const [loadingExams, setLoadingExams] = useState(true);
-  const [loadingAI, setLoadingAI] = useState(true);
-  const [loadingMarket, setLoadingMarket] = useState(true);
-  const [loadingChart, setLoadingChart] = useState(true);
-
-  const [errorStats, setErrorStats] = useState(false);
-  const [errorExams, setErrorExams] = useState(false);
-  const [errorAI, setErrorAI] = useState(false);
-  const [errorMarket, setErrorMarket] = useState(false);
-
   const [period, setPeriod] = useState<Period>("30d");
-  const [days, setDays] = useState(30);
+  // Cache entries are scoped to the authenticated identity (defense in depth
+  // on top of AuthContext purging the cache on any identity change).
+  const { user } = useAuth();
+  const uid = user?.id ?? "anon";
 
-  const fetchStats = useCallback(() => {
-    setLoadingStats(true);
-    setErrorStats(false);
-    adminApi.getDashboardStats()
-      .then(setStats)
-      .catch(() => setErrorStats(true))
-      .finally(() => setLoadingStats(false));
-  }, []);
+  // Critical: drives most of the stat cards + the activity feed.
+  const {
+    data: stats,
+    isLoading: loadingStats,
+    isFetching: statsFetching,
+    isError: errorStats,
+    refetch: refetchStats,
+  } = useQuery({
+    queryKey: ["admin-dashboard-stats", uid],
+    enabled: !!user,
+    retry: 1,
+    queryFn: () => adminApi.getDashboardStats(),
+    staleTime: 45 * 1000,
+  });
 
-  const fetchSupplementary = useCallback(() => {
-    setLoadingExams(true);
-    adminApi.getExamsOverview()
-      .then(setExamsData)
-      .catch(() => setErrorExams(true))
-      .finally(() => setLoadingExams(false));
+  // Secondary: independent of stats and of each other, loaded in parallel
+  // (each its own useQuery fires immediately, not chained/awaited).
+  const {
+    data: examsData,
+    isLoading: loadingExams,
+    isError: errorExams,
+    refetch: refetchExams,
+  } = useQuery({
+    queryKey: ["admin-exams-overview", uid],
+    enabled: !!user,
+    retry: 1,
+    queryFn: () => adminApi.getExamsOverview(),
+    staleTime: 45 * 1000,
+  });
+  const {
+    data: aiData,
+    isLoading: loadingAI,
+    isError: errorAI,
+    refetch: refetchAI,
+  } = useQuery({
+    queryKey: ["admin-ai-tutor-overview", uid],
+    enabled: !!user,
+    retry: 1,
+    queryFn: () => adminApi.getAITutorOverview(),
+    staleTime: 45 * 1000,
+  });
+  const {
+    data: marketData,
+    isLoading: loadingMarket,
+    isError: errorMarket,
+    refetch: refetchMarket,
+  } = useQuery({
+    queryKey: ["admin-marketplace-overview", uid],
+    enabled: !!user,
+    retry: 1,
+    queryFn: () => adminApi.getMarketplaceOverview(),
+    staleTime: 45 * 1000,
+  });
 
-    setLoadingAI(true);
-    adminApi.getAITutorOverview()
-      .then(setAiData)
-      .catch(() => setErrorAI(true))
-      .finally(() => setLoadingAI(false));
+  // Heavy: keyed by period so each period is independently cached - switching
+  // between two previously-viewed periods is itself an instant cache hit.
+  const {
+    data: chartResponse,
+    isLoading: loadingChart,
+    isError: errorChart,
+    refetch: refetchChart,
+  } = useQuery({
+    queryKey: ["admin-analytics", uid, period],
+    enabled: !!user,
+    retry: 1,
+    queryFn: () => adminApi.getAnalytics(period),
+    staleTime: 60 * 1000,
+  });
+  const chartData = chartResponse?.chartData ?? [];
+  const days = chartResponse?.days ?? 30;
 
-    setLoadingMarket(true);
-    adminApi.getMarketplaceOverview()
-      .then(setMarketData)
-      .catch(() => setErrorMarket(true))
-      .finally(() => setLoadingMarket(false));
-  }, []);
-
-  const fetchChart = useCallback((p: Period) => {
-    setLoadingChart(true);
-    adminApi.getAnalytics(p)
-      .then((d) => {
-        setChartData(d.chartData);
-        setDays(d.days);
-      })
-      .catch(() => setChartData([]))
-      .finally(() => setLoadingChart(false));
-  }, []);
-
-  useEffect(() => {
-    fetchStats();
-    fetchSupplementary();
-  }, [fetchStats, fetchSupplementary]);
-
-  useEffect(() => {
-    fetchChart(period);
-  }, [period, fetchChart]);
+  const refreshAll = () => {
+    refetchStats();
+    refetchExams();
+    refetchAI();
+    refetchMarket();
+    refetchChart();
+  };
 
   // ===== Quick Actions =====
   const quickActions = [
@@ -246,11 +253,18 @@ export default function AdminDashboardOverview() {
       {/* ===== Page Header ===== */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-[22px] font-bold text-[#0B2545] tracking-tight">Dashboard Overview</h1>
+          <h1 className="text-[22px] font-bold text-[#0B2545] tracking-tight flex items-center gap-2">
+            Dashboard Overview
+            {statsFetching && !loadingStats && (
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Updating...
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-slate-600 mt-0.5">Monitor your platform metrics and activity.</p>
         </div>
         <button
-          onClick={() => { fetchStats(); fetchSupplementary(); fetchChart(period); }}
+          onClick={refreshAll}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -262,7 +276,13 @@ export default function AdminDashboardOverview() {
       {errorStats && (
         <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>Failed to load dashboard statistics. Please check your connection and try refreshing.</span>
+          <span>Unable to load dashboard statistics.</span>
+          <button
+            onClick={() => refetchStats()}
+            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 text-[12px] font-semibold border border-red-200 rounded-md hover:bg-red-100"
+          >
+            <RefreshCw className="h-3 w-3" /> Retry
+          </button>
         </div>
       )}
 
@@ -429,52 +449,22 @@ export default function AdminDashboardOverview() {
                   <Skeleton key={i} className="flex-1 rounded-t-sm" style={{ height: `${30 + Math.random() * 60}%` }} />
                 ))}
               </div>
+            ) : errorChart ? (
+              <div className="h-full flex items-center justify-center gap-3 text-sm text-red-500">
+                <AlertCircle className="h-4 w-4" /> Unable to load
+                <button
+                  onClick={() => refetchChart()}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[12px] font-semibold text-[#0B2545] border border-slate-200 rounded-md hover:bg-slate-50"
+                >
+                  <RefreshCw className="h-3 w-3" /> Retry
+                </button>
+              </div>
             ) : chartData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-sm text-slate-600">
                 No data available for this period.
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={formattedChart} margin={{ top: 4, right: 10, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval={Math.floor(formattedChart.length / 6)}
-                  />
-                  <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line
-                    type="monotone"
-                    dataKey="registrations"
-                    name="Registrations"
-                    stroke="#0B2545"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: "#0B2545" }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="examAttempts"
-                    name="Exam Attempts"
-                    stroke="#D4A72C"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: "#D4A72C" }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="aiSessions"
-                    name="AI Sessions"
-                    stroke="#8b5cf6"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, fill: "#8b5cf6" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <PlatformActivityChart data={formattedChart} />
             )}
           </div>
           {/* Chart legend */}
@@ -501,6 +491,7 @@ export default function AdminDashboardOverview() {
           actionHref="/admin-dashboard/analytics"
           loading={false}
           error={errorStats}
+          onRetry={() => refetchStats()}
         >
           <ActivityFeed
             activities={stats?.recentActivity ?? []}
@@ -521,6 +512,7 @@ export default function AdminDashboardOverview() {
           actionHref="/admin-dashboard/users"
           loading={false}
           error={errorStats}
+          onRetry={() => refetchStats()}
         >
           {loadingStats ? (
             <div className="space-y-3">
@@ -561,6 +553,7 @@ export default function AdminDashboardOverview() {
           actionHref="/admin-dashboard/academic/exams"
           loading={false}
           error={errorExams}
+          onRetry={() => refetchExams()}
         >
           {loadingExams ? (
             <div className="space-y-3">
@@ -608,6 +601,7 @@ export default function AdminDashboardOverview() {
           actionHref="/admin-dashboard/ai-tutor"
           loading={false}
           error={errorAI}
+          onRetry={() => refetchAI()}
         >
           {loadingAI ? (
             <div className="space-y-3">
@@ -633,20 +627,7 @@ export default function AdminDashboardOverview() {
                 <div>
                   <p className="text-[11px] text-slate-600 font-medium mb-2">Last 7 days trend</p>
                   <div className="h-12">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={aiData.trend} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                        <Bar dataKey="sessions" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
-                        <Tooltip
-                          content={({ active, payload }) =>
-                            active && payload?.length ? (
-                              <div className="bg-white border border-slate-200 rounded px-2 py-1 text-xs shadow">
-                                <span className="font-bold text-violet-700">{payload[0]?.value} sessions</span>
-                              </div>
-                            ) : null
-                          }
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <AiTrendMiniChart data={aiData.trend} />
                   </div>
                 </div>
               )}
@@ -679,6 +660,7 @@ export default function AdminDashboardOverview() {
           className="lg:col-span-3"
           loading={false}
           error={errorMarket}
+          onRetry={() => refetchMarket()}
         >
           {loadingMarket ? (
             <div className="space-y-3">

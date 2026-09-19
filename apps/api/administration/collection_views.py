@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions, status
+from .permissions import IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from exams.models import QuestionCollection, CollectionRule, Question
@@ -87,7 +88,7 @@ class CollectionQuestionSerializer(serializers.ModelSerializer):
 class QuestionCollectionViewSet(viewsets.ModelViewSet):
     queryset = QuestionCollection.objects.all().order_by('-created_at')
     serializer_class = QuestionCollectionSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

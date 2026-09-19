@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -26,6 +27,7 @@ import Link from "next/link";
 
 export default function PlanCheckoutPage({ params }: { params: Promise<{ planId: string }> }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const unwrappedParams = use(params);
 
   const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
@@ -181,6 +183,12 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
         transactionId: transactionId.trim(),
         selectedCoursesCount: selectedCourseIds.length,
       });
+      // The dashboard's package block (latestPayment/status) and enrollment
+      // status both just changed server-side - targeted invalidation so the
+      // student sees "pending verification" immediately on their next visit
+      // instead of stale "no package" data for up to the cache's staleTime.
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["my-enrollment"] });
     } catch (err: any) {
       console.error(err);
       setError(err.detail || err.error || err.message || "Failed to submit payment. Please verify your details.");

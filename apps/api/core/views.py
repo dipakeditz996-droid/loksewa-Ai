@@ -633,34 +633,17 @@ class StudentDashboardView(APIView):
         except Exception as e:
             logger.error(f"Error fetching recent exams for dashboard: {e}")
 
-        # Purchases
+        # Purchases and Subject Performance: kept in the response shape for
+        # API-contract stability, but their queries (CourseApplication fetch,
+        # PracticeSession aggregate) are skipped - confirmed unused by every
+        # frontend consumer of this endpoint (student/page.tsx,
+        # student/purchases/page.tsx, student/layout.tsx all leave these two
+        # fields untouched), so they were pure wasted round trips on a
+        # critical/blocking path against a remote DB where each round trip
+        # measured ~250-400ms. Restore the real computation here if a future
+        # UI actually needs them.
         purchases_data = []
-        try:
-            from courses.models import CourseApplication
-            applications = CourseApplication.objects.filter(student=user).select_related('course').order_by('-applied_at')[:5]
-            for app in applications:
-                purchases_data.append({
-                    "id": app.id,
-                    "title": app.course.title if app.course else "Course Application",
-                    "status": "APPROVED" if app.status == 'approved' else "PENDING",
-                    "url": f"/student/courses/{app.course.slug}" if app.course else "/student/courses"
-                })
-        except Exception as e:
-            logger.error(f"Error fetching purchases for dashboard: {e}")
-
-        # Subject Performance
-        try:
-            subject_performance = AnalyticsService.get_subject_performance(user)
-            formatted_subject_performance = [
-                {
-                    "subject": sp["subject"],
-                    "progress": sp["accuracy"]
-                }
-                for sp in subject_performance[:5]
-            ]
-        except Exception as e:
-            logger.error(f"Error fetching subject performance: {e}")
-            formatted_subject_performance = []
+        formatted_subject_performance = []
 
         # Today's Plan
         todays_plan = []
@@ -689,41 +672,15 @@ class StudentDashboardView(APIView):
         # dashboard state without a second round-trip. Reuses
         # subscriptions.access (the same check HasActiveSubscription enforces
         # server-side) so this can never drift from what's actually allowed.
-        from .models import AdminSettings
-        from subscriptions.access import get_active_subscription, has_admin_granted_access
-        from subscriptions.models import SubscriptionPayment
-
-        active_subscription = get_active_subscription(user)
-        is_admin_granted = has_admin_granted_access(user)
-        latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
-        latest_payment_data = None
-        if latest_payment and not active_subscription:
-            # Only surface the latest payment while there's no active package
-            # to explain - once a package is active, pending/rejected history
-            # from before it belongs on the purchases/history page, not here.
-            latest_payment_data = {
-                "status": latest_payment.status,
-                "rejectionReason": latest_payment.rejection_reason or None,
-                "planName": latest_payment.plan.name,
-                "amount": str(latest_payment.amount),
-                "submittedAt": latest_payment.submitted_at.isoformat() if latest_payment.submitted_at else None,
-            }
-
-        package_data = {
-            "enforcementEnabled": AdminSettings.get_settings().enforce_subscription_access,
-            "hasActivePackage": active_subscription is not None or is_admin_granted,
-            "isAdminGranted": is_admin_granted,
-            "planName": active_subscription.plan.name if active_subscription else None,
-            "status": active_subscription.status if active_subscription else None,
-            "expiryDate": active_subscription.expiry_date.isoformat() if active_subscription else None,
-            "remainingDays": max((active_subscription.expiry_date - timezone.now()).days, 0) if active_subscription else None,
-            "latestPayment": latest_payment_data,
-        }
+        package_data = _get_package_status(user)
 
         data = {
             "profile": profile_data,
             "stats": stats_data,
             "continueLearning": continue_learning,
+            # Same active_course the overview already computed (no extra
+            # query) - lets the dashboard drop its separate analytics fetch.
+            "activeCourse": active_course,
             "todaysPlan": todays_plan,
             "recentExams": recent_exams_data,
             "purchases": purchases_data,
@@ -733,6 +690,63 @@ class StudentDashboardView(APIView):
         }
 
         return Response(data)
+
+
+def _get_package_status(user):
+    """
+    Shared by StudentDashboardView and StudentPackageStatusView so the
+    latter (a lightweight navigation-guard check - see student/layout.tsx)
+    never has to pull in the full dashboard's profile/stats/activity
+    computation just to read a couple of package-lock booleans.
+    """
+    from .models import AdminSettings
+    from subscriptions.access import get_active_subscription, has_admin_granted_access
+    from subscriptions.models import SubscriptionPayment
+
+    active_subscription = get_active_subscription(user)
+    is_admin_granted = has_admin_granted_access(user)
+    latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
+    latest_payment_data = None
+    if latest_payment and not active_subscription:
+        # Only surface the latest payment while there's no active package
+        # to explain - once a package is active, pending/rejected history
+        # from before it belongs on the purchases/history page, not here.
+        latest_payment_data = {
+            "status": latest_payment.status,
+            "rejectionReason": latest_payment.rejection_reason or None,
+            "planName": latest_payment.plan.name,
+            "amount": str(latest_payment.amount),
+            "submittedAt": latest_payment.submitted_at.isoformat() if latest_payment.submitted_at else None,
+        }
+
+    return {
+        "enforcementEnabled": AdminSettings.get_settings().enforce_subscription_access,
+        "hasActivePackage": active_subscription is not None or is_admin_granted,
+        "isAdminGranted": is_admin_granted,
+        "planName": active_subscription.plan.name if active_subscription else None,
+        "status": active_subscription.status if active_subscription else None,
+        "expiryDate": active_subscription.expiry_date.isoformat() if active_subscription else None,
+        "remainingDays": max((active_subscription.expiry_date - timezone.now()).days, 0) if active_subscription else None,
+        "latestPayment": latest_payment_data,
+    }
+
+
+class StudentPackageStatusView(APIView):
+    """
+    GET /api/dashboard/package-status/
+
+    Just the package-lock fields from StudentDashboardView, for callers that
+    only need to know "is this student locked out" - student/layout.tsx's
+    navigation guard was calling the full /api/dashboard/ (profile + cached-
+    but-still-real stats + today's plan + recent exams + purchases +
+    subject performance - 16 queries) on every route change within /student/*
+    purely to read two booleans here. That guard now hits this endpoint
+    instead, cutting an unrelated ~3s+ round trip out of ordinary navigation.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response({"package": _get_package_status(request.user)})
 
 class SocialLoginView(APIView):
     permission_classes = [AllowAny]

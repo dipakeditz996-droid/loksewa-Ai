@@ -2,7 +2,7 @@ from rest_framework import viewsets, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
+from .permissions import IsAdminUser
 from django.db.models import Count, F
 from exams.models import Question
 from rest_framework.pagination import PageNumberPagination

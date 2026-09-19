@@ -7,7 +7,7 @@ export interface SubjectiveQuestion {
   subject_name: string;
   text: string;
   marks: number;
-  suggested_time_minutes: number;
+  expected_time_minutes: number;
   difficulty: string;
   model_answer?: string; // only returned for teachers
   is_active: boolean;

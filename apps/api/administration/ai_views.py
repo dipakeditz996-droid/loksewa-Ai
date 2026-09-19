@@ -1,11 +1,12 @@
 from rest_framework import views, permissions
+from .permissions import IsAdminUser
 from rest_framework.response import Response
 from exams.models import Question
 from ai_tutor.services import AdminAILogic
 import json
 
 class AIGenerateOptionsView(views.APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
     def post(self, request, pk, format=None):
         try:
@@ -29,7 +30,7 @@ class AIGenerateOptionsView(views.APIView):
         return Response(generated_options)
 
 class AIApproveOptionsView(views.APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
     def post(self, request, pk, format=None):
         try:
@@ -53,7 +54,7 @@ class AIApproveOptionsView(views.APIView):
         return Response({"success": True, "message": "Options approved and saved"})
 
 class AIBulkGenerateContentView(views.APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsAdminUser]
 
     def post(self, request, format=None):
         data = request.data

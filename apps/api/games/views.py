@@ -300,12 +300,13 @@ def get_survival_question(survived_count, exam_id=None, subject_id=None, topic_i
         topic_id=topic_id,
         difficulty_distribution={diff: 1},
         randomize=True,
+        question_type='objective',
     )
     if result['questions']:
         question = result['questions'][0]
     else:
         # Fallback: any approved question
-        fallback = service.select(count=1, randomize=True)
+        fallback = service.select(count=1, randomize=True, question_type='objective')
         question = fallback['questions'][0] if fallback['questions'] else None
 
     return question, points, time

@@ -185,9 +185,12 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# EmailOrUsernameModelBackend subclasses ModelBackend (permissions included).
+# ModelBackend is deliberately not listed again: it can never authenticate an
+# account the first backend did not, and only added a second password hash to
+# every failed login.
 AUTHENTICATION_BACKENDS = [
     'core.backends.EmailOrUsernameModelBackend',
-    'django.contrib.auth.backends.ModelBackend',
 ]
 
 ROOT_URLCONF = 'backend.urls'

@@ -85,6 +85,7 @@ export interface DashboardData {
   profile: DashboardProfile;
   stats: DashboardStats;
   continueLearning: DashboardContinueLearning | null;
+  activeCourse: { name: string; id: number; slug: string | null } | null;
   todaysPlan: DashboardStudyTask[];
   recentExams: DashboardRecentExam[];
   purchases: DashboardPurchase[];
@@ -113,6 +114,13 @@ export interface DailyMotivation {
 export const dashboardApi = {
   getStudentDashboard: async (): Promise<DashboardData> => {
     return apiClient<DashboardData>("/dashboard/");
+  },
+  // Lightweight package-lock check (4 queries vs. the full dashboard's ~16) -
+  // use this instead of getStudentDashboard() anywhere that only needs to
+  // know whether the student is package-locked, e.g. a route guard that
+  // runs on every navigation. See student/layout.tsx.
+  getPackageStatus: async (): Promise<{ package: DashboardPackageStatus }> => {
+    return apiClient<{ package: DashboardPackageStatus }>("/dashboard/package-status/");
   },
   getAnalyticsOverview: async (): Promise<AnalyticsOverview> => {
     return analyticsApi.getOverview();

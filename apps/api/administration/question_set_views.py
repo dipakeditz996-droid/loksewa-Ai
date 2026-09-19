@@ -1,7 +1,7 @@
 from rest_framework import viewsets, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
+from .permissions import IsAdminUser
 from exams.models import QuestionSet, Question, ExamCategory, Exam, Subject, QuestionSetQuestion
 from exams.selection_service import QuestionSelectionService
 from administration.models import AuditLog

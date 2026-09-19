@@ -13,6 +13,80 @@ const MISSING_LABELS: Record<string, string> = {
   options: 'Options A–D',
   correct_answer: 'Correct answer',
   explanation: 'Explanation',
+  model_answer: 'Model answer',
+};
+
+type ImportQuestionType = 'mcq' | 'true_false' | 'subjective';
+
+interface Column {
+  header: string;        // Excel header / preview column title
+  key: string;           // key inside a report row's `data`
+  required: boolean;
+}
+
+// The upload instructions, template name and preview columns are all driven
+// from the selected Question Type - nothing MCQ-shaped is shown for a
+// subjective import (and vice versa). Mirrors the backend contract in
+// administration/import_views.py, which remains the authority.
+const TYPE_CONFIG: Record<ImportQuestionType, {
+  label: string;
+  family: 'Objective' | 'Subjective';
+  templateFile: string;
+  columns: Column[];
+  notes: string[];
+}> = {
+  mcq: {
+    label: 'Objective / MCQ',
+    family: 'Objective',
+    templateFile: 'Objective Question Template.xlsx',
+    columns: [
+      { header: 'SN', key: 'sn', required: false },
+      { header: 'Questions', key: 'question', required: true },
+      { header: 'Mark', key: 'marks', required: true },
+      { header: 'Option A', key: 'option_a', required: true },
+      { header: 'Option B', key: 'option_b', required: true },
+      { header: 'Option C', key: 'option_c', required: true },
+      { header: 'Option D', key: 'option_d', required: true },
+      { header: 'Correct Answer', key: 'correct_answer', required: true },
+      { header: 'Explanation', key: 'explanation', required: false },
+      { header: 'Hint', key: 'hint', required: false },
+    ],
+    notes: [
+      'Correct Answer: write A, B, C or D (the numbers 1, 2, 3, 4 also work).',
+      'Leave Explanation or Hint blank and the AI can fill Explanation in on the next step.',
+    ],
+  },
+  true_false: {
+    label: 'Objective / True-False',
+    family: 'Objective',
+    templateFile: 'True-False Question Template.xlsx',
+    columns: [
+      { header: 'SN', key: 'sn', required: false },
+      { header: 'Questions', key: 'question', required: true },
+      { header: 'Mark', key: 'marks', required: true },
+      { header: 'Correct Answer', key: 'correct_answer', required: true },
+      { header: 'Explanation', key: 'explanation', required: false },
+      { header: 'Hint', key: 'hint', required: false },
+    ],
+    notes: ['Correct Answer: A for True, B for False (1 or 2 also work).'],
+  },
+  subjective: {
+    label: 'Subjective',
+    family: 'Subjective',
+    templateFile: 'Subjective Question Template.xlsx',
+    columns: [
+      { header: 'SN', key: 'sn', required: false },
+      { header: 'Questions', key: 'question', required: true },
+      { header: 'Mark', key: 'marks', required: true },
+      { header: 'Model Answer', key: 'model_answer', required: true },
+      { header: 'Explanation', key: 'explanation', required: false },
+      { header: 'Hint', key: 'hint', required: false },
+    ],
+    notes: [
+      'Model Answer is the reference answer evaluators mark against - it is required.',
+      'Subjective questions have no answer options, so this template has no option columns.',
+    ],
+  },
 };
 
 export default function ImportQuestionsPage() {
@@ -21,6 +95,7 @@ export default function ImportQuestionsPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [importedCount, setImportedCount] = useState(0);
+  const [skippedDuplicates, setSkippedDuplicates] = useState(0);
 
   // Syllabus placement and defaults, chosen here rather than per CSV row.
   const [category, setCategory] = useState<number | undefined>();
@@ -28,8 +103,10 @@ export default function ImportQuestionsPage() {
   const [subject, setSubject] = useState<number | undefined>();
   const [chapter, setChapter] = useState<number | undefined>();
   const [topic, setTopic] = useState<number | undefined>();
-  const [questionType, setQuestionType] = useState<'mcq' | 'true_false' | 'subjective'>('mcq');
+  const [questionType, setQuestionType] = useState<ImportQuestionType>('mcq');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const cfg = TYPE_CONFIG[questionType];
+  const isSubjective = questionType === 'subjective';
 
   // Collection & Tags (Optional) - if set, every successfully imported
   // question is added to the Collection and/or receives the Tags. Neither
@@ -68,7 +145,7 @@ export default function ImportQuestionsPage() {
 
   const downloadTemplate = async () => {
     try {
-      await adminQuestionApi.downloadTemplate();
+      await adminQuestionApi.downloadTemplate(questionType);
     } catch (error: any) {
       toast.error(error.message || 'Failed to download template');
     }
@@ -76,6 +153,11 @@ export default function ImportQuestionsPage() {
 
   const handleUpload = async () => {
     if (!file || !topic) return;
+    const lower = file.name.toLowerCase();
+    if (!(lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv'))) {
+      toast.error('Please choose an Excel (.xlsx) or CSV file.');
+      return;
+    }
     setBusy(true);
     try {
       const res = await adminQuestionApi.uploadCSV(file, {
@@ -115,6 +197,7 @@ export default function ImportQuestionsPage() {
     try {
       const res = await adminQuestionApi.commitCSV(report.import_id);
       setImportedCount(res.imported_count);
+      setSkippedDuplicates(res.skipped_duplicates?.length ?? 0);
       setStep(3);
       toast.success(`Imported ${res.imported_count} questions`);
     } catch (error: any) {
@@ -125,7 +208,7 @@ export default function ImportQuestionsPage() {
   };
 
   const resetAll = () => {
-    setStep(1); setFile(null); setReport(null); setImportedCount(0);
+    setStep(1); setFile(null); setReport(null); setImportedCount(0); setSkippedDuplicates(0);
   };
 
   const downloadErrorReport = async () => {
@@ -210,9 +293,9 @@ export default function ImportQuestionsPage() {
                   onChange={(e) => setQuestionType(e.target.value as any)}
                   className="w-full p-2.5 border border-gray-200 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20"
                 >
-                  <option value="mcq">Multiple Choice</option>
-                  <option value="true_false">True / False</option>
-                  <option value="subjective">Subjective</option>
+                  <option value="mcq">Objective — Multiple Choice (MCQ)</option>
+                  <option value="true_false">Objective — True / False</option>
+                  <option value="subjective">Subjective (written answer)</option>
                 </select>
               </div>
               <div>
@@ -276,23 +359,32 @@ export default function ImportQuestionsPage() {
               <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mb-6">
                 <UploadCloud className="w-8 h-8 text-blue-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Upload Excel File</h2>
-              <p className="text-gray-500 text-center mb-2">
-                Columns: <code className="text-sm bg-gray-100 px-1 rounded">SN, Questions, Mark, Option A-D, Correct Answer, Explanation, Hint</code>.
-                Only Questions, Mark, the four Options and Correct Answer are required.
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Upload Excel File</h2>
+              <p className="text-sm font-semibold text-[#0B2545] mb-3" data-testid="import-type-label">
+                Question Type: {cfg.label}
               </p>
+              <div className="flex flex-wrap justify-center gap-1.5 mb-3" data-testid="import-columns">
+                {cfg.columns.map((c) => (
+                  <span
+                    key={c.header}
+                    className={`text-xs px-2 py-1 rounded border ${c.required ? 'bg-blue-50 border-blue-200 text-blue-800 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
+                  >
+                    {c.header}{c.required ? ' *' : ''}
+                  </span>
+                ))}
+              </div>
               <p className="text-gray-500 text-center mb-2 text-sm">
-                Correct Answer: write the option number <strong>1, 2, 3, or 4</strong> (matching Option A-D in order) — letters A-D also still work.
+                Columns marked * are required. SN is only the row number shown in the review — it is not the question&apos;s ID.
               </p>
-              <p className="text-gray-500 text-center mb-8 text-sm">
-                Leave Explanation or Hint blank and the AI can fill them in on the next step.
-              </p>
+              {cfg.notes.map((n) => (
+                <p key={n} className="text-gray-500 text-center mb-2 text-sm">{n}</p>
+              ))}
 
               <button
                 onClick={downloadTemplate}
-                className="text-[#0B2545] font-medium hover:underline flex items-center gap-2 mb-8"
+                className="text-[#0B2545] font-medium hover:underline flex items-center gap-2 mt-4 mb-8"
               >
-                <FileText className="w-4 h-4" /> Download Excel Template
+                <FileText className="w-4 h-4" /> Download {cfg.templateFile}
               </button>
 
               <div className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 hover:bg-gray-50 transition-colors text-center relative">
@@ -360,7 +452,7 @@ export default function ImportQuestionsPage() {
             </div>
           </div>
 
-          {report.incomplete_rows > 0 && (
+          {report.incomplete_rows > 0 && !isSubjective && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-blue-600 mt-0.5" />
@@ -386,6 +478,47 @@ export default function ImportQuestionsPage() {
 
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900">Preview — {cfg.label}</h3>
+              <p className="text-sm text-gray-500">{report.total_rows} row{report.total_rows === 1 ? '' : 's'}</p>
+            </div>
+            <div className="overflow-x-auto max-h-[360px] overflow-y-auto">
+              <table className="min-w-full text-sm" data-testid="import-preview">
+                <thead className="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Row</th>
+                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
+                    {cfg.columns.filter((c) => c.key !== 'sn').map((c) => (
+                      <th key={c.key} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">{c.header}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {report.report_data.map((row) => (
+                    <tr key={row.row_index} className="align-top">
+                      <td className="px-3 py-2 whitespace-nowrap text-gray-500">{row.row_index}{row.sn ? ` (SN ${row.sn})` : ''}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          row.status === 'valid' ? 'bg-green-100 text-green-700'
+                          : row.status === 'incomplete' ? 'bg-blue-100 text-blue-700'
+                          : row.status === 'duplicate' ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-700'}`}>
+                          {row.status === 'valid' ? 'Ready' : row.status === 'incomplete' ? 'Needs info' : row.status === 'duplicate' ? 'Duplicate' : 'Error'}
+                        </span>
+                      </td>
+                      {cfg.columns.filter((c) => c.key !== 'sn').map((c) => (
+                        <td key={c.key} className="px-3 py-2 max-w-[260px] truncate text-gray-800" title={row.data[c.key] || ''}>
+                          {row.data[c.key] || <span className="text-gray-300">—</span>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
               <h3 className="font-bold text-gray-900">Validation Report</h3>
               <p className="text-sm text-gray-500">Only rows marked ready will be imported.</p>
             </div>
@@ -406,6 +539,13 @@ export default function ImportQuestionsPage() {
                     {row.missing?.length > 0 && (
                       <p className="mt-1 text-sm text-blue-700">
                         Missing: {row.missing.map((m) => MISSING_LABELS[m] || m).join(', ')}
+                        {row.missing_detail && row.missing_detail.length > 0 && ` — ${row.missing_detail.join(' ')}`}
+                      </p>
+                    )}
+
+                    {row.duplicate_of && (
+                      <p className="mt-1 text-sm text-amber-700">
+                        Duplicate of {row.duplicate_of}. Action: skipped — nothing is overwritten or re-imported.
                       </p>
                     )}
 
@@ -461,8 +601,9 @@ export default function ImportQuestionsPage() {
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Import Successful</h2>
           <p className="text-gray-500 mb-8 max-w-md mx-auto">
-            {importedCount} question{importedCount === 1 ? '' : 's'} were added to the Question Bank and
+            {importedCount} {cfg.family.toLowerCase()} question{importedCount === 1 ? '' : 's'} were added to the Question Bank and
             assigned unique IDs.
+            {skippedDuplicates > 0 && ` ${skippedDuplicates} row${skippedDuplicates === 1 ? ' was' : 's were'} skipped because the question already exists.`}
           </p>
           <div className="flex justify-center gap-4">
             <Link

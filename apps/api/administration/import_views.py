@@ -4,8 +4,9 @@ from openpyxl import Workbook, load_workbook
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
+from .permissions import IsAdminUser
 from django.http import HttpResponse
+from django.db import transaction
 from administration.models import CSVImport, AuditLog
 from exams.models import Question, Topic, QuestionCollection
 from core.models import Tag
@@ -27,18 +28,35 @@ CSV_COLUMNS = [
 
 # Full set of fields recognised in a row, CSV or Excel. `sn` and `marks` and
 # `hint` are optional extras layered on top of the original CSV format.
+# `model_answer` is the canonical Question.model_answer (the reference answer
+# evaluators see) - used by subjective questions only.
 ROW_FIELDS = ['sn', 'question', 'marks', 'option_a', 'option_b', 'option_c', 'option_d',
-              'correct_answer', 'explanation', 'hint']
+              'correct_answer', 'model_answer', 'explanation', 'hint']
 
-EXCEL_HEADERS = [
+# One template per question-type family (there is deliberately no single
+# template that always carries MCQ columns).
+EXCEL_HEADERS_OBJECTIVE = [
     'SN', 'Questions', 'Mark', 'Option A', 'Option B', 'Option C', 'Option D',
     'Correct Answer', 'Explanation', 'Hint',
 ]
+EXCEL_HEADERS_TRUE_FALSE = ['SN', 'Questions', 'Mark', 'Correct Answer', 'Explanation', 'Hint']
+EXCEL_HEADERS_SUBJECTIVE = ['SN', 'Questions', 'Mark', 'Model Answer', 'Explanation', 'Hint']
+
+OBJECTIVE_TYPES = ('mcq', 'true_false')
+SUBJECTIVE_TYPES = ('subjective', 'short_answer', 'long_answer')
+ALL_TYPES = OBJECTIVE_TYPES + SUBJECTIVE_TYPES
+
 EXCEL_HEADER_MAP = {
-    'sn': 'sn', 'questions': 'question', 'mark': 'marks',
+    'sn': 'sn', 'questions': 'question', 'question': 'question',
+    'mark': 'marks', 'marks': 'marks',
     'option a': 'option_a', 'option b': 'option_b',
     'option c': 'option_c', 'option d': 'option_d',
-    'correct answer': 'correct_answer', 'explanation': 'explanation', 'hint': 'hint',
+    'options a': 'option_a', 'options b': 'option_b',
+    'options c': 'option_c', 'options d': 'option_d',
+    'correct answer': 'correct_answer',
+    'model answer': 'model_answer',
+    'expected answer': 'model_answer', 'model_answer': 'model_answer',
+    'explanation': 'explanation', 'hint': 'hint',
 }
 
 VALID_ANSWERS = ['A', 'B', 'C', 'D']
@@ -113,22 +131,15 @@ def _analyse_row(row, question_type):
             errors.append(f"Mark must be numeric (got '{marks_raw}').")
 
     if question_type == 'mcq':
-        blanks = [k for k in ('option_a', 'option_b', 'option_c', 'option_d')
-                  if not (row.get(k) or '').strip()]
-        if blanks:
+        if any(not (row.get(k) or '').strip() for k in ('option_a', 'option_b', 'option_c', 'option_d')):
             missing.append('options')
-            for k in blanks:
-                label = k.replace('option_', 'Option ').upper()
-                errors_note = f'{label} is required.'
-                # Only a hard error once AI-fill has had its chance; recorded
-                # in `missing` above so the row is held as 'incomplete' first.
 
         raw_answer = (row.get('correct_answer') or '').strip()
         answer = _normalize_answer(raw_answer)
         if not raw_answer:
             missing.append('correct_answer')
         elif answer not in VALID_ANSWERS:
-            errors.append(f"Correct Answer must be 1, 2, 3, 4 (or A, B, C, D) - got '{raw_answer}'.")
+            errors.append(f'Correct Answer "{raw_answer}" is invalid. Expected A, B, C or D (or 1, 2, 3, 4).')
         else:
             row['correct_answer'] = answer
 
@@ -142,10 +153,54 @@ def _analyse_row(row, question_type):
         else:
             row['correct_answer'] = answer
 
+    elif question_type in SUBJECTIVE_TYPES:
+        # Same rule the admin question form enforces
+        # (AdminQuestionSerializer.validate): a subjective question must
+        # carry the reference answer evaluators mark against. It cannot be
+        # AI-filled here, so a blank one is a hard error, not a gap.
+        if not (row.get('model_answer') or '').strip():
+            errors.append('Model Answer is required for subjective questions.')
+        # Objective-only columns (options / correct answer) are ignored for
+        # subjective questions - a blank or stray value there is not an error.
+        return errors, missing
+
     if not (row.get('explanation') or '').strip():
         missing.append('explanation')
 
     return errors, missing
+
+
+def _missing_detail(row, question_type):
+    """Human-readable list of exactly what an incomplete row is missing."""
+    detail = []
+    if question_type == 'mcq':
+        blanks = [k[-1].upper() for k in ('option_a', 'option_b', 'option_c', 'option_d')
+                  if not (row.get(k) or '').strip()]
+        if blanks:
+            detail.append('Option ' + ', '.join(blanks) + (' is required.' if len(blanks) == 1 else ' are required.'))
+    if question_type in OBJECTIVE_TYPES and not (row.get('correct_answer') or '').strip():
+        detail.append('Correct Answer is required.')
+    if not (row.get('explanation') or '').strip() and question_type in OBJECTIVE_TYPES:
+        detail.append('Explanation is empty (the AI can fill it).')
+    return detail
+
+
+def _existing_question_ids(norm_texts):
+    """Map lower-cased question text -> existing Question.question_id, in ONE
+    query (it used to be one query per row, which against a remote database
+    made a 100-row file take ~20s to analyse)."""
+    from django.db.models.functions import Lower
+    found = {}
+    texts = sorted(set(norm_texts))
+    for i in range(0, len(texts), 500):
+        chunk = texts[i:i + 500]
+        for qid, lowered in (
+            Question.objects.annotate(lowered=Lower('text'))
+            .filter(lowered__in=chunk).order_by('id')
+            .values_list('question_id', 'lowered')
+        ):
+            found.setdefault(lowered, qid)
+    return found
 
 
 def _build_report(rows, question_type):
@@ -154,22 +209,27 @@ def _build_report(rows, question_type):
     counts = {'total': 0, 'valid': 0, 'incomplete': 0, 'error': 0, 'duplicate': 0}
     seen_texts = {}
 
+    cleaned = []
     for idx, row in enumerate(rows):
-        counts['total'] += 1
         clean = {key: (row.get(key) or '').strip() for key in ROW_FIELDS}
         if not clean.get('sn'):
             clean['sn'] = str(idx + 1)
+        cleaned.append(clean)
+    existing_ids = _existing_question_ids(
+        c['question'].strip().lower() for c in cleaned if c['question'].strip()
+    )
 
+    for idx, clean in enumerate(cleaned):
+        counts['total'] += 1
         errors, missing = _analyse_row(clean, question_type)
 
         norm_text = clean['question'].strip().lower()
         is_duplicate = False
         duplicate_of = None
         if norm_text:
-            existing = Question.objects.filter(text__iexact=clean['question']).first()
-            if existing:
+            if norm_text in existing_ids:
                 is_duplicate = True
-                duplicate_of = existing.question_id
+                duplicate_of = existing_ids[norm_text]
             elif norm_text in seen_texts:
                 is_duplicate = True
                 duplicate_of = f"row {seen_texts[norm_text]}"
@@ -177,7 +237,7 @@ def _build_report(rows, question_type):
                 seen_texts[norm_text] = idx + 1
 
         if is_duplicate:
-            errors.append(f"Duplicate question (matches {duplicate_of}).")
+            errors.append(f"Duplicate question (matches {duplicate_of}). It will not be imported.")
 
         if errors:
             status = 'error'
@@ -196,6 +256,8 @@ def _build_report(rows, question_type):
             'status': status,
             'errors': errors,
             'missing': missing,
+            'missing_detail': _missing_detail(clean, question_type) if missing else [],
+            'duplicate_of': duplicate_of,
             'data': clean,
         })
 
@@ -233,22 +295,59 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def template(self, request):
-        """Download the Excel (.xlsx) import template."""
+        """Download the Excel (.xlsx) import template for a question type.
+
+        ?type=mcq (default) | true_false | subjective. The data sheet holds
+        headers only, so nothing sample-shaped can be imported by accident;
+        examples and rules live on a separate "Instructions" sheet.
+        """
+        qtype = (request.query_params.get('type') or 'mcq').strip().lower()
+        if qtype in SUBJECTIVE_TYPES:
+            qtype = 'subjective'
+        if qtype not in ('mcq', 'true_false', 'subjective'):
+            return Response({'error': f'Unsupported template type: {qtype}'}, status=400)
+
+        if qtype == 'mcq':
+            headers = EXCEL_HEADERS_OBJECTIVE
+            title = 'Objective Question Template'
+            example = [1, 'नेपालको राजधानी कुन हो?', 1, 'पोखरा', 'काठमाडौं', 'ललितपुर', 'विराटनगर',
+                       'B', 'नेपालको राजधानी काठमाडौं हो।', '']
+            rules = [
+                'Required: Questions, Mark, Option A-D, Correct Answer.',
+                'Correct Answer: A, B, C or D (the numbers 1-4 also work).',
+                'Explanation and Hint are optional (the AI can fill Explanation on the next step).',
+            ]
+        elif qtype == 'true_false':
+            headers = EXCEL_HEADERS_TRUE_FALSE
+            title = 'True-False Question Template'
+            example = [1, 'काठमाडौं नेपालको राजधानी हो।', 1, 'A', 'काठमाडौं नेपालको राजधानी हो।', '']
+            rules = [
+                'Required: Questions, Mark, Correct Answer.',
+                'Correct Answer: A (True) or B (False) - 1 or 2 also work.',
+            ]
+        else:
+            headers = EXCEL_HEADERS_SUBJECTIVE
+            title = 'Subjective Question Template'
+            example = [1, 'नेपालको संघीय संरचनाबारे संक्षिप्त चर्चा गर्नुहोस्।', 5,
+                       'नेपाल ७ प्रदेशसहितको संघीय गणतन्त्र हो...', 'अध्याय ३ हेर्नुहोस्।', '']
+            rules = [
+                'Required: Questions, Mark, Model Answer (the reference answer evaluators mark against).',
+                'Explanation and Hint are optional.',
+                'Subjective questions have no answer options, so this template has no option columns.',
+            ]
+
         wb = Workbook()
         ws = wb.active
         ws.title = 'Questions'
-        ws.append(EXCEL_HEADERS)
-        ws.append([
-            1, 'नेपालको संविधान कहिले जारी भयो?', 1,
-            '२०७२ असोज ३', '२०७२ भदौ ३', '२०७३ असोज ३', '२०७१ असोज ३',
-            1, 'नेपालको संविधान २०७२ असोज ३ गते जारी भएको हो।', 'असोज ३ सम्झनुहोस्',
-        ])
-        ws.append([
-            2, 'नेपालको राजधानी कुन हो?', 1,
-            'पोखरा', 'काठमाडौं', 'ललितपुर', 'विराटनगर',
-            2, 'नेपालको राजधानी काठमाडौं हो।', '',
-        ])
-        ws.append(['Remove the example rows above before importing.'])
+        ws.append(headers)
+        guide = wb.create_sheet('Instructions')
+        guide.append([title])
+        for line in rules:
+            guide.append([line])
+        guide.append([])
+        guide.append(['Example row (copy the layout into the Questions sheet):'])
+        guide.append(headers)
+        guide.append(example)
 
         buf = io.BytesIO()
         wb.save(buf)
@@ -257,7 +356,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
             buf.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
-        response['Content-Disposition'] = 'attachment; filename="question_import_template.xlsx"'
+        response['Content-Disposition'] = f'attachment; filename="{title}.xlsx"'
         response['Access-Control-Expose-Headers'] = 'Content-Disposition'
         return response
 
@@ -287,7 +386,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
             return Response({'error': 'The selected topic no longer exists.'}, status=400)
 
         question_type = (request.data.get('question_type') or 'mcq').strip().lower()
-        if question_type not in ('mcq', 'true_false', 'subjective', 'short_answer', 'long_answer'):
+        if question_type not in ALL_TYPES:
             return Response({'error': f'Unsupported question_type: {question_type}'}, status=400)
 
         difficulty = (request.data.get('difficulty') or 'medium').strip().lower()
@@ -322,6 +421,21 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
+        # Guard against uploading the wrong template for the chosen type.
+        if question_type in SUBJECTIVE_TYPES and 'model_answer' not in found_headers:
+            return Response(
+                {'error': "This file has no 'Model Answer' column. Subjective questions need the Subjective "
+                          "template (SN, Questions, Mark, Model Answer, Explanation, Hint)."},
+                status=400,
+            )
+        if question_type in OBJECTIVE_TYPES and 'model_answer' in found_headers \
+                and 'correct_answer' not in found_headers:
+            return Response(
+                {'error': "This file looks like the Subjective template (it has a 'Model Answer' column and no "
+                          "'Correct Answer'). Choose Question Type = Subjective, or download the Objective template."},
+                status=400,
+            )
+
         report_data, counts = _build_report(rows, question_type)
 
         import_record = CSVImport.objects.create(
@@ -351,6 +465,12 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
             ).get(pk=pk, status='validated')
         except CSVImport.DoesNotExist:
             return Response({'error': 'Import not found or already processed.'}, status=404)
+
+        if import_record.question_type in SUBJECTIVE_TYPES:
+            return Response(
+                {'error': 'AI fill applies to objective questions only. Subjective rows must include a Model Answer.'},
+                status=400,
+            )
 
         incomplete = [r for r in import_record.report_data if r['status'] == 'incomplete']
         if not incomplete:
@@ -399,6 +519,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
             errors, missing = _analyse_row(row['data'], import_record.question_type)
             row['errors'] = errors
             row['missing'] = missing
+            row['missing_detail'] = _missing_detail(row['data'], import_record.question_type) if missing else []
             row['status'] = 'error' if errors else ('incomplete' if missing else 'valid')
 
         counts = _recount(import_record.report_data)
@@ -419,44 +540,61 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         if not import_record.topic_id:
             return Response({'error': 'This import has no topic attached.'}, status=400)
 
+        # Re-check duplicates at commit time: another import or an admin may
+        # have added the same question since this file was analysed. Existing
+        # questions are never overwritten - a row that has become a duplicate
+        # is skipped and reported.
+        valid_rows = [r for r in import_record.report_data if r['status'] == 'valid']
+        existing_ids = _existing_question_ids(r['data']['question'].strip().lower() for r in valid_rows)
+
+        is_subjective = import_record.question_type in SUBJECTIVE_TYPES
         questions_to_create = []
-        for row in import_record.report_data:
-            if row['status'] != 'valid':
-                continue
+        skipped_duplicates = []
+        for row in valid_rows:
             data = row['data']
+            if data['question'].strip().lower() in existing_ids:
+                skipped_duplicates.append({
+                    'row_index': row['row_index'],
+                    'existing_question_id': existing_ids[data['question'].strip().lower()],
+                })
+                continue
             marks_raw = (data.get('marks') or '').strip()
             questions_to_create.append(Question(
                 topic_id=import_record.topic_id,
                 question_type=import_record.question_type,
                 text=data['question'],
-                option_a=data.get('option_a') or '',
-                option_b=data.get('option_b') or '',
-                option_c=data.get('option_c') or '',
-                option_d=data.get('option_d') or '',
-                correct_option=(data.get('correct_answer') or '').upper() or None,
+                # Objective-only fields stay empty for subjective questions.
+                option_a='' if is_subjective else (data.get('option_a') or ''),
+                option_b='' if is_subjective else (data.get('option_b') or ''),
+                option_c='' if is_subjective else (data.get('option_c') or ''),
+                option_d='' if is_subjective else (data.get('option_d') or ''),
+                correct_option=None if is_subjective else ((data.get('correct_answer') or '').upper() or None),
+                model_answer=(data.get('model_answer') or '') if is_subjective else '',
                 explanation=data.get('explanation') or '',
                 hint=data.get('hint') or '',
                 marks=float(marks_raw) if marks_raw else 1,
                 difficulty=import_record.difficulty,
                 status='approved',
+                created_by=request.user,
             ))
 
-        created = Question.objects.bulk_create(questions_to_create)
+        with transaction.atomic():
+            created = Question.objects.bulk_create(questions_to_create)
 
-        # bulk_create skips Model.save(), so the Q-000001 style id is never
-        # generated. Backfill it for the rows this import just created.
-        for q in created:
-            q.question_id = f"Q-{q.pk:06d}"
-        if created:
-            Question.objects.bulk_update(created, ['question_id'])
-
-        if created and import_record.collection_id:
-            import_record.collection.questions.add(*created)
-
-        tag_list = list(import_record.tag_objects.all())
-        if created and tag_list:
+            # bulk_create skips Model.save(), so the Q-000001 style id is never
+            # generated. Backfill it for the rows this import just created.
             for q in created:
-                q.tag_objects.set(tag_list)
+                q.question_id = f"Q-{q.pk:06d}"
+            if created:
+                Question.objects.bulk_update(created, ['question_id'])
+
+            if created and import_record.collection_id:
+                import_record.collection.questions.add(*created)
+
+            tag_list = list(import_record.tag_objects.all())
+            if created and tag_list:
+                for q in created:
+                    q.tag_objects.set(tag_list)
 
         import_record.status = 'imported'
         import_record.save(update_fields=['status'])
@@ -471,7 +609,12 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 'collection_id': import_record.collection_id,
             },
         )
-        return Response({'success': True, 'imported_count': len(created)})
+        return Response({
+            'success': True,
+            'imported_count': len(created),
+            'question_ids': [q.pk for q in created],
+            'skipped_duplicates': skipped_duplicates,
+        })
 
     @action(detail=True, methods=['get'], url_path='error-report')
     def error_report(self, request, pk=None):

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.http import HttpResponse
 from django.db.models import Count, Sum, Avg, Q
+from django.db.models.functions import TruncDate
 from django.contrib.auth.password_validation import validate_password as django_validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
@@ -48,10 +49,15 @@ class AdminDashboardStatsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        # Users
-        total_students = User.objects.filter(role='student').count()
-        active_students = User.objects.filter(role='student', is_active=True).count()
-        evaluators = User.objects.filter(role='teacher').count()
+        # Users - one aggregate query instead of three separate counts
+        user_counts = User.objects.aggregate(
+            total_students=Count('id', filter=Q(role='student')),
+            active_students=Count('id', filter=Q(role='student', is_active=True)),
+            evaluators=Count('id', filter=Q(role='teacher')),
+        )
+        total_students = user_counts['total_students']
+        active_students = user_counts['active_students']
+        evaluators = user_counts['evaluators']
 
         # Academic
         published_exams = Exam.objects.filter(is_active=True).count()
@@ -69,11 +75,12 @@ class AdminDashboardStatsView(APIView):
         # Marketplace & MRR
         marketplace_listings = Product.objects.filter(is_published=True).count()
         order_requests = PaymentSubmission.objects.filter(status='PENDING').count()
-        total_orders = Purchase.objects.count()
-        revenue = float(
-            Purchase.objects.filter(status='ACTIVE')
-            .aggregate(total=Sum('amount_paid'))['total'] or 0
+        purchase_stats = Purchase.objects.aggregate(
+            total_orders=Count('id'),
+            revenue=Sum('amount_paid', filter=Q(status='ACTIVE')),
         )
+        total_orders = purchase_stats['total_orders']
+        revenue = float(purchase_stats['revenue'] or 0)
         
         # Monthly Recurring Revenue (MRR) approximation from active subscriptions
         from subscriptions.models import Subscription
@@ -903,26 +910,38 @@ class AdminExamsOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        total_exams = Exam.objects.count()
-        active_exams = Exam.objects.filter(is_active=True).count()
+        exam_stats = Exam.objects.aggregate(
+            total=Count('id'),
+            active=Count('id', filter=Q(is_active=True)),
+        )
+        total_exams = exam_stats['total']
+        active_exams = exam_stats['active']
 
         model_exams_qs = Examination.objects.filter(objective_category='model')
-        total_model_exams = model_exams_qs.count()
-        published_model_exams = model_exams_qs.filter(status='published').count()
-        draft_model_exams = model_exams_qs.filter(status='draft').count()
+        model_exam_stats = model_exams_qs.aggregate(
+            total=Count('id'),
+            published=Count('id', filter=Q(status='published')),
+            draft=Count('id', filter=Q(status='draft')),
+        )
+        total_model_exams = model_exam_stats['total']
+        published_model_exams = model_exam_stats['published']
+        draft_model_exams = model_exam_stats['draft']
         total_attempts = ExaminationAttempt.objects.filter(examination__objective_category='model').count()
 
-        recent_model_exams = model_exams_qs.select_related('exam').order_by('-created_at')[:5]
+        # annotate() the attempt count instead of one .count() per exam in
+        # the loop below (was up to 5 extra queries, one per recent exam).
+        recent_model_exams = model_exams_qs.select_related('exam').annotate(
+            attempt_count=Count('attempts')
+        ).order_by('-created_at')[:5]
         recent_data = []
         for me in recent_model_exams:
-            attempt_count = me.attempts.count()
             recent_data.append({
                 "id": me.id,
                 "title": me.title,
                 "exam": me.exam.name,
                 "status": me.status,
                 "totalQuestions": me.total_questions,
-                "attempts": attempt_count,
+                "attempts": me.attempt_count,
                 "createdAt": me.created_at.isoformat(),
             })
 
@@ -944,18 +963,21 @@ class AdminAITutorOverviewView(APIView):
     def get(self, request):
         total_sessions = Conversation.objects.count()
         today = timezone.now().date()
-        sessions_today = TutorUsage.objects.filter(date=today).aggregate(
-            total=Sum('request_count')
-        )['total'] or 0
 
-        # Usage trend for last 7 days
-        trend_data = []
-        for i in range(6, -1, -1):
-            d = today - timedelta(days=i)
-            count = TutorUsage.objects.filter(date=d).aggregate(
-                total=Sum('request_count')
-            )['total'] or 0
-            trend_data.append({"date": str(d), "sessions": count})
+        # Usage trend for last 7 days - one grouped query instead of one
+        # .aggregate() per day (was 7 identical-shaped queries), and
+        # sessions_today is read from the same result instead of its own query.
+        window_start = today - timedelta(days=6)
+        daily_usage = {
+            row['date']: (row['total'] or 0)
+            for row in TutorUsage.objects.filter(date__gte=window_start, date__lte=today)
+            .values('date').annotate(total=Sum('request_count'))
+        }
+        trend_data = [
+            {"date": str(d), "sessions": daily_usage.get(d, 0)}
+            for d in (window_start + timedelta(days=i) for i in range(7))
+        ]
+        sessions_today = daily_usage.get(today, 0)
 
         # Most used modes (subjects proxy)
         mode_counts = (
@@ -1221,31 +1243,48 @@ class AdminMarketplaceOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        total_products = Product.objects.count()
-        active_products = Product.objects.filter(is_published=True).count()
-        total_orders = PaymentSubmission.objects.count()
-        pending_orders = PaymentSubmission.objects.filter(status='PENDING').count()
-        completed_orders = PaymentSubmission.objects.filter(status='APPROVED').count()
-        cancelled_orders = PaymentSubmission.objects.filter(status='REJECTED').count()
+        product_stats = Product.objects.aggregate(
+            total=Count('id'),
+            active=Count('id', filter=Q(is_published=True)),
+        )
+        total_products = product_stats['total']
+        active_products = product_stats['active']
 
-        active_purchases = Purchase.objects.filter(status='ACTIVE')
-        revenue = float(active_purchases.aggregate(total=Sum('amount_paid'))['total'] or 0)
+        order_stats = PaymentSubmission.objects.aggregate(
+            total=Count('id'),
+            pending=Count('id', filter=Q(status='PENDING')),
+            completed=Count('id', filter=Q(status='APPROVED')),
+            cancelled=Count('id', filter=Q(status='REJECTED')),
+        )
+        total_orders = order_stats['total']
+        pending_orders = order_stats['pending']
+        completed_orders = order_stats['completed']
+        cancelled_orders = order_stats['cancelled']
 
         today = timezone.now().date()
-        revenue_today = float(
-            active_purchases.filter(created_at__date=today)
-            .aggregate(total=Sum('amount_paid'))['total'] or 0
+        active_purchases = Purchase.objects.filter(status='ACTIVE')
+        revenue_stats = active_purchases.aggregate(
+            total=Sum('amount_paid'),
+            today=Sum('amount_paid', filter=Q(created_at__date=today)),
         )
+        revenue = float(revenue_stats['total'] or 0)
+        revenue_today = float(revenue_stats['today'] or 0)
 
-        # Real revenue trend for the last 7 days (no fabricated bars).
-        revenue_trend = []
-        for i in range(6, -1, -1):
-            d = today - timedelta(days=i)
-            day_total = float(
-                active_purchases.filter(created_at__date=d)
-                .aggregate(total=Sum('amount_paid'))['total'] or 0
-            )
-            revenue_trend.append({"date": str(d), "revenue": day_total})
+        # Real revenue trend for the last 7 days - one grouped query instead
+        # of one .aggregate() per day (was 7 identical-shaped queries).
+        window_start = today - timedelta(days=6)
+        daily_totals = {
+            row['day']: float(row['total'] or 0)
+            for row in active_purchases
+            .filter(created_at__date__gte=window_start, created_at__date__lte=today)
+            .annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(total=Sum('amount_paid'))
+        }
+        revenue_trend = [
+            {"date": str(d), "revenue": daily_totals.get(d, 0.0)}
+            for d in (window_start + timedelta(days=i) for i in range(7))
+        ]
 
         # Real payment-method usage breakdown, from actual submissions.
         method_counts = (

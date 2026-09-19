@@ -51,6 +51,10 @@ export interface ImportRow {
   missing: string[];
   /** Set once the AI has filled this row, listing what it supplied. */
   ai_filled?: string[];
+  /** Exactly what an incomplete row lacks, e.g. "Option B, D are required." */
+  missing_detail?: string[];
+  /** Existing Question.question_id (Q-000123) or "row N" for an in-file duplicate. */
+  duplicate_of?: string | null;
   data: Record<string, string>;
 }
 
@@ -115,8 +119,15 @@ export const adminQuestionApi = {
   },
   aiFillImport: async (importId: number | string) =>
     apiClient<ImportReport>(`/admin/questions/import/${importId}/ai-fill/`, { method: 'POST' }),
-  commitCSV: async (importId: number | string) => apiClient<{ success: boolean; imported_count: number }>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
-  downloadTemplate: async () => downloadFile('/admin/questions/import/template/', 'question_import_template.xlsx'),
+  commitCSV: async (importId: number | string) => apiClient<{ success: boolean; imported_count: number; question_ids?: number[]; skipped_duplicates?: { row_index: number; existing_question_id: string }[] }>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
+  /** One template per question type - never a single MCQ-shaped template. */
+  downloadTemplate: async (type: 'mcq' | 'true_false' | 'subjective' = 'mcq') =>
+    downloadFile(
+      `/admin/questions/import/template/?type=${type}`,
+      type === 'subjective' ? 'Subjective Question Template.xlsx'
+        : type === 'true_false' ? 'True-False Question Template.xlsx'
+        : 'Objective Question Template.xlsx',
+    ),
   downloadErrorReport: async (importId: number | string) =>
     downloadFile(`/admin/questions/import/${importId}/error-report/`, `import_${importId}_errors.xlsx`),
   generateOptions: async (id: number) => apiClient<any>(`/admin/questions/${id}/generate-options/`, { method: 'POST' }),

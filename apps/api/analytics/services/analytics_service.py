@@ -1,4 +1,7 @@
-from django.db.models import Sum, Count, Avg, F
+from django.core.cache import cache
+from django.db.models import Sum, Count, Avg, F, Q, Subquery, OuterRef, IntegerField
+from django.db.models.functions import Coalesce
+from core.models import User
 from django.utils import timezone
 from datetime import timedelta
 from exams.models import (
@@ -10,27 +13,91 @@ from exams.models import (
     ExaminationAttempt,
     StudentAnswer,
 )
+from gamification.models import GamificationProfile
+
+def _grouped(qs, group_field, **agg):
+    """Correlated one-row scalar subquery: aggregate `qs` grouped by the
+    field that ties it to the outer user, so several unrelated aggregates
+    can be selected in ONE round trip."""
+    (name, expr), = agg.items()
+    return Subquery(
+        qs.order_by().values(group_field).annotate(**{name: expr}).values(name)[:1],
+        output_field=IntegerField(),
+    )
+
 
 class AnalyticsService:
     @staticmethod
+    def _scalar_stats(user):
+        """The student's simple counts/sums, fetched with a single query.
+
+        These used to be six-plus separate aggregate queries (one per
+        table). Against the remote database every round trip costs ~200ms
+        regardless of query complexity, so they are selected together as
+        correlated subqueries on the user row. Semantics are identical to
+        the former per-table aggregates."""
+        uid = OuterRef('pk')
+        obj = QuestionAttempt.objects.filter(session__user=uid, session__completed=True)
+        exam_answers = StudentAnswer.objects.filter(attempt__student=uid, attempt__status='submitted')
+        row = (
+            User.objects.filter(pk=user.pk)
+            .annotate(
+                obj_total=Coalesce(_grouped(obj, 'session__user', n=Count('id')), 0),
+                obj_correct=Coalesce(_grouped(obj.filter(is_correct=True), 'session__user', n=Count('id')), 0),
+                exam_total=Coalesce(_grouped(exam_answers, 'attempt__student', n=Count('id')), 0),
+                exam_correct=Coalesce(_grouped(exam_answers.filter(is_correct=True), 'attempt__student', n=Count('id')), 0),
+                subjective_evaluated=Coalesce(_grouped(
+                    SubjectiveAnswer.objects.filter(attempt__student=uid, status='evaluated'),
+                    'attempt__student', n=Count('id')), 0),
+                exams_taken=Coalesce(_grouped(
+                    ExaminationAttempt.objects.filter(student=uid, status='submitted'),
+                    'student', n=Count('id')), 0),
+                study_seconds=Coalesce(_grouped(
+                    PracticeSession.objects.filter(user=uid, completed=True),
+                    'user', n=Sum('time_taken_seconds')), 0),
+                streak=Coalesce(Subquery(
+                    GamificationProfile.objects.filter(user=uid).values('study_current_streak')[:1],
+                    output_field=IntegerField()), 0),
+                best_streak=Coalesce(Subquery(
+                    GamificationProfile.objects.filter(user=uid).values('study_highest_streak')[:1],
+                    output_field=IntegerField()), 0),
+            )
+            .values('obj_total', 'obj_correct', 'exam_total', 'exam_correct',
+                    'subjective_evaluated', 'exams_taken', 'study_seconds',
+                    'streak', 'best_streak')
+            .first()
+        )
+        return row
+    @staticmethod
     def get_overview(user):
-        """Returns overall metrics for the student"""
-        # Objective Practice
-        completed_sessions = PracticeSession.objects.filter(user=user, completed=True)
+        """
+        Returns overall metrics for the student.
 
-        # Let's count from QuestionAttempt for precise objective metrics
-        obj_attempts = QuestionAttempt.objects.filter(session__user=user, session__completed=True)
-        exam_attempts = ExaminationAttempt.objects.filter(student=user, status='submitted')
+        Cached for a short window (per user) because a single dashboard page
+        load calls this twice from two independent requests - the critical
+        StudentDashboardView and the background /analytics/overview/ fetch -
+        and the underlying queries run against a remote Supabase instance
+        where each round trip costs ~250-400ms regardless of complexity.
+        Collapsing the duplicate computation is a straight latency win with
+        no correctness cost: this is summary/display data, not the
+        authoritative source for any exam result, submission or payment
+        status (those stay uncached and are read fresh at their own views).
+        """
+        cache_key = f'analytics_overview:{user.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        result = AnalyticsService._compute_overview(user)
+        cache.set(cache_key, result, 20)
+        return result
 
-        obj_solved = obj_attempts.count()
-        exam_solved = StudentAnswer.objects.filter(attempt__in=exam_attempts).count()
-
+    @staticmethod
+    def _compute_overview(user):
+        stats = AnalyticsService._scalar_stats(user)
+        obj_solved, obj_correct = stats['obj_total'], stats['obj_correct']
+        exam_solved, exam_correct = stats['exam_total'], stats['exam_correct']
         total_solved = obj_solved + exam_solved
-
-        # Subjective
-        subjective_evaluated = SubjectiveAnswer.objects.filter(
-            attempt__student=user, status='evaluated'
-        ).count()
+        subjective_evaluated = stats['subjective_evaluated']
 
         # ── Active course: read from Enrollment (real enrolled course), not SubscriptionPlan ──
         active_course = None
@@ -92,21 +159,11 @@ class AnalyticsService:
         except Exception:
             pass
 
-        # Get Streak from GamificationProfile
-        streak = 0
-        best_streak = 0
-        try:
-            from gamification.models import GamificationProfile
-            profile = GamificationProfile.objects.get(user=user)
-            streak = profile.study_current_streak
-            best_streak = profile.study_highest_streak
-        except Exception:
-            pass
+        streak = stats['streak']
+        best_streak = stats['best_streak']
 
-        # Overall Accuracy calculation (Objective only)
-        obj_correct = obj_attempts.filter(is_correct=True).count()
-        exam_correct = StudentAnswer.objects.filter(attempt__in=exam_attempts, is_correct=True).count()
-
+        # Overall Accuracy calculation (Objective only) - obj_correct/exam_correct
+        # already computed above alongside their totals.
         total_correct = obj_correct + exam_correct
         overall_accuracy = (total_correct / total_solved * 100) if total_solved > 0 else 0
 
@@ -119,18 +176,12 @@ class AnalyticsService:
         except Exception:
             pass
 
-        # Calculate Study Time (from PracticeSession durations)
-        total_study_time_mins = 0
-        try:
-            total_time_seconds = completed_sessions.aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
-            total_study_time_mins = total_time_seconds // 60
-        except Exception:
-            pass
+        total_study_time_mins = stats['study_seconds'] // 60
 
         return {
             "overall_accuracy": round(overall_accuracy, 1),
             "questions_solved": total_solved,
-            "model_exams_taken": exam_attempts.count(),
+            "model_exams_taken": stats['exams_taken'],
             "subjective_evaluated": subjective_evaluated,
             "study_streak": streak,
             "best_streak": best_streak,

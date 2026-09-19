@@ -110,7 +110,7 @@ export default function SubjectiveTopicPracticePage() {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Clock className="w-4 h-4 text-orange-500" />
-                    <span className="text-[14px] font-bold">{q.suggested_time_minutes} Mins Suggested</span>
+                    <span className="text-[14px] font-bold">{q.expected_time_minutes} Mins Suggested</span>
                   </div>
                 </div>
               </div>

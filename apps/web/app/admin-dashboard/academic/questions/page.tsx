@@ -162,7 +162,9 @@ export default function QuestionBankPage() {
     if (action === 'delete' && !confirm(`Are you sure you want to delete ${selectedIds.size} questions?`)) return;
 
     try {
-      const res = await adminQuestionApi.bulkAction(action, Array.from(selectedIds), collectionIds, tagIds);
+      // The backend's bulk action for "Publish" is named `approve` (it also enforces
+      // that an admin cannot approve their own question); 'publish' is not a valid action.
+      const res = await adminQuestionApi.bulkAction(action === 'publish' ? 'approve' : action, Array.from(selectedIds), collectionIds, tagIds);
       if (res.error) {
         toast.error(res.error);
       } else {
@@ -173,8 +175,8 @@ export default function QuestionBankPage() {
         setIsTagModalOpen(false);
         setSelectedBulkTagIds([]);
       }
-    } catch (error) {
-      toast.error(`Failed to perform bulk action`);
+    } catch (error: any) {
+      toast.error(error?.data?.error || `Failed to perform bulk action`);
     }
   };
 

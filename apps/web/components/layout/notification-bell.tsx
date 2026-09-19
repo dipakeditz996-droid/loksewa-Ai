@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, CircleAlert, FileText, HelpCircle, Users, Activity, CreditCard, ClipboardCheck, GraduationCap, UserPlus, UserCog, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +12,7 @@ import {
 import { apiClient } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
 import { useFocusMode } from "@/contexts/FocusModeContext";
-import { onNotificationsChanged, notifyNotificationsChanged } from "@/lib/notification-events";
+import { onNotificationsChanged } from "@/lib/notification-events";
 
 interface NotificationData {
   id: number;
@@ -24,58 +25,49 @@ interface NotificationData {
   created_at: string;
 }
 
+const NOTIFICATIONS_QUERY_KEY = ["notifications-unread"];
+
 export function NotificationBell({ viewAllHref = "/teacher/notifications" }: { viewAllHref?: string }) {
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   // Focus Mode quiets this bell: only critical notifications keep their badge,
   // and the attention-grabbing ping stops. Nothing is deleted - opening the
   // bell still shows everything, so no notification is ever lost.
   const { isFocusActive, examFocus } = useFocusMode();
 
-  const fetchNotifications = async () => {
-    try {
-      const data = await apiClient<any>("/notifications/unread/");
-      setUnreadCount(data.unread_count);
-      setNotifications(data.latest);
-    } catch (error) {
-      // Use warn instead of error so Next.js dev overlay doesn't aggressively pop up if the backend restarts during a poll
-      console.warn("Failed to fetch notifications", error);
-    }
-  };
+  const { data } = useQuery({
+    queryKey: NOTIFICATIONS_QUERY_KEY,
+    queryFn: () => apiClient<{ unread_count: number; latest: NotificationData[] }>("/notifications/unread/"),
+    staleTime: 30 * 1000,
+    refetchInterval: 180000,
+  });
+  const unreadCount = data?.unread_count ?? 0;
+  const notifications = data?.latest ?? [];
 
+  // Other notification surfaces (the full inbox pages) mark things read
+  // independently of this bell's own state - refetch whenever any of them
+  // reports a change, so the badge doesn't sit stale until the next poll.
   useEffect(() => {
-    fetchNotifications();
-    // Poll every 3 minutes
-    const interval = setInterval(fetchNotifications, 180000);
-    // Other notification surfaces (the full inbox pages) mark things read
-    // independently of this bell's own state - refetch whenever any of them
-    // reports a change, so the badge doesn't sit stale until the next poll.
-    const unsubscribe = onNotificationsChanged(fetchNotifications);
-    return () => {
-      clearInterval(interval);
-      unsubscribe();
-    };
-  }, []);
+    return onNotificationsChanged(() => {
+      queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    });
+  }, [queryClient]);
 
   const handleNotificationClick = async (notif: NotificationData) => {
     setIsOpen(false);
     if (!notif.is_read) {
       try {
         await apiClient(`/notifications/${notif.id}/read/`, { method: "PATCH" });
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-        notifyNotificationsChanged();
+        queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
       } catch (error: any) {
         // A 404 just means this notification was already deleted server-side
-        // (e.g. its source record was removed) - drop it locally and resync
-        // rather than logging it as a hard error, matching fetchNotifications'
-        // own console.warn below (Next's dev overlay treats console.error as
-        // a crash and pops up intrusively for what's really a stale row).
+        // (e.g. its source record was removed) - resync rather than logging it
+        // as a hard error (Next's dev overlay treats console.error as a crash
+        // and pops up intrusively for what's really a stale row).
         if (error?.status === 404) {
-          setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-          fetchNotifications();
+          queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
         } else {
           console.warn("Failed to mark as read", error);
         }

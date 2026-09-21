@@ -3,46 +3,26 @@
 import { useEffect, useState } from "react";
 import { Calendar, Sparkles, Target, BookOpen, RefreshCw, Loader2 } from "lucide-react";
 import { practiceApi, StudySessionResponse } from "@/lib/api/practice";
+import { useSavedQuestions } from "@/lib/practice-hooks";
+import { practiceError, PracticeError } from "@/lib/practice-errors";
 import { StudyQuestionBrowser } from "@/components/practice/StudyQuestionBrowser";
 import { Button } from "@/components/ui/button";
 
 export default function DailyPracticePage() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<PracticeError | null>(null);
   const [session, setSession] = useState<StudySessionResponse | null>(null);
-  const [savedQuestionIds, setSavedQuestionIds] = useState<Record<number, boolean>>({});
-
-  const toggleSave = async (questionId: number) => {
-    const wasSaved = !!savedQuestionIds[questionId];
-    setSavedQuestionIds((prev) => ({ ...prev, [questionId]: !wasSaved }));
-    try {
-      await practiceApi.toggleBookmark(questionId);
-    } catch {
-      setSavedQuestionIds((prev) => ({ ...prev, [questionId]: wasSaved }));
-    }
-  };
+  const { savedIds: savedQuestionIds, toggle: toggleSave } = useSavedQuestions();
 
   const startSession = async () => {
     setStarting(true);
     setError(null);
     try {
-      const [data, saved] = await Promise.all([
-        practiceApi.startDailySession(),
-        practiceApi.listSavedQuestions().catch(() => []),
-      ]);
-      const map: Record<number, boolean> = {};
-      saved.forEach((s) => {
-        map[s.question] = true;
-      });
-      setSavedQuestionIds(map);
-      setSession(data);
-    } catch (err: any) {
-      setError(
-        err?.data?.detail ||
-          err?.message ||
-          "Couldn't build your daily session. Try again."
-      );
+      setSession(await practiceApi.startDailySession());
+    } catch (err) {
+      console.error(err);
+      setError(practiceError(err, "start"));
     } finally {
       setStarting(false);
       setLoading(false);
@@ -51,7 +31,6 @@ export default function DailyPracticePage() {
 
   useEffect(() => {
     startSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Active session — render the question browser ───────────────────────
@@ -76,6 +55,7 @@ export default function DailyPracticePage() {
         <StudyQuestionBrowser
           sessionId={session.session.id}
           questions={session.questions}
+          initialAttempts={session.attempts}
           savedQuestionIds={savedQuestionIds}
           onToggleSave={toggleSave}
           initialIndex={session.resume_index ?? 0}
@@ -145,8 +125,8 @@ export default function DailyPracticePage() {
 
           {/* Error */}
           {error && (
-            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {error}
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
+              {error.message}
             </div>
           )}
 
@@ -162,7 +142,7 @@ export default function DailyPracticePage() {
                 Building your session…
               </>
             ) : (
-              error ? "Try Again" : "Start Daily Practice"
+              error?.retryable ? "Try Again" : "Start Daily Practice"
             )}
           </Button>
 

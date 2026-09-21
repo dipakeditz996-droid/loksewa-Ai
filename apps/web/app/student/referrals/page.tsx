@@ -219,7 +219,7 @@ export default function StudentReferralsPage() {
                 <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-primary text-primary-foreground text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
                   <Trophy className="w-4 h-4" />
                 </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-[#0B2545]/20 bg-primary text-primary-foreground/5">
+                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-xl border border-[#0B2545]/20 bg-primary/5">
                   <div className="font-semibold text-primary dark:text-foreground">Get Rewarded!</div>
                   <div className="text-sm text-muted-foreground">Both of you earn XP/Coins</div>
                 </div>

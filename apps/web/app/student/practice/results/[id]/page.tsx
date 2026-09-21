@@ -1,39 +1,61 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { practiceApi, SubmitSessionResponse } from "@/lib/api/practice";
+import React from "react";
+import { useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { practiceApi } from "@/lib/api/practice";
+import { practiceResultKey } from "@/lib/practice-hooks";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Target, Clock, CheckCircle2, XCircle, ChevronRight, BarChart3, HelpCircle } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, XCircle, BarChart3, HelpCircle } from "lucide-react";
 import Link from "next/link";
+import { practiceError, PracticeError } from "@/lib/practice-errors";
 
 export default function PracticeResultPage() {
   const params = useParams();
-  const router = useRouter();
-  const [result, setResult] = useState<SubmitSessionResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const id = parseInt(params.id as string);
+  const idValid = !Number.isNaN(id);
 
-  useEffect(() => {
-    async function loadResult() {
-      try {
-        const id = parseInt(params.id as string);
-        const data = await practiceApi.getSessionResult(id);
-        setResult(data);
-      } catch (e) {
-        console.error(e);
-        alert("Failed to load result.");
-        router.push("/student/practice");
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadResult();
-  }, [params.id]);
+  // Finishing a session already returned this exact payload and seeds the
+  // cache (see the Finish handlers), so the result normally renders at once
+  // with no second request. Opening the URL directly fetches it.
+  const resultQuery = useQuery({
+    queryKey: practiceResultKey(id),
+    queryFn: () => practiceApi.getSessionResult(id),
+    enabled: idValid,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const result = resultQuery.data ?? null;
+  const loading = resultQuery.isLoading;
+  const error: PracticeError | null = !idValid
+    ? { kind: "unavailable", message: "This practice session is no longer available.", retryable: false }
+    : resultQuery.isError
+      ? practiceError(resultQuery.error, "result")
+      : null;
+  const loadResult = () => resultQuery.refetch();
 
-  if (loading || !result) {
+  // Only the result area shows loading / failure; the page frame stays.
+  if (loading || error || !result) {
     return (
-      <div className="flex justify-center items-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" />
+      <div className="p-4 md:p-8 max-w-[1000px] mx-auto space-y-8">
+        <Link href="/student/practice" className="inline-flex items-center text-sm font-bold text-muted-foreground hover:text-primary dark:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Practice
+        </Link>
+        <h1 className="text-[28px] font-bold text-primary dark:text-foreground tracking-tight">Practice Result</h1>
+        {error ? (
+          <div className="bg-card rounded-[16px] border border-border shadow-sm p-10 text-center space-y-4" role="alert">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto" aria-hidden="true" />
+            <p className="font-semibold text-primary dark:text-foreground">{error.message}</p>
+            {error.retryable && <Button variant="outline" onClick={loadResult}>Retry</Button>}
+          </div>
+        ) : (
+          <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Loading your result">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[0, 1, 2, 3].map(i => <div key={i} className="h-24 rounded-[14px] bg-muted" />)}
+            </div>
+            <div className="h-64 rounded-[14px] bg-muted" />
+          </div>
+        )}
       </div>
     );
   }

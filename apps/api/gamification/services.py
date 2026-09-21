@@ -134,3 +134,34 @@ def register_referral(new_user, referral_code):
             
     except GamificationProfile.DoesNotExist:
         pass # Invalid referral code
+
+
+STUDY_TZ_NAME = 'Asia/Kathmandu'
+
+
+def record_study_activity(user, when=None):
+    """Count today as a study day for `user`'s streak.
+
+    The GamificationProfile streak stays the single source of truth; this is
+    its only writer. Idempotent per day: the first real learning activity of a
+    day (answering a practice question, finishing a mock exam, completing a
+    study task) extends the streak, later ones change nothing. Days are
+    Nepal days (the platform's students are there), not UTC days.
+    Returns the profile's current streak.
+    """
+    import datetime
+    from zoneinfo import ZoneInfo
+
+    now = when or timezone.now()
+    today = timezone.localtime(now, ZoneInfo(STUDY_TZ_NAME)).date()
+    profile = get_or_create_profile(user)
+    if profile.last_study_date == today:
+        return profile.study_current_streak
+    if profile.last_study_date == today - datetime.timedelta(days=1):
+        profile.study_current_streak += 1
+    else:
+        profile.study_current_streak = 1
+    profile.study_highest_streak = max(profile.study_highest_streak, profile.study_current_streak)
+    profile.last_study_date = today
+    profile.save(update_fields=['study_current_streak', 'study_highest_streak', 'last_study_date'])
+    return profile.study_current_streak

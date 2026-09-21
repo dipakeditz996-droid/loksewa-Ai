@@ -1,4 +1,8 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.cache import cache
+from django.db.models.signals import post_delete, post_save
+from django.dispatch import receiver
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
@@ -368,6 +372,57 @@ class AdminSettings(models.Model):
         obj, created = cls.objects.get_or_create(pk=1)
         return obj
 
+    ENFORCE_ACCESS_CACHE_KEY = 'admin_settings:enforce_subscription_access'
+    STUDY_PLANS_CACHE_KEY = 'admin_settings:enable_study_plans'
+
+    @classmethod
+    def is_study_plans_enabled(cls):
+        """The Study Plans kill-switch, cached for a few seconds exactly like
+        is_subscription_enforced (one global boolean; saving the settings drops it)."""
+        ttl = getattr(settings, 'ENFORCE_ACCESS_CACHE_TTL', 15)
+        if ttl <= 0:
+            return bool(cls.get_settings().enable_study_plans)
+        try:
+            cached = cache.get(cls.STUDY_PLANS_CACHE_KEY)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return cached
+        value = bool(cls.get_settings().enable_study_plans)
+        try:
+            cache.set(cls.STUDY_PLANS_CACHE_KEY, value, ttl)
+        except Exception:
+            pass
+        return value
+
+    @classmethod
+    def is_subscription_enforced(cls):
+        """Is package enforcement switched on?
+
+        This is called by the package permission on every student request, and
+        the answer is one global switch that admins flip rarely - so only THAT
+        boolean is cached, for a few seconds, and dropped whenever the settings
+        are saved. Whether a particular student has access is never cached:
+        the permission still checks their subscription on every request.
+        (The settings object itself is deliberately not cached - callers save
+        it, and saving a stale copy would overwrite other admins' changes.)
+        """
+        ttl = getattr(settings, 'ENFORCE_ACCESS_CACHE_TTL', 15)
+        if ttl <= 0:
+            return bool(cls.get_settings().enforce_subscription_access)
+        try:
+            cached = cache.get(cls.ENFORCE_ACCESS_CACHE_KEY)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return cached
+        value = bool(cls.get_settings().enforce_subscription_access)
+        try:
+            cache.set(cls.ENFORCE_ACCESS_CACHE_KEY, value, ttl)
+        except Exception:
+            pass
+        return value
+
 
 class SocialAccount(models.Model):
     PROVIDER_CHOICES = (
@@ -425,3 +480,11 @@ class Tag(models.Model):
 
     def __str__(self):
         return self.name
+
+
+@receiver([post_save, post_delete], sender=AdminSettings)
+def _forget_cached_enforcement_flag(sender, **kwargs):
+    try:
+        cache.delete_many([AdminSettings.ENFORCE_ACCESS_CACHE_KEY, AdminSettings.STUDY_PLANS_CACHE_KEY])
+    except Exception:
+        pass

@@ -96,6 +96,12 @@ def finalize_attempt(attempt, auto=False):
 
     attempt.save()
 
+    try:
+        from gamification.services import record_study_activity
+        record_study_activity(attempt.student)
+    except Exception:
+        pass
+
     # Award XP for examination attempt completion
     try:
         from gamification.services import award_xp

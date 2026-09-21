@@ -61,10 +61,17 @@ export default function StudentLayout({
     return <div className="min-h-screen bg-muted/20" />;
   }
 
-  if (examFocus) {
-    return (
-      <div className="flex min-h-screen flex-col bg-muted">
-        {!onAttemptPage && attemptPath && (
+  // ONE tree for both modes. The page content stays at the same position in it
+  // when an exam / practice session switches focus mode on, so React keeps the
+  // page mounted. Two different trees used to unmount and remount the page every
+  // time focus mode toggled - and a page that starts something when it mounts
+  // (a practice session) started a new one each time, in a loop.
+  return (
+    <div className={examFocus ? "flex min-h-screen flex-col bg-muted" : "flex min-h-screen bg-muted/20"}>
+      {!examFocus && <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} role="student" />}
+
+      <div className={examFocus ? "flex min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col lg:pl-72 transition-all duration-300"}>
+        {examFocus && !onAttemptPage && attemptPath ? (
           <div className="flex items-center justify-center gap-3 bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span>You have an exam in progress. Navigation is hidden until you submit it.</span>
@@ -75,23 +82,14 @@ export default function StudentLayout({
               Resume Exam
             </Link>
           </div>
+        ) : null}
+        {!examFocus && (
+          <DashboardHeader
+            onMenuClick={() => setSidebarOpen(true)}
+            role="student"
+          />
         )}
-        <main className="flex-1">{children}</main>
-        <FocusAwareToaster />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex min-h-screen bg-muted/20">
-      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} role="student" />
-      
-      <div className="flex flex-1 flex-col lg:pl-72 transition-all duration-300">
-        <DashboardHeader 
-          onMenuClick={() => setSidebarOpen(true)} 
-          role="student" 
-        />
-        <main className="flex-1 overflow-y-auto">
+        <main className={examFocus ? "flex-1" : "flex-1 overflow-y-auto"}>
           {children}
         </main>
       </div>

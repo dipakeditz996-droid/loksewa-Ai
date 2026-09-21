@@ -22,7 +22,7 @@ class HasActiveSubscription(BasePermission):
         if not request.user or not request.user.is_authenticated:
             return False
 
-        if not AdminSettings.get_settings().enforce_subscription_access:
+        if not AdminSettings.is_subscription_enforced():
             return True
 
         if request.user.role in ('teacher', 'admin', 'super-admin'):

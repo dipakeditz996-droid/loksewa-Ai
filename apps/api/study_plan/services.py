@@ -97,7 +97,7 @@ def generate_study_plan_tasks(study_plan, regenerate_future=False):
     study_days = study_plan.study_days if study_plan.study_days else list(weekday_map.values())
 
     while days_generated < 14:
-        if current_date > study_plan.target_date:
+        if study_plan.target_date and current_date > study_plan.target_date:
             break
             
         day_name = weekday_map[current_date.weekday()]

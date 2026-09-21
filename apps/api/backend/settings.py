@@ -432,7 +432,7 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'core.authentication.ProfileAwareJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -453,6 +453,11 @@ SIMPLE_JWT = {
 }
 
 AUTH_USER_MODEL = 'core.User'
+
+# Seconds the "is package enforcement on?" switch is cached (see
+# AdminSettings.is_subscription_enforced). 0 disables it - used under tests so a
+# value cached by one test can't leak into the next after its DB rollback.
+ENFORCE_ACCESS_CACHE_TTL = 0 if 'test' in sys.argv else 15
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

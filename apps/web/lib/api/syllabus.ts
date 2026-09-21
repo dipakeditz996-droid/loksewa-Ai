@@ -37,6 +37,9 @@ export interface Subject {
 export interface Exam {
   id: number;
   title: string;
+  // The name to show in pickers: `title`, qualified with the exam's real
+  // parent level / category only when two listed exams share a title.
+  display_name?: string;
   description: string;
   subjects: Subject[];
 }

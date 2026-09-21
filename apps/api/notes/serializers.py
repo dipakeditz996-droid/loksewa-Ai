@@ -1,6 +1,23 @@
 from rest_framework import serializers
 from .models import StudyMaterial, StudentMaterialProgress, StudentMaterialBookmark
 from exams.models import Exam, Subject, Chapter, Topic
+from django.db.models import Exists, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
+
+
+def with_student_state(queryset, user):
+    """Annotate each material with the requesting student's bookmark and
+    progress so the list serializer needs no per-row queries. Both values are
+    scoped to `user`, so nothing about another student can leak in."""
+    if not user or not user.is_authenticated:
+        return queryset
+    return queryset.annotate(
+        _is_bookmarked=Exists(StudentMaterialBookmark.objects.filter(student=user, material=OuterRef('pk'))),
+        _progress=Coalesce(Subquery(
+            StudentMaterialProgress.objects.filter(student=user, material=OuterRef('pk')).values('progress')[:1],
+            output_field=IntegerField()), Value(0)),
+    )
+
 
 class StudyMaterialListSerializer(serializers.ModelSerializer):
     exam_name = serializers.CharField(source='exam.name', read_only=True, default=None)
@@ -38,12 +55,16 @@ class StudyMaterialListSerializer(serializers.ModelSerializer):
         return None
 
     def get_is_bookmarked(self, obj):
+        if hasattr(obj, '_is_bookmarked'):
+            return obj._is_bookmarked
         request = self.context.get('request')
         if request and request.user and request.user.is_authenticated:
             return StudentMaterialBookmark.objects.filter(student=request.user, material=obj).exists()
         return False
 
     def get_progress(self, obj):
+        if hasattr(obj, '_progress'):
+            return obj._progress
         request = self.context.get('request')
         if request and request.user and request.user.is_authenticated:
             prog = StudentMaterialProgress.objects.filter(student=request.user, material=obj).first()

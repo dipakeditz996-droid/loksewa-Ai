@@ -38,9 +38,22 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
     def _verify_and_reward_template(self, template):
         pass
 
+    def _authorise_exam(self, exam):
+        """A plan can only target an exam the student's purchase covers - the exam id
+        in the request body is never trusted."""
+        from courses.access import authorized_exam_ids
+        scope = authorized_exam_ids(self.request.user)
+        if scope is not None and exam is not None and exam.id not in scope:
+            raise PermissionDenied("You don't have access to this exam.")
+
+    def perform_update(self, serializer):
+        self._authorise_exam(serializer.validated_data.get('exam'))
+        serializer.save()
+
     def perform_create(self, serializer):
         if not _study_plans_enabled():
             raise PermissionDenied("Study plans are currently disabled by the administrator.")
+        self._authorise_exam(serializer.validated_data.get('exam'))
         plan = serializer.save(student=self.request.user)
         # Generate initial tasks
         generate_study_plan_tasks(plan, regenerate_future=False)
@@ -146,32 +159,15 @@ class StudyTaskViewSet(viewsets.ModelViewSet):
         task.completed_at = timezone.now()
         task.save()
 
-        # ── Update study streak in GamificationProfile ──
+        # The streak lives in gamification; this is the same recorder practice and
+        # exams use, so a day counts once however the student studied.
         try:
-            from gamification.models import GamificationProfile
-            profile, _ = GamificationProfile.objects.get_or_create(user=request.user)
-            today = timezone.now().date()
-            yesterday = today - datetime.timedelta(days=1)
-
-            if profile.last_study_date == today:
-                pass  # Already recorded today, streak unchanged
-            elif profile.last_study_date == yesterday:
-                profile.study_current_streak += 1
-            else:
-                profile.study_current_streak = 1  # Reset — gap in study
-
-            if profile.study_current_streak > profile.study_highest_streak:
-                profile.study_highest_streak = profile.study_current_streak
-
-            profile.last_study_date = today
-            profile.save(update_fields=[
-                'study_current_streak', 'study_highest_streak', 'last_study_date'
-            ])
-
+            from gamification.services import record_study_activity
+            streak = record_study_activity(request.user)
             from core.notification_service import NotificationService
-            NotificationService.notify_streak_milestone(request.user, profile.study_current_streak)
+            NotificationService.notify_streak_milestone(request.user, streak)
         except Exception:
-            pass  # Don't fail the completion just because streak update errored
+            pass  # Don't fail the completion just because the streak update errored
 
         return Response({"status": "Task marked as completed."})
 
@@ -207,7 +203,7 @@ class DashboardView(APIView):
         for tp in topic_progress_qs:
             topics_data.append({
                 "topic_id": tp.topic.id,
-                "title": tp.topic.title,
+                "title": tp.topic.name,
                 "status": tp.status,
                 "progress": tp.progress,
                 "accuracy": tp.accuracy
@@ -275,7 +271,7 @@ class DashboardView(APIView):
             continue_learning = {
                 "type": "topic",
                 "id": last_topic.topic.id,
-                "title": f"Continue Topic: {last_topic.topic.title}",
+                "title": f"Continue Topic: {last_topic.topic.name}",
                 "url": f"/student/practice?topic={last_topic.topic.id}"
             }
         elif plan:

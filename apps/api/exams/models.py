@@ -409,14 +409,28 @@ class QuestionMastery(models.Model):
     # capped at 30 days.
     interval_days = models.IntegerField(default=1)
     next_review_at = models.DateTimeField(null=True, blank=True)
+    # When this question was last answered WHILE IT WAS DUE for review (its
+    # next_review_at fell on or before the end of that Nepal day). Answering
+    # moves next_review_at forward, so "was it due?" cannot be worked out
+    # afterwards - this records it at the moment it is true. It is what the
+    # Study Plan counts as a completed revision; a first attempt, or a question
+    # that was not yet due, never sets it.
+    last_due_review_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('user', 'question')
 
     def record_answer(self, is_correct):
+        import datetime
+        from zoneinfo import ZoneInfo
         from django.utils import timezone
         now = timezone.now()
+        nepal = ZoneInfo('Asia/Kathmandu')
+        local_today = timezone.localtime(now, nepal).date()
+        end_of_today = datetime.datetime.combine(local_today + datetime.timedelta(days=1), datetime.time.min, tzinfo=nepal)
+        if self.times_answered > 0 and self.next_review_at is not None and self.next_review_at < end_of_today:
+            self.last_due_review_at = now
         self.times_answered += 1
         if is_correct:
             self.times_correct += 1

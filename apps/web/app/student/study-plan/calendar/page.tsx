@@ -4,9 +4,12 @@ import React, { useEffect, useState } from "react";
 import { studyPlanApi, StudyTask } from "@/lib/api/study-plan";
 import { Button } from "@/components/ui/button";
 
-import { ChevronLeft, ChevronRight, Loader2, Calendar as CalendarIcon, CheckCircle2, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, CheckCircle2, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+// DEPRECATED: not linked from anywhere in the student app. It only lists legacy
+// StudyTask rows assigned by admins before "My Study Plan" became computed from
+// real activity. Kept (not deleted) so that assigned tasks stay reachable by URL.
 export default function CalendarPage() {
   const router = useRouter();
   const [tasks, setTasks] = useState<StudyTask[]>([]);
@@ -58,7 +61,7 @@ export default function CalendarPage() {
           <p className="text-muted-foreground mt-1 font-medium">View your scheduled tasks and track completion history.</p>
         </div>
         <Button variant="outline" onClick={() => router.push("/student/study-plan")}>
-          Back to Dashboard
+          Back to My Study Plan
         </Button>
       </div>
       
@@ -85,7 +88,7 @@ export default function CalendarPage() {
             <div key={`pad-${i}`} className="border-r border-b border-border/50 bg-muted/50" />
           ))}
           
-          {daysInMonth.map((day, idx) => {
+          {daysInMonth.map((day) => {
             const dayTasks = tasks.filter(t => isSameDay(new Date(t.date), day));
             const isToday = isSameDay(day, new Date());
             

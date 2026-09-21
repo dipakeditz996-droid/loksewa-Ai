@@ -94,7 +94,7 @@ export default function DuelGamePage() {
   if (match.status === 'SEARCHING' || match.status === 'MATCHED') {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-md mx-auto">
-        <div className="w-20 h-20 bg-primary text-primary-foreground/10 rounded-full flex items-center justify-center mb-6">
+        <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
           <Swords className="w-10 h-10 text-primary dark:text-foreground" />
         </div>
         <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">
@@ -201,7 +201,7 @@ export default function DuelGamePage() {
                   className={`
                     w-full text-left p-4 rounded-xl border-2 transition-all flex items-center
                     ${isSelected 
-                      ? 'border-[#0B2545] bg-primary text-primary-foreground/5' 
+                      ? 'border-[#0B2545] bg-primary/5' 
                       : 'border-border hover:border-[#0B2545]/30 hover:bg-muted'}
                     ${(isAnswered || timeLeft === 0) && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}
                   `}

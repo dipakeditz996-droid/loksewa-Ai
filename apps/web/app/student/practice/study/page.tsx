@@ -2,41 +2,35 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Loader2, RotateCcw, Sparkles, ChevronRight as ChevronRightIcon } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { BookOpen, Loader2, RotateCcw, Sparkles, AlertCircle, ChevronRight as ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { syllabusApi, Exam } from "@/lib/api/syllabus";
-import { practiceApi, StudySessionResponse } from "@/lib/api/practice";
-import { TopicPracticeBrowser } from "@/components/practice/TopicPracticeBrowser";
+import { practiceApi, StudyPage } from "@/lib/api/practice";
+import { TopicPracticeBrowser, QuestionSkeleton, readStoredPageSize } from "@/components/practice/TopicPracticeBrowser";
+import { usePracticeExams, useSavedQuestions, practiceResultKey } from "@/lib/practice-hooks";
+import { ExamListStatus } from "@/components/practice/ExamListStatus";
+import { practiceError, PracticeError } from "@/lib/practice-errors";
 
 export default function TopicStudyPage() {
   const router = useRouter();
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [loadingExams, setLoadingExams] = useState(true);
+  const queryClient = useQueryClient();
+  // Syllabus + saved questions come from the shared query cache, so coming
+  // back to Practice shows them instantly instead of refetching.
+  const examsQuery = usePracticeExams();
+  const exams = useMemo(() => examsQuery.data ?? [], [examsQuery.data]);
+  const loadingExams = examsQuery.isPending;
+  const { savedIds: savedQuestionIds, toggle: toggleSave } = useSavedQuestions();
   const [exam, setExam] = useState("");
   const [subject, setSubject] = useState("");
   const [topic, setTopic] = useState("");
 
   const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<StudySessionResponse | null>(null);
-  const [savedQuestionIds, setSavedQuestionIds] = useState<Record<number, boolean>>({});
+  const [error, setError] = useState<PracticeError | null>(null);
+  const [session, setSession] = useState<StudyPage | null>(null);
 
   useEffect(() => {
-    syllabusApi.getExams().then(data => {
-      setExams(data);
-      if (data.length > 0 && data[0]?.id) setExam(data[0].id.toString());
-      setLoadingExams(false);
-    }).catch(e => {
-      console.error(e);
-      setLoadingExams(false);
-    });
-
-    practiceApi.listSavedQuestions().then(saved => {
-      const map: Record<number, boolean> = {};
-      saved.forEach(s => { map[s.question] = true; });
-      setSavedQuestionIds(map);
-    }).catch(e => console.error(e));
-  }, []);
+    if (!exam && exams.length > 0 && exams[0]?.id) setExam(exams[0].id.toString());
+  }, [exams, exam]);
 
   const activeExam = useMemo(() => exams.find(e => e.id.toString() === exam), [exam, exams]);
   const activeSubject = useMemo(() => activeExam?.subjects?.find(s => s.id.toString() === subject), [activeExam, subject]);
@@ -47,30 +41,40 @@ export default function TopicStudyPage() {
   );
 
   const handleStart = async (restart = false) => {
-    if (!topic) return;
+    if (!topic || starting) return;
     setStarting(true);
     setError(null);
     try {
-      const data = await practiceApi.startStudy({ topic, subject, exam, restart });
+      const data = await practiceApi.startStudy({
+        topic, subject, exam, restart,
+        page_size: readStoredPageSize(),
+      });
+      // A restart replaces the question set: drop pages cached for the old one.
+      queryClient.removeQueries({ queryKey: ["practice-study-page"] });
       setSession(data);
     } catch (e) {
       console.error(e);
-      setError("Couldn't start studying this topic. Try a different one.");
+      setError(practiceError(e, "start"));
     } finally {
       setStarting(false);
     }
   };
 
-  const toggleSave = async (questionId: number) => {
-    const wasSaved = !!savedQuestionIds[questionId];
-    setSavedQuestionIds(prev => ({ ...prev, [questionId]: !wasSaved }));
-    try {
-      await practiceApi.toggleBookmark(questionId);
-    } catch (e) {
-      console.error(e);
-      setSavedQuestionIds(prev => ({ ...prev, [questionId]: wasSaved }));
-    }
-  };
+  // First load: show the practice shell straight away with skeleton cards,
+  // rather than leaving the student on a button spinner.
+  if (starting && !session) {
+    return (
+      <div className="p-4 md:p-8 max-w-[1200px] mx-auto space-y-6" aria-busy="true">
+        <div>
+          <h1 className="text-[22px] font-bold tracking-tight text-primary dark:text-foreground">
+            {allTopics.find(t => t.id.toString() === topic)?.name || "Topic"}
+          </h1>
+          <p className="text-muted-foreground text-[14px]">Loading your questions…</p>
+        </div>
+        <div className="max-w-[860px] mx-auto"><QuestionSkeleton count={3} /></div>
+      </div>
+    );
+  }
 
   if (session) {
     const topicName = allTopics.find(t => t.id.toString() === topic)?.name;
@@ -110,26 +114,28 @@ export default function TopicStudyPage() {
           </div>
         </div>
 
-        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        {error && (
+          <p className="text-sm text-red-500 font-medium" role="alert">{error.message}</p>
+        )}
 
-        <TopicPracticeBrowser
-          key={session.session.id}
-          sessionId={session.session.id}
-          questions={session.questions}
-          initialAttempts={session.attempts}
-          initialIndex={session.resume_index}
-          savedQuestionIds={savedQuestionIds}
-          onToggleSave={toggleSave}
-          onFinish={async () => {
-            try {
-              await practiceApi.submitSession(session.session.id, 0);
+        {starting ? (
+          <div className="max-w-[860px] mx-auto"><QuestionSkeleton count={3} /></div>
+        ) : (
+          <TopicPracticeBrowser
+            key={session.session.id}
+            initial={session}
+            savedQuestionIds={savedQuestionIds}
+            onToggleSave={toggleSave}
+            onFinish={async () => {
+              // The browser shows the (network / server) message next to the
+              // Finish button; rethrow so it can.
+              const finished = await practiceApi.submitSession(session.session.id, 0);
+              // Hand the result page the payload we already have.
+              queryClient.setQueryData(practiceResultKey(session.session.id), finished);
               router.push(`/student/practice/results/${session.session.id}`);
-            } catch (e) {
-              console.error(e);
-              setError("Couldn't finish the practice session. Please try again.");
-            }
-          }}
-        />
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -155,7 +161,7 @@ export default function TopicStudyPage() {
             disabled={loadingExams}
           >
             <option value="">Select an exam</option>
-            {exams.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+            {exams.map(e => <option key={e.id} value={e.id}>{e.display_name ?? e.title}</option>)}
           </select>
         </div>
 
@@ -185,7 +191,21 @@ export default function TopicStudyPage() {
           </select>
         </div>
 
-        {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        <ExamListStatus
+          isError={examsQuery.isError}
+          isEmpty={!loadingExams && !examsQuery.isError && exams.length === 0}
+          onRetry={() => examsQuery.refetch()}
+        />
+
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-red-600 font-medium" role="alert">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{error.message}</span>
+            {error.retryable && (
+              <button type="button" className="underline font-bold" onClick={() => handleStart(false)}>Retry</button>
+            )}
+          </div>
+        )}
 
         <Button
           onClick={() => handleStart(false)}

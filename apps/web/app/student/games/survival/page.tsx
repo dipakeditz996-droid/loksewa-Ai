@@ -218,7 +218,7 @@ export default function SurvivalGamePage() {
         )}
         
         <div className="flex items-center justify-between mb-6">
-          <span className="text-sm font-semibold text-primary dark:text-foreground bg-primary text-primary-foreground/10 px-3 py-1 rounded-full">
+          <span className="text-sm font-semibold text-primary dark:text-foreground bg-primary/10 px-3 py-1 rounded-full">
             Question {game.questions_survived + 1}
           </span>
           
@@ -248,7 +248,7 @@ export default function SurvivalGamePage() {
                 className={`
                   w-full text-left p-4 rounded-xl border-2 transition-all flex items-center
                   ${isSelected 
-                    ? 'border-[#0B2545] bg-primary text-primary-foreground/5' 
+                    ? 'border-[#0B2545] bg-primary/5' 
                     : 'border-border hover:border-[#0B2545]/30 hover:bg-muted'}
                   ${(isSubmitting || feedback !== null) && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}
                 `}

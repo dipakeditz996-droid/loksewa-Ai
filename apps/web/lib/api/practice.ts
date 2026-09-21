@@ -77,6 +77,12 @@ export interface AnswerResult {
   is_correct?: boolean;
   correct_option?: string;
   explanation?: string;
+  // True when the same question was already answered: the server kept the
+  // first answer and returned it (retries and second tabs are harmless).
+  already_answered?: boolean;
+  // The option the server holds for this question (differs from the one
+  // just sent when the first answer was kept).
+  selected_option?: string | null;
 }
 
 export interface RevealResult {
@@ -97,6 +103,30 @@ export interface StudySessionResponse extends PracticeSessionResponse {
   attempts: AttemptState[];
   resume_index: number;
   resumed: boolean;
+}
+
+// Whole-session totals from the server - never derived from the loaded page.
+export interface StudyStats {
+  total: number;
+  answered: number;
+  correct: number;
+  wrong: number;
+  accuracy: number;
+}
+
+// One page of a Topic-wise session: only these questions are sent.
+export interface StudyPage {
+  session: PracticeSession;
+  questions: Question[];
+  attempts: AttemptState[];
+  page: number; // 1-based
+  page_size: number;
+  total_pages: number;
+  total_questions: number;
+  first_index: number; // 0-based index of this page's first question
+  stats: StudyStats;
+  resumed?: boolean;
+  resume_index?: number;
 }
 
 export interface RevisionSummary {
@@ -138,11 +168,24 @@ export const practiceApi = {
     });
   },
 
-  startStudy: (params: { topic: string | number; subject?: string; exam?: string; restart?: boolean }) => {
-    return apiClient<StudySessionResponse>("/practice-sessions/study/", {
+  startStudy: (params: {
+    topic: string | number;
+    subject?: string;
+    exam?: string;
+    restart?: boolean;
+    page?: number;
+    page_size?: number;
+  }) => {
+    return apiClient<StudyPage>("/practice-sessions/study/", {
       method: "POST",
       body: JSON.stringify(params),
     });
+  },
+
+  getStudyPage: (sessionId: number, page: number, pageSize: number) => {
+    return apiClient<StudyPage>(
+      `/practice-sessions/${sessionId}/questions/?page=${page}&page_size=${pageSize}`
+    );
   },
 
   getRevisionSummary: () => {
@@ -163,13 +206,11 @@ export const practiceApi = {
     });
   },
 
+  // Read-only: opening or refreshing a result never completes a session (that
+  // used to happen because this called submit). Answers 409 while the session
+  // is still in progress.
   getSessionResult: (sessionId: number) => {
-    // We can just call submit again or a specific GET endpoint. 
-    // Since submit is idempotent when completed, we can just call it to get the full result.
-    return apiClient<SubmitSessionResponse>(`/practice-sessions/${sessionId}/submit/`, {
-      method: "POST",
-      body: JSON.stringify({ time_taken_seconds: 0 }),
-    });
+    return apiClient<SubmitSessionResponse>(`/practice-sessions/${sessionId}/result/`);
   },
 
   toggleBookmark: (questionId: number) => {

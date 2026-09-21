@@ -86,7 +86,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
 
   return (
     <header className="sticky top-0 z-30 flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-md px-4 sm:px-8">
-      <div className="flex items-center gap-4">
+      <div className="flex min-w-0 items-center gap-4">
         <Button
           variant="ghost"
           size="icon"
@@ -96,7 +96,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
           <Menu className="h-5 w-5 text-[#0B2545] dark:text-white" />
           <span className="sr-only">Toggle sidebar</span>
         </Button>
-        <div className="hidden lg:flex flex-col">
+        <div className="hidden lg:flex min-w-0 flex-col">
           {role === "teacher" ? (
             <>
               <span className="text-[16px] font-bold text-foreground dark:text-white">
@@ -106,10 +106,10 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
             </>
           ) : (
             <>
-              <span className="text-[16px] font-bold text-foreground dark:text-white flex items-center gap-1.5">
+              <span className="truncate text-[16px] font-bold text-foreground dark:text-white flex items-center gap-1.5">
                 {greeting}, {user.name.split(" ")[0]}! <span className="text-xl">{icon}</span>
               </span>
-              <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Welcome back! Keep up the excellent work.</span>
+              <span className="truncate text-[12px] font-medium text-muted-foreground dark:text-slate-300">Welcome back! Keep up the excellent work.</span>
             </>
           )}
         </div>

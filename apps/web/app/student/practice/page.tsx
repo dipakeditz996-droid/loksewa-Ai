@@ -6,37 +6,32 @@ import {
   Target, Sparkles, LucideIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { syllabusApi, Exam } from "@/lib/api/syllabus";
-import { practiceApi, RevisionSummary } from "@/lib/api/practice";
+import { usePracticeExams, useRevisionSummary } from "@/lib/practice-hooks";
+import { ExamListStatus } from "@/components/practice/ExamListStatus";
 import { useRouter } from "next/navigation";
 import { useCalmDownGate } from "@/components/calm-down/useCalmDownGate";
 import Link from "next/link";
 
 export default function PracticeSetupPage() {
   const router = useRouter();
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Shared query cache: the same syllabus tree feeds Topic-wise Study, so
+  // moving between Practice screens doesn't refetch it.
+  const examsQuery = usePracticeExams();
+  const exams = useMemo(() => examsQuery.data ?? [], [examsQuery.data]);
+  const loading = examsQuery.isPending;
 
-  const [exam, setExam] = useState("all");
+  // "" until the authorised list arrives; there is deliberately no "all exams" choice.
+  const [exam, setExam] = useState("");
   const [subject, setSubject] = useState("all");
   const [topic, setTopic] = useState("all");
   const [difficulty, setDifficulty] = useState("all");
   const [questions, setQuestions] = useState("20");
   const [mode, setMode] = useState("flexible");
-  const [revision, setRevision] = useState<RevisionSummary | null>(null);
+  const revision = useRevisionSummary().data ?? null;
 
   useEffect(() => {
-    syllabusApi.getExams().then(data => {
-      setExams(data);
-      if (data.length > 0 && data[0]?.id) setExam(data[0].id.toString());
-      setLoading(false);
-    }).catch(e => {
-      console.error(e);
-      setLoading(false);
-    });
-
-    practiceApi.getRevisionSummary().then(setRevision).catch(e => console.error(e));
-  }, []);
+    if (!exam && exams.length > 0 && exams[0]?.id) setExam(exams[0].id.toString());
+  }, [exams, exam]);
 
   const sessionUrl = `/student/practice/session?exam=${exam}&subject=${subject}&topic=${topic}&diff=${difficulty}&q=${questions}&mode=${mode}`;
   const { requestStart, gate } = useCalmDownGate(() => router.push(sessionUrl));
@@ -71,7 +66,7 @@ export default function PracticeSetupPage() {
   };
 
   const quickStarts: QuickStart[] = [
-    { id: "bookmark", label: "Saved Questions", icon: Bookmark, color: "text-primary dark:text-foreground", bg: "bg-primary text-primary-foreground/10", onClick: () => router.push("/student/practice/saved") },
+    { id: "bookmark", label: "Saved Questions", icon: Bookmark, color: "text-primary dark:text-foreground", bg: "bg-primary/10", onClick: () => router.push("/student/practice/saved") },
     { id: "random", label: "Random Practice", icon: Zap, color: "text-purple-500", bg: "bg-purple-500/10", onClick: () => router.push(`/student/practice/session?exam=all&subject=all&topic=all&diff=all&q=20&mode=flexible`) },
     { id: "weak", label: "Weak Topics", icon: Target, color: "text-red-500", bg: "bg-red-500/10", onClick: () => router.push("/student/practice/revision?focus=weak_topics") },
     { id: "incorrect", label: "Recently Incorrect", icon: RefreshCw, color: "text-orange-500", bg: "bg-orange-500/10", onClick: () => router.push("/student/practice/revision?focus=recent_mistakes") },
@@ -125,11 +120,15 @@ export default function PracticeSetupPage() {
                     onChange={(e) => { setExam(e.target.value); setSubject("all"); setTopic("all"); }}
                     className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                   >
-                    <option value="all">All Exams</option>
                     {exams.map(e => (
-                      <option key={e.id} value={e.id}>{e.title}</option>
+                      <option key={e.id} value={e.id}>{e.display_name ?? e.title}</option>
                     ))}
                   </select>
+                  <ExamListStatus
+                    isError={examsQuery.isError}
+                    isEmpty={!loading && !examsQuery.isError && exams.length === 0}
+                    onRetry={() => examsQuery.refetch()}
+                  />
                 </div>
                 
                 <div className="space-y-2">
@@ -194,7 +193,7 @@ export default function PracticeSetupPage() {
                         onChange={(e) => setQuestions(e.target.value)}
                         className="peer sr-only" 
                       />
-                      <div className="flex items-center justify-center h-11 px-5 rounded-[10px] border border-border bg-card text-[15px] font-semibold text-muted-foreground transition-all peer-checked:border-[#0B2545] peer-checked:bg-primary text-primary-foreground peer-checked:text-white hover:bg-muted">
+                      <div className="flex items-center justify-center h-11 px-5 rounded-[10px] border border-border bg-card text-[15px] font-semibold text-muted-foreground transition-all peer-checked:border-[#0B2545] peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-muted peer-checked:hover:bg-primary">
                         {num}
                       </div>
                     </label>
@@ -243,7 +242,7 @@ export default function PracticeSetupPage() {
 
           <Button
             onClick={handleStartPractice}
-            disabled={loading}
+            disabled={loading || !exam}
             className="w-full h-14 rounded-[12px] bg-primary text-primary-foreground hover:bg-[#163E6B] text-white font-bold text-[16px] shadow-[0_8px_20px_rgba(11,37,69,0.2)] transition-all hover:-translate-y-0.5 group"
           >
             {loading ? "Loading..." : "Start Practice"}

@@ -1,11 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, RefreshCw, Target, Clock, TrendingDown, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, Target, Clock, TrendingDown, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { practiceApi, PracticeSessionResponse, RevisionFocus, RevisionSummary } from "@/lib/api/practice";
 import { StudyQuestionBrowser } from "@/components/practice/StudyQuestionBrowser";
+import { useSavedQuestions, useRevisionSummary } from "@/lib/practice-hooks";
+import { ApiError } from "@/lib/api/client";
+import { practiceError } from "@/lib/practice-errors";
 
 const SIGNALS: { key: keyof Omit<RevisionSummary, "total_available">; label: string; icon: typeof Clock; focus: RevisionFocus }[] = [
   { key: "overdue", label: "Due for review", icon: Clock, focus: "overdue" },
@@ -18,32 +21,16 @@ function RevisionContent() {
   const searchParams = useSearchParams();
   const requestedFocus = searchParams.get("focus") as RevisionFocus | null;
 
-  const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<RevisionSummary | null>(null);
+  const summaryQuery = useRevisionSummary();
+  const summary = summaryQuery.data ?? null;
+  const loading = summaryQuery.isLoading;
+  // A failed load is not "nothing to revise" - say so and offer Retry.
+  const summaryError = summaryQuery.isError ? practiceError(summaryQuery.error, "load").message : null;
+  const loadSummary = () => summaryQuery.refetch();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<PracticeSessionResponse | null>(null);
-  const [savedQuestionIds, setSavedQuestionIds] = useState<Record<number, boolean>>({});
-
-  useEffect(() => {
-    practiceApi.getRevisionSummary().then(setSummary).catch(e => console.error(e)).finally(() => setLoading(false));
-    practiceApi.listSavedQuestions().then(saved => {
-      const map: Record<number, boolean> = {};
-      saved.forEach(s => { map[s.question] = true; });
-      setSavedQuestionIds(map);
-    }).catch(e => console.error(e));
-  }, []);
-
-  const toggleSave = async (questionId: number) => {
-    const wasSaved = !!savedQuestionIds[questionId];
-    setSavedQuestionIds(prev => ({ ...prev, [questionId]: !wasSaved }));
-    try {
-      await practiceApi.toggleBookmark(questionId);
-    } catch (e) {
-      console.error(e);
-      setSavedQuestionIds(prev => ({ ...prev, [questionId]: wasSaved }));
-    }
-  };
+  const { savedIds: savedQuestionIds, toggle: toggleSave } = useSavedQuestions();
 
   const handleStart = async (focus?: RevisionFocus) => {
     setStarting(true);
@@ -51,8 +38,17 @@ function RevisionContent() {
     try {
       const data = await practiceApi.startRevision(focus);
       setSession(data);
-    } catch (e: any) {
-      setError(e?.data?.detail || "Couldn't build a revision session right now.");
+    } catch (e) {
+      console.error(e);
+      const pe = practiceError(e, "start");
+      // The backend's "keep practicing and we'll build your queue" text is
+      // written for students - keep it; everything else goes through the
+      // shared wording.
+      setError(
+        pe.kind === "no-questions" && e instanceof ApiError && typeof e.data?.detail === "string"
+          ? e.data.detail
+          : pe.message
+      );
     } finally {
       setStarting(false);
     }
@@ -60,8 +56,26 @@ function RevisionContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" />
+      <div className="p-4 md:p-8 max-w-[800px] mx-auto space-y-8" aria-busy="true">
+        <div className="space-y-3 animate-pulse">
+          <div className="h-8 w-56 rounded bg-muted" />
+          <div className="h-4 w-full rounded bg-muted" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-pulse">
+          {[0, 1, 2, 3].map(i => <div key={i} className="h-24 rounded-[14px] bg-muted" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (summaryError && !session) {
+    return (
+      <div className="p-4 md:p-8 max-w-[800px] mx-auto">
+        <div className="bg-card rounded-[16px] border border-border shadow-sm p-10 text-center space-y-4" role="alert">
+          <AlertCircle className="w-8 h-8 text-red-500 mx-auto" aria-hidden="true" />
+          <p className="font-semibold text-primary dark:text-foreground">{summaryError}</p>
+          <Button variant="outline" onClick={loadSummary}>Retry</Button>
+        </div>
       </div>
     );
   }

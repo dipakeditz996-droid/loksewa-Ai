@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Q
 from .models import StudyMaterial, StudentMaterialProgress, StudentMaterialBookmark
-from .serializers import StudyMaterialListSerializer, StudyMaterialDetailSerializer
+from .serializers import StudyMaterialListSerializer, StudyMaterialDetailSerializer, with_student_state
 from subscriptions.access import has_active_subscription
 
 
@@ -124,7 +124,7 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(content__icontains=search)
             )
 
-        return queryset
+        return with_student_state(queryset, user)
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -321,7 +321,10 @@ class StudentPortalSyllabusNotesView(APIView):
 
         materials_qs = StudyMaterial.objects.filter(
             exam=selected_exam, status='published'
-        ).select_related('subject', 'chapter', 'topic', 'exam', 'exam__parent', 'exam__category').order_by('-created_at')
+        ).select_related(
+            'subject', 'chapter', 'topic', 'course', 'exam', 'exam__parent', 'exam__category'
+        ).order_by('-created_at')
+        materials_qs = with_student_state(materials_qs, user)
 
         from core.models import AdminSettings
         if AdminSettings.get_settings().enforce_subscription_access and not is_staff_or_teacher:

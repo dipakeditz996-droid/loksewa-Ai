@@ -250,7 +250,7 @@ export default function AITutorPage() {
         {/* Chat Header */}
         <header className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0 bg-card z-10 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground/10 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Bot className="w-6 h-6 text-primary dark:text-foreground" />
             </div>
             <div>

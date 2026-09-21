@@ -1,5 +1,6 @@
 "use client";
 
+import { practiceError } from "@/lib/practice-errors";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -19,7 +20,7 @@ function PracticeResultContent() {
   
   const [result, setResult] = useState<SubmitSessionResponse | null>(null);
   const [expandedQuestion, setExpandedQuestion] = useState<number | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionIdStr) {
@@ -34,14 +35,14 @@ function PracticeResultContent() {
         setResult(data);
       } catch (e) {
         console.error("Failed to fetch result", e);
-        setError(true);
+        setError(practiceError(e, "result").message);
       }
     }
     
     fetchResult();
   }, [sessionIdStr, router]);
 
-  if (error) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-red-500 font-bold">Failed to load result.</div>;
+  if (error) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-red-500 font-bold text-center px-6" role="alert">{error}</div>;
   if (!result) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-[#0B2545] border-t-transparent rounded-full animate-spin"></div></div>;
 
   const { session, attempts } = result;

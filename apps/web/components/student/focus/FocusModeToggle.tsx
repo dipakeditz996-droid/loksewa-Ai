@@ -91,7 +91,7 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
               Focus Mode
             </h2>
             {isFocusActive && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary text-primary-foreground/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary dark:text-foreground">
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary dark:text-foreground">
                 <Check className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
                 Active
               </span>

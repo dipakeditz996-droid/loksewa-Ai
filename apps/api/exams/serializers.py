@@ -11,25 +11,42 @@ class TopicSerializer(serializers.ModelSerializer):
         model = Topic
         fields = ['id', 'title', 'name', 'status', 'progress', 'accuracy', 'description']
 
+    def _progress_for(self, obj):
+        """This student's UserTopicProgress row for `obj`, or None.
+
+        All of the student's rows are read once per request and kept in the
+        serializer context - a syllabus tree has dozens of topics, and each
+        of the three fields below used to run its own query per topic.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        cache = self.context.setdefault('_topic_progress', {})
+        if request.user.pk not in cache:
+            cache[request.user.pk] = {
+                p.topic_id: p for p in UserTopicProgress.objects.filter(user=request.user)
+            }
+        return cache[request.user.pk].get(obj.pk)
+
     def get_status(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return 'not-started'
-        progress = UserTopicProgress.objects.filter(user=request.user, topic=obj).first()
+        progress = self._progress_for(obj)
         return progress.status if progress else 'not-started'
 
     def get_progress(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return 0
-        progress = UserTopicProgress.objects.filter(user=request.user, topic=obj).first()
+        progress = self._progress_for(obj)
         return progress.progress if progress else 0
 
     def get_accuracy(self, obj):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return None
-        progress = UserTopicProgress.objects.filter(user=request.user, topic=obj).first()
+        progress = self._progress_for(obj)
         return progress.accuracy if progress else None
 
 class ChapterSerializer(serializers.ModelSerializer):
@@ -63,15 +80,34 @@ class SubjectSerializer(serializers.ModelSerializer):
 class ExamSerializer(serializers.ModelSerializer):
     subjects = serializers.SerializerMethodField()
     title = serializers.CharField(source='name') # map name to title
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
-        fields = ['id', 'title', 'description', 'category', 'subjects']
+        fields = ['id', 'title', 'display_name', 'description', 'category', 'subjects']
+
+    def get_display_name(self, obj):
+        """The exam's name, qualified only when another exam in the same list
+        has the identical name. The qualifier is the exam's real parent (its
+        Level, e.g. "5th Level Exam") or, for a top-level exam, its category
+        (e.g. "Civil Service") - never an invented label."""
+        if obj.name in self.context.get('duplicate_exam_names', ()):
+            qualifier = obj.parent.name if obj.parent_id else obj.category.name
+            return f"{obj.name} \u2014 {qualifier}"
+        return obj.name
 
     def get_subjects(self, obj):
-        from django.db.models import Q
         from .models import Subject
-        subjects = Subject.objects.filter(paper__exam=obj).distinct()
+        if 'papers' in getattr(obj, '_prefetched_objects_cache', {}):
+            # The list endpoint prefetches papers -> subjects -> chapters ->
+            # topics in a handful of queries; read from that instead of
+            # querying again for every exam.
+            subjects = sorted(
+                (s for paper in obj.papers.all() for s in paper.subjects.all()),
+                key=lambda s: s.id,
+            )
+        else:
+            subjects = Subject.objects.filter(paper__exam=obj).distinct()
         return SubjectSerializer(subjects, many=True, context=self.context).data
 
 class QuestionFullSerializer(serializers.ModelSerializer):
@@ -151,6 +187,21 @@ class PracticeSessionSerializer(serializers.ModelSerializer):
         model = PracticeSession
         fields = '__all__'
         read_only_fields = ['user', 'score', 'completed']
+
+class PracticeSessionSummarySerializer(serializers.ModelSerializer):
+    """A session's own fields only - no nested attempts.
+
+    Practice responses already carry the per-question state they need (the
+    `attempts` list beside `questions`), so nesting every QuestionAttempt
+    inside the session as well doubled the payload and cost an extra query
+    per response. Every field is read-only: a student can never write scores
+    or counters onto their own session through the API.
+    """
+    class Meta:
+        model = PracticeSession
+        fields = '__all__'
+        read_only_fields = [f.name for f in PracticeSession._meta.fields]
+
 
 class UserTopicProgressSerializer(serializers.ModelSerializer):
     class Meta:

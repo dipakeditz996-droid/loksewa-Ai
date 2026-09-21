@@ -75,8 +75,17 @@ class QuestionSelectionService:
         tag_id: Optional[int] = None,
         tag_ids: Optional[list] = None,
         exclude_ids: Optional[list] = None,
+        exam_ids: Optional[list] = None,
     ) -> QuerySet:
-        """Apply academic-hierarchy and metadata filters to a queryset."""
+        """Apply academic-hierarchy and metadata filters to a queryset.
+
+        `exam_ids` restricts the pool to a SET of exams - the exams a student
+        is authorised for (courses.access.authorized_exam_ids). It composes
+        with `exam_id` (both must hold), so a caller can never widen access by
+        also passing a specific exam.
+        """
+        if exam_ids is not None:
+            qs = qs.filter(topic__chapter__subject__paper__exam_id__in=list(exam_ids))
         if exam_id:
             # A Question reaches its Exam through topic → chapter → subject →
             # paper → exam. Subject has no direct `exam` FK, so that is the only
@@ -181,6 +190,19 @@ class QuestionSelectionService:
         }
         return {"total": total, "by_difficulty": by_diff}
 
+    def select_ids(self, *, limit: int, **filters) -> list:
+        """IDs of the approved questions matching `filters`, oldest first.
+
+        Same pool as select() - it is built from the same base queryset and
+        apply_filters(), so approval status and question-type rules cannot
+        drift - but it returns bare ids. Callers that only need to FIX a
+        question set (a Topic-wise session records its questions as
+        QuestionAttempt rows) shouldn't load, join and de-duplicate every
+        full question row just to read the ids back out.
+        """
+        qs = self.apply_filters(self.get_base_queryset(), **filters)
+        return list(qs.order_by("id").values_list("id", flat=True)[:limit])
+
     def select(
         self,
         *,
@@ -206,6 +228,7 @@ class QuestionSelectionService:
         topic_distribution: Optional[dict] = None,
         randomize: bool = True,
         exclude_ids: Optional[list] = None,
+        exam_ids: Optional[list] = None,
     ) -> dict:
         """
         Select approved questions from the Master Question Bank.
@@ -267,6 +290,7 @@ class QuestionSelectionService:
             tag_id=tag_id,
             tag_ids=tag_ids,
             exclude_ids=exclude_ids,
+            exam_ids=exam_ids,
         )
         total_available = base_qs.count()
 

@@ -50,6 +50,10 @@ class Base(APITestCase):
         subject = Subject.objects.create(paper=paper, name='GK')
         chapter = Chapter.objects.create(subject=subject, title='Geo')
         self.topic = Topic.objects.create(chapter=chapter, name='Mountains')
+        # The student owns the course for this exam, so practising it is authorised.
+        from courses.models import Course, Enrollment
+        course = Course.objects.create(title='Kharidar', slug='kharidar', status='published', exam=exam)
+        Enrollment.objects.create(student=self.student, course=course)
 
     def upload(self, headers, rows, qtype, **extra):
         payload = {'file': xlsx(headers, rows), 'topic': self.topic.id,
@@ -287,13 +291,14 @@ class StudentPracticeTests(Base):
 
     def test_topic_practice_shows_only_approved_objective_questions_with_feedback(self):
         good = self.make_q(text='mcq ok', explanation='because b')
+        good2 = self.make_q(text='mcq ok too', explanation='because b again')
         for i, qt in enumerate(Question.SUBJECTIVE_TYPES):
             self.make_q(qtype=qt, text=f'written {i}')
         self.make_q(status_='draft', text='draft mcq')
         r = self.client.post('/api/practice-sessions/study/', {'topic': self.topic.id}, format='json')
         self.assertEqual(r.status_code, 200)
         ids = [q['id'] for q in r.data['questions']]
-        self.assertEqual(ids, [good.id])
+        self.assertEqual(ids, [good.id, good2.id])
         # student payload carries options but not the answer key
         q = r.data['questions'][0]
         self.assertEqual(q['option_b'], 'b')
@@ -306,11 +311,19 @@ class StudentPracticeTests(Base):
         self.assertFalse(wrong.data['is_correct'])
         self.assertEqual(wrong.data['correct_option'], 'B')
         self.assertEqual(wrong.data['explanation'], 'because b')
-        right = self.client.post(f'/api/practice-sessions/{session_id}/answer/',
+        # Study feedback is instant and final: a second answer to the same
+        # question returns the stored first one instead of rewriting it.
+        again = self.client.post(f'/api/practice-sessions/{session_id}/answer/',
                                  {'question_id': good.id, 'selected_option': 'B'}, format='json')
-        self.assertTrue(right.data['is_correct'])
+        self.assertTrue(again.data['already_answered'])
+        self.assertFalse(again.data['is_correct'])
         attempt = QuestionAttempt.objects.get(session_id=session_id, question=good)
-        self.assertEqual((attempt.selected_option, attempt.is_correct), ('B', True))
+        self.assertEqual((attempt.selected_option, attempt.is_correct), ('c', False))
+        right = self.client.post(f'/api/practice-sessions/{session_id}/answer/',
+                                 {'question_id': good2.id, 'selected_option': 'B'}, format='json')
+        self.assertTrue(right.data['is_correct'])
+        attempt = QuestionAttempt.objects.get(session_id=session_id, question=good2)
+        self.assertEqual((attempt.selected_option, attempt.is_correct), ('b', True))
 
     def test_topic_practice_with_only_subjective_questions_offers_nothing(self):
         self.make_q(qtype='long_answer', text='essay')

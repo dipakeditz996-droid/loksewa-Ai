@@ -34,8 +34,13 @@ class StudyPlan(models.Model):
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='study_plans')
     template = models.ForeignKey('StudyPlanTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='instances')
     
-    target_date = models.DateField()
+    # The student's OWN goal date - optional. The exam countdown and the on-track
+    # check use the admin-configured ExamSchedule; this is only a fallback when
+    # no schedule applies to the student's preparation.
+    target_date = models.DateField(null=True, blank=True)
     daily_minutes = models.IntegerField(default=120)
+    # Practice questions the student aims to answer on a study day.
+    daily_questions = models.PositiveIntegerField(default=20)
     
     # Store JSON list of days, e.g. ["Sunday", "Monday"]
     study_days = models.JSONField(default=list)

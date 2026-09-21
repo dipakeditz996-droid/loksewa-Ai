@@ -63,7 +63,7 @@ export default function DuelSetupPage() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Random Match */}
         <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center text-center">
-          <div className="w-16 h-16 bg-primary text-primary-foreground/10 rounded-full flex items-center justify-center mb-6">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-6">
             <Swords className="w-8 h-8 text-primary dark:text-foreground" />
           </div>
           <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">Random Match</h2>
@@ -71,7 +71,7 @@ export default function DuelSetupPage() {
             Play against a random student who is also looking for a match right now.
           </p>
           <Button 
-            className="w-full bg-primary text-primary-foreground hover:bg-primary text-primary-foreground/90 py-6"
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-6"
             onClick={handleRandomMatch}
             disabled={isSearching}
           >

@@ -4,13 +4,19 @@ import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { practiceApi, PracticeSessionResponse, Question } from "@/lib/api/practice";
 import { Button } from "@/components/ui/button";
-import { Loader2, Clock, CheckCircle2, ChevronLeft, ChevronRight, Flag, Star } from "lucide-react";
+import { Loader2, Clock, CheckCircle2, ChevronLeft, ChevronRight, Flag, Star, AlertCircle } from "lucide-react";
 import { useFocusMode } from "@/contexts/FocusModeContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSavedQuestions, practiceResultKey } from "@/lib/practice-hooks";
+import { notify } from "@/lib/notify";
+import { practiceError, practiceErrorMessage, PracticeError } from "@/lib/practice-errors";
+import { QuestionSkeleton } from "@/components/practice/TopicPracticeBrowser";
 
 function PracticeSessionContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { beginExamFocus, endExamFocus } = useFocusMode();
+  const queryClient = useQueryClient();
 
 
   const exam = searchParams.get("exam");
@@ -25,43 +31,41 @@ function PracticeSessionContent() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
-  const [savedQuestions, setSavedQuestions] = useState<Record<number, boolean>>({});
+  const { savedIds: savedQuestions, toggle: toggleSavedQuestion } = useSavedQuestions();
+  const [startError, setStartError] = useState<PracticeError | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    async function initSession() {
-      try {
-        const data = await practiceApi.startSession({
-          // The backend treats the literal string "all" as "no filter" for
-          // exam/subject/topic — sending "-1" instead used to be filtered as
-          // a real (nonexistent) id and returned zero questions.
-          exam: exam || "all",
-          subject: subject || "all",
-          topic: topic || "all",
-          difficulty: difficulty || "all",
-          mode,
-          total_questions: totalQuestions,
-        });
-        setSessionData(data);
-        if (mode === "timed") {
-          setTimeRemaining(totalQuestions * 60); // 1 min per question
-        }
-      } catch (e) {
-        console.error(e);
-        alert("Failed to start session.");
-        router.push("/student/practice");
-      } finally {
-        setLoading(false);
+  const initSession = async () => {
+    setLoading(true);
+    setStartError(null);
+    try {
+      const data = await practiceApi.startSession({
+        // The backend treats the literal string "all" as "no filter" for
+        // exam/subject/topic — sending "-1" instead used to be filtered as
+        // a real (nonexistent) id and returned zero questions.
+        exam: exam || "all",
+        subject: subject || "all",
+        topic: topic || "all",
+        difficulty: difficulty || "all",
+        mode,
+        total_questions: totalQuestions,
+      });
+      setSessionData(data);
+      if (mode === "timed") {
+        setTimeRemaining(totalQuestions * 60); // 1 min per question
       }
+    } catch (e) {
+      console.error(e);
+      setStartError(practiceError(e, "start"));
+    } finally {
+      setLoading(false);
     }
-    initSession();
+  };
 
-    practiceApi.listSavedQuestions().then(saved => {
-      const map: Record<number, boolean> = {};
-      saved.forEach(s => { map[s.question] = true; });
-      setSavedQuestions(map);
-    }).catch(e => console.error(e));
+  useEffect(() => {
+    initSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -102,6 +106,7 @@ function PracticeSessionContent() {
     if (!sessionData) return;
     const q = sessionData.questions[currentIdx];
     if (!q) return;
+    const previous = answers[q.id];
     setAnswers(prev => ({ ...prev, [q.id]: option }));
     try {
       await practiceApi.saveAnswer(sessionData.session.id, {
@@ -111,6 +116,13 @@ function PracticeSessionContent() {
       });
     } catch (e) {
       console.error(e);
+      // The server did not accept it, so don't leave it looking saved.
+      setAnswers(prev => {
+        const next = { ...prev };
+        if (previous) next[q.id] = previous; else delete next[q.id];
+        return next;
+      });
+      notify.examError(practiceErrorMessage(e, "answer"));
     }
   };
 
@@ -128,21 +140,15 @@ function PracticeSessionContent() {
       });
     } catch (e) {
       console.error(e);
+      setMarkedForReview(prev => ({ ...prev, [q.id]: !newState }));
+      notify.examError(practiceErrorMessage(e, "save"));
     }
   };
 
-  const toggleSave = async () => {
+  const toggleSave = () => {
     if (!sessionData) return;
     const q = sessionData.questions[currentIdx];
-    if (!q) return;
-    const wasSaved = !!savedQuestions[q.id];
-    setSavedQuestions(prev => ({ ...prev, [q.id]: !wasSaved }));
-    try {
-      await practiceApi.toggleBookmark(q.id);
-    } catch (e) {
-      console.error(e);
-      setSavedQuestions(prev => ({ ...prev, [q.id]: wasSaved }));
-    }
+    if (q) toggleSavedQuestion(q.id);
   };
 
   const handleSubmit = async () => {
@@ -152,26 +158,42 @@ function PracticeSessionContent() {
       const timeTaken = mode === "timed" && timeRemaining !== null
         ? (totalQuestions * 60) - timeRemaining
         : 0; // Or track time up if flexible
-      await practiceApi.submitSession(sessionData.session.id, timeTaken);
+      const finished = await practiceApi.submitSession(sessionData.session.id, timeTaken);
+      queryClient.setQueryData(practiceResultKey(sessionData.session.id), finished);
       router.push(`/student/practice/results/${sessionData.session.id}`);
     } catch (e) {
       console.error(e);
-      alert("Failed to submit.");
+      notify.examError(practiceErrorMessage(e, "submit"));
       setSubmitting(false);
     }
   };
 
+  if (startError) {
+    return (
+      <div className="max-w-[700px] mx-auto p-4 md:p-8">
+        <div className="bg-card rounded-[16px] border border-border shadow-sm p-10 text-center space-y-4" role="alert">
+          <AlertCircle className="w-8 h-8 text-red-500 mx-auto" aria-hidden="true" />
+          <p className="font-semibold text-primary dark:text-foreground">{startError.message}</p>
+          <div className="flex justify-center gap-3">
+            {startError.retryable && <Button variant="outline" onClick={initSession}>Retry</Button>}
+            <Button variant="ghost" onClick={() => router.push("/student/practice")}>Back to Practice</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !sessionData) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary dark:text-foreground" />
+      <div className="max-w-[1200px] mx-auto p-4 md:p-8">
+        <QuestionSkeleton count={1} />
       </div>
     );
   }
 
   const currentQ = sessionData.questions[currentIdx];
   if (!currentQ) {
-     return <div className="p-8 text-center">No questions found for the selected criteria.</div>;
+     return <div className="p-8 text-center">No questions are available for this practice yet.</div>;
   }
 
   return (

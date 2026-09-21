@@ -1,3 +1,11 @@
+/**
+ * @deprecated Legacy manual study-plan / task API. The student "My Study Plan"
+ * page no longer uses it - it reads `lib/api/study-plan-page.ts`, which is
+ * computed from real syllabus, practice and exam activity. This file is kept
+ * only for the old /student/study-plan/calendar route, which still lists
+ * StudyTask rows that admins assigned before the redesign. New code must not
+ * import from here.
+ */
 import { apiClient } from "./client";
 import { Exam } from "./syllabus";
 

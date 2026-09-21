@@ -1,10 +1,11 @@
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Exam, Subject, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress, QuestionMastery
 from .serializers import (
     ExamSerializer, SubjectSerializer, TopicSerializer,
-    QuestionFullSerializer, SecureQuestionSerializer, PracticeSessionSerializer, UserTopicProgressSerializer
+    QuestionFullSerializer, SecureQuestionSerializer, PracticeSessionSerializer, PracticeSessionSummarySerializer,
+    UserTopicProgressSerializer
 )
 from .selection_service import QuestionSelectionService
 from subscriptions.permissions import HasActiveSubscription
@@ -24,8 +25,17 @@ def _revision_buckets(user):
     from django.utils import timezone
     from django.db.models import Sum
 
+    from courses.access import authorized_exam_ids
+
     now = timezone.now()
-    approved_ids = QuestionSelectionService().get_base_queryset().values_list('id', flat=True)
+    service = QuestionSelectionService()
+    scope = authorized_exam_ids(user)
+    pool = service.get_base_queryset()
+    if scope is not None:
+        # Revision draws on the student's own history, but only from exams
+        # they are (still) authorised for.
+        pool = service.apply_filters(pool, exam_ids=scope)
+    approved_ids = pool.values_list('id', flat=True)
     mastery = QuestionMastery.objects.filter(user=user, question_id__in=approved_ids).select_related('question')
 
     overdue = list(mastery.filter(next_review_at__lte=now).order_by('next_review_at'))
@@ -72,8 +82,43 @@ def _dedup_questions(mastery_records, limit=None):
 
 
 class ExamViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Exam.objects.filter(is_active=True)
+    """The exams a user may browse and practise.
+
+    Staff see every active exam. A student sees only the exams their
+    purchase / enrollment authorises (courses.access.authorized_exam_ids) -
+    decided here on the server, so the Practice dropdown and a hand-typed
+    /api/exams/<id>/ agree: an exam outside the set is simply not found (404).
+    Behind the same package gate as Practice itself.
+    """
+    queryset = Exam.objects.filter(is_active=True)  # router basename; get_queryset adds the prefetch
     serializer_class = ExamSerializer
+    permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
+
+    def list(self, request, *args, **kwargs):
+        from collections import Counter
+        exams = list(self.filter_queryset(self.get_queryset()))
+        counts = Counter(e.name for e in exams)
+        context = self.get_serializer_context()
+        context['duplicate_exam_names'] = {name for name, n in counts.items() if n > 1}
+        return Response(ExamSerializer(exams, many=True, context=context).data)
+
+    def get_queryset(self):
+        from django.db.models import Prefetch
+        from courses.access import authorized_exam_ids
+        from .models import Paper, Chapter
+        # The response nests exam -> subjects -> chapters -> topics. Without
+        # prefetching, every level ran one query per parent (8 chapter and 8
+        # topic queries here, 16 for subjects) - and each round trip to the
+        # hosted database costs ~170ms.
+        qs = Exam.objects.filter(is_active=True).select_related('parent', 'category').prefetch_related(
+            Prefetch('papers', queryset=Paper.objects.prefetch_related(
+                Prefetch('subjects', queryset=Subject.objects.prefetch_related(
+                    Prefetch('chapters', queryset=Chapter.objects.prefetch_related('topics'))
+                ))
+            ))
+        ).order_by('category_id', 'order', 'id')
+        scope = authorized_exam_ids(self.request.user)
+        return qs if scope is None else qs.filter(id__in=scope)
 
 class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subject.objects.all()
@@ -97,7 +142,7 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
     def content(self, request, pk=None):
         topic = self.get_object()
         from notes.models import StudyMaterial
-        from notes.serializers import StudyMaterialDetailSerializer
+        from notes.serializers import StudyMaterialDetailSerializer, with_student_state
         from courses.models import Enrollment
         from django.db.models import Q
         
@@ -105,7 +150,10 @@ class TopicViewSet(viewsets.ReadOnlyModelViewSet):
         active_courses = Enrollment.objects.filter(student=request.user, status='active').values_list('course_id', flat=True)
         materials = StudyMaterial.objects.filter(topic=topic, status='published')
         materials = materials.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
-        
+        materials = with_student_state(
+            materials.select_related('subject', 'chapter', 'topic', 'course', 'exam', 'exam__parent', 'exam__category'),
+            request.user)
+
         materials_data = StudyMaterialDetailSerializer(materials, many=True, context={'request': request}).data
         
         return Response({
@@ -131,7 +179,12 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ['topic', 'difficulty']
 
     def get_queryset(self):
-        return QuestionSelectionService().get_base_queryset()
+        from courses.access import authorized_exam_ids
+        service = QuestionSelectionService()
+        scope = authorized_exam_ids(self.request.user)
+        qs = service.get_base_queryset()
+        # A student only ever sees questions of exams they are authorised for.
+        return qs if scope is None else service.apply_filters(qs, exam_ids=scope)
 
     @action(detail=False, methods=['get'])
     def practice_set(self, request):
@@ -153,8 +206,184 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = self.get_serializer(result['questions'], many=True)
         return Response(serializer.data)
 
-class PracticeSessionViewSet(viewsets.ModelViewSet):
-    serializer_class = PracticeSessionSerializer
+# Topic-wise practice shows a fixed page of questions at a time (default 20).
+STUDY_PAGE_SIZES = (10, 20)
+DEFAULT_STUDY_PAGE_SIZE = 20
+OPTION_LETTERS = ('a', 'b', 'c', 'd')
+# Modes that reveal correctness the moment a question is answered. Their
+# first answer is final (the UI locks the question); flexible/timed sessions
+# are scored at submit, so the student may change an answer until then.
+IMMEDIATE_FEEDBACK_MODES = ('study', 'revision', 'daily')
+
+
+def _note_study_activity(user):
+    """Tell gamification the student studied today - at most one cheap cache hit
+    per answer, and one small write per Nepal day."""
+    from django.core.cache import cache
+    from django.utils import timezone
+    from zoneinfo import ZoneInfo
+    key = f"study-activity:{user.pk}:{timezone.localtime(timezone.now(), ZoneInfo('Asia/Kathmandu')).date()}"
+    try:
+        if not cache.add(key, 1, 60 * 60 * 30):
+            return
+    except Exception:
+        pass
+    try:
+        from gamification.services import record_study_activity
+        record_study_activity(user)
+    except Exception:
+        pass
+
+
+def _attempt_state(attempt):
+    """Per-question state the frontend rehydrates from. Correct option and
+    explanation are only sent for questions the student has already answered
+    or revealed - never for ones they haven't touched."""
+    entry = {
+        'question_id': attempt.question_id,
+        'selected_option': attempt.selected_option,
+        'is_correct': attempt.is_correct if attempt.selected_option else None,
+        'is_viewed': attempt.is_viewed,
+    }
+    if attempt.is_viewed:
+        entry['correct_option'] = attempt.question.correct_option
+        entry['explanation'] = attempt.question.explanation
+    return entry
+
+
+def _session_stats(session):
+    """Totals over the WHOLE session (never just the loaded page) from one
+    aggregate query."""
+    from django.db.models import Count, Q, Subquery
+    # `before_first_open` = how many questions come before the first one the
+    # student hasn't touched yet - i.e. its 0-based index, which is where a
+    # resumed session should land. Computed in the same query.
+    first_open = (
+        QuestionAttempt.objects.filter(session=session, is_viewed=False)
+        .order_by('id').values('id')[:1]
+    )
+    agg = QuestionAttempt.objects.filter(session=session).aggregate(
+        total=Count('id'),
+        answered=Count('id', filter=Q(selected_option__isnull=False) & ~Q(selected_option='')),
+        correct=Count('id', filter=Q(selected_option__isnull=False) & ~Q(selected_option='') & Q(is_correct=True)),
+        before_first_open=Count('id', filter=Q(id__lt=Subquery(first_open))),
+    )
+    answered = agg['answered']
+    return {
+        'total': agg['total'],
+        'answered': answered,
+        'correct': agg['correct'],
+        'wrong': answered - agg['correct'],
+        'accuracy': round(agg['correct'] * 100 / answered) if answered else 0,
+        'resume_index': agg['before_first_open'],
+    }
+
+
+def _clean_page_params(page, page_size):
+    try:
+        page_size = int(page_size)
+    except (TypeError, ValueError):
+        page_size = DEFAULT_STUDY_PAGE_SIZE
+    if page_size not in STUDY_PAGE_SIZES:
+        page_size = DEFAULT_STUDY_PAGE_SIZE
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = None
+    return page, page_size
+
+
+def _study_page_payload(session, page, page_size, extra=None):
+    """One page of a session's fixed question set.
+
+    The set is the QuestionAttempt rows created when the session started,
+    read back in id order - so it never reshuffles between pages and no
+    selection runs again. Only this page's questions are loaded/serialized.
+    """
+    attempts_qs = QuestionAttempt.objects.filter(session=session)
+    stats = _session_stats(session)
+    total = stats['total']
+    total_pages = max(1, -(-total // page_size))
+
+    if page is None:
+        # Land on the page holding the first question the student hasn't
+        # touched yet, so resuming doesn't drop them back at question 1.
+        page = stats['resume_index'] // page_size + 1
+    page = min(max(page, 1), total_pages)
+
+    offset = (page - 1) * page_size
+    page_attempts = list(
+        attempts_qs.select_related('question').order_by('id')[offset:offset + page_size]
+    )
+    payload = {
+        'session': PracticeSessionSummarySerializer(session).data,
+        'questions': SecureQuestionSerializer([a.question for a in page_attempts], many=True).data,
+        'attempts': [_attempt_state(a) for a in page_attempts],
+        'page': page,
+        'page_size': page_size,
+        'total_pages': total_pages,
+        'total_questions': total,
+        'first_index': offset,
+        'stats': stats,
+    }
+    if extra:
+        payload.update(extra)
+    return payload
+
+
+def _new_study_page_payload(session, question_ids, page, page_size):
+    """Response for a session that was JUST created: every attempt is
+    untouched, so the totals are known without querying them back. Only the
+    requested page's questions are loaded."""
+    total = len(question_ids)
+    total_pages = max(1, -(-total // page_size))
+    page = min(max(page or 1, 1), total_pages)
+    offset = (page - 1) * page_size
+    page_ids = question_ids[offset:offset + page_size]
+    by_id = {q.id: q for q in Question.objects.filter(id__in=page_ids)}
+    questions = [by_id[i] for i in page_ids if i in by_id]
+    return {
+        'session': PracticeSessionSummarySerializer(session).data,
+        'questions': SecureQuestionSerializer(questions, many=True).data,
+        'attempts': [
+            {'question_id': q.id, 'selected_option': None, 'is_correct': None, 'is_viewed': False}
+            for q in questions
+        ],
+        'page': page,
+        'page_size': page_size,
+        'total_pages': total_pages,
+        'total_questions': total,
+        'first_index': offset,
+        'resumed': False,
+        'stats': {'total': total, 'answered': 0, 'correct': 0, 'wrong': 0, 'accuracy': 0, 'resume_index': 0},
+    }
+
+
+def _practice_result_payload(session, serializer_data):
+    """The result of a COMPLETED session: its totals plus every question with
+    the student's answer. Read-only."""
+    attempts = (
+        QuestionAttempt.objects.filter(session=session)
+        .select_related('question').prefetch_related('question__tag_objects')
+    )
+    return {
+        'session': serializer_data,
+        'attempts': [{
+            'attempt_id': a.id,
+            'question': QuestionFullSerializer(a.question).data,
+            'selected_option': a.selected_option,
+            'is_correct': a.is_correct,
+            'is_marked_for_review': a.is_marked_for_review,
+        } for a in attempts],
+    }
+
+
+class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Practice sessions. Read-only through the standard routes: sessions are
+    created and mutated only by the purpose-built actions below (create,
+    study, daily, start_revision, answer, reveal, submit), so a student can't
+    PATCH scores/counters onto their own session or DELETE it."""
+    serializer_class = PracticeSessionSummarySerializer
     permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
 
     def get_queryset(self):
@@ -180,17 +409,32 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         # Enforce Enrollment Access Control
         # If a course is provided, ensure the student is enrolled.
         if course_id:
-            from courses.models import Enrollment
-            if not Enrollment.objects.filter(student=request.user, course_id=course_id, status='active').exists():
-                return Response({'detail': 'You are not enrolled in this course.'}, status=403)
-            # Override exam_id with the course's exam if applicable
+            from courses.access import course_access_denial
             from courses.models import Course
-            try:
-                course = Course.objects.get(id=course_id)
-                if course.exam:
-                    exam_id = course.exam.id
-            except Course.DoesNotExist:
-                return Response({'detail': 'Course not found.'}, status=404)
+            denial = course_access_denial(request.user, course_id)
+            if denial:
+                return Response({'detail': denial[1]}, status=denial[0])
+            # Override exam_id with the course's exam if applicable
+            course = Course.objects.get(id=course_id)
+            if course.exam:
+                exam_id = course.exam.id
+
+        # Exam authorisation. The client's exam id is never trusted: a student
+        # may only name an exam their purchase covers, and "all" (or no exam)
+        # means "all of MY authorised exams", never the whole platform.
+        from courses.access import authorized_exam_ids
+        scope = authorized_exam_ids(request.user)
+        exam_filter_ids = None
+        if scope is not None:
+            if exam_id and str(exam_id) != 'all':
+                try:
+                    exam_authorised = int(exam_id) in scope
+                except (TypeError, ValueError):
+                    return Response({'detail': 'Invalid exam.'}, status=400)
+                if not exam_authorised:
+                    return Response({'detail': "You don't have access to this exam."}, status=403)
+            else:
+                exam_filter_ids = scope
 
         # Build difficulty distribution if a specific difficulty is requested
         difficulty_distribution = None
@@ -209,6 +453,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             difficulty_distribution=difficulty_distribution,
             randomize=True,
             question_type='objective',  # MCQ practice UI: never written-answer questions
+            exam_ids=exam_filter_ids,
         )
 
         questions = result['questions']
@@ -226,8 +471,11 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         # Resolve exam_id for session record
         resolved_exam_id = exam_id if exam_id and str(exam_id) != 'all' else None
         if not resolved_exam_id:
-            first_exam = Exam.objects.first()
-            resolved_exam_id = first_exam.id if first_exam else None
+            if scope:
+                resolved_exam_id = min(scope)
+            else:
+                first_exam = Exam.objects.first()
+                resolved_exam_id = first_exam.id if first_exam else None
 
         # Create session
         session = PracticeSession.objects.create(
@@ -240,12 +488,11 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             total_questions=len(questions)
         )
 
-        for q in questions:
-            QuestionAttempt.objects.create(session=session, question=q)
+        QuestionAttempt.objects.bulk_create([QuestionAttempt(session=session, question=q) for q in questions])
 
         from .serializers import SecureQuestionSerializer
         response_data = {
-            'session': PracticeSessionSerializer(session).data,
+            'session': PracticeSessionSummarySerializer(session).data,
             'questions': SecureQuestionSerializer(questions, many=True).data,
             'selection_info': {
                 'available': result['available'],
@@ -271,50 +518,91 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 attempt.viewed_at = timezone.now()
                 attempt.save(update_fields=['is_viewed', 'viewed_at'])
             return Response({'status': 'success'})
-        except QuestionAttempt.DoesNotExist:
+        except (QuestionAttempt.DoesNotExist, ValueError, TypeError):
             return Response({'detail': 'Question not found in this session.'}, status=404)
 
     @action(detail=True, methods=['post'])
     def answer(self, request, pk=None):
+        from django.db import transaction
+        from django.utils import timezone
+
         session = self.get_object()
         if session.completed:
             return Response({'detail': 'Session already completed.'}, status=400)
 
         question_id = request.data.get('question_id')
         selected_option = request.data.get('selected_option')
-        is_marked_for_review = request.data.get('is_marked_for_review', False)
+        is_marked_for_review = bool(request.data.get('is_marked_for_review', False))
+
+        if selected_option is not None:
+            selected_option = str(selected_option).strip().lower()
+            if selected_option not in OPTION_LETTERS:
+                return Response({'detail': 'Choose one of the options A, B, C or D.'}, status=400)
 
         try:
-            attempt = QuestionAttempt.objects.get(session=session, question_id=question_id)
-            is_correct = None
-            if selected_option is not None:
-                attempt.selected_option = selected_option
-                attempt.is_viewed = True
-                correct_option = attempt.question.correct_option
-                is_correct = bool(correct_option) and selected_option.upper() == correct_option.upper()
-                attempt.is_correct = is_correct
+            # Row lock: two identical requests (double click, retry after a
+            # slow response) queue up here, so the second sees the first
+            # one's saved answer instead of writing a second one.
+            with transaction.atomic():
+                attempt = (
+                    QuestionAttempt.objects.select_for_update(of=('self',))
+                    .select_related('question')
+                    .get(session=session, question_id=question_id)
+                )
+                question = attempt.question
+                immediate = session.mode in IMMEDIATE_FEEDBACK_MODES
 
-                # Study/Revision are no-pressure modes without a formal
-                # submit step, so score the answer as soon as it's given —
-                # this is also the single point that feeds Revision Mode's
-                # performance signals (never fed by merely viewing a
-                # question or by Bookmark/Saved Questions).
-                if session.mode in ('study', 'revision'):
-                    from .models import QuestionMastery
-                    mastery, _ = QuestionMastery.objects.get_or_create(user=session.user, question=attempt.question)
-                    mastery.record_answer(is_correct)
+                if selected_option is not None and immediate and attempt.selected_option:
+                    # First answer wins in modes that show the result at once.
+                    # Repeating the request returns what was stored and does
+                    # not touch attempts, mastery or any counters again.
+                    return Response({
+                        'status': 'success',
+                        'already_answered': True,
+                        'selected_option': attempt.selected_option,
+                        'is_correct': attempt.is_correct,
+                        'correct_option': question.correct_option,
+                        'explanation': question.explanation,
+                    })
 
-            attempt.is_marked_for_review = is_marked_for_review
-            attempt.save()
+                is_correct = None
+                if selected_option is not None:
+                    attempt.selected_option = selected_option
+                    attempt.is_viewed = True
+                    if not attempt.viewed_at:
+                        attempt.viewed_at = timezone.now()
+                    correct_option = question.correct_option
+                    # correct_option is stored uppercase; the frontend sends
+                    # lowercase letters - compare case-insensitively.
+                    is_correct = bool(correct_option) and selected_option.upper() == correct_option.upper()
+                    attempt.is_correct = is_correct
 
-            response = {'status': 'success'}
-            if is_correct is not None:
-                response['is_correct'] = is_correct
-                response['correct_option'] = attempt.question.correct_option
-                response['explanation'] = attempt.question.explanation
-            return Response(response)
-        except QuestionAttempt.DoesNotExist:
+                    # Study/Revision are no-pressure modes without a formal
+                    # submit step, so score the answer as soon as it's given -
+                    # this is also the single point that feeds Revision Mode's
+                    # performance signals (never fed by merely viewing a
+                    # question or by Bookmark/Saved Questions).
+                    if session.mode in ('study', 'revision'):
+                        mastery, _ = QuestionMastery.objects.get_or_create(user=session.user, question=question)
+                        mastery.record_answer(is_correct)
+
+                attempt.is_marked_for_review = is_marked_for_review
+                attempt.save()
+        except (QuestionAttempt.DoesNotExist, ValueError, TypeError):
             return Response({'detail': 'Question not found in this session.'}, status=404)
+
+        if selected_option is not None:
+            _note_study_activity(request.user)
+
+        response = {'status': 'success'}
+        # Flexible/timed sessions are scored at submit - never hand the
+        # student the answer key mid-session.
+        if is_correct is not None and session.mode in IMMEDIATE_FEEDBACK_MODES:
+            response['is_correct'] = is_correct
+            response['selected_option'] = selected_option
+            response['correct_option'] = question.correct_option
+            response['explanation'] = question.explanation
+        return Response(response)
 
     @action(detail=True, methods=['post'])
     def reveal(self, request, pk=None):
@@ -327,7 +615,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         question_id = request.data.get('question_id')
 
         try:
-            attempt = QuestionAttempt.objects.get(session=session, question_id=question_id)
+            attempt = QuestionAttempt.objects.select_related('question').get(session=session, question_id=question_id)
             if not attempt.is_viewed:
                 from django.utils import timezone
                 attempt.is_viewed = True
@@ -337,98 +625,153 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 'correct_option': attempt.question.correct_option,
                 'explanation': attempt.question.explanation,
             })
-        except QuestionAttempt.DoesNotExist:
+        except (QuestionAttempt.DoesNotExist, ValueError, TypeError):
             return Response({'detail': 'Question not found in this session.'}, status=404)
 
     @action(detail=False, methods=['post'])
     def study(self, request):
-        """Open-ended Topicwise Study: no fixed question count, no timer.
+        """Open-ended Topicwise Study: no timer, no formal submit.
 
         Resumes an in-progress study session for the topic unless `restart`
         is passed, in which case the old session (and its attempts) is
         discarded and a fresh one is built from every approved question in
-        the topic.
+        the topic. The question set is fixed once, when the session is
+        created; the response carries only one page of it (`page` /
+        `page_size`, default 20 - later pages come from `questions/`).
         """
+        from django.db import transaction
+        from core.models import User
+
         topic_id = request.data.get('topic')
         subject_id = request.data.get('subject')
         exam_id = request.data.get('exam')
         restart = bool(request.data.get('restart', False))
+        page, page_size = _clean_page_params(request.data.get('page'), request.data.get('page_size'))
 
         if not topic_id:
             return Response({'detail': 'topic is required.'}, status=400)
 
-        existing = PracticeSession.objects.filter(
-            user=request.user, topic_id=topic_id, mode='study', completed=False
-        ).order_by('-created_at').first()
+        # Exam authorisation (students): the exam the client names must be one
+        # their purchase covers, and it is what constrains the question pool
+        # below - so a topic id from another exam yields nothing.
+        from courses.access import authorized_exam_ids
+        scope = authorized_exam_ids(request.user)
+        if scope is not None:
+            if not exam_id or str(exam_id) == 'all':
+                # No exam named: the topic itself says which exam it belongs to.
+                exam_id = Topic.objects.filter(pk=topic_id).values_list(
+                    'chapter__subject__paper__exam_id', flat=True
+                ).first()
+                if not exam_id:
+                    return Response({'detail': 'No approved questions are available for this topic yet.'}, status=400)
+            try:
+                exam_authorised = int(exam_id) in scope
+            except (TypeError, ValueError):
+                return Response({'detail': 'Invalid exam.'}, status=400)
+            if not exam_authorised:
+                return Response({'detail': "You don't have access to this exam."}, status=403)
 
-        if existing and restart:
-            existing.delete()
-            existing = None
+        # Course-scoped study: the same enrollment/published check as create(),
+        # and the topic must belong to the course's exam - the client can't
+        # pair an authorised course id with somebody else's topic.
+        course_id = request.data.get('course')
+        if course_id:
+            from courses.access import course_access_denial
+            from courses.models import Course
+            denial = course_access_denial(request.user, course_id)
+            if denial:
+                return Response({'detail': denial[1]}, status=denial[0])
+            course_exam_id = Course.objects.filter(pk=course_id).values_list('exam_id', flat=True).first()
+            if course_exam_id:
+                topic_exam_id = Topic.objects.filter(pk=topic_id).values_list(
+                    'chapter__subject__paper__exam_id', flat=True
+                ).first()
+                in_scope = {course_exam_id, *Exam.objects.filter(parent_id=course_exam_id).values_list('id', flat=True)}
+                if topic_exam_id not in in_scope:
+                    return Response({'detail': 'This topic is not part of the selected course.'}, status=403)
 
-        if existing:
+        def find_open_session():
+            sessions = PracticeSession.objects.filter(
+                user=request.user, topic_id=topic_id, mode='study', completed=False
+            )
+            if scope is not None:
+                sessions = sessions.filter(exam_id__in=scope)   # never resume one whose exam is no longer authorised
+            return sessions.order_by('-created_at').first()
+
+        new_question_ids = None
+        existing = find_open_session()
+        if existing and not restart:
             session = existing
         else:
-            service = QuestionSelectionService()
-            result = service.select(
-                exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
-                subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
-                topic_id=topic_id,
-                count=500,  # effectively "every approved question in this topic"
-                randomize=False,
-                # Written-answer questions (all of Question.SUBJECTIVE_TYPES,
-                # not just 'subjective') have no options / correct_option and
-                # belong to the subjective-answer system - they can't be shown
-                # in an MCQ browsing screen.
-                question_type='objective',
-            )
-            questions = result['questions']
-            if not questions:
-                return Response({'detail': 'No approved questions are available for this topic yet.'}, status=400)
+            # Serialise per student: a double click or a React remount can
+            # send two "start" requests at once, and without this both would
+            # find "no session yet" and each build one.
+            with transaction.atomic():
+                User.objects.select_for_update().get(pk=request.user.pk)
 
-            resolved_exam_id = exam_id if exam_id and str(exam_id) != 'all' else None
-            if not resolved_exam_id:
-                first_exam = Exam.objects.first()
-                resolved_exam_id = first_exam.id if first_exam else None
+                existing = find_open_session()  # may have appeared while we waited
+                if existing and restart:
+                    existing.delete()
+                    existing = None
+                    page = None
 
-            session = PracticeSession.objects.create(
-                user=request.user,
-                exam_id=resolved_exam_id,
-                subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
-                topic_id=topic_id,
-                mode='study',
-                total_questions=len(questions),
-            )
-            for q in questions:
-                QuestionAttempt.objects.create(session=session, question=q)
+                if existing:
+                    session = existing
+                else:
+                    # Ids only: the session just records WHICH questions it holds
+                    # (as attempts); a page's content is read afterwards. Loading
+                    # every full, joined, de-duplicated row of a 100-question
+                    # topic here cost ~0.7s for data that was thrown away.
+                    question_ids = QuestionSelectionService().select_ids(
+                        exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
+                        subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
+                        topic_id=topic_id,
+                        limit=500,  # effectively "every approved question in this topic"
+                        # Written-answer questions (all of Question.SUBJECTIVE_TYPES,
+                        # not just 'subjective') have no options / correct_option and
+                        # belong to the subjective-answer system - they can't be shown
+                        # in an MCQ browsing screen.
+                        question_type='objective',
+                    )
+                    if not question_ids:
+                        return Response({'detail': 'No approved questions are available for this topic yet.'}, status=400)
 
-        attempts = list(QuestionAttempt.objects.filter(session=session).select_related('question').order_by('id'))
-        resume_index = next((i for i, a in enumerate(attempts) if not a.is_viewed), 0)
+                    resolved_exam_id = exam_id if exam_id and str(exam_id) != 'all' else None
+                    if not resolved_exam_id:
+                        first_exam = Exam.objects.first()
+                        resolved_exam_id = first_exam.id if first_exam else None
 
-        # Rehydrate per-question state so a page refresh doesn't lose already
-        # answered/revealed questions — only viewed questions get their
-        # correct_option/explanation back, never questions the student
-        # hasn't interacted with yet.
-        attempt_state = []
-        for a in attempts:
-            entry = {
-                'question_id': a.question_id,
-                'selected_option': a.selected_option,
-                'is_correct': a.is_correct if a.selected_option else None,
-                'is_viewed': a.is_viewed,
-            }
-            if a.is_viewed:
-                entry['correct_option'] = a.question.correct_option
-                entry['explanation'] = a.question.explanation
-            attempt_state.append(entry)
+                    session = PracticeSession.objects.create(
+                        user=request.user,
+                        exam_id=resolved_exam_id,
+                        subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
+                        topic_id=topic_id,
+                        mode='study',
+                        total_questions=len(question_ids),
+                    )
+                    # One INSERT for the whole set (a topic can hold 100+
+                    # questions; one round trip each took ~20s against the
+                    # hosted database).
+                    QuestionAttempt.objects.bulk_create(
+                        [QuestionAttempt(session=session, question_id=qid) for qid in question_ids]
+                    )
+                    new_question_ids = question_ids
 
-        from .serializers import SecureQuestionSerializer
-        return Response({
-            'session': PracticeSessionSerializer(session).data,
-            'questions': SecureQuestionSerializer([a.question for a in attempts], many=True).data,
-            'attempts': attempt_state,
-            'resume_index': resume_index,
-            'resumed': existing is not None,
-        })
+        if existing is None and new_question_ids is not None:
+            # Brand-new session: nothing is answered yet, so the first page and
+            # the totals are already known - no need to read them back.
+            payload = _new_study_page_payload(session, new_question_ids, page, page_size)
+        else:
+            payload = _study_page_payload(session, page, page_size, extra={'resumed': True})
+        payload['resume_index'] = payload['stats']['resume_index']
+        return Response(payload)
+
+    @action(detail=True, methods=['get'], url_path='questions')
+    def questions(self, request, pk=None):
+        """One page of a session's fixed question set, with the student's
+        saved state for those questions and whole-session stats."""
+        page, page_size = _clean_page_params(request.query_params.get('page', 1), request.query_params.get('page_size'))
+        return Response(_study_page_payload(self.get_object(), page or 1, page_size))
 
     @action(detail=False, methods=['get'])
     def revision_summary(self, request):
@@ -477,17 +820,27 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             mode='revision',
             total_questions=len(questions),
         )
-        for q in questions:
-            QuestionAttempt.objects.create(session=session, question=q)
+        QuestionAttempt.objects.bulk_create([QuestionAttempt(session=session, question=q) for q in questions])
 
         from .serializers import SecureQuestionSerializer
         return Response({
-            'session': PracticeSessionSerializer(session).data,
+            'session': PracticeSessionSummarySerializer(session).data,
             'questions': SecureQuestionSerializer(questions, many=True).data,
         })
 
     @action(detail=False, methods=['post'])
     def daily(self, request):
+        from django.db import transaction
+        from core.models import User
+
+        # One Daily session per student per day: lock the student's row so
+        # two simultaneous "open Daily Practice" requests (React remount,
+        # double click) can't both find no session and each build one.
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=request.user.pk)
+            return self._daily(request)
+
+    def _daily(self, request):
         """Build (or resume) a Daily Practice session for today.
 
         Question selection strategy (in priority order):
@@ -522,26 +875,27 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             resume_index = next((i for i, a in enumerate(attempts) if not a.is_viewed), 0)
             from .serializers import SecureQuestionSerializer
             return Response({
-                'session': PracticeSessionSerializer(existing).data,
+                'session': PracticeSessionSummarySerializer(existing).data,
                 'questions': SecureQuestionSerializer(
                     [a.question for a in attempts], many=True
                 ).data,
+                # Answered / revealed questions come back answered, so a
+                # refresh mid-session doesn't wipe the student's progress.
+                'attempts': [_attempt_state(a) for a in attempts],
                 'resume_index': resume_index,
                 'resumed': True,
             })
 
         # ── Determine the student's enrolled exam ──────────────────────────
-        from courses.models import Enrollment
-        enrolled_exam_id = None
-        enrollment = Enrollment.objects.filter(
-            student=user, status='active'
-        ).select_related('course__exam').first()
-        if enrollment and enrollment.course and enrollment.course.exam:
-            enrolled_exam_id = enrollment.course.exam_id
+        # Daily Practice draws only from the exams the student is authorised
+        # for (all exams, for staff) - a Coming Soon / unpublished course or an
+        # expired enrollment contributes nothing.
+        from courses.access import authorized_exam_ids
+        scope = authorized_exam_ids(user)
 
         base_qs = QuestionSelectionService().get_base_queryset()
         approved_qs = QuestionSelectionService().apply_filters(
-            base_qs, exam_id=enrolled_exam_id
+            base_qs, exam_ids=scope
         )
 
         # Exclude questions recently seen (in last 7 days) to maintain freshness
@@ -572,7 +926,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         weak_questions = []
         if weak_topic_ids:
             res1 = QuestionSelectionService().select(
-                exam_id=enrolled_exam_id,
+                exam_ids=scope,
                 topic_ids=weak_topic_ids,
                 exclude_ids=list(recently_seen_ids),
                 count=DAILY_SIZE,
@@ -591,7 +945,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             need = DAILY_SIZE - len(weak_questions)
             already_picked = [q.id for q in weak_questions]
             res2 = QuestionSelectionService().select(
-                exam_id=enrolled_exam_id,
+                exam_ids=scope,
                 exclude_ids=list(ever_seen_ids) + already_picked,
                 count=need,
                 question_type='objective',
@@ -605,7 +959,7 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
             need = DAILY_SIZE - total_so_far
             already_picked = [q.id for q in weak_questions + unseen_questions]
             res3 = QuestionSelectionService().select(
-                exam_id=enrolled_exam_id,
+                exam_ids=scope,
                 exclude_ids=already_picked,
                 count=need,
                 question_type='objective',
@@ -621,24 +975,44 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
-        first_exam = Exam.objects.filter(id=enrolled_exam_id).first() if enrolled_exam_id else Exam.objects.first()
+        if scope:
+            session_exam_id = min(scope)
+        else:
+            first_exam = Exam.objects.first()
+            session_exam_id = first_exam.id if first_exam else None
         session = PracticeSession.objects.create(
             user=user,
-            exam_id=first_exam.id if first_exam else None,
+            exam_id=session_exam_id,
             mode='daily',
             total_questions=len(questions),
         )
-        for q in questions:
-            QuestionAttempt.objects.create(session=session, question=q)
+        QuestionAttempt.objects.bulk_create([QuestionAttempt(session=session, question=q) for q in questions])
 
         from .serializers import SecureQuestionSerializer
         return Response({
-            'session': PracticeSessionSerializer(session).data,
+            'session': PracticeSessionSummarySerializer(session).data,
             'questions': SecureQuestionSerializer(questions, many=True).data,
+            'attempts': [
+                {'question_id': q.id, 'selected_option': None, 'is_correct': None, 'is_viewed': False}
+                for q in questions
+            ],
             'resume_index': 0,
             'resumed': False,
         })
 
+
+    @action(detail=True, methods=['get'])
+    def result(self, request, pk=None):
+        """Read a finished session's result. Never changes anything: opening
+        (or refreshing) a result page must not complete a session - only an
+        explicit submit does."""
+        session = self.get_object()
+        if not session.completed:
+            return Response(
+                {'detail': 'This practice has not been finished yet.', 'code': 'session_in_progress'},
+                status=409,
+            )
+        return Response(_practice_result_payload(session, self.get_serializer(session).data))
 
     @action(detail=True, methods=['post'])
     def submit(self, request, pk=None):
@@ -670,7 +1044,10 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
                 'attempts': _attempts_data(attempts),
             })
 
-        time_taken_seconds = int(request.data.get('time_taken_seconds', 0))
+        try:
+            time_taken_seconds = max(0, int(request.data.get('time_taken_seconds', 0) or 0))
+        except (TypeError, ValueError):
+            return Response({'detail': 'time_taken_seconds must be a number.'}, status=400)
 
         from django.db import transaction
 
@@ -684,51 +1061,60 @@ class PracticeSessionViewSet(viewsets.ModelViewSet):
         # the session totals commit together - a mid-submit failure leaves
         # the previous state intact rather than a half-scored session.
         with transaction.atomic():
+            # Lock the session row and re-read it: two submits racing (a
+            # double click, a retry after a slow response) queue here, and
+            # only the first one finalises - so XP is awarded once.
+            session = PracticeSession.objects.select_for_update().get(pk=session.pk)
+            already_completed = session.completed
+
             attempts = list(
                 QuestionAttempt.objects.filter(session=session)
                 .select_related('question')
                 .prefetch_related('question__tag_objects')
             )
 
-            correct = 0
-            incorrect = 0
-            unanswered = 0
-            to_score = []
+            if not already_completed:
+                correct = 0
+                incorrect = 0
+                unanswered = 0
+                to_score = []
 
-            for attempt in attempts:
-                if not attempt.selected_option:
-                    unanswered += 1
-                    continue
-                # correct_option is stored uppercase in the DB while the frontend
-                # sends lowercase option letters — compare case-insensitively or
-                # every correct answer is scored as wrong.
-                if attempt.question.correct_option and attempt.selected_option.upper() == attempt.question.correct_option.upper():
-                    attempt.is_correct = True
-                    correct += 1
-                else:
-                    attempt.is_correct = False
-                    incorrect += 1
-                to_score.append(attempt)
+                for attempt in attempts:
+                    if not attempt.selected_option:
+                        unanswered += 1
+                        continue
+                    # correct_option is stored uppercase in the DB while the frontend
+                    # sends lowercase option letters — compare case-insensitively or
+                    # every correct answer is scored as wrong.
+                    if attempt.question.correct_option and attempt.selected_option.upper() == attempt.question.correct_option.upper():
+                        attempt.is_correct = True
+                        correct += 1
+                    else:
+                        attempt.is_correct = False
+                        incorrect += 1
+                    to_score.append(attempt)
 
-            if to_score:
-                QuestionAttempt.objects.bulk_update(to_score, ['is_correct'])
+                if to_score:
+                    QuestionAttempt.objects.bulk_update(to_score, ['is_correct'])
 
-            session.correct_count = correct
-            session.incorrect_count = incorrect
-            session.unanswered_count = unanswered
-            session.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
-            session.score = correct # No negative marking by default unless specified
-            session.time_taken_seconds = time_taken_seconds
-            session.completed = True
-            session.save()
+                session.correct_count = correct
+                session.incorrect_count = incorrect
+                session.unanswered_count = unanswered
+                session.accuracy = (correct / (correct + incorrect)) * 100 if (correct + incorrect) > 0 else 0
+                session.score = correct # No negative marking by default unless specified
+                session.time_taken_seconds = time_taken_seconds
+                session.completed = True
+                session.save()
 
-        # Award XP for practice session
-        try:
-            from gamification.services import award_xp
-            if correct > 0:
-                award_xp(session.user, correct, "Practice Session Completed")
-        except Exception:
-            pass
+        if not already_completed:
+            # Award XP for practice session (once - only the request that
+            # actually finalised the session gets here)
+            try:
+                from gamification.services import award_xp
+                if session.correct_count > 0:
+                    award_xp(session.user, session.correct_count, "Practice Session Completed")
+            except Exception:
+                pass
 
         # After submission, return full data including answers
         return Response({

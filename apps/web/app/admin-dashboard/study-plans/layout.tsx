@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { CalendarDays, PlusCircle, LayoutTemplate } from "lucide-react";
+import { BarChart3, CalendarDays, PlusCircle, LayoutTemplate } from "lucide-react";
 
 export default function StudyPlansLayout({
   children,
@@ -15,10 +15,16 @@ export default function StudyPlansLayout({
 
   const tabs = [
     {
-      name: "All Plans",
+      name: "Monitoring",
       href: "/admin-dashboard/study-plans",
-      icon: CalendarDays,
+      icon: BarChart3,
       exact: true
+    },
+    {
+      name: "Assigned Plans",
+      href: "/admin-dashboard/study-plans/assigned",
+      icon: CalendarDays,
+      exact: false
     },
     {
       name: "Create Plan",
@@ -42,14 +48,14 @@ export default function StudyPlansLayout({
           <div>
             <h1 className="text-2xl font-bold text-[#0B2545]">Study Plan Management</h1>
             <p className="text-slate-500 text-sm mt-1">
-              Create, organize and monitor personalized study plans.
+              Monitor how students are progressing, who needs attention, and which parts of the syllabus are weak.
             </p>
           </div>
           
           <div className="flex gap-6 overflow-x-auto no-scrollbar">
             {tabs.map((tab) => {
-              const isActive = tab.exact 
-                ? pathname === tab.href 
+              const isActive = tab.exact
+                ? pathname === tab.href || pathname.startsWith(`${tab.href}/students`)
                 : pathname.startsWith(tab.href);
                 
               return (

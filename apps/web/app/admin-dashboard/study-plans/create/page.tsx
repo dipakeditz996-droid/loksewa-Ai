@@ -145,7 +145,7 @@ export default function CreateStudyPlanPage() {
       if (res.warning) {
         toast(res.warning, { icon: "⚠️", duration: 7000 });
       }
-      router.push("/admin-dashboard/study-plans");
+      router.push("/admin-dashboard/study-plans/assigned");
     } catch (error: any) {
       toast.error(error?.data?.error || error.message || "Could not create the study plan");
     } finally {
@@ -166,7 +166,7 @@ export default function CreateStudyPlanPage() {
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-6 pb-10">
       <div className="flex items-center gap-3">
         <Link
-          href="/admin-dashboard/study-plans"
+          href="/admin-dashboard/study-plans/assigned"
           className="p-2 hover:bg-slate-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-slate-500" />
@@ -410,7 +410,7 @@ export default function CreateStudyPlanPage() {
           <span className="text-sm text-slate-500 mr-auto">{problems[0]}</span>
         )}
         <Link
-          href="/admin-dashboard/study-plans"
+          href="/admin-dashboard/study-plans/assigned"
           className="px-6 py-2.5 border border-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors"
         >
           Cancel

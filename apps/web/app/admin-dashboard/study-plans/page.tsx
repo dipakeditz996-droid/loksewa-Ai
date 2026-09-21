@@ -1,287 +1,155 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import { Suspense, useCallback, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { CalendarClock, GraduationCap, Layers, RotateCcw, Sparkles, Target, Trophy, Users } from "lucide-react";
 import {
-  Calendar, Search, Plus, MoreVertical, Eye, Edit,
-  Loader2, Clock, Pause, Play
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+  useAdminOverview, useAdminPreparations, useAdminStudents, useAdminTopics,
+} from "@/lib/admin-study-plan-hooks";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuLabel
-} from "@/components/ui/dropdown-menu";
-import { adminApi, AdminStudyPlan } from "@/lib/api/admin";
+  ExamsPanel, FilterBar, Filters, Loadable, OverviewCards, PracticePanel, RangeKey, RecommendationsPanel, RevisionPanel, RulesPanel,
+  SchedulePanel, ScheduleAction, StudentsTable, TopicPanel, rangeToDates,
+} from "@/components/admin/study-plan/monitor";
+import type { Overview } from "@/lib/api/admin-study-plan-monitor";
+import { SectionFailed, SectionShell, SectionSkeleton, errorText } from "@/components/study-plan/sections";
 
-export default function StudyPlansPage() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [levelFilter, setLevelFilter] = useState("");
-  const [plans, setPlans] = useState<AdminStudyPlan[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [totalPlans, setTotalPlans] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+const PAGE_SIZE = 20;
 
-  const fetchPlans = async () => {
-    setIsLoading(true);
-    try {
-      const data = await adminApi.getStudyPlans({
-        level: levelFilter || undefined,
-        search: searchTerm || undefined,
-        page: currentPage,
-        pageSize: 20,
+/** The filters live in the URL, so the list survives opening a student and coming back. */
+function useUrlFilters() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const filters: Filters = {
+    exam: params.get("exam") ?? "",
+    status: params.get("status") ?? "",
+    activity: params.get("activity") ?? "",
+    progress: params.get("progress") ?? "",
+    range: (params.get("range") ?? "") as RangeKey,
+    from: params.get("from") ?? "",
+    to: params.get("to") ?? "",
+    search: params.get("q") ?? "",
+  };
+  const page = Math.max(1, Number(params.get("page")) || 1);
+  const ordering = params.get("ordering") ?? "attention";
+
+  const update = useCallback(
+    (patch: Record<string, string | number | null>) => {
+      const next = new URLSearchParams(params.toString());
+      Object.entries(patch).forEach(([k, v]) => {
+        if (v === null || v === "" || v === undefined) next.delete(k);
+        else next.set(k, String(v));
       });
-      setPlans(data.plans);
-      setTotalPlans(data.total);
-    } catch (error) {
-      console.error("Failed to fetch study plans", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [params, pathname, router]
+  );
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, levelFilter]);
+  const setFilters = useCallback(
+    (patch: Partial<Filters>) => {
+      const map: Record<string, string> = { search: "q" };
+      const out: Record<string, string | number | null> = { page: null };       // any filter change returns to page 1
+      Object.entries(patch).forEach(([k, v]) => (out[map[k] ?? k] = v as string));
+      if (patch.range && patch.range !== "custom") {
+        out.from = null;
+        out.to = null;
+      }
+      update(out);
+    },
+    [update]
+  );
+  return { filters, page, ordering, setFilters, setPage: (p: number) => update({ page: p > 1 ? p : null }), setOrdering: (o: string) => update({ ordering: o === "attention" ? null : o, page: null }) };
+}
 
-  useEffect(() => {
-    fetchPlans();
-  }, [currentPage, searchTerm, levelFilter]);
+function MonitoringPage() {
+  const { filters, page, ordering, setFilters, setPage, setOrdering } = useUrlFilters();
+  const exam = filters.exam ? Number(filters.exam) : null;
 
-  const activePlans = plans.filter(p => !p.isPaused).length;
-  const pausedPlans = plans.filter(p => p.isPaused).length;
-
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case 'BEGINNER':
-        return 'bg-green-900 text-green-300';
-      case 'INTERMEDIATE':
-        return 'bg-yellow-900 text-yellow-300';
-      case 'ADVANCED':
-        return 'bg-red-900 text-red-300';
-      default:
-        return 'bg-slate-700 text-slate-300';
-    }
-  };
-
-  const getStatusColor = (isPaused: boolean) => {
-    return isPaused
-      ? 'bg-slate-700 text-slate-300'
-      : 'bg-emerald-900 text-emerald-300';
-  };
-
-  const getTimeColor = (time: string | null) => {
-    switch (time) {
-      case 'MORNING':
-        return 'text-yellow-400';
-      case 'AFTERNOON':
-        return 'text-orange-400';
-      case 'EVENING':
-        return 'text-blue-400';
-      case 'NIGHT':
-        return 'text-purple-400';
-      default:
-        return 'text-slate-400';
-    }
-  };
+  const preparations = useAdminPreparations();
+  const overview = useAdminOverview(exam);
+  const students = useAdminStudents({
+    exam, status: filters.status, activity: filters.activity, progress: filters.progress, search: filters.search,
+    ...rangeToDates(filters.range, filters.from, filters.to), ordering, page, page_size: PAGE_SIZE,
+  });
+  const topics = useAdminTopics(exam);
+  const prepOptions = useMemo(() => preparations.data?.preparations ?? [], [preparations.data]);
+  const examName = prepOptions.find((p) => p.id === exam)?.display_name;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
+      <FilterBar filters={filters} onChange={setFilters} preparations={prepOptions} preparationsLoading={preparations.isPending} />
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-[#D4A72C]" />
-            Study Plans
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">Monitor and manage student study plans.</p>
-        </div>
-      </div>
-
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <p className="text-slate-600 text-sm font-medium mb-1">Total Plans</p>
-          <p className="text-2xl font-bold text-[#0B2545]">{totalPlans.toLocaleString()}</p>
-        </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
-          <p className="text-slate-600 text-sm font-medium mb-1">Active</p>
-          <p className="text-2xl font-bold text-emerald-600">{activePlans}</p>
-        </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-slate-400">
-          <p className="text-slate-600 text-sm font-medium mb-1">Paused</p>
-          <p className="text-2xl font-bold text-slate-600">{pausedPlans}</p>
-        </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
-          <p className="text-slate-600 text-sm font-medium mb-1">Avg Daily Minutes</p>
-          <p className="text-2xl font-bold text-blue-600">
-            {plans.length > 0
-              ? Math.round(plans.reduce((sum, p) => sum + p.dailyMinutes, 0) / plans.length)
-              : 0}
-          </p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search by student name or email..."
-              className="pl-9 bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-600"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+      {/* 1. Overview - whole-scope numbers from the server */}
+      <section aria-label="Overview" className="space-y-3">
+        {overview.isError ? (
+          <SectionShell title="Overview" icon={<Users className="h-4 w-4" />}>
+            <SectionFailed message={errorText(overview.error)} onRetry={() => overview.refetch()} />
+          </SectionShell>
+        ) : overview.isPending || !overview.data ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6" aria-busy="true" aria-label="Loading overview">
+            {Array.from({ length: 10 }).map((_, i) => <div key={i} className="h-[104px] animate-pulse rounded-[14px] bg-muted" />)}
           </div>
-          <select
-            value={levelFilter}
-            onChange={(e) => setLevelFilter(e.target.value)}
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
-          >
-            <option value="">All Levels</option>
-            <option value="BEGINNER">Beginner</option>
-            <option value="INTERMEDIATE">Intermediate</option>
-            <option value="ADVANCED">Advanced</option>
-          </select>
-        </div>
+        ) : (
+          <OverviewCards data={overview.data} status={filters.status} onStatus={(s) => setFilters({ status: s })} />
+        )}
+      </section>
+
+      {/* 2. Student monitoring table */}
+      <SectionShell title="Student study plans" icon={<GraduationCap className="h-4 w-4" />}>
+        {students.isError ? <SectionFailed message={errorText(students.error)} onRetry={() => students.refetch()} />
+          : students.isPending || !students.data ? <SectionSkeleton rows={6} />
+          : students.data.total === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {Object.entries(filters).some(([, v]) => v !== "")
+                ? "No students match these filters."
+                : "No active student study plans yet."}
+            </p>
+          ) : (
+            <StudentsTable data={students.data} loading={students.isPlaceholderData} ordering={ordering}
+              onOrder={setOrdering} page={page} onPage={setPage} />
+          )}
+      </SectionShell>
+
+      {/* 3. Secondary analytics */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Loadable title="Revision" icon={<RotateCcw className="h-4 w-4" />} query={overview} rows={4}>
+          {(d: Overview) => <RevisionPanel data={d} />}
+        </Loadable>
+        <Loadable title="Practice" icon={<Target className="h-4 w-4" />} query={overview} rows={4}>
+          {(d: Overview) => <PracticePanel data={d} />}
+        </Loadable>
+        <Loadable title="Mock exams" icon={<Trophy className="h-4 w-4" />} query={overview} rows={4}>
+          {(d: Overview) => <ExamsPanel data={d} />}
+        </Loadable>
       </div>
+      <Loadable title="Exam dates" icon={<CalendarClock className="h-4 w-4" />} query={overview} rows={2} action={ScheduleAction}>
+        {(d: Overview) => <SchedulePanel groups={d.schedules} />}
+      </Loadable>
 
-      {/* Plans Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50 hover:bg-slate-50">
-                <TableHead className="text-slate-700">Student</TableHead>
-                <TableHead className="text-slate-700">Exam</TableHead>
-                <TableHead className="text-slate-700">Level</TableHead>
-                <TableHead className="text-slate-700">Daily Minutes</TableHead>
-                <TableHead className="text-slate-700">Target Date</TableHead>
-                <TableHead className="text-slate-700">Preferred Time</TableHead>
-                <TableHead className="text-slate-700">Status</TableHead>
-                <TableHead className="text-right text-slate-700">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-32 text-center bg-white">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
-                  </TableCell>
-                </TableRow>
-              ) : plans.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-32 text-center text-slate-500 bg-white">
-                    No study plans found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                plans.map((plan) => (
-                  <TableRow key={plan.id} className="hover:bg-slate-50/50 border-b border-slate-200">
-                    <TableCell>
-                      <div>
-                        <p className="font-semibold text-[#0B2545]">{plan.student}</p>
-                        <p className="text-xs text-slate-600">{plan.email}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-slate-600">{plan.exam}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded ${getLevelColor(plan.level)}`}>
-                        {plan.level}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-slate-600 flex items-center gap-1">
-                        <Clock className="w-4 h-4" />
-                        {plan.dailyMinutes}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-slate-600">
-                        {new Date(plan.targetDate).toLocaleDateString()}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`text-sm font-medium ${getTimeColor(plan.preferredTime)}`}>
-                        {plan.preferredTime ? plan.preferredTime.charAt(0) + plan.preferredTime.slice(1).toLowerCase() : 'N/A'}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded flex items-center gap-1 w-fit ${getStatusColor(plan.isPaused)}`}>
-                        {plan.isPaused ? (
-                          <>
-                            <Pause className="w-3 h-3" />
-                            Paused
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-3 h-3" />
-                            Active
-                          </>
-                        )}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100">
-                            <span className="sr-only">Open menu</span>
-                            <MoreVertical className="h-4 w-4 text-slate-500" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/admin-dashboard/study-plans/${plan.id}`} className="cursor-pointer flex items-center">
-                              <Eye className="w-4 h-4 mr-2" /> View Details
-                            </Link>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      <Loadable title="Recommendations" icon={<Sparkles className="h-4 w-4" />} query={overview} rows={2}>
+        {(d: Overview) => <RecommendationsPanel rules={d.rules} />}
+      </Loadable>
 
-      {/* Pagination */}
-      {!isLoading && totalPlans > 0 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-          >
-            Previous
-          </Button>
-          <span className="text-sm text-slate-600">
-            Page {currentPage} of {Math.ceil(totalPlans / 20)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentPage >= Math.ceil(totalPlans / 20)}
-            onClick={() => setCurrentPage(p => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      )}
+      {/* 4. Detailed syllabus analytics - needs one preparation */}
+      <SectionShell title={examName ? `Syllabus performance — ${examName}` : "Syllabus performance"} icon={<Layers className="h-4 w-4" />}>
+        {exam === null ? (
+          <p className="text-sm text-muted-foreground">Choose a course / preparation above to see which parts of its syllabus are strong, weak or rarely studied.</p>
+        ) : topics.isError ? <SectionFailed message={errorText(topics.error)} onRetry={() => topics.refetch()} />
+          : topics.isPending || !topics.data ? <SectionSkeleton rows={4} />
+          : <TopicPanel data={topics.data} />}
+      </SectionShell>
 
+      {overview.data && <RulesPanel rules={overview.data.rules} />}
     </div>
   );
 }
+
+export default function StudyPlanMonitoringPage() {
+  return (
+    <Suspense fallback={<div className="h-40 animate-pulse rounded-[16px] bg-muted" aria-busy="true" aria-label="Loading" />}>
+      <MonitoringPage />
+    </Suspense>
+  );
+}
+

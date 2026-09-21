@@ -52,6 +52,8 @@ export interface PlanTask {
   done: number | null;
   completed: boolean;
   action: PlanAction;
+  /** Concise wording for administrators (the student sees `reason`). */
+  admin_reason?: string;
 }
 
 /** A section of the bundled plan response that failed on its own. */
@@ -100,6 +102,9 @@ export interface RevisionQueue {
 
 export interface Countdown {
   source: "schedule" | "student_target";
+  /** Which admin schedule applies: this exam, its level, its category, or every exam. */
+  scope?: "exam" | "level" | "category" | "all" | "student";
+  schedule_id?: number;
   title: string;
   exam_date: string;
   exam_time: string | null;
@@ -111,6 +116,7 @@ export interface Pace {
   status: "on_track" | "slightly_behind" | "needs_attention" | null;
   label: string | null;
   reason: string;
+  admin_reason?: string;
   rule?: string;
   expected_percent?: number;
   actual_percent?: number;

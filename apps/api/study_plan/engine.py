@@ -182,6 +182,62 @@ def preparation_choices(user, exams):
 # --------------------------------------------------------------------------
 # Real per-topic evidence
 # --------------------------------------------------------------------------
+def topic_state(available, answered, n_materials, materials_progress_sum, materials_touched, explicit=None):
+    """The one definition of a topic's progress, shared by the student's page
+    and the admin monitoring views so the two can never disagree.
+
+    `available`  approved objective questions in the topic
+    `answered`   how many of them the student has answered (practice + exams, each once)
+    `explicit`   an optional exams.UserTopicProgress-like row (.progress, .status)
+    Returns (percent | None, has_content, started, status).
+    """
+    parts = []
+    if available:
+        parts.append(min(100.0, answered * 100.0 / available))
+    if n_materials:
+        parts.append(min(100.0, materials_progress_sum / n_materials))
+    pct = sum(parts) / len(parts) if parts else None
+    if explicit is not None and explicit.progress and (pct is None or explicit.progress > pct):
+        pct = float(explicit.progress)
+    has_content = bool(available or n_materials or explicit is not None)
+    started = bool(answered or materials_touched or (explicit is not None and (explicit.progress or explicit.status != 'not-started')))
+    if not has_content:
+        status = 'no_content'
+    elif not started:
+        status = 'not_started'
+    elif pct is not None and pct >= 100:
+        status = 'completed'
+    else:
+        status = 'in_progress'
+    return pct, has_content, started, status
+
+
+def build_topic(meta, *, available, answered, n_materials, first_material_id, materials_sum, materials_touched,
+                explicit, practice, exam, last, first):
+    """One syllabus topic with a student's real evidence - the single place a
+    topic row is put together (used for the student page and the admin summary).
+    `practice` / `exam` are (answers, correct) pairs."""
+    pct, has_content, started, status = topic_state(available, answered, n_materials, materials_sum,
+                                                    materials_touched, explicit)
+    attempts, correct = practice[0] + exam[0], practice[1] + exam[1]
+    return {
+        'id': meta['id'], 'name': meta['name'],
+        'chapter_id': meta['chapter_id'], 'chapter': meta['chapter__title'],
+        'subject_id': meta['chapter__subject_id'], 'subject': meta['chapter__subject__name'],
+        'available_questions': available, 'answered_questions': answered, 'materials': n_materials,
+        'first_material_id': first_material_id,
+        'materials_done_pct': round(min(100.0, materials_sum / n_materials)) if n_materials else None,
+        'attempts': attempts, 'correct': correct,
+        'accuracy': round(correct * 100.0 / attempts) if attempts else None,
+        'exam_attempts': exam[0],
+        'exam_accuracy': round(exam[1] * 100.0 / exam[0]) if exam[0] else None,
+        # "Not started" / "no content" carry no percentage - none is invented.
+        'percent': round(pct) if pct is not None and status in ('in_progress', 'completed') else None,
+        'status': status, 'has_content': has_content, 'started': started,
+        'last_activity': last, 'first_activity': first,
+    }
+
+
 def load_stats(prep):
     """One row per syllabus topic of the preparation, with the student's real
     evidence: questions answered (practice + mock exams), accuracy, notes
@@ -286,52 +342,18 @@ def load_stats(prep):
         for r in rows:
             tid = r['id']
             a = agg.get(tid)
-            av = avail.get(tid, 0)
             m = mats.get(tid)
             n_mats = m['total'] if m else 0
-            distinct = len(a['q_b' if b else 'q']) if a else 0
-            practice_n, practice_ok = (a['n_b'], a['ok_b']) if a and b else ((a['n'], a['ok']) if a else (0, 0))
-            exam_n, exam_ok = (a['en_b'], a['eok_b']) if a and b else ((a['en'], a['eok']) if a else (0, 0))
-            attempts, correct = practice_n + exam_n, practice_ok + exam_ok
-            touched = (m['touched_b'] if b else m['touched']) if m else 0
-            prog_sum = ((m['prog_sum_b'] if b else m['prog_sum']) or 0) if m else 0
-
-            parts = []
-            if av:
-                parts.append(min(100.0, distinct * 100.0 / av))
-            if n_mats:
-                parts.append(min(100.0, prog_sum / n_mats))
-            ex = explicit.get(tid)
-            pct = sum(parts) / len(parts) if parts else None
-            if ex is not None and ex.progress and (pct is None or ex.progress > pct):
-                pct = float(ex.progress)
-            has_content = bool(av or n_mats or ex is not None)
-            started = bool(distinct or touched or (ex is not None and (ex.progress or ex.status != 'not-started')))
-            if not has_content:
-                status = 'no_content'
-            elif not started:
-                status = 'not_started'
-            elif pct is not None and pct >= 100:
-                status = 'completed'
-            else:
-                status = 'in_progress'
-            last = later(a['last_b' if b else 'last'] if a else None, (m['last_b'] if b else m['last']) if m else None)
-            topics.append({
-                'id': tid, 'name': r['name'],
-                'chapter_id': r['chapter_id'], 'chapter': r['chapter__title'],
-                'subject_id': r['chapter__subject_id'], 'subject': r['chapter__subject__name'],
-                'available_questions': av, 'answered_questions': distinct, 'materials': n_mats,
-                'first_material_id': m['first_id'] if m and n_mats else None,
-                'materials_done_pct': round(min(100.0, prog_sum / n_mats)) if n_mats else None,
-                'attempts': attempts, 'correct': correct,
-                'accuracy': round(correct * 100.0 / attempts) if attempts else None,
-                'exam_attempts': exam_n,
-                'exam_accuracy': round(exam_ok * 100.0 / exam_n) if exam_n else None,
-                # "Not started" / "no content" carry no percentage - none is invented.
-                'percent': round(pct) if pct is not None and status in ('in_progress', 'completed') else None,
-                'status': status, 'has_content': has_content, 'started': started,
-                'last_activity': last, 'first_activity': a['first'] if a else None,
-            })
+            topics.append(build_topic(
+                r, available=avail.get(tid, 0), answered=len(a['q_b' if b else 'q']) if a else 0,
+                n_materials=n_mats, first_material_id=m['first_id'] if m and n_mats else None,
+                materials_sum=((m['prog_sum_b'] if b else m['prog_sum']) or 0) if m else 0,
+                materials_touched=(m['touched_b'] if b else m['touched']) if m else 0,
+                explicit=explicit.get(tid),
+                practice=(a['n_b'], a['ok_b']) if a and b else ((a['n'], a['ok']) if a else (0, 0)),
+                exam=(a['en_b'], a['eok_b']) if a and b else ((a['en'], a['eok']) if a else (0, 0)),
+                last=later(a['last_b' if b else 'last'] if a else None, (m['last_b'] if b else m['last']) if m else None),
+                first=a['first'] if a else None))
         return topics
 
     now_topics, before_topics = make('now'), make('before')
@@ -341,6 +363,11 @@ def load_stats(prep):
 def _mean(values):
     values = [v for v in values if v is not None]
     return round(sum(values) / len(values)) if values else None
+
+
+def overall_percent(topics):
+    """Overall syllabus progress: the plain average of the topics that have content."""
+    return _mean([(t['percent'] or 0) for t in topics if t['has_content']])
 
 
 def build_tree(stats):
@@ -378,7 +405,7 @@ def build_tree(stats):
         s['topics_started'] = len([t for t in contentful if t['status'] in ('in_progress', 'completed')])
         s['status'] = ('no_content' if not contentful else 'not_started' if not s['topics_started'] else 'in_progress')
     contentful = [t for t in stats['topics'] if t['has_content']]
-    overall = _mean([(t['percent'] or 0) for t in contentful])
+    overall = overall_percent(stats['topics'])
     return {
         'overall': {
             'percent': overall,
@@ -395,7 +422,7 @@ def build_tree(stats):
 # --------------------------------------------------------------------------
 # Exam countdown and pace
 # --------------------------------------------------------------------------
-def countdown_and_pace(prep, stats, overall_percent):
+def countdown_and_pace(prep, stats, overall_percent, schedules=None):
     """The next ExamSchedule that applies to this preparation and whether the
     student's syllabus progress keeps pace with it."""
     from exams.models import ExamSchedule
@@ -408,7 +435,9 @@ def countdown_and_pace(prep, stats, overall_percent):
     category_id = prep.exam.category_id
 
     best = None
-    for s in ExamSchedule.objects.filter(is_published=True, exam_date__gte=today).select_related('exam'):
+    # `schedules` lets a caller that evaluates many students load the schedules once
+    for s in (schedules if schedules is not None
+              else ExamSchedule.objects.filter(is_published=True, exam_date__gte=today).select_related('exam')):
         if s.exam_id == prep.exam.id:
             rank = 0
         elif s.exam_id in chain:
@@ -427,24 +456,26 @@ def countdown_and_pace(prep, stats, overall_percent):
     if best:
         s = best[1]
         source, exam_date, title = 'schedule', s.exam_date, s.title
+        scope = {0: 'exam', 1: 'level', 2: 'category', 3: 'all'}[best[0][0]]
         tz = ZoneInfo(s.timezone) if s.timezone else NEPAL
         today_in_tz = timezone.localtime(timezone.now(), tz).date()
         days_remaining = (exam_date - today_in_tz).days
         countdown = {
-            'source': 'schedule', 'title': title, 'exam_date': exam_date.isoformat(),
+            'source': 'schedule', 'schedule_id': s.id, 'scope': scope, 'title': title, 'exam_date': exam_date.isoformat(),
             'exam_time': s.exam_time.isoformat() if s.exam_time else None,
             'days_remaining': days_remaining, 'notice_url': s.official_notice_url or None,
         }
     elif prep.plan and prep.plan.target_date and prep.plan.target_date >= today and prep.plan.exam_id in prep.exam_ids:
         exam_date = prep.plan.target_date
         countdown = {
-            'source': 'student_target', 'title': 'Your own target date', 'exam_date': exam_date.isoformat(),
+            'source': 'student_target', 'scope': 'student', 'title': 'Your own target date', 'exam_date': exam_date.isoformat(),
             'exam_time': None, 'days_remaining': (exam_date - today).days, 'notice_url': None,
         }
     else:
         return None, {
             'status': None, 'label': None,
             'reason': 'No upcoming exam schedule configured.',
+            'admin_reason': 'No exam date configured for this course.',
         }
 
     # ---- pace: expected progress by today vs actual
@@ -454,10 +485,17 @@ def countdown_and_pace(prep, stats, overall_percent):
         start = first_activity.astimezone(NEPAL).date()
     if start is None:
         return countdown, {'status': None, 'label': None,
-                           'reason': 'Not enough history yet - start studying and your pace will appear here.'}
+                           'reason': 'Not enough history yet - start studying and your pace will appear here.',
+                           'admin_reason': 'Not enough history to measure pace yet.'}
+    if overall_percent is None:
+        # A syllabus with no questions or notes cannot be "behind" - nothing measurable exists yet.
+        return countdown, {'status': None, 'label': None,
+                           'reason': 'This syllabus has no questions or notes yet, so progress cannot be compared with the exam date.',
+                           'admin_reason': 'The syllabus has no questions or notes yet, so pace cannot be measured.'}
     total_days = (exam_date - start).days
     if total_days <= 0:
-        return countdown, {'status': None, 'label': None, 'reason': 'The preparation window is too short to compare progress.'}
+        return countdown, {'status': None, 'label': None, 'reason': 'The preparation window is too short to compare progress.',
+                           'admin_reason': 'The preparation window is too short to compare progress.'}
     elapsed = max(0, min(total_days, (today - start).days))
     expected = round(elapsed * 100.0 / total_days)
     actual = overall_percent or 0
@@ -474,6 +512,8 @@ def countdown_and_pace(prep, stats, overall_percent):
         'start_date': start.isoformat(),
         'reason': (f'{elapsed} of {total_days} days of your preparation window have passed, so about {expected}% of the '
                    f'syllabus should be covered. You are at {actual}%.'),
+        'admin_reason': (f'{elapsed} of {total_days} days of the preparation window have passed: about {expected}% expected, '
+                         f'{actual}% completed.'),
         'rule': (f'On Track: at most {ON_TRACK_TOLERANCE} points behind the expected pace. Slightly Behind: '
                  f'{ON_TRACK_TOLERANCE + 1}-{SLIGHTLY_BEHIND_TOLERANCE} points behind. Needs Attention: more than '
                  f'{SLIGHTLY_BEHIND_TOLERANCE} points behind.'),
@@ -560,8 +600,14 @@ def recommended_mock(prep):
         .filter(Q(end_time__isnull=True) | Q(end_time__gt=now))
         .annotate(mine=Count('attempts', filter=Q(attempts__student=prep.user)))
     )
-    for e in qs.order_by('start_time', 'id'):
-        if e.max_attempts and e.mine >= e.max_attempts:
+    return pick_mock(qs.order_by('start_time', 'id'), lambda e: e.mine, now)
+
+
+def pick_mock(examinations, attempts_of, now):
+    """The first candidate (already in the platform's order) the student can still
+    attempt. Shared by the student page and the admin task summary."""
+    for e in examinations:
+        if e.max_attempts and attempts_of(e) >= e.max_attempts:
             continue
         started = e.start_time is None or e.start_time <= now
         return {
@@ -599,15 +645,38 @@ def recommended_practice(prep, stats, weak):
 # --------------------------------------------------------------------------
 # Today's plan
 # --------------------------------------------------------------------------
+def apply_activity(tasks, practice_answers, touched_topics, finished_exams):
+    """The one rule for task completion, shared by the student page (one
+    student, `activity_today`) and the admin summary (many students):
+
+      PRACTICE  done when the student answered the task's target number of
+                questions in that topic today
+      STUDY     done when notes of the topic were opened today
+      MOCK_EXAM done when that exam was submitted today
+      REVISION  already set from the revision queue in build_tasks
+    """
+    for t in tasks:
+        if t['type'] == 'PRACTICE':
+            n = practice_answers.get(t['topic']['id'], 0)
+            t['done'] = min(n, t['target'])
+            t['completed'] = n >= t['target']
+        elif t['type'] == 'STUDY':
+            t['completed'] = t['topic']['id'] in touched_topics
+        elif t['type'] == 'MOCK_EXAM':
+            t['completed'] = int(t['id'].split(':')[1]) in finished_exams
+    return tasks
+
+
 def activity_today(prep, stats, tasks):
     """Fill in real completion for `tasks` from today's activity - each kind
     of activity is only looked up if a task of that kind exists."""
-    from exams.models import ExaminationAttempt, QuestionAttempt, QuestionMastery
+    from exams.models import ExaminationAttempt, QuestionAttempt
     from notes.models import StudentMaterialProgress
 
     start, end = day_bounds(local_today())
     topic_ids = [t['id'] for t in stats['topics']]
     types = {t['type'] for t in tasks}
+    answers, touched, finished = {}, set(), set()
 
     if 'PRACTICE' in types:
         when = Coalesce('viewed_at', 'session__created_at')
@@ -616,25 +685,15 @@ def activity_today(prep, stats, tasks):
                                            selected_option__isnull=False).exclude(selected_option='')
             .annotate(at=when).filter(at__gte=start, at__lt=end)
             .values('question__topic_id').annotate(n=Count('id')))}
-        for t in tasks:
-            if t['type'] == 'PRACTICE':
-                t['done'] = min(answers.get(t['topic']['id'], 0), t['target'])
-                t['completed'] = answers.get(t['topic']['id'], 0) >= t['target']
     if 'STUDY' in types:
         touched = set(StudentMaterialProgress.objects.filter(
             student=prep.user, last_viewed_at__gte=start, last_viewed_at__lt=end,
             material__topic_id__in=topic_ids).values_list('material__topic_id', flat=True))
-        for t in tasks:
-            if t['type'] == 'STUDY':
-                t['completed'] = t['topic']['id'] in touched
     if 'MOCK_EXAM' in types:
         finished = set(ExaminationAttempt.objects.filter(
             student=prep.user, submitted_at__gte=start, submitted_at__lt=end,
             examination__exam_id__in=prep.exam_ids).values_list('examination_id', flat=True))
-        for t in tasks:
-            if t['type'] == 'MOCK_EXAM':
-                t['completed'] = int(t['id'].split(':')[1]) in finished
-    return tasks
+    return apply_activity(tasks, answers, touched, finished)
 
 
 def plan_stats(stats):
@@ -678,10 +737,10 @@ def build_tasks(prep, stats, weak, revision, mock, countdown, skip_topics=()):
             used += minutes
         return True
 
-    def practice_task(t, n, reason, ptype='PRACTICE'):
+    def practice_task(t, n, reason, ptype='PRACTICE', admin_reason=None):
         return {
             'id': f"practice:{t['id']}", 'type': ptype, 'title': f"Practice {n} MCQs — {t['name']}",
-            'detail': f"{t['subject']} › {t['chapter']}", 'reason': reason,
+            'detail': f"{t['subject']} › {t['chapter']}", 'reason': reason, 'admin_reason': admin_reason or reason,
             'topic': {'id': t['id'], 'name': t['name']}, 'target': n, 'done': 0,
             'completed': False,
             'action': {'label': 'Start Practice', 'url': practice_url(prep, t, n)},
@@ -694,9 +753,11 @@ def build_tasks(prep, stats, weak, revision, mock, countdown, skip_topics=()):
             continue
         n = min(nq, t['available_questions'], 20)
         why = f"Weak topic: {w['accuracy']}% correct over {w['attempts']} answers"
+        admin_why = why
         if close:
             why += f", and your exam is in {days_left} days"
-        if add(practice_task(t, n, why), n * MINUTES_PER_QUESTION):
+            admin_why += f"; exam in {days_left} days"
+        if add(practice_task(t, n, why, admin_reason=admin_why), n * MINUTES_PER_QUESTION):
             practice_total += n
 
     # 2. revision due
@@ -708,6 +769,7 @@ def build_tasks(prep, stats, weak, revision, mock, countdown, skip_topics=()):
             'id': 'revision', 'type': 'REVISION', 'title': f'Revise {n} question{"s" if n != 1 else ""} due for revision today',
             'detail': f'{due} due today · {reviewed} reviewed',
             'reason': 'These are questions from your revision queue whose review date is today or earlier',
+            'admin_reason': 'Revision questions due today',
             'topic': None, 'target': n, 'done': min(reviewed, n), 'completed': reviewed >= n,
             'action': {'label': 'Start Revision', 'url': '/student/practice/revision'},
         }, n * MINUTES_PER_QUESTION)
@@ -721,12 +783,13 @@ def build_tasks(prep, stats, weak, revision, mock, countdown, skip_topics=()):
             add({
                 'id': f"study:{t['id']}", 'type': 'STUDY', 'title': f"Continue notes — {t['name']}",
                 'detail': f"{t['subject']} › {t['chapter']}", 'reason': 'The topic you worked on most recently',
+                'admin_reason': 'Most recently studied topic',
                 'topic': {'id': t['id'], 'name': t['name']}, 'target': None, 'done': None, 'completed': False,
                 'action': {'label': 'Continue', 'url': f"/student/notes/{t['first_material_id']}"},
             }, STUDY_NOTE_MINUTES)
         elif t['available_questions'] and t['id'] not in {w['id'] for w in weak['topics'][:2]}:
             n = min(nq, t['available_questions'], 20)
-            if add(practice_task(t, n, 'The topic you worked on most recently'), n * MINUTES_PER_QUESTION):
+            if add(practice_task(t, n, 'The topic you worked on most recently', admin_reason='Most recently studied topic'), n * MINUTES_PER_QUESTION):
                 practice_total += n
 
     # 4. next not-started topic
@@ -737,13 +800,14 @@ def build_tasks(prep, stats, weak, revision, mock, countdown, skip_topics=()):
             add({
                 'id': f"study:{t['id']}", 'type': 'STUDY', 'title': f"Study notes — {t['name']}",
                 'detail': f"{t['subject']} › {t['chapter']}", 'reason': 'Next topic in your syllabus you have not started',
+                'admin_reason': 'Next unstarted topic in the syllabus',
                 'topic': {'id': t['id'], 'name': t['name']}, 'target': None, 'done': None,
                 'completed': False,
                 'action': {'label': 'Open Notes', 'url': f"/student/notes/{t['first_material_id']}"},
             }, STUDY_NOTE_MINUTES)
         elif t['available_questions']:
             n = min(nq, t['available_questions'], 20)
-            if add(practice_task(t, n, 'Next topic in your syllabus you have not started'), n * MINUTES_PER_QUESTION):
+            if add(practice_task(t, n, 'Next topic in your syllabus you have not started', admin_reason='Next unstarted topic in the syllabus'), n * MINUTES_PER_QUESTION):
                 practice_total += n
 
     # 5. top up to the daily question target
@@ -754,14 +818,14 @@ def build_tasks(prep, stats, weak, revision, mock, countdown, skip_topics=()):
         if pool:
             t = min(pool, key=lambda x: (x['percent'] or 0))
             n = min(remaining, t['available_questions'], 20)
-            add(practice_task(t, n, 'Tops up your daily target of %d questions' % nq), n * MINUTES_PER_QUESTION)
+            add(practice_task(t, n, 'Tops up your daily target of %d questions' % nq, admin_reason='Tops up the daily question target (%d)' % nq), n * MINUTES_PER_QUESTION)
 
     # mock exam close to the exam
     if mock and mock['available_now'] and days_left is not None and days_left <= MOCK_WINDOW_DAYS:
         add({
             'id': f"mock:{mock['id']}", 'type': 'MOCK_EXAM', 'title': f"Take a mock exam — {mock['title']}",
             'detail': f"{mock['total_questions']} questions · {mock['time_limit']} minutes",
-            'reason': f'Your exam is {days_left} days away', 'topic': None, 'target': None, 'done': None,
+            'reason': f'Your exam is {days_left} days away', 'admin_reason': f'Exam is {days_left} days away', 'topic': None, 'target': None, 'done': None,
             'completed': False,
             'action': {'label': 'Start Mock', 'url': mock['url']},
         }, mock['time_limit'] or 0, counts_toward_budget=False)

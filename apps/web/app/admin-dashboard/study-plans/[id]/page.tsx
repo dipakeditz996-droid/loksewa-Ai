@@ -63,7 +63,7 @@ export default function StudyPlanDetailPage({ params }: { params: Promise<{ id: 
   const handleDelete = async () => {
     try {
       await adminStudyPlanApi.deletePlan(planId);
-      router.push("/admin-dashboard/study-plans");
+      router.push("/admin-dashboard/study-plans/assigned");
     } catch (error) {
       console.error("Failed to delete study plan", error);
     }
@@ -84,7 +84,7 @@ export default function StudyPlanDetailPage({ params }: { params: Promise<{ id: 
           <AlertCircle className="h-5 w-5" />
           <p>Study plan not found.</p>
         </div>
-        <Link href="/admin-dashboard/study-plans" className="text-sm text-[#0B2545] underline mt-4 inline-block">
+        <Link href="/admin-dashboard/study-plans/assigned" className="text-sm text-[#0B2545] underline mt-4 inline-block">
           Back to Study Plans
         </Link>
       </div>
@@ -96,7 +96,7 @@ export default function StudyPlanDetailPage({ params }: { params: Promise<{ id: 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div>
-        <Button variant="ghost" size="sm" className="gap-2 -ml-2 mb-2" onClick={() => router.push("/admin-dashboard/study-plans")}>
+        <Button variant="ghost" size="sm" className="gap-2 -ml-2 mb-2" onClick={() => router.push("/admin-dashboard/study-plans/assigned")}>
           <ArrowLeft className="w-4 h-4" /> Back to Study Plans
         </Button>
 

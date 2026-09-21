@@ -36,6 +36,10 @@ def _section(fn):
         return {'error': 'Could not load this section.'}
 
 
+def prep_header(prep):
+    return {'id': prep.exam.id, 'name': prep.exam.name, 'display_name': prep.display_name}
+
+
 class PreparationView(APIView):
     permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
     need_since = False
@@ -50,9 +54,7 @@ class PreparationView(APIView):
         except engine.PreparationDenied:
             raise PermissionDenied("You don't have access to this preparation.")
 
-    @staticmethod
-    def header(prep):
-        return {'id': prep.exam.id, 'name': prep.exam.name, 'display_name': prep.display_name}
+    header = staticmethod(prep_header)
 
 
 class PreparationsView(PreparationView):
@@ -70,6 +72,38 @@ class PreparationsView(PreparationView):
         })
 
 
+def plan_payload(prep):
+    """Today's plan and everything derived from the same evidence (shared with the admin view)."""
+    stats = engine.load_stats(prep)
+    overall = engine.build_tree(stats)['overall']['percent']
+    countdown, pace = engine.countdown_and_pace(prep, stats, overall)
+    weak = _section(lambda: engine.weak_topics(prep, stats))
+    weak_before = _section(lambda: engine.weak_topics(prep, engine.plan_stats(stats), with_repeated=False))
+    revision = _section(lambda: engine.revision_queue(prep))
+    mock = _section(lambda: engine.recommended_mock(prep))
+    weak_ok = weak if 'error' not in weak else {'topics': []}
+    weak_before_ok = weak_before if 'error' not in weak_before else {'topics': []}
+    revision_ok = revision if 'error' not in revision else {'total': 0, 'due_today': 0, 'due_tomorrow': 0, 'later': 0}
+    mock_ok = mock if not (isinstance(mock, dict) and 'error' in mock) else None
+    today = _section(lambda: engine.today_plan(prep, stats, weak_before_ok, weak_ok, revision_ok, mock_ok, countdown))
+    return {
+        'has_preparation': True,
+        'exam': prep_header(prep),
+        'preferences': prep.preferences,
+        'has_content': any(t['has_content'] for t in stats['topics']),
+        'today': today,
+        'continue_learning': _section(lambda: engine.continue_learning(prep, stats)),
+        'weak_topics': weak,
+        'revision': revision,
+        'recommendations': _section(lambda: {
+            'practice': engine.recommended_practice(prep, engine.plan_stats(stats), weak_before_ok),
+            'mock': mock_ok,
+        }),
+        'countdown': countdown,
+        'pace': pace,
+    }
+
+
 class PlanView(PreparationView):
     """Today's plan and everything derived from the same evidence."""
     need_since = True
@@ -78,34 +112,14 @@ class PlanView(PreparationView):
         prep, _exams = self.preparation(request)
         if prep is None:
             return Response({'has_preparation': False})
-        stats = engine.load_stats(prep)
-        overall = engine.build_tree(stats)['overall']['percent']
-        countdown, pace = engine.countdown_and_pace(prep, stats, overall)
-        weak = _section(lambda: engine.weak_topics(prep, stats))
-        weak_before = _section(lambda: engine.weak_topics(prep, engine.plan_stats(stats), with_repeated=False))
-        revision = _section(lambda: engine.revision_queue(prep))
-        mock = _section(lambda: engine.recommended_mock(prep))
-        weak_ok = weak if 'error' not in weak else {'topics': []}
-        weak_before_ok = weak_before if 'error' not in weak_before else {'topics': []}
-        revision_ok = revision if 'error' not in revision else {'total': 0, 'due_today': 0, 'due_tomorrow': 0, 'later': 0}
-        mock_ok = mock if not (isinstance(mock, dict) and 'error' in mock) else None
-        today = _section(lambda: engine.today_plan(prep, stats, weak_before_ok, weak_ok, revision_ok, mock_ok, countdown))
-        return Response({
-            'has_preparation': True,
-            'exam': self.header(prep),
-            'preferences': prep.preferences,
-            'has_content': any(t['has_content'] for t in stats['topics']),
-            'today': today,
-            'continue_learning': _section(lambda: engine.continue_learning(prep, stats)),
-            'weak_topics': weak,
-            'revision': revision,
-            'recommendations': _section(lambda: {
-                'practice': engine.recommended_practice(prep, engine.plan_stats(stats), weak_before_ok),
-                'mock': mock_ok,
-            }),
-            'countdown': countdown,
-            'pace': pace,
-        })
+        return Response(plan_payload(prep))
+
+
+def progress_payload(prep):
+    stats = engine.load_stats(prep)
+    tree = engine.build_tree(stats)
+    countdown, pace = engine.countdown_and_pace(prep, stats, tree['overall']['percent'])
+    return {'has_preparation': True, 'exam': prep_header(prep), **tree, 'countdown': countdown, 'pace': pace}
 
 
 class ProgressView(PreparationView):
@@ -115,11 +129,11 @@ class ProgressView(PreparationView):
         prep, _exams = self.preparation(request)
         if prep is None:
             return Response({'has_preparation': False})
-        stats = engine.load_stats(prep)
-        tree = engine.build_tree(stats)
-        countdown, pace = engine.countdown_and_pace(prep, stats, tree['overall']['percent'])
-        return Response({'has_preparation': True, 'exam': self.header(prep), **tree,
-                         'countdown': countdown, 'pace': pace})
+        return Response(progress_payload(prep))
+
+
+def week_payload(prep):
+    return {'has_preparation': True, 'exam': prep_header(prep), **engine.week_overview(prep)}
 
 
 class WeekView(PreparationView):
@@ -127,7 +141,7 @@ class WeekView(PreparationView):
         prep, _exams = self.preparation(request)
         if prep is None:
             return Response({'has_preparation': False})
-        return Response({'has_preparation': True, 'exam': self.header(prep), **engine.week_overview(prep)})
+        return Response(week_payload(prep))
 
 
 class PreferencesView(PreparationView):

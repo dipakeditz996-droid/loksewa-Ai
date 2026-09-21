@@ -76,6 +76,7 @@ from .collection_views import QuestionCollectionViewSet
 from .exam_views import ExaminationViewSet
 from .study_plan_views import AdminStudyPlanTemplateViewSet
 from .leaderboard_views import AdminLeaderboardView
+from study_plan import admin_api as study_plan_admin
 from .feedback_views import AdminStudentFeedbackView
 from .student_performance_views import (
     AdminExamAttemptReviewView, AdminStudentExamHistoryView,
@@ -153,6 +154,14 @@ urlpatterns = [
     path('study-materials/<int:pk>/', AdminStudyMaterialDetailView.as_view(), name='admin-study-material-detail'),
     path('courses/<int:pk>/status/', AdminCourseStatusView.as_view(), name='admin-course-status'),
     # Study plans
+    # Study Plan monitoring & analytics (computed from real activity; see study_plan/admin_api.py)
+    path('study-plan/preparations/', study_plan_admin.PreparationsView.as_view(), name='admin-sp-preparations'),
+    path('study-plan/overview/', study_plan_admin.OverviewView.as_view(), name='admin-sp-overview'),
+    path('study-plan/students/', study_plan_admin.StudentsView.as_view(), name='admin-sp-students'),
+    path('study-plan/students/<int:student_id>/', study_plan_admin.StudentDetailView.as_view(), name='admin-sp-student'),
+    path('study-plan/students/<int:student_id>/<str:section>/', study_plan_admin.StudentSectionView.as_view(), name='admin-sp-student-section'),
+    path('study-plan/topics/', study_plan_admin.TopicsView.as_view(), name='admin-sp-topics'),
+    # Assigned study plan records (legacy manual plans)
     path('study-plans/', AdminStudyPlansView.as_view(), name='admin-study-plans'),
     path('study-plans/<int:pk>/', AdminStudyPlanDetailView.as_view(), name='admin-study-plan-detail'),
     # Ranking & Leaderboard

@@ -1,11 +1,19 @@
-import urllib.request
 import json
+import os
+import sys
+import urllib.request
+
+# Credentials come from the environment - never hardcode them here.
+USERNAME = os.environ.get('API_TEST_USERNAME')
+PASSWORD = os.environ.get('API_TEST_PASSWORD')
+if not USERNAME or not PASSWORD:
+    sys.exit('Set API_TEST_USERNAME and API_TEST_PASSWORD before running this script.')
 
 results = {}
 
 # Get admin token via correct endpoint
 try:
-    data = json.dumps({'username': 'admin', 'password': 'Admin@123456'}).encode()
+    data = json.dumps({'username': USERNAME, 'password': PASSWORD}).encode()
     req = urllib.request.Request(
         'http://localhost:8000/api/auth/admin-login/', 
         data=data, 

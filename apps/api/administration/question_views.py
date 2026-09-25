@@ -29,7 +29,8 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     # (both M2M) are joined into search/filter - without it, a question that
     # matches on two tags would otherwise appear twice in the list.
     queryset = Question.objects.select_related(
-        'topic', 'topic__chapter', 'topic__chapter__subject',
+        'subject', 'chapter', 'topic',
+        'chapter__subject', 'topic__chapter', 'topic__chapter__subject',
         'topic__chapter__subject__paper', 'topic__chapter__subject__paper__exam',
         'topic__chapter__subject__paper__exam__category',
     ).prefetch_related('collections', 'tag_objects').annotate(
@@ -49,6 +50,8 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
         'status': ['exact'],
         'ai_status': ['exact'],
         'difficulty': ['exact'],
+        'subject': ['exact'],
+        'chapter': ['exact'],
         'topic': ['exact'],
         'collections': ['exact'],
         'tag_objects': ['exact'],

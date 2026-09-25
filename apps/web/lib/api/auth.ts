@@ -10,6 +10,13 @@ export interface User {
   avatar?: string | null;
 }
 
+export interface AuthPackageStatus {
+  hasActivePackage: boolean;
+  planName: string | null;
+  paymentStatus: string | null;
+  pendingOrderId: number | null;
+}
+
 export const authApi = {
   /**
    * The one login endpoint for every role (student, teacher, admin,
@@ -24,6 +31,7 @@ export const authApi = {
       twoFactorRequired?: boolean;
       pendingToken?: string;
       user?: User;
+      package?: AuthPackageStatus;
     }>("/token/", {
       method: "POST",
       body: JSON.stringify(credentials),
@@ -150,6 +158,7 @@ export const authApi = {
       is_new_user: boolean;
       profile_complete: boolean;
       user: User;
+      package?: AuthPackageStatus;
     }>("/auth/social/", {
       method: "POST",
       body: JSON.stringify({ provider, token, additional_data }),

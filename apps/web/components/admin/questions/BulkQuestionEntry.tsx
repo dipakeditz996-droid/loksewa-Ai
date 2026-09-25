@@ -227,8 +227,8 @@ export function BulkQuestionEntry() {
   };
 
   const handleSaveAll = async () => {
-    if (!selTopic) {
-      toast.error('Please select a specific topic in the syllabus hierarchy.');
+    if (!selCategory || !selPosition || !selSubject) {
+      toast.error('Please select Category, Position/Level, and Subject.');
       return;
     }
 
@@ -252,7 +252,11 @@ export function BulkQuestionEntry() {
         question_type: qType,
         status: 'published',
         difficulty,
-        topic: Number(selTopic),
+        category: Number(selCategory),
+        position: Number(selPosition),
+        subject: Number(selSubject),
+        chapter: selChapter ? Number(selChapter) : null,
+        topic: selTopic ? Number(selTopic) : null,
         marks: Number(marks),
         negative_marks: Number(negativeMarks),
         expected_time_minutes: 1,

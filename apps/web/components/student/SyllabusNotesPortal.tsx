@@ -15,6 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+import { useOptionalStudentContext } from "@/contexts/StudentContext";
+
 interface SyllabusNotesPortalProps {
   initialSection?: 'syllabus' | 'subjective_topicwise' | 'objective_topicwise' | 'revision_notes';
   pageTitle?: string;
@@ -26,6 +28,9 @@ export default function SyllabusNotesPortal({
   pageTitle = "Syllabus & Notes",
   pageSubtitle = "Access your official syllabus, topicwise detailed notes, and revision materials."
 }: SyllabusNotesPortalProps) {
+  const studentCtx = useOptionalStudentContext();
+  const effectiveCourseId = studentCtx?.activeCourse?.id;
+
   // Active preparation ID - also doubles as the React Query cache key
   // discriminator, so switching back to a previously-viewed preparation is
   // itself an instant cache hit, not just the default view.
@@ -43,8 +48,8 @@ export default function SyllabusNotesPortal({
     // shortly after leaving it (e.g. Dashboard -> Syllabus -> Dashboard ->
     // Syllabus) shows the cached real data immediately with no loading
     // state at all, only refetching in the background once actually stale.
-    queryKey: ["syllabus-notes-portal", activePrepId],
-    queryFn: () => notesApi.getStudentPortalView(activePrepId ?? undefined),
+    queryKey: ["syllabus-notes-portal", activePrepId, effectiveCourseId ?? null],
+    queryFn: () => notesApi.getStudentPortalView(activePrepId ?? undefined, effectiveCourseId),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -493,7 +498,7 @@ export default function SyllabusNotesPortal({
             return (
               <div
                 key={material.id}
-                className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden hover:border-[#1A2E44]/30 group"
+                className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden hover:border-primary/40 dark:hover:border-[#D4A72C]/40 group"
               >
                 <div className="p-5 flex-1 flex flex-col">
                   {/* Category & Type badges */}
@@ -532,7 +537,7 @@ export default function SyllabusNotesPortal({
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-base font-bold text-foreground group-hover:text-[#1A2E44] transition-colors line-clamp-2 mb-2">
+                  <h3 className="text-base font-bold text-foreground group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors line-clamp-2 mb-2">
                     {material.title}
                   </h3>
 

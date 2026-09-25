@@ -44,6 +44,19 @@ export interface PracticeSessionResponse {
   questions: Question[]; // This will be SecureQuestionSerializer output initially
 }
 
+// The signal key maps to a human-readable label
+export const REVISION_SIGNAL_LABELS: Record<string, string> = {
+  overdue: "Due for review",
+  repeatedly_incorrect: "Repeated mistake",
+  recent_mistakes: "Recent mistake",
+  weak_topics: "Weak topic",
+};
+
+export interface RevisionSessionResponse extends PracticeSessionResponse {
+  // question_id (string key from JSON) -> signal key
+  question_signals: Record<string, string>;
+}
+
 export interface SaveAnswerParams {
   question_id: number;
   selected_option: string | null;
@@ -193,7 +206,7 @@ export const practiceApi = {
   },
 
   startRevision: (focus?: RevisionFocus) => {
-    return apiClient<PracticeSessionResponse>("/practice-sessions/start_revision/", {
+    return apiClient<RevisionSessionResponse>("/practice-sessions/start_revision/", {
       method: "POST",
       body: JSON.stringify(focus ? { focus } : {}),
     });

@@ -33,17 +33,98 @@ def attempt_remaining_seconds(attempt):
     expires = attempt_expires_at(attempt)
     if expires is None:
         return None
-    if attempt.status != 'in-progress':
+    if attempt.status not in ('in-progress', 'in_progress'):
         return 0
     return max(0, int((expires - timezone.now()).total_seconds()))
 
 
 def attempt_is_expired(attempt):
     """True when a still-in-progress attempt has run past its deadline."""
-    if attempt.status != 'in-progress':
+    if is_subjective_exam(attempt):
+        return subjective_upload_is_expired(attempt)
+    if attempt.status not in ('in-progress', 'in_progress'):
         return False
     remaining = attempt_remaining_seconds(attempt)
     return remaining is not None and remaining <= 0
+
+
+def is_subjective_exam(attempt):
+    """Check if the attempt belongs to a Subjective Examination."""
+    return getattr(attempt.examination, 'exam_type', None) == 'subjective'
+
+
+def subjective_exam_expires_at(attempt):
+    """Writing duration deadline for a subjective exam attempt."""
+    return attempt_expires_at(attempt)
+
+
+def subjective_exam_remaining_seconds(attempt):
+    """Writing seconds left for a subjective exam attempt, floored at 0."""
+    expires = subjective_exam_expires_at(attempt)
+    if expires is None:
+        return None
+    if attempt.status not in ('in-progress', 'in_progress', 'upload_pending'):
+        return 0
+    return max(0, int((expires - timezone.now()).total_seconds()))
+
+
+def subjective_upload_expires_at(attempt):
+    """
+    Absolute server deadline for answer sheet upload.
+    Derived from exam writing deadline + upload_deadline_minutes buffer
+    (or bounded by examination.upload_end_time if configured).
+    """
+    exam_expires = subjective_exam_expires_at(attempt)
+    if exam_expires is None:
+        return None
+
+    buffer_minutes = getattr(attempt.examination, 'upload_deadline_minutes', 30) or 30
+    deadline = exam_expires + timezone.timedelta(minutes=buffer_minutes)
+
+    fixed_end = getattr(attempt.examination, 'upload_end_time', None)
+    if fixed_end and fixed_end < deadline:
+        deadline = fixed_end
+
+    return deadline
+
+
+def subjective_upload_remaining_seconds(attempt):
+    """Seconds left to upload answer sheets, floored at 0."""
+    deadline = subjective_upload_expires_at(attempt)
+    if deadline is None:
+        return None
+    if attempt.status not in ('in-progress', 'in_progress', 'upload_pending'):
+        return 0
+    return max(0, int((deadline - timezone.now()).total_seconds()))
+
+
+def subjective_upload_is_expired(attempt):
+    """True when the answer upload window has closed."""
+    if attempt.status not in ('in-progress', 'in_progress', 'upload_pending'):
+        return False
+    remaining = subjective_upload_remaining_seconds(attempt)
+    return remaining is not None and remaining <= 0
+
+
+def is_subjective_upload_open(attempt):
+    """True if student is currently permitted to upload answer sheets."""
+    if not is_subjective_exam(attempt):
+        return False
+    if attempt.status not in ('in-progress', 'in_progress', 'upload_pending'):
+        return False
+    if not getattr(attempt.examination, 'answer_upload_enabled', True):
+        return False
+
+    now = timezone.now()
+    fixed_start = getattr(attempt.examination, 'upload_start_time', None)
+    if fixed_start and now < fixed_start:
+        return False
+
+    upload_expires = subjective_upload_expires_at(attempt)
+    if upload_expires and now > upload_expires:
+        return False
+
+    return True
 
 
 @transaction.atomic
@@ -111,11 +192,11 @@ def finalize_attempt(attempt, auto=False):
     except Exception:
         pass
 
-    # Deferred to on_commit: finalize_attempt runs inside @transaction.atomic,
-    # so creating the notification here directly would leave an orphan row if
-    # anything above it rolled back.
-    from core.notification_service import NotificationService
-    transaction.on_commit(lambda: NotificationService.notify_result_published(attempt))
+    # For objective exams, result is published immediately.
+    # For subjective exams, result publishing is gated until manual evaluation is completed and published.
+    if not is_subjective_exam(attempt):
+        from core.notification_service import NotificationService
+        transaction.on_commit(lambda: NotificationService.notify_result_published(attempt))
 
     return attempt
 
@@ -124,7 +205,27 @@ def enforce_expiry(attempt):
     """
     Close the attempt if its deadline has passed. Returns True when the
     attempt was expired (and is therefore now submitted).
+
+    For subjective exams:
+    - If writing time has elapsed but upload deadline has not passed, shifts status to
+      'upload_pending' and keeps upload window active.
+    - If upload deadline has elapsed, finalizes the attempt.
     """
+    if is_subjective_exam(attempt):
+        if attempt.status in ('submitted', 'evaluated'):
+            return False
+        writing_remaining = subjective_exam_remaining_seconds(attempt)
+        upload_remaining = subjective_upload_remaining_seconds(attempt)
+        if writing_remaining == 0 and upload_remaining is not None and upload_remaining > 0:
+            if attempt.status == 'in-progress':
+                attempt.status = 'upload_pending'
+                attempt.save(update_fields=['status'])
+            return False
+        elif upload_remaining is not None and upload_remaining <= 0:
+            finalize_attempt(attempt, auto=True)
+            return True
+        return False
+
     if attempt_is_expired(attempt):
         finalize_attempt(attempt, auto=True)
         return True

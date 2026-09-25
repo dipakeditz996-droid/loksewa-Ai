@@ -1,3 +1,4 @@
+/* eslint-env node */
 import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
@@ -30,6 +31,26 @@ const nextConfig = {
         source: '/teacher/materials',
         destination: '/teacher/study-materials',
         permanent: true,
+      },
+      {
+        source: '/admin-dashboard/question-bank',
+        destination: '/admin-dashboard/academic/questions',
+        permanent: false,
+      },
+      {
+        source: '/admin-dashboard/question-bank/create',
+        destination: '/admin-dashboard/academic/questions/create',
+        permanent: false,
+      },
+      {
+        source: '/admin-dashboard/question-bank/import',
+        destination: '/admin-dashboard/academic/questions/import',
+        permanent: false,
+      },
+      {
+        source: '/admin-dashboard/questions/create',
+        destination: '/admin-dashboard/academic/questions/create',
+        permanent: false,
       },
     ];
   },

@@ -15,6 +15,7 @@ export default function SurvivalGamePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [isLoadingActive, setIsLoadingActive] = useState(true);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -25,7 +26,9 @@ export default function SurvivalGamePage() {
       setGame(newGame);
       setFeedback(null);
       setSelectedOption(null);
-      startTimer(newGame.question_deadline);
+      if (newGame.question_deadline) {
+        startTimer(newGame.question_deadline);
+      }
     } catch (err) {
       alert("Failed to start game");
     } finally {
@@ -52,19 +55,38 @@ export default function SurvivalGamePage() {
   };
 
   useEffect(() => {
+    let isMounted = true;
+    const checkActiveGame = async () => {
+      try {
+        const res = await gamesApi.getActiveSurvival();
+        if (isMounted && res.active && res.game) {
+          setGame(res.game);
+          if (res.game.question_deadline) {
+            startTimer(res.game.question_deadline);
+          }
+        }
+      } catch (e) {
+        // Fallback to start challenge screen
+      } finally {
+        if (isMounted) setIsLoadingActive(false);
+      }
+    };
+    checkActiveGame();
+
     return () => {
+      isMounted = false;
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
 
   const handleAnswerTimeout = () => {
-    if (!isSubmitting && game?.status === 'IN_PROGRESS') {
+    if (!isSubmitting && (!game?.status || game.status === 'IN_PROGRESS')) {
       submitAnswer(""); // Timeout counts as incorrect
     }
   };
 
   const submitAnswer = async (option: string) => {
-    if (!game || game.status !== 'IN_PROGRESS' || isSubmitting) return;
+    if (!game || (game.status && game.status !== 'IN_PROGRESS') || isSubmitting) return;
     
     setSelectedOption(option);
     setIsSubmitting(true);
@@ -79,23 +101,33 @@ export default function SurvivalGamePage() {
           setGame(result.game);
           setFeedback(null);
           setSelectedOption(null);
-          if ('question_deadline' in result.game) {
+          if ('question_deadline' in result.game && result.game.question_deadline) {
             startTimer(result.game.question_deadline);
           }
           setIsSubmitting(false);
-        }, 1500);
+        }, 1200);
       } else if (result.status === 'GAME_OVER') {
         setFeedback('incorrect'); // Last life lost
         setTimeout(() => {
           setGame(result.game);
           setIsSubmitting(false);
-        }, 1500);
+        }, 1200);
       }
     } catch (err) {
       alert("Error submitting answer");
       setIsSubmitting(false);
+      setSelectedOption(null);
     }
   };
+
+  if (isLoadingActive) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center max-w-md mx-auto">
+        <Loader2 className="w-8 h-8 animate-spin text-[#D4A72C] mb-4" />
+        <p className="text-muted-foreground">Loading challenge...</p>
+      </div>
+    );
+  }
 
   if (!game) {
     return (
@@ -243,19 +275,20 @@ export default function SurvivalGamePage() {
             return (
               <button
                 key={opt}
+                type="button"
                 onClick={() => submitAnswer(opt)}
                 disabled={isSubmitting || feedback !== null}
                 className={`
-                  w-full text-left p-4 rounded-xl border-2 transition-all flex items-center
+                  w-full text-left p-4 rounded-xl border-2 transition-all flex items-center cursor-pointer select-none
                   ${isSelected 
-                    ? 'border-[#0B2545] bg-primary/5' 
-                    : 'border-border hover:border-[#0B2545]/30 hover:bg-muted'}
+                    ? 'border-primary bg-primary/10 shadow-sm ring-2 ring-primary/20' 
+                    : 'border-border hover:border-primary/40 hover:bg-muted/80'}
                   ${(isSubmitting || feedback !== null) && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}
                 `}
               >
                 <span className={`
-                  w-8 h-8 rounded-full flex items-center justify-center mr-4 font-bold
-                  ${isSelected ? 'bg-primary text-primary-foreground text-white' : 'bg-muted/80 text-muted-foreground'}
+                  w-8 h-8 rounded-full flex items-center justify-center mr-4 font-bold shrink-0 text-sm transition-colors
+                  ${isSelected ? 'bg-primary text-primary-foreground font-extrabold' : 'bg-muted/80 text-muted-foreground'}
                 `}>
                   {opt}
                 </span>

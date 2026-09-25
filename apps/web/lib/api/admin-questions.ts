@@ -119,7 +119,15 @@ export const adminQuestionApi = {
   },
   aiFillImport: async (importId: number | string) =>
     apiClient<ImportReport>(`/admin/questions/import/${importId}/ai-fill/`, { method: 'POST' }),
-  commitCSV: async (importId: number | string) => apiClient<{ success: boolean; imported_count: number; question_ids?: number[]; skipped_duplicates?: { row_index: number; existing_question_id: string }[] }>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
+  commitCSV: async (importId: number | string) =>
+    apiClient<{
+      success: boolean;
+      imported_count: number;
+      question_ids?: number[];
+      skipped_duplicates?: { row_index: number; existing_question_id: string; existing_id?: number }[];
+      existing_question_ids?: number[];
+      all_question_ids?: number[];
+    }>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
   /** One template per question type - never a single MCQ-shaped template. */
   downloadTemplate: async (type: 'mcq' | 'true_false' | 'subjective' = 'mcq') =>
     downloadFile(

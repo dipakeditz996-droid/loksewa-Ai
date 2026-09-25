@@ -73,7 +73,7 @@ from .question_views import AdminQuestionViewSet
 from .import_views import QuestionImportViewSet
 from .question_set_views import QuestionSetViewSet
 from .collection_views import QuestionCollectionViewSet
-from .exam_views import ExaminationViewSet
+from .exam_views import ExaminationViewSet, AdminSubjectiveSubmissionViewSet
 from .study_plan_views import AdminStudyPlanTemplateViewSet
 from .leaderboard_views import AdminLeaderboardView
 from study_plan import admin_api as study_plan_admin
@@ -97,6 +97,7 @@ router.register(r'questions/import', QuestionImportViewSet, basename='admin-ques
 router.register(r'question-sets', QuestionSetViewSet, basename='admin-question-set')
 router.register(r'collections', QuestionCollectionViewSet, basename='admin-collection')
 router.register(r'exams', ExaminationViewSet, basename='admin-examination')
+router.register(r'subjective-submissions', AdminSubjectiveSubmissionViewSet, basename='admin-subjective-submissions')
 router.register(r'schedules', AdminExamScheduleViewSet, basename='admin-exam-schedules')
 router.register(r'testimonials', AdminTestimonialViewSet, basename='admin-testimonials')
 router.register(r'website-pages', AdminWebsitePageViewSet, basename='admin-website-pages')
@@ -109,6 +110,12 @@ router.register(r'syllabus/papers', PaperViewSet, basename='syllabus-papers')
 router.register(r'syllabus/subjects', SubjectViewSet, basename='syllabus-subjects')
 router.register(r'syllabus/chapters', ChapterViewSet, basename='syllabus-chapters')
 router.register(r'syllabus/topics', TopicViewSet, basename='syllabus-topics')
+router.register(r'academic/categories', ExamCategoryViewSet, basename='academic-categories')
+router.register(r'academic/exams', ExamViewSet, basename='academic-exams')
+router.register(r'academic/papers', PaperViewSet, basename='academic-papers')
+router.register(r'academic/subjects', SubjectViewSet, basename='academic-subjects')
+router.register(r'academic/chapters', ChapterViewSet, basename='academic-chapters')
+router.register(r'academic/topics', TopicViewSet, basename='academic-topics')
 
 from .ai_views import AIGenerateOptionsView, AIApproveOptionsView, AIBulkGenerateContentView
 
@@ -206,9 +213,11 @@ urlpatterns = [
     # Course applications / enrollment management
     path('course-applications/', AdminCourseApplicationView.as_view(), name='admin-course-applications'),
     path('course-applications/<int:pk>/', AdminCourseApplicationDetailView.as_view(), name='admin-course-application-detail'),
-    # Syllabus
+    # Syllabus & Canonical Academic Tree
     path('syllabus/stats/', SyllabusStatsView.as_view(), name='syllabus-stats'),
     path('syllabus/tree/', SyllabusTreeView.as_view(), name='syllabus-tree'),
+    path('academic/stats/', SyllabusStatsView.as_view(), name='academic-stats'),
+    path('academic/tree/', SyllabusTreeView.as_view(), name='academic-tree'),
     # AI options
     path('questions/<int:pk>/generate-options/', AIGenerateOptionsView.as_view(), name='admin-generate-options'),
     path('questions/<int:pk>/approve-options/', AIApproveOptionsView.as_view(), name='admin-approve-options'),

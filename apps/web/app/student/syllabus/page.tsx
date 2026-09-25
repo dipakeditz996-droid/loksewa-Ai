@@ -14,7 +14,7 @@ export default function StudentSyllabusPage() {
     >
       <SyllabusNotesPortal
         initialSection="syllabus"
-        pageTitle="Official Syllabus"
+        pageTitle="Syllabus & Notes"
         pageSubtitle="Official PSC curriculum documents, syllabus frameworks, and preparation guides."
       />
     </Suspense>

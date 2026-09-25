@@ -62,21 +62,100 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
 
 class StudentExamScheduleNextView(APIView):
     """
-    Read-only public/student endpoint that returns the single authoritative
-    Next Official Loksewa Exam schedule.
+    Returns the authoritative Next Official Loksewa Exam schedule.
+    Course-contextual for authenticated students: scopes to the student's active
+    authorized course and never leaks other courses or fabricates fake dates.
+    Falls back to global active schedule for public visitors.
     """
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         today = timezone.now().date()
-        # Find active published schedule on or after today
+        user = request.user if request.user.is_authenticated else None
+        course_id_param = request.query_params.get('course_id')
+
+        target_course = None
+
+        if user and user.role == 'student':
+            from courses.access import authorized_courses, get_student_course_context
+            from courses.models import Course
+
+            auth_courses = authorized_courses(user)
+
+            if course_id_param:
+                try:
+                    c_id = int(course_id_param)
+                except (ValueError, TypeError):
+                    return Response({"detail": "Invalid course_id."}, status=status.HTTP_400_BAD_REQUEST)
+
+                target_course = auth_courses.filter(id=c_id).first()
+                if not target_course:
+                    return Response(
+                        {"detail": "You are not authorized to view the exam schedule for this course."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            else:
+                ctx = get_student_course_context(user)
+                active_c = ctx.get('active_course')
+                if active_c:
+                    target_course = Course.objects.filter(id=active_c['id'], status='published').first()
+                else:
+                    return Response({
+                        "schedule": None,
+                        "course_id": None,
+                        "message": "No active course yet.",
+                        "server_time": timezone.now().isoformat()
+                    })
+
+        elif course_id_param:
+            # Public request with course_id
+            from courses.models import Course
+            try:
+                target_course = Course.objects.filter(id=int(course_id_param), status='published').first()
+            except (ValueError, TypeError):
+                target_course = None
+
+        # If a target course was determined, look for schedule matching its exam
+        if target_course:
+            schedule = None
+            if target_course.exam_id:
+                schedule = ExamSchedule.objects.filter(
+                    exam_id=target_course.exam_id,
+                    is_published=True,
+                    exam_date__gte=today
+                ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time').first()
+
+                if not schedule and target_course.exam and target_course.exam.parent_id:
+                    schedule = ExamSchedule.objects.filter(
+                        exam_id=target_course.exam.parent_id,
+                        is_published=True,
+                        exam_date__gte=today
+                    ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time').first()
+
+            if not schedule:
+                return Response({
+                    "schedule": None,
+                    "course_id": target_course.id,
+                    "course_title": target_course.title,
+                    "message": "No exam schedule configured for this course yet.",
+                    "server_time": timezone.now().isoformat()
+                })
+
+            serializer = StudentExamScheduleSerializer(schedule)
+            return Response({
+                "schedule": serializer.data,
+                "course_id": target_course.id,
+                "course_title": target_course.title,
+                "server_time": timezone.now().isoformat()
+            })
+
+        # Global fallback (unauthenticated public homepage)
         schedule = ExamSchedule.objects.filter(
             is_active=True,
             is_published=True,
             exam_date__gte=today
         ).select_related('exam_category', 'exam').first()
 
-        # Fallback: if no active one, get the earliest future published schedule
         if not schedule:
             schedule = ExamSchedule.objects.filter(
                 is_published=True,
@@ -108,19 +187,50 @@ class StudentUpcomingMockExamView(APIView):
         now = timezone.now()
         user = request.user if request.user.is_authenticated else None
 
-        # Filter by enrollment if authenticated
-        active_courses = []
-        if user:
-            from courses.models import Enrollment
-            active_courses = list(Enrollment.objects.filter(student=user, status='active').values_list('course_id', flat=True))
+        if user and user.role == 'student':
+            from courses.access import authorized_courses, get_student_course_context, get_authorized_examination_filter
+            auth_courses = authorized_courses(user)
+            if not auth_courses.exists():
+                return Response({
+                    "mock_exam": None,
+                    "status": "NONE",
+                    "message": "No active course enrollments.",
+                    "server_time": now.isoformat()
+                })
 
-        base_qs = Examination.objects.filter(status__in=['published', 'live'])
-        if user:
-            base_qs = base_qs.filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
-            base_qs = base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
+            req_course_id = request.query_params.get('course_id')
+            target_course = None
+            if req_course_id:
+                try:
+                    c_id = int(req_course_id)
+                    target_course = auth_courses.filter(id=c_id).first()
+                except (ValueError, TypeError):
+                    target_course = None
+            if not target_course:
+                ctx = get_student_course_context(user)
+                active_c = ctx.get('active_course')
+                if active_c:
+                    target_course = auth_courses.filter(id=active_c['id']).first()
+
+            exam_q = get_authorized_examination_filter(user, target_course=target_course) if target_course else get_authorized_examination_filter(user)
+            if exam_q is None:
+                return Response({
+                    "mock_exam": None,
+                    "status": "NONE",
+                    "message": "No upcoming mock examinations scheduled.",
+                    "server_time": now.isoformat()
+                })
+
+            base_qs = Examination.objects.filter(status__in=['published', 'live']).filter(exam_q)
+        elif user and user.role in ('teacher', 'admin', 'super-admin'):
+            base_qs = Examination.objects.filter(status__in=['published', 'live'])
         else:
-            # Public only sees global non-custom exams
-            base_qs = base_qs.filter(course__isnull=True, exam_type__in=['mock', 'full', 'position'])
+            # Anonymous public user - only show public/global non-custom exams
+            base_qs = Examination.objects.filter(course__isnull=True, exam_type__in=['mock', 'full', 'position'], status__in=['published', 'live'])
+
+        # Upcoming/Live Mock Exam countdown banner is ONLY for official scheduled mock exams, NEVER on-demand custom exams
+        base_qs = base_qs.exclude(exam_type='custom').exclude(objective_category='custom')
+        base_qs = base_qs.filter(exam_type__in=['mock', 'full', 'position'])
 
         # Find live exams first (where end_time is future or None)
         live_exam = base_qs.filter(

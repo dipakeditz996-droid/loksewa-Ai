@@ -1,3 +1,4 @@
+import os
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -22,6 +23,7 @@ from .student_serializers import (
     StudentExaminationResultSerializer,
     StudentExaminationAttemptListSerializer,
     StudentSecureQuestionSerializer,
+    StudentReviewQuestionSerializer,
     StudentLeaderboardSerializer
 )
 from core.pagination import StandardResultsSetPagination
@@ -38,16 +40,109 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         user = self.request.user
-        
-        # Enforce Enrollment Access Control
-        from courses.models import Enrollment
-        active_courses = Enrollment.objects.filter(student=user, status='active').values_list('course_id', flat=True)
-        
-        # Get published and live exams, filtering out exams that are restricted to a course the student is not enrolled in
         from django.db.models import Q
-        base_qs = Examination.objects.filter(status__in=['published', 'live']).filter(Q(course__isnull=True) | Q(course_id__in=active_courses))
+
+        if not user or not user.is_authenticated:
+            return Examination.objects.none()
+
+        if user.role in ('teacher', 'admin', 'super-admin'):
+            return Examination.objects.filter(status__in=['published', 'live'])
+
+        from courses.access import (
+            authorized_courses,
+            get_student_course_context,
+            get_authorized_examination_filter,
+        )
+
+        # For single-object actions, allow the student to access any exam that belongs
+        # to ANY of their authorized courses or authorized exam scopes.
+        if self.action in ('retrieve', 'start', 'active_attempt', 'question_paper'):
+            exam_q = get_authorized_examination_filter(user)
+            if exam_q is None:
+                return Examination.objects.none()
+            base_qs = Examination.objects.filter(status__in=['published', 'live']).filter(exam_q)
+            return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
+
+        req_course_id = self.request.query_params.get('course_id')
+        auth_courses = authorized_courses(user)
+        if not auth_courses.exists():
+            return Examination.objects.none()
+
+        target_course = None
+        if req_course_id:
+            try:
+                c_id = int(req_course_id)
+                target_course = auth_courses.filter(id=c_id).first()
+                if not target_course:
+                    # Requested course does NOT belong to student's authorized courses -> strict denial (no fallback)
+                    return Examination.objects.none()
+            except (ValueError, TypeError):
+                return Examination.objects.none()
+
+        if target_course:
+            exam_q = get_authorized_examination_filter(user, target_course=target_course)
+        else:
+            exam_q = get_authorized_examination_filter(user)
+
+        if exam_q is None:
+            return Examination.objects.none()
+
+        base_qs = (
+            Examination.objects
+            .filter(status__in=['published', 'live'])
+            .filter(exam_q)
+            .select_related('course', 'category', 'exam', 'subject')
+        )
+        if user.is_authenticated:
+            from django.db.models import Prefetch
+            base_qs = base_qs.prefetch_related(
+                Prefetch(
+                    'attempts',
+                    queryset=ExaminationAttempt.objects.filter(student=user),
+                    to_attr='student_attempts'
+                )
+            )
+
+        if self.action == 'list':
+            return base_qs.exclude(exam_type='custom').exclude(objective_category='custom')
         return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
-        
+
+    def retrieve(self, request, *args, **kwargs):
+        examination = self.get_object()
+        user = request.user
+        if user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            if not is_examination_authorized_for_student(user, examination):
+                return Response(
+                    {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        serializer = self.get_serializer(examination)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='question-paper')
+    def question_paper(self, request, pk=None):
+        """Securely stream question paper PDF for authorized students."""
+        examination = self.get_object()
+        user = request.user
+
+        if user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            if not is_examination_authorized_for_student(user, examination):
+                return Response(
+                    {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        if not examination.question_paper_pdf:
+            return Response({'detail': 'No question paper uploaded for this examination.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.http import FileResponse
+        try:
+            return FileResponse(examination.question_paper_pdf.open('rb'), content_type='application/pdf')
+        except Exception as e:
+            return Response({'detail': f'Could not open question paper: {e}'}, status=status.HTTP_404_NOT_FOUND)
+
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
         """
@@ -60,6 +155,14 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         """
         examination = self.get_object()
         user = request.user
+
+        if user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            if not is_examination_authorized_for_student(user, examination):
+                return Response(
+                    {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
 
         if examination.status not in ['published', 'live']:
             return Response(
@@ -139,6 +242,13 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     def active_attempt(self, request, pk=None):
         """The student's in-progress attempt for this exam, if any."""
         examination = self.get_object()
+        if request.user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            if not is_examination_authorized_for_student(request.user, examination):
+                return Response(
+                    {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
         attempt = ExaminationAttempt.objects.filter(
             examination=examination, student=request.user, status='in-progress'
         ).first()
@@ -155,6 +265,28 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='academic-hierarchy')
     def academic_hierarchy(self, request):
+        user = request.user
+        allowed_exam_ids = None
+
+        if user.role == 'student':
+            from courses.access import authorized_courses, get_course_exam_ids, authorized_exam_ids
+            course_id = request.query_params.get('course_id')
+            if course_id:
+                try:
+                    c_id = int(course_id)
+                    auth_c = authorized_courses(user).filter(id=c_id).first()
+                    if auth_c:
+                        allowed_exam_ids = get_course_exam_ids(auth_c)
+                    else:
+                        allowed_exam_ids = set()
+                except (ValueError, TypeError):
+                    allowed_exam_ids = set()
+            else:
+                allowed_exam_ids = authorized_exam_ids(user)
+
+            if not allowed_exam_ids:
+                return Response([])
+
         from exams.models import ExamCategory
         categories = ExamCategory.objects.filter(is_active=True).prefetch_related(
             'exams', 'exams__papers', 'exams__papers__subjects', 
@@ -162,10 +294,17 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         )
         tree = []
         for cat in categories:
+            exams_qs = cat.exams.filter(is_active=True)
+            if allowed_exam_ids is not None:
+                exams_qs = exams_qs.filter(id__in=allowed_exam_ids)
+
+            if not exams_qs.exists():
+                continue
+
             cat_data = {
                 'id': cat.id, 'name': cat.name, 'is_active': cat.is_active, 'exams': []
             }
-            for exam in cat.exams.filter(is_active=True):
+            for exam in exams_qs:
                 exam_data = {
                     'id': exam.id, 'name': exam.name, 'is_active': exam.is_active, 'papers': []
                 }
@@ -241,8 +380,19 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     def available_questions(self, request):
         # QuestionSelectionService is imported at the top of this module
         data = request.data
+        exam_id = data.get('exam_id')
+
+        student_allowed_exam_ids = None
+        if request.user.role == 'student':
+            from courses.access import authorized_exam_ids
+            allowed_exam_ids = authorized_exam_ids(request.user) or set()
+            student_allowed_exam_ids = allowed_exam_ids
+            if exam_id and int(exam_id) not in allowed_exam_ids:
+                return Response({'available': 0})
+
         avail = QuestionSelectionService().check_availability(
             exam_id=data.get('exam_id'),
+            exam_ids=student_allowed_exam_ids,
             category_id=data.get('category_id'),
             paper_id=data.get('paper_id'),
             subject_id=data.get('subject_id'),
@@ -270,9 +420,18 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         if not exam_id and not category_id:
             return Response({'detail': 'exam_id or category_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        student_allowed_exam_ids = None
+        if request.user.role == 'student':
+            from courses.access import authorized_exam_ids
+            allowed_exam_ids = authorized_exam_ids(request.user) or set()
+            student_allowed_exam_ids = allowed_exam_ids
+            if exam_id and int(exam_id) not in allowed_exam_ids:
+                return Response({'detail': 'You are not enrolled in the course for this exam.'}, status=status.HTTP_403_FORBIDDEN)
+
         service = QuestionSelectionService()
         avail = service.check_availability(
             exam_id=exam_id,
+            exam_ids=student_allowed_exam_ids,
             category_id=category_id,
             paper_id=data.get('paper_id'),
             subject_id=data.get('subject_id'),
@@ -290,6 +449,7 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             with transaction.atomic():
                 result = service.select(
                     exam_id=exam_id,
+                    exam_ids=student_allowed_exam_ids,
                     category_id=category_id,
                     paper_id=data.get('paper_id'),
                     subject_id=data.get('subject_id'),
@@ -324,16 +484,23 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                 # the exam total must be the sum of those - not the question
                 # count - or a 2-mark question can push a score past 100%.
                 total_marks = sum(q.marks for q in questions)
+                from courses.models import Course
+                custom_course = Course.objects.filter(exam=resolved_exam).first()
+                if not custom_course and resolved_exam.parent_id:
+                    custom_course = Course.objects.filter(exam_id=resolved_exam.parent_id).first()
+
                 custom_exam = Examination.objects.create(
                     title=f"Custom Exam - {timezone.now().strftime('%Y-%m-%d %H:%M')}",
                     exam_type='custom',
                     objective_category='custom',
                     category=resolved_exam.category,
                     exam=resolved_exam,
+                    course=custom_course,
                     total_questions=len(questions),
                     time_limit=len(questions),
                     total_marks=total_marks,
                     passing_marks=total_marks * 0.4,
+                    show_correct_answers=True,
                     status='published',
                     created_by=request.user
                 )
@@ -364,14 +531,26 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
-        qs = ExaminationAttempt.objects.filter(
-            student=self.request.user
-        ).select_related('examination').prefetch_related('answers')
-        
+        user = self.request.user
+        qs = (
+            ExaminationAttempt.objects
+            .filter(student=user)
+            .select_related('examination', 'examination__course', 'examination__category', 'subjective_submission')
+            .prefetch_related('answers__question')
+        )
+
+        if user.role == 'student':
+            from courses.access import get_authorized_examination_filter
+            course_id = self.request.query_params.get('course_id')
+            exam_q = get_authorized_examination_filter(user, target_course=course_id)
+            if exam_q is None:
+                return qs.none()
+            qs = qs.filter(examination__in=Examination.objects.filter(exam_q))
+
         status_param = self.request.query_params.get('status')
         if status_param:
             qs = qs.filter(status=status_param)
-            
+
         return qs
 
     def get_serializer_class(self):
@@ -385,9 +564,16 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         """
         Every read of an attempt first settles its clock. A tab left open past
         the deadline therefore sees a submitted attempt, not a running one.
+        Enforces strict course authorization for the underlying examination.
         """
         attempt = super().get_object()
         enforce_expiry(attempt)
+        user = self.request.user
+        if user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            from rest_framework.exceptions import PermissionDenied
+            if not is_examination_authorized_for_student(user, attempt.examination):
+                raise PermissionDenied("You do not have access to this examination attempt.")
         return attempt
 
     @action(detail=False, methods=['get'])
@@ -412,33 +598,60 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         """
         Lightweight poll target: attempt status plus remaining time. Used by
         the exam timer and the Focus Mode watchdog to re-sync with the server.
+        For subjective exams, returns both writing timer and answer-upload deadline.
         """
         attempt = self.get_object()
+        from .attempt_timing import (
+            is_subjective_exam,
+            subjective_exam_expires_at,
+            subjective_exam_remaining_seconds,
+            subjective_upload_expires_at,
+            subjective_upload_remaining_seconds,
+            subjective_upload_is_expired,
+            is_subjective_upload_open,
+        )
+        is_subj = is_subjective_exam(attempt)
+        sub_status = getattr(attempt.subjective_submission, 'status', None) if hasattr(attempt, 'subjective_submission') else None
+
+        exam_exp = subjective_exam_expires_at(attempt) if is_subj else attempt_expires_at(attempt)
+        upload_exp = subjective_upload_expires_at(attempt) if is_subj else None
+
+        exam_rem = subjective_exam_remaining_seconds(attempt) if is_subj else attempt_remaining_seconds(attempt)
+        upload_rem = subjective_upload_remaining_seconds(attempt) if is_subj else None
+
         return Response({
             'id': attempt.id,
             'status': attempt.status,
-            'is_active': attempt.status == 'in-progress',
-            'is_expired': attempt_is_expired(attempt),
-            'remaining_seconds': attempt_remaining_seconds(attempt),
+            'is_active': (
+                (attempt.status in ('in-progress', 'upload_pending') and not subjective_upload_is_expired(attempt))
+                if is_subj else (attempt.status == 'in-progress' and not attempt_is_expired(attempt))
+            ),
+            'is_expired': subjective_upload_is_expired(attempt) if is_subj else attempt_is_expired(attempt),
+            'remaining_seconds': exam_rem,
+            'time_remaining_seconds': exam_rem,
             'server_time': timezone.now().isoformat(),
+            'is_subjective': is_subj,
+            'exam_expires_at': exam_exp.isoformat() if exam_exp else None,
+            'exam_remaining_seconds': exam_rem,
+            'is_exam_expired': (exam_rem == 0) if is_subj else attempt_is_expired(attempt),
+            'upload_expires_at': upload_exp.isoformat() if upload_exp else None,
+            'upload_remaining_seconds': upload_rem,
+            'upload_time_remaining_seconds': upload_rem,
+            'is_upload_expired': subjective_upload_is_expired(attempt) if is_subj else None,
+            'can_upload': is_subjective_upload_open(attempt) if is_subj else False,
+            'submission_status': sub_status,
         })
-
 
     @action(detail=True, methods=['get'])
     def questions(self, request, pk=None):
-        """Returns the questions for this attempt without the correct answers."""
+        """Returns questions for this attempt. Exposes correct answers only after submission when review is allowed."""
         attempt = self.get_object()
         examination = attempt.examination
         
         # Get questions depending on whether it's from a question_set or directly mapped
         if examination.question_set:
-            questions = examination.question_set.questions.all()
+            questions = list(examination.question_set.questions.all())
         else:
-            # Direct mapping via ExaminationQuestion, ordered the way the
-            # exam was authored (this used to unconditionally return
-            # Question.objects.none() here, so any exam built by attaching
-            # questions directly - rather than via a QuestionSet - showed
-            # "No questions found" despite having real, approved questions).
             from .models import ExaminationQuestion
             question_ids = list(
                 ExaminationQuestion.objects
@@ -446,21 +659,29 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
                 .order_by('order', 'id')
                 .values_list('question_id', flat=True)
             )
-            questions = sorted(
-                Question.objects.filter(id__in=question_ids),
-                key=lambda q: question_ids.index(q.id),
-            )
+            q_map = {q.id: q for q in Question.objects.filter(id__in=question_ids)}
+            questions = [q_map[qid] for qid in question_ids if qid in q_map]
 
-        # Old Past Exams must reproduce the original paper exactly — shuffling
-        # is hard-blocked for that category regardless of the admin flag.
-        # For everything else, shuffle deterministically per attempt (seeded
-        # on the attempt id) so the order is stable across reloads/Next
-        # navigation rather than re-randomizing on every request.
         if examination.randomize_questions and examination.objective_category != 'old_past':
             import random
             random.Random(attempt.id).shuffle(questions)
 
-        serializer = StudentSecureQuestionSerializer(questions, many=True)
+        # Check if correct answer review is allowed
+        can_review = False
+        if attempt.status != 'in-progress':
+            if examination.result_visibility == 'manual' and attempt.status != 'evaluated':
+                can_review = False
+            elif examination.result_visibility == 'after_end' and examination.end_time and timezone.now() < examination.end_time:
+                can_review = False
+            elif examination.exam_type in ('custom', 'practice') or examination.objective_category == 'custom':
+                can_review = True
+            else:
+                can_review = bool(examination.show_correct_answers)
+
+        if can_review:
+            serializer = StudentReviewQuestionSerializer(questions, many=True)
+        else:
+            serializer = StudentSecureQuestionSerializer(questions, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
@@ -550,14 +771,182 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         """View results if visibility allows."""
         attempt = self.get_object()
         
-        if attempt.status == 'in-progress':
+        if attempt.status in ('in-progress', 'upload_pending'):
             return Response({'detail': 'Exam not yet submitted.'}, status=status.HTTP_400_BAD_REQUEST)
             
         if attempt.examination.result_visibility == 'manual' and attempt.status != 'evaluated':
             return Response({'detail': 'Result pending manual review.'}, status=status.HTTP_403_FORBIDDEN)
             
+        if attempt.examination.result_visibility == 'after_end':
+            if attempt.examination.end_time and timezone.now() < attempt.examination.end_time:
+                return Response({'detail': 'Result will be available after the exam window ends.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Subjective exam gating: student can only view final result once published by admin
+        from .attempt_timing import is_subjective_exam
+        if is_subjective_exam(attempt) or hasattr(attempt, 'subjective_submission'):
+            sub = getattr(attempt, 'subjective_submission', None)
+            if not sub or not sub.is_published:
+                return Response({
+                    'detail': 'Your answer sheet has been submitted. Your result is currently being evaluated.',
+                    'status': attempt.status,
+                    'is_published': False,
+                    'needs_evaluation': True,
+                }, status=status.HTTP_403_FORBIDDEN)
+
         serializer = self.get_serializer(attempt)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='answer-sheet')
+    def answer_sheet(self, request, pk=None):
+        if request.method == 'GET':
+            return self.get_answer_sheet(request, pk)
+        return self.upload_answer_sheet(request, pk)
+
+    def upload_answer_sheet(self, request, pk=None):
+        attempt = self.get_object()
+        from .attempt_timing import is_subjective_exam, is_subjective_upload_open
+        from .subjective_service import SubjectivePdfService
+        from .models import SubjectiveSubmission, SubjectiveSubmissionPage
+
+        if not is_subjective_exam(attempt):
+            return Response(
+                {'detail': 'Answer sheet upload is only supported for Subjective Examinations.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Enforce server-authoritative upload deadline
+        if not is_subjective_upload_open(attempt):
+            return Response(
+                {'detail': 'The answer sheet upload window has closed.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Retrieve files
+        uploaded_files = request.FILES.getlist('images') or request.FILES.getlist('files')
+        single_pdf = request.FILES.get('pdf_file') or request.FILES.get('file')
+
+        if not uploaded_files and not single_pdf:
+            return Response(
+                {'detail': 'Please provide at least one answer sheet image or a PDF file.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate max upload size
+        max_mb = getattr(attempt.examination, 'max_upload_size_mb', 50) or 50
+        max_bytes = max_mb * 1024 * 1024
+
+        submission, _ = SubjectiveSubmission.objects.get_or_create(attempt=attempt)
+        submission.status = 'processing'
+        submission.save(update_fields=['status'])
+
+        try:
+            if single_pdf:
+                if single_pdf.size > max_bytes:
+                    submission.status = 'processing_failed'
+                    submission.save(update_fields=['status'])
+                    return Response(
+                        {'detail': f'File exceeds maximum allowed upload size of {max_mb}MB.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                content_file, page_count, total_bytes = SubjectivePdfService.validate_and_process_pdf(single_pdf)
+            else:
+                total_size = sum(f.size for f in uploaded_files)
+                if total_size > max_bytes:
+                    submission.status = 'processing_failed'
+                    submission.save(update_fields=['status'])
+                    return Response(
+                        {'detail': f'Total upload size exceeds maximum limit of {max_mb}MB.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Sort by page order if page_order is provided
+                page_order_str = request.data.get('page_order')
+                if page_order_str:
+                    try:
+                        import json
+                        if isinstance(page_order_str, str) and page_order_str.startswith('['):
+                            order_list = json.loads(page_order_str)
+                        else:
+                            order_list = [x.strip() for x in page_order_str.split(',') if x.strip()]
+                        file_map = {f.name: f for f in uploaded_files}
+                        ordered_files = [file_map[name] for name in order_list if name in file_map]
+                        for f in uploaded_files:
+                            if f not in ordered_files:
+                                ordered_files.append(f)
+                        uploaded_files = ordered_files
+                    except Exception:
+                        pass
+
+                images_data = []
+                for f in uploaded_files:
+                    f.seek(0)
+                    images_data.append((f.name, f))
+
+                content_file, page_count, total_bytes = SubjectivePdfService.process_and_merge_images(images_data)
+
+                # Save individual pages
+                submission.pages.all().delete()
+                for idx, (fname, file_obj) in enumerate(images_data):
+                    file_obj.seek(0)
+                    ext = os.path.splitext(fname)[1].lower()
+                    if not ext or ext not in ['.jpg', '.jpeg', '.png', '.webp', '.pdf']:
+                        ext = '.jpg'
+                    file_obj.name = f"page_{idx+1:03d}{ext}"
+                    SubjectiveSubmissionPage.objects.create(
+                        submission=submission,
+                        page_number=idx + 1,
+                        image_file=file_obj,
+                        file_size_bytes=file_obj.size,
+                    )
+
+            submission.answer_pdf = content_file
+            submission.page_count = page_count
+            submission.file_size_bytes = total_bytes
+            submission.status = 'submitted'
+            submission.save()
+
+            now = timezone.now()
+            attempt.status = 'submitted'
+            attempt.submitted_at = now
+            if attempt.started_at:
+                attempt.time_taken_seconds = max(0, int((now - attempt.started_at).total_seconds()))
+            attempt.save(update_fields=['status', 'submitted_at', 'time_taken_seconds'])
+
+            # Send notification to admins upon successful answer sheet submission
+            try:
+                from core.notification_service import NotificationService
+                NotificationService.notify_admins_subjective_submission(submission)
+            except Exception as notif_err:
+                import logging
+                logging.getLogger(__name__).warning("Failed to send admin subjective submission notification: %s", notif_err)
+
+            return Response({
+                'detail': 'Answer sheet uploaded and submitted successfully.',
+                'submission_id': submission.id,
+                'page_count': page_count,
+                'file_size_bytes': total_bytes,
+                'attempt_status': attempt.status,
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            submission.status = 'processing_failed'
+            submission.save(update_fields=['status'])
+            return Response(
+                {'detail': f'Failed to process answer sheet: {str(e)}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def get_answer_sheet(self, request, pk=None):
+        attempt = self.get_object()
+        if not hasattr(attempt, 'subjective_submission') or not attempt.subjective_submission.answer_pdf:
+            return Response({'detail': 'No answer-sheet PDF found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.http import FileResponse
+        try:
+            return FileResponse(attempt.subjective_submission.answer_pdf.open('rb'), content_type='application/pdf')
+        except Exception as e:
+            return Response({'detail': f'Could not open answer-sheet PDF: {e}'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class TeacherExaminationAttemptViewSet(viewsets.ReadOnlyModelViewSet):

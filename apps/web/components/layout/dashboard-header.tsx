@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { FocusModeHeaderToggle } from "@/components/student/focus/FocusModeHeaderToggle";
+import { CourseSwitcher } from "@/components/layout/CourseSwitcher";
 
 interface DashboardHeaderProps {
   onMenuClick: () => void;
@@ -124,6 +125,9 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
             className="w-full bg-muted/50 dark:bg-muted dark:text-foreground dark:border-border dark:placeholder:text-muted-foreground pl-9 focus-visible:ring-1 focus-visible:ring-primary rounded-full text-[13px] h-9"
           />
         </div>
+
+        {/* Active Course Context Switcher - student portal only */}
+        {role === "student" && <CourseSwitcher />}
 
         {/* Do Not Disturb / Focus Mode - student portal only. */}
         {role === "student" && <FocusModeHeaderToggle />}

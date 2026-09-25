@@ -39,7 +39,34 @@ interface UserDetail {
     language: string;
   } | null;
   enrollments?: { courseTitle: string; status: string; enrolledAt: string; expiresAt: string | null }[];
-  subscription?: { planName: string; status: string; startDate: string; expiryDate: string; isActive: boolean } | null;
+  subscriptions?: {
+    id?: number;
+    planId?: number;
+    planName: string;
+    packageType?: string;
+    status: string;
+    source?: string;
+    accessSource?: string;
+    adminGrantReason?: string;
+    grantedBy?: string | null;
+    startDate: string;
+    expiryDate: string;
+    isActive: boolean;
+  }[];
+  subscription?: {
+    id?: number;
+    planId?: number;
+    planName: string;
+    packageType?: string;
+    status: string;
+    source?: string;
+    accessSource?: string;
+    adminGrantReason?: string;
+    grantedBy?: string | null;
+    startDate: string;
+    expiryDate: string;
+    isActive: boolean;
+  } | null;
   examStats?: { totalAttempts: number; averagePercentage: number | null; passedCount: number };
   practiceStats?: { totalSessions: number; averageAccuracy: number | null };
   purchaseCount?: number;
@@ -213,17 +240,68 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
 
-              {/* Subscription */}
-              <SectionCard title="Subscription">
-                {user.subscription ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                    <InfoRow icon={CreditCard} label="Plan" value={user.subscription.planName} />
-                    <InfoRow icon={ShieldCheck} label="Status" value={user.subscription.isActive ? "Active" : user.subscription.status} />
-                    <InfoRow icon={Calendar} label="Started" value={new Date(user.subscription.startDate).toLocaleDateString()} />
-                    <InfoRow icon={Calendar} label="Expires" value={new Date(user.subscription.expiryDate).toLocaleDateString()} />
+              {/* Package Access */}
+              <SectionCard title={`Package Access ${user.subscriptions && user.subscriptions.length > 1 ? `(${user.subscriptions.length} Packages)` : ""}`}>
+                {((user.subscriptions && user.subscriptions.length > 0) || user.subscription) ? (
+                  <div className="space-y-4">
+                    {(user.subscriptions && user.subscriptions.length > 0 ? user.subscriptions : [user.subscription!]).map((sub, idx) => (
+                      <div key={sub.id || idx} className="p-4 rounded-lg bg-slate-50/70 border border-slate-200/80 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                          <InfoRow
+                            icon={CreditCard}
+                            label="Package"
+                            value={
+                              <span className="flex items-center gap-2">
+                                <span className="font-bold text-[#0B2545]">{sub.planName}</span>
+                                {sub.packageType && (
+                                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                                    {sub.packageType}
+                                  </span>
+                                )}
+                              </span>
+                            }
+                          />
+                          <InfoRow
+                            icon={ShieldCheck}
+                            label="Status"
+                            value={
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                sub.isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
+                              }`}>
+                                {sub.isActive ? "Active" : sub.status}
+                              </span>
+                            }
+                          />
+                          <InfoRow
+                            icon={Shield}
+                            label="Access Source"
+                            value={
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                                sub.source === "ADMIN_GRANT"
+                                  ? "bg-purple-100 text-purple-800 border border-purple-200"
+                                  : "bg-blue-100 text-blue-800"
+                              }`}>
+                                {sub.accessSource || (sub.source === "ADMIN_GRANT" ? "Admin Granted" : "Student Payment")}
+                              </span>
+                            }
+                          />
+                          <InfoRow icon={Calendar} label="Expires" value={new Date(sub.expiryDate).toLocaleDateString()} />
+                          <InfoRow icon={Calendar} label="Started" value={new Date(sub.startDate).toLocaleDateString()} />
+                          {sub.grantedBy && (
+                            <InfoRow icon={UserIcon} label="Granted By" value={`@${sub.grantedBy}`} />
+                          )}
+                        </div>
+                        {sub.adminGrantReason && (
+                          <div className="pt-2 border-t border-slate-200/70 text-xs">
+                            <span className="font-semibold text-slate-500">Grant Note: </span>
+                            <span className="text-slate-700 italic">"{sub.adminGrantReason}"</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">No active subscription.</p>
+                  <p className="text-sm text-slate-500">No active package or subscription.</p>
                 )}
               </SectionCard>
 

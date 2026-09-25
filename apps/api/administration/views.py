@@ -431,7 +431,7 @@ class AdminUsersView(APIView):
             return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(email__iexact=email).exists():
-            return Response({'error': 'This email is already registered.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'An account with this email already exists.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             django_validate_password(password)
@@ -465,14 +465,13 @@ class AdminUsersView(APIView):
         }, status=status.HTTP_201_CREATED)
 
     def _create_student(self, request, username, email, password):
-        """An admin-created student collects the same information as normal
-        self-registration (core.views.StudentSignupView) - full name, phone,
-        permanent address, and exam preference - so the resulting account and
-        StudentProfile are indistinguishable from a self-registered one. The
-        one deliberate difference: an admin is vouching for this account
-        directly, so it's created already verified/active (is_verified=True)
-        instead of going through the email-OTP pending step self-registration
-        requires - there is nothing to leave "pending" here."""
+        """Create a student account with immediate admin verification.
+        Supports both:
+        1. Explicit Package Assignment + Admin-Granted Access:
+           Directly activates a canonical Subscription and Enrollment(s)
+           without requiring customer payment (no fake transactions).
+        2. Optional Free / Basic Student Account:
+           If no package is selected, preserves existing behavior."""
         full_name = (request.data.get('name') or '').strip()
         phone = (request.data.get('mobile') or request.data.get('phone') or '').strip()
         permanent_district = (request.data.get('permanent_district') or '').strip()
@@ -480,6 +479,12 @@ class AdminUsersView(APIView):
         exam_category_id = request.data.get('exam_category_id')
         exam_position_id = request.data.get('exam_position_id')
         course_id = request.data.get('course_id')
+        package_id = request.data.get('package_id')
+        if hasattr(request.data, 'getlist'):
+            raw_course_ids = request.data.getlist('course_ids') or request.data.getlist('course_ids[]') or request.data.get('course_ids')
+        else:
+            raw_course_ids = request.data.get('course_ids')
+        grant_reason = (request.data.get('grant_reason') or 'Manually enrolled by Admin').strip()
         send_welcome_email = bool(request.data.get('send_welcome_email'))
 
         missing = []
@@ -511,9 +516,186 @@ class AdminUsersView(APIView):
             except (Exam.DoesNotExist, ValueError, TypeError):
                 return Response({'error': 'Invalid exam selection.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        from courses.models import Course, Enrollment, CourseApplication
+        from subscriptions.models import SubscriptionPlan, Subscription, SubscriptionCourseSelection
+
+        start_date = timezone.now()
+
+        # Sanitize legacy course_ids if provided (supports list, QueryDict, JSON string, or comma-separated)
+        course_ids = []
+        if raw_course_ids is not None:
+            if isinstance(raw_course_ids, str):
+                import json
+                try:
+                    parsed = json.loads(raw_course_ids)
+                    if isinstance(parsed, list):
+                        raw_course_ids = parsed
+                    else:
+                        raw_course_ids = [parsed]
+                except (json.JSONDecodeError, ValueError):
+                    raw_course_ids = [c.strip() for c in raw_course_ids.split(',') if c.strip()]
+            if isinstance(raw_course_ids, (list, tuple)):
+                for item in raw_course_ids:
+                    if isinstance(item, str) and (',' in item or item.startswith('[')):
+                        import json
+                        try:
+                            sub_parsed = json.loads(item)
+                            if isinstance(sub_parsed, list):
+                                for s in sub_parsed:
+                                    try: course_ids.append(int(s))
+                                    except (ValueError, TypeError): pass
+                                continue
+                        except Exception:
+                            for s in item.split(','):
+                                try: course_ids.append(int(s.strip()))
+                                except (ValueError, TypeError): pass
+                            continue
+                    try:
+                        course_ids.append(int(item))
+                    except (ValueError, TypeError):
+                        pass
+            else:
+                try:
+                    course_ids.append(int(raw_course_ids))
+                except (ValueError, TypeError):
+                    pass
+
+        course_ids = list(dict.fromkeys(course_ids))
+
+        # ── PACKAGE ASSIGNMENT NORMALIZATION & VALIDATION ──────────────────────
+        # Accept both `packages`: [...] (new multi-package format)
+        # and `package_id` / `course_ids` (legacy single-package format).
+        raw_packages = request.data.get('packages')
+        if isinstance(raw_packages, str):
+            import json
+            try:
+                raw_packages = json.loads(raw_packages)
+            except Exception:
+                raw_packages = None
+
+        package_specs = []
+        if isinstance(raw_packages, list) and len(raw_packages) > 0:
+            for item in raw_packages:
+                if isinstance(item, dict):
+                    pid = item.get('package_id') or item.get('plan_id')
+                    cids = item.get('course_ids') or item.get('courses') or []
+                    package_specs.append({'package_id': pid, 'course_ids': cids})
+        elif package_id:
+            package_specs.append({'package_id': package_id, 'course_ids': course_ids})
+
+        # Validate duplicate package IDs
+        seen_pkg_ids = set()
+        for ps in package_specs:
+            pid = ps.get('package_id')
+            if not pid:
+                return Response({'error': 'Each package assignment must specify a valid package ID.'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                pid = int(pid)
+                ps['package_id'] = pid
+            except (ValueError, TypeError):
+                return Response({'error': f'Invalid package ID: {pid}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if pid in seen_pkg_ids:
+                return Response({'error': f'Duplicate package selection: package ID {pid} cannot be selected multiple times.'}, status=status.HTTP_400_BAD_REQUEST)
+            seen_pkg_ids.add(pid)
+
+        validated_packages = []
+        for ps in package_specs:
+            pid = ps['package_id']
+            try:
+                plan = SubscriptionPlan.objects.get(id=pid, status='ACTIVE')
+            except (SubscriptionPlan.DoesNotExist, ValueError, TypeError):
+                return Response({'error': f'Selected package {pid} does not exist or is inactive.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Sanitize course IDs for this specific package
+            pkg_raw_cids = ps.get('course_ids') or []
+            if isinstance(pkg_raw_cids, str):
+                import json
+                try:
+                    pkg_raw_cids = json.loads(pkg_raw_cids)
+                except Exception:
+                    pkg_raw_cids = [c.strip() for c in pkg_raw_cids.split(',') if c.strip()]
+            pkg_cids = []
+            if isinstance(pkg_raw_cids, (list, tuple)):
+                for c in pkg_raw_cids:
+                    try: pkg_cids.append(int(c))
+                    except (ValueError, TypeError): pass
+            else:
+                try: pkg_cids.append(int(pkg_raw_cids))
+                except (ValueError, TypeError): pass
+            pkg_cids = list(dict.fromkeys(pkg_cids))
+
+            selected_pkg_courses = []
+            if plan.package_type == 'SINGLE':
+                single_course = None
+                if plan.course:
+                    single_course = plan.course
+                elif pkg_cids:
+                    if len(pkg_cids) != 1:
+                        return Response({'error': f"Package '{plan.name}' requires selecting exactly 1 course."}, status=status.HTTP_400_BAD_REQUEST)
+                    single_course = Course.objects.filter(id=pkg_cids[0], status='published').first()
+                elif plan.eligible_courses.count() == 1:
+                    single_course = plan.eligible_courses.first()
+                elif course_id:
+                    single_course = Course.objects.filter(id=course_id, status='published').first()
+
+                if not single_course or single_course.status != 'published':
+                    return Response({'error': f"Please select a valid published course for package '{plan.name}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+                if plan.eligible_courses.exists() and not plan.eligible_courses.filter(id=single_course.id).exists():
+                    return Response({'error': f"Course '{single_course.title}' is not eligible for package '{plan.name}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+                selected_pkg_courses = [single_course]
+
+            elif plan.package_type == 'MULTI':
+                if not pkg_cids:
+                    return Response({'error': f"Please select course(s) for package '{plan.name}'."}, status=status.HTTP_400_BAD_REQUEST)
+                if len(pkg_cids) > plan.allowed_preparation_count:
+                    return Response(
+                        {'error': f"Package '{plan.name}' allows at most {plan.allowed_preparation_count} preparation(s)."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                eligible_ids = set(plan.eligible_courses.values_list('id', flat=True))
+                if eligible_ids:
+                    ineligible = [cid for cid in pkg_cids if cid not in eligible_ids]
+                    if ineligible:
+                        return Response({'error': f"Some selected courses are not eligible for package '{plan.name}'."}, status=status.HTTP_400_BAD_REQUEST)
+
+                courses_found = list(Course.objects.filter(id__in=pkg_cids, status='published'))
+                if len(courses_found) != len(pkg_cids):
+                    return Response({'error': f"One or more selected courses for package '{plan.name}' are invalid or not published."}, status=status.HTTP_400_BAD_REQUEST)
+                selected_pkg_courses = courses_found
+
+            elif plan.package_type == 'BUNDLE':
+                bundle_courses = list(plan.eligible_courses.filter(status='published'))
+                if not bundle_courses:
+                    return Response({'error': f"Bundle package '{plan.name}' has no published eligible courses."}, status=status.HTTP_400_BAD_REQUEST)
+                selected_pkg_courses = bundle_courses
+
+            elif plan.package_type == 'ALL_ACCESS':
+                selected_pkg_courses = list(Course.objects.filter(status='published'))
+
+            # Calculate individual expiry for this plan
+            if plan.duration_unit == 'DAYS':
+                delta = timedelta(days=plan.duration)
+            elif plan.duration_unit == 'WEEKS':
+                delta = timedelta(weeks=plan.duration)
+            elif plan.duration_unit == 'MONTHS':
+                delta = timedelta(days=30 * plan.duration)
+            elif plan.duration_unit == 'YEAR':
+                delta = timedelta(days=365 * plan.duration)
+            else:
+                delta = timedelta(days=plan.duration)
+            pkg_expiry_date = start_date + delta
+
+            validated_packages.append({
+                'plan': plan,
+                'courses': selected_pkg_courses,
+                'expiry_date': pkg_expiry_date,
+            })
+
         course = None
-        if course_id:
-            from courses.models import Course
+        if not validated_packages and course_id:
             try:
                 course = Course.objects.get(id=course_id, status='published')
             except (Course.DoesNotExist, ValueError, TypeError):
@@ -521,6 +703,7 @@ class AdminUsersView(APIView):
 
         first_name, _, last_name = full_name.partition(' ')
 
+        # ── ATOMIC CREATION ──────────────────────────────────────────────────
         try:
             with transaction.atomic():
                 user = User.objects.create_user(
@@ -528,34 +711,128 @@ class AdminUsersView(APIView):
                     first_name=first_name[:150], last_name=last_name[:150],
                 )
 
+                # Collect all distinct courses across all packages
+                all_enrolled_courses = []
+                seen_cids = set()
+                for vp in validated_packages:
+                    for c in vp['courses']:
+                        if c.id not in seen_cids:
+                            seen_cids.add(c.id)
+                            all_enrolled_courses.append(c)
+
+                primary_course = all_enrolled_courses[0] if all_enrolled_courses else None
+                student_target_position = exam_position or (primary_course.exam if primary_course else None)
+
+                # Longest expiry date for StudentProfile
+                max_profile_expiry = max((vp['expiry_date'] for vp in validated_packages), default=None)
+
                 StudentProfile.objects.create(
                     user=user, phone=phone,
                     permanent_district=permanent_district, permanent_local_level=permanent_local_level,
-                    target_category=exam_category, target_position=exam_position,
-                    is_verified=True, verified_at=timezone.now(),
+                    target_category=exam_category, target_position=student_target_position,
+                    target_course=primary_course,
+                    is_verified=True, verified_at=start_date,
                     access_origin='ADMIN_GRANTED',
                     admin_granted_by=request.user,
-                    admin_granted_at=timezone.now(),
+                    admin_granted_at=start_date,
+                    admin_access_expiry=max_profile_expiry,
+                    admin_access_note=grant_reason,
                 )
                 NotificationPreference.objects.create(user=user)
 
                 from gamification.models import GamificationProfile
                 GamificationProfile.objects.create(user=user)
 
-                # Same as StudentSignupView: choosing a course here only
-                # records intent (a pending CourseApplication) - it is never
-                # an auto-enrollment or an auto-purchase. An admin/teacher
-                # still has to review and approve it like any other
-                # application before an Enrollment is created.
-                if course:
-                    from courses.models import CourseApplication
-                    CourseApplication.objects.create(student=user, course=course, status='pending')
+                created_subscriptions = []
+                for vp in validated_packages:
+                    plan = vp['plan']
+                    pkg_courses = vp['courses']
+                    pkg_expiry = vp['expiry_date']
 
-                AuditLog.objects.create(
-                    actor=request.user, action='ADMIN_STUDENT_CREATED',
-                    entity_type='User', entity_id=str(user.id),
-                    details={'email': email, 'username': username, 'created_by': request.user.username},
-                )
+                    subscription = Subscription.objects.create(
+                        student=user,
+                        plan=plan,
+                        status='ACTIVE',
+                        source='ADMIN_GRANT',
+                        admin_grant_reason=grant_reason,
+                        granted_by=request.user,
+                        start_date=start_date,
+                        expiry_date=pkg_expiry,
+                    )
+                    created_subscriptions.append({
+                        'subscription': subscription,
+                        'plan': plan,
+                        'courses': pkg_courses,
+                        'expiry_date': pkg_expiry,
+                    })
+
+                    for course_item in pkg_courses:
+                        SubscriptionCourseSelection.objects.create(
+                            subscription=subscription,
+                            course=course_item,
+                        )
+                        enrollment, created = Enrollment.objects.get_or_create(
+                            student=user,
+                            course=course_item,
+                            defaults={
+                                'status': 'active',
+                                'expires_at': pkg_expiry,
+                            }
+                        )
+                        if not created:
+                            enrollment.status = 'active'
+                            if pkg_expiry and (not enrollment.expires_at or pkg_expiry > enrollment.expires_at):
+                                enrollment.expires_at = pkg_expiry
+                            enrollment.save(update_fields=['status', 'expires_at'])
+
+                if created_subscriptions:
+                    first_sub = created_subscriptions[0]
+                    AuditLog.objects.create(
+                        actor=request.user,
+                        action='ADMIN_STUDENT_GRANTED_PACKAGE',
+                        entity_type='User',
+                        entity_id=str(user.id),
+                        details={
+                            'email': email,
+                            'username': username,
+                            'created_by': request.user.username,
+                            'grant_reason': grant_reason,
+                            'packages_count': len(created_subscriptions),
+                            'packages': [
+                                {
+                                    'package_id': cs['plan'].id,
+                                    'package_name': cs['plan'].name,
+                                    'package_type': cs['plan'].package_type,
+                                    'subscription_id': cs['subscription'].id,
+                                    'expiry_date': cs['expiry_date'].isoformat(),
+                                    'courses': [{'id': c.id, 'title': c.title} for c in cs['courses']],
+                                }
+                                for cs in created_subscriptions
+                            ],
+                            'total_enrollments_count': len(all_enrolled_courses),
+                            'enrolled_courses': [{'id': c.id, 'title': c.title} for c in all_enrolled_courses],
+                            # Backward compatible keys:
+                            'package_id': first_sub['plan'].id,
+                            'package_name': first_sub['plan'].name,
+                            'package_type': first_sub['plan'].package_type,
+                            'subscription_id': first_sub['subscription'].id,
+                            'expiry_date': first_sub['expiry_date'].isoformat(),
+                            'courses': [{'id': c.id, 'title': c.title} for c in first_sub['courses']],
+                            'enrollments_count': len(all_enrolled_courses),
+                        },
+                    )
+                else:
+                    if course_id and course:
+                        CourseApplication.objects.create(student=user, course=course, status='pending')
+
+                    AuditLog.objects.create(
+                        actor=request.user,
+                        action='ADMIN_STUDENT_CREATED',
+                        entity_type='User',
+                        entity_id=str(user.id),
+                        details={'email': email, 'username': username, 'created_by': request.user.username},
+                    )
+
         except Exception:
             logger.exception("Admin-created student setup failed for email=%s", email)
             return Response({'error': 'Failed to create student account due to an internal error.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -569,6 +846,21 @@ class AdminUsersView(APIView):
             "username": user.username,
             "email": user.email,
             "role": user.role,
+            "packageGranted": bool(created_subscriptions),
+            "packageName": created_subscriptions[0]['plan'].name if created_subscriptions else None,
+            "packagesCount": len(created_subscriptions),
+            "packagesGranted": [
+                {
+                    "id": cs['plan'].id,
+                    "name": cs['plan'].name,
+                    "packageType": cs['plan'].package_type,
+                    "subscriptionId": cs['subscription'].id,
+                    "courses": [c.title for c in cs['courses']],
+                    "expiryDate": cs['expiry_date'].isoformat(),
+                }
+                for cs in created_subscriptions
+            ],
+            "enrolledCourses": [c.title for c in all_enrolled_courses],
             "message": "Student account created successfully."
         }, status=status.HTTP_201_CREATED)
 
@@ -635,14 +927,25 @@ class AdminUserDetailView(APIView):
                 for e in enrollments
             ]
 
-            active_sub = Subscription.objects.filter(student=user, status='ACTIVE').select_related('plan').order_by('-expiry_date').first()
-            data["subscription"] = {
-                "planName": active_sub.plan.name,
-                "status": active_sub.status,
-                "startDate": active_sub.start_date.isoformat(),
-                "expiryDate": active_sub.expiry_date.isoformat(),
-                "isActive": active_sub.is_active,
-            } if active_sub else None
+            active_subs = list(Subscription.objects.filter(student=user, status='ACTIVE').select_related('plan', 'granted_by').order_by('-expiry_date'))
+            data["subscriptions"] = [
+                {
+                    "id": s.id,
+                    "planId": s.plan.id,
+                    "planName": s.plan.name,
+                    "packageType": s.plan.package_type,
+                    "status": s.status,
+                    "source": s.source,
+                    "accessSource": "Admin Granted" if s.source == 'ADMIN_GRANT' else "Student Payment",
+                    "adminGrantReason": s.admin_grant_reason,
+                    "grantedBy": s.granted_by.username if s.granted_by else None,
+                    "startDate": s.start_date.isoformat(),
+                    "expiryDate": s.expiry_date.isoformat(),
+                    "isActive": s.is_active,
+                }
+                for s in active_subs
+            ]
+            data["subscription"] = data["subscriptions"][0] if data["subscriptions"] else None
 
             exam_attempts = ExaminationAttempt.objects.filter(student=user, status='evaluated')
             exam_agg = exam_attempts.aggregate(avg_pct=Avg('percentage'), total=Count('id'), passed=Count('id', filter=Q(passed=True)))
@@ -2272,6 +2575,29 @@ class AdminStudyMaterialsView(APIView):
             except (Topic.DoesNotExist, ValueError, TypeError):
                 return Response({"error": "That topic does not exist."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Validate parent hierarchy integrity:
+        if topic and chapter and topic.chapter_id != chapter.id:
+            return Response(
+                {"error": f"Topic '{topic.name}' does not belong to chapter '{chapter.title}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if topic and not chapter:
+            chapter = topic.chapter
+
+        if chapter and subject and chapter.subject_id != subject.id:
+            return Response(
+                {"error": f"Chapter '{chapter.title}' does not belong to subject '{subject.name}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if chapter and not subject:
+            subject = chapter.subject
+
+        if subject and subject.paper and subject.paper.exam_id != exam.id:
+            return Response(
+                {"error": f"Subject '{subject.name}' does not belong to preparation '{exam.name}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         course = None
         course_id = request.data.get('course') or request.data.get('course_id')
         if course_id:
@@ -2489,6 +2815,29 @@ class AdminStudyMaterialDetailView(APIView):
             else:
                 material.topic = None
 
+        # Validate parent hierarchy integrity:
+        if material.topic and material.chapter and material.topic.chapter_id != material.chapter.id:
+            return Response(
+                {"error": f"Topic '{material.topic.name}' does not belong to chapter '{material.chapter.title}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if material.topic and not material.chapter:
+            material.chapter = material.topic.chapter
+
+        if material.chapter and material.subject and material.chapter.subject_id != material.subject.id:
+            return Response(
+                {"error": f"Chapter '{material.chapter.title}' does not belong to subject '{material.subject.name}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if material.chapter and not material.subject:
+            material.subject = material.chapter.subject
+
+        if material.subject and material.subject.paper and material.exam and material.subject.paper.exam_id != material.exam.id:
+            return Response(
+                {"error": f"Subject '{material.subject.name}' does not belong to preparation '{material.exam.name}'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         if 'estimated_reading_time' in request.data:
             try:
                 material.estimated_reading_time = int(request.data['estimated_reading_time'])
@@ -2663,43 +3012,145 @@ class AdminCourseStatusView(APIView):
 
 class AdminPreparationAcademicTreeView(APIView):
     """GET /api/admin/study-materials/academic-tree/?exam_id=<id>
-    Returns subjects, chapters, and topics for a selected preparation.
+    Returns canonical master academic tree (subjects, chapters, topics)
+    for a selected preparation, enriched with real database usage counts
+    (notes, questions, exams) and active/archived statuses in O(1) queries.
     """
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from exams.models import Subject, Chapter, Topic
+        from collections import defaultdict, Counter
+        from exams.models import Subject, Chapter, Topic, Question, Examination
+        from notes.models import StudyMaterial
 
         exam_id = request.query_params.get('exam_id') or request.query_params.get('exam')
         if not exam_id:
             return Response({"error": "exam_id is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         subjects = Subject.objects.filter(
-            Q(paper__exam_id=exam_id) | Q(paper__isnull=True)
-        ).prefetch_related('chapters__topics').order_by('order', 'id')
+            paper__exam_id=exam_id
+        ).select_related('paper').prefetch_related('chapters__topics').order_by('order', 'id')
+
+        # Fallback if subjects were created without paper association for this exam
+        if not subjects.exists():
+            subjects = Subject.objects.filter(
+                Q(paper__exam_id=exam_id) | Q(paper__isnull=True)
+            ).select_related('paper').prefetch_related('chapters__topics').order_by('order', 'id')
+
+        chaps = [c for s in subjects for c in s.chapters.all()]
+        tops = [t for c in chaps for t in c.topics.all()]
+        top_ids = [t.id for t in tops]
+        chap_ids = [c.id for c in chaps]
+        sub_ids = [s.id for s in subjects]
+
+        # Topic -> Chapter, and Chapter -> Subject mappings
+        topic_to_chap = {t.id: c.id for c in chaps for t in c.topics.all()}
+        chap_to_sub = {c.id: s.id for s in subjects for c in s.chapters.all()}
+
+        # 1. Study Materials counts (O(1) query)
+        notes_qs = StudyMaterial.objects.filter(exam_id=exam_id).values('id', 'subject_id', 'chapter_id', 'topic_id')
+        top_notes_count = Counter()
+        chap_notes_ids = defaultdict(set)
+        sub_notes_ids = defaultdict(set)
+        for n in notes_qs:
+            nid = n['id']
+            tid = n['topic_id']
+            cid = n['chapter_id'] or (topic_to_chap.get(tid) if tid else None)
+            sid = n['subject_id'] or (chap_to_sub.get(cid) if cid else None)
+            if tid:
+                top_notes_count[tid] += 1
+            if cid:
+                chap_notes_ids[cid].add(nid)
+            if sid:
+                sub_notes_ids[sid].add(nid)
+
+        # 2. Question Bank counts (O(1) query)
+        q_qs = Question.objects.filter(topic_id__in=top_ids).values('id', 'topic_id', 'topic__chapter_id', 'topic__chapter__subject_id')
+        top_q_count = Counter()
+        chap_q_count = Counter()
+        sub_q_count = Counter()
+        for q in q_qs:
+            tid = q['topic_id']
+            cid = q['topic__chapter_id']
+            sid = q['topic__chapter__subject_id']
+            if tid:
+                top_q_count[tid] += 1
+            if cid:
+                chap_q_count[cid] += 1
+            if sid:
+                sub_q_count[sid] += 1
+
+        # 3. Examination counts (O(1) query)
+        exam_qs = Examination.objects.filter(
+            Q(exam_id=exam_id) | Q(subject_id__in=sub_ids) | Q(questions__topic_id__in=top_ids)
+        ).values('id', 'subject_id', 'questions__topic_id', 'questions__topic__chapter_id').distinct()
+        
+        top_exam_ids = defaultdict(set)
+        chap_exam_ids = defaultdict(set)
+        sub_exam_ids = defaultdict(set)
+        for ex in exam_qs:
+            eid = ex['id']
+            sid = ex['subject_id']
+            tid = ex['questions__topic_id']
+            cid = ex['questions__topic__chapter_id'] or (topic_to_chap.get(tid) if tid else None)
+            if not sid and cid:
+                sid = chap_to_sub.get(cid)
+            if tid:
+                top_exam_ids[tid].add(eid)
+            if cid:
+                chap_exam_ids[cid].add(eid)
+            if sid:
+                sub_exam_ids[sid].add(eid)
 
         data = []
         for s in subjects:
             chap_data = []
-            for c in s.chapters.filter(is_active=True).order_by('order', 'id'):
+            for c in sorted(s.chapters.all(), key=lambda o: (o.order, o.id)):
                 topic_data = []
-                for t in c.topics.filter(is_active=True).order_by('order', 'id'):
+                for t in sorted(c.topics.all(), key=lambda o: (o.order, o.id)):
                     topic_data.append({
                         "id": t.id,
                         "name": t.name,
+                        "description": t.description or '',
                         "order": t.order,
+                        "is_active": t.is_active,
+                        "chapter_id": c.id,
+                        "chapter_name": c.title,
+                        "subject_id": s.id,
+                        "subject_name": s.name,
+                        "notes_count": top_notes_count[t.id],
+                        "questions_count": top_q_count[t.id],
+                        "exams_count": len(top_exam_ids[t.id]),
                     })
                 chap_data.append({
                     "id": c.id,
                     "title": c.title,
+                    "name": c.title,
+                    "description": c.description or '',
                     "order": c.order,
+                    "is_active": c.is_active,
+                    "subject_id": s.id,
+                    "subject_name": s.name,
+                    "topics_count": len(topic_data),
+                    "notes_count": len(chap_notes_ids[c.id]),
+                    "questions_count": chap_q_count[c.id],
+                    "exams_count": len(chap_exam_ids[c.id]),
                     "topics": topic_data,
                 })
             data.append({
                 "id": s.id,
                 "name": s.name,
-                "code": s.code,
+                "code": s.code or '',
+                "description": s.description or '',
                 "order": s.order,
+                "is_active": s.is_active,
+                "paper_id": s.paper_id,
+                "paper_name": s.paper.name if s.paper else None,
+                "chapters_count": len(chap_data),
+                "topics_count": sum(c['topics_count'] for c in chap_data),
+                "notes_count": len(sub_notes_ids[s.id]),
+                "questions_count": sub_q_count[s.id],
+                "exams_count": len(sub_exam_ids[s.id]),
                 "chapters": chap_data,
             })
 

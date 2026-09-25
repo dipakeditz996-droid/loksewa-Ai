@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BookOpen, Menu, X, Moon, Sun, ArrowRight,
-  Home, Target, FileText,
+  Home, Target, FileText, Sparkles, ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -34,10 +34,10 @@ export function Navbar() {
     { href: "/", label: "Home" },
     { href: "/courses", label: "Courses" },
     { href: "/syllabus", label: "Syllabus" },
-    { href: "/notes", label: "Notes" },
-    { href: "/practice", label: "Practice" },
-    { href: "/exams", label: "Exams" },
+    { href: "/features", label: "Features" },
+    { href: "/play-and-earn", label: "Play & Earn" },
     { href: "/marketplace", label: "Marketplace" },
+    { href: "/faqs", label: "FAQs" },
   ];
 
   // Bottom tab bar — mobile only. Four real destinations plus a "Menu" tab
@@ -45,8 +45,8 @@ export function Navbar() {
   const mobileTabs = [
     { href: "/", label: "Home", icon: Home },
     { href: "/courses", label: "Courses", icon: BookOpen },
-    { href: "/practice", label: "Practice", icon: Target },
-    { href: "/notes", label: "Notes", icon: FileText },
+    { href: "/features", label: "Features", icon: Sparkles },
+    { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
   ];
 
   return (

@@ -14,6 +14,8 @@ export interface StudentExam {
   // 48h after its scheduled start — group listings by this, not the raw value.
   effective_category: ObjectiveCategory;
   category_name: string;
+  course_id?: number | null;
+  course_title?: string | null;
   exam_name: string;
   subject_name: string;
   instructions: string;
@@ -47,6 +49,34 @@ export interface StudentAnswer {
   is_correct?: boolean;
   marks_awarded?: number;
   evaluated_at?: string | null;
+  question_text?: string;
+  question_type?: string;
+  max_marks?: number;
+  option_a?: string | null;
+  option_b?: string | null;
+  option_c?: string | null;
+  option_d?: string | null;
+  correct_option?: string | null;
+  explanation?: string | null;
+  model_answer?: string | null;
+}
+
+export interface SubjectiveAttemptState {
+  attempt_id: number;
+  status: string;
+  is_subjective: boolean;
+  server_time: string;
+  started_at: string;
+  exam_expires_at: string | null;
+  time_remaining_seconds: number;
+  upload_expires_at: string | null;
+  upload_time_remaining_seconds: number;
+  can_upload: boolean;
+  upload_status: string;
+  has_answer_pdf: boolean;
+  page_count: number;
+  total_marks: number;
+  pass_marks: number;
 }
 
 export interface StudentExamAttempt {
@@ -55,7 +85,7 @@ export interface StudentExamAttempt {
   examination_title: string;
   started_at: string;
   submitted_at: string | null;
-  status: 'in-progress' | 'submitted' | 'evaluated';
+  status: 'in-progress' | 'upload_pending' | 'submitted' | 'evaluated' | 'completed';
   score: number;
   percentage: number;
   passed: boolean;
@@ -65,16 +95,63 @@ export interface StudentExamAttempt {
   wrong_answers?: number;
   unanswered?: number;
   needs_evaluation?: boolean;
+  show_correct_answers?: boolean;
+  can_review_answers?: boolean;
   answers: StudentAnswer[];
+  // Subjective extensions
+  is_subjective?: boolean;
+  exam_expires_at?: string | null;
+  upload_expires_at?: string | null;
+  can_upload?: boolean;
+  has_answer_pdf?: boolean;
+  evaluator_feedback?: string;
+  evaluator_name?: string | null;
+  evaluated_at?: string | null;
+  is_published?: boolean;
+  published_at?: string | null;
+  extracted_text?: string;
 }
 
 export interface StudentExamResult extends StudentExamAttempt {
   answers: StudentAnswer[];
   examination_exam_type?: string;
-  // True while a teacher still has to grade at least one subjective answer
-  // on this (already-submitted) attempt - score/percentage are real numbers
-  // even then, but necessarily partial until evaluation finishes.
+  total_marks?: number;
   needs_evaluation?: boolean;
+  show_correct_answers?: boolean;
+  can_review_answers?: boolean;
+  evaluator_feedback?: string;
+  evaluator_name?: string | null;
+  evaluated_at?: string | null;
+  is_published?: boolean;
+  published_at?: string | null;
+  has_answer_pdf?: boolean;
+  has_submitted_answer_pdf?: boolean;
+  subjective_submission?: {
+    id: number;
+    status: string;
+    page_count: number;
+    file_size_bytes: number;
+    has_answer_pdf: boolean;
+    evaluator_feedback: string;
+    evaluator_name?: string | null;
+    evaluated_at: string | null;
+    is_published: boolean;
+    published_at: string | null;
+    question_scores?: {
+      id?: number;
+      question_number: number;
+      marks_obtained: number;
+      max_marks: number;
+      feedback?: string;
+    }[];
+  };
+  question_scores?: {
+    id?: number;
+    question_number: number;
+    marks_obtained: number;
+    max_marks: number;
+    feedback?: string;
+  }[];
 }
 
 export interface Question {
@@ -87,6 +164,9 @@ export interface Question {
   marks: number;
   difficulty: string;
   question_type: string;
+  correct_option?: string | null;
+  explanation?: string | null;
+  model_answer?: string | null;
 }
 
 export const OBJECTIVE_QUESTION_TYPES = ["mcq", "true_false"];
@@ -122,8 +202,9 @@ export interface CustomExamParams {
 
 
 export const studentExamsApi = {
-  getExams: async () => {
-    return await apiClient<StudentExam[]>('/student/exams/');
+  getExams: async (courseId?: number) => {
+    const url = courseId ? `/student/exams/?course_id=${courseId}` : '/student/exams/';
+    return await apiClient<StudentExam[]>(url);
   },
   
   getPastResults: async () => {
@@ -164,8 +245,9 @@ export const studentExamsApi = {
   
 
 
-  getAcademicHierarchy: async () => {
-    return await apiClient<AcademicHierarchyNode[]>('/student/exams/academic-hierarchy/');
+  getAcademicHierarchy: async (courseId?: number) => {
+    const url = courseId ? `/student/exams/academic-hierarchy/?course_id=${courseId}` : '/student/exams/academic-hierarchy/';
+    return await apiClient<AcademicHierarchyNode[]>(url);
   },
 
   getAvailableQuestionCount: async (params: Partial<CustomExamParams>) => {
@@ -204,5 +286,42 @@ export const studentExamsApi = {
   
   getResult: async (attemptId: number) => {
     return await apiClient<StudentExamResult>(`/student/exam-attempts/${attemptId}/result/`);
-  }
+  },
+
+  // Subjective Examination methods
+  getAttemptState: async (attemptId: number) => {
+    return await apiClient<SubjectiveAttemptState>(`/student/exam-attempts/${attemptId}/state/`);
+  },
+
+  getQuestionPaperBlob: async (examId: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/student/exams/${examId}/question-paper/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to load question paper PDF');
+    return await res.blob();
+  },
+
+  uploadAnswerSheet: async (attemptId: number, formData: FormData) => {
+    return await apiClient<{
+      message: string;
+      page_count: number;
+      file_size_bytes: number;
+      status: string;
+      can_upload: boolean;
+    }>(`/student/exam-attempts/${attemptId}/answer-sheet/`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  getAnswerSheetBlob: async (attemptId: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/student/exam-attempts/${attemptId}/answer-sheet/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to load submitted answer sheet');
+    return await res.blob();
+  },
 };
+

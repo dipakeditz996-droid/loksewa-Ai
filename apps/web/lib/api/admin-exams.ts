@@ -47,6 +47,8 @@ export interface Examination {
   objective_category: ObjectiveCategory;
   category: number;
   category_name?: string;
+  course?: number | null;
+  course_title?: string;
   exam: number;
   exam_name?: string;
   subject: number;
@@ -76,6 +78,72 @@ export interface Examination {
   updated_at: string;
   eligibility_rules: EligibilityRule[];
   attempts_count: number;
+  // Subjective examination fields
+  question_paper_pdf?: string | null;
+  question_paper_page_count?: number;
+  question_paper_file_size?: number;
+  answer_upload_enabled?: boolean;
+  upload_deadline_minutes?: number;
+  upload_start_time?: string | null;
+  upload_end_time?: string | null;
+  allowed_file_types?: string;
+  max_upload_size_mb?: number;
+  evaluation_type?: 'manual' | 'ai_assisted' | 'hybrid';
+}
+
+export interface AdminSubjectiveSubmission {
+  id: number;
+  attempt_id: number;
+  student_id: number;
+  student_name: string;
+  student_username: string;
+  student_email: string;
+  examination_id: number;
+  examination_title: string;
+  status: string;
+  attempt_status: string;
+  started_at: string;
+  submitted_at: string | null;
+  page_count: number;
+  file_size_bytes: number;
+  has_answer_pdf: boolean;
+  score: number;
+  total_marks: number;
+  percentage: number;
+  ocr_status: string;
+  evaluator: number | null;
+  evaluator_name: string | null;
+  evaluated_at: string | null;
+  is_published: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubjectiveSubmissionPage {
+  id: number;
+  page_number: number;
+  image_url: string;
+  file_size_bytes: number;
+  created_at: string;
+}
+
+export interface SubjectiveQuestionScore {
+  id: number;
+  question_number: number;
+  marks_obtained: number;
+  max_marks: number;
+  feedback: string;
+}
+
+export interface AdminSubjectiveSubmissionDetail extends AdminSubjectiveSubmission {
+  time_taken_seconds: number;
+  raw_ocr_text: string;
+  extracted_text: string;
+  ocr_error: string;
+  evaluator_feedback: string;
+  pages: SubjectiveSubmissionPage[];
+  question_scores: SubjectiveQuestionScore[];
 }
 
 export interface ExamQueryParams {
@@ -358,6 +426,93 @@ export const adminExamApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+
+  // Subjective Examination management
+  uploadQuestionPaper: async (id: number, file: File) => {
+    const formData = new FormData();
+    formData.append('pdf_file', file);
+    return apiClient<{ message: string; page_count: number; file_size: number }>(
+      `/admin/exams/${id}/question-paper/`,
+      { method: 'POST', body: formData }
+    );
+  },
+
+  deleteQuestionPaper: async (id: number) => {
+    return apiClient<{ message: string }>(
+      `/admin/exams/${id}/question-paper/`,
+      { method: 'DELETE' }
+    );
+  },
+
+  getQuestionPaperBlob: async (id: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/exams/${id}/question-paper/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to load question paper PDF');
+    return await res.blob();
+  },
+
+  getExamSubmissions: async (examId: number, status?: string) => {
+    const query = status ? `?status=${status}` : '';
+    return apiClient<AdminSubjectiveSubmission[]>(`/admin/exams/${examId}/submissions/${query}`);
+  },
+
+  getAllSubjectiveSubmissions: async (params?: { exam_id?: number; status?: string; search?: string }) => {
+    const qs = buildQueryString(params);
+    return apiClient<AdminSubjectiveSubmission[]>(`/admin/subjective-submissions/${qs}`);
+  },
+
+  getSubjectiveSubmission: async (id: number) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${id}/`);
+  },
+
+  getSubjectiveSubmissionByAttempt: async (attemptId: number) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/by-attempt/${attemptId}/`);
+  },
+
+  runOcr: async (submissionId: number) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/ocr/`, {
+      method: 'POST',
+    });
+  },
+
+  updateTranscription: async (submissionId: number, extracted_text: string) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/update-transcription/`, {
+      method: 'POST',
+      body: JSON.stringify({ extracted_text }),
+    });
+  },
+
+  evaluateSubmission: async (
+    submissionId: number,
+    data: {
+      score?: number;
+      marks_obtained?: number;
+      evaluator_feedback?: string;
+      question_scores?: { question_number: number; marks_obtained: number; max_marks: number; feedback?: string }[];
+    }
+  ) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/evaluate/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  publishSubmission: async (submissionId: number) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/publish/`, {
+      method: 'POST',
+    });
+  },
+
+  getAnswerSheetBlob: async (submissionId: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/subjective-submissions/${submissionId}/answer-sheet/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to load answer sheet PDF');
+    return await res.blob();
   },
 };
 

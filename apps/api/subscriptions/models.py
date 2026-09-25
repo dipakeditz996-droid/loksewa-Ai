@@ -85,18 +85,28 @@ class Subscription(models.Model):
         ('EXPIRED', 'Expired'),
         ('CANCELLED', 'Cancelled'),
     )
+    SOURCE_CHOICES = (
+        ('CUSTOMER_PAYMENT', 'Customer Payment'),
+        ('ADMIN_GRANT', 'Admin Grant'),
+    )
     
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name='subscriptions')
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='CUSTOMER_PAYMENT')
+    admin_grant_reason = models.TextField(blank=True, default='')
+    granted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='granted_subscriptions'
+    )
     start_date = models.DateTimeField()
     expiry_date = models.DateTimeField()
     
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.student.username} - {self.plan.name} ({self.status})"
+        return f"{self.student.username} - {self.plan.name} ({self.status}) [{self.source}]"
         
     @property
     def is_active(self):
@@ -148,17 +158,21 @@ class Invoice(models.Model):
 
 class SubscriptionCourseSelection(models.Model):
     """
-    Records exactly which Course(s) a student selected when purchasing a
-    MULTI-type SubscriptionPlan. At most `plan.allowed_preparation_count`
-    rows per payment.
-
-    When the admin approves the SubscriptionPayment, an Enrollment is
-    created for each row here — guaranteeing the student receives ONLY
-    the courses they actually selected (not every eligible course).
+    Records exactly which Course(s) a student selected for a
+    MULTI/BUNDLE-type SubscriptionPlan.
+    Supports both normal customer payments (linked to SubscriptionPayment)
+    and admin-granted access (linked directly to Subscription).
     """
     payment = models.ForeignKey(
         SubscriptionPayment,
         on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='course_selections',
+    )
+    subscription = models.ForeignKey(
+        Subscription,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
         related_name='course_selections',
     )
     course = models.ForeignKey(
@@ -169,8 +183,21 @@ class SubscriptionCourseSelection(models.Model):
     selected_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('payment', 'course')
         ordering = ['selected_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['payment', 'course'],
+                condition=models.Q(payment__isnull=False),
+                name='unique_payment_course_selection'
+            ),
+            models.UniqueConstraint(
+                fields=['subscription', 'course'],
+                condition=models.Q(subscription__isnull=False),
+                name='unique_subscription_course_selection'
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.payment.student.username} → {self.course.title} (payment #{self.payment.id})"
+        user_str = self.subscription.student.username if self.subscription else (self.payment.student.username if self.payment else "Unknown")
+        ref_str = f"sub #{self.subscription_id}" if self.subscription_id else f"payment #{self.payment_id}"
+        return f"{user_str} → {self.course.title} ({ref_str})"

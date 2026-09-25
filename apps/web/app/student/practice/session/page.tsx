@@ -56,7 +56,7 @@ function PracticeSessionContent() {
         setTimeRemaining(totalQuestions * 60); // 1 min per question
       }
     } catch (e) {
-      console.error(e);
+      console.warn("Practice session start error:", e);
       setStartError(practiceError(e, "start"));
     } finally {
       setLoading(false);

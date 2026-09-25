@@ -102,7 +102,7 @@ export async function apiClient<T>(
 ): Promise<T> {
   const url = `${API_URL}${endpoint}`;
   
-  let token = getAuthToken();
+  const token = getAuthToken();
   const headers = new Headers(options.headers || {});
   
   if (token) {

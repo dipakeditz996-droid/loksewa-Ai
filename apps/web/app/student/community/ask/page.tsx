@@ -53,10 +53,6 @@ function AskCommunityForm() {
       setError("Title must be at least 5 characters.");
       return;
     }
-    if (body.trim().length < 10) {
-      setError("Please add a bit more detail (10+ characters).");
-      return;
-    }
     setIsLoading(true);
     try {
       const post = await communityApi.createPost({
@@ -149,8 +145,9 @@ function AskCommunityForm() {
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-semibold text-foreground">
+          <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
             {questionId ? "Your Question / Doubt" : "Details"}
+            <span className="text-[11px] font-normal text-muted-foreground">(optional)</span>
           </label>
           <Textarea
             value={body}
@@ -161,7 +158,6 @@ function AskCommunityForm() {
                 : "Describe your question or what you'd like to discuss..."
             }
             className="min-h-[160px] bg-background"
-            required
           />
         </div>
 

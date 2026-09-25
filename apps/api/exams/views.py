@@ -418,6 +418,12 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             course = Course.objects.get(id=course_id)
             if course.exam:
                 exam_id = course.exam.id
+        elif not exam_id and request.user.role == 'student':
+            from courses.access import get_student_course_context
+            ctx = get_student_course_context(request.user)
+            active_c = ctx.get('active_course')
+            if active_c and active_c.get('exam_id'):
+                exam_id = active_c['exam_id']
 
         # Exam authorisation. The client's exam id is never trusted: a student
         # may only name an exam their purchase covers, and "all" (or no exam)
@@ -795,6 +801,8 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         "Recently Incorrect" quick-starts point at the same engine instead of
         being separate features.
         """
+        from courses.access import authorized_exam_ids
+
         focus = request.data.get('focus')
         buckets = _revision_buckets(request.user)
         order = ['overdue', 'repeatedly_incorrect', 'recent_mistakes', 'weak_topics']
@@ -802,8 +810,14 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             order.remove(focus)
             order.insert(0, focus)
 
+        # Build a question → signal mapping so the frontend knows why each
+        # question appears (e.g. "Due for review", "Repeated mistake")
+        question_signal: dict[int, str] = {}
         ordered_records = []
         for key in order:
+            for m in buckets[key]:
+                if m.question_id not in question_signal:
+                    question_signal[m.question_id] = key
             ordered_records += buckets[key]
         questions = _dedup_questions(ordered_records, limit=REVISION_SESSION_SIZE)
 
@@ -813,10 +827,17 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
                 status=400
             )
 
-        first_exam = Exam.objects.first()
+        # Use the student's authorized exam; fall back to any first active exam.
+        scope = authorized_exam_ids(request.user)
+        if scope:
+            session_exam_id = min(scope)
+        else:
+            first_exam = Exam.objects.filter(is_active=True).first()
+            session_exam_id = first_exam.id if first_exam else None
+
         session = PracticeSession.objects.create(
             user=request.user,
-            exam_id=first_exam.id if first_exam else None,
+            exam_id=session_exam_id,
             mode='revision',
             total_questions=len(questions),
         )
@@ -826,6 +847,9 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         return Response({
             'session': PracticeSessionSummarySerializer(session).data,
             'questions': SecureQuestionSerializer(questions, many=True).data,
+            # Map of question_id -> signal key; used by the frontend to display
+            # why each question is in the revision queue.
+            'question_signals': question_signal,
         })
 
     @action(detail=False, methods=['post'])
@@ -1370,7 +1394,15 @@ class SubjectivePracticeSetViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubjectivePracticeSetSerializer
 
     def get_queryset(self):
-        return self.SubjectivePracticeSet.objects.filter(status='published')
+        user = self.request.user
+        base_qs = self.SubjectivePracticeSet.objects.filter(status='published')
+        if not user or not user.is_authenticated:
+            return base_qs.none()
+        from courses.access import authorized_exam_ids
+        allowed_exams = authorized_exam_ids(user)
+        if allowed_exams is not None:
+            base_qs = base_qs.filter(exam_id__in=allowed_exams)
+        return base_qs
 
 class SubjectiveModelExamViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -1382,7 +1414,15 @@ class SubjectiveModelExamViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubjectiveModelExamSerializer
 
     def get_queryset(self):
-        return self.Examination.objects.filter(status='published', exam_type='subjective')
+        user = self.request.user
+        base_qs = self.Examination.objects.filter(status='published', exam_type='subjective')
+        if not user or not user.is_authenticated:
+            return base_qs.none()
+        from courses.access import get_authorized_examination_filter
+        q_filter = get_authorized_examination_filter(user)
+        if q_filter is None:
+            return base_qs.none()
+        return base_qs.filter(q_filter).distinct()
 
 class SubjectiveQuestionViewSet(viewsets.ReadOnlyModelViewSet):
     from .models import Question
@@ -1408,6 +1448,7 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         from .models import SubjectivePracticeSet, SubjectiveModelExam, SubjectiveAnswer, Question, SubjectiveAttempt
         from django.utils import timezone
+        from courses.access import authorized_exam_ids
 
         mode = request.data.get('mode', 'practice')
         practice_set_id = request.data.get('practice_set_id')
@@ -1419,6 +1460,10 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
                 ps = SubjectivePracticeSet.objects.get(id=practice_set_id, status='published')
             except SubjectivePracticeSet.DoesNotExist:
                 return Response({'detail': 'Practice set not found.'}, status=404)
+
+            allowed_exams = authorized_exam_ids(request.user)
+            if allowed_exams is not None and ps.exam_id not in allowed_exams:
+                return Response({'detail': 'You are not enrolled in the course for this practice set.'}, status=403)
 
             # Resume existing in-progress attempt
             existing = SubjectiveAttempt.objects.filter(
@@ -1439,6 +1484,10 @@ class SubjectiveAttemptViewSet(viewsets.ModelViewSet):
                 me = SubjectiveModelExam.objects.get(id=model_exam_id, status='published')
             except SubjectiveModelExam.DoesNotExist:
                 return Response({'detail': 'Model exam not found.'}, status=404)
+
+            allowed_exams = authorized_exam_ids(request.user)
+            if allowed_exams is not None and me.exam_id not in allowed_exams:
+                return Response({'detail': 'You are not enrolled in the course for this model exam.'}, status=403)
 
             existing = SubjectiveAttempt.objects.filter(
                 student=request.user, model_exam=me, status='in-progress'

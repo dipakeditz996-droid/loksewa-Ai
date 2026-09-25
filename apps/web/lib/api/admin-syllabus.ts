@@ -82,12 +82,47 @@ export interface ReorderItem {
 
 const SYLLABUS_BASE = "/admin/syllabus";
 
+let cachedTree: any[] | null = null;
+let cachedTreePromise: Promise<any[]> | null = null;
+let lastTreeFetchTime = 0;
+const TREE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export const getAcademicTreeCached = async (forceRefresh = false): Promise<any[]> => {
+  const now = Date.now();
+  if (!forceRefresh && cachedTree && (now - lastTreeFetchTime < TREE_CACHE_TTL_MS)) {
+    return cachedTree;
+  }
+  if (!forceRefresh && cachedTreePromise) {
+    return cachedTreePromise;
+  }
+  cachedTreePromise = adminSyllabusApi.getTree()
+    .then((data) => {
+      cachedTree = data;
+      lastTreeFetchTime = Date.now();
+      cachedTreePromise = null;
+      return data;
+    })
+    .catch((err) => {
+      cachedTreePromise = null;
+      throw err;
+    });
+  return cachedTreePromise;
+};
+
+export const clearAcademicTreeCache = () => {
+  cachedTree = null;
+  cachedTreePromise = null;
+  lastTreeFetchTime = 0;
+};
+
 export const adminSyllabusApi = {
   // Stats
   getStats: () => apiClient<SyllabusStats>(`${SYLLABUS_BASE}/stats/`),
   
   // Tree
   getTree: () => apiClient<any[]>(`${SYLLABUS_BASE}/tree/`),
+  getTreeCached: getAcademicTreeCached,
+  clearTreeCache: clearAcademicTreeCache,
 
   // Categories
   getCategories: () => apiClient<AdminExamCategory[]>(`${SYLLABUS_BASE}/categories/`),

@@ -1,15 +1,24 @@
 from rest_framework import serializers
-from exams.models import Question, Topic, QuestionCollection
+from exams.models import Question, Topic, Subject, Chapter, ExamCategory, Exam, QuestionCollection
 from core.models import Tag
 
 class AdminQuestionSerializer(serializers.ModelSerializer):
-    # Read: {id, name} per collection this question already belongs to.
-    # Write: optional list of QuestionCollection ids under `collection_ids`
-    # (source='collections') - a question does not need to belong to any
-    # collection. `collections` is a real ManyToManyField on Question, so
-    # DRF's default ModelSerializer.update()/create() already knows how to
-    # set it (via .set()) once the write field points at that source - no
-    # custom create/update override needed here.
+    subject = serializers.PrimaryKeyRelatedField(
+        queryset=Subject.objects.all(), required=False, allow_null=True
+    )
+    chapter = serializers.PrimaryKeyRelatedField(
+        queryset=Chapter.objects.all(), required=False, allow_null=True
+    )
+    topic = serializers.PrimaryKeyRelatedField(
+        queryset=Topic.objects.all(), required=False, allow_null=True
+    )
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=ExamCategory.objects.all(), required=False, write_only=True
+    )
+    position = serializers.PrimaryKeyRelatedField(
+        queryset=Exam.objects.all(), required=False, write_only=True
+    )
+
     collections = serializers.SerializerMethodField()
     collection_ids = serializers.PrimaryKeyRelatedField(
         queryset=QuestionCollection.objects.all(), many=True, required=False,
@@ -18,14 +27,8 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     )
 
     def get_collections(self, obj):
-        # Reads from the queryset's prefetch_related('collections') cache via
-        # .all() - calling .values() here would silently bypass that cache
-        # and re-query the database once per question in the list.
         return [{'id': c.id, 'name': c.name} for c in obj.collections.all()]
 
-    # Structured search/filter tags - independent of Collections and of the
-    # legacy free-text `tags` CharField (left untouched, still writable
-    # below). Same optional-many-to-many pattern as collections above.
     tag_objects = serializers.SerializerMethodField()
     tag_ids = serializers.PrimaryKeyRelatedField(
         queryset=Tag.objects.all(), many=True, required=False,
@@ -34,10 +37,6 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     )
 
     def get_tag_objects(self, obj):
-        # Inactive tags stay visible on questions that already carry them
-        # (historical metadata), just excluded from new-question selectors.
-        # Reads from the prefetch_related('tag_objects') cache via .all() -
-        # same reasoning as get_collections above.
         tags = sorted(obj.tag_objects.all(), key=lambda t: t.name)
         return [{'id': t.id, 'name': t.name, 'slug': t.slug, 'color': t.color, 'is_active': t.is_active} for t in tags]
 
@@ -55,11 +54,6 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     usage_count = serializers.SerializerMethodField()
 
     def get_usage_count(self, obj):
-        # Prefer the annotated value the viewset's queryset attaches
-        # (usage_count_computed) - one query for the whole page instead of
-        # two COUNT queries per row via the Question.usage_count property.
-        # Falls back to the property so this serializer still works
-        # correctly against any queryset that didn't add the annotation.
         annotated = getattr(obj, 'usage_count_computed', None)
         return annotated if annotated is not None else obj.usage_count
 
@@ -71,21 +65,34 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
 
     def get_chapter_name(self, obj):
         try:
-            return obj.topic.chapter.title if obj.topic and obj.topic.chapter else None
+            if obj.chapter:
+                return obj.chapter.title or obj.chapter.name
+            if obj.topic and obj.topic.chapter:
+                return obj.topic.chapter.title or obj.topic.chapter.name
+            return None
         except:
             return None
 
     def get_subject_name(self, obj):
         try:
-            return obj.topic.chapter.subject.name if obj.topic and obj.topic.chapter and obj.topic.chapter.subject else None
+            if obj.subject:
+                return obj.subject.name
+            if obj.chapter and obj.chapter.subject:
+                return obj.chapter.subject.name
+            if obj.topic and obj.topic.chapter and obj.topic.chapter.subject:
+                return obj.topic.chapter.subject.name
+            return None
         except:
             return None
 
     def _question_exam(self, obj):
-        # Subject links up to an Exam through its Paper.
         try:
-            subject = obj.topic.chapter.subject
-            if subject and subject.paper_id:
+            subject = (
+                obj.subject or
+                (obj.chapter.subject if obj.chapter else None) or
+                (obj.topic.chapter.subject if obj.topic and obj.topic.chapter else None)
+            )
+            if subject and subject.paper_id and subject.paper:
                 return subject.paper.exam
             return None
         except Exception:
@@ -107,13 +114,19 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
 
     def get_chapter_id(self, obj):
         try:
-            return obj.topic.chapter.id if obj.topic and obj.topic.chapter else None
+            if obj.chapter_id:
+                return obj.chapter_id
+            return obj.topic.chapter_id if obj.topic and obj.topic.chapter_id else None
         except:
             return None
             
     def get_subject_id(self, obj):
         try:
-            return obj.topic.chapter.subject.id if obj.topic and obj.topic.chapter and obj.topic.chapter.subject else None
+            if obj.subject_id:
+                return obj.subject_id
+            if obj.chapter and obj.chapter.subject_id:
+                return obj.chapter.subject_id
+            return obj.topic.chapter.subject_id if obj.topic and obj.topic.chapter and obj.topic.chapter.subject_id else None
         except:
             return None
             
@@ -134,9 +147,11 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Question
         fields = [
-            'id', 'question_id', 'question_type', 'status', 'topic', 'topic_name', 'chapter_name',
-            'subject_name', 'position_name', 'category_name', 
+            'id', 'question_id', 'question_type', 'status',
+            'subject', 'chapter', 'topic',
+            'topic_name', 'chapter_name', 'subject_name', 'position_name', 'category_name', 
             'chapter_id', 'subject_id', 'position_id', 'category_id',
+            'category', 'position',
             'text', 'option_a', 
             'option_b', 'option_c', 'option_d', 'correct_option', 'model_answer',
             'marks', 'negative_marks', 'expected_time_minutes', 'explanation', 'hint',
@@ -147,8 +162,63 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Validate question rules based on type.
+        Validate question rules based on type and academic hierarchy.
         """
+        # Academic hierarchy validation
+        subject = data.get('subject') or (self.instance.subject if self.instance else None)
+        chapter = data.get('chapter') if 'chapter' in data else (self.instance.chapter if self.instance else None)
+        topic = data.get('topic') if 'topic' in data else (self.instance.topic if self.instance else None)
+        category = data.get('category')
+        position = data.get('position')
+
+        # Auto-infer parents from topic/chapter if needed
+        if topic:
+            if not chapter and topic.chapter:
+                chapter = topic.chapter
+                data['chapter'] = chapter
+            if not subject and chapter and chapter.subject:
+                subject = chapter.subject
+                data['subject'] = subject
+
+        if chapter and not subject and chapter.subject:
+            subject = chapter.subject
+            data['subject'] = subject
+
+        if not subject and not self.instance:
+            raise serializers.ValidationError({"subject": "Subject is required."})
+
+        # 1. Topic must belong to Chapter if both are present
+        if topic and chapter and topic.chapter_id != chapter.id:
+            raise serializers.ValidationError({
+                "topic": f"Topic '{topic.name}' does not belong to chapter '{chapter.title}'."
+            })
+
+        # 2. Chapter must belong to Subject if both are present
+        if chapter and subject and chapter.subject_id != subject.id:
+            raise serializers.ValidationError({
+                "chapter": f"Chapter '{chapter.title}' does not belong to subject '{subject.name}'."
+            })
+
+        # 3. Subject must belong to Position/Level if position is provided
+        if position and subject:
+            subject_exam_id = subject.paper.exam_id if (subject.paper_id and subject.paper) else None
+            is_valid_exam = (
+                subject_exam_id == position.id or
+                (subject.paper and subject.paper.exam and subject.paper.exam.parent_id == position.id)
+            )
+            if not is_valid_exam:
+                raise serializers.ValidationError({
+                    "subject": f"Subject '{subject.name}' does not belong to level/position '{position.name}'."
+                })
+
+        # 4. Position must belong to Category if category is provided
+        if category and position:
+            if position.category_id != category.id:
+                raise serializers.ValidationError({
+                    "position": f"Position/Level '{position.name}' does not belong to category '{category.name}'."
+                })
+
+        # Type-specific validation
         q_type = data.get('question_type') or (self.instance.question_type if self.instance else None)
 
         if q_type == 'mcq':
@@ -164,3 +234,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Subjective-type questions require a model answer.")
 
         return data
+
+    def create(self, validated_data):
+        validated_data.pop('category', None)
+        validated_data.pop('position', None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop('category', None)
+        validated_data.pop('position', None)
+        return super().update(instance, validated_data)

@@ -389,6 +389,11 @@ function RegisterForm() {
         router.push("/student/onboarding");
         return;
       }
+      // Subscription Gate: Google signup != purchased course/package
+      if (!result.package?.hasActivePackage && result.package?.paymentStatus !== "PENDING") {
+        router.push("/student/onboarding/packages");
+        return;
+      }
       router.push("/student");
     } catch (err: any) {
       setGoogleError(err.message || err.detail || "Google sign-in failed. Please try again.");

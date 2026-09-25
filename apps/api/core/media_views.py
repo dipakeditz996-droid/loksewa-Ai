@@ -12,10 +12,12 @@ could with a public-read S3 URL; per-file access control is a separate,
 larger feature, not something this endpoint changes either way.
 """
 from django.http import HttpResponse, HttpResponseNotFound
+from django.views.decorators.clickjacking import xframe_options_exempt
 
 from core import google_drive
 
 
+@xframe_options_exempt
 def drive_media_proxy(request, file_id):
     try:
         meta = google_drive.get_file(file_id)
@@ -36,4 +38,9 @@ def drive_media_proxy(request, file_id):
     # aggressively - it also directly reduces how often we hit the Drive
     # API for the same image.
     response['Cache-Control'] = 'public, max-age=31536000, immutable'
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Cross-Origin-Resource-Policy'] = 'cross-origin'
+    response['Cross-Origin-Opener-Policy'] = 'unsafe-none'
+    filename = meta.get('name', 'document.pdf')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
     return response

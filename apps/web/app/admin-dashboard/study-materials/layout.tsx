@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const MATERIAL_NAV = [
-  { title: "Overview", href: "/admin-dashboard/study-materials", icon: LayoutDashboard, exact: true },
+  { title: "Academic Tree & Notes", href: "/admin-dashboard/study-materials", icon: LayoutDashboard, exact: true },
   { title: "Add Note", href: "/admin-dashboard/study-materials/new", icon: PlusCircle },
   { title: "Bulk Upload", href: "/admin-dashboard/study-materials/bulk-upload", icon: UploadCloud },
   { title: "Categories & Collections", href: "/admin-dashboard/study-materials/categories", icon: FolderTree },

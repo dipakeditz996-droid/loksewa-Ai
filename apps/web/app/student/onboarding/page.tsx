@@ -53,7 +53,7 @@ function OnboardingForm() {
       setReferralCode(ref);
       validateReferral(ref);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [searchParams]);
 
   const validateReferral = async (code: string) => {

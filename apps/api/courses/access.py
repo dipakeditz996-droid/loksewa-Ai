@@ -26,14 +26,9 @@ def course_access_denial(user, course_id):
     Not being enrolled and not existing look the same (403): a student can't
     probe which course ids exist.
     """
-    enrollment = (
-        active_enrollments(user).filter(course_id=course_id).select_related('course').first()
-    )
-    if enrollment is None:
-        return 403, 'You are not enrolled in this course.'
-    if enrollment.course.status != 'published':
-        return 403, 'This course is not available yet.'
-    return None
+    if authorized_courses(user).filter(id=course_id).exists():
+        return None
+    return 403, 'You are not enrolled in this course.'
 
 
 STAFF_ROLES = ('teacher', 'admin', 'super-admin')
@@ -116,3 +111,264 @@ def authorized_exam_ids(user, exams=None):
         covered.add(node)
         stack.extend(children.get(node, []))
     return {i for i in covered if status_of.get(i) == 'active'}
+
+
+def authorized_courses(user):
+    """The authoritative QuerySet of Course objects `user` is authorized to access.
+
+    Rules:
+    - Staff (teacher/admin/super-admin): all published courses.
+    - Students with active ALL_ACCESS subscription: all published courses.
+    - Students with active Enrollments: published courses with active unexpired enrollment.
+    - Admin granted access: StudentProfile.target_course (if published) or enrolled courses.
+    - Non-published courses (draft, coming_soon, archived) are NEVER returned.
+    """
+    from .models import Course
+
+    if not user or not user.is_authenticated:
+        return Course.objects.none()
+
+    if user.role in STAFF_ROLES:
+        return Course.objects.filter(status='published')
+
+    from core.models import AdminSettings
+    from subscriptions.access import has_admin_granted_access
+    from subscriptions.models import Subscription
+
+    now = timezone.now()
+
+    # Check if student has active ALL_ACCESS subscription
+    has_all_access = Subscription.objects.filter(
+        student=user, status='ACTIVE', expiry_date__gt=now, plan__package_type='ALL_ACCESS'
+    ).exists()
+    if has_all_access:
+        return Course.objects.filter(status='published')
+
+    # Enrolled courses
+    enrolled_course_ids = set(
+        active_enrollments(user).filter(course__status='published').values_list('course_id', flat=True)
+    )
+
+    # Admin granted access fallback if applicable
+    if not AdminSettings.is_subscription_enforced() or has_admin_granted_access(user):
+        try:
+            profile = getattr(user, 'student_profile', None)
+            if profile:
+                if profile.target_course_id:
+                    enrolled_course_ids.add(profile.target_course_id)
+                elif profile.target_position_id:
+                    target_exam_course_ids = Course.objects.filter(
+                        exam_id=profile.target_position_id,
+                        status='published'
+                    ).values_list('id', flat=True)
+                    enrolled_course_ids.update(target_exam_course_ids)
+        except Exception:
+            pass
+
+    return Course.objects.filter(id__in=enrolled_course_ids, status='published')
+
+
+def get_student_course_context(user):
+    """Canonical dictionary representation of the student's authorized course context:
+    - active_course: dict or None
+    - authorized_courses: list of dicts
+    - subscription: package / subscription status dict
+    - exam_schedule: next exam schedule dict for active_course.exam, or None
+    - schedule_message: str or None
+    """
+    from core.views import _get_package_status
+    from exams.models import ExamSchedule
+    from exams.schedule_serializers import StudentExamScheduleSerializer
+
+    package_status = _get_package_status(user)
+    auth_courses_qs = authorized_courses(user).select_related('exam', 'exam__category', 'exam__parent')
+    auth_courses_list = list(auth_courses_qs)
+
+    def serialize_course(c):
+        category_name = None
+        level_name = None
+        if c.exam:
+            if c.exam.category:
+                category_name = c.exam.category.name
+            if c.exam.parent:
+                level_name = c.exam.parent.name
+            else:
+                level_name = c.exam.name
+
+        return {
+            "id": c.id,
+            "title": c.title,
+            "short_description": c.short_description or "",
+            "slug": c.slug,
+            "exam_id": c.exam_id,
+            "exam_name": c.exam.name if c.exam else None,
+            "category_name": category_name,
+            "level_name": level_name,
+            "thumbnail": c.thumbnail.url if c.thumbnail else None,
+        }
+
+    authorized_courses_data = [serialize_course(c) for c in auth_courses_list]
+    active_course_obj = None
+
+    if len(auth_courses_list) == 1:
+        active_course_obj = auth_courses_list[0]
+        try:
+            profile = getattr(user, 'student_profile', None)
+            if profile and profile.target_course_id != active_course_obj.id:
+                profile.target_course = active_course_obj
+                profile.save(update_fields=['target_course'])
+        except Exception:
+            pass
+    elif len(auth_courses_list) > 1:
+        profile = getattr(user, 'student_profile', None)
+        target_course_id = profile.target_course_id if profile else None
+        matching = next((c for c in auth_courses_list if c.id == target_course_id), None)
+        if matching:
+            active_course_obj = matching
+        else:
+            active_course_obj = auth_courses_list[0]
+            if profile:
+                try:
+                    profile.target_course = active_course_obj
+                    profile.save(update_fields=['target_course'])
+                except Exception:
+                    pass
+
+    active_course_data = serialize_course(active_course_obj) if active_course_obj else None
+
+    # Exam schedule for active course
+    exam_schedule_data = None
+    schedule_message = None
+    if active_course_obj and active_course_obj.exam_id:
+        today = timezone.now().date()
+        schedule = ExamSchedule.objects.filter(
+            exam_id=active_course_obj.exam_id,
+            is_published=True,
+            exam_date__gte=today
+        ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time').first()
+
+        if not schedule and active_course_obj.exam and active_course_obj.exam.parent_id:
+            schedule = ExamSchedule.objects.filter(
+                exam_id=active_course_obj.exam.parent_id,
+                is_published=True,
+                exam_date__gte=today
+            ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time').first()
+
+        if schedule:
+            exam_schedule_data = StudentExamScheduleSerializer(schedule).data
+        else:
+            schedule_message = "No exam schedule configured for this course yet."
+    else:
+        if active_course_obj:
+            schedule_message = "No exam schedule configured for this course yet."
+        else:
+            schedule_message = "No active course yet."
+
+    return {
+        "active_course": active_course_data,
+        "authorized_courses": authorized_courses_data,
+        "subscription": package_status,
+        "exam_schedule": exam_schedule_data,
+        "schedule_message": schedule_message,
+    }
+
+
+def get_course_exam_ids(course):
+    """Returns the set of active Exam IDs covered by a Course (its exam_id plus any descendant children)."""
+    if not course or not course.exam_id:
+        return set()
+    from exams.models import Exam
+    rows = list(Exam.objects.filter(is_active=True).values_list('id', 'parent_id', 'status'))
+    children = {}
+    for exam_id, parent_id, _status in rows:
+        children.setdefault(parent_id, []).append(exam_id)
+    status_of = {exam_id: status for exam_id, _p, status in rows}
+
+    covered = set()
+    stack = [course.exam_id] if course.exam_id in status_of else []
+    while stack:
+        node = stack.pop()
+        if node in covered:
+            continue
+        covered.add(node)
+        stack.extend(children.get(node, []))
+    return {i for i in covered if status_of.get(i) == 'active'}
+
+
+def get_authorized_examination_filter(user, target_course=None):
+    """
+    Returns a Django Q object to filter Examination querysets to ONLY examinations
+    authorized for this student. If the student has NO valid course authorization
+    (or if target_course is specified but unauthorized), returns None (which the caller
+    must translate to Examination.objects.none()).
+    """
+    if not user or not user.is_authenticated:
+        return None
+
+    if user.role in STAFF_ROLES:
+        if target_course is not None:
+            from .models import Course
+            c_obj = target_course if isinstance(target_course, Course) else Course.objects.filter(id=target_course).first()
+            if not c_obj:
+                return Q(pk__in=[])
+            exam_ids = get_course_exam_ids(c_obj)
+            q = Q(course=c_obj)
+            if exam_ids:
+                q |= Q(course__isnull=True, exam_id__in=exam_ids)
+            return q
+        return Q()
+
+    auth_courses = authorized_courses(user)
+    if not auth_courses.exists():
+        return None
+
+    if target_course is not None:
+        from .models import Course
+        c_id = target_course.id if isinstance(target_course, Course) else target_course
+        c_obj = auth_courses.filter(id=c_id).first()
+        if not c_obj:
+            # Requested course is NOT authorized for this student -> strict denial
+            return None
+        exam_ids = get_course_exam_ids(c_obj)
+        q = Q(course=c_obj)
+        if exam_ids:
+            q |= Q(course__isnull=True, exam_id__in=exam_ids)
+        return q
+
+    # No specific target course requested: student sees exams for ALL their authorized courses
+    auth_course_ids = list(auth_courses.values_list('id', flat=True))
+    auth_exam_scope = authorized_exam_ids(user) or set()
+    q = Q(course_id__in=auth_course_ids)
+    if auth_exam_scope:
+        q |= Q(course__isnull=True, exam_id__in=auth_exam_scope)
+    return q
+
+
+def is_examination_authorized_for_student(user, examination):
+    """
+    Determines if student `user` is authorized to access `examination` (detail, start, attempt, result).
+    Returns True/False.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.role in STAFF_ROLES:
+        return True
+    if user.role != 'student':
+        return False
+
+    auth_courses = authorized_courses(user)
+    if not auth_courses.exists():
+        return False
+
+    # If exam is explicitly tied to a course, user must be enrolled/authorized in that course
+    if examination.course_id:
+        return auth_courses.filter(id=examination.course_id).exists()
+
+    # If exam is not explicitly tied to a course, check exam taxonomy scope
+    if examination.exam_id:
+        scope = authorized_exam_ids(user)
+        return bool(scope and examination.exam_id in scope)
+
+    # Exam has neither course nor exam taxonomy - unauthorized
+    return False
+

@@ -13,6 +13,7 @@ import { studentExamsApi, isSubjectiveQuestionType } from "@/lib/api/student-exa
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { Textarea } from "@/components/ui/textarea";
 import toast from "react-hot-toast";
+import { SubjectiveExamAttemptView } from "@/components/student/exams/SubjectiveExamAttemptView";
 
 
 export default function ExamAttemptPage() {
@@ -173,6 +174,21 @@ export default function ExamAttemptPage() {
           <p>Loading exam environment...</p>
         </div>
       </div>
+    );
+  }
+
+  // Dedicated Subjective Examination View
+  if (exam?.exam_type === 'subjective') {
+    return (
+      <SubjectiveExamAttemptView
+        examId={examId}
+        attemptId={attemptId}
+        examTitle={exam.title}
+        onFinish={() => {
+          queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+          router.replace(`/student/exams/${examId}/result/${attemptId}`);
+        }}
+      />
     );
   }
 

@@ -16,6 +16,12 @@ export interface SubscriptionPlan {
     id: number;
     title: string;
     exam: string | null;
+    level?: string | null;
+    category?: string | null;
+    service?: string | null;
+    hierarchy_path?: string | null;
+    status?: string;
+    is_coming_soon?: boolean;
   } | null;
   package_type: "SINGLE" | "MULTI" | "BUNDLE" | "ALL_ACCESS";
   eligible_courses: number[];
@@ -24,7 +30,11 @@ export interface SubscriptionPlan {
     title: string;
     exam: string | null;
     level?: string | null;
+    category?: string | null;
     service?: string | null;
+    hierarchy_path?: string | null;
+    status?: string;
+    is_coming_soon?: boolean;
   }[];
   is_flexible: boolean;
   allowed_preparation_count: number;
@@ -34,7 +44,7 @@ export interface SubscriptionPlan {
   updated_at: string;
 }
 
-export type SubscriptionPlanInput = Omit<SubscriptionPlan, "id" | "created_at" | "updated_at" | "eligible_courses_details">;
+export type SubscriptionPlanInput = Omit<SubscriptionPlan, "id" | "created_at" | "updated_at" | "eligible_courses_details" | "course_details">;
 
 export interface Subscription {
   id: number;

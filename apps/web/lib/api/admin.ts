@@ -107,7 +107,12 @@ export interface AdminUsersResponse {
 // Mirrors administration.views.AdminUsersView.post - username/email/password/
 // role are required for every role; the rest only apply when role is
 // "student" and mirror exactly what core.views.StudentSignupView collects
-// (see apps/web/app/register/page.tsx for the same field set/shape).
+export interface AdminPackageAssignmentPayload {
+  package_id: number;
+  course_ids?: number[];
+  grant_reason?: string;
+}
+
 export interface AdminCreateUserPayload {
   username: string;
   email: string;
@@ -120,6 +125,11 @@ export interface AdminCreateUserPayload {
   exam_category_id?: number;
   exam_position_id?: number;
   course_id?: number;
+  package_id?: number;
+  course_ids?: number[];
+  packages?: AdminPackageAssignmentPayload[];
+  grant_reason?: string;
+  access_source?: string;
   send_welcome_email?: boolean;
 }
 
@@ -128,6 +138,18 @@ export interface AdminCreateUserResponse {
   username: string;
   email: string;
   role: string;
+  packageGranted?: boolean;
+  packageName?: string | null;
+  packagesCount?: number;
+  packagesGranted?: Array<{
+    id: number;
+    name: string;
+    packageType: string;
+    subscriptionId: number;
+    courses: string[];
+    expiryDate: string;
+  }>;
+  enrolledCourses?: string[];
   message: string;
 }
 

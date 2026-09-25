@@ -85,22 +85,37 @@ class QuestionSelectionService:
         also passing a specific exam.
         """
         if exam_ids is not None:
-            qs = qs.filter(topic__chapter__subject__paper__exam_id__in=list(exam_ids))
+            qs = qs.filter(
+                Q(subject__paper__exam_id__in=list(exam_ids)) |
+                Q(topic__chapter__subject__paper__exam_id__in=list(exam_ids))
+            )
         if exam_id:
-            # A Question reaches its Exam through topic → chapter → subject →
-            # paper → exam. Subject has no direct `exam` FK, so that is the only
-            # valid path; filtering on `subject__exam_id` raises FieldError.
-            qs = qs.filter(topic__chapter__subject__paper__exam_id=exam_id)
+            qs = qs.filter(
+                Q(subject__paper__exam_id=exam_id) |
+                Q(topic__chapter__subject__paper__exam_id=exam_id)
+            )
         if paper_id:
-            qs = qs.filter(topic__chapter__subject__paper_id=paper_id)
+            qs = qs.filter(
+                Q(subject__paper_id=paper_id) |
+                Q(topic__chapter__subject__paper_id=paper_id)
+            )
         if subject_id:
-            qs = qs.filter(topic__chapter__subject_id=subject_id)
+            qs = qs.filter(
+                Q(subject_id=subject_id) |
+                Q(topic__chapter__subject_id=subject_id)
+            )
         if chapter_id:
-            qs = qs.filter(topic__chapter_id=chapter_id)
+            qs = qs.filter(
+                Q(chapter_id=chapter_id) |
+                Q(topic__chapter_id=chapter_id)
+            )
         if topic_id:
             qs = qs.filter(topic_id=topic_id)
         if category_id:
-            qs = qs.filter(topic__chapter__subject__paper__exam__category_id=category_id)
+            qs = qs.filter(
+                Q(subject__paper__exam__category_id=category_id) |
+                Q(topic__chapter__subject__paper__exam__category_id=category_id)
+            )
         if topic_ids:
             qs = qs.filter(topic_id__in=topic_ids)
         if difficulty:
@@ -138,6 +153,7 @@ class QuestionSelectionService:
         self,
         *,
         exam_id=None,
+        exam_ids=None,
         paper_id=None,
         subject_id=None,
         chapter_id=None,
@@ -167,6 +183,7 @@ class QuestionSelectionService:
         qs = self.apply_filters(
             self.get_base_queryset(),
             exam_id=exam_id,
+            exam_ids=exam_ids,
             paper_id=paper_id,
             subject_id=subject_id,
             chapter_id=chapter_id,

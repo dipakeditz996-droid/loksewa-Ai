@@ -186,7 +186,7 @@ def _missing_detail(row, question_type):
 
 
 def _existing_question_ids(norm_texts):
-    """Map lower-cased question text -> existing Question.question_id, in ONE
+    """Map lower-cased question text -> {'id': id, 'code': question_id}, in ONE
     query (it used to be one query per row, which against a remote database
     made a 100-row file take ~20s to analyse)."""
     from django.db.models.functions import Lower
@@ -194,12 +194,15 @@ def _existing_question_ids(norm_texts):
     texts = sorted(set(norm_texts))
     for i in range(0, len(texts), 500):
         chunk = texts[i:i + 500]
-        for qid, lowered in (
+        for q_id, q_code, lowered in (
             Question.objects.annotate(lowered=Lower('text'))
             .filter(lowered__in=chunk).order_by('id')
-            .values_list('question_id', 'lowered')
+            .values_list('id', 'question_id', 'lowered')
         ):
-            found.setdefault(lowered, qid)
+            found.setdefault(lowered, {
+                'id': q_id,
+                'code': q_code or f"Q-{q_id:06d}"
+            })
     return found
 
 
@@ -229,7 +232,7 @@ def _build_report(rows, question_type):
         if norm_text:
             if norm_text in existing_ids:
                 is_duplicate = True
-                duplicate_of = existing_ids[norm_text]
+                duplicate_of = existing_ids[norm_text]['code']
             elif norm_text in seen_texts:
                 is_duplicate = True
                 duplicate_of = f"row {seen_texts[norm_text]}"
@@ -376,7 +379,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         if not (is_excel or is_csv):
             return Response({'error': 'Please upload a valid Excel (.xlsx) or CSV file.'}, status=400)
 
-        topic_id = request.data.get('topic')
+        topic_id = request.data.get('topic') or request.data.get('topic_id')
         if not topic_id:
             return Response({'error': 'Select a topic before uploading.'}, status=400)
 
@@ -552,10 +555,12 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         skipped_duplicates = []
         for row in valid_rows:
             data = row['data']
-            if data['question'].strip().lower() in existing_ids:
+            lowered = data['question'].strip().lower()
+            if lowered in existing_ids:
                 skipped_duplicates.append({
                     'row_index': row['row_index'],
-                    'existing_question_id': existing_ids[data['question'].strip().lower()],
+                    'existing_question_id': existing_ids[lowered]['code'],
+                    'existing_id': existing_ids[lowered]['id'],
                 })
                 continue
             marks_raw = (data.get('marks') or '').strip()
@@ -599,6 +604,28 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         import_record.status = 'imported'
         import_record.save(update_fields=['status'])
 
+        # Collect existing canonical question IDs for rows that were marked duplicate during analysis
+        duplicate_rows = [r for r in import_record.report_data if r['status'] == 'duplicate']
+        dup_texts = [r['data']['question'].strip().lower() for r in duplicate_rows if r.get('data', {}).get('question')]
+        dup_map = _existing_question_ids(dup_texts) if dup_texts else {}
+
+        analysis_duplicates = []
+        for row in duplicate_rows:
+            lowered = row.get('data', {}).get('question', '').strip().lower()
+            if lowered in dup_map:
+                analysis_duplicates.append({
+                    'row_index': row['row_index'],
+                    'existing_question_id': dup_map[lowered]['code'],
+                    'existing_id': dup_map[lowered]['id'],
+                })
+
+        all_skipped = skipped_duplicates + analysis_duplicates
+        existing_canonical_ids = list(dict.fromkeys(
+            d['existing_id'] for d in all_skipped if 'existing_id' in d
+        ))
+        new_ids = [q.pk for q in created]
+        all_ids = new_ids + existing_canonical_ids
+
         AuditLog.objects.create(
             actor=request.user, action='CSV_IMPORT', entity_type='Question', entity_id=None,
             details={
@@ -607,13 +634,16 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 'imported_count': len(created),
                 'topic_id': import_record.topic_id,
                 'collection_id': import_record.collection_id,
+                'reused_duplicates_count': len(existing_canonical_ids),
             },
         )
         return Response({
             'success': True,
             'imported_count': len(created),
-            'question_ids': [q.pk for q in created],
-            'skipped_duplicates': skipped_duplicates,
+            'question_ids': new_ids,
+            'skipped_duplicates': all_skipped,
+            'existing_question_ids': existing_canonical_ids,
+            'all_question_ids': all_ids,
         })
 
     @action(detail=True, methods=['get'], url_path='error-report')

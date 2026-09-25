@@ -82,8 +82,12 @@ export const notesApi = {
     return apiClient<StudyMaterial[]>('/notes/materials/bookmarks/');
   },
 
-  getStudentPortalView: async (examId?: number): Promise<StudentPortalResponse> => {
-    return apiClient<StudentPortalResponse>(`/notes/student/portal/${examId ? `?exam_id=${examId}` : ''}`);
+  getStudentPortalView: async (examId?: number, courseId?: number): Promise<StudentPortalResponse> => {
+    const params = new URLSearchParams();
+    if (examId) params.append('exam_id', String(examId));
+    if (courseId) params.append('course_id', String(courseId));
+    const qs = params.toString();
+    return apiClient<StudentPortalResponse>(`/notes/student/portal/${qs ? `?${qs}` : ''}`);
   },
 
   toggleBookmark: async (id: number, action: 'bookmark' | 'unbookmark'): Promise<{status: string}> => {

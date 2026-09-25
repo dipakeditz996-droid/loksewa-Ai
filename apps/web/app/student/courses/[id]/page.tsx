@@ -18,7 +18,7 @@ import { Suspense } from "react";
 function CourseDetailContent() {
   const params = useParams();
   const router = useRouter();
-  const courseId = parseInt(params.id as string, 10);
+  const idOrSlug = params.id as string;
   
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,8 +26,9 @@ function CourseDetailContent() {
 
   useEffect(() => {
     async function loadCourse() {
+      if (!idOrSlug) return;
       try {
-        const data = await courseEnrollmentApi.getCourseDetails(courseId);
+        const data = await courseEnrollmentApi.getCourseDetails(idOrSlug);
         setCourse(data);
       } catch (err: any) {
         console.error("Failed to load course details:", err);
@@ -37,7 +38,7 @@ function CourseDetailContent() {
       }
     }
     loadCourse();
-  }, [courseId]);
+  }, [idOrSlug]);
 
   if (isLoading) {
     return (

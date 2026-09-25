@@ -22,12 +22,12 @@ export type CalmDownEvent =
 
 export function trackCalmDownEvent(event: CalmDownEvent, meta?: Record<string, string | number | boolean>): void {
   if (process.env.NODE_ENV !== "production") {
-    // eslint-disable-next-line no-console
+     
     console.debug("[calm-down]", event, meta || {});
   }
   
   // Clean prefix 'calm_down_' to match the EVENT_CHOICES in the backend CalmSessionLog model
-  let backendEvent = event.replace('calm_down_', '');
+  const backendEvent = event.replace('calm_down_', '');
   if (backendEvent === 'prompt_shown') {
       return; // Skip logging this simple impression if not needed, or add to backend enum
   }

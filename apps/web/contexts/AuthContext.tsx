@@ -37,7 +37,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // sees the new user alongside the old user's data.
   const purgeOnIdentityChange = (nextId: number | string | null) => {
     const previous = queryClient.getQueryData<{ id?: number | string } | null>(CURRENT_USER_QUERY_KEY);
-    if (previous !== undefined && (previous?.id ?? null) !== nextId) {
+    // Only purge if transitioning between two different authenticated identities.
+    // Initial page load transitioning from undefined/null to an authenticated user
+    // must NOT wipe the active queries that were just mounted and fetched.
+    if (previous && previous.id && nextId && previous.id !== nextId) {
       queryClient.removeQueries({
         predicate: (q) => q.queryKey[0] !== CURRENT_USER_QUERY_KEY[0],
       });

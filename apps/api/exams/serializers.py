@@ -389,9 +389,15 @@ class TeacherExaminationSerializer(serializers.ModelSerializer):
             'marks_per_question', 'negative_marking', 'negative_marking_value', 'max_attempts', 
             'allow_resume', 'auto_submit', 'result_visibility', 'show_correct_answers', 'randomize_questions', 
             'randomize_options', 'start_time', 'end_time', 'status', 'reviewer_comment', 'reviewed_by', 
-            'submitted_at', 'reviewed_at', 'questions_list', 'created_at', 'updated_at'
+            'submitted_at', 'reviewed_at', 'questions_list', 'created_at', 'updated_at',
+            'question_paper_pdf', 'question_paper_page_count', 'question_paper_file_size',
+            'answer_upload_enabled', 'upload_deadline_minutes', 'upload_start_time',
+            'upload_end_time', 'allowed_file_types', 'max_upload_size_mb', 'evaluation_type'
         ]
-        read_only_fields = ['status', 'reviewer_comment', 'reviewed_by', 'submitted_at', 'reviewed_at', 'created_at', 'updated_at']
+        read_only_fields = [
+            'status', 'reviewer_comment', 'reviewed_by', 'submitted_at', 'reviewed_at',
+            'created_at', 'updated_at', 'question_paper_page_count', 'question_paper_file_size'
+        ]
 
 class AdminExaminationReviewSerializer(serializers.ModelSerializer):
     questions_list = TeacherExaminationQuestionSerializer(source='examination_questions', many=True, read_only=True)
@@ -480,3 +486,151 @@ class ExaminationAttemptEvaluationListSerializer(serializers.ModelSerializer):
             1 for a in obj.answers.all()
             if a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
         )
+
+
+# ---------------------------------------------------------------------------
+# Advanced Subjective Examination Submissions & Admin Workspace
+# ---------------------------------------------------------------------------
+
+class SubjectiveSubmissionPageSerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import SubjectiveSubmissionPage
+        model = SubjectiveSubmissionPage
+        fields = ['id', 'page_number', 'image_file', 'file_size_bytes', 'created_at']
+
+
+class SubjectiveQuestionScoreSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source='question.text', read_only=True)
+
+    class Meta:
+        from .models import SubjectiveQuestionScore
+        model = SubjectiveQuestionScore
+        fields = ['id', 'question', 'question_text', 'question_number', 'marks_obtained', 'max_marks', 'feedback']
+
+
+class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
+    student_id = serializers.IntegerField(source='attempt.student.id', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    student_username = serializers.CharField(source='attempt.student.username', read_only=True)
+    student_email = serializers.CharField(source='attempt.student.email', read_only=True)
+    examination_id = serializers.IntegerField(source='attempt.examination.id', read_only=True)
+    examination_title = serializers.CharField(source='attempt.examination.title', read_only=True)
+    attempt_id = serializers.IntegerField(source='attempt.id', read_only=True)
+    started_at = serializers.DateTimeField(source='attempt.started_at', read_only=True)
+    submitted_at = serializers.DateTimeField(source='attempt.submitted_at', read_only=True)
+    attempt_status = serializers.CharField(source='attempt.status', read_only=True)
+    score = serializers.SerializerMethodField()
+    total_marks = serializers.SerializerMethodField()
+    percentage = serializers.SerializerMethodField()
+    has_answer_pdf = serializers.SerializerMethodField()
+    evaluator_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import SubjectiveSubmission
+        model = SubjectiveSubmission
+        fields = [
+            'id', 'attempt_id', 'student_id', 'student_name', 'student_username', 'student_email',
+            'examination_id', 'examination_title', 'status', 'attempt_status', 'started_at',
+            'submitted_at', 'page_count', 'file_size_bytes', 'has_answer_pdf', 'score',
+            'total_marks', 'percentage', 'ocr_status', 'evaluator', 'evaluator_name',
+            'evaluated_at', 'is_published', 'published_at', 'created_at', 'updated_at'
+        ]
+
+    def get_student_name(self, obj):
+        student = obj.attempt.student
+        return student.get_full_name() or student.username
+
+    def get_has_answer_pdf(self, obj):
+        return bool(obj.answer_pdf)
+
+    def get_evaluator_name(self, obj):
+        if obj.evaluator:
+            return obj.evaluator.get_full_name() or obj.evaluator.username
+        return None
+
+    def get_score(self, obj):
+        scores = list(obj.question_scores.all())
+        if scores:
+            return sum(qs.marks_obtained for qs in scores)
+        return obj.attempt.score
+
+    def get_total_marks(self, obj):
+        scores = list(obj.question_scores.all())
+        if scores:
+            total = sum(qs.max_marks for qs in scores)
+            if total > 0:
+                return total
+        return float(obj.attempt.examination.total_marks or 100)
+
+    def get_percentage(self, obj):
+        total = self.get_total_marks(obj)
+        score = self.get_score(obj)
+        return round((score / total) * 100, 2) if total > 0 else 0.0
+
+
+class AdminSubjectiveSubmissionDetailSerializer(serializers.ModelSerializer):
+    student_id = serializers.IntegerField(source='attempt.student.id', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    student_username = serializers.CharField(source='attempt.student.username', read_only=True)
+    student_email = serializers.CharField(source='attempt.student.email', read_only=True)
+    examination_id = serializers.IntegerField(source='attempt.examination.id', read_only=True)
+    examination_title = serializers.CharField(source='attempt.examination.title', read_only=True)
+    attempt_id = serializers.IntegerField(source='attempt.id', read_only=True)
+    started_at = serializers.DateTimeField(source='attempt.started_at', read_only=True)
+    submitted_at = serializers.DateTimeField(source='attempt.submitted_at', read_only=True)
+    time_taken_seconds = serializers.IntegerField(source='attempt.time_taken_seconds', read_only=True)
+    attempt_status = serializers.CharField(source='attempt.status', read_only=True)
+    score = serializers.SerializerMethodField()
+    total_marks = serializers.SerializerMethodField()
+    percentage = serializers.SerializerMethodField()
+    has_answer_pdf = serializers.SerializerMethodField()
+    evaluator_name = serializers.SerializerMethodField()
+    pages = SubjectiveSubmissionPageSerializer(many=True, read_only=True)
+    question_scores = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import SubjectiveSubmission
+        model = SubjectiveSubmission
+        fields = [
+            'id', 'attempt_id', 'student_id', 'student_name', 'student_username', 'student_email',
+            'examination_id', 'examination_title', 'status', 'attempt_status', 'started_at',
+            'submitted_at', 'time_taken_seconds', 'page_count', 'file_size_bytes', 'has_answer_pdf',
+            'raw_ocr_text', 'extracted_text', 'ocr_status', 'ocr_error', 'score', 'total_marks',
+            'percentage', 'evaluator', 'evaluator_name', 'evaluator_feedback', 'evaluated_at',
+            'is_published', 'published_at', 'pages', 'question_scores', 'created_at', 'updated_at'
+        ]
+
+    def get_student_name(self, obj):
+        student = obj.attempt.student
+        return student.get_full_name() or student.username
+
+    def get_has_answer_pdf(self, obj):
+        return bool(obj.answer_pdf)
+
+    def get_evaluator_name(self, obj):
+        if obj.evaluator:
+            return obj.evaluator.get_full_name() or obj.evaluator.username
+        return None
+
+    def get_score(self, obj):
+        scores = list(obj.question_scores.all())
+        if scores:
+            return sum(qs.marks_obtained for qs in scores)
+        return obj.attempt.score
+
+    def get_total_marks(self, obj):
+        scores = list(obj.question_scores.all())
+        if scores:
+            total = sum(qs.max_marks for qs in scores)
+            if total > 0:
+                return total
+        return float(obj.attempt.examination.total_marks or 100)
+
+    def get_percentage(self, obj):
+        total = self.get_total_marks(obj)
+        score = self.get_score(obj)
+        return round((score / total) * 100, 2) if total > 0 else 0.0
+
+    def get_question_scores(self, obj):
+        scores = obj.question_scores.all().order_by('question_number', 'id')
+        return SubjectiveQuestionScoreSerializer(scores, many=True).data

@@ -3,11 +3,88 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from administration.permissions import IsAdminUser
-from exams.models import ExamCategory, Exam, Paper, Subject, Chapter, Topic
+from django.db.models import Q
+from exams.models import ExamCategory, Exam, Paper, Subject, Chapter, Topic, Question, Examination
+from notes.models import StudyMaterial
 from .syllabus_serializers import (
     ExamCategorySerializer, ExamSerializer, PaperSerializer, SubjectSerializer, 
     ChapterSerializer, TopicSerializer, ReorderSerializer
 )
+
+def get_node_dependencies(instance):
+    counts = {
+        'notes': 0,
+        'questions': 0,
+        'exams': 0,
+        'children': 0,
+    }
+    model_name = instance.__class__.__name__
+
+    if isinstance(instance, ExamCategory):
+        counts['children'] = instance.exams.count()
+        counts['notes'] = StudyMaterial.objects.filter(exam__category=instance).count()
+        counts['questions'] = Question.objects.filter(topic__chapter__subject__paper__exam__category=instance).count()
+        counts['exams'] = Examination.objects.filter(category=instance).count()
+    elif isinstance(instance, Exam):
+        counts['children'] = instance.children.count() + instance.papers.count()
+        counts['notes'] = StudyMaterial.objects.filter(exam=instance).count()
+        counts['questions'] = Question.objects.filter(topic__chapter__subject__paper__exam=instance).count()
+        counts['exams'] = Examination.objects.filter(exam=instance).count()
+    elif isinstance(instance, Paper):
+        counts['children'] = instance.subjects.count()
+        counts['notes'] = StudyMaterial.objects.filter(subject__paper=instance).count()
+        counts['questions'] = Question.objects.filter(topic__chapter__subject__paper=instance).count()
+        counts['exams'] = Examination.objects.filter(subject__paper=instance).count()
+    elif isinstance(instance, Subject):
+        counts['children'] = instance.chapters.count()
+        counts['notes'] = StudyMaterial.objects.filter(
+            Q(subject=instance) | Q(chapter__subject=instance) | Q(topic__chapter__subject=instance)
+        ).distinct().count()
+        counts['questions'] = Question.objects.filter(topic__chapter__subject=instance).count()
+        counts['exams'] = Examination.objects.filter(
+            Q(subject=instance) | Q(questions__topic__chapter__subject=instance)
+        ).distinct().count()
+    elif isinstance(instance, Chapter):
+        counts['children'] = instance.topics.count()
+        counts['notes'] = StudyMaterial.objects.filter(
+            Q(chapter=instance) | Q(topic__chapter=instance)
+        ).distinct().count()
+        counts['questions'] = Question.objects.filter(topic__chapter=instance).count()
+        counts['exams'] = Examination.objects.filter(questions__topic__chapter=instance).distinct().count()
+    elif isinstance(instance, Topic):
+        counts['children'] = 0
+        counts['notes'] = StudyMaterial.objects.filter(topic=instance).count()
+        counts['questions'] = Question.objects.filter(topic=instance).count()
+        counts['exams'] = Examination.objects.filter(questions__topic=instance).distinct().count()
+
+    total_dependents = counts['notes'] + counts['questions'] + counts['exams'] + counts['children']
+    has_dependencies = total_dependents > 0
+    name = getattr(instance, 'name', getattr(instance, 'title', str(instance)))
+    
+    parts = []
+    if counts['notes']:
+        parts.append(f"{counts['notes']} notes")
+    if counts['questions']:
+        parts.append(f"{counts['questions']} questions")
+    if counts['exams']:
+        parts.append(f"{counts['exams']} exams")
+    if counts['children']:
+        parts.append(f"{counts['children']} child items")
+
+    if parts:
+        message = f"This {model_name.lower()} '{name}' is currently used by: {', '.join(parts)}. Deleting it may affect existing content."
+    else:
+        message = f"This {model_name.lower()} has no dependent content."
+
+    return {
+        'model': model_name,
+        'id': instance.id,
+        'name': name,
+        'has_dependencies': has_dependencies,
+        'counts': counts,
+        'message': message,
+        'is_active': getattr(instance, 'is_active', True),
+    }
 
 class BaseSyllabusViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -26,13 +103,51 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
             return Response({'status': 'reordered'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['get'])
+    def dependencies(self, request, pk=None):
+        instance = self.get_object()
+        return Response(get_node_dependencies(instance))
+
+    @action(detail=True, methods=['patch', 'post'])
+    def archive(self, request, pk=None):
+        instance = self.get_object()
+        new_active = request.data.get('is_active')
+        if new_active is None:
+            instance.is_active = not instance.is_active
+        else:
+            instance.is_active = bool(new_active)
+        if hasattr(instance, 'status'):
+            instance.status = 'active' if instance.is_active else 'inactive'
+        instance.save()
+        return Response({
+            'id': instance.id,
+            'is_active': instance.is_active,
+            'status': getattr(instance, 'status', 'active' if instance.is_active else 'inactive'),
+            'message': f"{instance} is now {'active' if instance.is_active else 'archived'}."
+        })
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        force = (
+            request.query_params.get('force') == 'true' or
+            (request.data.get('force') is True if isinstance(request.data, dict) else False)
+        )
+        deps = get_node_dependencies(instance)
+        if deps['has_dependencies'] and not force:
+            return Response(
+                {
+                    'error': 'Cannot delete node because it has linked content.',
+                    'message': deps['message'],
+                    'dependencies': deps['counts'],
+                    'can_archive': True,
+                },
+                status=status.HTTP_409_CONFLICT
+            )
+        return super().destroy(request, *args, **kwargs)
+
 class ExamCategoryViewSet(BaseSyllabusViewSet):
     queryset = ExamCategory.objects.all().order_by('order', 'id')
     serializer_class = ExamCategorySerializer
-
-    def destroy(self, request, *args, **kwargs):
-        """Allow cascade delete — Django will delete child exams, papers, subjects, chapters, topics."""
-        return super().destroy(request, *args, **kwargs)
 
 class ExamViewSet(BaseSyllabusViewSet):
     serializer_class = ExamSerializer
@@ -44,10 +159,6 @@ class ExamViewSet(BaseSyllabusViewSet):
             queryset = queryset.filter(category_id=category_id)
         return queryset
 
-    def destroy(self, request, *args, **kwargs):
-        """Allow cascade delete — Django will delete child papers, subjects, chapters, topics."""
-        return super().destroy(request, *args, **kwargs)
-
 class PaperViewSet(BaseSyllabusViewSet):
     serializer_class = PaperSerializer
     
@@ -57,10 +168,6 @@ class PaperViewSet(BaseSyllabusViewSet):
         if exam_id:
             queryset = queryset.filter(exam_id=exam_id)
         return queryset
-
-    def destroy(self, request, *args, **kwargs):
-        """Allow cascade delete — Django will delete child subjects, chapters, topics."""
-        return super().destroy(request, *args, **kwargs)
 
 class SubjectViewSet(BaseSyllabusViewSet):
     serializer_class = SubjectSerializer
@@ -77,10 +184,6 @@ class SubjectViewSet(BaseSyllabusViewSet):
             queryset = queryset.filter(paper__exam_id=exam_id)
         return queryset
 
-    def destroy(self, request, *args, **kwargs):
-        """Allow cascade delete — Django will delete child chapters and topics."""
-        return super().destroy(request, *args, **kwargs)
-
 class ChapterViewSet(BaseSyllabusViewSet):
     serializer_class = ChapterSerializer
     
@@ -90,10 +193,6 @@ class ChapterViewSet(BaseSyllabusViewSet):
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
         return queryset
-
-    def destroy(self, request, *args, **kwargs):
-        """Allow cascade delete — Django will delete child topics and questions."""
-        return super().destroy(request, *args, **kwargs)
 
 class TopicViewSet(BaseSyllabusViewSet):
     serializer_class = TopicSerializer

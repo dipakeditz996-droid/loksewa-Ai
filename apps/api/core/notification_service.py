@@ -628,6 +628,66 @@ class NotificationService:
         )
 
     @classmethod
+    def notify_admins_subjective_submission(cls, submission):
+        """
+        Fanned out to all admins when a student successfully submits a subjective exam answer sheet.
+        Deduplicated via related_id='subjective-submission:{submission.id}' so retried requests or
+        refreshes never duplicate notifications.
+        """
+        from .models import AdminSettings
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return
+
+        related_id = f"subjective-submission:{submission.id}"
+        if Notification.objects.filter(related_id=related_id, recipient__role__in=['admin', 'super-admin']).exists():
+            return
+
+        attempt = submission.attempt
+        student = attempt.student
+        student_name = student.get_full_name() or student.username
+        exam = attempt.examination
+
+        admins = resolve_audience('admins')
+        Notification.objects.bulk_create([
+            Notification(
+                recipient=admin,
+                type='evaluation',
+                related_id=related_id,
+                title="New Subjective Exam Submission",
+                message=f'{student_name} has submitted "{exam.title}".',
+                action_url=f"/admin-dashboard/exams/{exam.id}/submissions/{submission.id}",
+                priority='important',
+            )
+            for admin in admins
+        ])
+
+    @classmethod
+    def notify_subjective_result_published(cls, submission):
+        """
+        Notifies student that their subjective exam evaluation has been published.
+        Deduplicated per attempt id so multiple publishes do not spam the student.
+        """
+        attempt = submission.attempt
+        exam = attempt.examination
+        total_marks = exam.total_marks or 100
+        score = attempt.score
+
+        message = f'Your result for "{exam.title}" has been published. Score: {score:g} / {total_marks:g} ({attempt.percentage}%).'
+        if attempt.passed:
+            message += ' Congratulations, you passed!'
+
+        return cls._student_notify_once(
+            recipient=attempt.student,
+            notif_type='result',
+            related_id=f'subjective-result:{attempt.id}',
+            title='Subjective Exam Result Published',
+            message=message,
+            action_url=f'/student/exams/{exam.id}/result/{attempt.id}',
+            priority='important',
+        )
+
+    @classmethod
     def notify_study_plan_created(cls, plan):
         return cls._student_notify_once(
             recipient=plan.student,

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { gamesApi, GameMatch, SurvivalGame, GameProfile } from "@/lib/api/games";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Swords, HeartPulse, Loader2 } from "lucide-react";
+import { Swords, HeartPulse, Loader2 } from "lucide-react";
 
 export default function GameHistoryPage() {
   const [history, setHistory] = useState<{ matches: GameMatch[]; survivals: SurvivalGame[] } | null>(null);
@@ -67,33 +67,43 @@ export default function GameHistoryPage() {
                   <thead className="bg-muted border-b text-muted-foreground uppercase text-xs">
                     <tr>
                       <th className="px-6 py-4 font-medium">Date</th>
+                      <th className="px-6 py-4 font-medium">Type</th>
                       <th className="px-6 py-4 font-medium">Opponent</th>
                       <th className="px-6 py-4 font-medium">Score</th>
                       <th className="px-6 py-4 font-medium">Result</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {history?.matches.map(match => (
-                      <tr key={match.id} className="hover:bg-muted">
-                        <td className="px-6 py-4 text-muted-foreground">
-                          {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date(match.created_at))}
-                        </td>
-                        <td className="px-6 py-4 font-medium text-primary dark:text-foreground">
-                          {/* Determine if player 1 or 2 is the opponent. We don't have current user context, so we show both */}
-                          {match.player1_name} vs {match.player2_name || 'TBD'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {match.player1_score} - {match.player2_score}
-                        </td>
-                        <td className="px-6 py-4">
-                          {match.is_draw ? (
-                            <span className="text-muted-foreground font-medium">Draw</span>
-                          ) : (
-                            <span className="text-primary dark:text-foreground font-semibold">{match.winner_name ? `Winner: ${match.winner_name}` : 'Unfinished'}</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {history?.matches.map(match => {
+                      const isBot = match.is_bot_match || match.opponent_type === 'BOT';
+                      return (
+                        <tr key={match.id} className="hover:bg-muted">
+                          <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
+                            {new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date(match.created_at))}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${
+                              isBot ? 'bg-amber-500/10 text-amber-600 border border-amber-500/20' : 'bg-blue-500/10 text-blue-600 border border-blue-500/20'
+                            }`}>
+                              {isBot ? '🤖 Computer' : '👤 Human'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 font-medium text-primary dark:text-foreground">
+                            {match.player1_name} vs {match.player2_name || (isBot ? 'LoksewaAI Bot' : 'TBD')}
+                          </td>
+                          <td className="px-6 py-4">
+                            {match.player1_score} - {match.player2_score}
+                          </td>
+                          <td className="px-6 py-4">
+                            {match.is_draw ? (
+                              <span className="text-muted-foreground font-medium">Draw</span>
+                            ) : (
+                              <span className="text-primary dark:text-foreground font-semibold">{match.winner_name ? `Winner: ${match.winner_name}` : 'Unfinished'}</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

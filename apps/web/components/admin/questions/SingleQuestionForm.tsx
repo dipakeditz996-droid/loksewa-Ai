@@ -135,8 +135,8 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
       return;
     }
 
-    if (!selTopic) {
-      toast.error('Please select a specific topic in the syllabus hierarchy.');
+    if (!selCategory || !selPosition || !selSubject) {
+      toast.error('Please select Category, Position/Level, and Subject.');
       return;
     }
 
@@ -161,7 +161,11 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         question_type: qType,
         status,
         difficulty,
-        topic: Number(selTopic),
+        category: Number(selCategory),
+        position: Number(selPosition),
+        subject: Number(selSubject),
+        chapter: selChapter ? Number(selChapter) : null,
+        topic: selTopic ? Number(selTopic) : null,
         text,
         marks: Number(marks),
         negative_marks: Number(negativeMarks),
@@ -327,7 +331,9 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         <h2 className="text-lg font-semibold flex items-center gap-2">
           Syllabus Mapping
         </h2>
-        <p className="text-sm text-gray-500 mb-4">You must drill down to a specific Topic to save the question.</p>
+        <p className="text-sm text-gray-500 mb-4">
+          Assign this question to a Subject. Chapter and Topic are optional.
+        </p>
         
         <AcademicDependentSelect
           category={selCategory}

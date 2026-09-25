@@ -33,13 +33,25 @@ export interface TopicPerformance {
 
 export interface QuestionReview {
   id: string;
+  questionId: number;
   questionText: string;
+  questionType: string;
+  options?: {
+    A?: string | null;
+    B?: string | null;
+    C?: string | null;
+    D?: string | null;
+  };
   studentAnswer: string | null;
-  correctAnswer: string;
+  answerText?: string | null;
+  correctAnswer: string | null;
+  modelAnswer?: string | null;
   status: "Correct" | "Incorrect" | "Unanswered";
   marks: number;
   maxMarks: number;
   explanation: string;
+  reviewAllowed: boolean;
+  evaluatedAt?: string | null;
 }
 
 export interface LeaderboardEntry {
@@ -163,27 +175,60 @@ export const studentResultService = {
       const questions = await studentExamsApi.getAttemptQuestions(parseInt(resultId));
       
       if (!attempt.answers) return [];
+
+      const reviewAllowed = Boolean(attempt.can_review_answers ?? attempt.show_correct_answers);
       
       return attempt.answers.map(ans => {
         const q = questions.find(question => question.id === ans.question);
-        
+        const questionType = ans.question_type || q?.question_type || "mcq";
+        const isSubjective = !["mcq", "true_false"].includes(questionType);
+
         let status: "Correct" | "Incorrect" | "Unanswered" = "Unanswered";
-        if (ans.selected_option) {
-          status = ans.is_correct ? "Correct" : "Incorrect";
+        if (isSubjective) {
+          if (ans.answer_text) {
+            status = (ans.marks_awarded && ans.marks_awarded > 0) ? "Correct" : (ans.evaluated_at ? "Incorrect" : "Unanswered");
+          }
+        } else {
+          if (ans.selected_option) {
+            status = ans.is_correct ? "Correct" : "Incorrect";
+          }
         }
         
+        let rawCorrectOption = ans.correct_option || q?.correct_option || null;
+        if (rawCorrectOption) {
+          rawCorrectOption = rawCorrectOption.trim().toUpperCase();
+        }
+
+        const rawExplanation = ans.explanation || q?.explanation || "";
+        const explanationText = reviewAllowed
+          ? (rawExplanation.trim() ? rawExplanation : "Explanation unavailable.")
+          : "Correct answers are not available for this examination.";
+
         return {
           id: ans.id.toString(),
-          questionText: q?.text || `Question ID: ${ans.question}`,
-          studentAnswer: ans.selected_option || null,
-          correctAnswer: "Hidden by backend",
+          questionId: ans.question,
+          questionText: ans.question_text || q?.text || `Question ID: ${ans.question}`,
+          questionType: questionType,
+          options: {
+            A: ans.option_a ?? q?.option_a ?? null,
+            B: ans.option_b ?? q?.option_b ?? null,
+            C: ans.option_c ?? q?.option_c ?? null,
+            D: ans.option_d ?? q?.option_d ?? null,
+          },
+          studentAnswer: isSubjective ? (ans.answer_text || null) : (ans.selected_option ? ans.selected_option.trim().toUpperCase() : null),
+          answerText: ans.answer_text || null,
+          correctAnswer: reviewAllowed ? rawCorrectOption : null,
+          modelAnswer: reviewAllowed ? (ans.model_answer || q?.model_answer || null) : null,
           status: status,
           marks: ans.marks_awarded || 0,
-          maxMarks: q?.marks || 1,
-          explanation: "Explanation hidden or unavailable."
+          maxMarks: ans.max_marks || q?.marks || 1,
+          explanation: explanationText,
+          reviewAllowed: reviewAllowed,
+          evaluatedAt: ans.evaluated_at || null,
         };
       });
     } catch (e) {
+      console.error("Error fetching question reviews", e);
       return [];
     }
   },

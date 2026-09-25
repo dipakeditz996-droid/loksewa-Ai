@@ -23,12 +23,14 @@ urlpatterns = [
     # Public (no auth)
     path('courses/public/', PublicCourseListView.as_view(), name='public-courses'),
     path('courses/hierarchy/', ProgressiveHierarchyAPIView.as_view(), name='course-hierarchy'),
-    path('courses/<int:pk>/', CourseDetailView.as_view(), name='course-detail'),
 
     # Student authenticated
     path('courses/my-enrollment/', StudentEnrollmentView.as_view(), name='my-enrollment'),
     path('courses/my-courses/', MyCoursesListView.as_view(), name='my-courses'),
     path('courses/apply/', StudentCourseApplicationView.as_view(), name='course-apply'),
+
+    # Course detail by ID or Slug
+    path('courses/<str:lookup_value>/', CourseDetailView.as_view(), name='course-detail'),
 
     path('', include(router.urls)),
 ]

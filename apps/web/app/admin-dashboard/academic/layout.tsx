@@ -7,9 +7,12 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { name: "Overview", href: "/admin-dashboard/academic" },
+  { name: "Question Bank", href: "/admin-dashboard/academic/questions" },
   { name: "Subjects", href: "/admin-dashboard/academic/subjects" },
   { name: "Chapters", href: "/admin-dashboard/academic/chapters" },
   { name: "Topics", href: "/admin-dashboard/academic/topics" },
+  { name: "Collections", href: "/admin-dashboard/academic/collections" },
+  { name: "Question Sets", href: "/admin-dashboard/academic/question-sets" },
   { name: "Exam Categories", href: "/admin-dashboard/academic/exam-categories" },
   { name: "Positions", href: "/admin-dashboard/academic/positions" },
   { name: "Syllabus", href: "/admin-dashboard/academic/syllabus" },

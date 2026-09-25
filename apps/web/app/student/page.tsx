@@ -42,6 +42,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { LoksewaExamCountdown, nextOfficialExamQuery } from "@/components/student/countdown/LoksewaExamCountdown";
 import { MockExamCountdown, upcomingMockExamQuery } from "@/components/student/countdown/MockExamCountdown";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOptionalStudentContext } from "@/contexts/StudentContext";
 
 // ─── Widget IDs ────────────────────────────────────────────────────────────────
 const FULL_WIDTH_WIDGETS = [
@@ -119,25 +120,23 @@ function WidgetDragGhost({ label }: { label: string }) {
 
 export default function StudentDashboardPage() {
   const { user } = useAuth();
+  const studentCtx = useOptionalStudentContext();
+  const effectiveCourseId = studentCtx?.activeCourse?.id;
+  const isCtxLoading = studentCtx?.isLoading ?? false;
 
-  // Critical: the data that actually gates/drives this page's render (the
-  // locked-vs-full-dashboard branch below reads data.package directly).
-  // Moderately-dynamic staleTime - short enough that finishing a practice
-  // session and coming straight back still feels fresh, long enough that
-  // Dashboard -> Syllabus -> Dashboard within the window is an instant
-  // cache hit with zero loading state, matching the rest of this page's
-  // existing "critical vs background" split (see the queries below).
   const {
     data,
-    isLoading: loading,
+    isLoading: isDashboardLoading,
     isFetching: dashboardFetching,
     isError,
     refetch: refetchDashboard,
   } = useQuery({
-    queryKey: ["student-dashboard"],
-    queryFn: () => dashboardApi.getStudentDashboard(),
+    queryKey: ["student-dashboard", effectiveCourseId ?? null],
+    queryFn: () => dashboardApi.getStudentDashboard(effectiveCourseId),
+    enabled: !isCtxLoading,
     staleTime: 45 * 1000,
   });
+  const loading = isCtxLoading || isDashboardLoading;
   const error = isError && !data;
 
   // Background/secondary data - each cached independently so, e.g., a
@@ -269,12 +268,10 @@ export default function StudentDashboardPage() {
   // (same overview computation) - no separate analytics request.
   const analytics = { journey_progress: data.stats.progress, active_course: data.activeCourse };
 
-  // Server-enforced package lock (subscriptions.permissions.HasActiveSubscription
-  // is the real gate on protected endpoints - this is just the matching UI
-  // state, driven by the same has_active_subscription check via
-  // StudentDashboardView's `package` block). Only shows once an admin has
-  // turned enforcement on; otherwise the full dashboard below renders as before.
-  if (data.package?.enforcementEnabled && !data.package?.hasActivePackage) {
+  // Server-enforced package lock:
+  // Authentication != Subscription. Users without an active package see the
+  // clear CTA, verification pending state, or renewal option.
+  if (!data.package?.hasActivePackage) {
     const isPending = data.package.latestPayment?.status === "PENDING";
     const isRejected = data.package.latestPayment?.status === "REJECTED";
     const isExpired = data.package.status === "EXPIRED" || (data.package.status === "ACTIVE" && data.package.remainingDays === 0);
@@ -424,6 +421,27 @@ export default function StudentDashboardPage() {
                 <span className="w-1 h-1 rounded-full bg-secondary"></span>
                 <span>Applied for: <span className="font-semibold text-primary dark:text-foreground">{data.profile.targetPosition && data.profile.targetPosition !== "Student" ? data.profile.targetPosition : "Section Officer"}</span></span>
               </p>
+              {studentCtx?.activeCourse ? (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className="text-[11px] font-semibold text-muted-foreground">Active Course:</span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-bold bg-[#D4A72C]/15 text-[#D4A72C] border border-[#D4A72C]/30">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    {studentCtx.activeCourse.title}
+                  </span>
+                  {studentCtx.activeCourse.level_name && (
+                    <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded font-medium">
+                      {studentCtx.activeCourse.level_name}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[12px] text-muted-foreground">No active course yet.</span>
+                  <Link href="/courses" className="text-[12px] font-semibold text-[#D4A72C] hover:underline flex items-center gap-1">
+                    Explore Courses <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
+              )}
               {referralData && (
                 <div className="mt-1.5 text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/30 inline-flex px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-900/50 self-start">
                   Level {referralData.profile.level}
@@ -730,12 +748,12 @@ export default function StudentDashboardPage() {
               if (widgetId === "continue-study" && data.continueLearning) {
                 return (
                   <SortableWidget key={widgetId} id={widgetId}>
-                    <section className="relative overflow-hidden bg-primary text-primary-foreground rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
+                    <section className="relative overflow-hidden bg-gradient-to-r from-[#0B2545] via-[#0E3259] to-[#163E6B] text-white rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
                       <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#163E6B]/50 to-transparent pointer-events-none"></div>
-                      <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4A72C] opacity-5 blur-[60px] pointer-events-none"></div>
+                      <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4A72C] opacity-10 blur-[60px] pointer-events-none"></div>
                       <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 z-10">
                         <div className="flex items-start gap-5">
-                          <div className="bg-[#163E6B] p-3.5 rounded-[12px] hidden sm:flex shrink-0">
+                          <div className="bg-[#0B2545] border border-[#163E6B] p-3.5 rounded-[12px] hidden sm:flex shrink-0">
                             <BookOpen className="h-7 w-7 text-[#D4A72C]" strokeWidth={1.5} />
                           </div>
                           <div>
@@ -744,12 +762,12 @@ export default function StudentDashboardPage() {
                             </div>
                             <h3 className="font-bold text-[20px] text-white tracking-tight">{data.continueLearning.title}</h3>
                             <div className="flex items-center gap-4 mt-5">
-                              <Progress value={data.continueLearning.progress} className="w-48 h-1.5 bg-card/10" indicatorClassName="bg-[#D4A72C]" />
+                              <Progress value={data.continueLearning.progress} className="w-48 h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
                               <span className="text-[13px] font-bold text-white">{data.continueLearning.progress}%</span>
                             </div>
                           </div>
                         </div>
-                        <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-primary dark:text-foreground font-bold px-8 h-12 rounded-xl shrink-0" asChild>
+                        <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-slate-950 font-bold px-8 h-12 rounded-xl shrink-0 shadow-md transition-all hover:scale-[1.02]" asChild>
                           <Link href={data.continueLearning.url}>
                             Resume <ArrowRight className="ml-2 h-5 w-5" />
                           </Link>

@@ -291,9 +291,20 @@ export default function ExamsOverviewPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>Edit Details</DropdownMenuItem>
-                            <DropdownMenuItem>Manage Questions</DropdownMenuItem>
-                            <DropdownMenuItem>Preview as Student</DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin-dashboard/exams/${exam.id}`}>Overview</Link>
+                            </DropdownMenuItem>
+                            {exam.exam_type === "subjective" ? (
+                              <DropdownMenuItem asChild>
+                                <Link href={`/admin-dashboard/exams/${exam.id}/submissions`} className="font-semibold text-indigo-600">
+                                  Submissions &amp; Grading
+                                </Link>
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem asChild>
+                                <Link href={`/admin-dashboard/exams/${exam.id}/questions`}>Manage Questions</Link>
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem>Duplicate Exam</DropdownMenuItem>
                             <DropdownMenuSeparator />

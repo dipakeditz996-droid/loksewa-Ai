@@ -517,7 +517,14 @@ export default function QuestionBankPage() {
               ) : questions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-gray-500">
-                    No questions found matching your criteria.
+                    <p className="mb-3">No questions found matching your criteria.</p>
+                    <Link
+                      href="/admin-dashboard/academic/questions/create"
+                      className="inline-flex items-center gap-2 bg-[#0B2545] hover:bg-[#163E6C] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Question
+                    </Link>
                   </td>
                 </tr>
               ) : (

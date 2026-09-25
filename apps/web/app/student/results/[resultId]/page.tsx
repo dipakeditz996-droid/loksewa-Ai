@@ -280,63 +280,154 @@ export default function FullResultPage() {
       {/* Question Review */}
       <div>
         <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Review Answers</h2>
+        
+        {reviews.length > 0 && !reviews[0]?.reviewAllowed && (
+          <div className="p-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
+            <HelpCircle className="w-5 h-5 shrink-0 text-amber-600" />
+            <span>Correct answers and detailed explanations are not available for this examination.</span>
+          </div>
+        )}
+
         <div className="space-y-4">
-          {reviews.map((review, idx) => (
-            <div key={review.id} className="bg-card border border-border rounded-xl p-5 shadow-sm">
-              <div className="flex gap-4 items-start mb-4">
-                <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-muted/80 text-muted-foreground font-bold text-sm">
-                  {idx + 1}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-primary dark:text-foreground leading-relaxed mb-4">
-                    {review.questionText}
-                  </p>
-                  
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="bg-muted p-3 rounded-lg border border-border/50">
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Your Answer</p>
-                      <div className="flex items-center gap-2">
-                        {review.status === "Correct" && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                        {review.status === "Incorrect" && <XCircle className="w-4 h-4 text-red-500" />}
-                        {review.status === "Unanswered" && <HelpCircle className="w-4 h-4 text-muted-foreground" />}
-                        <span className={
-                          review.status === "Correct" ? "text-green-700 dark:text-green-300 font-medium" : 
-                          review.status === "Incorrect" ? "text-red-700 dark:text-red-300 font-medium" : "text-muted-foreground italic"
-                        }>
-                          {review.studentAnswer || "Not answered"}
-                        </span>
-                      </div>
-                    </div>
+          {reviews.map((review, idx) => {
+            const isSubjective = review.questionType && !["mcq", "true_false"].includes(review.questionType);
+            return (
+              <div key={review.id} className="bg-card border border-border rounded-xl p-5 shadow-sm">
+                <div className="flex gap-4 items-start mb-4">
+                  <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-muted/80 text-muted-foreground font-bold text-sm">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-primary dark:text-foreground leading-relaxed mb-4">
+                      {review.questionText}
+                    </p>
                     
-                    <div className="bg-green-50 dark:bg-green-950/30/50 p-3 rounded-lg border border-green-100">
-                      <p className="text-xs font-semibold text-green-600 uppercase tracking-wider mb-1">Correct Answer</p>
-                      <span className="text-green-800 font-medium">
-                        {review.correctAnswer}
-                      </span>
-                    </div>
+                    {/* Render Options if available for Objective Questions */}
+                    {!isSubjective && review.options && (review.options.A || review.options.B) && (
+                      <div className="grid sm:grid-cols-2 gap-2 mb-4">
+                        {(['A', 'B', 'C', 'D'] as const).map(opt => {
+                          const optText = review.options?.[opt];
+                          if (!optText) return null;
+                          const isStudentChoice = review.studentAnswer === opt;
+                          const isCorrectOption = review.reviewAllowed && review.correctAnswer === opt;
+                          
+                          let containerStyle = "bg-muted/20 border-border/60 text-muted-foreground";
+                          let badgeStyle = "bg-muted text-foreground";
+                          
+                          if (isCorrectOption) {
+                            containerStyle = "bg-green-50 dark:bg-green-950/20 border-green-300 dark:border-green-800 font-medium text-green-900 dark:text-green-200";
+                            badgeStyle = "bg-green-600 text-white";
+                          } else if (isStudentChoice) {
+                            containerStyle = "bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-800 font-medium text-red-900 dark:text-red-200";
+                            badgeStyle = "bg-red-500 text-white";
+                          }
+
+                          return (
+                            <div
+                              key={opt}
+                              className={`p-3 rounded-lg border text-sm flex items-center justify-between transition-colors ${containerStyle}`}
+                            >
+                              <span className="flex items-center gap-2.5">
+                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${badgeStyle}`}>
+                                  {opt}
+                                </span>
+                                <span>{optText}</span>
+                              </span>
+                              {isCorrectOption && <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />}
+                              {!isCorrectOption && isStudentChoice && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {isSubjective ? (
+                      <div className="space-y-3">
+                        <div className="bg-muted/40 p-4 rounded-lg border border-border/60">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Your Written Answer</p>
+                          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+                            {review.studentAnswer || <span className="italic text-muted-foreground">Not answered</span>}
+                          </p>
+                        </div>
+
+                        {review.reviewAllowed && review.modelAnswer && (
+                          <div className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1">Model Answer</p>
+                            <p className="text-sm text-blue-950 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
+                              {review.modelAnswer}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="bg-muted/60 p-3 rounded-lg border border-border/60">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Your Answer</p>
+                          <div className="flex items-center gap-2">
+                            {review.status === "Correct" && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
+                            {review.status === "Incorrect" && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                            {review.status === "Unanswered" && <HelpCircle className="w-4 h-4 text-muted-foreground shrink-0" />}
+                            <span className={
+                              review.status === "Correct" ? "text-green-700 dark:text-green-300 font-bold" : 
+                              review.status === "Incorrect" ? "text-red-700 dark:text-red-300 font-bold" : "text-muted-foreground italic"
+                            }>
+                              {review.studentAnswer ? `${review.studentAnswer} ${review.status === "Correct" ? "✓" : "❌"}` : "Not answered"}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className={`p-3 rounded-lg border ${
+                          review.reviewAllowed 
+                            ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800" 
+                            : "bg-muted/40 border-border/60"
+                        }`}>
+                          <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${
+                            review.reviewAllowed ? "text-green-700 dark:text-green-400" : "text-muted-foreground"
+                          }`}>
+                            Correct Answer
+                          </p>
+                          <div className="flex items-center gap-2">
+                            {review.reviewAllowed && review.correctAnswer ? (
+                              <>
+                                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                                <span className="text-green-800 dark:text-green-200 font-bold">
+                                  {review.correctAnswer} ✓
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground italic text-sm">
+                                {review.reviewAllowed ? "Unavailable" : "Not available for this examination"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {review.reviewAllowed && (
+                      <div className="mt-4 pt-4 border-t border-border/50">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <BarChart3 className="w-3.5 h-3.5" /> Explanation
+                        </p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {review.explanation || "Explanation unavailable."}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   
-                  <div className="mt-4 pt-4 border-t border-border/50">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                      <BarChart3 className="w-3.5 h-3.5" /> Explanation
-                    </p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      {review.explanation}
-                    </p>
+                  <div className="shrink-0 text-right hidden sm:block">
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-bold ${
+                      review.status === "Correct" ? "bg-green-100 text-green-700 dark:text-green-300" :
+                      "bg-muted/80 text-muted-foreground"
+                    }`}>
+                      {review.marks} / {review.maxMarks} marks
+                    </span>
                   </div>
-                </div>
-                
-                <div className="shrink-0 text-right hidden sm:block">
-                  <span className={`inline-flex px-2 py-1 rounded text-xs font-bold ${
-                    review.status === "Correct" ? "bg-green-100 text-green-700 dark:text-green-300" :
-                    "bg-muted/80 text-muted-foreground"
-                  }`}>
-                    {review.marks} / {review.maxMarks} marks
-                  </span>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       {/* Debug Info */}

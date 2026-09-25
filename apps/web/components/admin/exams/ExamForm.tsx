@@ -210,7 +210,7 @@ export function ExamForm({ initialData, isEdit = false }: ExamFormProps) {
                   position={data.exam?.toString()}
                   subject={data.subject?.toString()}
                   onChange={(field, val) => {
-                    let newData = { ...data };
+                    const newData = { ...data };
                     if (field === 'category') {
                       newData.category = val;
                       newData.exam = undefined;

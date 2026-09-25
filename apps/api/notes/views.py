@@ -226,39 +226,14 @@ class StudentPortalSyllabusNotesView(APIView):
                     'course': c
                 }
         else:
-            enrollments = Enrollment.objects.filter(student=user, status='active').select_related(
-                'course', 'course__exam', 'course__exam__parent', 'course__exam__category'
-            )
-            for e in enrollments:
-                if e.course and e.course.exam:
-                    prep = e.course.exam
+            from courses.access import authorized_courses
+            auth_courses = authorized_courses(user).select_related('exam', 'exam__parent', 'exam__category')
+            for c in auth_courses:
+                if c.exam:
+                    prep = c.exam
                     authorized_prep_dict[prep.id] = {
                         'exam': prep,
-                        'course': e.course
-                    }
-
-            profile = getattr(user, 'student_profile', None)
-            if profile:
-                if profile.target_position:
-                    target_exam = profile.target_position
-                    if target_exam.parent_id:
-                        c = profile.target_course or target_exam.courses.first()
-                        authorized_prep_dict[target_exam.id] = {
-                            'exam': target_exam,
-                            'course': c
-                        }
-                    else:
-                        for ch in target_exam.children.filter(is_active=True):
-                            c = ch.courses.first()
-                            authorized_prep_dict[ch.id] = {
-                                'exam': ch,
-                                'course': c
-                            }
-                elif profile.target_course and profile.target_course.exam:
-                    prep = profile.target_course.exam
-                    authorized_prep_dict[prep.id] = {
-                        'exam': prep,
-                        'course': profile.target_course
+                        'course': c
                     }
 
         authorized_preps_list = []
@@ -276,10 +251,32 @@ class StudentPortalSyllabusNotesView(APIView):
                 "courseTitle": c.title if c else None,
             })
 
+        req_course_id = request.query_params.get('course_id')
         req_exam_id = request.query_params.get('exam') or request.query_params.get('exam_id')
         selected_prep_id = None
 
-        if req_exam_id:
+        if req_course_id:
+            try:
+                c_id = int(req_course_id)
+                matched = next((info for info in authorized_prep_dict.values() if info['course'] and info['course'].id == c_id), None)
+                if matched:
+                    selected_prep_id = matched['exam'].id
+                elif is_staff_or_teacher:
+                    from courses.models import Course
+                    c = Course.objects.filter(id=c_id).first()
+                    if c and c.exam_id:
+                        selected_prep_id = c.exam_id
+                    else:
+                        return Response({"error": "Course not found or has no linked syllabus."}, status=status.HTTP_404_NOT_FOUND)
+                else:
+                    return Response(
+                        {"error": "You are not authorized to view content for this course."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except (ValueError, TypeError):
+                return Response({"error": "Invalid course_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        elif req_exam_id:
             try:
                 candidate_id = int(req_exam_id)
                 if candidate_id in authorized_prep_dict or is_staff_or_teacher:
@@ -292,7 +289,15 @@ class StudentPortalSyllabusNotesView(APIView):
             except (ValueError, TypeError):
                 return Response({"error": "Invalid exam_id"}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            if authorized_preps_list:
+            if not is_staff_or_teacher:
+                from courses.access import get_student_course_context
+                ctx = get_student_course_context(user)
+                active_c = ctx.get('active_course')
+                if active_c and active_c.get('exam_id') in authorized_prep_dict:
+                    selected_prep_id = active_c['exam_id']
+                elif authorized_preps_list:
+                    selected_prep_id = authorized_preps_list[0]['id']
+            elif authorized_preps_list:
                 selected_prep_id = authorized_preps_list[0]['id']
 
         if not selected_prep_id:

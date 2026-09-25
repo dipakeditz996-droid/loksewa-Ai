@@ -22,7 +22,8 @@ import {
   Bell,
   MessageSquarePlus,
   PenTool,
-  CreditCard
+  CreditCard,
+  Award
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,13 @@ interface SidebarProps {
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   role?: "student" | "teacher" | "admin" | "super-admin";
+}
+
+interface NavLinkItem {
+  href: string;
+  label: string;
+  icon: any;
+  isActive?: (pathname: string) => boolean;
 }
 
 const DEFAULT_BRAND_NAME = "LoksewaAI";
@@ -59,26 +67,104 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const brandSuffix = brandName.endsWith("AI") ? "AI" : null;
   const brandBase = brandSuffix ? brandName.slice(0, -2) : brandName;
 
-  const studentLinks = [
-    { href: "/student", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/student/courses", label: "My Courses", icon: BookOpen },
-    { href: "/student/purchases", label: "My Purchases", icon: CreditCard },
-    { href: "/student/study-plan", label: "My Study Plan", icon: Target },
-    { href: "/student/syllabus", label: "Syllabus", icon: BookOpen },
-    { href: "/student/practice", label: "Practice", icon: Trophy },
-    { href: "/student/exams", label: "Mock Exams", icon: FileText },
-    { href: "/student/results", label: "Results", icon: FileText },
-    { href: "/student/leaderboard", label: "Leaderboard", icon: Trophy },
-    { href: "/student/community", label: "Community", icon: Users },
-    { href: "/student/feedback", label: "Feedback", icon: MessageSquarePlus },
-    { href: "/student/ai-tutor", label: "AI Tutor", icon: MessageSquare },
-    { href: "/student/notes", label: "Notes", icon: Bookmark },
-    { href: "/student/marketplace", label: "Marketplace", icon: ShoppingBag },
-    { href: "/student/games", label: "Games", icon: Gamepad2 },
-    { href: "/student/analytics", label: "Analytics", icon: History },
+  const studentLinks: NavLinkItem[] = [
+    { 
+      href: "/student", 
+      label: "Dashboard", 
+      icon: LayoutDashboard,
+      isActive: (p) => p === "/student"
+    },
+    { 
+      href: "/student/learning", 
+      label: "My Learning", 
+      icon: BookOpen,
+      isActive: (p) => 
+        p === "/student/learning" || 
+        p.startsWith("/student/learning/") || 
+        p === "/student/courses" || 
+        p.startsWith("/student/courses/") || 
+        p === "/student/purchases" || 
+        p.startsWith("/student/purchases/")
+    },
+    { 
+      href: "/student/study-plan", 
+      label: "My Study Plan", 
+      icon: Target,
+      isActive: (p) => p === "/student/study-plan" || p.startsWith("/student/study-plan/")
+    },
+    { 
+      href: "/student/syllabus", 
+      label: "Syllabus & Notes", 
+      icon: BookOpen,
+      isActive: (p) => 
+        p === "/student/syllabus" || 
+        p.startsWith("/student/syllabus/") || 
+        p === "/student/notes" || 
+        p.startsWith("/student/notes/")
+    },
+    { 
+      href: "/student/practice", 
+      label: "Practice", 
+      icon: Trophy,
+      isActive: (p) => p === "/student/practice" || p.startsWith("/student/practice/")
+    },
+    { 
+      href: "/student/exams", 
+      label: "Mock Exams", 
+      icon: FileText,
+      isActive: (p) => p === "/student/exams" || p.startsWith("/student/exams/")
+    },
+    { 
+      href: "/student/results-feedback", 
+      label: "Results & Feedback", 
+      icon: Award,
+      isActive: (p) => 
+        p === "/student/results-feedback" || 
+        p.startsWith("/student/results-feedback/") || 
+        p === "/student/results" || 
+        p.startsWith("/student/results/") || 
+        p === "/student/feedback" || 
+        p.startsWith("/student/feedback/")
+    },
+    { 
+      href: "/student/leaderboard-analytics", 
+      label: "Leaderboard & Analytics", 
+      icon: Trophy,
+      isActive: (p) => 
+        p === "/student/leaderboard-analytics" || 
+        p.startsWith("/student/leaderboard-analytics/") || 
+        p === "/student/leaderboard" || 
+        p.startsWith("/student/leaderboard/") || 
+        p === "/student/analytics" || 
+        p.startsWith("/student/analytics/")
+    },
+    { 
+      href: "/student/community", 
+      label: "Community", 
+      icon: Users,
+      isActive: (p) => p === "/student/community" || p.startsWith("/student/community/")
+    },
+    { 
+      href: "/student/ai-tutor", 
+      label: "AI Tutor", 
+      icon: MessageSquare,
+      isActive: (p) => p === "/student/ai-tutor" || p.startsWith("/student/ai-tutor/")
+    },
+    { 
+      href: "/student/marketplace", 
+      label: "Marketplace", 
+      icon: ShoppingBag,
+      isActive: (p) => p === "/student/marketplace" || p.startsWith("/student/marketplace/")
+    },
+    { 
+      href: "/student/games", 
+      label: "Games", 
+      icon: Gamepad2,
+      isActive: (p) => p === "/student/games" || p.startsWith("/student/games/")
+    },
   ];
 
-  const adminLinks = [
+  const adminLinks: NavLinkItem[] = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/mock-exams", label: "Mock Exam Review", icon: FileText },
     { href: "/admin-dashboard/packages", label: "Subscription Plans", icon: Bookmark },
@@ -241,7 +327,9 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
             ) : (
               links.map((link) => {
                 const Icon = link.icon;
-                const isActive = pathname === link.href || (link.href !== `/${role}` && pathname.startsWith(`${link.href}/`));
+                const isActive = link.isActive
+                  ? link.isActive(pathname)
+                  : pathname === link.href || (link.href !== `/${role}` && pathname.startsWith(`${link.href}/`));
                 
                 return (
                   <Link

@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ChevronRight, FileText, Target, LayoutList, Settings,
-  Check, Loader2, AlertCircle, Save, Rocket,
+  Check, Loader2, AlertCircle, Save, Rocket, UploadCloud, FileCheck,
+  Trash2, Eye, Download, FileUp, Sparkles, HelpCircle,
 } from "lucide-react";
 import { QuestionSelectionWorkspace } from "@/components/admin/exams/QuestionSelectionWorkspace";
 import { adminExamApi, Examination, ExaminationType, ObjectiveCategory } from "@/lib/api/admin-exams";
@@ -94,6 +95,18 @@ export default function CreateExamPage() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
 
+  // ── Subjective Examination Specifics
+  const [hasQuestionPaper, setHasQuestionPaper] = useState(false);
+  const [questionPaperPageCount, setQuestionPaperPageCount] = useState(0);
+  const [questionPaperFileSize, setQuestionPaperFileSize] = useState(0);
+  const [uploadDeadlineMinutes, setUploadDeadlineMinutes] = useState(15);
+  const [allowedFileTypes, setAllowedFileTypes] = useState("pdf,image");
+  const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(25);
+  const [evaluationType, setEvaluationType] = useState<"manual" | "ai_assisted" | "hybrid">("manual");
+  const [subjectiveTotalMarks, setSubjectiveTotalMarks] = useState(100);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const applyExam = useCallback((e: Examination) => {
     setTitle(e.title || "");
     setDescription(e.description || "");
@@ -118,6 +131,17 @@ export default function CreateExamPage() {
     setStartTime(toLocal(e.start_time));
     setEndTime(toLocal(e.end_time));
     setSelection({ count: e.total_questions ?? 0, marks: e.total_marks ?? 0 });
+
+    if (e.upload_deadline_minutes !== undefined && e.upload_deadline_minutes !== null) {
+      setUploadDeadlineMinutes(e.upload_deadline_minutes);
+    }
+    if (e.allowed_file_types) setAllowedFileTypes(e.allowed_file_types);
+    if (e.max_upload_size_mb) setMaxUploadSizeMb(e.max_upload_size_mb);
+    if (e.evaluation_type) setEvaluationType(e.evaluation_type);
+    if (e.total_marks) setSubjectiveTotalMarks(e.total_marks);
+    setHasQuestionPaper(Boolean(e.question_paper_pdf));
+    setQuestionPaperPageCount(e.question_paper_page_count || 0);
+    setQuestionPaperFileSize(e.question_paper_file_size || 0);
   }, []);
 
   // Recover an existing draft after a refresh.
@@ -149,7 +173,7 @@ export default function CreateExamPage() {
     if (!categoryId) return;
     adminSyllabusApi.getPositions(categoryId)
       .then(r => setPositions(Array.isArray(r) ? r : []))
-      .catch(() => {});
+      .catch(() => { });
   }, [categoryId]);
 
   useEffect(() => {
@@ -157,7 +181,7 @@ export default function CreateExamPage() {
     if (!positionId) return;
     adminSyllabusApi.getSubjects(positionId)
       .then(r => setSubjects(Array.isArray(r) ? r : []))
-      .catch(() => {});
+      .catch(() => { });
   }, [positionId]);
 
   const buildPayload = () => ({
@@ -186,7 +210,70 @@ export default function CreateExamPage() {
     randomize_options: randomizeOptions,
     start_time: toIso(startTime),
     end_time: toIso(endTime),
+    ...(examType === "subjective"
+      ? {
+        total_marks: subjectiveTotalMarks,
+        upload_deadline_minutes: uploadDeadlineMinutes,
+        allowed_file_types: allowedFileTypes,
+        max_upload_size_mb: maxUploadSizeMb,
+        evaluation_type: evaluationType,
+      }
+      : {}),
   });
+
+  const handleQuestionPaperFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      toast.error("Please upload a valid PDF file.");
+      return;
+    }
+    let targetExamId = examId;
+    if (!targetExamId) {
+      targetExamId = await persist({ silent: true });
+      if (!targetExamId) return;
+    }
+
+    setUploadingPdf(true);
+    try {
+      const res = await adminExamApi.uploadQuestionPaper(targetExamId, file);
+      setHasQuestionPaper(true);
+      setQuestionPaperPageCount(res.page_count);
+      setQuestionPaperFileSize(res.file_size);
+      toast.success("Question Paper PDF uploaded successfully!");
+    } catch (err: any) {
+      const msg = err?.data?.error || err?.data?.detail || "Failed to upload question paper.";
+      toast.error(msg);
+    } finally {
+      setUploadingPdf(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleDeleteQuestionPaper = async () => {
+    if (!examId) return;
+    if (!confirm("Are you sure you want to remove the question paper PDF?")) return;
+    try {
+      await adminExamApi.deleteQuestionPaper(examId);
+      setHasQuestionPaper(false);
+      setQuestionPaperPageCount(0);
+      setQuestionPaperFileSize(0);
+      toast.success("Question paper removed.");
+    } catch {
+      toast.error("Failed to remove question paper.");
+    }
+  };
+
+  const handleViewQuestionPaper = async () => {
+    if (!examId) return;
+    try {
+      const blob = await adminExamApi.getQuestionPaperBlob(examId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch {
+      toast.error("Could not preview question paper PDF.");
+    }
+  };
 
   /** Creates the Examination on first save, then PATCHes. Returns its id. */
   const persist = async (opts: { silent?: boolean } = {}): Promise<number | null> => {
@@ -307,7 +394,7 @@ export default function CreateExamPage() {
       {/* Stepper */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">
         <div className="flex flex-wrap items-center gap-3">
-          {STEPS.map((s, i) => {
+          {STEPS.map((s) => (s.id === 3 && examType === "subjective" ? { ...s, title: "Question Paper" } : s)).map((s, i) => {
             const active = step === s.id;
             const done = step > s.id;
             // Step 3 is unreachable until a draft exists to attach questions to.
@@ -319,17 +406,15 @@ export default function CreateExamPage() {
                   disabled={locked}
                   className={`flex items-center gap-2.5 disabled:cursor-not-allowed ${locked ? "opacity-40" : ""}`}
                 >
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
-                    active ? "bg-[#0B2545] text-white"
-                      : done ? "bg-emerald-500 text-white"
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${active ? "bg-[#0B2545] text-white"
+                    : done ? "bg-emerald-500 text-white"
                       : "bg-slate-100 text-slate-400"
-                  }`}>
+                    }`}>
                     {done ? <Check className="w-4 h-4" /> : s.id}
                   </span>
                   <span className="text-left hidden sm:block">
-                    <span className={`block text-[10px] font-bold uppercase tracking-wider ${
-                      active ? "text-[#0B2545]" : done ? "text-emerald-600" : "text-slate-400"
-                    }`}>Step {s.id}</span>
+                    <span className={`block text-[10px] font-bold uppercase tracking-wider ${active ? "text-[#0B2545]" : done ? "text-emerald-600" : "text-slate-400"
+                      }`}>Step {s.id}</span>
                     <span className={`block text-sm font-medium ${active ? "text-slate-900" : "text-slate-500"}`}>
                       {s.title}
                     </span>
@@ -451,7 +536,209 @@ export default function CreateExamPage() {
 
       {/* ── Step 3 ─────────────────────────────────────────────────────────── */}
       {step === 3 && (
-        examId ? (
+        examType === "subjective" ? (
+          <div className="space-y-6">
+            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-[#0B2545] flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-600" />
+                    Subjective Question Paper (PDF)
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    Upload the official Loksewa PSC question paper PDF that students will read during their exam.
+                  </p>
+                </div>
+                {hasQuestionPaper && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <FileCheck className="w-3.5 h-3.5" /> PDF Attached ({questionPaperPageCount} {questionPaperPageCount === 1 ? "page" : "pages"})
+                  </span>
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,.pdf"
+                className="hidden"
+                onChange={handleQuestionPaperFileChange}
+              />
+
+              {hasQuestionPaper ? (
+                <div className="bg-gradient-to-r from-emerald-50/60 to-blue-50/40 border border-emerald-200/80 rounded-xl p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start sm:items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-xl bg-white shadow-sm border border-emerald-200 flex items-center justify-center shrink-0">
+                        <FileCheck className="w-6 h-6 text-emerald-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-slate-900">Official Question Paper PDF</h4>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
+                          <span className="bg-white/80 px-2 py-0.5 rounded border border-slate-200 font-medium text-slate-700">
+                            {questionPaperPageCount} {questionPaperPageCount === 1 ? "Page" : "Pages"}
+                          </span>
+                          {questionPaperFileSize > 0 && (
+                            <span className="bg-white/80 px-2 py-0.5 rounded border border-slate-200 font-medium text-slate-700">
+                              {(questionPaperFileSize / (1024 * 1024)).toFixed(2)} MB
+                            </span>
+                          )}
+                          <span className="text-emerald-700 font-medium">Ready for examination</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleViewQuestionPaper}
+                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
+                      >
+                        <Eye className="w-4 h-4 text-slate-500" /> Preview PDF
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingPdf}
+                        className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors"
+                      >
+                        <FileUp className="w-4 h-4" /> Replace
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteQuestionPaper}
+                        disabled={uploadingPdf}
+                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition-colors"
+                        title="Remove Question Paper"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => !uploadingPdf && fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50 hover:bg-indigo-50/20 rounded-xl p-8 text-center cursor-pointer transition-all group"
+                >
+                  <div className="mx-auto w-14 h-14 rounded-2xl bg-white shadow-sm border border-slate-200 flex items-center justify-center group-hover:scale-105 transition-transform mb-3">
+                    {uploadingPdf ? (
+                      <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
+                    ) : (
+                      <UploadCloud className="w-7 h-7 text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                    )}
+                  </div>
+                  <h4 className="font-semibold text-slate-800 text-base">
+                    {uploadingPdf ? "Uploading and processing question paper..." : "Click to upload Question Paper PDF"}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    Supported format: Adobe PDF (.pdf) up to 25MB. Page count and metadata will be parsed automatically.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={uploadingPdf}
+                    className="mt-4 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 shadow-sm group-hover:border-indigo-300"
+                  >
+                    Select PDF Document
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Subjective Submission Rules */}
+            <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
+              <div>
+                <h3 className="text-base font-bold text-[#0B2545] flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-indigo-600" />
+                  Answer Submission &amp; Evaluation Configuration
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure the mobile upload window and evaluator workflow.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div>
+                  <label className={label}>Upload Deadline Window (minutes) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={uploadDeadlineMinutes}
+                    onChange={(e) => setUploadDeadlineMinutes(Math.max(1, Number(e.target.value) || 15))}
+                    className={field}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Extra time granted after writing timer expires for students to photograph and upload answer sheets.
+                  </p>
+                </div>
+                <div>
+                  <label className={label}>Total Marks *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={subjectiveTotalMarks}
+                    onChange={(e) => setSubjectiveTotalMarks(Math.max(1, Number(e.target.value) || 100))}
+                    className={field}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Total examination marks (used for percentage and pass criteria).
+                  </p>
+                </div>
+                <div>
+                  <label className={label}>Passing Marks</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={passingMarks}
+                    onChange={(e) => setPassingMarks(Number(e.target.value) || 0)}
+                    className={field}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Minimum marks required to pass (default 40%).
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-1">
+                <div>
+                  <label className={label}>Allowed Upload Types</label>
+                  <select
+                    value={allowedFileTypes}
+                    onChange={(e) => setAllowedFileTypes(e.target.value)}
+                    className={field}
+                  >
+                    <option value="pdf,image">Camera Photos &amp; PDF (Recommended)</option>
+                    <option value="pdf">PDF Document Only</option>
+                    <option value="image">Camera Photos Only</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={label}>Max Upload File Size (MB)</label>
+                  <input
+                    type="number"
+                    min={5}
+                    max={100}
+                    value={maxUploadSizeMb}
+                    onChange={(e) => setMaxUploadSizeMb(Math.max(5, Number(e.target.value) || 25))}
+                    className={field}
+                  />
+                </div>
+                <div>
+                  <label className={label}>Evaluation Workflow</label>
+                  <select
+                    value={evaluationType}
+                    onChange={(e) => setEvaluationType(e.target.value as any)}
+                    className={field}
+                  >
+                    <option value="manual">Manual Examiner Evaluation</option>
+                    <option value="ai_assisted">AI-Assisted OCR + Examiner Verification</option>
+                    <option value="hybrid">Hybrid (AI First Pass + Manual Review)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : examId ? (
           <QuestionSelectionWorkspace
             examinationId={examId}
             defaultSubjectId={subjectId ?? null}
@@ -472,84 +759,193 @@ export default function CreateExamPage() {
       {step === 4 && (
         <div className="space-y-5">
           <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-5">
-            <h2 className="font-bold text-[#0B2545]">Scoring &amp; Timing</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <h2 className="font-bold text-[#0B2545]">
+              {examType === "subjective" ? "Writing Timing & Scoring" : "Scoring & Timing"}
+            </h2>
+            <div className={`grid grid-cols-1 ${examType === "subjective" ? "md:grid-cols-3" : "md:grid-cols-3"} gap-5`}>
               <div>
-                <label className={label}>Time Limit (minutes) *</label>
-                <input type="number" min={1} value={timeLimit}
-                  onChange={e => setTimeLimit(Math.max(1, Number(e.target.value) || 1))} className={field} />
+                <label className={label}>
+                  {examType === "subjective" ? "Writing Time Limit (minutes) *" : "Time Limit (minutes) *"}
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={timeLimit}
+                  onChange={(e) => setTimeLimit(Math.max(1, Number(e.target.value) || 1))}
+                  className={field}
+                />
+                {examType === "subjective" && (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Time allocated for handwriting answers on physical paper.
+                  </p>
+                )}
               </div>
-              <div>
-                <label className={label}>Marks Per Question</label>
-                <input type="number" min={0.5} step={0.5} value={marksPerQuestion}
-                  onChange={e => setMarksPerQuestion(Number(e.target.value) || 1)} className={field} />
-              </div>
-              <div>
-                <label className={label}>Passing Marks</label>
-                <input type="number" min={0} value={passingMarks}
-                  onChange={e => setPassingMarks(Number(e.target.value) || 0)} className={field} />
-              </div>
+              {examType === "subjective" ? (
+                <>
+                  <div>
+                    <label className={label}>Total Exam Marks *</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={subjectiveTotalMarks}
+                      onChange={(e) => setSubjectiveTotalMarks(Math.max(1, Number(e.target.value) || 100))}
+                      className={field}
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>Passing Marks</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={passingMarks}
+                      onChange={(e) => setPassingMarks(Number(e.target.value) || 0)}
+                      className={field}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className={label}>Marks Per Question</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={marksPerQuestion}
+                      onChange={(e) => setMarksPerQuestion(Number(e.target.value) || 1)}
+                      className={field}
+                    />
+                  </div>
+                  <div>
+                    <label className={label}>Passing Marks</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={passingMarks}
+                      onChange={(e) => setPassingMarks(Number(e.target.value) || 0)}
+                      className={field}
+                    />
+                  </div>
+                </>
+              )}
             </div>
-            <p className="text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-              {selection.count} question(s) assigned · <strong>{selection.marks}</strong> total marks.
-              Totals come from the questions on the exam and are recalculated server-side.
-            </p>
+
+            {examType === "subjective" ? (
+              <p className="text-sm text-indigo-900 bg-indigo-50/70 border border-indigo-100 rounded-lg px-4 py-2.5">
+                Subjective Examination · Writing Time: <strong>{timeLimit} mins</strong> · Upload Window:{" "}
+                <strong>{uploadDeadlineMinutes} mins</strong> · Total Marks: <strong>{subjectiveTotalMarks}</strong>.
+              </p>
+            ) : (
+              <p className="text-sm text-slate-600 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+                {selection.count} question(s) assigned · <strong>{selection.marks}</strong> total marks.
+                Totals come from the questions on the exam and are recalculated server-side.
+              </p>
+            )}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
             <h2 className="font-bold text-[#0B2545]">Attempt Rules</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className={label}>Max Attempts <span className="text-slate-400">(0 = unlimited)</span></label>
-                <input type="number" min={0} value={maxAttempts}
-                  onChange={e => setMaxAttempts(Math.max(0, Number(e.target.value) || 0))} className={field} />
+                <label className={label}>
+                  Max Attempts <span className="text-slate-400">(0 = unlimited)</span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={maxAttempts}
+                  onChange={(e) => setMaxAttempts(Math.max(0, Number(e.target.value) || 0))}
+                  className={field}
+                />
               </div>
               <div>
                 <label className={label}>Result Visibility</label>
-                <select value={resultVisibility}
-                  onChange={e => setResultVisibility(e.target.value as Examination["result_visibility"])}
-                  className={field}>
+                <select
+                  value={examType === "subjective" ? "manual" : resultVisibility}
+                  disabled={examType === "subjective"}
+                  onChange={(e) => setResultVisibility(e.target.value as Examination["result_visibility"])}
+                  className={`${field} disabled:bg-slate-50`}
+                >
+                  <option value="manual">After manual review &amp; publishing</option>
                   <option value="immediate">Immediately</option>
                   <option value="after_end">After exam ends</option>
-                  <option value="manual">After manual review</option>
                 </select>
+                {examType === "subjective" && (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Subjective exams require manual evaluation by an evaluator before publishing results to students.
+                  </p>
+                )}
               </div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-              {([
-                ["Allow resume", allowResume, setAllowResume,
-                  objectiveCategory === "live" ? "Live Exams never allow resume — leaving mid-attempt forfeits it, regardless of this setting." : null],
-                ["Auto-submit on timeout", autoSubmit, setAutoSubmit, null],
-                ["Show correct answers", showAnswers, setShowAnswers, null],
-                ["Randomize question order", randomizeQuestions, setRandomizeQuestions,
-                  objectiveCategory === "old_past" ? "Old Past Exams must keep their original, fixed question order." : null],
-                ["Randomize MCQ options", randomizeOptions, setRandomizeOptions, null],
-                ["Negative marking", negativeMarking, setNegativeMarking, null],
-              ] as [string, boolean, (v: boolean) => void, string | null][]).map(([text, value, setter, lockedNote]) => (
-                <label key={text} className={`flex items-start gap-3 text-sm text-slate-700 ${lockedNote ? "opacity-60" : "cursor-pointer"}`}>
+              {(
+                examType === "subjective"
+                  ? [
+                    [
+                      "Allow resume",
+                      allowResume,
+                      setAllowResume,
+                      "Allows students to reconnect and resume if their browser disconnects during writing time.",
+                    ],
+                    ["Auto-submit on timeout", autoSubmit, setAutoSubmit, "Moves attempt to upload window when writing timer reaches zero."],
+                  ]
+                  : [
+                    [
+                      "Allow resume",
+                      allowResume,
+                      setAllowResume,
+                      objectiveCategory === "live"
+                        ? "Live Exams never allow resume — leaving mid-attempt forfeits it, regardless of this setting."
+                        : null,
+                    ],
+                    ["Auto-submit on timeout", autoSubmit, setAutoSubmit, null],
+                    ["Show correct answers", showAnswers, setShowAnswers, null],
+                    [
+                      "Randomize question order",
+                      randomizeQuestions,
+                      setRandomizeQuestions,
+                      objectiveCategory === "old_past"
+                        ? "Old Past Exams must keep their original, fixed question order."
+                        : null,
+                    ],
+                    ["Randomize MCQ options", randomizeOptions, setRandomizeOptions, null],
+                    ["Negative marking", negativeMarking, setNegativeMarking, null],
+                  ]
+              ).map(([text, value, setter, note]: any) => (
+                <label
+                  key={text}
+                  className="flex items-start gap-3 text-sm text-slate-700 cursor-pointer"
+                >
                   <input
                     type="checkbox"
-                    checked={lockedNote ? false : value}
-                    disabled={!!lockedNote}
-                    onChange={e => setter(e.target.checked)}
+                    checked={value}
+                    onChange={(e) => setter(e.target.checked)}
                     className="w-4 h-4 rounded text-[#0B2545] mt-0.5"
                   />
                   <span>
                     {text}
-                    {lockedNote && <span className="block text-xs text-slate-400 mt-0.5">{lockedNote}</span>}
+                    {note && <span className="block text-xs text-slate-400 mt-0.5">{note}</span>}
                   </span>
                 </label>
               ))}
             </div>
-            {negativeMarking && (
+
+            {examType !== "subjective" && negativeMarking && (
               <div className="pt-1">
                 <label className={label}>Negative Marking Value</label>
-                <input type="number" min={0} step={0.05} value={negativeValue}
-                  onChange={e => setNegativeValue(Number(e.target.value) || 0)}
-                  className={`${field} md:w-48`} />
+                <input
+                  type="number"
+                  min={0}
+                  step={0.05}
+                  value={negativeValue}
+                  onChange={(e) => setNegativeValue(Number(e.target.value) || 0)}
+                  className={`${field} md:w-48`}
+                />
               </div>
             )}
           </div>
+
 
           <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-4">
             <h2 className="font-bold text-[#0B2545]">Availability</h2>

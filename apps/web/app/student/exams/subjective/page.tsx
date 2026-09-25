@@ -171,7 +171,7 @@ export default function SubjectiveExamsPage() {
                 // Determine overall status based on answers if needed, or use attempt status
                 let isEvaluated = false;
                 let totalScore = 0;
-                let totalMarks = attempt.practice_set_detail?.question_count ? attempt.practice_set_detail.question_count * 10 : 100; // Mock total marks calculation
+                const totalMarks = attempt.practice_set_detail?.question_count ? attempt.practice_set_detail.question_count * 10 : 100; // Mock total marks calculation
                 
                 if (attempt.answers && attempt.answers.length > 0) {
                   // If all answers are evaluated

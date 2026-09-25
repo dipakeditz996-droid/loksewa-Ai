@@ -2,7 +2,10 @@ from django.db import models
 from django.utils import timezone
 from core.models import User
 from django.conf import settings
-from core.upload_validators import validate_image_size_5mb, validate_image_extension
+from core.upload_validators import (
+    validate_image_size_5mb, validate_image_extension,
+    validate_document_size_20mb, validate_document_extension,
+)
 
 class ExamCategory(models.Model):
     name = models.CharField(max_length=255)
@@ -151,7 +154,9 @@ class Question(models.Model):
         ('hard', 'Hard'),
     )
     question_id = models.CharField(max_length=20, unique=True, blank=True, null=True, help_text="Permanent unique ID (e.g., Q-000001)")
-    topic = models.ForeignKey(Topic, on_delete=models.CASCADE, related_name='questions')
+    subject = models.ForeignKey('exams.Subject', on_delete=models.CASCADE, null=True, blank=True, related_name='questions')
+    chapter = models.ForeignKey('exams.Chapter', on_delete=models.SET_NULL, null=True, blank=True, related_name='questions')
+    topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True, related_name='questions')
     question_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='mcq')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     text = models.TextField()
@@ -220,6 +225,23 @@ class Question(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        # Auto-propagate academic parents if child is set
+        if self.topic_id and not self.chapter_id:
+            try:
+                self.chapter_id = self.topic.chapter_id
+            except Exception:
+                pass
+        if self.chapter_id and not self.subject_id:
+            try:
+                self.subject_id = self.chapter.subject_id
+            except Exception:
+                pass
+        elif self.topic_id and not self.subject_id:
+            try:
+                self.subject_id = self.topic.chapter.subject_id
+            except Exception:
+                pass
+
         super().save(*args, **kwargs)
         if is_new and not self.question_id:
             self.question_id = f"Q-{self.pk:06d}"
@@ -628,6 +650,7 @@ class Examination(models.Model):
     instructions = models.TextField(blank=True)
     thumbnail = models.ImageField(
         upload_to='exams/thumbnails/', null=True, blank=True,
+        max_length=500,
         validators=[validate_image_size_5mb, validate_image_extension],
     )
     
@@ -665,6 +688,31 @@ class Examination(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_examinations')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Subjective Examination Configuration
+    question_paper_pdf = models.FileField(
+        upload_to='subjective_exams/question_papers/', null=True, blank=True,
+        max_length=500,
+        validators=[validate_document_size_20mb, validate_document_extension],
+    )
+    question_paper_page_count = models.IntegerField(default=0, blank=True)
+    question_paper_file_size = models.IntegerField(default=0, blank=True)
+    answer_upload_enabled = models.BooleanField(default=True)
+    upload_deadline_minutes = models.IntegerField(
+        default=30, help_text="Minutes allowed to upload answer sheets after exam duration expires"
+    )
+    upload_start_time = models.DateTimeField(null=True, blank=True)
+    upload_end_time = models.DateTimeField(null=True, blank=True)
+    allowed_file_types = models.CharField(max_length=100, default='jpg,jpeg,png,webp,pdf')
+    max_upload_size_mb = models.IntegerField(default=50)
+    evaluation_type = models.CharField(
+        max_length=20, default='admin',
+        choices=(
+            ('admin', 'Admin Evaluation'),
+            ('ai', 'AI Evaluation'),
+            ('hybrid', 'Hybrid Evaluation'),
+        ),
+    )
 
     # Moderation Workflow
     reviewer_comment = models.TextField(blank=True, null=True)
@@ -729,6 +777,7 @@ class ExaminationEligibility(models.Model):
 class ExaminationAttempt(models.Model):
     STATUS_CHOICES = (
         ('in-progress', 'In Progress'),
+        ('upload_pending', 'Upload Pending'),
         ('submitted', 'Submitted'),
         ('evaluated', 'Evaluated'),
     )
@@ -768,6 +817,88 @@ class StudentAnswer(models.Model):
         
     def __str__(self):
         return f"Answer to Q{self.question_id} by {self.attempt.student.username}"
+
+
+# ============================================================
+# SUBJECTIVE SUBMISSION & EVALUATION MODELS
+# ============================================================
+
+class SubjectiveSubmission(models.Model):
+    SUBMISSION_STATUS_CHOICES = (
+        ('upload_pending', 'Upload Pending'),
+        ('processing', 'Processing'),
+        ('submitted', 'Submitted'),
+        ('processing_failed', 'Processing Failed'),
+        ('evaluated', 'Evaluated'),
+    )
+    OCR_STATUS_CHOICES = (
+        ('not_started', 'Not Started'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    )
+
+    attempt = models.OneToOneField(
+        ExaminationAttempt, on_delete=models.CASCADE, related_name='subjective_submission'
+    )
+    status = models.CharField(max_length=25, choices=SUBMISSION_STATUS_CHOICES, default='upload_pending')
+    answer_pdf = models.FileField(upload_to='subjective_exams/submissions/%Y/%m/', null=True, blank=True, max_length=500)
+    page_count = models.IntegerField(default=0)
+    file_size_bytes = models.IntegerField(default=0)
+
+    # OCR / Handwriting Extraction fields
+    raw_ocr_text = models.TextField(blank=True, help_text="Raw unedited handwriting extraction from OCR")
+    extracted_text = models.TextField(blank=True, help_text="Admin-verified / edited transcription")
+    ocr_status = models.CharField(max_length=20, choices=OCR_STATUS_CHOICES, default='not_started')
+    ocr_error = models.TextField(blank=True)
+
+    # Evaluation fields
+    evaluator = models.ForeignKey(
+        User, null=True, blank=True, on_delete=models.SET_NULL, related_name='evaluated_subjective_submissions'
+    )
+    evaluator_feedback = models.TextField(blank=True)
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+    is_published = models.BooleanField(default=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Subjective Submission for Attempt #{self.attempt_id} ({self.status})"
+
+
+class SubjectiveSubmissionPage(models.Model):
+    submission = models.ForeignKey(SubjectiveSubmission, on_delete=models.CASCADE, related_name='pages')
+    page_number = models.IntegerField(default=1)
+    image_file = models.FileField(upload_to='subjective_exams/pages/%Y/%m/', max_length=500)
+    file_size_bytes = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['page_number', 'id']
+        unique_together = ('submission', 'page_number')
+
+    def __str__(self):
+        return f"Submission #{self.submission_id} - Page {self.page_number}"
+
+
+class SubjectiveQuestionScore(models.Model):
+    submission = models.ForeignKey(SubjectiveSubmission, on_delete=models.CASCADE, related_name='question_scores')
+    question = models.ForeignKey(Question, null=True, blank=True, on_delete=models.SET_NULL)
+    question_number = models.IntegerField(default=1)
+    marks_obtained = models.FloatField(default=0)
+    max_marks = models.FloatField(default=10)
+    feedback = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['question_number', 'id']
+
+    def __str__(self):
+        return f"Submission #{self.submission_id} - Q{self.question_number}: {self.marks_obtained}/{self.max_marks}"
 
 class ExamSchedule(models.Model):
     """

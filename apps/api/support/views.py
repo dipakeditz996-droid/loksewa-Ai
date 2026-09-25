@@ -373,3 +373,63 @@ class AccountDeleteView(APIView):
         user.save()
 
         return Response({'detail': 'Account has been permanently deleted.'})
+
+
+class StudentContextView(APIView):
+    """
+    GET /api/student/context/
+    Canonical authoritative endpoint for student course context, authorized courses,
+    subscription state, and course-specific upcoming exam schedule.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from courses.access import get_student_course_context
+        data = get_student_course_context(request.user)
+        return Response(data)
+
+
+class StudentSelectCourseView(APIView):
+    """
+    POST /api/student/context/select-course/
+    Switch active course context among authorized courses.
+    Accepts: { "course_id": <int> }
+    Returns: Updated canonical context
+    Enforces strict authorization: 403 Forbidden if student is not authorized for course_id.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        course_id = request.data.get('course_id')
+        if not course_id:
+            return Response({'detail': 'course_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            course_id = int(course_id)
+        except (ValueError, TypeError):
+            return Response({'detail': 'Invalid course_id.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from courses.access import authorized_courses, get_student_course_context
+
+        user = request.user
+        auth_qs = authorized_courses(user)
+        course = auth_qs.filter(id=course_id).first()
+
+        if not course:
+            return Response(
+                {'detail': 'You are not authorized to access this course.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Update StudentProfile.target_course
+        profile = getattr(user, 'student_profile', None)
+        if profile:
+            profile.target_course = course
+            if course.exam_id:
+                profile.target_position = course.exam
+                if course.exam.category_id:
+                    profile.target_category = course.exam.category
+            profile.save(update_fields=['target_course', 'target_position', 'target_category'])
+
+        data = get_student_course_context(user)
+        return Response(data)

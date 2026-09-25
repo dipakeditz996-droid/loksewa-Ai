@@ -6,9 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Loader2, BookOpen, Target, Settings2, PlayCircle, CheckSquare, AlertCircle } from 'lucide-react';
 import { studentExamsApi, AcademicHierarchyNode, CustomExamParams } from '@/lib/api/student-exams';
+import { useOptionalStudentContext } from "@/contexts/StudentContext";
 
 export default function CustomExamBuilder() {
   const router = useRouter();
+  const studentCtx = useOptionalStudentContext();
+  const effectiveCourseId = studentCtx?.activeCourse?.id;
+  const isCtxLoading = studentCtx?.isLoading ?? false;
   
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -34,9 +38,19 @@ export default function CustomExamBuilder() {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   useEffect(() => {
-    studentExamsApi.getAcademicHierarchy()
+    if (isCtxLoading) return;
+    setLoading(true);
+    studentExamsApi.getAcademicHierarchy(effectiveCourseId)
       .then(data => {
         setHierarchy(data);
+        const exams: AcademicHierarchyNode[] = [];
+        data.forEach(c => exams.push(...(c.exams || [])));
+        if (exams.length === 1 && exams[0]) {
+          setSelectedExamId(exams[0].id);
+        }
+        if (data.length === 1 && data[0]) {
+          setSelectedCategoryId(data[0].id);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -44,7 +58,7 @@ export default function CustomExamBuilder() {
         setError("Failed to load academic hierarchy.");
         setLoading(false);
       });
-  }, []);
+  }, [effectiveCourseId, isCtxLoading]);
 
   useEffect(() => {
     // Reset children when parent changes
@@ -157,7 +171,7 @@ export default function CustomExamBuilder() {
 
   // Derive available options based on selections
   const categories = hierarchy;
-  let allExams: AcademicHierarchyNode[] = [];
+  const allExams: AcademicHierarchyNode[] = [];
   categories.forEach(c => allExams.push(...(c.exams || [])));
   
   const activeExam = allExams.find(e => e.id === selectedExamId);
@@ -179,7 +193,14 @@ export default function CustomExamBuilder() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-foreground">Custom Exam Builder</h1>
-          <p className="text-muted-foreground text-sm">Design your own mock test targeting specific weak points</p>
+          <p className="text-muted-foreground text-sm">
+            Design your own mock test targeting specific weak points
+            {studentCtx?.activeCourse ? (
+              <span className="ml-1 text-primary font-medium">
+                • {studentCtx.activeCourse.title}
+              </span>
+            ) : null}
+          </p>
         </div>
       </div>
 
@@ -239,16 +260,23 @@ export default function CustomExamBuilder() {
               ) : (
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Exam <span className="text-red-500">*</span></label>
-                  <select
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    value={selectedExamId || ""}
-                    onChange={(e) => setSelectedExamId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">Select Exam</option>
-                    {allExams.map(ex => (
-                      <option key={ex.id} value={ex.id}>{ex.name}</option>
-                    ))}
-                  </select>
+                  {allExams.length === 0 ? (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-md text-sm flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      <span>No exams are available for your current course package.</span>
+                    </div>
+                  ) : (
+                    <select
+                      className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      value={selectedExamId || ""}
+                      onChange={(e) => setSelectedExamId(e.target.value ? Number(e.target.value) : null)}
+                    >
+                      <option value="">Select Exam</option>
+                      {allExams.map(ex => (
+                        <option key={ex.id} value={ex.id}>{ex.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
 

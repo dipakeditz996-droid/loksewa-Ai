@@ -1,11 +1,27 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
-  BookOpen, Search, FileText, Eye, Edit, Trash2, Plus, Loader2,
-  UploadCloud, CheckCircle2, AlertCircle, RefreshCw, ChevronRight,
-  Layers, Download, Filter, FileCheck, Sparkles, Brain, Clock, Shield
+  BookOpen,
+  Search,
+  FileText,
+  Eye,
+  Edit,
+  Trash2,
+  Plus,
+  Loader2,
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  ChevronRight,
+  Layers,
+  Download,
+  Filter,
+  Sparkles,
+  Clock,
+  Shield,
+  FolderTree,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +36,29 @@ import {
   NoteType,
   AcademicSubject,
   AcademicChapter,
-  AcademicTopic
+  AcademicTopic,
 } from "@/lib/api/admin-study-materials";
+import {
+  adminAcademicApi,
+  ApiSubject,
+  ApiChapter,
+  ApiTopic,
+} from "@/lib/api/admin-academic-api";
 import { adminSyllabusApi } from "@/lib/api/admin-syllabus";
+import {
+  AcademicTreePanel,
+  SelectedAcademicNode,
+} from "@/components/admin/academic/AcademicTreePanel";
+import {
+  AcademicNodeDetailsPanel,
+} from "@/components/admin/academic/AcademicNodeDetailsPanel";
+import {
+  AddEditSubjectModal,
+  AddEditChapterModal,
+  AddEditTopicModal,
+  AcademicSafeDeleteModal,
+  DeleteNodeTarget,
+} from "@/components/admin/academic/AcademicModals";
 
 const SECTION_CONFIG: {
   id: ContentCategory;
@@ -31,7 +67,7 @@ const SECTION_CONFIG: {
 }[] = [
   {
     id: "subjective_topicwise",
-    label: "Subjective Topicwise Notes [Detailed]",
+    label: "Subjective Topicwise Notes",
     subTypes: [
       { value: "standard", label: "Standard" },
       { value: "ai", label: "AI" },
@@ -39,7 +75,7 @@ const SECTION_CONFIG: {
   },
   {
     id: "objective_topicwise",
-    label: "Objective Topicwise Notes [Detailed]",
+    label: "Objective Topicwise Notes",
     subTypes: [
       { value: "standard", label: "Standard" },
       { value: "ai", label: "AI" },
@@ -56,8 +92,6 @@ const SECTION_CONFIG: {
 ];
 
 export function AdminContentManager() {
-  const visibleSections = SECTION_CONFIG;
-
   // Hierarchy state
   const [hierarchy, setHierarchy] = useState<CategoryHierarchyItem[]>([]);
   const [loadingHierarchy, setLoadingHierarchy] = useState(true);
@@ -66,26 +100,69 @@ export function AdminContentManager() {
   const [selectedLevelId, setSelectedLevelId] = useState<number | null>(null);
   const [selectedPrepId, setSelectedPrepId] = useState<number | null>(null);
 
-  // Content navigation state
+  // Canonical Academic Tree state
+  const [academicTree, setAcademicTree] = useState<AcademicSubject[]>([]);
+  const [loadingAcademicTree, setLoadingAcademicTree] = useState(false);
+  const [selectedAcademicNode, setSelectedAcademicNode] = useState<SelectedAcademicNode>({
+    type: "preparation",
+  });
+
+  // Content navigation & filter state
   const [activeSection, setActiveSection] = useState<ContentCategory>("subjective_topicwise");
-  const [activeSubType, setActiveSubType] = useState<string>("all"); // 'all' or NoteType
-  const [statusFilter, setStatusFilter] = useState<string>("all"); // 'all', 'published', 'draft'
+  const [activeSubType, setActiveSubType] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   // Materials data
   const [materials, setMaterials] = useState<StudyMaterialListItem[]>([]);
   const [loadingMaterials, setLoadingMaterials] = useState(false);
 
-  // Academic tree for selected preparation (for form dropdowns)
-  const [academicTree, setAcademicTree] = useState<AcademicSubject[]>([]);
+  // Modals state - Academic CRUD
+  const [showSubjectModal, setShowSubjectModal] = useState<{
+    mode: "add" | "edit";
+    initialData?: Partial<ApiSubject> | null;
+  } | null>(null);
+  const [showChapterModal, setShowChapterModal] = useState<{
+    mode: "add" | "edit";
+    subject: AcademicSubject;
+    initialData?: Partial<ApiChapter> | null;
+  } | null>(null);
+  const [showTopicModal, setShowTopicModal] = useState<{
+    mode: "add" | "edit";
+    chapter: AcademicChapter;
+    subject?: AcademicSubject;
+    initialData?: Partial<ApiTopic> | null;
+  } | null>(null);
+  const [safeDeleteTarget, setSafeDeleteTarget] = useState<DeleteNodeTarget | null>(null);
 
-  // Modals state
+  // Modals state - Material CRUD
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadContext, setUploadContext] = useState<{
+    subjectId?: number | null;
+    chapterId?: number | null;
+    topicId?: number | null;
+  }>({});
   const [showEditModal, setShowEditModal] = useState<StudyMaterialListItem | null>(null);
   const [showReplaceModal, setShowReplaceModal] = useState<StudyMaterialListItem | null>(null);
   const [viewPdfMaterial, setViewPdfMaterial] = useState<StudyMaterialListItem | null>(null);
   const [deleteConfirmMaterial, setDeleteConfirmMaterial] = useState<StudyMaterialListItem | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Modals state - Level / Prep management
+  const [showAddLevelModal, setShowAddLevelModal] = useState(false);
+  const [newLevelName, setNewLevelName] = useState("");
+  const [isAddingLevel, setIsAddingLevel] = useState(false);
+
+  const [showAddPrepModal, setShowAddPrepModal] = useState(false);
+  const [newPrepName, setNewPrepName] = useState("");
+  const [isAddingPrep, setIsAddingPrep] = useState(false);
+
+  const [deleteNodeTarget, setDeleteNodeTarget] = useState<{
+    type: "level" | "preparation";
+    id: number;
+    name: string;
+  } | null>(null);
+  const [isDeletingNode, setIsDeletingNode] = useState(false);
 
   // 1. Load Hierarchy
   const loadHierarchy = async (preserveSelection = true) => {
@@ -95,25 +172,30 @@ export function AdminContentManager() {
       setHierarchy(data);
 
       if (data.length > 0) {
-        const pscCat = data.find(c => c.name.toLowerCase().includes("psc")) || data[0];
+        const pscCat = data.find((c) => c.name.toLowerCase().includes("psc")) || data[0];
         if (!pscCat) return;
-        const initialCatId = preserveSelection && selectedCategoryId ? selectedCategoryId : pscCat.id;
+        const initialCatId =
+          preserveSelection && selectedCategoryId ? selectedCategoryId : pscCat.id;
         setSelectedCategoryId(initialCatId);
 
-        const currentCat = data.find(c => c.id === initialCatId) || pscCat;
+        const currentCat = data.find((c) => c.id === initialCatId) || pscCat;
         if (currentCat && currentCat.levels.length > 0) {
-          // Prefer 5th level if first load
-          const preferredLevel = currentCat.levels.find(l => l.name.includes("5th")) || currentCat.levels[0];
+          const preferredLevel =
+            currentCat.levels.find((l) => l.name.includes("5th")) || currentCat.levels[0];
           if (!preferredLevel) return;
-          const initialLevelId = preserveSelection && selectedLevelId ? selectedLevelId : preferredLevel.id;
+          const initialLevelId =
+            preserveSelection && selectedLevelId ? selectedLevelId : preferredLevel.id;
           setSelectedLevelId(initialLevelId);
 
-          const currentLevel = currentCat.levels.find(l => l.id === initialLevelId) || preferredLevel;
+          const currentLevel =
+            currentCat.levels.find((l) => l.id === initialLevelId) || preferredLevel;
           if (currentLevel && currentLevel.preparations.length > 0) {
-            // Prefer Civil Engineering if first load
-            const preferredPrep = currentLevel.preparations.find(p => p.name.includes("Civil")) || currentLevel.preparations[0];
+            const preferredPrep =
+              currentLevel.preparations.find((p) => p.name.includes("Civil")) ||
+              currentLevel.preparations[0];
             if (preferredPrep) {
-              const initialPrepId = preserveSelection && selectedPrepId ? selectedPrepId : preferredPrep.id;
+              const initialPrepId =
+                preserveSelection && selectedPrepId ? selectedPrepId : preferredPrep.id;
               setSelectedPrepId(initialPrepId);
             }
           }
@@ -132,130 +214,268 @@ export function AdminContentManager() {
 
   // Derived active items
   const activeCategory = useMemo(
-    () => hierarchy.find(c => c.id === selectedCategoryId) || null,
+    () => hierarchy.find((c) => c.id === selectedCategoryId) || null,
     [hierarchy, selectedCategoryId]
   );
 
   const activeLevel = useMemo(
-    () => activeCategory?.levels.find(l => l.id === selectedLevelId) || null,
+    () => activeCategory?.levels.find((l) => l.id === selectedLevelId) || null,
     [activeCategory, selectedLevelId]
   );
 
   const activePreparation = useMemo(
-    () => activeLevel?.preparations.find(p => p.id === selectedPrepId) || null,
+    () => activeLevel?.preparations.find((p) => p.id === selectedPrepId) || null,
     [activeLevel, selectedPrepId]
   );
 
-  // Load academic tree when preparation changes
+  // 2. Load Academic Tree for selected preparation
+  const loadAcademicTree = useCallback(
+    async (prepId: number) => {
+      setLoadingAcademicTree(true);
+      try {
+        const data = await adminStudyMaterialApi.getAcademicTree(prepId);
+        setAcademicTree(data);
+
+        // Keep selectedNode synchronized if its node was reloaded
+        setSelectedAcademicNode((prev) => {
+          if (prev.type === "subject" && prev.subject) {
+            const updatedSub = data.find((s) => s.id === prev.subject!.id);
+            return updatedSub ? { ...prev, subject: updatedSub } : { type: "preparation" };
+          }
+          if (prev.type === "chapter" && prev.chapter) {
+            for (const s of data) {
+              const updatedChap = s.chapters.find((c) => c.id === prev.chapter!.id);
+              if (updatedChap) return { ...prev, subject: s, chapter: updatedChap };
+            }
+          }
+          if (prev.type === "topic" && prev.topic) {
+            for (const s of data) {
+              for (const c of s.chapters) {
+                const updatedTop = c.topics.find((t) => t.id === prev.topic!.id);
+                if (updatedTop) return { ...prev, subject: s, chapter: c, topic: updatedTop };
+              }
+            }
+          }
+          return { type: "preparation" };
+        });
+      } catch {
+        setAcademicTree([]);
+      } finally {
+        setLoadingAcademicTree(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     if (!selectedPrepId) {
       setAcademicTree([]);
+      setSelectedAcademicNode({ type: "preparation" });
       return;
     }
-    adminStudyMaterialApi.getAcademicTree(selectedPrepId)
-      .then(setAcademicTree)
-      .catch(() => setAcademicTree([]));
-  }, [selectedPrepId]);
+    loadAcademicTree(selectedPrepId);
+  }, [selectedPrepId, loadAcademicTree]);
 
-  // Load materials when preparation, section, subtype, or status changes
-  const loadMaterials = async () => {
+  // 3. Load materials for active node
+  const loadMaterials = useCallback(async () => {
     if (!selectedPrepId) return;
     setLoadingMaterials(true);
     try {
-      const res = await adminStudyMaterialApi.list({
+      const params: any = {
         exam: selectedPrepId,
         content_category: activeSection,
         note_type: activeSubType !== "all" ? activeSubType : undefined,
         status: statusFilter !== "all" ? statusFilter : undefined,
         search: searchQuery.trim() || undefined,
         pageSize: 100,
-      });
+      };
+
+      if (selectedAcademicNode.type === "topic" && selectedAcademicNode.topic) {
+        params.topic = selectedAcademicNode.topic.id;
+      } else if (selectedAcademicNode.type === "chapter" && selectedAcademicNode.chapter) {
+        params.chapter = selectedAcademicNode.chapter.id;
+      } else if (selectedAcademicNode.type === "subject" && selectedAcademicNode.subject) {
+        params.subject = selectedAcademicNode.subject.id;
+      }
+
+      const res = await adminStudyMaterialApi.list(params);
       setMaterials(res.materials);
     } catch (err: any) {
       toast.error(err.message || "Failed to load materials");
     } finally {
       setLoadingMaterials(false);
     }
-  };
+  }, [
+    selectedPrepId,
+    selectedAcademicNode,
+    activeSection,
+    activeSubType,
+    statusFilter,
+    searchQuery,
+  ]);
 
   useEffect(() => {
     loadMaterials();
-  }, [selectedPrepId, activeSection, activeSubType, statusFilter, searchQuery]);
+  }, [loadMaterials]);
 
-  // Handle section change
-  const handleSectionChange = (section: ContentCategory) => {
-    setActiveSection(section);
-    setActiveSubType("all");
+  // Handlers for Academic Tree Actions
+  const handleOpenAddSubject = () => {
+    setShowSubjectModal({ mode: "add" });
   };
 
-  // Toggle publish status
+  const handleOpenEditSubject = (sub: AcademicSubject) => {
+    setShowSubjectModal({
+      mode: "edit",
+      initialData: {
+        id: sub.id,
+        name: sub.name,
+        code: sub.code || "",
+        description: sub.description || "",
+        order: sub.order,
+        is_active: sub.is_active ?? true,
+      },
+    });
+  };
+
+  const handleArchiveSubject = async (sub: AcademicSubject) => {
+    try {
+      await adminAcademicApi.archiveNode("subjects", sub.id, sub.is_active === false);
+      toast.success(`"${sub.name}" ${sub.is_active === false ? "activated" : "archived"}`);
+      if (selectedPrepId) loadAcademicTree(selectedPrepId);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update subject status");
+    }
+  };
+
+  const handleDeleteSubject = (sub: AcademicSubject) => {
+    setSafeDeleteTarget({
+      modelType: "subjects",
+      id: sub.id,
+      name: sub.name,
+    });
+  };
+
+  const handleOpenAddChapter = (sub: AcademicSubject) => {
+    setShowChapterModal({ mode: "add", subject: sub });
+  };
+
+  const handleOpenEditChapter = (sub: AcademicSubject, chap: AcademicChapter) => {
+    setShowChapterModal({
+      mode: "edit",
+      subject: sub,
+      initialData: {
+        id: chap.id,
+        subject: sub.id,
+        title: chap.title || chap.name || "",
+        description: chap.description || "",
+        order: chap.order,
+        is_active: chap.is_active ?? true,
+      },
+    });
+  };
+
+  const handleArchiveChapter = async (chap: AcademicChapter) => {
+    try {
+      await adminAcademicApi.archiveNode("chapters", chap.id, chap.is_active === false);
+      toast.success(
+        `"${chap.title || chap.name}" ${chap.is_active === false ? "activated" : "archived"}`
+      );
+      if (selectedPrepId) loadAcademicTree(selectedPrepId);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update chapter status");
+    }
+  };
+
+  const handleDeleteChapter = (chap: AcademicChapter) => {
+    setSafeDeleteTarget({
+      modelType: "chapters",
+      id: chap.id,
+      name: chap.title || chap.name || `Chapter ${chap.id}`,
+    });
+  };
+
+  const handleOpenAddTopic = (chap: AcademicChapter, sub?: AcademicSubject) => {
+    setShowTopicModal({ mode: "add", chapter: chap, subject: sub });
+  };
+
+  const handleOpenEditTopic = (chap: AcademicChapter, top: AcademicTopic) => {
+    setShowTopicModal({
+      mode: "edit",
+      chapter: chap,
+      initialData: {
+        id: top.id,
+        chapter: chap.id,
+        name: top.name,
+        description: top.description || "",
+        order: top.order,
+        is_active: top.is_active ?? true,
+      },
+    });
+  };
+
+  const handleArchiveTopic = async (top: AcademicTopic) => {
+    try {
+      await adminAcademicApi.archiveNode("topics", top.id, top.is_active === false);
+      toast.success(`"${top.name}" ${top.is_active === false ? "activated" : "archived"}`);
+      if (selectedPrepId) loadAcademicTree(selectedPrepId);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update topic status");
+    }
+  };
+
+  const handleDeleteTopic = (top: AcademicTopic) => {
+    setSafeDeleteTarget({
+      modelType: "topics",
+      id: top.id,
+      name: top.name,
+    });
+  };
+
+  // Open note upload pre-filled for a specific node
+  const handleOpenUploadForNode = (node: SelectedAcademicNode) => {
+    setUploadContext({
+      subjectId: node.subject?.id ?? null,
+      chapterId: node.chapter?.id ?? null,
+      topicId: node.topic?.id ?? null,
+    });
+    setShowUploadModal(true);
+  };
+
+  // Toggle publish status on material
   const handleTogglePublish = async (mat: StudyMaterialListItem) => {
     const newStatus = mat.status === "published" ? "draft" : "published";
     try {
       await adminStudyMaterialApi.update(mat.id, { status: newStatus });
-      toast.success(newStatus === "published" ? `"${mat.title}" published` : `"${mat.title}" saved as draft`);
+      toast.success(
+        newStatus === "published" ? `"${mat.title}" published` : `"${mat.title}" saved as draft`
+      );
       loadMaterials();
       loadHierarchy(true);
+      if (selectedPrepId) loadAcademicTree(selectedPrepId);
     } catch (err: any) {
       toast.error(err.message || "Failed to update status");
     }
   };
 
-  // Publish a "Coming Soon" preparation's underlying course so students can
-  // access it (and admins can start uploading real content against it).
-  const [publishingCourseId, setPublishingCourseId] = useState<number | null>(null);
-  const handleSetCourseStatus = async (courseId: number, prepName: string, newStatus: "published" | "coming_soon") => {
-    setPublishingCourseId(courseId);
+  // Delete note material
+  const handleDeleteMaterial = async () => {
+    if (!deleteConfirmMaterial) return;
+    setIsProcessing(true);
     try {
-      await adminStudyMaterialApi.setCourseStatus(courseId, newStatus);
-      toast.success(
-        newStatus === "published"
-          ? `"${prepName}" is now live for students.`
-          : `"${prepName}" is now marked Coming Soon.`
-      );
-      await loadHierarchy(true);
+      await adminStudyMaterialApi.remove(deleteConfirmMaterial.id);
+      toast.success("Material deleted successfully");
+      setDeleteConfirmMaterial(null);
+      loadMaterials();
+      loadHierarchy(true);
+      if (selectedPrepId) loadAcademicTree(selectedPrepId);
     } catch (err: any) {
-      toast.error(err.message || "Failed to update course status");
+      toast.error(err.message || "Failed to delete material");
     } finally {
-      setPublishingCourseId(null);
-    }
-  };
-  const handlePublishCourse = (courseId: number, prepName: string) => handleSetCourseStatus(courseId, prepName, "published");
-  const handleMarkComingSoon = (courseId: number, prepName: string) => handleSetCourseStatus(courseId, prepName, "coming_soon");
-
-  // Delete a Level or Preparation/Service node (an Exam row). Cascades to
-  // any papers/subjects/chapters/topics and study materials under it on the
-  // backend, so this is confirmed before firing.
-  const [deleteNodeTarget, setDeleteNodeTarget] = useState<{ type: "level" | "preparation"; id: number; name: string } | null>(null);
-  const [isDeletingNode, setIsDeletingNode] = useState(false);
-
-  const confirmDeleteNode = async () => {
-    if (!deleteNodeTarget) return;
-    setIsDeletingNode(true);
-    try {
-      await adminSyllabusApi.deletePosition(deleteNodeTarget.id);
-      toast.success(`"${deleteNodeTarget.name}" deleted.`);
-      if (deleteNodeTarget.type === "level" && selectedLevelId === deleteNodeTarget.id) {
-        setSelectedLevelId(null);
-        setSelectedPrepId(null);
-      } else if (deleteNodeTarget.type === "preparation" && selectedPrepId === deleteNodeTarget.id) {
-        setSelectedPrepId(null);
-      }
-      setDeleteNodeTarget(null);
-      await loadHierarchy(true);
-    } catch (err: any) {
-      toast.error(err.message || `Failed to delete "${deleteNodeTarget.name}"`);
-    } finally {
-      setIsDeletingNode(false);
+      setIsProcessing(false);
     }
   };
 
-  // Add a new Level under the selected Exam Category (a top-level, parent-less
-  // Exam row — see exams.models.Exam for why this doubles as "Level").
-  const [showAddLevelModal, setShowAddLevelModal] = useState(false);
-  const [newLevelName, setNewLevelName] = useState("");
-  const [isAddingLevel, setIsAddingLevel] = useState(false);
-
+  // Add Level / Prep handlers
   const handleAddLevel = async () => {
     if (!selectedCategoryId || !newLevelName.trim()) return;
     setIsAddingLevel(true);
@@ -278,13 +498,6 @@ export function AdminContentManager() {
     }
   };
 
-  // Add a new Preparation/Service under the selected Level (a child Exam row
-  // — see exams.models.Exam). Materials are keyed off this Exam id directly,
-  // so no Course needs to exist before an admin can start uploading content.
-  const [showAddPrepModal, setShowAddPrepModal] = useState(false);
-  const [newPrepName, setNewPrepName] = useState("");
-  const [isAddingPrep, setIsAddingPrep] = useState(false);
-
   const handleAddPrep = async () => {
     if (!selectedCategoryId || !selectedLevelId || !newPrepName.trim()) return;
     setIsAddingPrep(true);
@@ -294,7 +507,7 @@ export function AdminContentManager() {
         parent: selectedLevelId,
         name: newPrepName.trim(),
       });
-      toast.success(`"${created.name}" added — you can now upload materials for it.`);
+      toast.success(`"${created.name}" added.`);
       setShowAddPrepModal(false);
       setNewPrepName("");
       await loadHierarchy(true);
@@ -306,20 +519,24 @@ export function AdminContentManager() {
     }
   };
 
-  // Delete material
-  const handleDelete = async () => {
-    if (!deleteConfirmMaterial) return;
-    setIsProcessing(true);
+  const confirmDeleteNode = async () => {
+    if (!deleteNodeTarget) return;
+    setIsDeletingNode(true);
     try {
-      await adminStudyMaterialApi.remove(deleteConfirmMaterial.id);
-      toast.success("Material deleted successfully");
-      setDeleteConfirmMaterial(null);
-      loadMaterials();
-      loadHierarchy(true);
+      await adminSyllabusApi.deletePosition(deleteNodeTarget.id);
+      toast.success(`"${deleteNodeTarget.name}" deleted.`);
+      if (deleteNodeTarget.type === "level" && selectedLevelId === deleteNodeTarget.id) {
+        setSelectedLevelId(null);
+        setSelectedPrepId(null);
+      } else if (deleteNodeTarget.type === "preparation" && selectedPrepId === deleteNodeTarget.id) {
+        setSelectedPrepId(null);
+      }
+      setDeleteNodeTarget(null);
+      await loadHierarchy(true);
     } catch (err: any) {
-      toast.error(err.message || "Failed to delete material");
+      toast.error(err.message || `Failed to delete "${deleteNodeTarget.name}"`);
     } finally {
-      setIsProcessing(false);
+      setIsDeletingNode(false);
     }
   };
 
@@ -329,13 +546,13 @@ export function AdminContentManager() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C4A45C]">
-            <Layers className="w-4 h-4" /> Real Content Management System
+            <Layers className="w-4 h-4" /> Master Academic Syllabus &amp; Notes
           </div>
           <h1 className="text-2xl font-extrabold text-[#0B2545] dark:text-white mt-1">
-            Notes Management
+            Notes &amp; Academic Hierarchy
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Manage topicwise detailed notes (Standard / AI) and revision notes.
+            Canonical taxonomy (Subject &rarr; Chapter &rarr; Topic) shared across Notes, Courses, Practice, Question Bank &amp; Exams.
           </p>
         </div>
 
@@ -345,16 +562,21 @@ export function AdminContentManager() {
             size="sm"
             onClick={() => {
               loadHierarchy(true);
+              if (selectedPrepId) loadAcademicTree(selectedPrepId);
               loadMaterials();
             }}
             className="flex items-center gap-2 border-slate-200 dark:border-slate-700"
           >
-            <RefreshCw className={`w-4 h-4 ${loadingHierarchy || loadingMaterials ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-4 h-4 ${
+                loadingHierarchy || loadingAcademicTree || loadingMaterials ? "animate-spin" : ""
+              }`}
+            />
             Refresh
           </Button>
 
           <Button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => handleOpenUploadForNode(selectedAcademicNode)}
             disabled={!activePreparation}
             className="bg-[#0B2545] hover:bg-[#163E6C] text-white shadow-md flex items-center gap-2"
           >
@@ -363,493 +585,342 @@ export function AdminContentManager() {
         </div>
       </div>
 
-      {/* Main Content Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Hierarchy Selector */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-5">
-            <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-2">
-                1. Exam Category
-              </label>
-              <div className="space-y-1">
-                {hierarchy.map(cat => (
-                  <button
-                    key={cat.id}
-                    onClick={() => {
-                      setSelectedCategoryId(cat.id);
-                      if (cat.levels.length > 0 && cat.levels[0]) {
-                        setSelectedLevelId(cat.levels[0].id);
-                        if (cat.levels[0].preparations.length > 0 && cat.levels[0].preparations[0]) {
-                          setSelectedPrepId(cat.levels[0].preparations[0].id);
-                        }
+      {/* TOP HIERARCHY SELECTOR STRIP: Category -> Level -> Preparation */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 space-y-4">
+        {/* Step 1: Category */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+              <span className="w-4 h-4 rounded-full bg-[#0B2545] text-white text-[10px] inline-flex items-center justify-center font-bold">
+                1
+              </span>
+              Exam Category
+            </label>
+            <span className="text-xs text-slate-400">{hierarchy.length} categories</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {hierarchy.map((cat) => {
+              const isSelected = selectedCategoryId === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    setSelectedCategoryId(cat.id);
+                    if (cat.levels.length > 0 && cat.levels[0]) {
+                      setSelectedLevelId(cat.levels[0].id);
+                      if (cat.levels[0].preparations.length > 0 && cat.levels[0].preparations[0]) {
+                        setSelectedPrepId(cat.levels[0].preparations[0].id);
+                      } else {
+                        setSelectedPrepId(null);
                       }
-                    }}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-between ${
-                      selectedCategoryId === cat.id
-                        ? "bg-[#0B2545] text-white shadow-sm"
-                        : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    } else {
+                      setSelectedLevelId(null);
+                      setSelectedPrepId(null);
+                    }
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                    isSelected
+                      ? "bg-[#0B2545] text-white border-[#0B2545] shadow-xs"
+                      : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/50"
+                  }`}
+                >
+                  <span>{cat.name}</span>
+                  <span
+                    className={`text-[10px] px-2 py-0.2 rounded-full ${
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
                     }`}
                   >
-                    <span>{cat.name}</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${selectedCategoryId === cat.id ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500"}`}>
-                      {cat.levels.length} levels
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Level Selector */}
-            {activeCategory && (
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    2. Level Selection
-                  </label>
-                  <div className="flex items-center gap-3">
-                    {activeLevel && (
-                      <button
-                        onClick={() => setDeleteNodeTarget({ type: "level", id: activeLevel.id, name: activeLevel.name })}
-                        className="flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:underline"
-                      >
-                        <Trash2 className="w-3 h-3" /> Delete
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setShowAddLevelModal(true)}
-                      className="flex items-center gap-1 text-[11px] font-bold text-[#0B2545] dark:text-[#C4A45C] hover:underline"
-                    >
-                      <Plus className="w-3 h-3" /> Add Level
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {activeCategory.levels.map(lvl => (
-                    <button
-                      key={lvl.id}
-                      onClick={() => {
-                        setSelectedLevelId(lvl.id);
-                        if (lvl.preparations.length > 0 && lvl.preparations[0]) {
-                          setSelectedPrepId(lvl.preparations[0].id);
-                        }
-                      }}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-bold text-center transition-all border ${
-                        selectedLevelId === lvl.id
-                          ? "bg-[#C4A45C] text-white border-[#C4A45C] shadow-sm"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/50"
-                      }`}
-                    >
-                      {lvl.name.replace("Exam", "").trim()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Preparations Selector */}
-            {activeLevel && (
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    3. Preparation / Service
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400">{activeLevel.preparations.length} available</span>
-                    {activePreparation && (
-                      <button
-                        onClick={() => setDeleteNodeTarget({ type: "preparation", id: activePreparation.id, name: activePreparation.name })}
-                        className="flex items-center gap-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:underline"
-                      >
-                        <Trash2 className="w-3 h-3" /> Delete
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setShowAddPrepModal(true)}
-                      className="flex items-center gap-1 text-[11px] font-bold text-[#0B2545] dark:text-[#C4A45C] hover:underline"
-                    >
-                      <Plus className="w-3 h-3" /> Add
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-                  {activeLevel.preparations.map(prep => {
-                    const isSelected = selectedPrepId === prep.id;
-                    const isCS = prep.isComingSoon;
-                    return (
-                      <button
-                        key={prep.id}
-                        onClick={() => setSelectedPrepId(prep.id)}
-                        className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between ${
-                          isSelected
-                            ? "bg-slate-50 dark:bg-slate-800 border-[#0B2545] dark:border-[#C4A45C] ring-2 ring-[#0B2545]/10 dark:ring-[#C4A45C]/20"
-                            : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
-                        }`}
-                      >
-                        <div>
-                          <div className={`font-bold text-sm ${ isCS ? "text-amber-700 dark:text-amber-400" : "text-[#0B2545] dark:text-white" } flex items-center gap-1.5`}>
-                            {prep.name}
-                          </div>
-                          {prep.courseTitle && (
-                            <div className="text-xs text-slate-400 truncate max-w-[180px]">
-                              {prep.courseTitle}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="text-right flex-shrink-0">
-                          {isCS ? (
-                            <span className="inline-block px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                              Coming Soon
-                            </span>
-                          ) : (
-                            <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
-                              isSelected
-                                ? "bg-[#0B2545] text-white"
-                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                            }`}>
-                              {prep.counts.total} files
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                    {cat.levels.length} levels
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Right Column: Selected Preparation Content Area */}
-        <div className="lg:col-span-8 space-y-6">
-          {activePreparation ? (
-            <>
-              {/* Selected Preparation Overview Card */}
-              <div className="bg-gradient-to-br from-[#0B2545] to-[#163E6C] text-white p-6 rounded-2xl shadow-md">
-                <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/10">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C4A45C]">
-                      <span>{activeCategory?.name}</span>
-                      <span>•</span>
-                      <span>{activeLevel?.name}</span>
-                    </div>
-                    <h2 className="text-2xl font-extrabold mt-1">{activePreparation.name}</h2>
-                  </div>
+        {/* Step 2: Level Selection */}
+        {activeCategory && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-[#C4A45C] text-black text-[10px] inline-flex items-center justify-center font-bold">
+                  2
+                </span>
+                Level
+              </label>
 
-                  <div className="flex items-center gap-2">
-                    {activePreparation.isComingSoon && (
-                      <div className="flex items-center gap-2 bg-amber-500/20 border border-amber-400/30 pl-3 pr-1.5 py-1.5 rounded-xl text-xs font-bold text-amber-300">
-                        <Clock className="w-3.5 h-3.5" />
-                        Coming Soon — Content pre-loading enabled
-                        {activePreparation.courseId && (
-                          <Button
-                            size="sm"
-                            disabled={publishingCourseId === activePreparation.courseId}
-                            onClick={() => handlePublishCourse(activePreparation.courseId!, activePreparation.name)}
-                            className="h-7 px-3 bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold rounded-lg"
-                          >
-                            {publishingCourseId === activePreparation.courseId ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <>
-                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Publish Now
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    {!activePreparation.isComingSoon && activePreparation.courseId && (
-                      <Button
-                        size="sm"
-                        disabled={publishingCourseId === activePreparation.courseId}
-                        onClick={() => handleMarkComingSoon(activePreparation.courseId!, activePreparation.name)}
-                        className="h-8 px-3 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 text-amber-300 text-[11px] font-bold rounded-xl"
-                      >
-                        {publishingCourseId === activePreparation.courseId ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <>
-                            <Clock className="w-3.5 h-3.5 mr-1" /> Mark Coming Soon
-                          </>
-                        )}
-                      </Button>
-                    )}
-                    <div className="flex items-center gap-2 bg-white/10 px-3.5 py-1.5 rounded-xl text-xs font-medium text-white/90">
-                      <Shield className="w-4 h-4 text-[#C4A45C]" />
-                      <span>Real Database Content Counts</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Real Counts Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                  <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-xl border border-white/10">
-                    <div className="text-xs text-white/70 font-medium">Subjective Notes</div>
-                    <div className="text-2xl font-black text-white mt-0.5">
-                      {activePreparation.counts.subjective_topicwise}
-                    </div>
-                    <div className="text-[11px] text-white/50">detailed materials</div>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-xl border border-white/10">
-                    <div className="text-xs text-white/70 font-medium">Objective Notes</div>
-                    <div className="text-2xl font-black text-white mt-0.5">
-                      {activePreparation.counts.objective_topicwise}
-                    </div>
-                    <div className="text-[11px] text-white/50">detailed materials</div>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-xl border border-white/10">
-                    <div className="text-xs text-white/70 font-medium">Revision Notes</div>
-                    <div className="text-2xl font-black text-white mt-0.5">
-                      {activePreparation.counts.revision_notes}
-                    </div>
-                    <div className="text-[11px] text-white/50">summary materials</div>
-                  </div>
-                </div>
+              <div className="flex items-center gap-3">
+                {activeLevel && (
+                  <button
+                    onClick={() =>
+                      setDeleteNodeTarget({
+                        type: "level",
+                        id: activeLevel.id,
+                        name: activeLevel.name,
+                      })
+                    }
+                    className="flex items-center gap-1 text-[11px] font-bold text-red-600 hover:underline"
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete Level
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddLevelModal(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-[#0B2545] dark:text-[#C4A45C] hover:underline"
+                >
+                  <Plus className="w-3 h-3" /> Add Level
+                </button>
               </div>
-
-              {/* Section Tabs */}
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-4 space-y-4">
-                <div className="flex border-b border-slate-200 dark:border-slate-800 overflow-x-auto pb-1 gap-2">
-                  {visibleSections.map(sec => {
-                    const isTabActive = activeSection === sec.id;
-                    const count = activePreparation.counts[sec.id] || 0;
-                    return (
-                      <button
-                        key={sec.id}
-                        onClick={() => handleSectionChange(sec.id)}
-                        className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
-                          isTabActive
-                            ? "bg-[#0B2545] text-white shadow-sm"
-                            : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                        }`}
-                      >
-                        <span>{sec.label}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                          isTabActive ? "bg-[#C4A45C] text-black" : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                        }`}>
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Sub-type filter & Search Toolbar */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                  {/* Sub-types pills (Standard / AI or Subjective / Objective) */}
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                    <button
-                      onClick={() => setActiveSubType("all")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                        activeSubType === "all"
-                          ? "bg-white dark:bg-slate-700 text-[#0B2545] dark:text-white shadow-xs"
-                          : "text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                      }`}
-                    >
-                      All Types
-                    </button>
-                    {SECTION_CONFIG.find(s => s.id === activeSection)?.subTypes.map(st => (
-                      <button
-                        key={st.value}
-                        onClick={() => setActiveSubType(st.value)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
-                          activeSubType === st.value
-                            ? "bg-white dark:bg-slate-700 text-[#0B2545] dark:text-white shadow-xs"
-                            : "text-slate-500 hover:text-slate-800 dark:hover:text-white"
-                        }`}
-                      >
-                        {st.value === "ai" && <Sparkles className="w-3.5 h-3.5 text-purple-500" />}
-                        {st.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Filter & Search */}
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1 sm:w-48">
-                      <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Search title, subject..."
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:border-[#0B2545]"
-                      />
-                    </div>
-
-                    <select
-                      value={statusFilter}
-                      onChange={e => setStatusFilter(e.target.value)}
-                      className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-900 dark:text-white focus:outline-none cursor-pointer"
-                    >
-                      <option value="all" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">All Status</option>
-                      <option value="published" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Published</option>
-                      <option value="draft" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Draft</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Materials List */}
-                <div className="pt-2">
-                  {loadingMaterials ? (
-                    <div className="py-16 text-center text-slate-400">
-                      <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
-                      <p className="text-xs">Loading materials...</p>
-                    </div>
-                  ) : materials.length === 0 ? (
-                    <div className="py-14 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50">
-                      <FileText className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
-                      <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300">No content in this section</h4>
-                      <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1 mb-4">
-                        Upload notes specifically for {activePreparation.name}.
-                      </p>
-                      <Button
-                        onClick={() => setShowUploadModal(true)}
-                        size="sm"
-                        className="bg-[#0B2545] hover:bg-[#163E6C] text-white"
-                      >
-                        <Plus className="w-4 h-4 mr-1.5" /> Upload Note
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {materials.map(mat => (
-                        <div
-                          key={mat.id}
-                          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                        >
-                          <div className="space-y-1.5 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              {/* Type Badge */}
-                              <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider ${
-                                mat.noteType === "ai"
-                                  ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-                                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
-                              }`}>
-                                {mat.noteType}
-                              </span>
-
-                              {/* Status Badge */}
-                              <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                                mat.status === "published"
-                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-                                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                              }`}>
-                                {mat.status === "published" ? "Published" : "Draft"}
-                              </span>
-
-                              {mat.accessType === "premium" && (
-                                <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                                  Premium
-                                </span>
-                              )}
-                            </div>
-
-                            <h3 className="font-bold text-slate-900 dark:text-white text-base">
-                              {mat.title}
-                            </h3>
-
-                            {mat.description && (
-                              <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                                {mat.description}
-                              </p>
-                            )}
-
-                            {/* Breadcrumb metadata */}
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 pt-1">
-                              {mat.subjectName && (
-                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                  Subject: {mat.subjectName}
-                                </span>
-                              )}
-                              {mat.chapterName && (
-                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                  Unit: {mat.chapterName}
-                                </span>
-                              )}
-                              {mat.topicName && (
-                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                                  Topic: {mat.topicName}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
-                            {mat.fileUrl && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setViewPdfMaterial(mat)}
-                                className="text-xs h-8 px-2.5 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900"
-                              >
-                                <Eye className="w-3.5 h-3.5 mr-1" /> View PDF
-                              </Button>
-                            )}
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setShowReplaceModal(mat)}
-                              className="text-xs h-8 px-2.5 text-slate-600 dark:text-slate-300"
-                            >
-                              <UploadCloud className="w-3.5 h-3.5 mr-1" /> Replace PDF
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setShowEditModal(mat)}
-                              className="text-xs h-8 px-2.5 text-slate-600 dark:text-slate-300"
-                            >
-                              <Edit className="w-3.5 h-3.5 mr-1" /> Edit
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleTogglePublish(mat)}
-                              className={`text-xs h-8 px-2.5 ${
-                                mat.status === "published"
-                                  ? "text-amber-600 hover:text-amber-700"
-                                  : "text-emerald-600 hover:text-emerald-700"
-                              }`}
-                            >
-                              {mat.status === "published" ? "Unpublish" : "Publish"}
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setDeleteConfirmMaterial(mat)}
-                              className="text-xs h-8 px-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
-              <Layers className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">Please select a Preparation from the left panel.</p>
             </div>
-          )}
-        </div>
+
+            <div className="flex flex-wrap gap-2">
+              {activeCategory.levels.map((lvl) => {
+                const isSelected = selectedLevelId === lvl.id;
+                return (
+                  <button
+                    key={lvl.id}
+                    onClick={() => {
+                      setSelectedLevelId(lvl.id);
+                      if (lvl.preparations.length > 0 && lvl.preparations[0]) {
+                        setSelectedPrepId(lvl.preparations[0].id);
+                      } else {
+                        setSelectedPrepId(null);
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      isSelected
+                        ? "bg-[#C4A45C] text-black border-[#C4A45C] shadow-xs"
+                        : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-800/50"
+                    }`}
+                  >
+                    {lvl.name} ({lvl.preparations.length})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Preparation Selection */}
+        {activeLevel && (
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] inline-flex items-center justify-center font-bold">
+                  3
+                </span>
+                Preparation / Service / Course
+              </label>
+
+              <div className="flex items-center gap-3">
+                {activePreparation && (
+                  <button
+                    onClick={() =>
+                      setDeleteNodeTarget({
+                        type: "preparation",
+                        id: activePreparation.id,
+                        name: activePreparation.name,
+                      })
+                    }
+                    className="flex items-center gap-1 text-[11px] font-bold text-red-600 hover:underline"
+                  >
+                    <Trash2 className="w-3 h-3" /> Delete Prep
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddPrepModal(true)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-[#0B2545] dark:text-[#C4A45C] hover:underline"
+                >
+                  <Plus className="w-3 h-3" /> Add Preparation
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {activeLevel.preparations.map((prep) => {
+                const isSelected = selectedPrepId === prep.id;
+                return (
+                  <button
+                    key={prep.id}
+                    onClick={() => {
+                      setSelectedPrepId(prep.id);
+                      setSelectedAcademicNode({ type: "preparation" });
+                    }}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-2 ${
+                      isSelected
+                        ? "bg-[#0B2545] text-white border-[#0B2545] shadow-xs ring-2 ring-[#0B2545]/20"
+                        : "border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900"
+                    }`}
+                  >
+                    <span>{prep.name}</span>
+                    {prep.isComingSoon ? (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">
+                        Coming Soon
+                      </span>
+                    ) : (
+                      <span
+                        className={`text-[10px] px-2 py-0.2 rounded-full font-bold ${
+                          isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {prep.counts.total} notes
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Upload Modal */}
+      {/* DUAL-PANE MAIN WORK AREA */}
+      {activePreparation ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* LEFT COLUMN: Master Academic Tree Panel (4 cols) */}
+          <div className="lg:col-span-4 sticky top-24">
+            <AcademicTreePanel
+              preparationId={activePreparation.id}
+              preparationName={activePreparation.name}
+              subjects={academicTree}
+              loading={loadingAcademicTree}
+              selectedNode={selectedAcademicNode}
+              onSelectNode={(node) => setSelectedAcademicNode(node)}
+              onAddSubject={handleOpenAddSubject}
+              onEditSubject={handleOpenEditSubject}
+              onDeleteSubject={handleDeleteSubject}
+              onArchiveSubject={handleArchiveSubject}
+              onAddChapter={handleOpenAddChapter}
+              onEditChapter={handleOpenEditChapter}
+              onDeleteChapter={handleDeleteChapter}
+              onArchiveChapter={handleArchiveChapter}
+              onAddTopic={handleOpenAddTopic}
+              onEditTopic={handleOpenEditTopic}
+              onDeleteTopic={handleDeleteTopic}
+              onArchiveTopic={handleArchiveTopic}
+              onAddNoteForNode={handleOpenUploadForNode}
+            />
+          </div>
+
+          {/* RIGHT COLUMN: Node Details, Actions & Notes Materials (8 cols) */}
+          <div className="lg:col-span-8">
+            <AcademicNodeDetailsPanel
+              activeCategory={activeCategory!}
+              activeLevel={activeLevel!}
+              activePreparation={activePreparation}
+              selectedNode={selectedAcademicNode}
+              materials={materials}
+              loadingMaterials={loadingMaterials}
+              activeSection={activeSection}
+              onSectionChange={(sec) => {
+                setActiveSection(sec);
+                setActiveSubType("all");
+              }}
+              activeSubType={activeSubType}
+              onSubTypeChange={setActiveSubType}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              onAddSubject={handleOpenAddSubject}
+              onEditSubject={handleOpenEditSubject}
+              onDeleteSubject={handleDeleteSubject}
+              onArchiveSubject={handleArchiveSubject}
+              onAddChapter={handleOpenAddChapter}
+              onEditChapter={handleOpenEditChapter}
+              onDeleteChapter={handleDeleteChapter}
+              onArchiveChapter={handleArchiveChapter}
+              onAddTopic={handleOpenAddTopic}
+              onEditTopic={handleOpenEditTopic}
+              onDeleteTopic={handleDeleteTopic}
+              onArchiveTopic={handleArchiveTopic}
+              onOpenUploadNote={() => handleOpenUploadForNode(selectedAcademicNode)}
+              onViewPdf={setViewPdfMaterial}
+              onReplacePdf={setShowReplaceModal}
+              onEditMaterial={setShowEditModal}
+              onTogglePublishMaterial={handleTogglePublish}
+              onDeleteMaterial={setDeleteConfirmMaterial}
+              onSelectNode={(node) => setSelectedAcademicNode(node)}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <Layers className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-500 text-sm">Please select a Preparation from the selector above.</p>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ACADEMIC MODALS                                          */}
+      {/* ========================================================= */}
+
+      {/* Add / Edit Subject Modal */}
+      {showSubjectModal && activePreparation && (
+        <AddEditSubjectModal
+          isOpen={!!showSubjectModal}
+          onClose={() => setShowSubjectModal(null)}
+          preparationId={activePreparation.id}
+          preparationName={activePreparation.name}
+          initialData={showSubjectModal.initialData}
+          onSuccess={() => {
+            loadAcademicTree(activePreparation.id);
+            loadHierarchy(true);
+          }}
+        />
+      )}
+
+      {/* Add / Edit Chapter Modal */}
+      {showChapterModal && (
+        <AddEditChapterModal
+          isOpen={!!showChapterModal}
+          onClose={() => setShowChapterModal(null)}
+          subjectId={showChapterModal.subject.id}
+          subjectName={showChapterModal.subject.name}
+          initialData={showChapterModal.initialData}
+          onSuccess={() => {
+            if (selectedPrepId) loadAcademicTree(selectedPrepId);
+          }}
+        />
+      )}
+
+      {/* Add / Edit Topic Modal */}
+      {showTopicModal && (
+        <AddEditTopicModal
+          isOpen={!!showTopicModal}
+          onClose={() => setShowTopicModal(null)}
+          chapterId={showTopicModal.chapter.id}
+          chapterName={showTopicModal.chapter.title || showTopicModal.chapter.name || ""}
+          subjectName={showTopicModal.subject?.name}
+          initialData={showTopicModal.initialData}
+          onSuccess={() => {
+            if (selectedPrepId) loadAcademicTree(selectedPrepId);
+          }}
+        />
+      )}
+
+      {/* Academic Safe Delete Modal */}
+      {safeDeleteTarget && (
+        <AcademicSafeDeleteModal
+          isOpen={!!safeDeleteTarget}
+          onClose={() => setSafeDeleteTarget(null)}
+          target={safeDeleteTarget}
+          onSuccess={() => {
+            if (selectedPrepId) loadAcademicTree(selectedPrepId);
+            loadHierarchy(true);
+            loadMaterials();
+          }}
+        />
+      )}
+
+      {/* ========================================================= */}
+      {/* STUDY MATERIAL MODALS                                     */}
+      {/* ========================================================= */}
+
+      {/* Upload Material Modal */}
       {showUploadModal && activePreparation && (
         <UploadMaterialModal
           isOpen={showUploadModal}
@@ -858,12 +929,20 @@ export function AdminContentManager() {
           activeLevel={activeLevel!}
           activePreparation={activePreparation}
           activeSection={activeSection}
-          activeSubType={activeSubType !== "all" ? (activeSubType as NoteType) : (SECTION_CONFIG.find(s => s.id === activeSection)?.subTypes[0]?.value || "standard")}
+          activeSubType={
+            activeSubType !== "all"
+              ? (activeSubType as NoteType)
+              : (SECTION_CONFIG.find((s) => s.id === activeSection)?.subTypes[0]?.value || "standard")
+          }
           academicTree={academicTree}
+          initialSubjectId={uploadContext.subjectId}
+          initialChapterId={uploadContext.chapterId}
+          initialTopicId={uploadContext.topicId}
           onSuccess={() => {
             setShowUploadModal(false);
             loadMaterials();
             loadHierarchy(true);
+            if (selectedPrepId) loadAcademicTree(selectedPrepId);
           }}
         />
       )}
@@ -877,6 +956,8 @@ export function AdminContentManager() {
           onSuccess={() => {
             setShowEditModal(null);
             loadMaterials();
+            loadHierarchy(true);
+            if (selectedPrepId) loadAcademicTree(selectedPrepId);
           }}
         />
       )}
@@ -901,7 +982,7 @@ export function AdminContentManager() {
         />
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Note Confirmation Modal */}
       {deleteConfirmMaterial && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
@@ -920,7 +1001,7 @@ export function AdminContentManager() {
                 variant="destructive"
                 size="sm"
                 disabled={isProcessing}
-                onClick={handleDelete}
+                onClick={handleDeleteMaterial}
               >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Delete Material
@@ -949,14 +1030,16 @@ export function AdminContentManager() {
                 placeholder="e.g. 8th Level"
                 value={newLevelName}
                 onChange={(e) => setNewLevelName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && newLevelName.trim()) handleAddLevel(); }}
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => { setShowAddLevelModal(false); setNewLevelName(""); }}
+                onClick={() => {
+                  setShowAddLevelModal(false);
+                  setNewLevelName("");
+                }}
               >
                 Cancel
               </Button>
@@ -974,15 +1057,15 @@ export function AdminContentManager() {
         </div>
       )}
 
-      {/* Add Preparation/Service Modal */}
+      {/* Add Preparation Modal */}
       {showAddPrepModal && activeLevel && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl border border-slate-200 dark:border-slate-800">
             <h3 className="text-lg font-bold text-[#0B2545] dark:text-white">
-              Add Preparation/Service to {activeLevel.name}
+              Add Preparation to {activeLevel.name}
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Creates a new preparation (e.g. "Civil", "Computer") under this level. You'll be able to upload notes for it right away.
+              Creates a new preparation / service (e.g. "Computer / IT", "Electrical Engineering").
             </p>
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1.5">
@@ -990,17 +1073,19 @@ export function AdminContentManager() {
               </label>
               <Input
                 autoFocus
-                placeholder="e.g. Computer Engineering"
+                placeholder="e.g. Electrical Engineering"
                 value={newPrepName}
                 onChange={(e) => setNewPrepName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && newPrepName.trim()) handleAddPrep(); }}
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => { setShowAddPrepModal(false); setNewPrepName(""); }}
+                onClick={() => {
+                  setShowAddPrepModal(false);
+                  setNewPrepName("");
+                }}
               >
                 Cancel
               </Button>
@@ -1029,8 +1114,7 @@ export function AdminContentManager() {
               Are you sure you want to delete <strong className="text-slate-900 dark:text-white">"{deleteNodeTarget.name}"</strong>?
               {deleteNodeTarget.type === "level"
                 ? " This also deletes every preparation, course link, and uploaded material under this level."
-                : " This also deletes every notes file uploaded for this preparation."
-              } This action cannot be undone.
+                : " This also deletes every notes file uploaded for this preparation."} This action cannot be undone.
             </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => setDeleteNodeTarget(null)}>
@@ -1055,14 +1139,14 @@ export function AdminContentManager() {
 
 export default function AdminNotesPage() {
   return (
-    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading notes...</div>}>
+    <React.Suspense fallback={<div className="p-8 text-center text-slate-400">Loading notes &amp; academic hierarchy...</div>}>
       <AdminContentManager />
     </React.Suspense>
   );
 }
 
 // ==========================================
-// UPLOAD MATERIAL MODAL
+// UPLOAD MATERIAL MODAL (Context-Aware)
 // ==========================================
 
 function UploadMaterialModal({
@@ -1074,6 +1158,9 @@ function UploadMaterialModal({
   activeSection,
   activeSubType,
   academicTree,
+  initialSubjectId,
+  initialChapterId,
+  initialTopicId,
   onSuccess,
 }: {
   isOpen: boolean;
@@ -1084,30 +1171,45 @@ function UploadMaterialModal({
   activeSection: ContentCategory;
   activeSubType: NoteType;
   academicTree: AcademicSubject[];
+  initialSubjectId?: number | null;
+  initialChapterId?: number | null;
+  initialTopicId?: number | null;
   onSuccess: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedSubType, setSelectedSubType] = useState<NoteType>(activeSubType);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<number | "">("");
-  const [selectedChapterId, setSelectedChapterId] = useState<number | "">("");
-  const [selectedTopicId, setSelectedTopicId] = useState<number | "">("");
+  const [selectedSubjectId, setSelectedSubjectId] = useState<number | "">(
+    initialSubjectId ?? ""
+  );
+  const [selectedChapterId, setSelectedChapterId] = useState<number | "">(
+    initialChapterId ?? ""
+  );
+  const [selectedTopicId, setSelectedTopicId] = useState<number | "">(
+    initialTopicId ?? ""
+  );
   const [accessType, setAccessType] = useState<"free" | "premium">("free");
   const [materialStatus, setMaterialStatus] = useState<"published" | "draft">("published");
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  useEffect(() => {
+    if (initialSubjectId !== undefined) setSelectedSubjectId(initialSubjectId ?? "");
+    if (initialChapterId !== undefined) setSelectedChapterId(initialChapterId ?? "");
+    if (initialTopicId !== undefined) setSelectedTopicId(initialTopicId ?? "");
+  }, [initialSubjectId, initialChapterId, initialTopicId]);
+
   // Available chapters for selected subject
   const availableChapters = useMemo(() => {
     if (!selectedSubjectId) return [];
-    const sub = academicTree.find(s => s.id === Number(selectedSubjectId));
+    const sub = academicTree.find((s) => s.id === Number(selectedSubjectId));
     return sub ? sub.chapters : [];
   }, [academicTree, selectedSubjectId]);
 
   // Available topics for selected chapter
   const availableTopics = useMemo(() => {
     if (!selectedChapterId) return [];
-    const chap = availableChapters.find(c => c.id === Number(selectedChapterId));
+    const chap = availableChapters.find((c) => c.id === Number(selectedChapterId));
     return chap ? chap.topics : [];
   }, [availableChapters, selectedChapterId]);
 
@@ -1117,8 +1219,8 @@ function UploadMaterialModal({
       toast.error("Title is required");
       return;
     }
-    if (!file && activeSection === "syllabus") {
-      toast.error("Please attach a syllabus PDF file");
+    if (!file) {
+      toast.error("Please attach a PDF note file");
       return;
     }
 
@@ -1161,7 +1263,7 @@ function UploadMaterialModal({
             Target Location Locked
           </div>
           <h2 className="text-xl font-extrabold text-[#0B2545] dark:text-white mt-0.5">
-            Upload to {activePreparation.name}
+            Upload Note to {activePreparation.name}
           </h2>
 
           {/* Locked Hierarchy Info Badges */}
@@ -1176,37 +1278,35 @@ function UploadMaterialModal({
               Preparation: <strong>{activePreparation.name}</strong>
             </span>
             <span className="bg-[#0B2545] text-white text-xs px-2.5 py-1 rounded-md font-medium">
-              Section: <strong>{SECTION_CONFIG.find(s => s.id === activeSection)?.label}</strong>
+              Section: <strong>{SECTION_CONFIG.find((s) => s.id === activeSection)?.label}</strong>
             </span>
           </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-          {/* SubType Selection if applicable */}
-          {activeSection !== "syllabus" && (
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Note Type
-              </label>
-              <div className="flex gap-2">
-                {SECTION_CONFIG.find(s => s.id === activeSection)?.subTypes.map(st => (
-                  <button
-                    type="button"
-                    key={st.value}
-                    onClick={() => setSelectedSubType(st.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                      selectedSubType === st.value
-                        ? "bg-[#0B2545] text-white border-[#0B2545]"
-                        : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
-                    }`}
-                  >
-                    {st.label}
-                  </button>
-                ))}
-              </div>
+          {/* SubType Selection */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Note Sub-Type
+            </label>
+            <div className="flex gap-2">
+              {SECTION_CONFIG.find((s) => s.id === activeSection)?.subTypes.map((st) => (
+                <button
+                  type="button"
+                  key={st.value}
+                  onClick={() => setSelectedSubType(st.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    selectedSubType === st.value
+                      ? "bg-[#0B2545] text-white border-[#0B2545]"
+                      : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
+                  }`}
+                >
+                  {st.label}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
           {/* Title */}
           <div>
@@ -1215,9 +1315,9 @@ function UploadMaterialModal({
             </label>
             <Input
               required
-              placeholder={activeSection === "syllabus" ? "e.g., Official Syllabus - Civil Engineering 5th Level" : "e.g., Complete Notes on Structural Analysis"}
+              placeholder="e.g. Complete Notes on Structural Analysis & Mechanics"
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               className="text-sm"
             />
           </div>
@@ -1231,7 +1331,7 @@ function UploadMaterialModal({
               rows={2}
               placeholder="Brief summary of what this document covers..."
               value={description}
-              onChange={e => setDescription(e.target.value)}
+              onChange={(e) => setDescription(e.target.value)}
               className="w-full text-sm p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-[#0B2545]"
             />
           </div>
@@ -1240,20 +1340,26 @@ function UploadMaterialModal({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Subject (Optional)
+                Subject
               </label>
               <select
                 value={selectedSubjectId}
-                onChange={e => {
+                onChange={(e) => {
                   setSelectedSubjectId(e.target.value ? Number(e.target.value) : "");
                   setSelectedChapterId("");
                   setSelectedTopicId("");
                 }}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
               >
-                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">-- Preparation Wide --</option>
-                {academicTree.map(sub => (
-                  <option key={sub.id} value={sub.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                  -- Preparation Wide --
+                </option>
+                {academicTree.map((sub) => (
+                  <option
+                    key={sub.id}
+                    value={sub.id}
+                    className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
                     {sub.name}
                   </option>
                 ))}
@@ -1262,21 +1368,27 @@ function UploadMaterialModal({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Chapter / Unit
+                Chapter
               </label>
               <select
                 disabled={!selectedSubjectId}
                 value={selectedChapterId}
-                onChange={e => {
+                onChange={(e) => {
                   setSelectedChapterId(e.target.value ? Number(e.target.value) : "");
                   setSelectedTopicId("");
                 }}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none disabled:opacity-50"
               >
-                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">-- All Units --</option>
-                {availableChapters.map(chap => (
-                  <option key={chap.id} value={chap.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
-                    {chap.title}
+                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                  -- All Chapters --
+                </option>
+                {availableChapters.map((chap) => (
+                  <option
+                    key={chap.id}
+                    value={chap.id}
+                    className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    {chap.title || chap.name}
                   </option>
                 ))}
               </select>
@@ -1289,12 +1401,18 @@ function UploadMaterialModal({
               <select
                 disabled={!selectedChapterId}
                 value={selectedTopicId}
-                onChange={e => setSelectedTopicId(e.target.value ? Number(e.target.value) : "")}
+                onChange={(e) => setSelectedTopicId(e.target.value ? Number(e.target.value) : "")}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none disabled:opacity-50"
               >
-                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">-- All Topics --</option>
-                {availableTopics.map(t => (
-                  <option key={t.id} value={t.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                  -- All Topics --
+                </option>
+                {availableTopics.map((t) => (
+                  <option
+                    key={t.id}
+                    value={t.id}
+                    className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
                     {t.name}
                   </option>
                 ))}
@@ -1313,7 +1431,7 @@ function UploadMaterialModal({
                 accept=".pdf,application/pdf"
                 id="file-upload-input"
                 className="hidden"
-                onChange={e => {
+                onChange={(e) => {
                   if (e.target.files?.[0]) setFile(e.target.files[0]);
                 }}
               />
@@ -1350,35 +1468,40 @@ function UploadMaterialModal({
               </label>
               <select
                 value={accessType}
-                onChange={e => setAccessType(e.target.value as any)}
-                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                onChange={(e) => setAccessType(e.target.value as any)}
+                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                <option value="free" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Free for authorized students</option>
-                <option value="premium" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Premium (Subscription required)</option>
+                <option value="free">Free Access</option>
+                <option value="premium">Premium Access Only</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Publication Status
+                Initial Status
               </label>
               <select
                 value={materialStatus}
-                onChange={e => setMaterialStatus(e.target.value as any)}
-                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                onChange={(e) => setMaterialStatus(e.target.value as any)}
+                className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                <option value="published" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Publish Now (Immediate student access)</option>
-                <option value="draft" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Save as Draft (Admin only)</option>
+                <option value="published">Publish Immediately</option>
+                <option value="draft">Save as Draft</option>
               </select>
             </div>
           </div>
 
           {/* Modal Footer */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={uploading}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={uploading} className="bg-[#0B2545] hover:bg-[#163E6C] text-white">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={uploading || !file}
+              className="bg-[#0B2545] hover:bg-[#163E6C] text-white"
+            >
               {uploading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
@@ -1387,7 +1510,7 @@ function UploadMaterialModal({
               ) : (
                 <>
                   <UploadCloud className="w-4 h-4 mr-1.5" />
-                  {materialStatus === "published" ? "Upload & Publish" : "Save as Draft"}
+                  Upload Note
                 </>
               )}
             </Button>
@@ -1424,13 +1547,13 @@ function EditMaterialModal({
 
   const availableChapters = useMemo(() => {
     if (!subjectId) return [];
-    const sub = academicTree.find(s => s.id === Number(subjectId));
+    const sub = academicTree.find((s) => s.id === Number(subjectId));
     return sub ? sub.chapters : [];
   }, [academicTree, subjectId]);
 
   const availableTopics = useMemo(() => {
     if (!chapterId) return [];
-    const chap = availableChapters.find(c => c.id === Number(chapterId));
+    const chap = availableChapters.find((c) => c.id === Number(chapterId));
     return chap ? chap.topics : [];
   }, [availableChapters, chapterId]);
 
@@ -1476,7 +1599,7 @@ function EditMaterialModal({
             <Input
               required
               value={title}
-              onChange={e => setTitle(e.target.value)}
+              onChange={(e) => setTitle(e.target.value)}
               className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
             />
           </div>
@@ -1488,48 +1611,53 @@ function EditMaterialModal({
             <textarea
               rows={2}
               value={description}
-              onChange={e => setDescription(e.target.value)}
-              className="w-full text-sm p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder:text-slate-400"
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full text-xs p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          {/* Academic Placement */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 Subject
               </label>
               <select
                 value={subjectId}
-                onChange={e => {
+                onChange={(e) => {
                   setSubjectId(e.target.value ? Number(e.target.value) : "");
                   setChapterId("");
                   setTopicId("");
                 }}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">-- None --</option>
-                {academicTree.map(s => (
-                  <option key={s.id} value={s.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{s.name}</option>
+                <option value="">-- None --</option>
+                {academicTree.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
-                Chapter/Unit
+                Chapter
               </label>
               <select
                 disabled={!subjectId}
                 value={chapterId}
-                onChange={e => {
+                onChange={(e) => {
                   setChapterId(e.target.value ? Number(e.target.value) : "");
                   setTopicId("");
                 }}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white disabled:opacity-50"
               >
-                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">-- None --</option>
-                {availableChapters.map(c => (
-                  <option key={c.id} value={c.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{c.title}</option>
+                <option value="">-- None --</option>
+                {availableChapters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title || c.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1541,12 +1669,14 @@ function EditMaterialModal({
               <select
                 disabled={!chapterId}
                 value={topicId}
-                onChange={e => setTopicId(e.target.value ? Number(e.target.value) : "")}
+                onChange={(e) => setTopicId(e.target.value ? Number(e.target.value) : "")}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white disabled:opacity-50"
               >
-                <option value="" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">-- None --</option>
-                {availableTopics.map(t => (
-                  <option key={t.id} value={t.id} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{t.name}</option>
+                <option value="">-- None --</option>
+                {availableTopics.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1559,11 +1689,11 @@ function EditMaterialModal({
               </label>
               <select
                 value={accessType}
-                onChange={e => setAccessType(e.target.value as any)}
+                onChange={(e) => setAccessType(e.target.value as any)}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                <option value="free" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Free</option>
-                <option value="premium" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Premium</option>
+                <option value="free">Free</option>
+                <option value="premium">Premium</option>
               </select>
             </div>
 
@@ -1573,12 +1703,12 @@ function EditMaterialModal({
               </label>
               <select
                 value={status}
-                onChange={e => setStatus(e.target.value)}
+                onChange={(e) => setStatus(e.target.value)}
                 className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
               >
-                <option value="published" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Published</option>
-                <option value="draft" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Draft</option>
-                <option value="archived" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">Archived</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
               </select>
             </div>
           </div>
@@ -1587,7 +1717,12 @@ function EditMaterialModal({
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={saving} className="bg-[#0B2545] hover:bg-[#163E6C] text-white">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={saving}
+              className="bg-[#0B2545] hover:bg-[#163E6C] text-white"
+            >
               {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
               Save Changes
             </Button>
@@ -1650,7 +1785,7 @@ function ReplaceFileModal({
               accept=".pdf,application/pdf"
               id="replace-file-input"
               className="hidden"
-              onChange={e => {
+              onChange={(e) => {
                 if (e.target.files?.[0]) setFile(e.target.files[0]);
               }}
             />
@@ -1674,10 +1809,21 @@ function ReplaceFileModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={replacing}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              disabled={replacing}
+            >
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={replacing || !file} className="bg-[#0B2545] hover:bg-[#163E6C] text-white">
+            <Button
+              type="submit"
+              size="sm"
+              disabled={replacing || !file}
+              className="bg-[#0B2545] hover:bg-[#163E6C] text-white"
+            >
               {replacing ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
               Replace File
             </Button>
@@ -1709,7 +1855,7 @@ function ViewPdfModal({
               {material.title}
             </h3>
             <div className="text-xs text-slate-400">
-              {material.examName} • {material.contentCategory} ({material.noteType})
+              {material.examName} &bull; {material.contentCategory} ({material.noteType})
             </div>
           </div>
 
@@ -1726,7 +1872,7 @@ function ViewPdfModal({
               </a>
             )}
             <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
-              ✕
+              &#10005;
             </Button>
           </div>
         </div>

@@ -138,5 +138,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'is_active': user.is_active,
             'avatar': user.avatar,
         }
+        if user.role == 'student':
+            from .views import _get_package_status
+            data['package'] = _get_package_status(user)
         return _apply_admin_session_timeout(data, user, admin_settings)
 

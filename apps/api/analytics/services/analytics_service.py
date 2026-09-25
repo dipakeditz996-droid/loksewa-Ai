@@ -69,7 +69,7 @@ class AnalyticsService:
         )
         return row
     @staticmethod
-    def get_overview(user):
+    def get_overview(user, course_id=None):
         """
         Returns overall metrics for the student.
 
@@ -83,99 +83,89 @@ class AnalyticsService:
         authoritative source for any exam result, submission or payment
         status (those stay uncached and are read fresh at their own views).
         """
-        cache_key = f'analytics_overview:{user.id}'
+        cache_key = f'analytics_overview:{user.id}:{course_id or "default"}'
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
-        result = AnalyticsService._compute_overview(user)
+        result = AnalyticsService._compute_overview(user, course_id=course_id)
         cache.set(cache_key, result, 20)
         return result
 
     @staticmethod
-    def _compute_overview(user):
+    def _compute_overview(user, course_id=None):
         stats = AnalyticsService._scalar_stats(user)
         obj_solved, obj_correct = stats['obj_total'], stats['obj_correct']
         exam_solved, exam_correct = stats['exam_total'], stats['exam_correct']
         total_solved = obj_solved + exam_solved
         subjective_evaluated = stats['subjective_evaluated']
 
-        # ── Active course: read from Enrollment (real enrolled course), not SubscriptionPlan ──
+        # ── Active course: read from canonical course context or authorized course ──
         active_course = None
         journey_progress = 0
+        total_available_exams = 0
         try:
-            from courses.models import Enrollment
-            active_enrollment = Enrollment.objects.filter(
-                student=user, status='active'
-            ).select_related('course', 'course__exam').first()
+            from courses.access import authorized_courses, get_student_course_context
+            from courses.models import Course
 
-            if active_enrollment and active_enrollment.course:
-                course = active_enrollment.course
+            auth_courses = authorized_courses(user)
+            course = None
+
+            if course_id:
+                try:
+                    course = auth_courses.filter(id=int(course_id)).select_related('exam').first()
+                except (ValueError, TypeError):
+                    course = None
+            else:
+                ctx = get_student_course_context(user)
+                active_c = ctx.get('active_course')
+                if active_c:
+                    course = auth_courses.filter(id=active_c['id']).select_related('exam').first()
+
+            if course:
                 active_course = {
                     "name": course.title,
                     "id": course.id,
                     "slug": course.slug,
                 }
 
-                # ── Real journey progress ──
-                # Numerator: topics the student has actually completed
-                completed_topics = UserTopicProgress.objects.filter(
-                    user=user, status='completed'
-                ).count()
-
-                # Denominator: topics in the exam linked to this course
-                total_topics = 0
+                # ── Real journey progress scoped to this course's syllabus topics ──
                 if course.exam:
                     try:
                         from exams.models import Topic
-                        # Paper-based hierarchy
-                        total_topics = Topic.objects.filter(
+                        course_topic_ids = list(Topic.objects.filter(
                             chapter__subject__paper__exam=course.exam
-                        ).distinct().count()
-                        if total_topics == 0:
-                            # Legacy flat subject → chapter → topic
-                            total_topics = Topic.objects.filter(
-                                chapter__subject__exam=course.exam
-                            ).distinct().count()
-                    except Exception:
-                        total_topics = 0
+                        ).values_list('id', flat=True))
 
-                if total_topics > 0:
-                    journey_progress = min(100, round((completed_topics / total_topics) * 100, 1))
-                elif completed_topics > 0:
-                    # No topic structure configured yet — use study-plan task progress as fallback
-                    journey_progress = 0  # honest zero until syllabus is seeded
-            else:
-                # No enrollment — fall back to subscription plan name if student has active sub
-                from subscriptions.models import Subscription
-                active_sub = Subscription.objects.filter(
-                    student=user, status='ACTIVE'
-                ).select_related('plan').first()
-                if active_sub:
-                    active_course = {
-                        "name": active_sub.plan.name,
-                        "id": active_sub.plan.id,
-                        "slug": None,
-                    }
+                        if not course_topic_ids:
+                            course_topic_ids = list(Topic.objects.filter(
+                                chapter__subject__exam=course.exam
+                            ).values_list('id', flat=True))
+
+                        total_topics = len(course_topic_ids)
+                        if total_topics > 0:
+                            completed_topics = UserTopicProgress.objects.filter(
+                                user=user, topic_id__in=course_topic_ids, status='completed'
+                            ).count()
+                            journey_progress = min(100, round((completed_topics / total_topics) * 100, 1))
+                        else:
+                            journey_progress = 0
+                    except Exception:
+                        journey_progress = 0
+
+                # Calculate Total Available Exams for this course
+                from exams.models import Examination
+                exam_q = Q(course=course)
+                if course.exam_id:
+                    exam_q |= Q(course__isnull=True, exam_id=course.exam_id)
+                total_available_exams = Examination.objects.filter(status='published').filter(exam_q).count()
+
         except Exception:
             pass
 
         streak = stats['streak']
         best_streak = stats['best_streak']
-
-        # Overall Accuracy calculation (Objective only) - obj_correct/exam_correct
-        # already computed above alongside their totals.
         total_correct = obj_correct + exam_correct
         overall_accuracy = (total_correct / total_solved * 100) if total_solved > 0 else 0
-
-        # Calculate Total Available Exams
-        total_available_exams = 0
-        try:
-            if active_course and active_course.get('id'):
-                from exams.models import Examination
-                total_available_exams = Examination.objects.filter(course_id=active_course['id'], is_published=True).count()
-        except Exception:
-            pass
-
         total_study_time_mins = stats['study_seconds'] // 60
 
         return {

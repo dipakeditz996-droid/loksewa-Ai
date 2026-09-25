@@ -11,107 +11,242 @@ export interface GameMode {
   color: string;
   badge?: string;
   path: string;
+  isComingSoon?: boolean;
 }
 
-export interface FeaturedGame {
-  id: string;
+export interface WeeklyQuiz {
+  id: number;
   title: string;
-  type: string;
   description: string;
-  participants: number;
-  prizePool: string;
-  endTime: string;
-  image: string;
-  icon: string;
-  difficulty: string;
-  questionsCount: number;
-  timeLimitMins: number;
-  buttonText: string;
-  route: string;
-  xpReward: number;
-  coinReward: number;
+  week_number: number;
+  year: number;
+  start_date: string | null;
+  end_date: string | null;
+  duration_minutes: number;
+  xp_reward: number;
+  is_active: boolean;
+  questions_count: number;
+  has_attempted: boolean;
+  has_in_progress: boolean;
+  in_progress_attempt_id?: number | null;
+  latest_attempt?: WeeklyQuizAttempt | null;
 }
 
-const STATIC_GAME_MODES: GameMode[] = [
+export interface WeeklyQuizAttempt {
+  id: number;
+  quiz_id: number;
+  quiz_title: string;
+  student_name: string;
+  status: 'IN_PROGRESS' | 'COMPLETED';
+  score: number;
+  correct_answers: number;
+  total_questions: number;
+  duration_minutes: number;
+  time_taken_seconds: number;
+  xp_awarded: number;
+  started_at: string;
+  completed_at?: string | null;
+}
+
+export interface WeeklyQuizQuestionItem {
+  id: number;
+  order: number;
+  question_id: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+}
+
+export interface WeeklyQuizStartResponse {
+  attempt_id: number;
+  quiz: WeeklyQuiz;
+  questions: WeeklyQuizQuestionItem[];
+  duration_minutes: number;
+  started_at: string;
+}
+
+export interface WeeklyQuizReviewItem {
+  question_id: number;
+  order: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  selected_option: string | null;
+  correct_option: string;
+  is_correct: boolean;
+  explanation: string;
+}
+
+export interface WeeklyQuizSubmitResponse {
+  attempt_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  status: string;
+  score: number;
+  correct_answers: number;
+  total_questions: number;
+  percentage: number;
+  xp_awarded: number;
+  time_taken_seconds: number;
+  completed_at: string;
+  review: WeeklyQuizReviewItem[];
+}
+
+export interface DailyDrillQuestionItem {
+  id: number;
+  order: number;
+  question_id: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  hint?: string | null;
+  selected_option?: string | null;
+  is_answered: boolean;
+  is_correct?: boolean | null;
+  correct_option?: string | null;
+  explanation?: string | null;
+  answered_at?: string | null;
+}
+
+export interface DailyDrillSession {
+  id: number;
+  student_name: string;
+  date: string;
+  exam_id?: number | null;
+  course_title: string;
+  focus_type: 'weak_areas' | 'revision' | 'course_mixed';
+  focus_label: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'EXPIRED';
+  duration_seconds: number;
+  remaining_seconds: number;
+  score: number;
+  correct_answers: number;
+  total_questions: number;
+  answered_count: number;
+  accuracy: number;
+  time_taken_seconds: number;
+  xp_awarded: number;
+  started_at: string;
+  completed_at?: string | null;
+  questions: DailyDrillQuestionItem[];
+}
+
+export interface DailyDrillTodayResponse {
+  exists: boolean;
+  session: DailyDrillSession | null;
+  course_title?: string;
+  exam_id?: number | null;
+}
+
+export interface DailyDrillAnswerResponse {
+  question_id: number;
+  selected_option: string;
+  is_correct: boolean;
+  correct_option: string;
+  explanation?: string;
+  hint?: string;
+  current_score: number;
+  correct_answers: number;
+  answered_count: number;
+  total_questions: number;
+}
+
+export interface DailyDrillReviewItem {
+  id: number;
+  order: number;
+  question_id: number;
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  selected_option?: string | null;
+  correct_option: string;
+  is_correct: boolean;
+  explanation?: string;
+  hint?: string;
+  answered_at?: string | null;
+}
+
+export interface DailyDrillCompleteResponse {
+  session_id: number;
+  status: 'COMPLETED';
+  score: number;
+  correct_answers: number;
+  total_questions: number;
+  accuracy: number;
+  time_taken_seconds: number;
+  xp_awarded: number;
+  current_streak: number;
+  completed_at: string;
+  review: DailyDrillReviewItem[];
+}
+
+const CANONICAL_GAME_MODES: GameMode[] = [
   {
-    id: "1",
-    title: "1v1 Duel",
-    description: "Challenge a random opponent in a fast-paced 5-question match.",
-    icon: "swords",
+    id: "weekly-quiz",
+    title: "Weekly Grand Quiz",
+    description: "Curated 15-question weekly challenge from the Master Question Bank. Earn XP and test readiness.",
+    icon: "Crown",
+    players: "Single Player",
+    timeLimit: "20 mins",
+    xpReward: "Up to 100 XP",
+    color: "from-amber-500 to-yellow-600",
+    badge: "Featured",
+    path: "/student/games/weekly-quiz"
+  },
+  {
+    id: "1v1-duel",
+    title: "1v1 Duel Challenge",
+    description: "Battle live against another aspirant in real-time. Highest score claims the Victory Bonus.",
+    icon: "Swords",
     players: "2 Players",
-    timeLimit: "30s / question",
-    xpReward: "50 XP",
+    timeLimit: "15s / question",
+    xpReward: "Score + 50 XP Victory Bonus",
     color: "from-blue-500 to-indigo-600",
+    badge: "Live Battle",
     path: "/student/games/duel"
   },
   {
-    id: "2",
-    title: "Survival Mode",
-    description: "Answer correctly to stay alive. How long can you survive?",
-    icon: "shield",
+    id: "survival",
+    title: "Solo Survival Mode",
+    description: "Answer correctly to stay alive with 3 lives. Difficulty escalates with each question survived.",
+    icon: "Shield",
     players: "Single Player",
-    timeLimit: "15s / question",
-    xpReward: "10 XP / q",
+    timeLimit: "8s - 15s / question",
+    xpReward: "10 - 50 XP / q",
     color: "from-rose-500 to-red-600",
-    badge: "Popular",
+    badge: "High Stakes",
     path: "/student/games/survival"
   },
   {
-    id: "3",
-    title: "Daily Challenge",
-    description: "Complete the daily 10-question set for bonus rewards.",
-    icon: "target",
-    players: "Global",
-    timeLimit: "10 mins",
-    xpReward: "100 XP",
-    color: "from-amber-500 to-orange-600",
-    path: "/student/games/daily"
+    id: "daily-challenge",
+    title: "Daily Drill",
+    description: "Daily 5-minute question set tailored to your preparation course. Reinforce concepts, earn XP, and protect your study streak.",
+    icon: "Target",
+    players: "Single Player",
+    timeLimit: "5 mins",
+    xpReward: "Up to 45 XP + Streak",
+    color: "from-emerald-500 to-teal-600",
+    badge: "Daily 5 Min",
+    path: "/student/games/daily-drill"
   }
 ];
 
-const STATIC_FEATURED_GAME: FeaturedGame = {
-  id: "fg-1",
-  title: "Weekly Grand Loksewa Quiz",
-  type: "Tournament",
-  description: "Join 5,000+ aspirants in the ultimate weekly showdown. Top 100 win exclusive study materials.",
-  participants: 5240,
-  prizePool: "10,000 XP + Premium Notes",
-  endTime: "2024-05-15T18:00:00Z",
-  image: "/media/course.jpg",
-  icon: "Crown",
-  difficulty: "Hard",
-  questionsCount: 50,
-  timeLimitMins: 45,
-  buttonText: "Play Now",
-  route: "/student/games/weekly-quiz",
-  xpReward: 500,
-  coinReward: 200
-};
-
 class GamesService {
-  /**
-   * Fetch all available game modes. (Static UI Configuration)
-   */
   async getGameModes(): Promise<GameMode[]> {
-    return STATIC_GAME_MODES;
-  }
-
-  /**
-   * Fetch the featured game of the day. (Static UI Configuration)
-   */
-  async getFeaturedGame(): Promise<FeaturedGame | null> {
-    return STATIC_FEATURED_GAME;
-  }
-
-  /**
-   * Fetch personalized recommended games for the student.
-   */
-  async getRecommendedGames(): Promise<GameMode[]> {
-    return STATIC_GAME_MODES.slice(0, 2);
+    return CANONICAL_GAME_MODES;
   }
 }
 
 export const gamesService = new GamesService();
+
 
 
 // ============================================================================
@@ -131,6 +266,11 @@ export interface GameQuestion {
 export interface GameMatch {
   id: number;
   status: 'SEARCHING' | 'MATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  is_bot_match?: boolean;
+  bot_difficulty?: string;
+  opponent_type?: 'BOT' | 'HUMAN';
+  time_remaining_matchmaking?: number;
+  bot_answered?: boolean;
   player1_name: string;
   player2_name: string;
   player1_score: number;
@@ -290,7 +430,7 @@ export const gamesApi = {
   submitAnswer: async (matchId: number, option: string): Promise<any> => {
     return apiClient<any>(`/games/matches/${matchId}/answer/`, {
       method: "POST",
-      body: JSON.stringify({ selected_option: option })
+      body: JSON.stringify({ selected_option: option, option })
     });
   },
   randomMatch: async (): Promise<{id: number}> => {
@@ -305,20 +445,68 @@ export const gamesApi = {
       body: JSON.stringify({ invite_code: code })
     });
   },
+  cancelMatch: async (matchId?: number): Promise<{ status: string; match_id?: number }> => {
+    const url = matchId ? `/games/matches/${matchId}/cancel/` : '/games/matchmaking/cancel/';
+    return apiClient<{ status: string; match_id?: number }>(url, { method: "POST" });
+  },
 
   // Survival API
   startSurvival: async (): Promise<ActiveSurvivalGame> => {
     return apiClient<ActiveSurvivalGame>('/games/survival/start/', { method: "POST" });
   },
+  getActiveSurvival: async (): Promise<{ active: boolean; game: ActiveSurvivalGame | null }> => {
+    return apiClient<{ active: boolean; game: ActiveSurvivalGame | null }>('/games/survival/active/');
+  },
   submitSurvivalAnswer: async (gameId: number, option: string): Promise<{status: 'CONTINUE' | 'GAME_OVER', is_correct: boolean, game: ActiveSurvivalGame | SurvivalGame}> => {
     return apiClient<any>(`/games/survival/${gameId}/answer/`, {
       method: "POST",
-      body: JSON.stringify({ selected_option: option })
+      body: JSON.stringify({ selected_option: option, option })
     });
   },
 
+  // Weekly Quiz API
+  getCurrentWeeklyQuiz: async (): Promise<WeeklyQuiz> => {
+    return apiClient<WeeklyQuiz>('/games/weekly-quiz/current/');
+  },
+  startWeeklyQuiz: async (): Promise<WeeklyQuizStartResponse> => {
+    return apiClient<WeeklyQuizStartResponse>('/games/weekly-quiz/start/', { method: "POST" });
+  },
+  submitWeeklyQuiz: async (attemptId: number, answers: Record<string, string>, timeTakenSeconds: number): Promise<WeeklyQuizSubmitResponse> => {
+    return apiClient<WeeklyQuizSubmitResponse>('/games/weekly-quiz/submit/', {
+      method: "POST",
+      body: JSON.stringify({
+        attempt_id: attemptId,
+        answers,
+        time_taken_seconds: timeTakenSeconds,
+      })
+    });
+  },
+  getWeeklyQuizAttempt: async (attemptId: number): Promise<WeeklyQuizSubmitResponse> => {
+    return apiClient<WeeklyQuizSubmitResponse>(`/games/weekly-quiz/attempts/${attemptId}/`);
+  },
+
+  // Daily Drill
+  getDailyDrillToday: async (): Promise<DailyDrillTodayResponse> => {
+    return apiClient<DailyDrillTodayResponse>('/games/daily-drill/today/');
+  },
+  startDailyDrill: async (): Promise<DailyDrillSession> => {
+    return apiClient<DailyDrillSession>('/games/daily-drill/start/', { method: "POST" });
+  },
+  getDailyDrillDetail: async (sessionId: number): Promise<DailyDrillSession> => {
+    return apiClient<DailyDrillSession>(`/games/daily-drill/${sessionId}/`);
+  },
+  submitDailyDrillAnswer: async (sessionId: number, questionId: number, selectedOption: string): Promise<DailyDrillAnswerResponse> => {
+    return apiClient<DailyDrillAnswerResponse>(`/games/daily-drill/${sessionId}/answer/`, {
+      method: "POST",
+      body: JSON.stringify({ question_id: questionId, selected_option: selectedOption })
+    });
+  },
+  completeDailyDrill: async (sessionId: number): Promise<DailyDrillCompleteResponse> => {
+    return apiClient<DailyDrillCompleteResponse>(`/games/daily-drill/${sessionId}/complete/`, { method: "POST" });
+  },
+
   // History & Leaderboard
-  getHistory: async (): Promise<{matches: GameMatch[], survivals: SurvivalGame[]}> => {
+  getHistory: async (): Promise<{matches: GameMatch[], survivals: SurvivalGame[], weekly_quizzes?: WeeklyQuizAttempt[]}> => {
     return apiClient<any>('/games/history/');
   },
   getLeaderboard: async (): Promise<{top_1v1: GameProfile[], top_survival: GameProfile[]}> => {

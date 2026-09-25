@@ -17,7 +17,7 @@ export default function PublicCourseDetail() {
   const router = useRouter();
   const { user } = useAuth();
   const isAuthenticated = !!user;
-  const courseId = parseInt(params.id as string, 10);
+  const idOrSlug = params.id as string;
   
   const [course, setCourse] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,8 +28,9 @@ export default function PublicCourseDetail() {
 
   useEffect(() => {
     async function loadCourse() {
+      if (!idOrSlug) return;
       try {
-        const data = await courseEnrollmentApi.getCourseDetails(courseId);
+        const data = await courseEnrollmentApi.getCourseDetails(idOrSlug);
         setCourse(data);
       } catch (err: any) {
         console.error("Failed to load course details:", err);
@@ -39,22 +40,29 @@ export default function PublicCourseDetail() {
       }
     }
     loadCourse();
-  }, [courseId]);
+  }, [idOrSlug]);
 
   const handleApply = async () => {
+    const targetCourseId = course?.id || (!isNaN(Number(idOrSlug)) ? Number(idOrSlug) : undefined);
+
     if (!isAuthenticated) {
-      router.push(`/register?course=${courseId}`);
+      router.push(`/register?course=${targetCourseId || idOrSlug}`);
       return;
     }
 
     if (course?.is_enrolled) {
-      router.push(`/student/courses/${courseId}`);
+      router.push(`/student/courses/${course?.slug || targetCourseId || idOrSlug}`);
+      return;
+    }
+
+    if (!targetCourseId) {
+      alert("Unable to process application for this course.");
       return;
     }
 
     setIsApplying(true);
     try {
-      await courseEnrollmentApi.applyToCourse(courseId);
+      await courseEnrollmentApi.applyToCourse(targetCourseId);
       setApplySuccess(true);
     } catch (err) {
       console.error("Application failed:", err);

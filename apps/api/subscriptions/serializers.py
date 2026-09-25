@@ -17,40 +17,92 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
         model = SubscriptionPlan
         fields = '__all__'
 
+    def _format_course_detail(self, course):
+        if not course:
+            return None
+        exam = course.exam
+        exam_name = exam.name if exam else None
+        level_name = exam.parent.name if (exam and exam.parent) else (exam_name if exam_name and 'level' in exam_name.lower() else None)
+        category_name = exam.category.name if (exam and exam.category) else None
+
+        parts = []
+        if category_name:
+            parts.append(category_name)
+        if level_name:
+            parts.append(level_name)
+        if exam_name and exam_name not in parts:
+            parts.append(exam_name)
+        elif course.title and course.title not in parts:
+            parts.append(course.title)
+        hierarchy_path = " › ".join(parts) if parts else course.title
+
+        return {
+            "id": course.id,
+            "title": course.title,
+            "exam": exam_name,
+            "level": level_name,
+            "category": category_name,
+            "service": exam_name if exam and exam.parent else None,
+            "hierarchy_path": hierarchy_path,
+            "status": course.status,
+            "is_coming_soon": course.status == 'coming_soon',
+        }
+
     def get_eligible_courses_details(self, obj):
-        details = []
-        for course in obj.eligible_courses.select_related('exam', 'exam__parent', 'exam__category').all():
-            exam_name = course.exam.name if course.exam else None
-            level = course.exam.parent.name if (course.exam and course.exam.parent) else (exam_name if exam_name and 'level' in exam_name.lower() else None)
-            details.append({
-                "id": course.id,
-                "title": course.title,
-                "exam": exam_name,
-                "level": level,
-                "service": exam_name if course.exam and course.exam.parent else None,
-            })
-        return details
+        return [
+            self._format_course_detail(c)
+            for c in obj.eligible_courses.select_related('exam', 'exam__parent', 'exam__category').all()
+        ]
 
     def get_course_details(self, obj):
         if not obj.course:
             return None
         c = obj.course
-        return {
-            "id": c.id,
-            "title": c.title,
-            "exam": c.exam.name if c.exam else None,
-        }
+        if hasattr(c, 'exam') and c.exam and hasattr(c.exam, 'category'):
+            return self._format_course_detail(c)
+        from courses.models import Course
+        c_full = Course.objects.select_related('exam', 'exam__parent', 'exam__category').filter(id=obj.course_id).first()
+        return self._format_course_detail(c_full)
+
+    def validate(self, data):
+        package_type = data.get('package_type', getattr(self.instance, 'package_type', 'SINGLE'))
+        course = data.get('course', getattr(self.instance, 'course', None))
+        eligible_courses = data.get('eligible_courses')
+
+        if package_type == 'SINGLE':
+            # Sync course and eligible_courses if either is provided
+            if not course and eligible_courses and len(eligible_courses) == 1:
+                data['course'] = eligible_courses[0]
+            elif course and (eligible_courses is None or len(eligible_courses) == 0):
+                data['eligible_courses'] = [course]
+        elif package_type in ('MULTI', 'BUNDLE'):
+            if eligible_courses is not None and len(eligible_courses) == 0:
+                raise serializers.ValidationError({"eligible_courses": f"Please select at least one eligible preparation for {package_type} packages."})
+            if package_type == 'MULTI':
+                allowed = data.get('allowed_preparation_count', getattr(self.instance, 'allowed_preparation_count', 1))
+                if allowed < 1:
+                    raise serializers.ValidationError({"allowed_preparation_count": "Allowed preparations must be at least 1."})
+        elif package_type == 'ALL_ACCESS':
+            data['course'] = None
+
+        return data
+
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     plan_details = SubscriptionPlanSerializer(source='plan', read_only=True)
     remaining_days = serializers.SerializerMethodField()
     computed_status = serializers.SerializerMethodField()
     authorized_courses = serializers.SerializerMethodField()
+    granted_by_username = serializers.CharField(source='granted_by.username', read_only=True, default=None)
+    access_source = serializers.SerializerMethodField()
 
     class Meta:
         model = Subscription
         fields = '__all__'
         read_only_fields = ('student', 'status', 'start_date', 'expiry_date')
+
+    def get_access_source(self, obj):
+        return "Admin Granted" if obj.source == 'ADMIN_GRANT' else "Student Payment"
 
     def get_authorized_courses(self, obj):
         from courses.models import Enrollment

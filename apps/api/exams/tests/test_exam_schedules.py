@@ -35,10 +35,10 @@ class ExamScheduleAndCountdownTests(APITestCase):
 
         # Category and Exam
         self.category = ExamCategory.objects.create(name='Civil Service', order=1)
-        self.exam = Exam.objects.create(category=self.category, name='Section Officer')
+        self.exam = Exam.objects.create(category=self.category, name='Section Officer', is_active=True)
 
         # Course and Enrollment for student_user
-        self.course = Course.objects.create(title='Officer Premium Batch', exam=self.exam)
+        self.course = Course.objects.create(title='Officer Premium Batch', exam=self.exam, status='published')
         Enrollment.objects.create(student=self.student_user, course=self.course, status='active')
 
     def test_01_admin_can_create_schedule(self):

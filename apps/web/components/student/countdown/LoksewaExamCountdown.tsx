@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { schedulesApi, OfficialExamSchedule } from "@/lib/api/schedules";
 
+import { useOptionalStudentContext } from "@/contexts/StudentContext";
+
 interface TimeLeft {
   days: number;
   hours: number;
@@ -15,17 +17,28 @@ interface TimeLeft {
   isExpired: boolean;
 }
 
-// Shared with the dashboard page so it can start this request the moment the
-// page mounts, in parallel with the main dashboard request, instead of only
-// once this (later-mounted) widget renders.
+// Shared query helper
 export const nextOfficialExamQuery = {
-  queryKey: ["next-official-exam"],
+  queryKey: ["next-official-exam", null],
   queryFn: () => schedulesApi.getNextOfficialExam(),
   staleTime: 5 * 60 * 1000,
 } as const;
 
-export function LoksewaExamCountdown({ className = "" }: { className?: string }) {
-  const { data, isLoading: loading, isError: error, refetch } = useQuery(nextOfficialExamQuery);
+export function LoksewaExamCountdown({
+  className = "",
+  courseId,
+}: {
+  className?: string;
+  courseId?: number;
+}) {
+  const studentCtx = useOptionalStudentContext();
+  const effectiveCourseId = courseId ?? studentCtx?.activeCourse?.id;
+
+  const { data, isLoading: loading, isError: error, refetch } = useQuery({
+    queryKey: ["next-official-exam", effectiveCourseId ?? null],
+    queryFn: () => schedulesApi.getNextOfficialExam(effectiveCourseId),
+    staleTime: 5 * 60 * 1000,
+  });
   const schedule = data?.schedule ?? null;
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
@@ -124,7 +137,9 @@ export function LoksewaExamCountdown({ className = "" }: { className?: string })
             </div>
             <div>
               <h4 className="text-sm font-bold text-foreground">Next Official Loksewa Exam</h4>
-              <p className="text-xs text-muted-foreground mt-0.5">No upcoming Loksewa exam scheduled yet.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {data?.message || "No exam schedule configured for this course yet."}
+              </p>
             </div>
           </div>
         </CardContent>

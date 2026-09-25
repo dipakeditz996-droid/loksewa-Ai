@@ -13,9 +13,9 @@ export default function StudentNotesPage() {
       }
     >
       <SyllabusNotesPortal
-        initialSection="subjective_topicwise"
-        pageTitle="Notes & Study Materials"
-        pageSubtitle="Subjective & Objective topicwise notes, AI summaries, and comprehensive revision notes."
+        initialSection="syllabus"
+        pageTitle="Syllabus & Notes"
+        pageSubtitle="Official PSC curriculum documents, syllabus frameworks, topicwise detailed notes, and revision materials."
       />
     </Suspense>
   );

@@ -574,9 +574,12 @@ class CourseDetailView(APIView):
     """
     permission_classes = [AllowAny]
 
-    def get(self, request, pk):
+    def get(self, request, lookup_value):
         try:
-            course = Course.objects.select_related('exam').get(id=pk, status='published')
+            if str(lookup_value).isdigit():
+                course = Course.objects.select_related('exam').get(id=int(lookup_value), status='published')
+            else:
+                course = Course.objects.select_related('exam').get(slug=lookup_value, status='published')
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=drf_status.HTTP_404_NOT_FOUND)
 

@@ -1,7 +1,7 @@
 // @ts-nocheck
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -140,20 +140,51 @@ function AdminSidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const isActive = (href: string, exact?: boolean) => {
-    const [hrefPath, hrefQuery] = href.split("?");
-    if (hrefQuery !== undefined) {
-      // Distinguishes nav items that share a pathname but differ only by
-      // query string (e.g. Syllabus vs. Notes both route to
-      // /admin-dashboard/study-materials).
-      return pathname === hrefPath && searchParams.toString() === hrefQuery;
+  // Find the single best matching nav item based on specificity:
+  // 1. Matches with exact query parameters take highest priority.
+  // 2. Otherwise, the longest matching path prefix wins (so /admin-dashboard/academic/questions
+  //    matches Question Bank rather than also highlighting Academic Management).
+  const activeItem = useMemo(() => {
+    let bestItem: NavItem | null = null;
+    let bestScore = -1;
+
+    for (const section of SIDEBAR_NAV) {
+      for (const item of section.items) {
+        const [hrefPath, hrefQuery] = item.href.split("?");
+
+        if (hrefQuery !== undefined) {
+          const searchParamsString = searchParams.toString();
+          if (pathname === hrefPath && (searchParamsString === hrefQuery || searchParamsString.includes(hrefQuery))) {
+            const score = 10000 + hrefPath.length;
+            if (score > bestScore) {
+              bestScore = score;
+              bestItem = item;
+            }
+          }
+        } else {
+          let matches = false;
+          if (item.exact) {
+            matches = pathname === hrefPath;
+          } else {
+            matches = pathname === hrefPath || pathname.startsWith(hrefPath + "/");
+          }
+
+          if (matches) {
+            const score = hrefPath.length;
+            if (score > bestScore) {
+              bestScore = score;
+              bestItem = item;
+            }
+          }
+        }
+      }
     }
-    if (exact) return pathname === href;
-    return pathname === href || pathname.startsWith(href + "/");
-  };
+
+    return bestItem;
+  }, [pathname, searchParams]);
 
   const NavItem = ({ item }: { item: NavItem }) => {
-    const active = isActive(item.href, item.exact);
+    const active = activeItem?.href === item.href;
     return (
       <Link
         href={item.href}

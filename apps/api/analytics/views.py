@@ -10,7 +10,8 @@ class OverviewView(APIView):
     permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
-        data = AnalyticsService.get_overview(request.user)
+        course_id = request.query_params.get('course_id')
+        data = AnalyticsService.get_overview(request.user, course_id=course_id)
         return Response(data)
 
 class PerformanceTrendView(APIView):

@@ -112,8 +112,9 @@ export interface DailyMotivation {
 }
 
 export const dashboardApi = {
-  getStudentDashboard: async (): Promise<DashboardData> => {
-    return apiClient<DashboardData>("/dashboard/");
+  getStudentDashboard: async (courseId?: number): Promise<DashboardData> => {
+    const url = courseId ? `/dashboard/?course_id=${courseId}` : "/dashboard/";
+    return apiClient<DashboardData>(url);
   },
   // Lightweight package-lock check (4 queries vs. the full dashboard's ~16) -
   // use this instead of getStudentDashboard() anywhere that only needs to

@@ -58,13 +58,31 @@ export interface CategoryHierarchyItem {
 export interface AcademicTopic {
   id: number;
   name: string;
+  description?: string;
   order: number;
+  is_active?: boolean;
+  chapter_id?: number;
+  chapter_name?: string;
+  subject_id?: number;
+  subject_name?: string;
+  notes_count?: number;
+  questions_count?: number;
+  exams_count?: number;
 }
 
 export interface AcademicChapter {
   id: number;
   title: string;
+  name?: string;
+  description?: string;
   order: number;
+  is_active?: boolean;
+  subject_id?: number;
+  subject_name?: string;
+  topics_count?: number;
+  notes_count?: number;
+  questions_count?: number;
+  exams_count?: number;
   topics: AcademicTopic[];
 }
 
@@ -72,7 +90,16 @@ export interface AcademicSubject {
   id: number;
   name: string;
   code: string;
+  description?: string;
   order: number;
+  is_active?: boolean;
+  paper_id?: number | null;
+  paper_name?: string | null;
+  chapters_count?: number;
+  topics_count?: number;
+  notes_count?: number;
+  questions_count?: number;
+  exams_count?: number;
   chapters: AcademicChapter[];
 }
 

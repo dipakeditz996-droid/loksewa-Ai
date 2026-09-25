@@ -30,7 +30,11 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         return [IsAdminUser()]
 
     def get_queryset(self):
-        qs = SubscriptionPlan.objects.all().order_by('display_order')
+        qs = SubscriptionPlan.objects.select_related(
+            'course', 'course__exam', 'course__exam__parent', 'course__exam__category'
+        ).prefetch_related(
+            'eligible_courses', 'eligible_courses__exam', 'eligible_courses__exam__parent', 'eligible_courses__exam__category'
+        ).order_by('display_order')
         user = self.request.user
         if not (user and user.is_authenticated and user.role in ('admin', 'super-admin')):
             qs = qs.filter(status='ACTIVE')

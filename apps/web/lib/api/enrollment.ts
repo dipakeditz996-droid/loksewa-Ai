@@ -128,8 +128,8 @@ export const courseEnrollmentApi = {
     apiClient<MyCourse[]>("/courses/my-courses/"),
 
   /**
-   * Public — Returns detailed information about a course by ID.
+   * Public — Returns detailed information about a course by ID or Slug.
    */
-  getCourseDetails: (id: number): Promise<any> =>
-    apiClient<any>(`/courses/${id}/`),
+  getCourseDetails: (idOrSlug: number | string): Promise<any> =>
+    apiClient<any>(`/courses/${idOrSlug}/`),
 };

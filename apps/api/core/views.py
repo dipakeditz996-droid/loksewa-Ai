@@ -581,7 +581,8 @@ class StudentDashboardView(APIView):
 
         # Stats
         from analytics.services.analytics_service import AnalyticsService
-        overview = AnalyticsService.get_overview(user)
+        course_id_param = request.query_params.get('course_id')
+        overview = AnalyticsService.get_overview(user, course_id=course_id_param)
         
         study_time_hours = overview.get("total_study_time_mins", 0) // 60
         study_time_mins = overview.get("total_study_time_mins", 0) % 60
@@ -800,6 +801,7 @@ class SocialLoginView(APIView):
                 'refresh': str(refresh),
                 'is_new_user': is_new_user,
                 'profile_complete': profile_complete,
+                'package': _get_package_status(user),
                 'user': {
                     'id': user.id,
                     'username': user.username,

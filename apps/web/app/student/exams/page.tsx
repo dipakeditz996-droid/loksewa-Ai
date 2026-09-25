@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { FileText, Clock, Target, ArrowRight, Play, CheckCircle, Loader2 } from "lucide-react";
+import { FileText, Clock, Target, Play, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,25 +11,73 @@ import { useQuery } from "@tanstack/react-query";
 import { studentExamsApi } from "@/lib/api/student-exams";
 import { LoksewaExamCountdown } from "@/components/student/countdown/LoksewaExamCountdown";
 import { MockExamCountdown } from "@/components/student/countdown/MockExamCountdown";
+import { useOptionalStudentContext } from "@/contexts/StudentContext";
+
+const ExamSkeletonGrid = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {[1, 2, 3, 4, 5, 6].map((i) => (
+      <Card key={i} className="border-border/60 flex flex-col animate-pulse">
+        <CardHeader className="space-y-3">
+          <div className="flex justify-between items-start">
+            <div className="h-5 w-16 bg-muted/60 rounded" />
+            <div className="h-5 w-20 bg-muted/40 rounded" />
+          </div>
+          <div className="h-6 w-3/4 bg-muted/70 rounded" />
+          <div className="h-4 w-1/2 bg-muted/50 rounded" />
+        </CardHeader>
+        <CardContent className="flex-1">
+          <div className="h-11 bg-muted/40 rounded-lg" />
+        </CardContent>
+        <CardFooter className="pt-4 border-t border-border/50">
+          <div className="h-10 w-full bg-muted/60 rounded" />
+        </CardFooter>
+      </Card>
+    ))}
+  </div>
+);
+
+const PastResultsSkeletonGrid = () => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    {[1, 2, 3].map((i) => (
+      <Card key={i} className="border-border/60 flex flex-col animate-pulse">
+        <CardHeader className="space-y-3">
+          <div className="flex justify-between items-start">
+            <div className="h-5 w-16 bg-muted/60 rounded" />
+            <div className="h-4 w-24 bg-muted/40 rounded" />
+          </div>
+          <div className="h-6 w-3/4 bg-muted/70 rounded" />
+          <div className="h-4 w-1/3 bg-muted/50 rounded" />
+        </CardHeader>
+        <CardContent className="flex-1">
+          <div className="h-11 bg-muted/40 rounded-lg" />
+        </CardContent>
+        <CardFooter className="pt-4 border-t border-border/50">
+          <div className="h-10 w-full bg-muted/60 rounded" />
+        </CardFooter>
+      </Card>
+    ))}
+  </div>
+);
 
 export default function ExamsListingPage() {
-  const { data: exams, isLoading } = useQuery({
-    queryKey: ['student-exams'],
-    queryFn: studentExamsApi.getExams
+  const [activeTab, setActiveTab] = useState("old_past");
+  const studentCtx = useOptionalStudentContext();
+  const effectiveCourseId = studentCtx?.activeCourse?.id;
+  const isCtxLoading = studentCtx?.isLoading ?? false;
+
+  const { data: exams, isLoading: isLoadingExams } = useQuery({
+    queryKey: ['student-exams', effectiveCourseId ?? null],
+    queryFn: () => studentExamsApi.getExams(effectiveCourseId),
+    enabled: !isCtxLoading,
+    staleTime: 60 * 1000,
   });
 
   const { data: pastResultsData, isLoading: isLoadingPast } = useQuery({
     queryKey: ['student-past-results'],
-    queryFn: studentExamsApi.getPastResults
+    queryFn: studentExamsApi.getPastResults,
+    enabled: activeTab === 'past',
+    staleTime: 60 * 1000,
   });
-
-  if (isLoading || isLoadingPast) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   const activeExams: any[] = exams || [];
   const pastExams = pastResultsData || [];
@@ -39,20 +88,28 @@ export default function ExamsListingPage() {
   const oldPastExams = activeExams.filter(e => e.effective_category === "old_past");
   const modelExams = activeExams.filter(e => e.effective_category === "model");
   const liveExams = activeExams.filter(e => e.effective_category === "live");
-  // Subjective exams sit outside the old_past/model/live/custom scheme
-  // entirely (objective_category is always null for exam_type='subjective')
-  // - grouped by exam_type instead, same canonical Examination record type
-  // as every other tab here, not a separate legacy data source.
   const subjectiveExams = activeExams.filter(e => e.exam_type === "subjective");
 
-  const ExamGrid = ({ list, emptyTitle, emptyBody }: { list: any[]; emptyTitle: string; emptyBody: string }) => (
-    list.length === 0 ? (
-      <Card className="border-border/60 border-dashed flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
-        <FileText className="h-10 w-10 mb-4 opacity-50" />
-        <h3 className="font-medium text-lg mb-1">{emptyTitle}</h3>
-        <p className="text-sm">{emptyBody}</p>
-      </Card>
-    ) : (
+  const ExamGrid = ({ list, emptyTitle, emptyBody }: { list: any[]; emptyTitle: string; emptyBody: string }) => {
+    if (isLoadingExams && !exams) {
+      return <ExamSkeletonGrid />;
+    }
+
+    if (list.length === 0) {
+      return (
+        <Card className="border-border/60 border-dashed flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
+          <FileText className="h-10 w-10 mb-4 opacity-50 text-muted-foreground" />
+          <h3 className="font-medium text-lg mb-1 text-foreground">
+            {activeExams.length === 0 ? "No exams available for your course yet." : emptyTitle}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {activeExams.length === 0 ? "New examinations will appear here when they are published." : emptyBody}
+          </p>
+        </Card>
+      );
+    }
+
+    return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {list.map((exam: any) => (
           <Card key={exam.id} className="border-border/60 flex flex-col hover:border-primary/30 transition-colors">
@@ -107,8 +164,8 @@ export default function ExamsListingPage() {
           </Card>
         ))}
       </div>
-    )
-  );
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in-50 duration-500">
@@ -128,8 +185,7 @@ export default function ExamsListingPage() {
         <MockExamCountdown />
       </div>
 
-
-      <Tabs defaultValue="old_past" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="mb-6 flex-wrap h-auto">
           <TabsTrigger value="old_past">Old Past Exams</TabsTrigger>
           <TabsTrigger value="model">Model Exams</TabsTrigger>
@@ -172,7 +228,9 @@ export default function ExamsListingPage() {
         </TabsContent>
 
         <TabsContent value="past" className="space-y-6">
-          {pastExams.length === 0 ? (
+          {isLoadingPast && !pastResultsData ? (
+            <PastResultsSkeletonGrid />
+          ) : pastExams.length === 0 ? (
             <Card className="border-border/60 border-dashed flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
               <CheckCircle className="h-10 w-10 mb-4 opacity-50" />
               <h3 className="font-medium text-lg mb-1">No Past Results</h3>

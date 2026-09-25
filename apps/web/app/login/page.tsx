@@ -79,7 +79,14 @@ function LoginContent() {
         return;
       }
 
-      // Existing student with complete profile → dashboard (handles locked states itself)
+      // Subscription gate: Authentication != Subscription.
+      // If student has no active package and no pending payment verification, route to packages
+      if (!result.package?.hasActivePackage && result.package?.paymentStatus !== "PENDING") {
+        router.push("/student/onboarding/packages");
+        return;
+      }
+
+      // Existing student with active package or pending payment → dashboard
       router.push("/student");
     } catch (err: any) {
       setError(err.message || err.detail || `Failed to login with ${provider}`);
@@ -94,7 +101,7 @@ function LoginContent() {
 
   // `loginUser` is the user object the login response already returned, so
   // the redirect needs no extra /auth/me/ round trips.
-  const redirectByRole = async (loginUser: AuthUser) => {
+  const redirectByRole = async (loginUser: AuthUser, pkg?: any) => {
     redirectedRef.current = true;
     const signedIn = (await signIn(loginUser)) ?? loginUser;
 
@@ -103,6 +110,10 @@ function LoginContent() {
     } else if (signedIn.role === "admin" || signedIn.role === "super-admin") {
       router.push("/admin-dashboard");
     } else {
+      if (pkg && !pkg.hasActivePackage && pkg.paymentStatus !== "PENDING") {
+        router.push("/student/onboarding/packages");
+        return;
+      }
       router.push("/student");
     }
   };
@@ -123,7 +134,7 @@ function LoginContent() {
         setIsLoading(false);
         return;
       }
-      await redirectByRole(result.user ?? (await authApi.me()));
+      await redirectByRole(result.user ?? (await authApi.me()), result.package);
     } catch (err: any) {
       setError(err.message || err.detail || "Invalid credentials. Please try again.");
       setIsLoading(false);

@@ -57,8 +57,9 @@ export interface UpcomingMockExamResponse {
 
 export const schedulesApi = {
   // Student Public Endpoints
-  getNextOfficialExam: async (): Promise<OfficialExamScheduleNextResponse> => {
-    return apiClient<OfficialExamScheduleNextResponse>("/schedules/next/", { skipRedirect: true });
+  getNextOfficialExam: async (courseId?: number): Promise<OfficialExamScheduleNextResponse> => {
+    const url = courseId ? `/schedules/next/?course_id=${courseId}` : "/schedules/next/";
+    return apiClient<OfficialExamScheduleNextResponse>(url, { skipRedirect: true });
   },
 
   getUpcomingMockExam: async (): Promise<UpcomingMockExamResponse> => {

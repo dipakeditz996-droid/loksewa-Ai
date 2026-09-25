@@ -142,7 +142,7 @@ export function QuestionSelectionWorkspace({
 
   useEffect(() => { loadBank(); }, [loadBank]);
   useEffect(() => { loadAvailability(); }, [loadAvailability, assigned.length]);
-  useEffect(() => { loadAssigned(); /* eslint-disable-next-line */ }, [examinationId]);
+  useEffect(() => { loadAssigned();   }, [examinationId]);
 
   // ── Filter dropdown data, from the canonical academic hierarchy ───────────
   useEffect(() => {

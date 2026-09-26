@@ -65,7 +65,8 @@ export interface AdminChapter {
 
 export interface AdminTopic {
   id: number;
-  unit: number;
+  unit?: number;
+  chapter?: number;
   chapter_name: string;
   name: string;
   description: string;

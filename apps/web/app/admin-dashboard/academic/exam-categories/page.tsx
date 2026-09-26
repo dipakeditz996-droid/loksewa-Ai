@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { adminSyllabusApi, AdminExamCategory } from "@/lib/api/admin-syllabus";
 import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ModalMode = "create" | "edit" | "delete" | null;
 
@@ -140,15 +141,21 @@ export default function ExamCategoriesPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-slate-600 text-sm font-medium mb-1">Total Categories</p>
-          <p className="text-2xl font-bold text-[#0B2545]">{categories.length}</p>
+          <p className="text-2xl font-bold text-[#0B2545]">
+            {isLoading ? <Skeleton className="h-8 w-14 my-0.5" /> : categories.length}
+          </p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Active</p>
-          <p className="text-2xl font-bold text-emerald-600">{activeCount}</p>
+          <p className="text-2xl font-bold text-emerald-600">
+            {isLoading ? <Skeleton className="h-8 w-14 my-0.5" /> : activeCount}
+          </p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Inactive</p>
-          <p className="text-2xl font-bold text-blue-600">{categories.length - activeCount}</p>
+          <p className="text-2xl font-bold text-blue-600">
+            {isLoading ? <Skeleton className="h-8 w-14 my-0.5" /> : categories.length - activeCount}
+          </p>
         </div>
       </div>
 
@@ -180,11 +187,15 @@ export default function ExamCategoriesPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center bg-white">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
-                  </TableCell>
-                </TableRow>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="border-b border-slate-200">
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto rounded" /></TableCell>
+                  </TableRow>
+                ))
               ) : filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-32 text-center text-slate-500 bg-white">
@@ -320,6 +331,7 @@ export default function ExamCategoriesPage() {
               className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white"
               onClick={handleSave}
               disabled={isSaving}
+              aria-busy={isSaving}
             >
               {isSaving
                 ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
@@ -360,6 +372,7 @@ export default function ExamCategoriesPage() {
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={handleDelete}
               disabled={isSaving}
+              aria-busy={isSaving}
             >
               {isSaving
                 ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting...</>

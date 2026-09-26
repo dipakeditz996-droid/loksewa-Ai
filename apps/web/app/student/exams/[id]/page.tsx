@@ -190,7 +190,7 @@ export default function ExamDetailsPage() {
             ) : (
               <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button disabled={isStarting} className="w-full sm:w-auto gap-2 bg-[#0B2545] hover:bg-[#133E6D] text-white font-bold">
+                  <Button disabled={isStarting} className="w-full sm:w-auto gap-2 bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#133E6D] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
                     <Play className="h-4 w-4" /> Start Exam
                   </Button>
                 </DialogTrigger>
@@ -208,7 +208,7 @@ export default function ExamDetailsPage() {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setIsConfirmDialogOpen(false)} disabled={isStarting}>Cancel</Button>
-                    <Button onClick={handleConfirmStart} disabled={isStarting} className="bg-[#0B2545] hover:bg-[#133E6D] text-white">
+                    <Button onClick={handleConfirmStart} disabled={isStarting} className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#133E6D] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
                       {isStarting ? "Starting..." : "Yes, Start Now"}
                     </Button>
                   </DialogFooter>

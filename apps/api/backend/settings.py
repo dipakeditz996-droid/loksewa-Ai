@@ -271,11 +271,14 @@ if _active_db_url:
         _query = [(k, v) for k, v in parse_qsl(_parts.query) if k != 'pgbouncer']
         _active_db_url = urlunsplit(_parts._replace(query=urlencode(_query)))
 
+    _conn_max_age_env = os.environ.get('DJANGO_CONN_MAX_AGE') or os.environ.get('CONN_MAX_AGE')
+    _conn_max_age = int(_conn_max_age_env) if _conn_max_age_env else (60 if _is_pooled else 600)
+
     DATABASES = {
         'default': dj_database_url.parse(
             _active_db_url,
-            conn_max_age=0 if _is_pooled else 600,
-            conn_health_checks=not _is_pooled,
+            conn_max_age=_conn_max_age,
+            conn_health_checks=True,
             # Supabase requires TLS. This adds sslmode=require to OPTIONS;
             # no certificate is bundled or hardcoded.
             ssl_require=_is_postgres,
@@ -296,6 +299,26 @@ else:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
+
+if 'test' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'test_db.sqlite3',
+        }
+    }
+
+# Fast In-Memory Cache with Redis fallback capability
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'loksewa-global-cache',
+        'TIMEOUT': 300,
+        'OPTIONS': {
+            'MAX_ENTRIES': 5000,
+        }
+    }
+}
 
 
 # Password validation

@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { adminApi, AdminEvaluationDetail } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/client";
 import { toast } from "sonner";
+import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
 function statusBadge(status: string) {
   const map: Record<string, string> = {
@@ -93,12 +94,7 @@ export default function AdminEvaluationAnswerPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-        <p className="text-sm text-slate-500">Loading evaluation…</p>
-      </div>
-    );
+    return <PageSkeleton layout="detail" className="max-w-[1400px] mx-auto py-8" />;
   }
 
   if (notFound || !detail) {
@@ -298,17 +294,30 @@ export default function AdminEvaluationAnswerPage() {
                   className="bg-white gap-2"
                   onClick={() => handleSave(false)}
                   disabled={saving !== null}
+                  aria-busy={saving === "draft"}
                 >
-                  <Save className="h-4 w-4" />
-                  {saving === "draft" ? "Saving…" : "Save Progress"}
+                  {saving === "draft" ? (
+                    <ButtonSpinner text="Saving…" />
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" /> Save Progress
+                    </>
+                  )}
                 </Button>
                 <Button
                   className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white gap-2"
                   onClick={() => handleSave(true)}
                   disabled={saving !== null}
+                  aria-busy={saving === "final"}
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  {saving === "final" ? "Submitting…" : isEvaluated ? "Re-submit Evaluation" : "Submit Evaluation"}
+                  {saving === "final" ? (
+                    <ButtonSpinner text="Submitting…" />
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      {isEvaluated ? "Re-submit Evaluation" : "Submit Evaluation"}
+                    </>
+                  )}
                 </Button>
               </div>
               {isEvaluated && (

@@ -620,26 +620,35 @@ export default function SyllabusNotesPortal({
             )}
           >
             {/* Modal Header */}
-            <div className="bg-[#0F1E2E] text-white px-5 py-3.5 flex items-center justify-between border-b border-white/10 shrink-0">
-              <div className="min-w-0 pr-4">
-                <div className="flex items-center gap-2 text-xs font-medium text-[#C4A45C] mb-0.5">
-                  <span>{activePrep?.name}</span>
-                  <span>•</span>
-                  <span className="capitalize">{viewingMaterial.content_category?.replace('_', ' ')}</span>
-                  {viewingMaterial.note_type && (
-                    <>
-                      <span>•</span>
-                      <span className="capitalize">{viewingMaterial.note_type}</span>
-                    </>
-                  )}
-                </div>
-                <h2 className="text-base sm:text-lg font-bold truncate text-white">
+            <div className="relative bg-[#0F1E2E] text-white px-5 py-3.5 flex items-center justify-between border-b border-white/10 shrink-0 gap-4">
+              {/* Left: Document Title */}
+              <div className="min-w-0 pr-2 max-w-[50%] sm:max-w-[35%]">
+                <h2 className="text-sm sm:text-base md:text-lg font-bold truncate text-white" title={viewingMaterial.title}>
                   {viewingMaterial.title}
                 </h2>
+                {/* Fallback for small screens (< sm) */}
+                <div className="flex sm:hidden items-center gap-1.5 text-[10px] font-medium text-[#C4A45C] truncate mt-0.5">
+                  <span className="truncate">{activePrep?.name}</span>
+                  <span>•</span>
+                  <span className="capitalize shrink-0">{viewingMaterial.content_category?.replace('_', ' ')}</span>
+                </div>
+              </div>
+
+              {/* Middle: Yellow color text centered in the header */}
+              <div className="hidden sm:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2 text-xs font-semibold text-[#C4A45C] pointer-events-none max-w-[42%] truncate text-center">
+                <span className="truncate">{activePrep?.name}</span>
+                <span className="shrink-0">•</span>
+                <span className="capitalize shrink-0">{viewingMaterial.content_category?.replace('_', ' ')}</span>
+                {viewingMaterial.note_type && (
+                  <>
+                    <span className="shrink-0">•</span>
+                    <span className="capitalize shrink-0">{viewingMaterial.note_type}</span>
+                  </>
+                )}
               </div>
 
               {/* Header Actions */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 z-10">
                 {(viewingMaterial.file_url || viewingMaterial.file) && (
                   <a
                     href={viewingMaterial.file_url || viewingMaterial.file}
@@ -687,7 +696,7 @@ export default function SyllabusNotesPortal({
             </div>
 
             {/* Modal Body / PDF Viewer */}
-            <div className="flex-1 bg-slate-100 relative overflow-hidden">
+            <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative overflow-hidden">
               {(viewingMaterial.file_url || viewingMaterial.file) ? (
                 <iframe
                   src={`${viewingMaterial.file_url || viewingMaterial.file}#view=FitH`}
@@ -695,7 +704,7 @@ export default function SyllabusNotesPortal({
                   title={viewingMaterial.title}
                 />
               ) : viewingMaterial.content ? (
-                <div className="p-6 overflow-y-auto max-w-4xl mx-auto prose prose-slate">
+                <div className="p-6 overflow-y-auto max-w-4xl mx-auto prose prose-slate dark:prose-invert">
                   <div dangerouslySetInnerHTML={{ __html: viewingMaterial.content }} />
                 </div>
               ) : (

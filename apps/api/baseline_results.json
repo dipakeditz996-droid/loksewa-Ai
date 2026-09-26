@@ -1,0 +1,101 @@
+[
+  {
+    "name": "Auth Current User",
+    "path": "/api/auth/me/",
+    "status": 200,
+    "payload_bytes": 128,
+    "total_ms": 0.74,
+    "db_ms": 0,
+    "python_ms": 0.74,
+    "query_count": 0,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Student Context",
+    "path": "/api/student/context/",
+    "status": 200,
+    "payload_bytes": 289,
+    "total_ms": 1329.16,
+    "db_ms": 1299.0,
+    "python_ms": 30.16,
+    "query_count": 8,
+    "duplicate_queries": 1
+  },
+  {
+    "name": "Student Dashboard",
+    "path": "/api/dashboard/",
+    "status": 200,
+    "payload_bytes": 590,
+    "total_ms": 2764.16,
+    "db_ms": 2721.0,
+    "python_ms": 43.16,
+    "query_count": 15,
+    "duplicate_queries": 3
+  },
+  {
+    "name": "Notes & Syllabus Portal",
+    "path": "/api/notes/student/portal/",
+    "status": 200,
+    "payload_bytes": 328,
+    "total_ms": 2038.1,
+    "db_ms": 2020.0,
+    "python_ms": 18.1,
+    "query_count": 9,
+    "duplicate_queries": 1
+  },
+  {
+    "name": "Student Examinations List",
+    "path": "/api/exams/examinations/",
+    "status": 404,
+    "payload_bytes": 23,
+    "total_ms": 331.32,
+    "db_ms": 325.0,
+    "python_ms": 6.32,
+    "query_count": 2,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Admin Dashboard Stats",
+    "path": "/api/admin/dashboard/stats/",
+    "status": 200,
+    "payload_bytes": 1283,
+    "total_ms": 2663.15,
+    "db_ms": 2638.0,
+    "python_ms": 25.15,
+    "query_count": 17,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Teacher Dashboard",
+    "path": "/api/teacher/dashboard/",
+    "status": 200,
+    "payload_bytes": 941,
+    "total_ms": 2031.64,
+    "db_ms": 2004.0,
+    "python_ms": 27.64,
+    "query_count": 13,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Teacher Students List",
+    "path": "/api/teacher/students/",
+    "status": "ERR: Cannot resolve keyword 'model_exam_attempts' into field. Choices are: achievements, admin_notifications_created, admin_settings_updates, annotation, assigned_courses, audit_logs, authored_materials, authored_questions, avatar, average_score, backup_codes, bookmarks, calm_session_logs, cart, community_bookmarks, community_helpful_votes, community_posts, community_replies, community_reports_filed, community_reports_resolved, completed_courses, course_applications, created_collections, created_examinations, created_material_collections, created_question_sets, csvimport, daily_drill_sessions, date_joined, delivery_addresses, disputeevidence, disputes_raised, disputes_received, email, enrolled_courses, enrollments, evaluated_subjective_submissions, evaluations_given, examination_attempts, export_jobs, failed_login_attempts, faqfeedback, feedback_given, first_name, game_profile, gameanswer, gamification_profile, granted_access_profiles, granted_subscriptions, groups, id, invoices, is_2fa_enabled, is_active, is_staff, is_superuser, last_active, last_login, last_name, listing_reports, locked_until, logentry, marketplace_listings, marketplace_orders, matches_as_p1, matches_as_p2, material_bookmarks, material_progress, notification_preferences, notifications, orderstatushistory, otps_generated, outstandingtoken, password, payment_submissions, payout_accounts, payouts, performance_feedback, practice_accuracy, practice_sessions, processed_payouts, prompttemplate, purchases, question_mastery, received_teacher_messages, referrals_made, referred_by, resolved_disputes, resolved_reports, reviewed_course_applications, reviewed_mock_exams, reviewed_practice_sets, reviewed_questions, reviews_given, reviews_received, role, sent_teacher_messages, social_accounts, student_notes_given, student_profile, study_plan, subjective_attempts, subscription_payments, subscriptions, support_tickets, supportmessage, survival_games, teacher_notes, teacher_profile, testimonials_created, topic_progress, totp_secret, tutor_conversations, tutor_usage, user_permissions, username, verified_payments, verified_subscription_payments, website_pages_updated, weekly_quiz_attempts, won_matches, xp_transactions",
+    "payload_bytes": 0,
+    "total_ms": 5.1,
+    "db_ms": 0,
+    "python_ms": 5.1,
+    "query_count": 0,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Games Weekly Quiz",
+    "path": "/api/games/weekly-quiz/current/",
+    "status": 200,
+    "payload_bytes": 761,
+    "total_ms": 1121.33,
+    "db_ms": 1104.0,
+    "python_ms": 17.33,
+    "query_count": 7,
+    "duplicate_queries": 1
+  }
+]

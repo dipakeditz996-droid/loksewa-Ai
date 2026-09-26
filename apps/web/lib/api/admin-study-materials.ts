@@ -135,6 +135,7 @@ export interface StudyMaterialListItem {
   externalUrl: string | null;
   estimatedReadingTime: number;
   availableToAiTutor: boolean;
+  isDownloadable: boolean;
   order: number;
   createdAt: string;
   updatedAt: string;
@@ -257,6 +258,12 @@ export const adminStudyMaterialApi = {
 
   remove: async (id: number | string) =>
     apiClient(`/admin/study-materials/${id}/`, { method: "DELETE" }),
+
+  toggleDownloadable: async (id: number | string, isDownloadable: boolean) =>
+    apiClient<{ success: boolean; id: number; is_downloadable: boolean }>(
+      `/admin/study-materials/${id}/`,
+      { method: "PATCH", body: JSON.stringify({ is_downloadable: isDownloadable }) }
+    ),
 };
 
 // ===== Categories & Collections =====

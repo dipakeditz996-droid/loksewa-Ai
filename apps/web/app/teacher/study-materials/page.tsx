@@ -110,7 +110,7 @@ export default function TeacherStudyMaterialsPage() {
         description="View and manage the study materials you have authored."
         action={
           <Link href="/teacher/study-materials/create">
-            <Button className="gap-2 rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C]">
+            <Button className="gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] shadow-sm hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
               <PlusCircle className="h-4 w-4" />
               Upload Material
             </Button>

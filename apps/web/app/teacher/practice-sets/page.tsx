@@ -91,7 +91,7 @@ export default function PracticeSetsPage() {
         title="Practice Sets"
         description="Build and manage question collections for student practice."
         action={
-          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C] text-white">
+          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] shadow-sm hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
             <Plus className="mr-2 h-4 w-4" /> Create Practice Set
           </Button>
         }
@@ -163,7 +163,7 @@ export default function PracticeSetsPage() {
           <p className="mb-6 max-w-sm text-[13px] text-muted-foreground">
             Create a practice set by grouping questions from your Question Bank to share with your students.
           </p>
-          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">
+          <Button onClick={() => router.push("/teacher/practice-sets/new")} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
             Create Your First Practice Set
           </Button>
         </div>

@@ -80,30 +80,30 @@ export function TeacherNotificationPreferences() {
     emailKey: keyof NotificationPreferences;
     requiredInApp?: boolean;
   }) => (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-5 border-b border-slate-100 last:border-0 gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between py-5 border-b border-border last:border-0 gap-4">
       <div className="flex-1 pr-4">
-        <h4 className="font-semibold text-primary">{title}</h4>
-        <p className="text-sm text-slate-500 mt-1">{description}</p>
+        <h4 className="font-semibold text-foreground">{title}</h4>
+        <p className="text-sm text-muted-foreground mt-1">{description}</p>
       </div>
       <div className="flex items-center gap-6 sm:w-[240px] shrink-0">
         <div className="flex flex-col items-center gap-2 flex-1">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">In-App</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">In-App</span>
           {requiredInApp ? (
-            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">Required</span>
+            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/40 px-2 py-1 rounded-md">Required</span>
           ) : inAppKey ? (
             <Switch 
               checked={prefs[inAppKey]} 
               onCheckedChange={(c) => handleToggle(inAppKey, c)}
-              className="data-[state=checked]:bg-[#0B2545]"
+              className="data-[state=checked]:bg-primary"
             />
           ) : null}
         </div>
         <div className="flex flex-col items-center gap-2 flex-1">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Email</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</span>
           <Switch 
             checked={prefs[emailKey]} 
             onCheckedChange={(c) => handleToggle(emailKey, c)}
-            className="data-[state=checked]:bg-[#0B2545]"
+            className="data-[state=checked]:bg-primary"
           />
         </div>
       </div>
@@ -112,9 +112,9 @@ export function TeacherNotificationPreferences() {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-card border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-          <CardTitle className="text-lg font-bold text-primary">Notification Preferences</CardTitle>
+      <Card className="bg-card border-border shadow-sm rounded-2xl overflow-hidden">
+        <CardHeader className="bg-muted/50 border-b border-border">
+          <CardTitle className="text-lg font-bold text-foreground">Notification Preferences</CardTitle>
           <CardDescription>Choose how LoksewaAI keeps you informed about your teaching activity.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -148,12 +148,12 @@ export function TeacherNotificationPreferences() {
             />
           </div>
           
-          <div className="bg-slate-50/50 px-6 py-4 flex items-center justify-between border-t border-slate-100">
-            <p className="text-xs text-slate-500">Unsaved changes will be lost if you leave this page.</p>
+          <div className="bg-muted/50 px-6 py-4 flex items-center justify-between border-t border-border">
+            <p className="text-xs text-muted-foreground">Unsaved changes will be lost if you leave this page.</p>
             <Button 
               onClick={handleSave} 
               disabled={isSaving}
-              className="bg-[#D4A72C] hover:bg-[#b88c1c] text-white shadow-sm"
+              className="bg-[#D4A72C] hover:bg-[#b88c1c] text-[#0A1118] font-bold shadow-sm"
             >
               {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
               Save Changes

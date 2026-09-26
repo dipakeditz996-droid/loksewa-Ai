@@ -124,7 +124,7 @@ export function TeacherProfileSection() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-[#0B2545] to-[#163E6B] px-8 py-6">
           <div className="flex items-center gap-6">
             <div className="relative group">
@@ -163,70 +163,70 @@ export function TeacherProfileSection() {
         </div>
 
         <div className="p-8">
-          <h3 className="text-lg font-semibold text-primary mb-6">Personal Information</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-6">Personal Information</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">First Name</Label>
+              <Label className="text-[12px] font-semibold text-foreground">First Name</Label>
               <Input
                 value={form.first_name}
                 onChange={(e) => handleChange("first_name", e.target.value)}
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Last Name</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Last Name</Label>
               <Input
                 value={form.last_name}
                 onChange={(e) => handleChange("last_name", e.target.value)}
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Email</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Email</Label>
               <Input
                 value={profile?.email || ""}
                 disabled
-                className="bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                className="bg-muted border-border text-muted-foreground cursor-not-allowed"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Phone</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Phone</Label>
               <Input
                 value={form.phone_number}
                 onChange={(e) => handleChange("phone_number", e.target.value)}
                 placeholder="+977-XXXXXXXXXX"
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Designation</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Designation</Label>
               <Input
                 value={form.designation}
                 onChange={(e) => handleChange("designation", e.target.value)}
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[12px] font-semibold text-slate-700">Specialization</Label>
+              <Label className="text-[12px] font-semibold text-foreground">Specialization</Label>
               <Input
                 value={form.specialization}
                 onChange={(e) => handleChange("specialization", e.target.value)}
-                className="bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
             </div>
           </div>
 
-          <div className="flex justify-end mt-8 pt-6 border-t border-slate-100">
+          <div className="flex justify-end mt-8 pt-6 border-t border-border">
             {dirty && (
-              <span className="text-[12px] text-amber-600 flex items-center mr-4">
+              <span className="text-[12px] text-amber-600 dark:text-amber-400 font-medium flex items-center mr-4">
                 You have unsaved changes
               </span>
             )}
             <Button
               onClick={handleSave}
               disabled={updateMutation.isPending || !dirty}
-              className="bg-[#0B2545] hover:bg-[#163E6B] text-white px-6"
+              className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold px-6 shadow-sm"
             >
               {updateMutation.isPending ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Saving...</>

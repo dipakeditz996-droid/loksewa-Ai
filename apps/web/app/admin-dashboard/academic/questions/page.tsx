@@ -13,6 +13,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { InlineLoader } from '@/components/ui/loading-states';
 
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
@@ -301,16 +302,21 @@ export default function QuestionBankPage() {
 
       {/* Toolbar */}
       <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
-        <form onSubmit={handleSearch} className="relative w-full md:w-96">
-          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search questions, options, or answers..." 
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-navy-500"
-          />
-        </form>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <form onSubmit={handleSearch} className="relative w-full md:w-96">
+            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Search questions, options, or answers..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-navy-500"
+            />
+          </form>
+          {loading && questions.length > 0 && (
+            <InlineLoader text="Refreshing..." className="shrink-0 text-xs" />
+          )}
+        </div>
         
         <div className="flex gap-2 w-full md:w-auto items-center flex-wrap">
           {selectedIds.size > 0 && (
@@ -506,14 +512,16 @@ export default function QuestionBankPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading && questions.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">
-                    <div className="flex justify-center mb-2">
-                      <div className="w-6 h-6 border-2 border-navy-500 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                    Loading questions...
-                  </td>
-                </tr>
+                Array.from({ length: 6 }).map((_, r) => (
+                  <tr key={r} className="animate-pulse">
+                    <td className="p-4 w-12"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
+                    <td className="p-4"><div className="h-4 w-72 bg-gray-200 rounded mb-1.5" /><div className="h-3 w-40 bg-gray-100 rounded" /></td>
+                    <td className="p-4"><div className="h-4 w-16 bg-gray-200 rounded" /></td>
+                    <td className="p-4"><div className="h-4 w-32 bg-gray-200 rounded" /></td>
+                    <td className="p-4"><div className="h-6 w-20 bg-gray-200 rounded-full" /></td>
+                    <td className="p-4 text-right"><div className="h-8 w-8 bg-gray-200 rounded ml-auto" /></td>
+                  </tr>
+                ))
               ) : questions.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-8 text-center text-gray-500">

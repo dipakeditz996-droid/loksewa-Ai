@@ -294,7 +294,7 @@ function LoginContent() {
                     <Button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full h-[50px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none"
+                      className="w-full h-[50px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-[#0A1118] text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none"
                     >
                       {isLoading ? "Verifying..." : (
                         <>
@@ -368,7 +368,7 @@ function LoginContent() {
                   <Button 
                     type="submit" 
                     disabled={isLoading}
-                    className="w-full h-[50px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none"
+                    className="w-full h-[50px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-[#0A1118] text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none"
                   >
                     {isLoading ? "Logging in..." : (
                       <>

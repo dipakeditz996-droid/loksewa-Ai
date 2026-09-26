@@ -73,14 +73,14 @@ export function NeedsAttention({ courseFilter }: NeedsAttentionProps) {
           
           <div className="flex flex-col sm:items-end text-sm">
             <div className="flex space-x-3 mb-1">
-              <div className="text-slate-500">
-                Performance: <span className="text-rose-600 font-medium">{student.current_performance}</span>
+              <div className="text-muted-foreground">
+                Performance: <span className="text-rose-600 dark:text-rose-400 font-medium">{student.current_performance}</span>
               </div>
-              <div className="text-slate-500">
-                Active: <span className="text-slate-700 font-medium">{student.last_active}</span>
+              <div className="text-muted-foreground">
+                Active: <span className="text-foreground font-medium">{student.last_active}</span>
               </div>
             </div>
-            <Badge variant="outline" className="border-[#0B2545]/20 text-primary bg-[#0B2545]/5 w-fit rounded-full px-3 font-medium">
+            <Badge variant="outline" className="border-primary/20 text-primary bg-primary/10 w-fit rounded-full px-3 font-medium">
               {student.recommended_action}
             </Badge>
           </div>

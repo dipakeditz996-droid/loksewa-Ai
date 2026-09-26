@@ -306,6 +306,12 @@ export default function ExamsOverviewPage() {
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin-dashboard/exams/new?draft=${exam.id}`} className="font-medium text-blue-600">
+                                Edit Exam
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem>Duplicate Exam</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {exam.status === "live" || (exam as any).status === "published" ? (

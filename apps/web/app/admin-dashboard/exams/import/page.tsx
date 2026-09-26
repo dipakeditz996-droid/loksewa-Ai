@@ -132,16 +132,15 @@ export default function ImportExamPage() {
       objectiveTitle.trim() &&
       objectiveDuration > 0 &&
       category &&
-      position &&
-      topic
+      position
   );
 
   const handleObjectiveUpload = async () => {
-    if (!objectiveFile || !topic) return;
+    if (!objectiveFile) return;
     setBusy(true);
     try {
       const res = await adminQuestionApi.uploadCSV(objectiveFile, {
-        topic,
+        topic: topic || '',
         question_type: questionType,
         difficulty,
       });
@@ -491,7 +490,7 @@ export default function ImportExamPage() {
                 <div className="pt-6 border-t border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-1">Syllabus &amp; Question Bank Target</h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    The exam links to Category and Position. Imported questions are stored under the selected Topic in the canonical Master Question Bank.
+                    Category and Position are required. Subject, Chapter, and Topic are optional — questions will be stored under the selected Topic in the Master Question Bank if provided.
                   </p>
                   <AcademicDependentSelect
                     category={category}
@@ -501,6 +500,7 @@ export default function ImportExamPage() {
                     topic={topic}
                     onChange={handleAcademicChange}
                     maxLevel="topic"
+                    requiredLevels={["category", "position"]}
                     layout="grid"
                   />
                 </div>
@@ -552,7 +552,7 @@ export default function ImportExamPage() {
 
                   {!canAnalyzeObjective && (
                     <p className="text-sm text-amber-600 mt-4 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" /> Please enter a title, category, position, topic, duration (&gt;0), and choose a file.
+                      <AlertCircle className="w-4 h-4" /> Please enter a title, select category and position, set duration (&gt;0), and choose a file.
                     </p>
                   )}
 
@@ -669,7 +669,7 @@ export default function ImportExamPage() {
                 <div className="pt-6 border-t border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-1">Syllabus Scope</h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    Select the target Category, Position/Exam, and Subject for this subjective examination.
+                    Select the target Category and Position/Exam (Subject is optional) for this subjective examination.
                   </p>
                   <AcademicDependentSelect
                     category={category}
@@ -677,6 +677,7 @@ export default function ImportExamPage() {
                     subject={subject}
                     onChange={handleAcademicChange}
                     maxLevel="subject"
+                    requiredLevels={["category", "position"]}
                     layout="grid"
                   />
                 </div>

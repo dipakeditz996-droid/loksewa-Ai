@@ -34,21 +34,21 @@ export function PreferencesSection({
     }
   };
 
-  const selectClass = "flex h-10 w-full items-center justify-between rounded-lg border border-[#D9E1EA] bg-white px-3 py-2 text-sm text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 disabled:cursor-not-allowed disabled:opacity-50";
+  const selectClass = "flex h-10 w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
-    <div className="space-y-6 rounded-2xl border border-[#E7EBF3] bg-white p-6 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
-      <div className="border-b border-[#E7EBF3] pb-5">
-        <h3 className="text-lg font-semibold text-[#101828]">Teaching Preferences</h3>
-        <p className="text-sm text-[#667085]">
+    <div className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="border-b border-border pb-5">
+        <h3 className="text-lg font-semibold text-foreground">Teaching Preferences</h3>
+        <p className="text-sm text-muted-foreground">
           Set default values to speed up your content creation workflow.
         </p>
       </div>
 
       <div className="grid gap-6 pt-2 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[#344054]">Default Question Difficulty</label>
-          <p className="mb-2 text-xs text-[#667085]">The default difficulty selected when creating new questions.</p>
+          <label className="text-sm font-medium text-foreground">Default Question Difficulty</label>
+          <p className="mb-2 text-xs text-muted-foreground">The default difficulty selected when creating new questions.</p>
           <select
             name="preferred_difficulty"
             value={prefs.preferred_difficulty}
@@ -62,8 +62,8 @@ export function PreferencesSection({
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium text-[#344054]">Default Question Type</label>
-          <p className="mb-2 text-xs text-[#667085]">The default format selected when creating new questions.</p>
+          <label className="text-sm font-medium text-foreground">Default Question Type</label>
+          <p className="mb-2 text-xs text-muted-foreground">The default format selected when creating new questions.</p>
           <select
             name="preferred_question_type"
             value={prefs.preferred_question_type}
@@ -78,8 +78,8 @@ export function PreferencesSection({
         </div>
       </div>
 
-      <div className="mt-6 flex justify-end border-t border-[#E7EBF3] pt-6">
-        <Button onClick={handleSave} disabled={isSaving} className="rounded-[9px] bg-[#0B2545] text-white hover:bg-[#163E6C]">
+      <div className="mt-6 flex justify-end border-t border-border pt-6">
+        <Button onClick={handleSave} disabled={isSaving} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] text-white dark:text-[#0A1118] font-bold hover:bg-[#163E6C] dark:hover:bg-[#bfa228]">
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Preferences
         </Button>

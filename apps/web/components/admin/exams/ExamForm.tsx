@@ -74,7 +74,7 @@ export function ExamForm({ initialData, isEdit = false }: ExamFormProps) {
       if (!data.title) newErrors.title = 'Title is required';
       if (!data.category) newErrors.category = 'Category is required';
       if (!data.exam) newErrors.exam = 'Position is required';
-      if (!data.subject) newErrors.subject = 'Subject is required';
+      // Subject is optional: a single exam may span all subjects under a position
     }
     if (currentStep === 2) {
       if (!data.question_set) newErrors.question_set = 'Please select a Question Set';
@@ -201,6 +201,7 @@ export function ExamForm({ initialData, isEdit = false }: ExamFormProps) {
                   <option value="position">Position-Based Exam</option>
                   <option value="subject">Subject Test</option>
                   <option value="custom">Custom Exam</option>
+                  <option value="subjective">Subjective Exam</option>
                 </select>
               </div>
 
@@ -228,6 +229,7 @@ export function ExamForm({ initialData, isEdit = false }: ExamFormProps) {
                     }
                   }}
                   maxLevel="subject"
+                  requiredLevels={['category', 'position']}
                   errors={{
                     category: errors.category || '',
                     position: errors.exam || '',

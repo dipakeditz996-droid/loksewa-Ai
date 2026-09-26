@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, ChevronLeft, FileText, ListTodo, Trophy, ClipboardList } from "lucide-react";
+import { BarChart3, ChevronLeft, FileText, ListTodo, Trophy, ClipboardList, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { adminExamApi } from "@/lib/api/admin-exams";
@@ -44,6 +44,7 @@ export default function ExamDetailLayout({ children }: { children: React.ReactNo
       : [{ label: "Questions", href: questionsHref, icon: ListTodo }]),
     { label: "Analytics", href: `${base}/analytics`, icon: BarChart3 },
     { label: "Results", href: `${base}/results`, icon: Trophy },
+    { label: "Edit", href: `/admin-dashboard/exams/new?draft=${params?.id}`, icon: Pencil, external: true },
   ];
 
   const meta = exam
@@ -91,6 +92,12 @@ export default function ExamDetailLayout({ children }: { children: React.ReactNo
           {exam && (
             <div className="flex items-center gap-2 shrink-0">
               <ExamStatusBadge status={exam.status} />
+              <Link
+                href={`/admin-dashboard/exams/new?draft=${params?.id}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#0B2545] text-white hover:bg-[#0B2545]/90 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Edit Exam
+              </Link>
             </div>
           )}
         </div>

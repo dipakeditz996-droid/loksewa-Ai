@@ -6,7 +6,8 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Button } from "@/components/ui/button";
 import { marketplaceApi, Cart, Order, PaymentMethod } from "@/lib/api/marketplace";
-import { ArrowLeft, ArrowRight, CheckCircle2, ImageIcon, UploadCloud, X, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, ImageIcon, UploadCloud, X, AlertCircle } from "lucide-react";
+import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -102,9 +103,11 @@ export default function CheckoutPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#0A1118] flex items-center justify-center flex-col">
+      <div className="min-h-screen bg-slate-50 dark:bg-[#0A1118] flex flex-col justify-between">
         <Navbar />
-        <Loader2 className="w-10 h-10 animate-spin text-[#163E6B]" />
+        <main className="flex-1 max-w-6xl mx-auto w-full py-10 px-4">
+          <PageSkeleton layout="detail" />
+        </main>
         <Footer />
       </div>
     );
@@ -185,8 +188,19 @@ export default function CheckoutPage() {
                   <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full h-24 p-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Special delivery instructions"></textarea>
                 </div>
               </div>
-              <Button onClick={handleContinueToPayment} disabled={processingOrder} className="w-full sm:w-auto h-14 px-10 font-bold bg-[#163E6B] hover:bg-[#163E6B]/90 text-white">
-                {processingOrder ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null} Continue to Payment <ArrowRight className="w-5 h-5 ml-2" />
+              <Button 
+                onClick={handleContinueToPayment} 
+                disabled={processingOrder} 
+                aria-busy={processingOrder}
+                className="w-full sm:w-auto h-14 px-10 font-bold bg-[#163E6B] hover:bg-[#163E6B]/90 text-white"
+              >
+                {processingOrder ? (
+                  <ButtonSpinner text="Creating Order..." />
+                ) : (
+                  <>
+                    Continue to Payment <ArrowRight className="w-5 h-5 ml-2" />
+                  </>
+                )}
               </Button>
             </div>
             <div>{renderOrderSummary()}</div>
@@ -282,8 +296,17 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <Button onClick={handlePlaceOrder} disabled={submittingPayment} className="w-full sm:w-auto h-14 px-10 font-bold bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118]">
-                {submittingPayment ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : null} Confirm & Submit Payment
+              <Button 
+                onClick={handlePlaceOrder} 
+                disabled={submittingPayment} 
+                aria-busy={submittingPayment}
+                className="w-full sm:w-auto h-14 px-10 font-bold bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118]"
+              >
+                {submittingPayment ? (
+                  <ButtonSpinner text="Verifying &amp; Submitting Payment..." />
+                ) : (
+                  "Confirm & Submit Payment"
+                )}
               </Button>
             </div>
             <div className="hidden lg:block">{renderOrderSummary()}</div>

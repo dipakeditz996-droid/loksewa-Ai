@@ -55,7 +55,7 @@ export default function StudyPlanPage() {
                   id="prep"
                   value={selected ?? ""}
                   onChange={(e) => choose(Number(e.target.value))}
-                  className="w-full h-11 px-3 bg-card border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545]"
+                  className="w-full h-11 px-3 bg-card border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary dark:focus:border-[#D4A72C]"
                 >
                   {prep.preparations.map((p) => (
                     <option key={p.id} value={p.id}>{p.display_name}{p.course ? ` — ${p.course.title}` : ""}</option>

@@ -782,15 +782,29 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
     @action(detail=False, methods=['get'])
     def revision_summary(self, request):
         """Counts behind each Revision Mode signal, without starting a session."""
+        from django.core.cache import cache
+        cache_key = f'student_rev_summary:{request.user.id}'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
+
         buckets = _revision_buckets(request.user)
         all_records = buckets['overdue'] + buckets['repeatedly_incorrect'] + buckets['recent_mistakes'] + buckets['weak_topics']
-        return Response({
+        data = {
             'overdue': len({m.question_id for m in buckets['overdue']}),
             'repeatedly_incorrect': len({m.question_id for m in buckets['repeatedly_incorrect']}),
             'recent_mistakes': len({m.question_id for m in buckets['recent_mistakes']}),
             'weak_topics': len({m.question_id for m in buckets['weak_topics']}),
             'total_available': len({m.question_id for m in all_records}),
-        })
+        }
+        try:
+            cache.set(cache_key, data, 30)
+        except Exception:
+            pass
+        return Response(data)
 
     @action(detail=False, methods=['post'])
     def start_revision(self, request):
@@ -1140,6 +1154,12 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             except Exception:
                 pass
 
+            try:
+                from core.views import invalidate_student_dashboard
+                invalidate_student_dashboard(session.user_id)
+            except Exception:
+                pass
+
         # After submission, return full data including answers
         return Response({
             'session': self.get_serializer(session).data,
@@ -1199,8 +1219,17 @@ class DashboardView(APIView):
     def get(self, request):
         user = request.user
         
+        from django.core.cache import cache
+        cache_key = f'student_dashboard:{user.id}'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
+
         from django.utils import timezone
-        from django.db.models import Avg, Sum
+        from django.db.models import Avg, Sum, Count, Max, Q
         from django.db.models.functions import TruncDate
         
         now = timezone.now()
@@ -1234,21 +1263,32 @@ class DashboardView(APIView):
         completed_statuses = ('submitted', 'evaluated')
         practice_sessions = PracticeSession.objects.filter(user=user)
 
-        total_exams = model_attempts.count()
-        completed_exams = model_attempts.filter(status__in=completed_statuses).count()
+        # Consolidated aggregation for model attempts
+        exam_agg = model_attempts.aggregate(
+            total=Count('id'),
+            completed=Count('id', filter=Q(status__in=completed_statuses)),
+            avg_score=Avg('score', filter=Q(status__in=completed_statuses)),
+            max_score=Max('score', filter=Q(status__in=completed_statuses)),
+            time_sum=Sum('time_taken_seconds', filter=Q(status__in=completed_statuses))
+        )
+        total_exams = exam_agg['total'] or 0
+        completed_exams = exam_agg['completed'] or 0
+        avg_score = exam_agg['avg_score'] or 0
+        best_score_val = exam_agg['max_score'] or 0
+        exam_time = exam_agg['time_sum'] or 0
 
-        avg_score = model_attempts.filter(status__in=completed_statuses).aggregate(Avg('score'))['score__avg'] or 0
-        best_score = model_attempts.filter(status__in=completed_statuses).order_by('-score').first()
-        best_score_val = best_score.score if best_score else 0
+        # Consolidated aggregation for practice sessions
+        practice_agg = practice_sessions.filter(completed=True).aggregate(
+            avg_acc=Avg('accuracy'),
+            time_sum=Sum('time_taken_seconds')
+        )
+        avg_accuracy = practice_agg['avg_acc'] or 0
+        practice_time = practice_agg['time_sum'] or 0
 
         exam_questions = StudentAnswer.objects.filter(attempt__student=user).count()
         practice_questions = QuestionAttempt.objects.filter(session__user=user).count()
         questions_attempted = exam_questions + practice_questions
 
-        avg_accuracy = practice_sessions.filter(completed=True).aggregate(Avg('accuracy'))['accuracy__avg'] or 0
-
-        exam_time = model_attempts.filter(status__in=completed_statuses).aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
-        practice_time = practice_sessions.filter(completed=True).aggregate(Sum('time_taken_seconds'))['time_taken_seconds__sum'] or 0
         total_seconds = exam_time + practice_time
         hours = total_seconds // 3600
         minutes = (total_seconds % 3600) // 60
@@ -1284,7 +1324,7 @@ class DashboardView(APIView):
 
         # 3. Continue Learning
         continue_learning = None
-        in_progress_exam = model_attempts.filter(status='in-progress').order_by('-started_at').first()
+        in_progress_exam = model_attempts.filter(status='in-progress').select_related('examination').order_by('-started_at').first()
         if in_progress_exam:
             continue_learning = {
                 'id': in_progress_exam.id,
@@ -1294,7 +1334,7 @@ class DashboardView(APIView):
                 'url': f'/student/exams/{in_progress_exam.examination_id}/attempt/{in_progress_exam.id}'
             }
         else:
-            in_progress_practice = practice_sessions.filter(completed=False).order_by('-created_at').first()
+            in_progress_practice = practice_sessions.filter(completed=False).select_related('topic').order_by('-created_at').first()
             if in_progress_practice:
                 answered = QuestionAttempt.objects.filter(session=in_progress_practice, selected_option__isnull=False).count()
                 total = in_progress_practice.total_questions
@@ -1322,29 +1362,29 @@ class DashboardView(APIView):
         except Exception:
             pass
 
-        # 5. Recent Exams
+        # 5. Recent Exams (select_related eliminates N+1 queries)
         recent_exams = []
-        for e in model_attempts.filter(status__in=completed_statuses).order_by('-submitted_at')[:5]:
+        for e in model_attempts.filter(status__in=completed_statuses).select_related('examination').order_by('-submitted_at')[:5]:
             recent_exams.append({
                 'id': e.id,
                 'title': e.examination.title,
-                'date': e.submitted_at.strftime('%Y-%m-%d'),
+                'date': e.submitted_at.strftime('%Y-%m-%d') if e.submitted_at else '',
                 'score': float(e.score),
                 'percentage': float(e.percentage),
             })
 
-        # 6. Marketplace
+        # 6. Marketplace (select_related eliminates N+1 queries)
         purchases = []
         try:
             from marketplace.models import Purchase, PaymentSubmission
-            for p in Purchase.objects.filter(student=user, status='ACTIVE').order_by('-approved_at')[:3]:
+            for p in Purchase.objects.filter(student=user, status='ACTIVE').select_related('product').order_by('-approved_at')[:3]:
                 purchases.append({
                     'id': p.id,
                     'title': p.product.title,
                     'status': 'APPROVED',
                     'url': f'/student/marketplace/{p.product.id}'
                 })
-            for ps in PaymentSubmission.objects.filter(student=user, status='PENDING').order_by('-submitted_at')[:3]:
+            for ps in PaymentSubmission.objects.filter(student=user, status='PENDING').select_related('product').order_by('-submitted_at')[:3]:
                 purchases.append({
                     'id': ps.id,
                     'title': ps.product.title,
@@ -1369,7 +1409,7 @@ class DashboardView(APIView):
         except Exception:
             pass
 
-        return Response({
+        resp_payload = {
             'profile': profile_data,
             'stats': stats,
             'continueLearning': continue_learning,
@@ -1382,7 +1422,13 @@ class DashboardView(APIView):
                 {"subject": "General Knowledge", "progress": 64},
                 {"subject": "Current Affairs", "progress": 81}
             ]
-        })
+        }
+        try:
+            cache.set(cache_key, resp_payload, 15)
+        except Exception:
+            pass
+
+        return Response(resp_payload)
 
 # ============================================================
 # SUBJECTIVE PRACTICE VIEWS
@@ -1796,7 +1842,7 @@ class TeacherQuestionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsTeacher]
     serializer_class = QuestionFullSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
-    filterset_fields = ['topic', 'difficulty', 'question_type', 'status']
+    filterset_fields = ['subject', 'chapter', 'topic', 'difficulty', 'question_type', 'status']
     search_fields = ['text']
 
     def get_queryset(self):
@@ -1946,12 +1992,27 @@ class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
         question.reviewed_at = timezone.now()
         question.reviewer_comment = request.data.get('reviewer_comment', '')
         question.save()
+
+        if question.created_by:
+            from core.notification_service import NotificationService
+            NotificationService.notify_question_review(
+                teacher=question.created_by,
+                question_title=question.text[:80],
+                status='approved',
+                action_url='/teacher/questions',
+            )
+
         return Response({"detail": "Question approved."})
 
     @action(detail=True, methods=['post'])
     def reject(self, request, pk=None):
         question = self.get_object()
-        reason = request.data.get('reviewer_comment')
+        reason = (
+            request.data.get('reviewer_comment')
+            or request.data.get('feedback')
+            or request.data.get('reason')
+            or request.data.get('note')
+        )
         if not reason:
             return Response({"detail": "Rejection reason is required."}, status=400)
             
@@ -1961,12 +2022,28 @@ class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
         question.reviewed_at = timezone.now()
         question.reviewer_comment = reason
         question.save()
+
+        if question.created_by:
+            from core.notification_service import NotificationService
+            NotificationService.notify_question_review(
+                teacher=question.created_by,
+                question_title=question.text[:80],
+                status='rejected',
+                feedback=reason,
+                action_url='/teacher/questions',
+            )
+
         return Response({"detail": "Question rejected."})
 
     @action(detail=True, methods=['post'], url_path='request-changes')
     def request_changes(self, request, pk=None):
         question = self.get_object()
-        feedback = request.data.get('reviewer_comment')
+        feedback = (
+            request.data.get('reviewer_comment')
+            or request.data.get('feedback')
+            or request.data.get('reason')
+            or request.data.get('note')
+        )
         if not feedback:
             return Response({"detail": "Feedback is required to request changes."}, status=400)
             
@@ -1976,6 +2053,17 @@ class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
         question.reviewed_at = timezone.now()
         question.reviewer_comment = feedback
         question.save()
+
+        if question.created_by:
+            from core.notification_service import NotificationService
+            NotificationService.notify_question_review(
+                teacher=question.created_by,
+                question_title=question.text[:80],
+                status='changes_requested',
+                feedback=feedback,
+                action_url=f'/teacher/questions/{question.id}/edit',
+            )
+
         return Response({"detail": "Changes requested."})
 
 from .models import QuestionSet, QuestionSetQuestion

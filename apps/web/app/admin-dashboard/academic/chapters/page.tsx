@@ -23,6 +23,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { adminApi, AdminChapter, AdminSubject } from "@/lib/api/admin";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AcademicChaptersPage() {
   const [chapters, setChapters] = useState<AdminChapter[]>([]);
@@ -206,11 +207,16 @@ export default function AcademicChaptersPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center bg-white">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
-                  </TableCell>
-                </TableRow>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="border-b border-slate-200">
+                    <TableCell><Skeleton className="h-4 w-36" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto rounded" /></TableCell>
+                  </TableRow>
+                ))
               ) : !selectedSubject ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-32 text-center text-slate-500 bg-white">

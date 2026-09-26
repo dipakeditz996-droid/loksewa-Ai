@@ -14,8 +14,11 @@ import {
   Sparkles,
   Search,
   FolderTree,
+  Download,
+  DownloadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   CategoryHierarchyItem,
   LevelItem,
@@ -63,6 +66,7 @@ interface AcademicNodeDetailsPanelProps {
   onReplacePdf: (material: StudyMaterialListItem) => void;
   onEditMaterial: (material: StudyMaterialListItem) => void;
   onTogglePublishMaterial: (material: StudyMaterialListItem) => void;
+  onToggleDownloadableMaterial: (material: StudyMaterialListItem) => void;
   onDeleteMaterial: (material: StudyMaterialListItem) => void;
   onSelectNode: (node: SelectedAcademicNode) => void;
 }
@@ -130,6 +134,7 @@ export function AcademicNodeDetailsPanel({
   onReplacePdf,
   onEditMaterial,
   onTogglePublishMaterial,
+  onToggleDownloadableMaterial,
   onDeleteMaterial,
   onSelectNode,
 }: AcademicNodeDetailsPanelProps) {
@@ -744,7 +749,7 @@ export function AcademicNodeDetailsPanel({
                 <div className="flex items-center gap-2 pt-2">
                   <Button
                     size="sm"
-                    onClick={onOpenUploadNote}
+                    onClick={() => { setActiveTab("notes"); onOpenUploadNote(); }}
                     className="bg-[#0B2545] text-white text-xs h-8"
                   >
                     <Plus className="w-3.5 h-3.5 mr-1" /> Upload Note for "{selectedNode.topic.name}"
@@ -807,25 +812,30 @@ export function AcademicNodeDetailsPanel({
                   <button
                     key={sec.id}
                     onClick={() => onSectionChange(sec.id)}
-                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+                    className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
                       isTabActive
                         ? "bg-[#0B2545] text-white shadow-sm"
                         : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                     }`}
                   >
-                    <span>{sec.label}</span>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                        isTabActive
-                          ? "bg-[#C4A45C] text-black"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                      }`}
-                    >
-                      {count}
-                    </span>
+                    {sec.label}
                   </button>
                 );
               })}
+            </div>
+
+            {/* Upload Button Row */}
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Showing notes for the selected academic node.
+              </p>
+              <Button
+                onClick={onOpenUploadNote}
+                size="sm"
+                className="bg-[#0B2545] hover:bg-[#163E6C] text-white text-xs h-8 gap-1.5 shadow-sm"
+              >
+                <UploadCloud className="w-3.5 h-3.5" /> Upload Note
+              </Button>
             </div>
 
             {/* Sub-type filter & Search Toolbar */}
@@ -885,7 +895,25 @@ export function AcademicNodeDetailsPanel({
             {/* Materials List */}
             <div className="pt-2">
               {loadingMaterials ? (
-                <div className="py-16 text-center text-slate-400 text-xs">Loading notes...</div>
+                <div className="space-y-3" role="status" aria-busy="true" aria-label="Loading notes">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl space-y-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-5 w-16 rounded-md" />
+                        <Skeleton className="h-5 w-20 rounded-md" />
+                      </div>
+                      <Skeleton className="h-5 w-3/5" />
+                      <Skeleton className="h-3.5 w-4/5" />
+                      <div className="flex items-center gap-2 pt-1">
+                        <Skeleton className="h-4 w-24 rounded" />
+                        <Skeleton className="h-4 w-28 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : materials.length === 0 ? (
                 <div className="py-14 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-slate-50/50 dark:bg-slate-900/50">
                   <FileText className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
@@ -937,6 +965,17 @@ export function AcademicNodeDetailsPanel({
                               Premium
                             </span>
                           )}
+
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                              mat.isDownloadable
+                                ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300"
+                                : "bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-500 line-through"
+                            }`}
+                          >
+                            <Download className="w-3 h-3" />
+                            {mat.isDownloadable ? "Downloadable" : "No Download"}
+                          </span>
                         </div>
 
                         <h3 className="font-bold text-slate-900 dark:text-white text-base">
@@ -1016,6 +1055,21 @@ export function AcademicNodeDetailsPanel({
                         <Button
                           size="sm"
                           variant="ghost"
+                          title={mat.isDownloadable ? "Disable student download" : "Allow student download"}
+                          onClick={() => onToggleDownloadableMaterial(mat)}
+                          className={`text-xs h-8 px-2.5 flex items-center gap-1 ${
+                            mat.isDownloadable
+                              ? "text-cyan-600 hover:text-red-600"
+                              : "text-slate-400 hover:text-cyan-600"
+                          }`}
+                        >
+                          <DownloadCloud className="w-3.5 h-3.5" />
+                          {mat.isDownloadable ? "Disable Download" : "Allow Download"}
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => onDeleteMaterial(mat)}
                           className="text-xs h-8 px-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
                         >
@@ -1024,6 +1078,15 @@ export function AcademicNodeDetailsPanel({
                       </div>
                     </div>
                   ))}
+
+                  {/* Upload More - Bottom CTA */}
+                  <button
+                    onClick={onOpenUploadNote}
+                    className="w-full mt-3 flex items-center justify-center gap-2 py-4 border-2 border-dashed border-[#0B2545]/30 dark:border-slate-600 rounded-xl text-sm font-semibold text-[#0B2545] dark:text-slate-300 hover:border-[#0B2545] hover:bg-[#0B2545]/5 dark:hover:bg-slate-800 transition-all group"
+                  >
+                    <UploadCloud className="w-5 h-5 text-[#0B2545]/60 dark:text-slate-400 group-hover:text-[#0B2545] dark:group-hover:text-white transition-colors" />
+                    Upload Note Here
+                  </button>
                 </div>
               )}
             </div>

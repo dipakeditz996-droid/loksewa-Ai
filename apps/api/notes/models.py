@@ -151,6 +151,11 @@ class StudyMaterial(models.Model):
                    "material's content as reference context for student questions.",
     )
 
+    is_downloadable = models.BooleanField(
+        default=True,
+        help_text="When true, students are allowed to download the PDF file of this material.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

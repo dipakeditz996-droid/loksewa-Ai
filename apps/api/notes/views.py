@@ -218,9 +218,10 @@ class StudentPortalSyllabusNotesView(APIView):
         if is_staff_or_teacher:
             all_preps = Exam.objects.filter(
                 parent__isnull=False, is_active=True
-            ).select_related('parent', 'category')
+            ).select_related('parent', 'category').prefetch_related('courses')
             for prep in all_preps:
-                c = prep.courses.first() if hasattr(prep, 'courses') else None
+                courses_list = list(prep.courses.all())
+                c = courses_list[0] if courses_list else None
                 authorized_prep_dict[prep.id] = {
                     'exam': prep,
                     'course': c

@@ -234,6 +234,12 @@ class TopicSerializer(serializers.ModelSerializer):
             validated_data['chapter'] = unit
         return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        unit = validated_data.pop('unit', None)
+        if not validated_data.get('chapter') and unit:
+            validated_data['chapter'] = unit
+        return super().update(instance, validated_data)
+
 
 class ReorderSerializer(serializers.Serializer):
     id = serializers.IntegerField()

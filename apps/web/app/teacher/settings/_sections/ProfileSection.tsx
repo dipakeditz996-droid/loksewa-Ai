@@ -173,8 +173,8 @@ export function ProfileSection({
         </div>
       </div>
 
-      <div className="flex justify-end pt-4 border-t border-[#E7EBF3]">
-        <Button onClick={handleSave} disabled={isSaving} className="bg-[#0B2545] hover:bg-[#163E6C]">
+      <div className="flex justify-end pt-4 border-t border-border">
+        <Button onClick={handleSave} disabled={isSaving} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Save Changes
         </Button>

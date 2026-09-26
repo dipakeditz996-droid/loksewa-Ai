@@ -140,24 +140,28 @@ export function AcademicDependentSelect({
   }, [position, tree, loading.tree]);
 
   // 4. Chapters derived from selected Subject (instant from tree, fallback to API)
+  // When subject is optional and not selected, load chapters from the full position.
   useEffect(() => {
-    if (!subject) {
+    if (!subject && !position) {
       setChapters([]);
       return;
     }
-    const subId = Number(subject);
-    let foundChapters: any[] = [];
+    if (subject) {
+      const subId = Number(subject);
+      let foundChapters: any[] = [];
 
-    for (const cat of tree) {
-      for (const pos of (cat.positions || [])) {
-        const allPos = [pos, ...(pos.children || [])];
-        for (const p of allPos) {
-          for (const paper of (p.papers || [])) {
-            for (const sub of (paper.subjects || [])) {
-              if (sub.id === subId) {
-                foundChapters = sub.chapters || [];
-                break;
+      for (const cat of tree) {
+        for (const pos of (cat.positions || [])) {
+          const allPos = [pos, ...(pos.children || [])];
+          for (const p of allPos) {
+            for (const paper of (p.papers || [])) {
+              for (const sub of (paper.subjects || [])) {
+                if (sub.id === subId) {
+                  foundChapters = sub.chapters || [];
+                  break;
+                }
               }
+              if (foundChapters.length > 0) break;
             }
             if (foundChapters.length > 0) break;
           }
@@ -165,19 +169,43 @@ export function AcademicDependentSelect({
         }
         if (foundChapters.length > 0) break;
       }
-      if (foundChapters.length > 0) break;
-    }
 
-    if (foundChapters.length > 0) {
-      setChapters(foundChapters);
-    } else if (!loading.tree) {
-      setLoading(prev => ({ ...prev, chapter: true }));
-      adminSyllabusApi.getChapters(subId)
-        .then((res: any) => setChapters(Array.isArray(res) ? res : (res?.results || [])))
-        .catch(console.error)
-        .finally(() => setLoading(prev => ({ ...prev, chapter: false })));
+      if (foundChapters.length > 0) {
+        setChapters(foundChapters);
+      } else if (!loading.tree) {
+        setLoading(prev => ({ ...prev, chapter: true }));
+        adminSyllabusApi.getChapters(subId)
+          .then((res: any) => setChapters(Array.isArray(res) ? res : (res?.results || [])))
+          .catch(console.error)
+          .finally(() => setLoading(prev => ({ ...prev, chapter: false })));
+      }
+    } else {
+      // Subject is optional and not selected — load all chapters for the position
+      const posId = Number(position);
+      let allChapters: any[] = [];
+      for (const cat of tree) {
+        for (const pos of (cat.positions || [])) {
+          const allPos = [pos, ...(pos.children || [])];
+          for (const p of allPos) {
+            if (p.id === posId) {
+              for (const paper of (p.papers || [])) {
+                for (const sub of (paper.subjects || [])) {
+                  allChapters = [...allChapters, ...(sub.chapters || [])];
+                }
+              }
+            }
+          }
+        }
+      }
+      if (allChapters.length > 0) {
+        setChapters(allChapters);
+      } else {
+        // Fallback: could call getChapters for position, but API doesn't support it;
+        // leave empty so user knows to select a subject first via API.
+        setChapters([]);
+      }
     }
-  }, [subject, tree, loading.tree]);
+  }, [subject, position, tree, loading.tree]);
 
   // 5. Topics derived from selected Chapter (instant from tree, fallback to API)
   useEffect(() => {
@@ -224,28 +252,13 @@ export function AcademicDependentSelect({
 
   const handleChange = (field: string, val: string) => {
     const value = val ? Number(val) : undefined;
+    // Only emit a single onChange call per user interaction.
+    // The parent component (e.g. QuestionSetForm / handleAcademicChange) is
+    // responsible for cascading child-field resets when a parent field changes.
+    // Emitting multiple onChange calls here caused a stale-closure bug: each
+    // call read from the same stale `data` snapshot in the parent, so the last
+    // "reset" call would silently overwrite the category value that was just set.
     onChange(field, value);
-
-    // Automatically clear dependent child values
-    if (field === 'category') {
-      onChange('position', undefined);
-      onChange('exam', undefined);
-      onChange('subject', undefined);
-      onChange('chapter', undefined);
-      onChange('unit', undefined);
-      onChange('topic', undefined);
-    } else if (field === 'position' || field === 'exam') {
-      onChange('subject', undefined);
-      onChange('chapter', undefined);
-      onChange('unit', undefined);
-      onChange('topic', undefined);
-    } else if (field === 'subject') {
-      onChange('chapter', undefined);
-      onChange('unit', undefined);
-      onChange('topic', undefined);
-    } else if (field === 'chapter' || field === 'unit') {
-      onChange('topic', undefined);
-    }
   };
 
   const containerClass = layout === 'grid' 
@@ -324,7 +337,12 @@ export function AcademicDependentSelect({
       {show('subject') && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            {labels.subject || 'Subject'} {isRequired('subject') && <span className="text-red-500">*</span>}
+            {labels.subject || 'Subject'}{' '}
+            {isRequired('subject') ? (
+              <span className="text-red-500">*</span>
+            ) : (
+              <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+            )}
           </label>
           <select
             value={subject || ''}
@@ -339,7 +357,9 @@ export function AcademicDependentSelect({
                 ? 'Loading subjects...'
                 : subjects.length === 0
                 ? 'No subjects available'
-                : 'Select Subject'}
+                : isRequired('subject')
+                ? 'Select Subject'
+                : 'Select Subject (Optional)'}
             </option>
             {subjects.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
@@ -367,11 +387,13 @@ export function AcademicDependentSelect({
               handleChange('unit', e.target.value);
               handleChange('chapter', e.target.value);
             }}
-            disabled={!subject || loading.chapter}
-            className={`w-full p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 ${errors.unit || errors.chapter ? 'border-red-500' : 'border-gray-200'} ${!subject ? 'bg-gray-50 text-gray-400' : ''}`}
+            disabled={(!subject && isRequired('subject')) || loading.chapter || !position}
+            className={`w-full p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 ${errors.unit || errors.chapter ? 'border-red-500' : 'border-gray-200'} ${(!subject && isRequired('subject')) || !position ? 'bg-gray-50 text-gray-400' : ''}`}
           >
             <option value="">
-              {!subject
+              {!position
+                ? 'Select Position first'
+                : !subject && isRequired('subject')
                 ? 'Select Subject first'
                 : loading.chapter
                 ? 'Loading chapters...'

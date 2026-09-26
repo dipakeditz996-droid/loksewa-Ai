@@ -519,14 +519,16 @@ export default function CreateExamPage() {
               </select>
             </div>
             <div>
-              <label className={label}>Subject</label>
+              <label className={label}>
+                Subject {examType === "subjective" ? <span className="text-xs text-slate-400 font-normal">(Optional)</span> : null}
+              </label>
               <select
                 value={subjectId ?? ""}
                 onChange={e => setSubjectId(e.target.value ? Number(e.target.value) : undefined)}
                 disabled={!positionId}
                 className={`${field} disabled:bg-slate-50`}
               >
-                <option value="">All subjects</option>
+                <option value="">{examType === "subjective" ? "Select subject (Optional)" : "All subjects"}</option>
                 {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>

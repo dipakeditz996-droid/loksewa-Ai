@@ -555,6 +555,17 @@ class ResetPasswordConfirmView(APIView):
         return Response({'detail': 'Your password has been reset. You can now sign in.'}, status=status.HTTP_200_OK)
 
 
+def invalidate_student_dashboard(user_id):
+    if not user_id:
+        return
+    from django.core.cache import cache
+    try:
+        cache.delete(f'student_dashboard:{user_id}')
+        cache.delete(f'student_dashboard_v2:{user_id}:')
+    except Exception:
+        pass
+
+
 class StudentDashboardView(APIView):
     """
     Consolidated dashboard data for the authenticated student.
@@ -562,8 +573,17 @@ class StudentDashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        
         user = request.user
+        course_id_param = request.query_params.get('course_id') or ''
+
+        from django.core.cache import cache
+        cache_key = f'student_dashboard_v2:{user.id}:{course_id_param}'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
         
         has_avatar = bool(hasattr(user, 'avatar') and user.avatar)
         has_phone = bool(getattr(user, 'phone_number', '') or getattr(user, 'phone', ''))
@@ -689,6 +709,11 @@ class StudentDashboardView(APIView):
             "subjectPerformance": formatted_subject_performance,
             "package": package_data,
         }
+
+        try:
+            cache.set(cache_key, data, 20)
+        except Exception:
+            pass
 
         return Response(data)
 

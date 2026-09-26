@@ -133,7 +133,7 @@ export default function ExamResultPage() {
                   <Eye className="w-4 h-4" /> View Submitted Answer Sheet
                 </Button>
                 <Link href="/student/exams">
-                  <Button className="bg-[#0B2545] text-white">Back to Examinations</Button>
+                  <Button className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Back to Examinations</Button>
                 </Link>
               </CardFooter>
             </Card>

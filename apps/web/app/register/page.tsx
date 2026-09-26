@@ -684,7 +684,7 @@ function RegisterForm() {
                       <Button
                         type="button"
                         onClick={handleNext}
-                        className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2 mt-4"
+                        className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2 mt-4"
                       >
                         Continue to Address <ArrowRight className="h-4 w-4" />
                       </Button>
@@ -754,7 +754,7 @@ function RegisterForm() {
                         <Button
                           type="button"
                           onClick={handleNext}
-                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
+                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
                         >
                           Continue <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
@@ -896,7 +896,7 @@ function RegisterForm() {
                         <Button
                           type="button"
                           onClick={handleNext}
-                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
+                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
                         >
                           Review <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
@@ -961,7 +961,7 @@ function RegisterForm() {
                           type="button"
                           onClick={handleRegister}
                           disabled={isLoading}
-                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
+                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
                         >
                           {isLoading ? (
                             <>
@@ -1014,7 +1014,7 @@ function RegisterForm() {
                       Your account was verified using an administrative recovery code. Please log in with your credentials to start learning.
                     </p>
                     <Link href="/login">
-                      <Button className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white text-[14px] font-bold rounded-[10px]">
+                      <Button className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] text-[14px] font-bold rounded-[10px]">
                         Go to Login
                       </Button>
                     </Link>
@@ -1064,7 +1064,7 @@ function RegisterForm() {
                           type="button"
                           onClick={handleVerifyOtp}
                           disabled={otpLoading || otpDigits.join("").length !== 6}
-                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
+                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
                         >
                           {otpLoading ? (
                             <>
@@ -1138,7 +1138,7 @@ function RegisterForm() {
                           type="button"
                           onClick={handleVerifyRecovery}
                           disabled={recoveryLoading || !recoveryCode.trim()}
-                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[10px] flex items-center justify-center gap-2"
+                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] flex items-center justify-center gap-2"
                         >
                           {recoveryLoading ? (
                             <>

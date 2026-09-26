@@ -1,6 +1,7 @@
 import React from "react";
-import { AttractiveLoader } from "@/components/ui/attractive-loader";
+import { PageSkeleton } from "@/components/ui/loading-states";
 
 export default function StudentLoading() {
-  return <AttractiveLoader text="Loading..." />;
+  return <PageSkeleton layout="grid" className="max-w-7xl mx-auto py-6" />;
 }
+

@@ -122,34 +122,37 @@ input:-webkit-autofill:active {
  * This scope pins every token back to its light value and tells the
  * browser's native form-control UI (select popups, etc.) to render light
  * too, regardless of the visitor's global theme preference. */
-.admin-light-scope {
-  color-scheme: light;
+.admin-light-scope,
+html.dark:has(.admin-light-scope),
+html:has(.admin-light-scope),
+.dark .admin-light-scope {
+  color-scheme: light !important;
   /* `color: inherit` (used by the select/input/textarea rule below, and by
    * anything else that relies on inheritance) copies the PARENT's already
    * -resolved `color` value - it doesn't re-run `var(--foreground)`. Since
    * <body> sits outside this scope and stays dark-mode-resolved, redeclaring
    * just the custom properties here has no effect on inherited `color`
    * without this explicit re-evaluation at the scope boundary. */
-  color: hsl(220 43% 11%);
-  --background: 216 33% 98%;
-  --foreground: 220 43% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 220 43% 11%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 43% 11%;
-  --primary: 212 73% 16%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 216 33% 98%;
-  --secondary-foreground: 216 19% 34%;
-  --muted: 216 33% 98%;
-  --muted-foreground: 216 19% 34%;
-  --accent: 42 63% 48%;
-  --accent-foreground: 220 43% 11%;
-  --destructive: 0 65% 61%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 212 27% 88%;
-  --input: 212 27% 88%;
-  --ring: 212 73% 16%;
+  color: hsl(220 43% 11%) !important;
+  --background: 0 0% 100% !important;
+  --foreground: 220 43% 11% !important;
+  --card: 0 0% 100% !important;
+  --card-foreground: 220 43% 11% !important;
+  --popover: 0 0% 100% !important;
+  --popover-foreground: 220 43% 11% !important;
+  --primary: 212 73% 16% !important;
+  --primary-foreground: 0 0% 100% !important;
+  --secondary: 216 33% 98% !important;
+  --secondary-foreground: 216 19% 34% !important;
+  --muted: 216 33% 98% !important;
+  --muted-foreground: 216 19% 34% !important;
+  --accent: 42 63% 48% !important;
+  --accent-foreground: 220 43% 11% !important;
+  --destructive: 0 65% 61% !important;
+  --destructive-foreground: 0 0% 100% !important;
+  --border: 212 27% 88% !important;
+  --input: 212 27% 88% !important;
+  --ring: 212 73% 16% !important;
 }
 
 .dark {
@@ -171,7 +174,7 @@ input:-webkit-autofill:active {
   --secondary-foreground: 213 27% 73%; /* #A8B8CC Secondary text */
   
   --muted: 210 52% 16%; /* #142A40 Secondary surfaces / Hover */
-  --muted-foreground: 214 15% 52%; /* #71839A Muted text */
+  --muted-foreground: 215 20% 65%; /* Accessible muted text (~7.1:1 AAA against #0D1B2A) */
   
   --accent: 45 90% 57%;
   --accent-foreground: 215 64% 7%;
@@ -179,8 +182,8 @@ input:-webkit-autofill:active {
   --destructive: 0 65% 61%;
   --destructive-foreground: 0 0% 100%;
   
-  --border: 211 39% 23%; /* #243B53 Borders */
-  --input: 211 39% 23%;
+  --border: 212 28% 36%; /* Visible borders against #0D1B2A and #07111F */
+  --input: 212 28% 36%;
   --ring: 45 90% 57%;
 }
 
@@ -242,18 +245,22 @@ option {
 
 .dark option,
 [data-theme="dark"] option {
-  background-color: #1e293b;
-  color: #f8fafc;
+  /* Match the dark card/popover background (#0D1B2A) so native select
+     dropdowns don't show a mismatched slate-800 shell in dark mode. */
+  background-color: #0D1B2A;
+  color: #f1f5f9;
 }
 
 ::placeholder {
   color: #94a3b8;
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 .dark ::placeholder {
+  /* Slightly brighter in dark mode so placeholder text clears the dark
+     input background at an accessible contrast ratio. */
   color: #94a3b8;
-  opacity: 0.9;
+  opacity: 1;
 }
 
 /* ===== SCROLLBAR ===== */

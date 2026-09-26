@@ -12,266 +12,16 @@ from exams.models import Question, Topic, QuestionCollection
 from core.models import Tag
 from ai_tutor.services import AdminAILogic
 
-# The CSV/Excel file carries question content only. Syllabus placement,
-# question type and difficulty are chosen once in the UI and applied to
-# every row, so the file stays simple and an admin cannot mistype a subject
-# or chapter name.
-#
-# Internal row keys (left) map to the admin-facing Excel headers (right):
-#   sn -> SN, question -> Questions, marks -> Mark,
-#   option_a..d -> Option A..D, correct_answer -> Correct Answer,
-#   explanation -> Explanation, hint -> Hint
-CSV_COLUMNS = [
-    'question', 'option_a', 'option_b', 'option_c', 'option_d',
-    'correct_answer', 'explanation',
-]
+from exams.services.question_import_service import (
+    CSV_COLUMNS, ROW_FIELDS,
+    EXCEL_HEADERS_OBJECTIVE, EXCEL_HEADERS_TRUE_FALSE, EXCEL_HEADERS_SUBJECTIVE,
+    OBJECTIVE_TYPES, SUBJECTIVE_TYPES, ALL_TYPES,
+    EXCEL_HEADER_MAP, VALID_ANSWERS, ANSWER_NUMBER_MAP,
+    _normalize_answer, _parse_xlsx_rows, _parse_csv_rows,
+    _analyse_row, _missing_detail, _existing_question_ids,
+    _build_report, _recount, generate_excel_template,
+)
 
-# Full set of fields recognised in a row, CSV or Excel. `sn` and `marks` and
-# `hint` are optional extras layered on top of the original CSV format.
-# `model_answer` is the canonical Question.model_answer (the reference answer
-# evaluators see) - used by subjective questions only.
-ROW_FIELDS = ['sn', 'question', 'marks', 'option_a', 'option_b', 'option_c', 'option_d',
-              'correct_answer', 'model_answer', 'explanation', 'hint']
-
-# One template per question-type family (there is deliberately no single
-# template that always carries MCQ columns).
-EXCEL_HEADERS_OBJECTIVE = [
-    'SN', 'Questions', 'Mark', 'Option A', 'Option B', 'Option C', 'Option D',
-    'Correct Answer', 'Explanation', 'Hint',
-]
-EXCEL_HEADERS_TRUE_FALSE = ['SN', 'Questions', 'Mark', 'Correct Answer', 'Explanation', 'Hint']
-EXCEL_HEADERS_SUBJECTIVE = ['SN', 'Questions', 'Mark', 'Model Answer', 'Explanation', 'Hint']
-
-OBJECTIVE_TYPES = ('mcq', 'true_false')
-SUBJECTIVE_TYPES = ('subjective', 'short_answer', 'long_answer')
-ALL_TYPES = OBJECTIVE_TYPES + SUBJECTIVE_TYPES
-
-EXCEL_HEADER_MAP = {
-    'sn': 'sn', 'questions': 'question', 'question': 'question',
-    'mark': 'marks', 'marks': 'marks',
-    'option a': 'option_a', 'option b': 'option_b',
-    'option c': 'option_c', 'option d': 'option_d',
-    'options a': 'option_a', 'options b': 'option_b',
-    'options c': 'option_c', 'options d': 'option_d',
-    'correct answer': 'correct_answer',
-    'model answer': 'model_answer',
-    'expected answer': 'model_answer', 'model_answer': 'model_answer',
-    'explanation': 'explanation', 'hint': 'hint',
-}
-
-VALID_ANSWERS = ['A', 'B', 'C', 'D']
-
-# Admins commonly write the correct answer as the option's position number
-# (1st/2nd/3rd/4th option) rather than its letter - both are accepted and
-# normalized to the letter form the Question model actually stores.
-ANSWER_NUMBER_MAP = {'1': 'A', '2': 'B', '3': 'C', '4': 'D'}
-
-
-def _normalize_answer(raw):
-    value = (raw or '').strip().upper()
-    return ANSWER_NUMBER_MAP.get(value, value)
-
-
-def _parse_xlsx_rows(file):
-    """Read an .xlsx workbook into a list of dicts keyed by ROW_FIELDS."""
-    wb = load_workbook(file, data_only=True, read_only=True)
-    ws = wb.active
-    rows_iter = ws.iter_rows(values_only=True)
-    try:
-        header_row = next(rows_iter)
-    except StopIteration:
-        return [], []
-
-    headers = []
-    for cell in header_row:
-        key = EXCEL_HEADER_MAP.get(str(cell).strip().lower()) if cell is not None else None
-        headers.append(key)
-
-    rows = []
-    for raw in rows_iter:
-        if raw is None or all(v is None or str(v).strip() == '' for v in raw):
-            continue
-        row = {}
-        for key, value in zip(headers, raw):
-            if key is None:
-                continue
-            row[key] = '' if value is None else str(value).strip()
-        rows.append(row)
-    return rows, [h for h in headers if h]
-
-
-def _parse_csv_rows(file):
-    decoded = file.read().decode('utf-8-sig')
-    reader = list(csv.DictReader(io.StringIO(decoded)))
-    # Normalize legacy CSV headers (question, option_a, ...) which already
-    # match ROW_FIELDS, so no remapping needed beyond stripping values.
-    rows = [{k: (v or '').strip() for k, v in r.items()} for r in reader]
-    return rows, list(reader[0].keys()) if reader else []
-
-
-def _analyse_row(row, question_type):
-    """Split a row's problems into hard errors and AI-fillable gaps.
-
-    Errors mean the row can never be imported. Missing fields are gaps the AI
-    can fill, so those rows are held as 'incomplete' rather than rejected.
-    """
-    errors = []
-    missing = []
-
-    text = (row.get('question') or '').strip()
-    if not text:
-        errors.append('Question is required.')
-
-    marks_raw = (row.get('marks') or '').strip()
-    if marks_raw:
-        try:
-            if float(marks_raw) <= 0:
-                errors.append('Mark must be a positive number.')
-        except ValueError:
-            errors.append(f"Mark must be numeric (got '{marks_raw}').")
-
-    if question_type == 'mcq':
-        if any(not (row.get(k) or '').strip() for k in ('option_a', 'option_b', 'option_c', 'option_d')):
-            missing.append('options')
-
-        raw_answer = (row.get('correct_answer') or '').strip()
-        answer = _normalize_answer(raw_answer)
-        if not raw_answer:
-            missing.append('correct_answer')
-        elif answer not in VALID_ANSWERS:
-            errors.append(f'Correct Answer "{raw_answer}" is invalid. Expected A, B, C or D (or 1, 2, 3, 4).')
-        else:
-            row['correct_answer'] = answer
-
-    elif question_type == 'true_false':
-        raw_answer = (row.get('correct_answer') or '').strip()
-        answer = _normalize_answer(raw_answer)
-        if not raw_answer:
-            missing.append('correct_answer')
-        elif answer not in ('A', 'B'):
-            errors.append("Correct Answer must be 1 or A (True), or 2 or B (False).")
-        else:
-            row['correct_answer'] = answer
-
-    elif question_type in SUBJECTIVE_TYPES:
-        # Same rule the admin question form enforces
-        # (AdminQuestionSerializer.validate): a subjective question must
-        # carry the reference answer evaluators mark against. It cannot be
-        # AI-filled here, so a blank one is a hard error, not a gap.
-        if not (row.get('model_answer') or '').strip():
-            errors.append('Model Answer is required for subjective questions.')
-        # Objective-only columns (options / correct answer) are ignored for
-        # subjective questions - a blank or stray value there is not an error.
-        return errors, missing
-
-    if not (row.get('explanation') or '').strip():
-        missing.append('explanation')
-
-    return errors, missing
-
-
-def _missing_detail(row, question_type):
-    """Human-readable list of exactly what an incomplete row is missing."""
-    detail = []
-    if question_type == 'mcq':
-        blanks = [k[-1].upper() for k in ('option_a', 'option_b', 'option_c', 'option_d')
-                  if not (row.get(k) or '').strip()]
-        if blanks:
-            detail.append('Option ' + ', '.join(blanks) + (' is required.' if len(blanks) == 1 else ' are required.'))
-    if question_type in OBJECTIVE_TYPES and not (row.get('correct_answer') or '').strip():
-        detail.append('Correct Answer is required.')
-    if not (row.get('explanation') or '').strip() and question_type in OBJECTIVE_TYPES:
-        detail.append('Explanation is empty (the AI can fill it).')
-    return detail
-
-
-def _existing_question_ids(norm_texts):
-    """Map lower-cased question text -> {'id': id, 'code': question_id}, in ONE
-    query (it used to be one query per row, which against a remote database
-    made a 100-row file take ~20s to analyse)."""
-    from django.db.models.functions import Lower
-    found = {}
-    texts = sorted(set(norm_texts))
-    for i in range(0, len(texts), 500):
-        chunk = texts[i:i + 500]
-        for q_id, q_code, lowered in (
-            Question.objects.annotate(lowered=Lower('text'))
-            .filter(lowered__in=chunk).order_by('id')
-            .values_list('id', 'question_id', 'lowered')
-        ):
-            found.setdefault(lowered, {
-                'id': q_id,
-                'code': q_code or f"Q-{q_id:06d}"
-            })
-    return found
-
-
-def _build_report(rows, question_type):
-    """Validate every row and return (report_data, counts)."""
-    report_data = []
-    counts = {'total': 0, 'valid': 0, 'incomplete': 0, 'error': 0, 'duplicate': 0}
-    seen_texts = {}
-
-    cleaned = []
-    for idx, row in enumerate(rows):
-        clean = {key: (row.get(key) or '').strip() for key in ROW_FIELDS}
-        if not clean.get('sn'):
-            clean['sn'] = str(idx + 1)
-        cleaned.append(clean)
-    existing_ids = _existing_question_ids(
-        c['question'].strip().lower() for c in cleaned if c['question'].strip()
-    )
-
-    for idx, clean in enumerate(cleaned):
-        counts['total'] += 1
-        errors, missing = _analyse_row(clean, question_type)
-
-        norm_text = clean['question'].strip().lower()
-        is_duplicate = False
-        duplicate_of = None
-        if norm_text:
-            if norm_text in existing_ids:
-                is_duplicate = True
-                duplicate_of = existing_ids[norm_text]['code']
-            elif norm_text in seen_texts:
-                is_duplicate = True
-                duplicate_of = f"row {seen_texts[norm_text]}"
-            else:
-                seen_texts[norm_text] = idx + 1
-
-        if is_duplicate:
-            errors.append(f"Duplicate question (matches {duplicate_of}). It will not be imported.")
-
-        if errors:
-            status = 'error'
-        elif missing:
-            status = 'incomplete'
-        else:
-            status = 'valid'
-
-        if is_duplicate and status == 'error' and len(errors) == 1:
-            status = 'duplicate'
-
-        counts[status] += 1
-        report_data.append({
-            'row_index': idx + 1,
-            'sn': clean['sn'],
-            'status': status,
-            'errors': errors,
-            'missing': missing,
-            'missing_detail': _missing_detail(clean, question_type) if missing else [],
-            'duplicate_of': duplicate_of,
-            'data': clean,
-        })
-
-    return report_data, counts
-
-
-def _recount(report_data):
-    counts = {'total': len(report_data), 'valid': 0, 'incomplete': 0, 'error': 0, 'duplicate': 0}
-    for row in report_data:
-        counts[row['status']] = counts.get(row['status'], 0) + 1
-    return counts
 
 
 def _response_payload(import_record):
@@ -310,51 +60,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         if qtype not in ('mcq', 'true_false', 'subjective'):
             return Response({'error': f'Unsupported template type: {qtype}'}, status=400)
 
-        if qtype == 'mcq':
-            headers = EXCEL_HEADERS_OBJECTIVE
-            title = 'Objective Question Template'
-            example = [1, 'नेपालको राजधानी कुन हो?', 1, 'पोखरा', 'काठमाडौं', 'ललितपुर', 'विराटनगर',
-                       'B', 'नेपालको राजधानी काठमाडौं हो।', '']
-            rules = [
-                'Required: Questions, Mark, Option A-D, Correct Answer.',
-                'Correct Answer: A, B, C or D (the numbers 1-4 also work).',
-                'Explanation and Hint are optional (the AI can fill Explanation on the next step).',
-            ]
-        elif qtype == 'true_false':
-            headers = EXCEL_HEADERS_TRUE_FALSE
-            title = 'True-False Question Template'
-            example = [1, 'काठमाडौं नेपालको राजधानी हो।', 1, 'A', 'काठमाडौं नेपालको राजधानी हो।', '']
-            rules = [
-                'Required: Questions, Mark, Correct Answer.',
-                'Correct Answer: A (True) or B (False) - 1 or 2 also work.',
-            ]
-        else:
-            headers = EXCEL_HEADERS_SUBJECTIVE
-            title = 'Subjective Question Template'
-            example = [1, 'नेपालको संघीय संरचनाबारे संक्षिप्त चर्चा गर्नुहोस्।', 5,
-                       'नेपाल ७ प्रदेशसहितको संघीय गणतन्त्र हो...', 'अध्याय ३ हेर्नुहोस्।', '']
-            rules = [
-                'Required: Questions, Mark, Model Answer (the reference answer evaluators mark against).',
-                'Explanation and Hint are optional.',
-                'Subjective questions have no answer options, so this template has no option columns.',
-            ]
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = 'Questions'
-        ws.append(headers)
-        guide = wb.create_sheet('Instructions')
-        guide.append([title])
-        for line in rules:
-            guide.append([line])
-        guide.append([])
-        guide.append(['Example row (copy the layout into the Questions sheet):'])
-        guide.append(headers)
-        guide.append(example)
-
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
+        buf, title = generate_excel_template(qtype)
         response = HttpResponse(
             buf.read(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -379,14 +85,13 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         if not (is_excel or is_csv):
             return Response({'error': 'Please upload a valid Excel (.xlsx) or CSV file.'}, status=400)
 
+        topic = None
         topic_id = request.data.get('topic') or request.data.get('topic_id')
-        if not topic_id:
-            return Response({'error': 'Select a topic before uploading.'}, status=400)
-
-        try:
-            topic = Topic.objects.select_related('chapter', 'chapter__subject').get(pk=topic_id)
-        except (Topic.DoesNotExist, ValueError, TypeError):
-            return Response({'error': 'The selected topic no longer exists.'}, status=400)
+        if topic_id and str(topic_id) not in ('null', 'undefined', ''):
+            try:
+                topic = Topic.objects.select_related('chapter', 'chapter__subject').get(pk=topic_id)
+            except (Topic.DoesNotExist, ValueError, TypeError):
+                return Response({'error': 'The selected topic no longer exists.'}, status=400)
 
         question_type = (request.data.get('question_type') or 'mcq').strip().lower()
         if question_type not in ALL_TYPES:
@@ -439,7 +144,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
-        report_data, counts = _build_report(rows, question_type)
+        report_data, counts = _build_report(rows, question_type, allow_blank_explanation=True)
 
         import_record = CSVImport.objects.create(
             admin=request.user,
@@ -519,7 +224,7 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 row['data']['explanation'] = item['explanation']
 
             row['ai_filled'] = list(row['missing'])
-            errors, missing = _analyse_row(row['data'], import_record.question_type)
+            errors, missing = _analyse_row(row['data'], import_record.question_type, allow_blank_explanation=True)
             row['errors'] = errors
             row['missing'] = missing
             row['missing_detail'] = _missing_detail(row['data'], import_record.question_type) if missing else []
@@ -539,9 +244,6 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
             import_record = CSVImport.objects.get(pk=pk, status='validated')
         except CSVImport.DoesNotExist:
             return Response({'error': 'Import not found or already processed.'}, status=404)
-
-        if not import_record.topic_id:
-            return Response({'error': 'This import has no topic attached.'}, status=400)
 
         # Re-check duplicates at commit time: another import or an admin may
         # have added the same question since this file was analysed. Existing

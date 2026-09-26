@@ -101,7 +101,7 @@ export default function EvaluationDetailPage() {
         <h2 className="mb-2 text-2xl font-bold text-foreground">Evaluation Not Found</h2>
         <p className="mb-6 text-muted-foreground">This submission might have been deleted or you lack permission.</p>
         <Link href="/teacher/evaluations">
-          <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Return to List</Button>
+          <Button className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Return to List</Button>
         </Link>
       </div>
     );
@@ -132,7 +132,7 @@ export default function EvaluationDetailPage() {
 
         <div className="flex w-full gap-4 md:w-auto">
           <Button
-            className="w-full gap-2 rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C] md:w-auto"
+            className="w-full gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] shadow-sm hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold md:w-auto"
             onClick={handleSaveAndNext}
             disabled={isSaving}
           >
@@ -221,7 +221,7 @@ export default function EvaluationDetailPage() {
             </CardContent>
             <CardFooter>
               <Button
-                className="w-full gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white"
+                className="w-full gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold"
                 onClick={handleSaveAndNext}
                 disabled={isSaving}
               >

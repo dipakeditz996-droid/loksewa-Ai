@@ -14,6 +14,7 @@ import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
 import toast from "react-hot-toast";
+import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
 export default function CheckoutPage() {
   const params = useParams();
@@ -110,7 +111,7 @@ export default function CheckoutPage() {
   };
 
   if (loading) {
-    return <div className="p-12 text-center text-muted-foreground animate-pulse">Loading checkout...</div>;
+    return <PageSkeleton layout="detail" className="max-w-6xl mx-auto py-8" />;
   }
 
   if (!product) return null;
@@ -323,8 +324,13 @@ export default function CheckoutPage() {
                   type="submit" 
                   className="w-full h-12 text-lg" 
                   disabled={submitting || !selectedMethodId || !transactionId || !screenshot}
+                  aria-busy={submitting}
                 >
-                  {submitting ? "Submitting..." : "Submit Payment for Verification"}
+                  {submitting ? (
+                    <ButtonSpinner text="Submitting Payment for Verification..." />
+                  ) : (
+                    "Submit Payment for Verification"
+                  )}
                 </Button>
               </CardFooter>
             </form>

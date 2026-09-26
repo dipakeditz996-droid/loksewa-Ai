@@ -69,7 +69,7 @@ export function MaterialCard({ material, onPreview, onSubmit, onDuplicate, onDel
             <Clock className="h-3 w-3" />
             {new Date(material.updated_at).toLocaleDateString()}
           </span>
-          <span className="rounded-md bg-[#EEF1F6] px-2 py-0.5 font-medium capitalize text-muted-foreground">
+          <span className="rounded-md bg-[#EEF1F6] dark:bg-muted px-2 py-0.5 font-medium capitalize text-muted-foreground">
             {material.material_type.replace('_', ' ')}
           </span>
         </div>
@@ -80,7 +80,7 @@ export function MaterialCard({ material, onPreview, onSubmit, onDuplicate, onDel
         <Button
           size="sm"
           onClick={() => onPreview(material)}
-          className="mr-2 h-8 flex-1 rounded-lg bg-[#0B2545] text-xs font-medium text-white shadow-sm hover:bg-[#163E6C]"
+          className="mr-2 h-8 flex-1 rounded-lg bg-[#0B2545] dark:bg-[#D4A72C] text-xs font-medium text-white dark:text-[#0A1118] shadow-sm hover:bg-[#163E6C] dark:hover:bg-[#bfa228]"
         >
           <Eye className="mr-1.5 h-3 w-3" />
           Preview

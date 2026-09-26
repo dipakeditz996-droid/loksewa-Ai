@@ -29,7 +29,7 @@ export interface AdminQuestion {
 
 /** Where an imported Excel/CSV file lands. Chosen in the UI, applied to every row. */
 export interface ImportTarget {
-  topic: number;
+  topic?: number | string;
   question_type: 'mcq' | 'true_false' | 'subjective';
   difficulty: 'easy' | 'medium' | 'hard';
   /** Optional: add every successfully imported question to this Collection. */

@@ -245,7 +245,6 @@ export default function ExamAttemptPage() {
   };
 
   const handleSubmit = () => {
-    setIsSubmitDialogOpen(false);
     setIsSubmitting(true);
     submitMutation.mutate();
   };
@@ -265,9 +264,9 @@ export default function ExamAttemptPage() {
             <h1 className="font-bold text-lg hidden sm:block">{exam?.title}</h1>
             <h1 className="font-bold text-base sm:hidden">Exam</h1>
           </div>
-          {saveAnswerMutation.isPending && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1 animate-pulse">
-              <Loader2 className="h-3 w-3 animate-spin" /> Saving...
+          {(saveAnswerMutation.isPending || saveTextAnswerMutation.isPending) && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1.5 animate-pulse" role="status">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" /> Saving...
             </span>
           )}
         </div>
@@ -280,8 +279,20 @@ export default function ExamAttemptPage() {
             <Clock className="h-5 w-5" />
             {timeLeft !== null ? formatTime(timeLeft) : "--:--"}
           </div>
-          <Button onClick={() => setIsSubmitDialogOpen(true)} variant="destructive" className="hidden sm:flex">
-            Submit Exam
+          <Button 
+            onClick={() => setIsSubmitDialogOpen(true)} 
+            variant="destructive" 
+            className="hidden sm:flex"
+            disabled={isSubmitting}
+            aria-busy={isSubmitting}
+          >
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Submitting...
+              </span>
+            ) : (
+              "Submit Exam"
+            )}
           </Button>
         </div>
       </header>
@@ -436,38 +447,71 @@ export default function ExamAttemptPage() {
         </aside>
       </div>
 
-      <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Submit Exam?</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to submit your exam? You cannot change your answers after submission.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="py-4 grid grid-cols-2 gap-4 text-center">
-            <div className="bg-muted rounded-lg p-3">
-              <p className="text-2xl font-bold text-foreground">{answeredCount}</p>
-              <p className="text-xs text-muted-foreground">Answered</p>
+      <Dialog 
+        open={isSubmitDialogOpen || isSubmitting} 
+        onOpenChange={(open) => {
+          if (!isSubmitting) setIsSubmitDialogOpen(open);
+        }}
+      >
+        <DialogContent 
+          className="sm:max-w-md"
+          onPointerDownOutside={(e) => {
+            if (isSubmitting) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (isSubmitting) e.preventDefault();
+          }}
+        >
+          {isSubmitting ? (
+            <div className="py-6 flex flex-col items-center justify-center text-center space-y-4" role="status" aria-busy="true">
+              <div className="relative flex items-center justify-center w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-destructive/20 animate-pulse" />
+                <Loader2 className="w-10 h-10 animate-spin text-destructive shrink-0" aria-hidden="true" />
+              </div>
+              <div className="space-y-1.5">
+                <DialogTitle className="text-lg font-bold">Submitting Your Exam...</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground">
+                  Recording your final answers and finalizing your attempt.
+                </DialogDescription>
+              </div>
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3.5 py-1.5 rounded-full border border-amber-500/20">
+                Please do not refresh or close this tab.
+              </p>
             </div>
-            <div className="bg-muted rounded-lg p-3">
-              <p className="text-2xl font-bold text-amber-500">{reviewCount}</p>
-              <p className="text-xs text-muted-foreground">Marked for Review</p>
-            </div>
-            <div className="bg-muted rounded-lg p-3 col-span-2">
-              <p className="text-2xl font-bold text-destructive">{totalQuestions - answeredCount}</p>
-              <p className="text-xs text-muted-foreground">Unanswered Questions</p>
-            </div>
-          </div>
-          
-          <DialogFooter className="flex gap-2 sm:justify-end">
-            <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)} disabled={isSubmitting}>
-              Continue Exam
-            </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting} variant="destructive">
-              {isSubmitting ? "Submitting..." : "Yes, Submit Exam"}
-            </Button>
-          </DialogFooter>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Submit Exam?</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to submit your exam? You cannot change your answers after submission.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="py-4 grid grid-cols-2 gap-4 text-center">
+                <div className="bg-muted rounded-lg p-3">
+                  <p className="text-2xl font-bold text-foreground">{answeredCount}</p>
+                  <p className="text-xs text-muted-foreground">Answered</p>
+                </div>
+                <div className="bg-muted rounded-lg p-3">
+                  <p className="text-2xl font-bold text-amber-500">{reviewCount}</p>
+                  <p className="text-xs text-muted-foreground">Marked for Review</p>
+                </div>
+                <div className="bg-muted rounded-lg p-3 col-span-2">
+                  <p className="text-2xl font-bold text-destructive">{totalQuestions - answeredCount}</p>
+                  <p className="text-xs text-muted-foreground">Unanswered Questions</p>
+                </div>
+              </div>
+              
+              <DialogFooter className="flex gap-2 sm:justify-end">
+                <Button variant="outline" onClick={() => setIsSubmitDialogOpen(false)} disabled={isSubmitting}>
+                  Continue Exam
+                </Button>
+                <Button onClick={handleSubmit} disabled={isSubmitting} variant="destructive">
+                  Yes, Submit Exam
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>

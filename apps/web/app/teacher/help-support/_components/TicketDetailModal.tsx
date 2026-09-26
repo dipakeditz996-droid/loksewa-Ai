@@ -133,7 +133,7 @@ export function TicketDetailModal({ ticketId, onOpenChange }: TicketDetailModalP
                     </div>
                     <div className={`whitespace-pre-wrap rounded-2xl p-4 text-sm ${
                       !msg.is_staff_reply
-                        ? "rounded-tr-sm bg-[#0B2545] text-white"
+                        ? "rounded-tr-sm bg-[#0B2545] dark:bg-primary text-white dark:text-primary-foreground font-medium"
                         : "rounded-tl-sm border border-border bg-card text-foreground shadow-sm"
                     }`}>
                       {msg.message}
@@ -154,10 +154,10 @@ export function TicketDetailModal({ ticketId, onOpenChange }: TicketDetailModalP
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     placeholder="Type your reply..."
-                    className="min-h-[80px] resize-none rounded-lg border-border focus-visible:ring-[#0B2545]/30"
+                    className="min-h-[80px] resize-none rounded-lg border-border focus-visible:ring-primary/30"
                   />
                   <Button
-                    className="h-auto shrink-0 rounded-[9px] bg-[#0B2545] px-6 hover:bg-[#163E6C]"
+                    className="h-auto shrink-0 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] px-6 hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118]"
                     onClick={handleSendReply}
                     disabled={isSending || !replyText.trim()}
                   >

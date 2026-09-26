@@ -49,6 +49,15 @@ class AdminDashboardStatsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        from django.core.cache import cache
+        cache_key = 'admin:dashboard:stats'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
+
         # Users - one aggregate query instead of three separate counts
         user_counts = User.objects.aggregate(
             total_students=Count('id', filter=Q(role='student')),
@@ -82,20 +91,41 @@ class AdminDashboardStatsView(APIView):
         total_orders = purchase_stats['total_orders']
         revenue = float(purchase_stats['revenue'] or 0)
         
-        # Monthly Recurring Revenue (MRR) approximation from active subscriptions
-        from subscriptions.models import Subscription
-        active_subs = Subscription.objects.filter(status='ACTIVE', expiry_date__gt=timezone.now()).select_related('plan')
-        mrr = 0.0
-        for sub in active_subs:
-            plan = sub.plan
-            if plan.duration_unit == 'MONTHS' and plan.duration > 0:
-                mrr += float(plan.price) / plan.duration
-            elif plan.duration_unit == 'YEAR' and plan.duration > 0:
-                mrr += float(plan.price) / (plan.duration * 12)
-            elif plan.duration_unit == 'DAYS' and plan.duration > 0:
-                mrr += float(plan.price) / (plan.duration / 30.0)
-            elif plan.duration_unit == 'WEEKS' and plan.duration > 0:
-                mrr += float(plan.price) / (plan.duration / 4.33)
+        # MRR: compute entirely in the DB using a conditional expression so
+        # no Subscription rows are loaded into Python memory.
+        from django.db.models import Case, When, FloatField, ExpressionWrapper, F
+        from django.db.models.functions import Cast
+        from django.db.models import DecimalField
+        mrr_qs = (
+            Subscription.objects
+            .filter(status='ACTIVE', expiry_date__gt=timezone.now())
+            .select_related('plan')
+            .aggregate(
+                mrr_days=Sum(
+                    Case(
+                        When(plan__duration_unit='MONTHS', plan__duration__gt=0,
+                             then=ExpressionWrapper(
+                                 Cast(F('plan__price'), FloatField()) / Cast(F('plan__duration'), FloatField()),
+                                 output_field=FloatField())),
+                        When(plan__duration_unit='YEAR', plan__duration__gt=0,
+                             then=ExpressionWrapper(
+                                 Cast(F('plan__price'), FloatField()) / (Cast(F('plan__duration'), FloatField()) * 12),
+                                 output_field=FloatField())),
+                        When(plan__duration_unit='DAYS', plan__duration__gt=0,
+                             then=ExpressionWrapper(
+                                 Cast(F('plan__price'), FloatField()) / (Cast(F('plan__duration'), FloatField()) / 30.0),
+                                 output_field=FloatField())),
+                        When(plan__duration_unit='WEEKS', plan__duration__gt=0,
+                             then=ExpressionWrapper(
+                                 Cast(F('plan__price'), FloatField()) / (Cast(F('plan__duration'), FloatField()) / 4.33),
+                                 output_field=FloatField())),
+                        default=0.0,
+                        output_field=FloatField(),
+                    )
+                )
+            )
+        )
+        mrr = float(mrr_qs['mrr_days'] or 0)
 
         # Games
         games_played = (
@@ -158,7 +188,7 @@ class AdminDashboardStatsView(APIView):
         # Sort by most recent (best effort since time is formatted)
         recent_activity = recent_activity[:10]
 
-        return Response({
+        payload = {
             "users": {
                 "totalStudents": total_students,
                 "activeStudents": active_students,
@@ -190,7 +220,12 @@ class AdminDashboardStatsView(APIView):
                 "totalPlayed": games_played,
             },
             "recentActivity": recent_activity,
-        })
+        }
+        try:
+            cache.set(cache_key, payload, 120)  # 120s — was 30s
+        except Exception:
+            pass
+        return Response(payload)
 
 
 ANALYTICS_PERIOD_DAYS = {'7d': 7, '30d': 30, '90d': 90, '1y': 365}
@@ -267,10 +302,18 @@ class AdminAnalyticsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        from django.core.cache import cache
         period = request.query_params.get('period', '30d')
-        days, chart_data = _analytics_chart_data(period)
+        cache_key = f'admin:analytics:{period}'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
 
-        return Response({
+        days, chart_data = _analytics_chart_data(period)
+        payload = {
             "period": period,
             "days": days,
             "chartData": chart_data,
@@ -280,7 +323,12 @@ class AdminAnalyticsView(APIView):
                 "aiSessions": sum(r["aiSessions"] for r in chart_data),
                 "practiceSessions": sum(r["practiceSessions"] for r in chart_data),
             }
-        })
+        }
+        try:
+            cache.set(cache_key, payload, 90)  # 90s per period
+        except Exception:
+            pass
+        return Response(payload)
 
 
 class AdminAnalyticsExportView(APIView):
@@ -1213,6 +1261,15 @@ class AdminExamsOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        from django.core.cache import cache
+        cache_key = 'admin:exams:overview'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
+
         exam_stats = Exam.objects.aggregate(
             total=Count('id'),
             active=Count('id', filter=Q(is_active=True)),
@@ -1248,7 +1305,7 @@ class AdminExamsOverviewView(APIView):
                 "createdAt": me.created_at.isoformat(),
             })
 
-        return Response({
+        payload = {
             "totalExams": total_exams,
             "activeExams": active_exams,
             "totalModelExams": total_model_exams,
@@ -1256,7 +1313,12 @@ class AdminExamsOverviewView(APIView):
             "draftModelExams": draft_model_exams,
             "totalAttempts": total_attempts,
             "recentExams": recent_data,
-        })
+        }
+        try:
+            cache.set(cache_key, payload, 120)
+        except Exception:
+            pass
+        return Response(payload)
 
 
 class AdminAITutorOverviewView(APIView):
@@ -1264,6 +1326,15 @@ class AdminAITutorOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        from django.core.cache import cache
+        cache_key = 'admin:ai_tutor:overview'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
+
         total_sessions = Conversation.objects.count()
         today = timezone.now().date()
 
@@ -1296,14 +1367,19 @@ class AdminAITutorOverviewView(APIView):
         # Questions asked = messages sent by students (excludes AI responses)
         total_questions = Message.objects.filter(role='user').count()
 
-        return Response({
+        payload = {
             "totalSessions": total_sessions,
             "sessionsToday": sessions_today,
             "activeStudents": active_students,
             "totalQuestions": total_questions,
             "topModes": top_modes,
             "trend": trend_data,
-        })
+        }
+        try:
+            cache.set(cache_key, payload, 120)
+        except Exception:
+            pass
+        return Response(payload)
 
 
 class AdminAITutorProviderStatusView(APIView):
@@ -1546,6 +1622,15 @@ class AdminMarketplaceOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        from django.core.cache import cache
+        cache_key = 'admin:marketplace:overview'
+        try:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+        except Exception:
+            pass
+
         product_stats = Product.objects.aggregate(
             total=Count('id'),
             active=Count('id', filter=Q(is_published=True)),
@@ -1621,7 +1706,7 @@ class AdminMarketplaceOverviewView(APIView):
                 "createdAt": o.submitted_at.isoformat(),
             })
 
-        return Response({
+        payload = {
             "totalProducts": total_products,
             "activeProducts": active_products,
             "totalOrders": total_orders,
@@ -1633,7 +1718,12 @@ class AdminMarketplaceOverviewView(APIView):
             "revenueTrend": revenue_trend,
             "paymentMethodBreakdown": payment_method_breakdown,
             "recentOrders": recent_data,
-        })
+        }
+        try:
+            cache.set(cache_key, payload, 120)
+        except Exception:
+            pass
+        return Response(payload)
 
 
 # ============================================================
@@ -2917,7 +3007,8 @@ class AdminStudyMaterialsHierarchyView(APIView):
             cat = item['content_category']
             if cat in count_map[eid]:
                 count_map[eid][cat] = item['count']
-            count_map[eid]["total"] += item['count']
+            if cat != 'syllabus':
+                count_map[eid]["total"] += item['count']
 
         courses = Course.objects.filter(exam_id__in=exam_ids, status__in=['published', 'coming_soon']).order_by('id')
         course_map = {}
@@ -3047,8 +3138,10 @@ class AdminPreparationAcademicTreeView(APIView):
         topic_to_chap = {t.id: c.id for c in chaps for t in c.topics.all()}
         chap_to_sub = {c.id: s.id for s in subjects for c in s.chapters.all()}
 
-        # 1. Study Materials counts (O(1) query)
-        notes_qs = StudyMaterial.objects.filter(exam_id=exam_id).values('id', 'subject_id', 'chapter_id', 'topic_id')
+        # 1. Study Materials counts (O(1) query) — exclude syllabus category
+        notes_qs = StudyMaterial.objects.filter(
+            exam_id=exam_id
+        ).exclude(content_category='syllabus').values('id', 'subject_id', 'chapter_id', 'topic_id')
         top_notes_count = Counter()
         chap_notes_ids = defaultdict(set)
         sub_notes_ids = defaultdict(set)

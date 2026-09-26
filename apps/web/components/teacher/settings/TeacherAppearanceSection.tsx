@@ -44,9 +44,9 @@ export function TeacherAppearanceSection() {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-card border-slate-200/80 shadow-sm rounded-2xl overflow-hidden">
-        <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-          <CardTitle className="text-lg font-bold text-primary">Appearance</CardTitle>
+      <Card className="bg-card border-border shadow-sm rounded-2xl overflow-hidden">
+        <CardHeader className="bg-muted/50 border-b border-border">
+          <CardTitle className="text-lg font-bold text-foreground">Appearance</CardTitle>
           <CardDescription>Customize how LoksewaAI looks on your device.</CardDescription>
         </CardHeader>
         <CardContent className="p-8">
@@ -63,21 +63,21 @@ export function TeacherAppearanceSection() {
                 >
                   <div className={`
                     w-full aspect-[4/3] rounded-xl border-2 mb-3 overflow-hidden flex items-center justify-center transition-all
-                    ${isActive ? 'border-[#0B2545] shadow-sm' : 'border-slate-200 group-hover:border-slate-300'}
+                    ${isActive ? 'border-primary ring-2 ring-primary/20 shadow-sm' : 'border-border group-hover:border-primary/50'}
                     ${t.preview}
                   `}>
-                    <Icon className={`w-8 h-8 ${isActive ? (t.id === 'dark' ? 'text-white' : 'text-primary') : 'text-slate-400 opacity-50 group-hover:opacity-100 transition-opacity'}`} />
+                    <Icon className={`w-8 h-8 ${isActive ? 'text-primary' : 'text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity'}`} />
                   </div>
                   
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-slate-700'}`}>
+                    <h3 className={`text-sm font-bold ${isActive ? 'text-primary' : 'text-foreground'}`}>
                       {t.name}
                     </h3>
                     {isActive && (
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500">{t.description}</p>
+                  <p className="text-xs text-muted-foreground">{t.description}</p>
                 </button>
               );
             })}

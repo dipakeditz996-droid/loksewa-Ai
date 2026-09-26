@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Plus, Search, Filter, Download, Upload, MoreHorizontal, 
-  Eye, Edit, Trash2, Copy, Power, BookOpen
+  Eye, Edit, Trash2, Copy, Power, BookOpen, ArrowUp, ArrowDown, Unlink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,6 +174,33 @@ export default function SubjectsPage() {
     }
   };
 
+  const moveSubject = async (index: number, direction: "up" | "down") => {
+    const newList = [...subjects];
+    const swapIdx = direction === "up" ? index - 1 : index + 1;
+    if (swapIdx < 0 || swapIdx >= newList.length) return;
+    [newList[index], newList[swapIdx]] = [newList[swapIdx]!, newList[index]!];
+    setSubjects(newList);
+    try {
+      await adminAcademicApi.reorderSubjects(
+        newList.map((s, i) => ({ id: s.id, order: i + 1 }))
+      );
+    } catch {
+      toast.error("Failed to save order.");
+      setSubjects(subjects); // revert
+    }
+  };
+
+  const handleDisconnect = async (subject: ApiSubject) => {
+    if (!confirm(`Disconnect "${subject.name}" from its syllabus paper? It will become a standalone subject.`)) return;
+    try {
+      await adminAcademicApi.updateSubject(subject.id, { paper: null as any });
+      setSubjects(prev => prev.map(s => s.id === subject.id ? { ...s, paper_name: 'Standalone' } : s));
+      toast.success(`"${subject.name}" disconnected from syllabus.`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to disconnect subject.");
+    }
+  };
+
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading subjects...</div>;
 
   return (
@@ -246,6 +273,7 @@ export default function SubjectsPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50 hover:bg-slate-50">
+                <TableHead className="w-12 text-center">Order</TableHead>
                 <TableHead className="w-12 text-center">
                   <Checkbox 
                     checked={selected.length === filteredSubjects.length && filteredSubjects.length > 0}
@@ -265,7 +293,7 @@ export default function SubjectsPage() {
             <TableBody>
               {filteredSubjects.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="h-32 text-center text-slate-500">
+                  <TableCell colSpan={10} className="h-32 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center">
                       <BookOpen className="w-8 h-8 text-slate-300 mb-2" />
                       <p>No subjects found.</p>
@@ -274,8 +302,28 @@ export default function SubjectsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredSubjects.map((subject) => (
+                filteredSubjects.map((subject, index) => (
                   <TableRow key={subject.id} className="group">
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button
+                          disabled={index === 0}
+                          onClick={() => moveSubject(index, "up")}
+                          className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          disabled={index === filteredSubjects.length - 1}
+                          onClick={() => moveSubject(index, "down")}
+                          className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center">
                       <Checkbox 
                         checked={selected.includes(subject.id)}
@@ -342,6 +390,13 @@ export default function SubjectsPage() {
                             <Link href={`/admin-dashboard/academic/chapters?subject=${subject.id}`} className="cursor-pointer">
                               <BookOpen className="mr-2 h-4 w-4" /> Manage Chapters
                             </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-amber-600 focus:text-amber-600 focus:bg-amber-50"
+                            onClick={() => handleDisconnect(subject)}
+                          >
+                            <Unlink className="mr-2 h-4 w-4" /> Disconnect from Syllabus
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => handleToggleActive(subject)}>

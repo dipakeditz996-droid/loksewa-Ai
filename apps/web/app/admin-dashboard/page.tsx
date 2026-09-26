@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
@@ -51,6 +51,18 @@ const PERIODS = [
 ] as const;
 
 type Period = (typeof PERIODS)[number]["value"];
+
+// ===== Module-level constants (no state deps, never need re-creation) =====
+// Defined outside the component so they are created once per module load,
+// not on every render of AdminDashboardOverview.
+const QUICK_ACTIONS = [
+  { label: "Add Question", icon: Plus, href: "/admin-dashboard/academic/questions", color: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200" },
+  { label: "Create Exam", icon: FileText, href: "/admin-dashboard/academic/exams", color: "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200" },
+  { label: "Add Material", icon: BookMarked, href: "/admin-dashboard/study-materials", color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200" },
+  { label: "Manage Users", icon: Users, href: "/admin-dashboard/users", color: "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200" },
+  { label: "Evaluations", icon: ClipboardList, href: "/admin-dashboard/evaluations", color: "bg-red-50 text-red-700 hover:bg-red-100 border-red-200" },
+  { label: "AI Tutor", icon: Brain, href: "/admin-dashboard/ai-tutor", color: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200" },
+] as const;
 
 // ===== Helpers =====
 function formatCurrency(n: number) {
@@ -232,20 +244,14 @@ export default function AdminDashboardOverview() {
   };
 
   // ===== Quick Actions =====
-  const quickActions = [
-    { label: "Add Question", icon: Plus, href: "/admin-dashboard/academic/questions", color: "bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200" },
-    { label: "Create Exam", icon: FileText, href: "/admin-dashboard/academic/exams", color: "bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200" },
-    { label: "Add Material", icon: BookMarked, href: "/admin-dashboard/study-materials", color: "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200" },
-    { label: "Manage Users", icon: Users, href: "/admin-dashboard/users", color: "bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200" },
-    { label: "Evaluations", icon: ClipboardList, href: "/admin-dashboard/evaluations", color: "bg-red-50 text-red-700 hover:bg-red-100 border-red-200" },
-    { label: "AI Tutor", icon: Brain, href: "/admin-dashboard/ai-tutor", color: "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200" },
-  ];
+  // QUICK_ACTIONS is a module-level constant — no state dependency.
 
-  // Chart data formatted
-  const formattedChart = chartData.map((d) => ({
-    ...d,
-    label: formatDate(d.date, days),
-  }));
+  // Chart data formatted — only recalculate when the underlying data or
+  // active period changes, not on every re-render.
+  const formattedChart = useMemo(
+    () => chartData.map((d) => ({ ...d, label: formatDate(d.date, days) })),
+    [chartData, days]
+  );
 
   return (
     <div className="p-5 md:p-6 space-y-6 max-w-[1600px]">
@@ -721,7 +727,7 @@ export default function AdminDashboardOverview() {
             <p className="text-[12px] text-slate-600 mt-0.5">Frequently used admin actions</p>
           </div>
           <div className="px-5 py-4 grid grid-cols-2 gap-2.5">
-            {quickActions.map((action) => (
+            {QUICK_ACTIONS.map((action) => (
               <Link
                 key={action.label}
                 href={action.href}

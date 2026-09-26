@@ -93,9 +93,9 @@ export default function CalendarPage() {
             const isToday = isSameDay(day, new Date());
             
             return (
-              <div key={day.toISOString()} className={`border-r border-b border-border/50 p-2 overflow-hidden hover:bg-muted transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-950/30/50' : ''}`}>
+              <div key={day.toISOString()} className={`border-r border-b border-border/50 p-2 overflow-hidden hover:bg-muted transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}>
                 <div className="flex justify-between items-start mb-2">
-                  <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-primary-foreground text-white' : 'text-foreground'}`}>
+                  <span className={`text-sm font-semibold w-7 h-7 flex items-center justify-center rounded-full ${isToday ? 'bg-primary text-primary-foreground font-bold' : 'text-foreground'}`}>
                     {day.getDate()}
                   </span>
                   {dayTasks.length > 0 && (
@@ -108,9 +108,9 @@ export default function CalendarPage() {
                 <div className="space-y-1 overflow-y-auto max-h-[70px] scrollbar-hide">
                   {dayTasks.map(t => (
                     <div key={t.id} className={`text-[10px] truncate px-1.5 py-1 rounded font-medium flex items-center gap-1 ${
-                      t.status === 'COMPLETED' ? 'bg-green-100 text-green-700 dark:text-green-300' :
-                      t.status === 'SKIPPED' ? 'bg-red-100 text-red-700 dark:text-red-300' :
-                      'bg-muted/80 text-foreground'
+                      t.status === 'COMPLETED' ? 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300' :
+                      t.status === 'SKIPPED' ? 'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300' :
+                      'bg-muted text-foreground'
                     }`}>
                       {t.status === 'COMPLETED' ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                       {t.title}

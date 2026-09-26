@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { apiClient } from "@/lib/api/client";
+import { ButtonSpinner } from "@/components/ui/loading-states";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AcademicTopicsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -15,6 +17,7 @@ export default function AcademicTopicsPage() {
   const [topics, setTopics] = useState<any[]>([]);
   const [chapters, setChapters] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [totalTopics, setTotalTopics] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -62,6 +65,7 @@ export default function AcademicTopicsPage() {
       alert("Please select a chapter first");
       return;
     }
+    setIsSubmitting(true);
     try {
       await apiClient("/admin/syllabus/topics/", {
         method: "POST",
@@ -84,6 +88,8 @@ export default function AcademicTopicsPage() {
     } catch (error) {
       console.error("Failed to create topic", error);
       alert("Failed to create topic");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -110,11 +116,15 @@ export default function AcademicTopicsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
           <p className="text-slate-600 text-sm font-medium mb-1">Total Topics</p>
-          <p className="text-2xl font-bold text-[#0B2545]">{totalTopics}</p>
+          <p className="text-2xl font-bold text-[#0B2545]">
+            {isLoading ? <Skeleton className="h-8 w-14 my-0.5" /> : totalTopics}
+          </p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
           <p className="text-slate-600 text-sm font-medium mb-1">Active</p>
-          <p className="text-2xl font-bold text-emerald-600">{activeTopics}</p>
+          <p className="text-2xl font-bold text-emerald-600">
+            {isLoading ? <Skeleton className="h-8 w-14 my-0.5" /> : activeTopics}
+          </p>
         </div>
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-slate-400">
           <p className="text-slate-600 text-sm font-medium mb-1">Selected Chapter</p>
@@ -156,11 +166,15 @@ export default function AcademicTopicsPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center bg-white">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
-                  </TableCell>
-                </TableRow>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="border-b border-slate-200">
+                    <TableCell><Skeleton className="h-4 w-36" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-16 rounded" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto rounded" /></TableCell>
+                  </TableRow>
+                ))
               ) : !selectedChapter ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-32 text-center text-slate-500 bg-white">
@@ -254,14 +268,17 @@ export default function AcademicTopicsPage() {
               <div className="flex gap-3 pt-4">
                 <Button
                   type="submit"
+                  disabled={isSubmitting || !createFormData.title.trim()}
+                  aria-busy={isSubmitting}
                   className="flex-1 bg-[#D4A72C] text-[#0B2545] hover:bg-[#C49B1F]"
                 >
-                  Create Topic
+                  {isSubmitting ? <ButtonSpinner text="Creating..." /> : "Create Topic"}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setShowCreateModal(false)}
+                  disabled={isSubmitting}
                   className="flex-1"
                 >
                   Cancel

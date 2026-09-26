@@ -36,6 +36,12 @@ class StudentExaminationAttemptTests(APITestCase):
             topic=self.topic
         )
 
+        from courses.models import Course, Enrollment
+        self.course = Course.objects.create(title='Test Course', exam=self.exam_level, status='published')
+        self.enrollment = Enrollment.objects.create(student=self.student, course=self.course, status='active')
+        self.examination.course = self.course
+        self.examination.save(update_fields=['course'])
+
     def test_list_submitted_attempts(self):
         self.client.force_authenticate(user=self.student)
         

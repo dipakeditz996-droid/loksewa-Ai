@@ -24,6 +24,7 @@ import { apiClient } from "@/lib/api/client";
 import { subscriptionsApi, SubscriptionPlan } from "@/lib/api/subscriptions";
 import { RetryImage } from "@/components/ui/retry-image";
 import Link from "next/link";
+import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
 export default function PlanCheckoutPage({ params }: { params: Promise<{ planId: string }> }) {
   const router = useRouter();
@@ -198,12 +199,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
   };
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[65vh] gap-3">
-        <Loader2 className="w-9 h-9 animate-spin text-[#D4A72C]" />
-        <p className="text-sm text-muted-foreground font-medium">Loading checkout details...</p>
-      </div>
-    );
+    return <PageSkeleton layout="detail" className="max-w-6xl mx-auto py-8" />;
   }
 
   if (!plan) {
@@ -695,12 +691,11 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
                 <Button
                   type="submit"
                   disabled={isSubmitting}
+                  aria-busy={isSubmitting}
                   className="w-full h-12 text-sm font-bold bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] rounded-xl shadow-lg flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" /> Submitting...
-                    </>
+                    <ButtonSpinner text="Submitting Payment for Verification..." />
                   ) : (
                     <>
                       <ShieldCheck className="w-4 h-4" /> Submit Payment for Verification

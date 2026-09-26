@@ -323,7 +323,7 @@ export default function CreateStudyMaterialPage() {
             <Button variant="outline" className="rounded-[9px] border-border" onClick={() => handleSubmit('draft')} disabled={loading}>
               Save Draft
             </Button>
-            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={() => handleSubmit('submit')} disabled={loading}>
+            <Button className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold" onClick={() => handleSubmit('submit')} disabled={loading}>
               {loading ? 'Saving...' : 'Submit for Review'}
             </Button>
           </div>

@@ -138,7 +138,7 @@ export function CreateTicketModal({
             <Button type="button" variant="outline" className="rounded-[9px] border-border" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">
+            <Button type="submit" disabled={isSubmitting} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Submit Request
             </Button>

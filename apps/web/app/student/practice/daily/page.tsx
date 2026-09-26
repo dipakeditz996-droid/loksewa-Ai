@@ -134,7 +134,7 @@ export default function DailyPracticePage() {
           <Button
             onClick={startSession}
             disabled={loading || starting}
-            className="w-full bg-[#0B2545] hover:bg-[#163E6B] text-white font-semibold"
+            className="w-full bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold"
           >
             {loading || starting ? (
               <>

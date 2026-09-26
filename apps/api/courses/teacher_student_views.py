@@ -49,10 +49,10 @@ class TeacherStudentViewSet(viewsets.GenericViewSet):
         qs = qs.annotate(
             enrolled_courses=Count('enrollments', filter=Q(enrollments__status='active'), distinct=True),
             completed_courses=Count('enrollments', filter=Q(enrollments__status='completed'), distinct=True),
-            average_score=Coalesce(Avg('examination_attempts__percentage', filter=Q(examination_attempts__status='submitted')), 0.0),
+            average_score=Coalesce(Avg('examination_attempts__percentage', filter=Q(examination_attempts__status__in=['submitted', 'evaluated'])), 0.0),
             last_active=Max('examination_attempts__started_at'),
             practice_accuracy=Coalesce(Avg('practice_sessions__accuracy'), 0.0),
-            mock_exam_performance=Coalesce(Avg('model_exam_attempts__score'), 0.0)
+            mock_exam_performance=Coalesce(Avg('examination_attempts__score', filter=Q(examination_attempts__status__in=['submitted', 'evaluated'])), 0.0)
         )
         
         now = timezone.now()

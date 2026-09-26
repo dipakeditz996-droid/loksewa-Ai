@@ -139,7 +139,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-9 w-9 rounded-full ml-1">
-              <Avatar className="h-9 w-9 border border-slate-200">
+              <Avatar className="h-9 w-9 border border-slate-200 dark:border-[hsl(var(--border))]">
                 <RetryImage src={user.avatar || "/images/profile.png"} alt={user.name} className="aspect-square h-full w-full object-cover" />
               </Avatar>
             </Button>

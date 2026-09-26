@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
+
 function StatusBadge({ status }: { status: ResultStatus }) {
   const config: Record<ResultStatus, { label: string; cls: string }> = {
     Published: { label: "Published", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -46,6 +48,7 @@ export default function ResultDetailPage() {
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustScore, setAdjustScore] = useState<string>("");
   const [isAdjusting, setIsAdjusting] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -60,6 +63,22 @@ export default function ResultDetailPage() {
       setLoading(false);
     }
   }, [resultId]);
+
+  const handleTogglePublish = async () => {
+    setIsPublishing(true);
+    try {
+      if (detail?.status === "Published") {
+        await evaluationService.unpublishResult(resultId);
+      } else {
+        await evaluationService.publishResult(resultId);
+      }
+      await fetchDetail();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   useEffect(() => {
     if (resultId) fetchDetail();
@@ -119,17 +138,29 @@ export default function ResultDetailPage() {
           </button>
           {detail.status === "Published" ? (
             <button 
-              onClick={async () => { await evaluationService.unpublishResult(resultId); fetchDetail(); }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 shadow-sm transition-colors"
+              onClick={handleTogglePublish}
+              disabled={isPublishing}
+              aria-busy={isPublishing}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 disabled:opacity-50 shadow-sm transition-colors"
             >
-              Unpublish Result
+              {isPublishing ? (
+                <ButtonSpinner text="Unpublishing..." />
+              ) : (
+                "Unpublish Result"
+              )}
             </button>
           ) : (
             <button 
-              onClick={async () => { await evaluationService.publishResult(resultId); fetchDetail(); }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 shadow-sm transition-colors"
+              onClick={handleTogglePublish}
+              disabled={isPublishing}
+              aria-busy={isPublishing}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-700 rounded-lg hover:bg-blue-700 disabled:opacity-50 shadow-sm transition-colors"
             >
-              Publish Result
+              {isPublishing ? (
+                <ButtonSpinner text="Publishing..." />
+              ) : (
+                "Publish Result"
+              )}
             </button>
           )}
         </div>
@@ -356,9 +387,10 @@ export default function ResultDetailPage() {
               <button 
                 onClick={handleAdjustScore}
                 disabled={!adjustReason || !adjustScore || isAdjusting}
-                className="w-full px-4 py-2 bg-amber-100 text-amber-800 font-bold rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors text-sm"
+                aria-busy={isAdjusting}
+                className="w-full px-4 py-2 bg-amber-100 text-amber-800 font-bold rounded-lg hover:bg-amber-200 disabled:opacity-50 transition-colors text-sm flex items-center justify-center gap-2"
               >
-                {isAdjusting ? 'Saving...' : 'Save Adjustment'}
+                {isAdjusting ? <ButtonSpinner text="Saving Adjustment..." /> : "Save Adjustment"}
               </button>
             </div>
           </div>

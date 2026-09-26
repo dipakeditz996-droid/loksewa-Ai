@@ -34,6 +34,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import toast from "react-hot-toast";
 import {
   subscriptionsApi,
@@ -79,6 +80,7 @@ export default function AdminPackagesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<SubscriptionPlanInput>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
 
   // Hierarchy filter & search state inside the modal
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -307,12 +309,15 @@ export default function AdminPackagesPage() {
 
   const togglePublish = async (plan: SubscriptionPlan) => {
     const nextStatus = plan.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    setTogglingPlanId(plan.id);
     try {
       await subscriptionsApi.adminUpdatePlan(plan.id, { status: nextStatus });
       toast.success(nextStatus === "ACTIVE" ? "Package published." : "Package unpublished.");
       load();
     } catch {
       toast.error("Failed to update package status.");
+    } finally {
+      setTogglingPlanId(null);
     }
   };
 
@@ -338,8 +343,53 @@ export default function AdminPackagesPage() {
 
       {/* Package List */}
       {loading ? (
-        <div className="flex items-center justify-center py-24">
-          <Loader2 className="w-8 h-8 animate-spin text-[#0B2545]" />
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-left text-slate-600 font-semibold">
+                  <th className="px-5 py-3.5">Package &amp; Preparation</th>
+                  <th className="px-5 py-3.5">Price</th>
+                  <th className="px-5 py-3.5">Duration &amp; Type</th>
+                  <th className="px-5 py-3.5">Included Features</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="hover:bg-slate-50/60">
+                    <td className="px-5 py-4 min-w-[240px]">
+                      <Skeleton className="h-4 w-36 mb-2" />
+                      <Skeleton className="h-3 w-52" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <Skeleton className="h-4 w-20" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <Skeleton className="h-4 w-24 mb-1" />
+                      <Skeleton className="h-3 w-16" />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex gap-1">
+                        <Skeleton className="h-5 w-16 rounded" />
+                        <Skeleton className="h-5 w-16 rounded" />
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Skeleton className="h-8 w-24 rounded" />
+                        <Skeleton className="h-8 w-16 rounded" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : plans.length === 0 ? (
         <div className="text-center py-20 border border-dashed border-slate-200 rounded-xl bg-white">
@@ -492,9 +542,16 @@ export default function AdminPackagesPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => togglePublish(plan)}
+                          disabled={togglingPlanId === plan.id}
+                          aria-busy={togglingPlanId === plan.id}
                           className="gap-1.5 text-xs h-8"
                         >
-                          {plan.status === "ACTIVE" ? (
+                          {togglingPlanId === plan.id ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              {plan.status === "ACTIVE" ? "Unpublishing..." : "Publishing..."}
+                            </>
+                          ) : plan.status === "ACTIVE" ? (
                             <>
                               <EyeOff className="w-3.5 h-3.5" /> Unpublish
                             </>
@@ -525,7 +582,7 @@ export default function AdminPackagesPage() {
       {/* Create / Edit Package Modal */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent
-          className="max-w-3xl w-full max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white shadow-2xl rounded-xl"
+          className="admin-light-scope max-w-3xl w-full max-h-[92vh] flex flex-col p-0 overflow-hidden bg-white text-slate-900 shadow-2xl rounded-xl border border-slate-200"
         >
           {/* Header */}
           <DialogHeader className="px-6 py-4 border-b border-slate-200 bg-slate-50/70 shrink-0">
@@ -557,7 +614,7 @@ export default function AdminPackagesPage() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. PSC 5th Level Civil Engineering — 3 Months"
-                  className="font-medium"
+                  className="font-medium bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                 />
               </div>
 
@@ -570,6 +627,7 @@ export default function AdminPackagesPage() {
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder="Comprehensive preparation package including all syllabus notes, practice sets, and mock exams."
                   rows={2}
+                  className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                 />
               </div>
 
@@ -583,6 +641,7 @@ export default function AdminPackagesPage() {
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
                     placeholder="e.g. 1999"
+                    className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -596,6 +655,7 @@ export default function AdminPackagesPage() {
                       setForm({ ...form, original_price: e.target.value || null })
                     }
                     placeholder="e.g. 2999"
+                    className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                   />
                 </div>
               </div>
@@ -612,6 +672,7 @@ export default function AdminPackagesPage() {
                     onChange={(e) =>
                       setForm({ ...form, duration: parseInt(e.target.value) || 0 })
                     }
+                    className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -627,14 +688,14 @@ export default function AdminPackagesPage() {
                       })
                     }
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
+                    <SelectTrigger className="w-full bg-white text-slate-900 border-slate-300 focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]">
+                      <SelectValue placeholder="Select duration unit" className="text-slate-900" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DAYS">Days</SelectItem>
-                      <SelectItem value="WEEKS">Weeks</SelectItem>
-                      <SelectItem value="MONTHS">Months</SelectItem>
-                      <SelectItem value="YEAR">Year</SelectItem>
+                    <SelectContent className="bg-white text-slate-900 border-slate-200 shadow-xl">
+                      <SelectItem value="DAYS" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Days</SelectItem>
+                      <SelectItem value="WEEKS" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Weeks</SelectItem>
+                      <SelectItem value="MONTHS" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Months</SelectItem>
+                      <SelectItem value="YEAR" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Year</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -651,15 +712,15 @@ export default function AdminPackagesPage() {
                       setForm({ ...form, badge: v as SubscriptionPlanInput["badge"] })
                     }
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
+                    <SelectTrigger className="w-full bg-white text-slate-900 border-slate-300 focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]">
+                      <SelectValue placeholder="Select badge" className="text-slate-900" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NONE">None</SelectItem>
-                      <SelectItem value="POPULAR">Popular</SelectItem>
-                      <SelectItem value="BEST_VALUE">Best Value</SelectItem>
-                      <SelectItem value="RECOMMENDED">Recommended</SelectItem>
-                      <SelectItem value="LIMITED_OFFER">Limited Offer</SelectItem>
+                    <SelectContent className="bg-white text-slate-900 border-slate-200 shadow-xl">
+                      <SelectItem value="NONE" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">None</SelectItem>
+                      <SelectItem value="POPULAR" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Popular</SelectItem>
+                      <SelectItem value="BEST_VALUE" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Best Value</SelectItem>
+                      <SelectItem value="RECOMMENDED" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Recommended</SelectItem>
+                      <SelectItem value="LIMITED_OFFER" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">Limited Offer</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -677,6 +738,7 @@ export default function AdminPackagesPage() {
                         display_order: parseInt(e.target.value) || 0,
                       })
                     }
+                    className="bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                   />
                 </div>
               </div>
@@ -708,20 +770,20 @@ export default function AdminPackagesPage() {
                       });
                     }}
                   >
-                    <SelectTrigger className="w-full font-medium">
+                    <SelectTrigger className="w-full font-medium bg-white text-slate-900 border-slate-300 focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="SINGLE">
+                    <SelectContent className="bg-white text-slate-900 border-slate-200 shadow-xl">
+                      <SelectItem value="SINGLE" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">
                         Single Preparation (Exact Match)
                       </SelectItem>
-                      <SelectItem value="MULTI">
+                      <SelectItem value="MULTI" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">
                         Multi Preparation (Student Selects N)
                       </SelectItem>
-                      <SelectItem value="BUNDLE">
+                      <SelectItem value="BUNDLE" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">
                         Bundle (All Selected Included)
                       </SelectItem>
-                      <SelectItem value="ALL_ACCESS">
+                      <SelectItem value="ALL_ACCESS" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">
                         All Access (Full Platform)
                       </SelectItem>
                     </SelectContent>
@@ -744,7 +806,7 @@ export default function AdminPackagesPage() {
                           allowed_preparation_count: parseInt(e.target.value) || 1,
                         })
                       }
-                      className="font-medium"
+                      className="font-medium bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                     />
                     <p className="text-[11px] text-slate-400">
                       Number of preparations the student can activate from the eligible pool.
@@ -818,13 +880,13 @@ export default function AdminPackagesPage() {
                           setSelectedLevel("ALL");
                         }}
                       >
-                        <SelectTrigger className="h-9 text-xs bg-white border-slate-200">
-                          <SelectValue placeholder="All Categories" />
+                        <SelectTrigger className="h-9 text-xs bg-white text-slate-900 border-slate-300 focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]">
+                          <SelectValue placeholder="All Categories" className="text-slate-900" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">All Categories</SelectItem>
+                        <SelectContent className="bg-white text-slate-900 border-slate-200 shadow-xl">
+                          <SelectItem value="ALL" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">All Categories</SelectItem>
                           {availableCategories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
+                            <SelectItem key={cat} value={cat} className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">
                               {cat}
                             </SelectItem>
                           ))}
@@ -838,13 +900,13 @@ export default function AdminPackagesPage() {
                         value={selectedLevel}
                         onValueChange={(val) => setSelectedLevel(val)}
                       >
-                        <SelectTrigger className="h-9 text-xs bg-white border-slate-200">
-                          <SelectValue placeholder="All Levels" />
+                        <SelectTrigger className="h-9 text-xs bg-white text-slate-900 border-slate-300 focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]">
+                          <SelectValue placeholder="All Levels" className="text-slate-900" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ALL">All Levels</SelectItem>
+                        <SelectContent className="bg-white text-slate-900 border-slate-200 shadow-xl">
+                          <SelectItem value="ALL" className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">All Levels</SelectItem>
                           {availableLevels.map((lvl) => (
-                            <SelectItem key={lvl} value={lvl}>
+                            <SelectItem key={lvl} value={lvl} className="text-slate-900 focus:bg-slate-100 focus:text-slate-900 cursor-pointer">
                               {lvl}
                             </SelectItem>
                           ))}
@@ -859,7 +921,7 @@ export default function AdminPackagesPage() {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search preparation..."
-                        className="h-9 pl-8 text-xs bg-white border-slate-200"
+                        className="h-9 pl-8 text-xs bg-white text-slate-900 border-slate-300 placeholder:text-slate-400 focus:bg-white focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
                       />
                       {searchQuery && (
                         <button
@@ -1072,7 +1134,7 @@ export default function AdminPackagesPage() {
               type="button"
               variant="outline"
               onClick={() => setDialogOpen(false)}
-              className="text-xs"
+              className="text-xs bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 hover:text-slate-900 font-medium"
             >
               Cancel
             </Button>
@@ -1080,7 +1142,7 @@ export default function AdminPackagesPage() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-xs px-5 shadow-sm"
+              className="bg-[#0B2545] hover:bg-[#163E6C] text-white text-xs px-5 shadow-sm font-semibold"
             >
               {saving ? (
                 <>

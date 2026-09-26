@@ -1,0 +1,101 @@
+[
+  {
+    "name": "Auth Current User",
+    "path": "/api/auth/me/",
+    "status": 200,
+    "payload_bytes": 128,
+    "total_ms": 0.85,
+    "db_ms": 0,
+    "python_ms": 0.85,
+    "query_count": 0,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Student Context",
+    "path": "/api/student/context/",
+    "status": 200,
+    "payload_bytes": 289,
+    "total_ms": 1117.39,
+    "db_ms": 1080.0,
+    "python_ms": 37.39,
+    "query_count": 7,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Student Dashboard",
+    "path": "/api/dashboard/",
+    "status": 200,
+    "payload_bytes": 590,
+    "total_ms": 1287.1,
+    "db_ms": 1248.0,
+    "python_ms": 39.1,
+    "query_count": 8,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Notes & Syllabus Portal",
+    "path": "/api/notes/student/portal/",
+    "status": 200,
+    "payload_bytes": 328,
+    "total_ms": 460.81,
+    "db_ms": 454.0,
+    "python_ms": 6.81,
+    "query_count": 3,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Student Examinations List",
+    "path": "/api/exams/examinations/",
+    "status": 404,
+    "payload_bytes": 23,
+    "total_ms": 313.46,
+    "db_ms": 304.0,
+    "python_ms": 9.46,
+    "query_count": 2,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Admin Dashboard Stats",
+    "path": "/api/admin/dashboard/stats/",
+    "status": 200,
+    "payload_bytes": 1283,
+    "total_ms": 2654.08,
+    "db_ms": 2626.0,
+    "python_ms": 28.08,
+    "query_count": 17,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Teacher Dashboard",
+    "path": "/api/teacher/dashboard/",
+    "status": 200,
+    "payload_bytes": 941,
+    "total_ms": 2153.87,
+    "db_ms": 2124.0,
+    "python_ms": 29.87,
+    "query_count": 13,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Teacher Students List",
+    "path": "/api/teacher/students/",
+    "status": 200,
+    "payload_bytes": 999,
+    "total_ms": 185.16,
+    "db_ms": 166.0,
+    "python_ms": 19.16,
+    "query_count": 1,
+    "duplicate_queries": 0
+  },
+  {
+    "name": "Games Weekly Quiz",
+    "path": "/api/games/weekly-quiz/current/",
+    "status": 200,
+    "payload_bytes": 761,
+    "total_ms": 1337.56,
+    "db_ms": 1320.0,
+    "python_ms": 17.56,
+    "query_count": 7,
+    "duplicate_queries": 1
+  }
+]

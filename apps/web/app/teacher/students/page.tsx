@@ -21,11 +21,13 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader, StatCard } from "@/components/teacher/portal";
+import { TableSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
 export default function TeacherStudentsPage() {
   const [students, setStudents] = useState<TeacherStudentList[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [courseFilter, setCourseFilter] = useState("all");
@@ -69,10 +71,14 @@ export default function TeacherStudentsPage() {
   };
 
   const handleExport = async () => {
+    setIsExporting(true);
     try {
       await teacherStudentsApi.exportStudents();
+      toast.success("Students exported successfully");
     } catch (error: any) {
       toast.error(error.message || "Failed to export students");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -98,8 +104,20 @@ export default function TeacherStudentsPage() {
         title="Students"
         description="Monitor your students, track their progress, and understand their learning performance."
         action={
-          <Button variant="outline" onClick={handleExport} className="gap-2 rounded-[9px] border-border text-foreground">
-            <Download className="h-4 w-4" /> Export Students
+          <Button 
+            variant="outline" 
+            onClick={handleExport} 
+            disabled={isExporting}
+            aria-busy={isExporting}
+            className="gap-2 rounded-[9px] border-border text-foreground"
+          >
+            {isExporting ? (
+              <ButtonSpinner text="Exporting..." />
+            ) : (
+              <>
+                <Download className="h-4 w-4" /> Export Students
+              </>
+            )}
           </Button>
         }
       />
@@ -164,9 +182,8 @@ export default function TeacherStudentsPage() {
         {/* Table Area */}
         <div className="overflow-x-auto">
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
-              <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-[#0B2545] border-t-transparent"></div>
-              <p className="text-[13px]">Loading students...</p>
+            <div className="p-4">
+              <TableSkeleton rows={6} columns={5} />
             </div>
           ) : filteredStudents.length === 0 ? (
             <EmptyState
@@ -279,7 +296,7 @@ function EmptyState({ hasSearch, onClearSearch }: { hasSearch: boolean, onClearS
         }
       </p>
       {hasSearch && (
-        <Button onClick={onClearSearch} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Clear Filters</Button>
+        <Button onClick={onClearSearch} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Clear Filters</Button>
       )}
     </div>
   );

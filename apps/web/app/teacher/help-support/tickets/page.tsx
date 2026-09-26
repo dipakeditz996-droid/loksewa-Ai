@@ -54,7 +54,7 @@ export default function TeacherTicketsPage() {
           <h1 className="text-2xl font-bold text-primary">My Tickets</h1>
           <p className="text-sm text-muted-foreground mt-1">Track your support requests and replies from the admin team.</p>
         </div>
-        <Button onClick={() => setCreateModalOpen(true)} className="gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">
+        <Button onClick={() => setCreateModalOpen(true)} className="gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
           <Plus className="h-4 w-4" /> New Ticket
         </Button>
       </div>
@@ -72,7 +72,7 @@ export default function TeacherTicketsPage() {
           <p className="mx-auto mb-6 max-w-md text-[13px] text-muted-foreground">
             Report a problem or ask a question and the admin team will get back to you.
           </p>
-          <Button onClick={() => setCreateModalOpen(true)} className="gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">
+          <Button onClick={() => setCreateModalOpen(true)} className="gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
             <Plus className="h-4 w-4" /> New Ticket
           </Button>
         </div>

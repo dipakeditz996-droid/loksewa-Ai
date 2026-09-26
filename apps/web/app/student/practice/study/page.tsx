@@ -157,7 +157,7 @@ export default function TopicStudyPage() {
           <select
             value={exam}
             onChange={(e) => { setExam(e.target.value); setSubject(""); setTopic(""); }}
-            className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+            className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
             disabled={loadingExams}
           >
             <option value="">Select an exam</option>
@@ -170,7 +170,7 @@ export default function TopicStudyPage() {
           <select
             value={subject}
             onChange={(e) => { setSubject(e.target.value); setTopic(""); }}
-            className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+            className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
             disabled={!activeExam}
           >
             <option value="">Select a subject</option>
@@ -183,7 +183,7 @@ export default function TopicStudyPage() {
           <select
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+            className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
             disabled={!activeSubject}
           >
             <option value="">Select a topic</option>

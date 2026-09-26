@@ -168,6 +168,17 @@ def authorized_courses(user):
     return Course.objects.filter(id__in=enrolled_course_ids, status='published')
 
 
+def invalidate_student_course_context(user_id):
+    """Invalidate cached student course context for user_id."""
+    if not user_id:
+        return
+    from django.core.cache import cache
+    try:
+        cache.delete(f'student_course_ctx:{user_id}')
+    except Exception:
+        pass
+
+
 def get_student_course_context(user):
     """Canonical dictionary representation of the student's authorized course context:
     - active_course: dict or None
@@ -176,6 +187,24 @@ def get_student_course_context(user):
     - exam_schedule: next exam schedule dict for active_course.exam, or None
     - schedule_message: str or None
     """
+    if not user or not user.is_authenticated:
+        return {
+            "active_course": None,
+            "authorized_courses": [],
+            "subscription": None,
+            "exam_schedule": None,
+            "schedule_message": "Not authenticated",
+        }
+
+    from django.core.cache import cache
+    cache_key = f'student_course_ctx:{user.id}'
+    try:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        pass
+
     from core.views import _get_package_status
     from exams.models import ExamSchedule
     from exams.schedule_serializers import StudentExamScheduleSerializer
@@ -264,13 +293,18 @@ def get_student_course_context(user):
         else:
             schedule_message = "No active course yet."
 
-    return {
+    result = {
         "active_course": active_course_data,
         "authorized_courses": authorized_courses_data,
         "subscription": package_status,
         "exam_schedule": exam_schedule_data,
         "schedule_message": schedule_message,
     }
+    try:
+        cache.set(cache_key, result, 30)
+    except Exception:
+        pass
+    return result
 
 
 def get_course_exam_ids(course):

@@ -24,6 +24,14 @@ class CSVImport(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     # Syllabus placement and defaults are chosen in the UI, not in the CSV, and
     # apply to every row of the file.
+    subject = models.ForeignKey(
+        'exams.Subject', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='csv_imports',
+    )
+    chapter = models.ForeignKey(
+        'exams.Chapter', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='csv_imports',
+    )
     topic = models.ForeignKey(
         'exams.Topic', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='csv_imports',

@@ -96,7 +96,35 @@ export interface ApiClientOptions extends RequestInit {
   skipRedirect?: boolean;
 }
 
+const inFlightGetRequests = new Map<string, Promise<any>>();
+
 export async function apiClient<T>(
+  endpoint: string,
+  options: ApiClientOptions = {}
+): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  const isGet = (method === "GET" || method === "HEAD") && !options.body;
+
+  if (!isGet) {
+    return executeRequest<T>(endpoint, options);
+  }
+
+  const token = getAuthToken();
+  const dedupKey = `${endpoint}::${token || "anon"}`;
+
+  if (inFlightGetRequests.has(dedupKey)) {
+    return inFlightGetRequests.get(dedupKey)! as Promise<T>;
+  }
+
+  const promise = executeRequest<T>(endpoint, options).finally(() => {
+    inFlightGetRequests.delete(dedupKey);
+  });
+
+  inFlightGetRequests.set(dedupKey, promise);
+  return promise;
+}
+
+async function executeRequest<T>(
   endpoint: string,
   options: ApiClientOptions = {}
 ): Promise<T> {

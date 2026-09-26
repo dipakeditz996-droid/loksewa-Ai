@@ -409,7 +409,7 @@ class StudentSelectCourseView(APIView):
         except (ValueError, TypeError):
             return Response({'detail': 'Invalid course_id.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from courses.access import authorized_courses, get_student_course_context
+        from courses.access import authorized_courses, get_student_course_context, invalidate_student_course_context
 
         user = request.user
         auth_qs = authorized_courses(user)
@@ -431,5 +431,6 @@ class StudentSelectCourseView(APIView):
                     profile.target_category = course.exam.category
             profile.save(update_fields=['target_course', 'target_position', 'target_category'])
 
+        invalidate_student_course_context(user.id)
         data = get_student_course_context(user)
         return Response(data)

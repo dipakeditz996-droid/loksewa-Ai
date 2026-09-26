@@ -147,6 +147,7 @@ def finalize_attempt(attempt, auto=False):
     score = 0
     total_possible = examination.total_marks
 
+    answers_to_update = []
     for answer in answers:
         question = answer.question
         answer.is_correct = False
@@ -158,7 +159,10 @@ def finalize_attempt(attempt, auto=False):
                 score += question.marks
             elif examination.negative_marking:
                 score -= examination.negative_marking_value
-        answer.save()
+        answers_to_update.append(answer)
+
+    if answers_to_update:
+        StudentAnswer.objects.bulk_update(answers_to_update, ['is_correct', 'marks_awarded'])
 
     score = max(0, score)
     percentage = round((score / total_possible * 100), 2) if total_possible > 0 else 0
@@ -176,6 +180,12 @@ def finalize_attempt(attempt, auto=False):
         )
 
     attempt.save()
+
+    try:
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(attempt.student_id)
+    except Exception:
+        pass
 
     try:
         from gamification.services import record_study_activity

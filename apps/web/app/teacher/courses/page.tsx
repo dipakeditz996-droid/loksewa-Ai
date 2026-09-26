@@ -103,7 +103,7 @@ export default function TeacherCoursesPage() {
 
                 <div className="mt-5 flex items-center justify-end border-t border-border pt-4">
                   <Link href={`/teacher/courses/${course.id}`}>
-                    <Button size="sm" className="gap-1.5 rounded-lg bg-primary/10 text-primary shadow-none hover:bg-[#0B2545] hover:text-white">
+                    <Button size="sm" className="gap-1.5 rounded-lg bg-primary/10 text-primary shadow-none hover:bg-primary hover:text-primary-foreground">
                       Manage Course <ArrowRight className="h-3.5 w-3.5" />
                     </Button>
                   </Link>

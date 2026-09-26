@@ -4,6 +4,8 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { Plus, Search, ChevronRight, Edit, Trash2, Bookmark, CheckCircle2, XCircle, Loader2, AlertCircle } from "lucide-react";
 import { adminAcademicApi, ApiChapter, ApiTopic } from "@/lib/api/admin-academic-api";
+import { ButtonSpinner } from "@/components/ui/loading-states";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ChapterDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -18,6 +20,7 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
   const [editingTopic, setEditingTopic] = useState<ApiTopic | null>(null);
   const [formData, setFormData] = useState({ name: "", description: "", is_active: true });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingTopicId, setDeletingTopicId] = useState<number | null>(null);
 
   useEffect(() => {
     loadData();
@@ -79,18 +82,45 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this topic?")) {
       try {
+        setDeletingTopicId(id);
         await adminAcademicApi.deleteTopic(id);
-        loadData();
+        await loadData();
       } catch (error) {
         console.error("Failed to delete", error);
+      } finally {
+        setDeletingTopicId(null);
       }
     }
   };
 
   if (isLoading && !chapter) {
     return (
-      <div className="flex h-[400px] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6" role="status" aria-busy="true" aria-label="Loading chapter details">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-48" />
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <Skeleton className="h-14 w-full rounded-xl" />
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          <div className="border-b border-slate-200 bg-slate-50 p-4 flex gap-4">
+            <Skeleton className="h-4 flex-[3]" />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+          <div className="divide-y divide-slate-100 p-4 space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between py-2">
+                <div className="space-y-1.5 flex-[3]">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-3.5 w-64" />
+                </div>
+                <Skeleton className="h-6 w-16 rounded-md flex-1" />
+                <Skeleton className="h-8 w-16 rounded-lg" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -170,11 +200,23 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
-                <tr>
-                  <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
-                    Loading topics...
-                  </td>
-                </tr>
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i} className="border-b border-slate-100">
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-5 w-44 mb-1.5" />
+                      <Skeleton className="h-3.5 w-60" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-6 w-16 rounded-md" />
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Skeleton className="h-8 w-8 rounded-lg" />
+                        <Skeleton className="h-8 w-8 rounded-lg" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : filteredTopics.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
@@ -212,10 +254,16 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
                         </button>
                         <button
                           onClick={() => handleDelete(topic.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          disabled={deletingTopicId === topic.id}
+                          aria-busy={deletingTopicId === topic.id}
+                          className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                           title="Delete"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deletingTopicId === topic.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-red-600" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -290,9 +338,10 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
                 <button
                   type="submit"
                   disabled={isSubmitting || !formData.name.trim()}
+                  aria-busy={isSubmitting}
                   className="px-4 py-2 text-sm font-medium bg-[#0B2545] text-white hover:bg-[#163E6C] rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {isSubmitting ? "Saving..." : "Save Topic"}
+                  {isSubmitting ? <ButtonSpinner text="Saving..." /> : "Save Topic"}
                 </button>
               </div>
             </form>

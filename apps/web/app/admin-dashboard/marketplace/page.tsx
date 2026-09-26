@@ -3,12 +3,13 @@
 import React, { useEffect, useState } from "react";
 import {
   Package, ShoppingCart, CreditCard, DollarSign, TrendingUp,
-  BarChart3, PieChart as PieChartIcon,
+  BarChart3, PieChart as PieChartIcon, AlertCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import { marketplaceApi, MarketplaceOverview } from "@/lib/api/marketplace";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const METHOD_COLORS = ["#22c55e", "#a855f7", "#3b82f6", "#f59e0b", "#ef4444"];
 
@@ -17,27 +18,95 @@ export default function MarketplaceDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  const fetchStats = async () => {
+    try {
+      setLoading(true);
+      setError(false);
+      const data = await marketplaceApi.adminGetOverview();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to fetch marketplace stats:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data = await marketplaceApi.adminGetOverview();
-        setStats(data);
-      } catch (err) {
-        console.error("Failed to fetch marketplace stats:", err);
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchStats();
   }, []);
 
   if (loading) {
-    return <div className="p-6 text-center text-slate-500">Loading dashboard...</div>;
+    return (
+      <div className="space-y-6" role="status" aria-busy="true" aria-label="Loading marketplace dashboard">
+        {/* Overview Cards Skeleton */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-card p-5 rounded-xl border border-border shadow-sm flex flex-col justify-center space-y-3">
+              <div className="flex justify-between items-start">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+              </div>
+              <Skeleton className="h-7 w-32" />
+              <Skeleton className="h-3.5 w-28" />
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 space-y-6">
+            <div className="flex items-center gap-2">
+              <Skeleton className="w-5 h-5 rounded" />
+              <Skeleton className="h-5 w-44" />
+            </div>
+            <div className="h-56 flex items-end gap-3 pt-6 px-2">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <Skeleton
+                  key={i}
+                  className="flex-1 rounded-t"
+                  style={{ height: `${20 + ((i * 13) % 70)}%` }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-card rounded-xl shadow-sm border border-border p-6 space-y-6">
+            <div className="flex items-center gap-2">
+              <Skeleton className="w-5 h-5 rounded" />
+              <Skeleton className="h-5 w-48" />
+            </div>
+            <div className="space-y-5 pt-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-12" />
+                  </div>
+                  <Skeleton className="w-full h-2 rounded-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error || !stats) {
-    return <div className="p-6 text-center text-red-500">Failed to load marketplace statistics.</div>;
+    return (
+      <div className="p-8 text-center rounded-xl border border-dashed border-destructive/30 bg-destructive/5 my-6 space-y-3">
+        <AlertCircle className="w-8 h-8 text-destructive mx-auto" />
+        <h3 className="font-semibold text-foreground">Failed to load marketplace statistics</h3>
+        <p className="text-sm text-muted-foreground">An error occurred while fetching dashboard overview metrics.</p>
+        <button
+          onClick={fetchStats}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+        >
+          Try Again
+        </button>
+      </div>
+    );
   }
 
   return (

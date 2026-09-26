@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import toast from "react-hot-toast";
 import {
   adminStudyMaterialApi,
@@ -227,6 +228,19 @@ export function AdminContentManager() {
     () => activeLevel?.preparations.find((p) => p.id === selectedPrepId) || null,
     [activeLevel, selectedPrepId]
   );
+
+  const allPreparations = useMemo(() => {
+    return hierarchy.flatMap((c) =>
+      c.levels.flatMap((l) =>
+        l.preparations.map((p) => ({
+          id: p.id,
+          name: p.name,
+          categoryName: c.name,
+          levelName: l.name,
+        }))
+      )
+    );
+  }, [hierarchy]);
 
   // 2. Load Academic Tree for selected preparation
   const loadAcademicTree = useCallback(
@@ -457,6 +471,20 @@ export function AdminContentManager() {
     }
   };
 
+  // Toggle download permission on material
+  const handleToggleDownloadable = async (mat: StudyMaterialListItem) => {
+    const newValue = !mat.isDownloadable;
+    try {
+      await adminStudyMaterialApi.toggleDownloadable(mat.id, newValue);
+      toast.success(
+        newValue ? `"${mat.title}" — students can now download` : `"${mat.title}" — download disabled`
+      );
+      loadMaterials();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update download setting");
+    }
+  };
+
   // Delete note material
   const handleDeleteMaterial = async () => {
     if (!deleteConfirmMaterial) return;
@@ -600,7 +628,11 @@ export function AdminContentManager() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {hierarchy.map((cat) => {
+            {loadingHierarchy ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-28 rounded-xl" />
+              ))
+            ) : hierarchy.map((cat) => {
               const isSelected = selectedCategoryId === cat.id;
               return (
                 <button
@@ -802,6 +834,8 @@ export function AdminContentManager() {
               onDeleteTopic={handleDeleteTopic}
               onArchiveTopic={handleArchiveTopic}
               onAddNoteForNode={handleOpenUploadForNode}
+              onRefreshTree={() => loadAcademicTree(activePreparation.id)}
+              allPreparations={allPreparations}
             />
           </div>
 
@@ -842,6 +876,7 @@ export function AdminContentManager() {
               onReplacePdf={setShowReplaceModal}
               onEditMaterial={setShowEditModal}
               onTogglePublishMaterial={handleTogglePublish}
+              onToggleDownloadableMaterial={handleToggleDownloadable}
               onDeleteMaterial={setDeleteConfirmMaterial}
               onSelectNode={(node) => setSelectedAcademicNode(node)}
             />

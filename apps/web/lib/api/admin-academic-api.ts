@@ -154,6 +154,7 @@ export const adminAcademicApi = {
   createSubject: (data: Partial<ApiSubject>) => apiClient<ApiSubject>(`/admin/academic/subjects/`, { method: "POST", body: JSON.stringify(data) }),
   updateSubject: (id: number, data: Partial<ApiSubject>) => apiClient<ApiSubject>(`/admin/academic/subjects/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
   deleteSubject: (id: number, force?: boolean) => apiClient(`/admin/academic/subjects/${id}/${force ? '?force=true' : ''}`, { method: "DELETE" }),
+  reorderSubjects: (data: { id: number; order: number }[]) => apiClient(`/admin/academic/subjects/reorder/`, { method: "PATCH", body: JSON.stringify(data) }),
 
   // Chapters
   getChapters: (subjectId?: number) =>

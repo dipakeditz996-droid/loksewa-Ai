@@ -214,7 +214,7 @@ export default function StudentDetailPage() {
           <Button variant="outline" className="gap-2 rounded-[9px] border-border text-foreground" onClick={() => setIsNoteModalOpen(true)}>
             <FileText className="h-4 w-4" /> Add Note
           </Button>
-          <Button className="gap-2 rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={() => setIsMessageModalOpen(true)}>
+          <Button className="gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold" onClick={() => setIsMessageModalOpen(true)}>
             <MessageSquare className="h-4 w-4" /> Send Message
           </Button>
         </div>
@@ -365,7 +365,7 @@ export default function StudentDetailPage() {
                         />
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setEditingNoteId(null)}>Cancel</Button>
-                          <Button size="sm" className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={handleUpdateNote}>Save</Button>
+                          <Button size="sm" className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold" onClick={handleUpdateNote}>Save</Button>
                         </div>
                       </div>
                     ) : (
@@ -497,7 +497,7 @@ export default function StudentDetailPage() {
             />
             <div className="flex justify-end gap-3">
               <Button variant="outline" className="rounded-[9px] border-border" onClick={() => setIsNoteModalOpen(false)}>Cancel</Button>
-              <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white" onClick={handleAddNote}>Save Note</Button>
+              <Button className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold" onClick={handleAddNote}>Save Note</Button>
             </div>
           </div>
         </div>
@@ -529,7 +529,7 @@ export default function StudentDetailPage() {
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="outline" className="rounded-[9px] border-border" onClick={() => setIsMessageModalOpen(false)}>Cancel</Button>
-              <Button onClick={handleSendMessage} className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Send</Button>
+              <Button onClick={handleSendMessage} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Send</Button>
             </div>
           </div>
         </div>

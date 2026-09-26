@@ -126,7 +126,7 @@ export function AccountSection({ profile }: { profile: TeacherProfile }) {
             />
           </div>
 
-          <Button type="submit" disabled={isChanging || !passwordData.current_password || !passwordData.new_password} className="bg-[#0B2545] hover:bg-[#163E6C] text-white w-full sm:w-auto">
+          <Button type="submit" disabled={isChanging || !passwordData.current_password || !passwordData.new_password} className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold w-full sm:w-auto">
             {isChanging && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Update Password
           </Button>

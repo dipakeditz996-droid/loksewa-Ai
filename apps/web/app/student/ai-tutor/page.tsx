@@ -202,7 +202,7 @@ export default function AITutorPage() {
         
         <div className="p-4">
           <Button 
-            className="w-full bg-primary text-primary-foreground hover:bg-[#1a365d] text-white flex items-center gap-2"
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-bold flex items-center gap-2"
             onClick={() => {
               setActiveConversationId(null);
               setMessages([]);
@@ -279,11 +279,11 @@ export default function AITutorPage() {
                   return (
                     <Card 
                       key={mode.id} 
-                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-[#0B2545] border-transparent' : 'hover:border-border'}`}
+                      className={`cursor-pointer transition-all hover:shadow-md ${isSelected ? 'ring-2 ring-primary border-transparent' : 'hover:border-border'}`}
                       onClick={() => setSelectedMode(mode.id)}
                     >
                       <CardContent className="p-5 flex flex-col items-center text-center gap-3">
-                        <div className={`p-3 rounded-full ${isSelected ? 'bg-primary text-primary-foreground text-white' : 'bg-muted/80 text-muted-foreground'}`}>
+                        <div className={`p-3 rounded-full ${isSelected ? 'bg-primary text-primary-foreground font-bold' : 'bg-muted/80 text-muted-foreground'}`}>
                           <Icon className="w-5 h-5" />
                         </div>
                         <div>
@@ -304,19 +304,19 @@ export default function AITutorPage() {
                   
                   {msg.role === 'assistant' && (
                     <div className="w-8 h-8 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center mt-1 shadow-sm">
-                      <Bot className="w-4 h-4 text-white" />
+                      <Bot className="w-4 h-4 text-primary-foreground" />
                     </div>
                   )}
                   
                   <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-5 py-3.5 shadow-sm ${
                     msg.role === 'user' 
-                      ? 'bg-primary text-primary-foreground text-white rounded-tr-sm' 
+                      ? 'bg-primary text-primary-foreground font-medium rounded-tr-sm' 
                       : 'bg-card border border-border text-foreground rounded-tl-sm'
                   }`}>
                     {msg.role === 'user' ? (
                       <div className="whitespace-pre-wrap text-[15px] leading-relaxed">{msg.content}</div>
                     ) : (
-                      <div className="prose prose-sm md:prose-base max-w-none prose-slate prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100">
+                      <div className="prose prose-sm md:prose-base max-w-none prose-slate dark:prose-invert prose-p:leading-relaxed prose-pre:bg-slate-800 prose-pre:text-slate-100">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {msg.content}
                         </ReactMarkdown>
@@ -330,7 +330,7 @@ export default function AITutorPage() {
               {isLoading && (
                 <div className="flex gap-4 justify-start">
                   <div className="w-8 h-8 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center mt-1">
-                    <Bot className="w-4 h-4 text-white" />
+                    <Bot className="w-4 h-4 text-primary-foreground" />
                   </div>
                   <div className="bg-card border border-border rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 shadow-sm">
                     <div className="flex gap-1">
@@ -351,14 +351,14 @@ export default function AITutorPage() {
         <div className="p-4 md:p-6 bg-card border-t border-border shrink-0">
           <div className="max-w-4xl mx-auto">
             {error && (
-              <div className="mb-3 px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-lg text-sm flex items-center gap-2 border border-red-100">
+              <div className="mb-3 px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2 border border-red-200 dark:border-red-800/40">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 {error}
               </div>
             )}
             
             <div className="relative flex items-end gap-2">
-              <div className="relative flex-1 bg-card rounded-xl shadow-sm border border-border focus-within:border-[#0B2545] focus-within:ring-1 focus-within:ring-[#0B2545] transition-all overflow-hidden">
+              <div className="relative flex-1 bg-card rounded-xl shadow-sm border border-border focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all overflow-hidden">
                 {!activeConversationId && (
                   <div className="absolute top-0 left-0 right-0 h-8 bg-muted border-b border-border flex items-center px-3 text-xs font-medium text-muted-foreground">
                     <ActiveModeIcon mode={activeModeDetails.icon} />
@@ -386,7 +386,7 @@ export default function AITutorPage() {
                 disabled={!inputValue.trim() || isLoading}
                 className={`h-12 w-12 rounded-xl shrink-0 p-0 transition-all ${
                   inputValue.trim() && !isLoading 
-                    ? 'bg-primary text-primary-foreground hover:bg-[#1a365d] text-white shadow-md' 
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/90 font-bold shadow-md' 
                     : 'bg-muted/80 text-muted-foreground'
                 }`}
               >

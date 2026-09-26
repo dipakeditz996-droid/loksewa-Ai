@@ -125,6 +125,46 @@ const SIDEBAR_NAV: NavSection[] = [
   },
 ];
 
+// SidebarNavItem is defined at module level — outside AdminSidebar — so
+// React never sees a new component type on sidebar re-renders (collapse
+// toggle, pathname change, mobile open), which would force unmount+remount
+// of all 30 nav items on every interaction.
+function SidebarNavItem({
+  item,
+  active,
+  collapsed,
+  onMobileClose,
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+  onMobileClose: () => void;
+}) {
+  return (
+    <Link
+      href={item.href}
+      onClick={onMobileClose}
+      title={collapsed ? item.title : undefined}
+      className={cn(
+        "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13.5px] font-medium transition-all duration-150",
+        active
+          ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#D4A72C]"
+          : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
+        collapsed && "justify-center px-2"
+      )}
+    >
+      <item.icon
+        className={cn("shrink-0 h-[18px] w-[18px]", active ? "text-[#D4A72C]" : "text-slate-400")}
+        strokeWidth={active ? 2 : 1.5}
+      />
+      {!collapsed && <span className="truncate">{item.title}</span>}
+      {!collapsed && active && (
+        <ChevronRight className="ml-auto h-3.5 w-3.5 text-slate-400" />
+      )}
+    </Link>
+  );
+}
+
 // ===== Sidebar Component =====
 function AdminSidebar({
   collapsed,
@@ -183,32 +223,6 @@ function AdminSidebar({
     return bestItem;
   }, [pathname, searchParams]);
 
-  const NavItem = ({ item }: { item: NavItem }) => {
-    const active = activeItem?.href === item.href;
-    return (
-      <Link
-        href={item.href}
-        onClick={() => setMobileOpen(false)}
-        title={collapsed ? item.title : undefined}
-        className={cn(
-          "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13.5px] font-medium transition-all duration-150",
-          active
-            ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#D4A72C]"
-            : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
-          collapsed && "justify-center px-2"
-        )}
-      >
-        <item.icon
-          className={cn("shrink-0 h-[18px] w-[18px]", active ? "text-[#D4A72C]" : "text-slate-400")}
-          strokeWidth={active ? 2 : 1.5}
-        />
-        {!collapsed && <span className="truncate">{item.title}</span>}
-        {!collapsed && active && (
-          <ChevronRight className="ml-auto h-3.5 w-3.5 text-slate-400" />
-        )}
-      </Link>
-    );
-  };
 
   const sidebarContent = (
     <>
@@ -266,7 +280,13 @@ function AdminSidebar({
               {collapsed && idx > 0 && <div className="my-2 border-t border-white/10" />}
               <nav className="space-y-0.5">
                 {section.items.map((item) => (
-                  <NavItem key={item.href} item={item} />
+                  <SidebarNavItem
+                    key={item.href}
+                    item={item}
+                    active={activeItem?.href === item.href}
+                    collapsed={collapsed}
+                    onMobileClose={() => setMobileOpen(false)}
+                  />
                 ))}
               </nav>
             </div>
@@ -396,6 +416,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { user, loading } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const hadDark = html.classList.contains("dark");
+
+    html.classList.add("admin-light-scope");
+    body.classList.add("admin-light-scope");
+    if (hadDark) {
+      html.classList.remove("dark");
+    }
+
+    return () => {
+      html.classList.remove("admin-light-scope");
+      body.classList.remove("admin-light-scope");
+      if (hadDark) {
+        html.classList.add("dark");
+      }
+    };
+  }, []);
 
   if (loading) {
     return (

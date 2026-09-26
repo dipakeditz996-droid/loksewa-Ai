@@ -118,7 +118,7 @@ export default function PracticeSetupPage() {
                   <select 
                     value={exam} 
                     onChange={(e) => { setExam(e.target.value); setSubject("all"); setTopic("all"); }}
-                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
                   >
                     {exams.map(e => (
                       <option key={e.id} value={e.id}>{e.display_name ?? e.title}</option>
@@ -136,7 +136,7 @@ export default function PracticeSetupPage() {
                   <select 
                     value={subject} 
                     onChange={(e) => { setSubject(e.target.value); setTopic("all"); }}
-                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
                     disabled={!activeExam}
                   >
                     <option value="all">All Subjects</option>
@@ -154,7 +154,7 @@ export default function PracticeSetupPage() {
                   <select 
                     value={topic} 
                     onChange={(e) => setTopic(e.target.value)}
-                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
                     disabled={!activeSubject}
                   >
                     <option value="all">All Topics</option>
@@ -169,7 +169,7 @@ export default function PracticeSetupPage() {
                   <select 
                     value={difficulty} 
                     onChange={(e) => setDifficulty(e.target.value)}
-                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-primary dark:text-foreground outline-none focus:border-[#0B2545] focus:ring-1 focus:ring-[#0B2545]"
+                    className="w-full h-12 px-3 bg-muted border border-border rounded-[10px] text-[15px] font-medium text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary dark:focus:border-[#D4A72C] dark:focus:ring-[#D4A72C]"
                   >
                     <option value="all">All Levels</option>
                     <option value="easy">Easy</option>
@@ -193,7 +193,7 @@ export default function PracticeSetupPage() {
                         onChange={(e) => setQuestions(e.target.value)}
                         className="peer sr-only" 
                       />
-                      <div className="flex items-center justify-center h-11 px-5 rounded-[10px] border border-border bg-card text-[15px] font-semibold text-muted-foreground transition-all peer-checked:border-[#0B2545] peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-muted peer-checked:hover:bg-primary">
+                      <div className="flex items-center justify-center h-11 px-5 rounded-[10px] border border-border bg-card text-[15px] font-semibold text-muted-foreground transition-all peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground hover:bg-muted peer-checked:hover:bg-primary">
                         {num}
                       </div>
                     </label>
@@ -214,7 +214,7 @@ export default function PracticeSetupPage() {
                       onChange={(e) => setMode(e.target.value)}
                       className="peer sr-only" 
                     />
-                    <div className="flex flex-col p-4 rounded-[12px] border-2 border-border bg-card transition-all peer-checked:border-[#D4A72C] peer-checked:bg-amber-50/30 hover:bg-muted">
+                    <div className="flex flex-col p-4 rounded-[12px] border-2 border-border bg-card transition-all peer-checked:border-[#D4A72C] peer-checked:bg-[#D4A72C]/10 hover:bg-muted">
                       <span className="font-bold text-primary dark:text-foreground text-[15px] mb-1">Flexible Practice</span>
                       <span className="text-[13px] text-muted-foreground font-medium">Take your time, no strict countdown. Best for learning.</span>
                     </div>
@@ -229,7 +229,7 @@ export default function PracticeSetupPage() {
                       onChange={(e) => setMode(e.target.value)}
                       className="peer sr-only" 
                     />
-                    <div className="flex flex-col p-4 rounded-[12px] border-2 border-border bg-card transition-all peer-checked:border-[#0B2545] peer-checked:bg-muted hover:bg-muted">
+                    <div className="flex flex-col p-4 rounded-[12px] border-2 border-border bg-card transition-all peer-checked:border-primary peer-checked:bg-muted hover:bg-muted">
                       <span className="font-bold text-primary dark:text-foreground text-[15px] mb-1">Timed Practice</span>
                       <span className="text-[13px] text-muted-foreground font-medium">Simulate exam pressure with a strict countdown timer.</span>
                     </div>

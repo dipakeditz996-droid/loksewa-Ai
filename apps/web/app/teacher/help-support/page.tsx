@@ -81,7 +81,7 @@ export default function TeacherHelpSupportPage() {
           </div>
         </Link>
         <Link href="/teacher/help-support/tickets">
-          <div className="flex items-center gap-3 p-4 bg-[#0B2545]/5 border border-[#0B2545]/10 rounded-xl hover:bg-[#0B2545]/10 transition-colors cursor-pointer">
+          <div className="flex items-center gap-3 p-4 bg-primary/5 border border-primary/10 rounded-xl hover:bg-primary/10 transition-colors cursor-pointer">
             <TicketIcon className="h-5 w-5 text-primary" />
             <span className="text-sm font-semibold text-primary">My Tickets</span>
           </div>

@@ -16,8 +16,10 @@ import { toast } from "react-hot-toast";
 import { 
   ChevronRight, ChevronLeft, Save, Play, Send, 
   Search, BookOpen, Clock, AlertCircle, FileText, 
-  CheckCircle, GripVertical, Trash2
+  CheckCircle, GripVertical, Trash2, Loader2
 } from "lucide-react";
+import { ButtonSpinner } from "@/components/ui/loading-states";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface MockExamBuilderProps {
   initialData?: MockExam;
@@ -28,6 +30,13 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [navigatingNext, setNavigatingNext] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [generatingQuestions, setGeneratingQuestions] = useState(false);
+  const [addingQuestionId, setAddingQuestionId] = useState<number | null>(null);
+  const [removingQuestionId, setRemovingQuestionId] = useState<number | null>(null);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [examId, setExamId] = useState<number | null>(initialData?.id || null);
   const [formData, setFormData] = useState<Partial<MockExam>>(initialData || {
     title: "",
@@ -93,6 +102,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
 
   const loadQuestionBank = async () => {
     try {
+      setLoadingQuestions(true);
       const data = await getQuestions({
         page_size: 100,
         question_type: isSubjectiveExam ? "subjective" : "mcq",
@@ -100,6 +110,8 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
       setQuestions(data.results.filter((q: any) => q.status === "approved"));
     } catch (error) {
       toast.error("Failed to load question bank");
+    } finally {
+      setLoadingQuestions(false);
     }
   };
 
@@ -132,8 +144,13 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
 
   const handleNext = async () => {
     if (currentStep === 1 || currentStep === 3) {
-      const success = await saveExamDetails();
-      if (!success) return;
+      setNavigatingNext(true);
+      try {
+        const success = await saveExamDetails();
+        if (!success) return;
+      } finally {
+        setNavigatingNext(false);
+      }
     }
     setCurrentStep(prev => prev + 1);
   };
@@ -144,6 +161,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
       toast.error("Question already added");
       return;
     }
+    setAddingQuestionId(q.id);
     try {
       await teacherMockExamsApi.addQuestions(examId, [q.id], formData.marks_per_question || 1);
       const updatedExam = await teacherMockExamsApi.getById(examId);
@@ -152,11 +170,14 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
       toast.success("Question added");
     } catch (error) {
       toast.error("Failed to add question");
+    } finally {
+      setAddingQuestionId(null);
     }
   };
 
   const handleRemoveQuestion = async (questionId: number) => {
     if (!examId) return;
+    setRemovingQuestionId(questionId);
     try {
       await teacherMockExamsApi.removeQuestion(examId, questionId);
       const updatedExam = await teacherMockExamsApi.getById(examId);
@@ -165,6 +186,8 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
       toast.success("Question removed");
     } catch (error) {
       toast.error("Failed to remove question");
+    } finally {
+      setRemovingQuestionId(null);
     }
   };
 
@@ -204,7 +227,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
       toast.error("Please specify at least one question to generate");
       return;
     }
-    setLoading(true);
+    setGeneratingQuestions(true);
     try {
       const result = await teacherMockExamsApi.autoGenerate(examId, {
         subject_id: formData.subject,
@@ -218,13 +241,13 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
     } catch (error) {
       toast.error("Failed to auto-generate questions");
     } finally {
-      setLoading(false);
+      setGeneratingQuestions(false);
     }
   };
 
   const handleSubmit = async () => {
     if (!examId) return;
-    setLoading(true);
+    setSubmittingReview(true);
     try {
       await teacherMockExamsApi.submitReview(examId);
       toast.success("Exam submitted for review!");
@@ -232,7 +255,7 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Failed to submit exam");
     } finally {
-      setLoading(false);
+      setSubmittingReview(false);
     }
   };
 
@@ -416,8 +439,8 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
                 />
               </div>
             </div>
-            <Button onClick={handleAutoGenerate} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {loading ? "Generating..." : "Generate Questions"}
+            <Button onClick={handleAutoGenerate} disabled={generatingQuestions} aria-busy={generatingQuestions} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {generatingQuestions ? <ButtonSpinner text="Generating..." /> : "Generate Questions"}
             </Button>
           </CardContent>
         </Card>
@@ -441,24 +464,44 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {questions
-                .filter(q => q.text.toLowerCase().includes(searchQuery.toLowerCase()))
-                .map(q => (
-                <div key={q.id} className="p-3 border rounded-lg hover:border-blue-300 transition-colors group">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="text-sm text-slate-700 line-clamp-2" dangerouslySetInnerHTML={{__html: q.text}} />
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="shrink-0"
-                      onClick={() => handleAddQuestion(q)}
-                      disabled={selectedQuestions.some(sq => sq.question === q.id)}
-                    >
-                      Add
-                    </Button>
-                  </div>
+              {loadingQuestions ? (
+                <div className="space-y-3" role="status" aria-busy="true" aria-label="Loading question bank">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="p-3 border rounded-lg space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-4/5" />
+                      <div className="flex justify-end pt-1">
+                        <Skeleton className="h-7 w-16 rounded" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <>
+                  {questions
+                    .filter(q => q.text.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map(q => (
+                    <div key={q.id} className="p-3 border rounded-lg hover:border-blue-300 transition-colors group">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="text-sm text-slate-700 line-clamp-2" dangerouslySetInnerHTML={{__html: q.text}} />
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="shrink-0"
+                          onClick={() => handleAddQuestion(q)}
+                          disabled={addingQuestionId === q.id || selectedQuestions.some(sq => sq.question === q.id)}
+                          aria-busy={addingQuestionId === q.id}
+                        >
+                          {addingQuestionId === q.id ? <ButtonSpinner text="Adding..." /> : "Add"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {questions.filter(q => q.text.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-sm">No questions found matching your search.</div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
@@ -506,8 +549,14 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
                       variant="ghost" 
                       className="h-7 w-7 text-red-500 hover:bg-red-50"
                       onClick={() => handleRemoveQuestion(sq.question)}
+                      disabled={removingQuestionId === sq.question}
+                      aria-busy={removingQuestionId === sq.question}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {removingQuestionId === sq.question ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -794,8 +843,13 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           <Button variant="outline" className="w-full" onClick={() => router.push('/teacher/mock-exams')}>
             Save & Exit
           </Button>
-          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md gap-2" onClick={handleSubmit} disabled={loading || selectedQuestions.length === 0}>
-            {loading ? "Submitting..." : <><Send className="w-4 h-4"/> Submit for Review</>}
+          <Button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-md gap-2"
+            onClick={handleSubmit}
+            disabled={submittingReview || selectedQuestions.length === 0}
+            aria-busy={submittingReview}
+          >
+            {submittingReview ? <ButtonSpinner text="Submitting for Review..." /> : <><Send className="w-4 h-4"/> Submit for Review</>}
           </Button>
         </div>
       </div>
@@ -816,7 +870,21 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
         <div>
           <h1 className="text-xl font-bold text-slate-900">{mode === "create" ? "Create Mock Exam" : `Edit: ${initialData?.title}`}</h1>
         </div>
-        <Button variant="outline" onClick={saveExamDetails} disabled={loading || !examId}>Save Draft</Button>
+        <Button
+          variant="outline"
+          onClick={async () => {
+            setSavingDraft(true);
+            try {
+              await saveExamDetails();
+            } finally {
+              setSavingDraft(false);
+            }
+          }}
+          disabled={savingDraft || loading || !examId}
+          aria-busy={savingDraft}
+        >
+          {savingDraft ? <ButtonSpinner text="Saving..." /> : "Save Draft"}
+        </Button>
       </div>
 
       <div className="bg-slate-50 border-b px-8 py-4 flex justify-center">
@@ -851,8 +919,13 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           <ChevronLeft className="w-4 h-4" /> Back
         </Button>
         {currentStep < 5 && (
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={handleNext}>
-            Next Step <ChevronRight className="w-4 h-4" />
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            onClick={handleNext}
+            disabled={navigatingNext || loading}
+            aria-busy={navigatingNext}
+          >
+            {navigatingNext ? <ButtonSpinner text="Saving & Continuing..." /> : <>Next Step <ChevronRight className="w-4 h-4" /></>}
           </Button>
         )}
       </div>

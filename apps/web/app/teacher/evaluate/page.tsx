@@ -441,7 +441,7 @@ export default function TeacherEvaluationDashboard() {
                   <Button 
                     onClick={handleSaveEvaluation}
                     disabled={submitting || !marks || !feedback}
-                    className="w-full h-12 bg-[#0B2545] hover:bg-[#1a365d] text-white font-bold"
+                    className="w-full h-12 bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#1a365d] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold"
                   >
                     {submitting ? "Saving..." : <><Save className="w-4 h-4 mr-2" /> Complete Evaluation</>}
                   </Button>

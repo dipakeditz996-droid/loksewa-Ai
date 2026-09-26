@@ -38,11 +38,17 @@ export default function NotificationDetailPage({ params }: { params: Promise<{ i
   const [banner, setBanner] = useState("");
 
   useEffect(() => {
+    if (isNaN(notifId) || notifId <= 0) {
+      setIsLoading(false);
+      setNotif(null);
+      return;
+    }
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notifId]);
 
   const loadData = async () => {
+    if (isNaN(notifId) || notifId <= 0) return;
     try {
       setIsLoading(true);
       const data = await adminApi.getNotificationDetail(notifId);

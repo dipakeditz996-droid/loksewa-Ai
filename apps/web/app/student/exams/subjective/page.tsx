@@ -116,7 +116,7 @@ export default function SubjectiveExamsPage() {
                     <div className="flex items-center gap-6 text-sm text-muted-foreground p-3 bg-muted/30 rounded-lg border border-border/50">
                       <div>
                         <span className="block text-xs uppercase tracking-wider mb-1">Subject</span>
-                        <span className="font-semibold text-foreground truncate max-w-[120px] inline-block" title={exam.subject_name}>{exam.subject_name}</span>
+                        <span className="font-semibold text-foreground truncate max-w-[120px] inline-block" title={exam.subject_name || "General"}>{exam.subject_name || "General"}</span>
                       </div>
                       <div>
                         <span className="block text-xs uppercase tracking-wider mb-1">Questions</span>

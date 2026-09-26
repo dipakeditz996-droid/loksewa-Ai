@@ -194,32 +194,32 @@ function PracticeSessionContent() {
   const unansweredCount = questions.length - answeredCount;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 font-sans">
+    <div className="min-h-screen flex flex-col bg-background font-sans">
       
       {/* HEADER */}
-      <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-20">
+      <header className="bg-card border-b border-border h-16 flex items-center justify-between px-4 md:px-8 shrink-0 sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <div className="bg-[#0B2545] p-1.5 rounded-[8px]">
-            <BookOpen className="h-5 w-5 text-white" strokeWidth={2.5} />
+          <div className="bg-[#0B2545] dark:bg-primary/20 p-1.5 rounded-[8px]">
+            <BookOpen className="h-5 w-5 text-white dark:text-primary" strokeWidth={2.5} />
           </div>
-          <span className="font-[800] text-[18px] text-[#0B2545] tracking-tight hidden sm:block">
+          <span className="font-[800] text-[18px] text-foreground tracking-tight hidden sm:block">
             Loksewa<span className="text-[#D4A72C]">AI</span>
           </span>
-          <div className="h-6 w-px bg-slate-200 mx-2 hidden sm:block"></div>
+          <div className="h-6 w-px bg-border mx-2 hidden sm:block"></div>
           <div className="flex flex-col">
-            <span className="text-[12px] font-bold text-slate-400 uppercase tracking-wider leading-none">Practice</span>
-            <span className="text-[14px] font-bold text-[#0B2545]">{currentQuestion.subject}</span>
+            <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-wider leading-none">Practice</span>
+            <span className="text-[14px] font-bold text-foreground">{currentQuestion.subject}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="text-[14px] font-bold text-slate-500 hidden md:block">
+          <div className="text-[14px] font-bold text-muted-foreground hidden md:block">
             Question {currentIndex + 1} of {questions.length}
           </div>
           
           <div className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-[8px] border font-bold text-[15px]",
-            mode === "timed" ? (timeRemaining < 60 ? "bg-red-50 text-red-600 border-red-200" : "bg-slate-50 text-[#0B2545] border-slate-200") : "bg-slate-50 text-slate-500 border-slate-200"
+            mode === "timed" ? (timeRemaining < 60 ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20" : "bg-muted text-foreground border-border") : "bg-muted text-muted-foreground border-border"
           )}>
             <Clock className="w-4 h-4" />
             {mode === "timed" ? formatTime(timeRemaining) : formatTime(timeTaken)}
@@ -242,7 +242,7 @@ function PracticeSessionContent() {
           <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col">
             
             <div className="flex justify-between items-start mb-6">
-              <span className="inline-flex items-center justify-center bg-[#0B2545] text-white font-bold text-[14px] h-8 px-4 rounded-full">
+              <span className="inline-flex items-center justify-center bg-[#0B2545] dark:bg-[#D4A72C] text-white dark:text-[#0A1118] font-bold text-[14px] h-8 px-4 rounded-full">
                 Question {currentIndex + 1}
               </span>
               <div className="flex gap-2">
@@ -250,24 +250,24 @@ function PracticeSessionContent() {
                   variant="outline" 
                   size="sm" 
                   onClick={handleToggleBookmark}
-                  className={cn("h-8 gap-2 font-semibold transition-colors", bookmarked[currentQuestion.id] ? "bg-slate-100 text-[#0B2545] border-slate-300" : "text-slate-500")}
+                  className={cn("h-8 gap-2 font-semibold transition-colors border-border", bookmarked[currentQuestion.id] ? "bg-primary/10 text-primary border-primary/30" : "text-muted-foreground")}
                 >
-                  <Bookmark className={cn("w-4 h-4", bookmarked[currentQuestion.id] && "fill-[#0B2545]")} />
+                  <Bookmark className={cn("w-4 h-4", bookmarked[currentQuestion.id] && "fill-primary")} />
                   <span className="hidden sm:inline">{bookmarked[currentQuestion.id] ? "Saved" : "Save Question"}</span>
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={handleToggleReview}
-                  className={cn("h-8 gap-2 font-semibold transition-colors", markedForReview[currentQuestion.id] ? "bg-orange-50 text-orange-600 border-orange-200" : "text-slate-500")}
+                  className={cn("h-8 gap-2 font-semibold transition-colors border-border", markedForReview[currentQuestion.id] ? "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/30" : "text-muted-foreground")}
                 >
-                  <Flag className={cn("w-4 h-4", markedForReview[currentQuestion.id] && "fill-orange-600")} />
+                  <Flag className={cn("w-4 h-4", markedForReview[currentQuestion.id] && "fill-orange-600 dark:fill-orange-400")} />
                   <span className="hidden sm:inline">{markedForReview[currentQuestion.id] ? "Marked" : "Mark for Review"}</span>
                 </Button>
               </div>
             </div>
 
-            <h2 className="text-[20px] md:text-[24px] font-semibold text-[#0B2545] leading-snug mb-8">
+            <h2 className="text-[20px] md:text-[24px] font-semibold text-foreground leading-snug mb-8">
               {currentQuestion.questionText}
             </h2>
 
@@ -281,23 +281,23 @@ function PracticeSessionContent() {
                     key={idx}
                     onClick={() => handleSelectAnswer(idx)}
                     className={cn(
-                      "w-full flex items-center p-4 md:p-5 text-left rounded-[12px] border-2 transition-all group outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#0B2545]",
+                      "w-full flex items-center p-4 md:p-5 text-left rounded-[12px] border-2 transition-all group outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary",
                       isSelected 
-                        ? "border-[#0B2545] bg-[#0B2545]/5" 
-                        : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+                        ? "border-[#0B2545] dark:border-[#D4A72C] bg-[#0B2545]/5 dark:bg-[#D4A72C]/10" 
+                        : "border-border bg-card hover:border-primary/40 hover:bg-muted/50"
                     )}
                   >
                     <div className={cn(
                       "w-8 h-8 rounded-[8px] flex items-center justify-center font-bold text-[14px] shrink-0 mr-4 transition-colors",
                       isSelected
-                        ? "bg-[#0B2545] text-white"
-                        : "bg-slate-100 text-slate-500 group-hover:bg-slate-200"
+                        ? "bg-[#0B2545] dark:bg-[#D4A72C] text-white dark:text-[#0A1118]"
+                        : "bg-muted text-muted-foreground group-hover:bg-muted/80"
                     )}>
                       {letter}
                     </div>
                     <span className={cn(
                       "text-[16px] font-medium leading-relaxed",
-                      isSelected ? "text-[#0B2545]" : "text-slate-700"
+                      isSelected ? "text-foreground font-semibold" : "text-foreground/90"
                     )}>
                       {option}
                     </span>
@@ -307,13 +307,13 @@ function PracticeSessionContent() {
             </div>
 
             {/* NAVIGATION CONTROLS */}
-            <div className="mt-auto pt-6 border-t border-slate-200 flex items-center justify-between">
+            <div className="mt-auto pt-6 border-t border-border flex items-center justify-between">
               <Button
                 variant="outline"
                 size="lg"
                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
                 disabled={currentIndex === 0}
-                className="font-bold gap-2 text-slate-600"
+                className="font-bold gap-2 text-foreground border-border"
               >
                 <ChevronLeft className="w-5 h-5" /> Previous
               </Button>
@@ -327,8 +327,8 @@ function PracticeSessionContent() {
                   }
                 }}
                 className={cn(
-                  "font-bold gap-2 text-white",
-                  currentIndex === questions.length - 1 ? "bg-[#D4A72C] hover:bg-[#b58e23] text-[#0A1118]" : "bg-[#0B2545] hover:bg-[#163E6B]"
+                  "font-bold gap-2 text-white dark:text-[#0A1118]",
+                  currentIndex === questions.length - 1 ? "bg-[#D4A72C] hover:bg-[#b58e23] text-[#0A1118]" : "bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#bfa228]"
                 )}
               >
                 {currentIndex === questions.length - 1 ? "Finish" : "Next"} <ChevronRight className="w-5 h-5" />
@@ -339,8 +339,8 @@ function PracticeSessionContent() {
         </div>
 
         {/* RIGHT: QUESTION NAVIGATOR */}
-        <div className="w-full lg:w-80 bg-white border-l border-slate-200 p-6 flex flex-col shrink-0">
-          <h3 className="text-[14px] font-bold text-slate-400 uppercase tracking-wider mb-6">Question Navigator</h3>
+        <div className="w-full lg:w-80 bg-card border-l border-border p-6 flex flex-col shrink-0">
+          <h3 className="text-[14px] font-bold text-muted-foreground uppercase tracking-wider mb-6">Question Navigator</h3>
           
           <div className="grid grid-cols-5 gap-2 lg:gap-3 mb-8">
             {questions.map((q, idx) => {
@@ -354,29 +354,29 @@ function PracticeSessionContent() {
                   onClick={() => setCurrentIndex(idx)}
                   className={cn(
                     "relative w-full aspect-square rounded-[8px] text-[14px] font-bold flex items-center justify-center transition-all",
-                    isCurrent ? "ring-2 ring-offset-2 ring-[#0B2545]" : "",
-                    isAnswered && !isMarked ? "bg-[#0B2545] text-white" : 
+                    isCurrent ? "ring-2 ring-offset-2 ring-primary" : "",
+                    isAnswered && !isMarked ? "bg-[#0B2545] dark:bg-[#D4A72C] text-white dark:text-[#0A1118]" : 
                     isMarked ? "bg-orange-500 text-white" : 
-                    "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    "bg-muted text-muted-foreground hover:bg-muted/80"
                   )}
                 >
                   {idx + 1}
                   {isMarked && (
-                    <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-white"></div>
+                    <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-background border border-orange-500"></div>
                   )}
                 </button>
               );
             })}
           </div>
 
-          <div className="space-y-3 mt-auto lg:mt-0 p-4 bg-slate-50 rounded-[12px] border border-slate-100">
-            <div className="flex items-center gap-3 text-[13px] font-medium text-slate-600">
-              <div className="w-4 h-4 rounded-[4px] bg-[#0B2545]"></div> Answered ({answeredCount})
+          <div className="space-y-3 mt-auto lg:mt-0 p-4 bg-muted/40 rounded-[12px] border border-border">
+            <div className="flex items-center gap-3 text-[13px] font-medium text-foreground">
+              <div className="w-4 h-4 rounded-[4px] bg-[#0B2545] dark:bg-[#D4A72C]"></div> Answered ({answeredCount})
             </div>
-            <div className="flex items-center gap-3 text-[13px] font-medium text-slate-600">
-              <div className="w-4 h-4 rounded-[4px] bg-slate-200"></div> Unanswered ({unansweredCount})
+            <div className="flex items-center gap-3 text-[13px] font-medium text-muted-foreground">
+              <div className="w-4 h-4 rounded-[4px] bg-muted-foreground/30"></div> Unanswered ({unansweredCount})
             </div>
-            <div className="flex items-center gap-3 text-[13px] font-medium text-slate-600">
+            <div className="flex items-center gap-3 text-[13px] font-medium text-orange-600 dark:text-orange-400">
               <div className="w-4 h-4 rounded-[4px] bg-orange-500 relative">
                 <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-white"></div>
               </div> Marked for Review ({markedCount})
@@ -387,8 +387,8 @@ function PracticeSessionContent() {
 
       {/* SUBMISSION MODAL */}
       <Dialog open={isSubmitModalOpen} onOpenChange={setIsSubmitModalOpen}>
-        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-[16px]">
-          <div className="bg-[#0B2545] p-6 text-center">
+        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-[16px] border border-border">
+          <div className="bg-[#0B2545] dark:bg-[#0D1B2A] p-6 text-center border-b border-border">
             <CheckCircle2 className="w-12 h-12 text-[#D4A72C] mx-auto mb-4" />
             <DialogTitle className="text-[24px] font-bold text-white mb-1">Submit your practice?</DialogTitle>
             <DialogDescription className="text-white/70">
@@ -396,25 +396,25 @@ function PracticeSessionContent() {
             </DialogDescription>
           </div>
           
-          <div className="p-6 bg-white space-y-4">
-            <div className="flex justify-between items-center p-3 rounded-[8px] bg-slate-50 border border-slate-100">
-              <span className="font-semibold text-slate-600">Answered</span>
-              <span className="font-bold text-[#0B2545]">{answeredCount} / {questions.length}</span>
+          <div className="p-6 bg-card space-y-4">
+            <div className="flex justify-between items-center p-3 rounded-[8px] bg-muted/40 border border-border">
+              <span className="font-semibold text-muted-foreground">Answered</span>
+              <span className="font-bold text-foreground">{answeredCount} / {questions.length}</span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-[8px] bg-red-50 border border-red-100">
-              <span className="font-semibold text-red-600">Unanswered</span>
-              <span className="font-bold text-red-600">{unansweredCount}</span>
+            <div className="flex justify-between items-center p-3 rounded-[8px] bg-red-500/10 border border-red-500/20">
+              <span className="font-semibold text-red-600 dark:text-red-400">Unanswered</span>
+              <span className="font-bold text-red-600 dark:text-red-400">{unansweredCount}</span>
             </div>
             {markedCount > 0 && (
-              <div className="flex justify-between items-center p-3 rounded-[8px] bg-orange-50 border border-orange-100">
-                <span className="font-semibold text-orange-600">Marked for Review</span>
-                <span className="font-bold text-orange-600">{markedCount}</span>
+              <div className="flex justify-between items-center p-3 rounded-[8px] bg-orange-500/10 border border-orange-500/20">
+                <span className="font-semibold text-orange-600 dark:text-orange-400">Marked for Review</span>
+                <span className="font-bold text-orange-600 dark:text-orange-400">{markedCount}</span>
               </div>
             )}
           </div>
 
-          <DialogFooter className="p-6 pt-0 sm:justify-between flex-row">
-            <Button variant="outline" onClick={() => setIsSubmitModalOpen(false)} className="font-bold">
+          <DialogFooter className="p-6 pt-0 sm:justify-between flex-row bg-card">
+            <Button variant="outline" onClick={() => setIsSubmitModalOpen(false)} className="font-bold border-border">
               Continue Practice
             </Button>
             <Button onClick={handleSubmit} className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#b58e23] font-bold">
@@ -429,7 +429,7 @@ function PracticeSessionContent() {
 
 export default function PracticeSessionPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-[#0B2545] border-t-transparent rounded-full animate-spin"></div></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-background"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>}>
       <PracticeSessionContent />
     </Suspense>
   );

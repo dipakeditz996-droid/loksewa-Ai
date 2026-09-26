@@ -62,31 +62,31 @@ export function TeacherSecuritySection() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm p-8">
+      <div className="bg-card rounded-2xl border border-border shadow-sm p-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-xl bg-[#0B2545]/5 flex items-center justify-center">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
             <Shield className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-primary">Change Password</h3>
-            <p className="text-xs text-slate-500">Update your password regularly for better security.</p>
+            <h3 className="text-lg font-semibold text-foreground">Change Password</h3>
+            <p className="text-xs text-muted-foreground">Update your password regularly for better security.</p>
           </div>
         </div>
 
         <div className="max-w-md space-y-5">
           <div className="space-y-1.5">
-            <Label className="text-[12px] font-semibold text-slate-700">Current Password</Label>
+            <Label className="text-[12px] font-semibold text-foreground">Current Password</Label>
             <div className="relative">
               <Input
                 type={showPasswords.current ? "text" : "password"}
                 value={form.current_password}
                 onChange={(e) => setForm({ ...form, current_password: e.target.value })}
-                className="pr-10 bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="pr-10 bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
               <button
                 type="button"
                 onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -94,51 +94,51 @@ export function TeacherSecuritySection() {
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[12px] font-semibold text-slate-700">New Password</Label>
+            <Label className="text-[12px] font-semibold text-foreground">New Password</Label>
             <div className="relative">
               <Input
                 type={showPasswords.new ? "text" : "password"}
                 value={form.new_password}
                 onChange={(e) => setForm({ ...form, new_password: e.target.value })}
-                className="pr-10 bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20"
+                className="pr-10 bg-background border-border text-foreground focus:border-primary focus:ring-primary/20"
               />
               <button
                 type="button"
                 onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPasswords.new ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {form.new_password && (
               <div className="flex items-center gap-2 mt-2">
-                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={cn("h-full rounded-full transition-all", strength.color)}
                     style={{ width: `${(strength.score / 5) * 100}%` }}
                   />
                 </div>
-                <span className="text-[11px] font-medium text-slate-500">{strength.label}</span>
+                <span className="text-[11px] font-medium text-muted-foreground">{strength.label}</span>
               </div>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[12px] font-semibold text-slate-700">Confirm New Password</Label>
+            <Label className="text-[12px] font-semibold text-foreground">Confirm New Password</Label>
             <div className="relative">
               <Input
                 type={showPasswords.confirm ? "text" : "password"}
                 value={form.confirm_password}
                 onChange={(e) => setForm({ ...form, confirm_password: e.target.value })}
                 className={cn(
-                  "pr-10 bg-slate-50/50 border-slate-200 focus:border-[#D4A72C] focus:ring-[#D4A72C]/20",
+                  "pr-10 bg-background border-border text-foreground focus:border-primary focus:ring-primary/20",
                   form.confirm_password && !passwordsMatch && "border-red-300 focus:border-red-400"
                 )}
               />
               <button
                 type="button"
                 onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 {showPasswords.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -151,7 +151,7 @@ export function TeacherSecuritySection() {
           <Button
             onClick={() => mutation.mutate()}
             disabled={!canSubmit}
-            className="bg-[#0B2545] hover:bg-[#163E6B] text-white w-full"
+            className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6B] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold w-full shadow-sm"
           >
             {mutation.isPending ? (
               <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Changing...</>
@@ -162,24 +162,24 @@ export function TeacherSecuritySection() {
         </div>
       </div>
 
-      <div className="bg-card rounded-2xl border border-slate-200/80 shadow-sm p-8">
-        <h3 className="text-lg font-semibold text-primary mb-2">Active Sessions</h3>
-        <p className="text-xs text-slate-500 mb-6">Manage where you're signed in.</p>
+      <div className="bg-card rounded-2xl border border-border shadow-sm p-8">
+        <h3 className="text-lg font-semibold text-foreground mb-2">Active Sessions</h3>
+        <p className="text-xs text-muted-foreground mb-6">Manage where you're signed in.</p>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-green-50/50 border border-green-200/50 rounded-xl">
+          <div className="flex items-center justify-between p-4 bg-green-50/50 dark:bg-green-950/20 border border-green-200/50 dark:border-green-800/30 rounded-xl">
             <div className="flex items-center gap-3">
-              <Monitor className="h-5 w-5 text-green-600" />
+              <Monitor className="h-5 w-5 text-green-600 dark:text-green-400" />
               <div>
-                <p className="text-sm font-medium text-primary">Current Session</p>
-                <p className="text-xs text-slate-500">This device · Active now</p>
+                <p className="text-sm font-medium text-foreground">Current Session</p>
+                <p className="text-xs text-muted-foreground">This device · Active now</p>
               </div>
             </div>
-            <span className="text-xs font-medium text-green-600 bg-green-100 px-2.5 py-1 rounded-full">Active</span>
+            <span className="text-xs font-semibold text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 px-2.5 py-1 rounded-full">Active</span>
           </div>
         </div>
 
-        <p className="text-[11px] text-slate-400 mt-4">
+        <p className="text-[11px] text-muted-foreground mt-4">
           Session management is limited to JWT-based authentication. Logging out invalidates your current token.
         </p>
       </div>

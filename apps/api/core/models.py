@@ -366,14 +366,43 @@ class AdminSettings(models.Model):
     def __str__(self):
         return f"Admin Settings - Last Updated: {self.updated_at.strftime('%Y-%m-%d %H:%M')}"
 
-    @classmethod
-    def get_settings(cls):
-        """Get or create the singleton settings object."""
-        obj, created = cls.objects.get_or_create(pk=1)
-        return obj
-
+    SETTINGS_CACHE_KEY = 'admin_settings:singleton'
     ENFORCE_ACCESS_CACHE_KEY = 'admin_settings:enforce_subscription_access'
     STUDY_PLANS_CACHE_KEY = 'admin_settings:enable_study_plans'
+
+    @classmethod
+    def get_settings(cls):
+        """Get or create the singleton settings object with fast caching."""
+        try:
+            cached = cache.get(cls.SETTINGS_CACHE_KEY)
+            if cached is not None:
+                return cached
+        except Exception:
+            pass
+        obj, created = cls.objects.get_or_create(pk=1)
+        try:
+            cache.set(cls.SETTINGS_CACHE_KEY, obj, 60)
+        except Exception:
+            pass
+        return obj
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        try:
+            cache.delete(self.SETTINGS_CACHE_KEY)
+            cache.delete(self.ENFORCE_ACCESS_CACHE_KEY)
+            cache.delete(self.STUDY_PLANS_CACHE_KEY)
+        except Exception:
+            pass
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        try:
+            cache.delete(self.SETTINGS_CACHE_KEY)
+            cache.delete(self.ENFORCE_ACCESS_CACHE_KEY)
+            cache.delete(self.STUDY_PLANS_CACHE_KEY)
+        except Exception:
+            pass
 
     @classmethod
     def is_study_plans_enabled(cls):

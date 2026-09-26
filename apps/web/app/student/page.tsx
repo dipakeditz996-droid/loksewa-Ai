@@ -136,7 +136,7 @@ export default function StudentDashboardPage() {
     enabled: !isCtxLoading,
     staleTime: 45 * 1000,
   });
-  const loading = isCtxLoading || isDashboardLoading;
+  const loading = !data && (isCtxLoading || isDashboardLoading);
   const error = isError && !data;
 
   // Background/secondary data - each cached independently so, e.g., a

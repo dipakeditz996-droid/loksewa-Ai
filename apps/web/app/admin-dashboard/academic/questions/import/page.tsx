@@ -8,6 +8,7 @@ import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDep
 import Link from 'next/link';
 import { ArrowLeft, UploadCloud, AlertCircle, CheckCircle, FileText, ChevronRight, Sparkles, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { ButtonSpinner } from '@/components/ui/loading-states';
 
 const MISSING_LABELS: Record<string, string> = {
   options: 'Options A–D',
@@ -416,10 +417,16 @@ export default function ImportQuestionsPage() {
               <button
                 disabled={!file || !topic || busy}
                 onClick={handleUpload}
-                className="w-full mt-6 bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2"
+                aria-busy={busy}
+                className="w-full mt-6 bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 shadow-sm transition-all"
               >
-                {busy ? 'Analyzing...' : 'Analyze File'}
-                {!busy && <ChevronRight className="w-5 h-5" />}
+                {busy ? (
+                  <ButtonSpinner text="Analyzing File..." />
+                ) : (
+                  <>
+                    Analyze File <ChevronRight className="w-5 h-5" />
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -585,9 +592,14 @@ export default function ImportQuestionsPage() {
             <button
               disabled={report.valid_rows === 0 || busy}
               onClick={handleCommit}
-              className="px-8 py-3 font-medium text-white bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors flex items-center gap-2"
+              aria-busy={busy}
+              className="px-8 py-3 font-medium text-white bg-[#0B2545] hover:bg-[#163E6C] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors flex items-center gap-2 shadow-sm"
             >
-              {busy ? 'Importing...' : `Import ${report.valid_rows} Question${report.valid_rows === 1 ? '' : 's'}`}
+              {busy ? (
+                <ButtonSpinner text="Importing Questions..." />
+              ) : (
+                `Import ${report.valid_rows} Question${report.valid_rows === 1 ? '' : 's'}`
+              )}
             </button>
           </div>
         </div>

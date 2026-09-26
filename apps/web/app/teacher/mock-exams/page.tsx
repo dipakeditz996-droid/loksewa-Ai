@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { teacherMockExamsApi, MockExam } from "@/lib/api/teacher-mock-exams";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Search, FileText, CheckCircle, Clock, AlertCircle, MoreVertical, Edit, Copy, BarChart, Send, Trash2 } from "lucide-react";
+import { PlusCircle, Search, FileText, CheckCircle, Clock, AlertCircle, MoreVertical, Edit, Copy, BarChart, Send, Trash2, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,10 +11,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { format } from "date-fns";
 import { toast } from "react-hot-toast";
 import { PageHeader, StatCard, StatusPill } from "@/components/teacher/portal";
+import { Skeleton } from "@/components/ui/skeleton";
+import { InlineLoader } from "@/components/ui/loading-states";
 
 export default function MockExamsDashboard() {
   const [exams, setExams] = useState<MockExam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionInProgressId, setActionInProgressId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -50,32 +53,41 @@ export default function MockExamsDashboard() {
 
   const handleDuplicate = async (id: number) => {
     try {
+      setActionInProgressId(id);
       await teacherMockExamsApi.duplicate(id);
       toast.success("Exam duplicated successfully");
-      fetchExams();
+      await fetchExams();
     } catch (error) {
       toast.error("Failed to duplicate exam");
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this exam?")) return;
     try {
+      setActionInProgressId(id);
       await teacherMockExamsApi.delete(id);
       toast.success("Exam deleted successfully");
-      fetchExams();
+      await fetchExams();
     } catch (error) {
       toast.error("Failed to delete exam");
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
   const handleSubmitReview = async (id: number) => {
     try {
+      setActionInProgressId(id);
       await teacherMockExamsApi.submitReview(id);
       toast.success("Exam submitted for review");
-      fetchExams();
+      await fetchExams();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Failed to submit exam for review");
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
@@ -100,7 +112,7 @@ export default function MockExamsDashboard() {
               Auto-generate (Coming Soon)
             </Button>
             <Link href="/teacher/mock-exams/new">
-              <Button className="gap-2 rounded-[9px] bg-[#0B2545] shadow-sm hover:bg-[#163E6C] text-white">
+              <Button className="gap-2 rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] shadow-sm hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
                 <PlusCircle className="h-4 w-4" />
                 New Mock Exam
               </Button>
@@ -111,13 +123,27 @@ export default function MockExamsDashboard() {
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={FileText} label="Total Exams" value={exams.length} />
-        <StatCard icon={CheckCircle} label="Published" value={exams.filter(e => e.status === 'published').length} tone="success" />
-        <StatCard icon={Clock} label="Pending Review" value={exams.filter(e => e.status === 'pending_review').length} tone="pending" />
+        <StatCard
+          icon={FileText}
+          label="Total Exams"
+          value={loading ? <Skeleton className="h-8 w-16 my-1" /> : exams.length}
+        />
+        <StatCard
+          icon={CheckCircle}
+          label="Published"
+          value={loading ? <Skeleton className="h-8 w-16 my-1" /> : exams.filter(e => e.status === 'published').length}
+          tone="success"
+        />
+        <StatCard
+          icon={Clock}
+          label="Pending Review"
+          value={loading ? <Skeleton className="h-8 w-16 my-1" /> : exams.filter(e => e.status === 'pending_review').length}
+          tone="pending"
+        />
         <StatCard
           icon={AlertCircle}
           label="Drafts & Needs Work"
-          value={exams.filter(e => ['draft', 'changes_requested', 'rejected'].includes(e.status)).length}
+          value={loading ? <Skeleton className="h-8 w-16 my-1" /> : exams.filter(e => ['draft', 'changes_requested', 'rejected'].includes(e.status)).length}
           tone={exams.some(e => ['changes_requested', 'rejected'].includes(e.status)) ? "error" : "neutral"}
         />
       </div>
@@ -173,7 +199,27 @@ export default function MockExamsDashboard() {
 
       {/* MAIN CONTENT */}
       {loading ? (
-        <div className="py-12 text-center text-muted-foreground">Loading exams...</div>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3" role="status" aria-busy="true" aria-label="Loading exams">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex flex-col justify-between rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                  <Skeleton className="h-8 w-8 rounded-md" />
+                </div>
+                <Skeleton className="h-5 w-4/5 mb-2" />
+                <div className="flex items-center gap-2 mb-3">
+                  <Skeleton className="h-4 w-16 rounded" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+                <Skeleton className="h-4 w-3/5" />
+              </div>
+              <div className="border-t border-border/50 pt-3">
+                <Skeleton className="h-3.5 w-32" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : filteredExams.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-12 text-center">
           <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
@@ -184,7 +230,7 @@ export default function MockExamsDashboard() {
             Create your first model exam and build a realistic Loksewa examination experience for your students.
           </p>
           <Link href="/teacher/mock-exams/new">
-            <Button className="rounded-[9px] bg-[#0B2545] hover:bg-[#163E6C] text-white">Create Mock Exam</Button>
+            <Button className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Create Mock Exam</Button>
           </Link>
         </div>
       ) : (
@@ -195,8 +241,18 @@ export default function MockExamsDashboard() {
                 <StatusPill status={exam.status} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                      <MoreVertical className="h-4 w-4" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={actionInProgressId === exam.id}
+                      aria-busy={actionInProgressId === exam.id}
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    >
+                      {actionInProgressId === exam.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <MoreVertical className="h-4 w-4" />
+                      )}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">

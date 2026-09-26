@@ -49,6 +49,9 @@ router.register(r'subjective-model-exams', SubjectiveModelExamViewSet, basename=
 router.register(r'subjective-questions', SubjectiveQuestionViewSet, basename='subjective-question')
 router.register(r'subjective-attempts', SubjectiveAttemptViewSet, basename='subjective-attempt')
 router.register(r'evaluations', TeacherEvaluationViewSet, basename='teacher-evaluation')
+from .teacher_import_views import TeacherQuestionImportViewSet
+
+router.register(r'teacher/questions/import', TeacherQuestionImportViewSet, basename='teacher-question-import')
 router.register(r'teacher/questions', TeacherQuestionViewSet, basename='teacher-question')
 router.register(r'teacher/practice-sets', TeacherQuestionSetViewSet, basename='teacher-practice-set')
 router.register(r'teacher/mock-exams', TeacherMockExamViewSet, basename='teacher-mock-exam')

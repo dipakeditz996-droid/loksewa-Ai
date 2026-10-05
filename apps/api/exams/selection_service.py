@@ -58,13 +58,8 @@ class QuestionSelectionService:
             "topic", "topic__chapter", "topic__chapter__subject",
             "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
         )
-        academic_mapped = (
-            Q(subject_id__isnull=False) |
-            Q(topic_id__isnull=False) |
-            Q(chapter_id__isnull=False)
-        )
         if all_course_exam_ids:
-            qs = qs.filter(academic_mapped).filter(
+            qs = qs.filter(
                 Q(exam_id__in=all_course_exam_ids) |
                 Q(subject__paper__exam_id__in=all_course_exam_ids) |
                 Q(chapter__subject__paper__exam_id__in=all_course_exam_ids) |
@@ -110,12 +105,7 @@ class QuestionSelectionService:
             if course:
                 c_exam_ids = list(CourseAccessService.get_course_exam_ids(course))
                 if c_exam_ids:
-                    academic_mapped = (
-                        Q(subject_id__isnull=False) |
-                        Q(topic_id__isnull=False) |
-                        Q(chapter_id__isnull=False)
-                    )
-                    qs = qs.filter(academic_mapped).filter(
+                    qs = qs.filter(
                         Q(exam_id__in=c_exam_ids) |
                         Q(subject__paper__exam_id__in=c_exam_ids) |
                         Q(chapter__subject__paper__exam_id__in=c_exam_ids) |

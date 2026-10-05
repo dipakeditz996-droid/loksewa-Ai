@@ -90,6 +90,7 @@ class Product(models.Model):
     cover_image = models.ImageField(
         upload_to='marketplace/covers/', null=True, blank=True,
         validators=[validate_image_size_5mb, validate_image_extension],
+        max_length=500,  # Google Drive proxy URLs exceed the default max_length=100
     )
 
     is_published = models.BooleanField(default=False)
@@ -137,6 +138,7 @@ class PaymentMethod(models.Model):
     qr_image = models.ImageField(
         upload_to='marketplace/payment_qrs/', null=True, blank=True,
         validators=[validate_image_size_5mb, validate_image_extension],
+        max_length=500,  # Google Drive proxy URLs exceed the default max_length=100
     )
     instructions = models.TextField(blank=True)
 
@@ -173,6 +175,7 @@ class PaymentSubmission(models.Model):
     screenshot = models.ImageField(
         upload_to='marketplace/payment_proofs/',
         validators=[validate_image_size_5mb, validate_image_extension],
+        max_length=500,  # Google Drive proxy URLs exceed the default max_length=100
     )
     note = models.TextField(blank=True)
 
@@ -231,6 +234,7 @@ class ProductImage(models.Model):
     image = models.ImageField(
         upload_to='marketplace/product_images/',
         validators=[validate_image_size_5mb, validate_image_extension],
+        max_length=500,  # Google Drive proxy URLs exceed the default max_length=100
     )
     label = models.CharField(
         max_length=20, choices=IMAGE_LABEL_CHOICES, default='other', blank=True

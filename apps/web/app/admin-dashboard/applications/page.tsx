@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, Clock, Eye, Gift, ImageIcon, X, ZoomIn } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Eye, Gift, ImageIcon, RefreshCw, X, ZoomIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,6 +25,17 @@ interface Payment {
   screenshot: string | null;
   note: string;
   status: string;
+  verification_status: string;
+  verification_status_display: string;
+  verification_result: {
+    detected_amount?: string | null;
+    detected_transaction_id?: string | null;
+    amount_matches?: boolean;
+    transaction_id_matches?: boolean;
+    payment_completed?: boolean;
+    notes?: string | null;
+    error_message?: string;
+  };
   submitted_at: string;
   selected_courses?: { id: number; title: string }[];
 }
@@ -243,6 +254,10 @@ export default function AdminApplicationsPage() {
           <h1 className="text-3xl font-bold text-[#0B2545]">Student Applications</h1>
           <p className="text-slate-500 mt-1">Review and approve student course applications and subscriptions</p>
         </div>
+        <Button variant="outline" onClick={() => fetchAll()} disabled={isLoading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -355,7 +370,34 @@ export default function AdminApplicationsPage() {
                         <td className="px-6 py-4 text-slate-500">
                           {new Date(payment.submitted_at).toLocaleDateString()}
                         </td>
-                        <td className="px-6 py-4">{getStatusBadge(payment.status)}</td>
+                        <td className="px-6 py-4">
+                          {getStatusBadge(payment.status)}
+                          <p className="mt-1 text-xs text-slate-500">
+                            AI: {payment.verification_status_display || payment.verification_status || "Not checked"}
+                          </p>
+                          {payment.verification_result?.detected_amount && (
+                            <p className="text-xs text-slate-500">
+                              Detected: Rs. {payment.verification_result.detected_amount}
+                              {payment.verification_result.amount_matches === false ? " (amount mismatch)" : ""}
+                            </p>
+                          )}
+                          {payment.verification_result?.detected_transaction_id && (
+                            <p className="text-xs text-slate-500 break-all">
+                              Receipt TXN: {payment.verification_result.detected_transaction_id}
+                              {payment.verification_result.transaction_id_matches === false ? " (ID mismatch)" : ""}
+                            </p>
+                          )}
+                          {payment.verification_result?.notes && (
+                            <p className="mt-1 max-w-48 text-xs text-slate-500">
+                              {payment.verification_result.notes}
+                            </p>
+                          )}
+                          {payment.verification_result?.error_message && (
+                            <p className="mt-1 max-w-48 text-xs text-amber-700">
+                              Manual check required: {payment.verification_result.error_message}
+                            </p>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-right">
                           {payment.status === "PENDING" ? (
                             <div className="flex justify-end gap-2">

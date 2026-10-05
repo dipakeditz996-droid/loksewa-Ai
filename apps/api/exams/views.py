@@ -23,17 +23,24 @@ def _practice_exam_scope(user, course_id=None):
     from courses.access import authorized_courses, authorized_exam_ids, get_course_exam_ids, get_student_course_context
     from courses.models import Course
 
-    if course_id in (None, '') and getattr(user, 'role', None) == 'student':
-        active_course = get_student_course_context(user).get('active_course')
-        course_id = active_course.get('id') if active_course else None
+    if getattr(user, 'role', None) != 'student':
+        if course_id not in (None, ''):
+            course = Course.objects.filter(id=course_id, status='published').first()
+            return get_course_exam_ids(course) if course else set()
+        return None
 
     if course_id not in (None, ''):
         try:
             course_id = int(course_id)
         except (TypeError, ValueError):
             return set()
-        courses = authorized_courses(user) if getattr(user, 'role', None) == 'student' else Course.objects.filter(status='published')
-        course = courses.filter(id=course_id, status='published').first()
+        course = authorized_courses(user).filter(id=course_id, status='published').first()
+        return get_course_exam_ids(course) if course else set()
+
+    ctx = get_student_course_context(user)
+    active_course = ctx.get('active_course')
+    if active_course and active_course.get('id'):
+        course = Course.objects.filter(id=active_course['id'], status='published').first()
         return get_course_exam_ids(course) if course else set()
 
     return authorized_exam_ids(user)
@@ -788,10 +795,11 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             return Response({'detail': 'topic is required.'}, status=400)
 
         course_id = request.data.get('course')
-        if not course_id and request.user.role == 'student':
-            from courses.access import get_student_course_context
-            active_course = get_student_course_context(request.user).get('active_course')
-            course_id = active_course.get('id') if active_course else None
+        if course_id:
+            from courses.access import course_access_denial
+            denial = course_access_denial(request.user, course_id)
+            if denial:
+                return Response({'detail': denial[1]}, status=denial[0])
 
         # Exam authorisation (students): the exam the client names must be one
         # their purchase covers, and it is what constrains the question pool
@@ -810,25 +818,9 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             except (TypeError, ValueError):
                 return Response({'detail': 'Invalid exam.'}, status=400)
             if not exam_authorised:
-                return Response({'detail': "You don't have access to this exam."}, status=403)
-
-        # Course-scoped study: the same enrollment/published check as create(),
-        # and the topic must belong to the course's exam - the client can't
-        # pair an authorised course id with somebody else's topic.
-        if course_id:
-            from courses.access import course_access_denial
-            from courses.models import Course
-            denial = course_access_denial(request.user, course_id)
-            if denial:
-                return Response({'detail': denial[1]}, status=denial[0])
-            course_exam_id = Course.objects.filter(pk=course_id).values_list('exam_id', flat=True).first()
-            if course_exam_id:
-                topic_exam_id = Topic.objects.filter(pk=topic_id).values_list(
-                    'chapter__subject__paper__exam_id', flat=True
-                ).first()
-                in_scope = {course_exam_id, *Exam.objects.filter(parent_id=course_exam_id).values_list('id', flat=True)}
-                if topic_exam_id not in in_scope:
+                if course_id:
                     return Response({'detail': 'This topic is not part of the selected course.'}, status=403)
+                return Response({'detail': "You don't have access to this exam."}, status=403)
 
         def find_open_session():
             sessions = PracticeSession.objects.filter(
@@ -1034,14 +1026,17 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
                 for record in buckets['weak_topics']
                 if record.question.topic_id
             })
-            selected = QuestionSelectionService().select(
-                exam_ids=scope,
-                topic_ids=weak_topic_ids,
-                count=REVISION_SESSION_SIZE,
-                randomize=True,
-                question_type='objective',
-            )
-            questions = selected['questions']
+            if not weak_topic_ids:
+                questions = []
+            else:
+                selected = QuestionSelectionService().select(
+                    exam_ids=scope,
+                    topic_ids=weak_topic_ids,
+                    count=REVISION_SESSION_SIZE,
+                    randomize=True,
+                    question_type='objective',
+                )
+                questions = selected['questions']
             question_signal = {question.id: 'weak_topics' for question in questions}
             ordered_records = []
         elif focus == 'recent_mistakes':

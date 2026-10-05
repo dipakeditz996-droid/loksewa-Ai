@@ -52,17 +52,18 @@ export default function AddMaterialPage() {
   const [chapter, setChapter] = useState<number | undefined>();
   const [topic, setTopic] = useState<number | undefined>();
 
-  const handleAcademicChange = (field: string, value: any) => {
+  const handleAcademicChange = (field: string, value: number | string | undefined) => {
+    const numVal = typeof value === 'string' ? (Number(value) || undefined) : value;
     if (field === "category") {
-      setCategory(value); setExam(undefined); setSubject(undefined); setChapter(undefined); setTopic(undefined);
+      setCategory(numVal); setExam(undefined); setSubject(undefined); setChapter(undefined); setTopic(undefined);
     } else if (field === "position" || field === "exam") {
-      setExam(value); setSubject(undefined); setChapter(undefined); setTopic(undefined);
+      setExam(numVal); setSubject(undefined); setChapter(undefined); setTopic(undefined);
     } else if (field === "subject") {
-      setSubject(value); setChapter(undefined); setTopic(undefined);
+      setSubject(numVal); setChapter(undefined); setTopic(undefined);
     } else if (field === "chapter" || field === "unit") {
-      setChapter(value); setTopic(undefined);
+      setChapter(numVal); setTopic(undefined);
     } else if (field === "topic") {
-      setTopic(value);
+      setTopic(numVal);
     }
   };
 
@@ -91,6 +92,7 @@ export default function AddMaterialPage() {
         title: title.trim(),
         exam: exam!,
         subject: subject!,
+        chapter: chapter ?? null,
         topic: topic ?? null,
         description: description.trim(),
         content,
@@ -106,8 +108,9 @@ export default function AddMaterialPage() {
         status === "published" ? `"${res.title}" published` : `"${res.title}" saved as draft`
       );
       router.push("/admin-dashboard/study-materials");
-    } catch (error: any) {
-      toast.error(error?.data?.error || error.message || "Could not save the material");
+    } catch (error: unknown) {
+      const errorObj = error as { data?: { error?: string }; message?: string };
+      toast.error(errorObj?.data?.error || errorObj?.message || "Could not save the material");
     } finally {
       setSaving(null);
     }

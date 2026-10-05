@@ -74,15 +74,16 @@ export function WriteReviewDialog() {
 
   if (!user) {
     return (
-      <Link href="/login">
-        <Button
-          variant="outline"
-          className="border-slate-300 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 bg-transparent h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2"
-        >
+      <Button
+        asChild
+        variant="outline"
+        className="border-slate-300 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 bg-transparent h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2"
+      >
+        <Link href="/login">
           <PenLine className="w-4 h-4" />
           Write a Review
-        </Button>
-      </Link>
+        </Link>
+      </Button>
     );
   }
 

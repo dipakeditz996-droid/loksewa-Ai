@@ -95,12 +95,6 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
             if tag_ids:
                 qs = qs.filter(tag_objects__id__in=tag_ids).distinct()
 
-        # Authoritative mapping filter: all | mapped | needs_mapping | incomplete | unassigned | invalid
-        mapping = self.request.query_params.get('mapping')
-        if mapping:
-            from courses.services.course_access_service import CourseAccessService
-            qs = CourseAccessService.filter_admin_questions_by_mapping(qs, mapping)
-
         course_param = self.request.query_params.get('course')
         if course_param:
             from courses.models import Course
@@ -124,40 +118,39 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     def stats(self, request):
         """
         Return summary statistics for the question bank.
+        Active = approved or pending_review.
+        Inactive = draft, archived, rejected, changes_requested.
         """
         qs = self.get_queryset()
-        
+
         total = qs.count()
         mcq_count = qs.filter(question_type='mcq').count()
-        subjective_count = qs.filter(question_type='subjective').count()
+        true_false_count = qs.filter(question_type='true_false').count()
+        subjective_count = qs.filter(question_type__in=['subjective', 'short_answer', 'long_answer']).count()
         active_count = qs.filter(status__in=['approved', 'pending_review']).count()
+        inactive_count = total - active_count
         draft_count = qs.filter(status='draft').count()
         ai_pending_count = qs.filter(ai_status='pending').count()
-        
-        # Mapping breakdown
-        from courses.services.course_access_service import CourseAccessService
-        mapped_count = CourseAccessService.filter_admin_questions_by_mapping(qs, 'mapped').count()
-        needs_mapping_count = CourseAccessService.filter_admin_questions_by_mapping(qs, 'needs_mapping').count()
-        incomplete_count = CourseAccessService.filter_admin_questions_by_mapping(qs, 'incomplete').count()
-        unassigned_count = CourseAccessService.filter_admin_questions_by_mapping(qs, 'unassigned').count()
-        invalid_count = CourseAccessService.filter_admin_questions_by_mapping(qs, 'invalid').count()
+
+        # Questions with subject/topic placement (fully placed in syllabus)
+        with_subject_count = qs.filter(subject__isnull=False).count()
+        with_topic_count = qs.filter(topic__isnull=False).count()
 
         # Difficulty breakdown
         difficulty_counts = list(qs.values('difficulty').annotate(count=Count('id')))
-        
+
         return Response({
             'total': total,
             'mcq': mcq_count,
+            'true_false': true_false_count,
             'subjective': subjective_count,
             'active': active_count,
+            'inactive': inactive_count,
             'draft': draft_count,
             'ai_pending': ai_pending_count,
-            'mapped': mapped_count,
-            'needs_mapping': needs_mapping_count,
-            'incomplete': incomplete_count,
-            'unassigned': unassigned_count,
-            'invalid': invalid_count,
-            'by_difficulty': difficulty_counts
+            'with_subject': with_subject_count,
+            'with_topic': with_topic_count,
+            'by_difficulty': difficulty_counts,
         })
 
     @action(detail=True, methods=['post'])

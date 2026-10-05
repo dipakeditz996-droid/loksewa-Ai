@@ -262,12 +262,24 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         now = timezone.now()
-        if examination.start_time and now < examination.start_time:
+        is_live_scheduled = examination.objective_category == 'live' and examination.effective_category == 'live'
+        if is_live_scheduled:
+            if examination.start_time and now < examination.start_time:
+                return Response(
+                    {'detail': 'This exam has not opened yet.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if examination.end_time and now > examination.end_time:
+                return Response(
+                    {'detail': 'This exam window has closed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif examination.start_time and now < examination.start_time:
             return Response(
                 {'detail': 'This exam has not opened yet.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if examination.end_time and now > examination.end_time:
+        elif examination.end_time and now > examination.end_time and examination.objective_category not in ('past_year', 'model', 'topicwise'):
             return Response(
                 {'detail': 'This exam window has closed.'},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -723,7 +735,7 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_permissions(self):
-        if self.action in ['active', 'state']:
+        if self.action in ['active', 'state', 'list', 'result', 'retrieve']:
             return [IsAuthenticated()]
         return super().get_permissions()
     
@@ -736,19 +748,37 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             .prefetch_related('answers__question')
         )
 
-        if user.role == 'student':
-            from courses.access import get_authorized_examination_filter
-            course_id = self.request.query_params.get('course_id')
-            exam_q = get_authorized_examination_filter(user, target_course=course_id)
-            if exam_q is None:
-                return qs.none()
-            qs = qs.filter(examination__in=Examination.objects.filter(exam_q))
-
         status_param = self.request.query_params.get('status')
         if status_param:
-            qs = qs.filter(status=status_param)
+            if status_param in ('results', 'completed', 'finished'):
+                qs = qs.filter(status__in=('submitted', 'evaluated'))
+            else:
+                qs = qs.filter(status=status_param)
 
-        return qs
+        course_id = self.request.query_params.get('course_id')
+        if course_id:
+            try:
+                cid = int(course_id)
+                from django.db.models import Q
+                qs = qs.filter(Q(examination__course_id=cid) | Q(examination__exam__courses__id=cid))
+            except (ValueError, TypeError):
+                pass
+
+        if user.role == 'student':
+            from courses.access import get_authorized_examination_filter
+            from django.db.models import Q
+            exam_q = get_authorized_examination_filter(user, target_course=course_id)
+            if exam_q is not None:
+                # Student is currently authorized: they can see their attempts for authorized exams,
+                # plus their historical submitted/evaluated attempts.
+                qs = qs.filter(
+                    Q(status__in=('submitted', 'evaluated')) | Q(examination__in=Examination.objects.filter(exam_q))
+                )
+            else:
+                # Student's course access is not active: historical completed attempts remain preserved.
+                qs = qs.filter(status__in=('submitted', 'evaluated'))
+
+        return qs.order_by('-submitted_at', '-started_at', '-id')
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -761,16 +791,21 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         """
         Every read of an attempt first settles its clock. A tab left open past
         the deadline therefore sees a submitted attempt, not a running one.
-        Enforces strict course authorization for the underlying examination.
+        Enforces strict course authorization for active attempts, while preserving
+        historical access to finalized results.
         """
         attempt = super().get_object()
         enforce_expiry(attempt)
         user = self.request.user
         if user.role == 'student':
-            from courses.access import is_examination_authorized_for_student
             from rest_framework.exceptions import PermissionDenied
-            if not is_examination_authorized_for_student(user, attempt.examination):
+            if attempt.student_id != user.id:
                 raise PermissionDenied("You do not have access to this examination attempt.")
+
+            if attempt.status in ('in-progress', 'upload_pending'):
+                from courses.access import is_examination_authorized_for_student
+                if not is_examination_authorized_for_student(user, attempt.examination):
+                    raise PermissionDenied("You do not have access to this active examination attempt.")
         return attempt
 
     @action(detail=False, methods=['get'])

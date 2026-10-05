@@ -14,30 +14,41 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function MarketplacePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
 
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const CATEGORIES = [
+    { id: "ALL", label: "All Physical Books" },
+    { id: "NEW_BOOK", label: "New Books" },
+    { id: "USED_BOOK", label: "Used Books" },
+    { id: "QUESTION_BANK", label: "Question Banks" },
+    { id: "NOTES", label: "Printed Notes" },
+  ];
 
-  const loadProducts = async () => {
+  const loadProducts = async (searchTerm = search, cat = selectedCategory) => {
     try {
       setLoading(true);
-      const data = await marketplaceApi.getProducts();
+      setError(null);
+      const params: any = {};
+      if (searchTerm.trim()) params.search = searchTerm.trim();
+      if (cat !== "ALL") params.category = cat;
+      const data = await marketplaceApi.getProducts(params);
       setProducts(data);
-    } catch (error) {
-      console.error("Failed to load marketplace products", error);
+    } catch (err: any) {
+      console.error("Failed to load marketplace products", err);
+      setError(err?.data?.detail || err?.message || "Failed to load physical books. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = p.title.toLowerCase().includes(search.toLowerCase()) || 
-                          p.category.toLowerCase().includes(search.toLowerCase());
-
-    return matchesSearch;
-  });
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadProducts(search, selectedCategory);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, selectedCategory]);
 
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
 
@@ -47,7 +58,7 @@ export default function MarketplacePage() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Marketplace</h2>
           <p className="text-muted-foreground mt-1">
-            Premium study materials, question sets, and courses for your Loksewa preparation.
+            Verified physical books, printed question sets, and student-to-student used copies for Loksewa preparation.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -67,7 +78,7 @@ export default function MarketplacePage() {
             Sell Your Used Book
           </h3>
           <p className="text-white/80 dark:text-muted-foreground font-medium mb-2 text-base">
-            Have books you no longer need? Sell them to fellow LoksewaAI students.
+            Have physical books you no longer need? Sell them to fellow LoksewaAI students.
           </p>
           <p className="text-white/60 dark:text-muted-foreground/70 text-sm">
             List your used books and earn while helping another student. All student listings are reviewed by LoksewaAI before appearing in the marketplace.
@@ -87,25 +98,47 @@ export default function MarketplacePage() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-xl shadow-sm border">
+      <div className="flex flex-col gap-4 bg-card p-4 rounded-xl shadow-sm border">
         <div className="relative flex-grow">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search products, courses, or materials..."
+            placeholder="Search physical books by title, author, or publisher..."
             className="pl-9 bg-background"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <div className="flex flex-wrap gap-2 pt-2 border-t">
+          {CATEGORIES.map((cat) => (
+            <Button
+              key={cat.id}
+              variant={selectedCategory === cat.id ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory(cat.id)}
+              className="text-xs rounded-full h-8"
+            >
+              {cat.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {loading ? (
+      {error ? (
+        <div className="text-center py-16 border rounded-xl bg-card">
+          <ShoppingBag className="mx-auto h-12 w-12 text-destructive mb-3 opacity-60" />
+          <h3 className="text-lg font-bold text-destructive mb-1">Marketplace Temporarily Unavailable</h3>
+          <p className="text-muted-foreground text-sm mb-4">{error}</p>
+          <Button onClick={() => loadProducts()} variant="outline">
+            Retry
+          </Button>
+        </div>
+      ) : loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map(n => (
             <div key={n} className="h-[350px] bg-muted animate-pulse rounded-xl border"></div>
           ))}
         </div>
-      ) : filteredProducts.length === 0 ? (
+      ) : products.length === 0 ? (
         <div className="text-center py-20 border rounded-xl bg-card">
           <ShoppingBag className="mx-auto h-12 w-12 text-muted-foreground mb-4 opacity-50" />
           <h3 className="text-lg font-medium">No products found</h3>
@@ -113,7 +146,7 @@ export default function MarketplacePage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredProducts.map((product) => (
+          {products.map((product: Product) => (
             <Card key={product.id} className="flex flex-col overflow-hidden hover:shadow-md transition-shadow">
               <div className="aspect-video w-full bg-muted relative">
                 {product.cover_image ? (

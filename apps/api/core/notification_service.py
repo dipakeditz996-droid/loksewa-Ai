@@ -218,6 +218,21 @@ class NotificationService:
         )
 
     @classmethod
+    def notify_student_payment_manual_review(cls, student, title_ref, action_url=None):
+        cls._create_if_allowed(
+            recipient=student,
+            notif_type='payment',
+            preference_key='system_alerts_inapp',
+            title="Payment Under Manual Review",
+            message=(
+                f"We could not automatically confirm your payment for '{title_ref}'. "
+                "An administrator will review it; no further action is needed right now."
+            ),
+            action_url=action_url,
+            priority='important',
+        )
+
+    @classmethod
     def notify_student_payment_approved(cls, student, title_ref, action_url=None):
         title = "Payment Verified"
         message = f"Your payment for '{title_ref}' has been verified successfully. Your order is confirmed."
@@ -1123,3 +1138,81 @@ def dispatch_due_scheduled_notifications():
             notification.save(update_fields=['status', 'updated_at'])
 
     return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Question Issue Report notifications  (added alongside issue_models.py)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _question_report_notify(student, report, title, message, priority='normal'):
+    """Shared helper for the three report-lifecycle notifiers below."""
+    NotificationService._student_notify_once(
+        recipient=student,
+        notif_type='exam',
+        related_id=f'report:{report.id}',
+        title=title,
+        message=message,
+        action_url='/student/reports',
+        priority=priority,
+    )
+
+
+@classmethod
+def _notify_question_report_submitted(cls, student, report):
+    issue = report.get_issue_type_display()
+    q_id = report.question.question_id or f'Q#{report.question_id}'
+    _question_report_notify(
+        student, report,
+        title="Question Report Received",
+        message=(
+            f"Thank you — your report ({issue}) for question {q_id} "
+            "has been received and is pending review."
+        ),
+    )
+
+
+@classmethod
+def _notify_question_report_resolved(cls, student, report):
+    q_id = report.question.question_id or f'Q#{report.question_id}'
+    _question_report_notify(
+        student, report,
+        title="Question Report Resolved",
+        message=(
+            f"Your report for question {q_id} has been reviewed and resolved. "
+            "Thank you for helping improve our question bank!"
+        ),
+    )
+
+
+@classmethod
+def _notify_question_report_rejected(cls, student, report):
+    q_id = report.question.question_id or f'Q#{report.question_id}'
+    _question_report_notify(
+        student, report,
+        title="Question Report Reviewed",
+        message=(
+            f"Your report for question {q_id} has been reviewed. "
+            "After careful consideration, no changes will be made at this time."
+        ),
+    )
+
+
+@classmethod
+def _notify_question_report_needs_info(cls, student, report):
+    q_id = report.question.question_id or f'Q#{report.question_id}'
+    _question_report_notify(
+        student, report,
+        title="Additional Info Requested",
+        message=(
+            f"An admin has reviewed your report for question {q_id} "
+            "and has requested additional information. Please check your reports page."
+        ),
+        priority='important',
+    )
+
+
+# Attach the four methods to the existing class.
+NotificationService.notify_question_report_submitted   = _notify_question_report_submitted
+NotificationService.notify_question_report_resolved    = _notify_question_report_resolved
+NotificationService.notify_question_report_rejected    = _notify_question_report_rejected
+NotificationService.notify_question_report_needs_info  = _notify_question_report_needs_info

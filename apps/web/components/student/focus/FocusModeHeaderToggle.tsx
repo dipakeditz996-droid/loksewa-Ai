@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { Loader2, Lock, Moon } from "lucide-react";
+import { Loader2, Lock, BellOff } from "lucide-react";
 
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { cn } from "@/lib/utils";
@@ -80,7 +80,7 @@ export function FocusModeHeaderToggle() {
           ) : examFocus ? (
             <Lock className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
           ) : (
-            <Moon
+            <BellOff
               className={cn("h-4 w-4", checked && "fill-[#D4A72C] text-[#D4A72C]")}
               strokeWidth={1.75}
               aria-hidden="true"

@@ -123,7 +123,7 @@ export default function CheckoutPage() {
       setOrder(createdOrder);
       toast.success("Order confirmed. Please proceed to payment.");
     } catch (error: any) {
-      toast.error(error.message || "Failed to place order.");
+      toast.error(error?.data?.detail || error?.message || "Failed to place order.");
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +176,7 @@ export default function CheckoutPage() {
       setSuccess(true);
       toast.success("Your payment proof has been submitted and is pending verification.");
     } catch (error: any) {
-      toast.error(error?.response?.data?.detail || "An error occurred during submission. Please try again.");
+      toast.error(error?.data?.detail || error?.message || "An error occurred during submission. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -546,13 +546,13 @@ export default function CheckoutPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Delivery Fee</span>
-                  <span>{calculatedFee === null ? "Calculating..." : `Rs. ${deliveryFee.toFixed(2)}`}</span>
+                  <span>{calculatedFee === null && !order ? "Calculating..." : `Rs. ${(order ? Number(order.delivery_fee) : deliveryFee).toFixed(2)}`}</span>
                 </div>
                 
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total to Pay</span>
-                  <span className="text-primary">Rs. {order ? order.total_amount : grandTotal.toFixed(2)}</span>
+                  <span className="text-primary">Rs. {order ? (Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2) : grandTotal.toFixed(2)}</span>
                 </div>
               </div>
             </CardContent>

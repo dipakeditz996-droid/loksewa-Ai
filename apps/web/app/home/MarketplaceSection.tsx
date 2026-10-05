@@ -6,48 +6,14 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, ShoppingBag, Download, PlayCircle, Lock } from "lucide-react";
 import { PublicProduct } from "@/lib/api/public-api";
 
-// Shown only until real published products exist.
-const STATIC_PRODUCTS = [
-  {
-    id: -1,
-    title: "Mastering Constitutional Law (Paperback)",
-    description: "Complete printed book covering every article with case studies.",
-    category: "BOOK",
-    price: "1500",
-    discount_price: null as string | null,
-    final_price: "1500",
-    image: "bg-blue-500",
-  },
-  {
-    id: -2,
-    title: "Section Officer 10 Full Mock Sets (Printed Edition)",
-    description: "High-quality printed mock exams with detailed answer keys.",
-    category: "BOOK",
-    price: "500",
-    discount_price: null as string | null,
-    final_price: "500",
-    image: "bg-emerald-500",
-  },
-  {
-    id: -3,
-    title: "Current Affairs 2080 Yearbook (Physical Copy)",
-    description: "The definitive physical guide to national and international events for Loksewa.",
-    category: "BOOK",
-    price: "350",
-    discount_price: null as string | null,
-    final_price: "350",
-    image: "bg-[#D4A72C]",
-  },
-];
-
 interface Props {
   products?: PublicProduct[] | null;
 }
 
 export function MarketplaceSection({ products }: Props) {
-  const displayProducts: any[] = (products && products.length > 0)
+  const displayProducts: PublicProduct[] = (products && products.length > 0)
     ? products.slice(0, 3)
-    : STATIC_PRODUCTS;
+    : [];
 
   return (
     <section className="py-24 bg-slate-50 dark:bg-[#04080F] relative overflow-hidden">
@@ -60,17 +26,31 @@ export function MarketplaceSection({ products }: Props) {
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 mb-4">
             <ShoppingBag className="w-3.5 h-3.5 text-violet-500" />
-            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-violet-600 dark:text-violet-400">Premium Marketplace</span>
+            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-violet-600 dark:text-violet-400">Physical Books Marketplace</span>
           </div>
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
-            Go beyond the <span className="text-gradient-blue-violet">standard syllabus.</span>
+            Physical Books &amp; <span className="text-gradient-blue-violet">Study Materials.</span>
           </h2>
           <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
-            Unlock expert-created masterclasses, premium mock sets, and specialized study guides.
+            Browse platform-verified physical preparation books, practice question sets, and student-to-student used listings.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {displayProducts.length === 0 ? (
+          <div className="text-center py-12 px-4 bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] max-w-xl mx-auto mb-10">
+            <ShoppingBag className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-1">No Books Listed Right Now</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              New physical books and student used-book listings are verified and published regularly.
+            </p>
+            <Link href="/marketplace">
+              <Button variant="outline" className="font-semibold text-xs">
+                Open Marketplace
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           {displayProducts.map((p: any) => (
             <Link key={p.id} href="/marketplace" className="group block">
               <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] overflow-hidden hover:border-violet-500/30 dark:hover:border-violet-500/30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.4)] card-hover h-full flex flex-col">
@@ -117,6 +97,7 @@ export function MarketplaceSection({ products }: Props) {
             </Link>
           ))}
         </div>
+        )}
 
         <div className="text-center">
           <Link href="/marketplace">

@@ -7,6 +7,7 @@ import {
 } from "@/lib/api/marketplace";
 import { Button } from "@/components/ui/button";
 import { Wallet, Plus, CreditCard, Clock, CheckCircle, XCircle } from "lucide-react";
+import { toast } from "sonner";
 
 export default function PayoutsTab() {
   const [balance, setBalance] = useState<SellerBalance | null>(null);
@@ -50,25 +51,31 @@ export default function PayoutsTab() {
 
   const handleRequestPayout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!requestAmount || !selectedAccountId) return alert("Please fill all fields");
+    if (!requestAmount || !selectedAccountId) {
+      toast.error("Please fill all fields");
+      return;
+    }
     
     try {
       await marketplaceApi.requestPayout({
         requested_amount: requestAmount,
         payout_account_id: parseInt(selectedAccountId)
       });
-      alert("Payout requested successfully.");
+      toast.success("Payout requested successfully.");
       setShowRequestForm(false);
       setRequestAmount("");
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Error requesting payout");
+      toast.error(err?.data?.detail || err?.message || "Error requesting payout");
     }
   };
 
   const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accName || !accId) return alert("Please fill required fields");
+    if (!accName || !accId) {
+      toast.error("Please fill required fields");
+      return;
+    }
     try {
       await marketplaceApi.createPayoutAccount({
         method: accMethod,
@@ -77,11 +84,11 @@ export default function PayoutsTab() {
         bank_name: bankName,
         branch: branch
       });
-      alert("Account added successfully");
+      toast.success("Account added successfully");
       setShowAccountForm(false);
       fetchData();
     } catch (err: any) {
-      alert("Error adding account");
+      toast.error(err?.data?.detail || err?.message || "Error adding account");
     }
   };
 

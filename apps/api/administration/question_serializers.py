@@ -26,8 +26,6 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
 
     course_id = serializers.SerializerMethodField()
     course_title = serializers.SerializerMethodField()
-    mapping_status = serializers.SerializerMethodField()
-    mapping_status_display = serializers.SerializerMethodField()
 
     def get_course_id(self, obj):
         course = CourseAccessService.get_question_course(obj)
@@ -36,19 +34,6 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
     def get_course_title(self, obj):
         course = CourseAccessService.get_question_course(obj)
         return course.title if course else None
-
-    def get_mapping_status(self, obj):
-        return CourseAccessService.get_question_mapping_status(obj)
-
-    def get_mapping_status_display(self, obj):
-        status_val = CourseAccessService.get_question_mapping_status(obj)
-        displays = {
-            'mapped': 'Mapped',
-            'incomplete': 'Incomplete',
-            'unassigned': 'Unassigned',
-            'invalid': 'Invalid',
-        }
-        return displays.get(status_val, 'Unassigned')
 
     collections = serializers.SerializerMethodField()
     collection_ids = serializers.PrimaryKeyRelatedField(
@@ -193,12 +178,12 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
         model = Question
         fields = [
             'id', 'question_id', 'question_type', 'status',
-            'course', 'course_id', 'course_title', 'mapping_status', 'mapping_status_display',
+            'course', 'course_id', 'course_title',
             'subject', 'chapter', 'topic',
-            'topic_name', 'chapter_name', 'subject_name', 'position_name', 'category_name', 
+            'topic_name', 'chapter_name', 'subject_name', 'position_name', 'category_name',
             'chapter_id', 'subject_id', 'position_id', 'category_id',
             'category', 'position',
-            'text', 'option_a', 
+            'text', 'option_a',
             'option_b', 'option_c', 'option_d', 'correct_option', 'model_answer',
             'marks', 'negative_marks', 'expected_time_minutes', 'explanation', 'hint',
             'difficulty', 'tags', 'usage_count', 'created_at', 'updated_at',
@@ -304,24 +289,6 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
                     "position": f"Position/Level '{position.name}' does not belong to category '{category.name}'."
                 })
 
-        # 5. Validate that approved questions map to an active published course
-        target_status = data.get('status') or (self.instance.status if self.instance else 'draft')
-        if target_status == 'approved':
-            resolved_exam_id = None
-            if position:
-                resolved_exam_id = position.id
-            elif subject and getattr(subject, 'paper_id', None) and subject.paper:
-                resolved_exam_id = subject.paper.exam_id
-            elif chapter and chapter.subject and chapter.subject.paper:
-                resolved_exam_id = chapter.subject.paper.exam_id
-            elif topic and topic.chapter and topic.chapter.subject and topic.chapter.subject.paper:
-                resolved_exam_id = topic.chapter.subject.paper.exam_id
-
-            all_course_exam_ids = CourseAccessService.get_all_course_exam_ids()
-            if not resolved_exam_id or resolved_exam_id not in all_course_exam_ids:
-                raise serializers.ValidationError({
-                    "course": "Approved questions intended for student practice must map to an active published course."
-                })
 
         # Type-specific validation
         q_type = data.get('question_type') or (self.instance.question_type if self.instance else 'mcq')

@@ -25,7 +25,13 @@ def attempt_expires_at(attempt):
     total = attempt_time_limit_seconds(attempt)
     if total is None or attempt.started_at is None:
         return None
-    return attempt.started_at + timezone.timedelta(seconds=total)
+    deadline = attempt.started_at + timezone.timedelta(seconds=total)
+    exam = getattr(attempt, 'examination', None)
+    if exam and getattr(exam, 'objective_category', None) == 'live' and getattr(exam, 'effective_category', None) == 'live':
+        end_time = getattr(exam, 'end_time', None)
+        if end_time and end_time < deadline:
+            deadline = end_time
+    return deadline
 
 
 def attempt_remaining_seconds(attempt):
@@ -142,6 +148,34 @@ def finalize_attempt(attempt, auto=False):
         return attempt
 
     examination = attempt.examination
+
+    # Ensure all assigned questions have a StudentAnswer record so that unanswered
+    # questions are properly recorded, scored as 0, and reviewable by the student.
+    assigned_qids = []
+    if examination.question_set_id:
+        assigned_qids = list(examination.question_set.questions.values_list('id', flat=True))
+    else:
+        from .models import ExaminationQuestion
+        assigned_qids = list(
+            ExaminationQuestion.objects.filter(examination=examination).values_list('question_id', flat=True)
+        )
+
+    if assigned_qids:
+        existing_qids = set(StudentAnswer.objects.filter(attempt=attempt).values_list('question_id', flat=True))
+        missing_qids = [qid for qid in assigned_qids if qid not in existing_qids]
+        if missing_qids:
+            StudentAnswer.objects.bulk_create([
+                StudentAnswer(
+                    attempt=attempt,
+                    question_id=qid,
+                    selected_option=None,
+                    answer_text='',
+                    is_correct=False,
+                    marks_awarded=0.0
+                )
+                for qid in missing_qids
+            ])
+
     answers = StudentAnswer.objects.filter(attempt=attempt).select_related('question')
 
     score = 0
@@ -158,13 +192,19 @@ def finalize_attempt(attempt, auto=False):
                 answer.marks_awarded = question.marks
                 score += question.marks
             elif examination.negative_marking:
-                score -= examination.negative_marking_value
+                penalty = (
+                    round(question.marks * examination.negative_marking_value, 4)
+                    if examination.negative_marking_value <= 1.0
+                    else examination.negative_marking_value
+                )
+                answer.marks_awarded = -penalty
+                score -= penalty
         answers_to_update.append(answer)
 
     if answers_to_update:
         StudentAnswer.objects.bulk_update(answers_to_update, ['is_correct', 'marks_awarded'])
 
-    score = max(0, score)
+    score = max(0, round(score, 2))
     percentage = round((score / total_possible * 100), 2) if total_possible > 0 else 0
 
     now = timezone.now()
@@ -260,7 +300,7 @@ def recompute_after_evaluation(attempt):
     attempt.refresh_from_db()
     answers = list(StudentAnswer.objects.filter(attempt=attempt).select_related('question'))
 
-    attempt.score = max(0, sum(a.marks_awarded for a in answers))
+    attempt.score = max(0, round(sum(a.marks_awarded for a in answers), 2))
     total_possible = attempt.examination.total_marks
     attempt.percentage = round((attempt.score / total_possible * 100), 2) if total_possible > 0 else 0
     attempt.passed = attempt.score >= attempt.examination.passing_marks

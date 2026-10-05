@@ -1691,16 +1691,25 @@ class AdminMarketplaceOverviewView(APIView):
         ]
 
         recent_orders = PaymentSubmission.objects.select_related(
-            'student', 'product'
-        ).order_by('-submitted_at')[:5]
+            'student', 'product', 'product__seller', 'order'
+        ).prefetch_related('order__items__product__seller').order_by('-submitted_at')[:5]
 
         recent_data = []
         for o in recent_orders:
+            product_title = o.product.title if o.product else (f"Order #{o.order_id}" if o.order_id else "Marketplace Item")
+            seller_name = "LoksewaAI"
+            if o.product and o.product.seller:
+                seller_name = o.product.seller.get_full_name() or o.product.seller.username
+            elif o.order:
+                first_item = o.order.items.first()
+                if first_item and first_item.product and first_item.product.seller:
+                    seller_name = first_item.product.seller.get_full_name() or first_item.product.seller.username
+
             recent_data.append({
                 "id": o.id,
-                "product": o.product.title,
+                "product": product_title,
                 "buyer": o.student.get_full_name() or o.student.username,
-                "seller": "LoksewaAI",  # We don't have individual sellers anymore based on the models
+                "seller": seller_name,
                 "price": float(o.submitted_amount),
                 "status": o.status,
                 "createdAt": o.submitted_at.isoformat(),

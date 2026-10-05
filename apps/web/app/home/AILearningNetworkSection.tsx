@@ -98,9 +98,9 @@ function NetworkDiagram() {
         const isActive = active === i;
         const tier = TIER_STYLE[tierOf(node.accuracy)];
         const Icon = node.icon;
-        // Bias the tooltip to open toward the diagram's center so it never
-        // clips past the section edge, regardless of which side the node sits on.
-        const tooltipSide = node.x < 50 ? "left-full ml-3" : "right-full mr-3";
+        // Bias the tooltip to open outward from the diagram's center to avoid
+        // overlapping with the central AI core and other nodes.
+        const tooltipSide = node.x < 50 ? "right-full mr-3" : "left-full ml-3";
 
         return (
           <button
@@ -111,7 +111,7 @@ function NetworkDiagram() {
             onFocus={() => setActive(i)}
             onBlur={() => setActive(null)}
             aria-label={`${node.short}: ${node.accuracy}% accuracy, ${tier.label.toLowerCase()}`}
-            className="absolute z-20 flex flex-col items-center gap-1.5 focus:outline-none"
+            className={`absolute flex flex-col items-center gap-1.5 focus:outline-none ${isActive ? 'z-50' : 'z-20'}`}
             style={{ left: `${node.x}%`, top: `${node.y}%`, transform: "translate(-50%, -50%)" }}
           >
             <div

@@ -6,8 +6,6 @@ export interface AdminQuestion {
   question_id: string;
   course_id?: number | null;
   course_title?: string | null;
-  mapping_status?: 'mapped' | 'incomplete' | 'unassigned' | 'invalid';
-  mapping_status_display?: string;
   topic_name: string;
   subject_name: string;
   chapter_name?: string;
@@ -85,14 +83,14 @@ export interface ImportReport {
 export interface QuestionStats {
   total: number;
   mcq: number;
+  true_false?: number;
   subjective: number;
   active: number;
+  inactive?: number;
+  draft?: number;
   ai_pending: number;
-  mapped?: number;
-  needs_mapping?: number;
-  incomplete?: number;
-  unassigned?: number;
-  invalid?: number;
+  with_subject?: number;
+  with_topic?: number;
 }
 
 export const adminQuestionApi = {

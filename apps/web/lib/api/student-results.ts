@@ -16,19 +16,32 @@ export interface StudentResult {
   correctAnswers: number;
   incorrectAnswers: number;
   unanswered: number;
+  accuracy?: number;
+  subjectBreakdown?: SubjectPerformance[];
+  topicBreakdown?: TopicPerformance[];
+  reviews?: QuestionReview[];
 }
 
 export interface SubjectPerformance {
   subject: string;
-  questions: number;
-  correct: number;
-  incorrect: number;
+  questions?: number;
+  correct?: number;
+  incorrect?: number;
   accuracy: number;
+  total_attempted?: number;
+  status?: string;
 }
 
 export interface TopicPerformance {
+  topic_id?: number;
   topic: string;
-  performance: "Strong" | "Average" | "Needs Improvement";
+  subject?: string;
+  accuracy?: number;
+  progress?: number;
+  status?: string;
+  performance?: "Strong" | "Average" | "Needs Improvement" | "Good" | "Weak" | string;
+  questions?: number;
+  correct?: number;
 }
 
 export interface QuestionReview {
@@ -78,7 +91,8 @@ export interface PaginatedLeaderboard {
 
 export const studentResultService = {
   async getStudentResults(): Promise<StudentResult[]> {
-    const attempts = await apiClient<any[]>('/student/exam-attempts/');
+    const res = await apiClient<any>('/student/exam-attempts/?status=results');
+    const attempts: any[] = Array.isArray(res) ? res : (res?.results || []);
     
     return attempts.filter(a => a.status === 'submitted' || a.status === 'evaluated').map(a => ({
       id: a.id.toString(),
@@ -86,45 +100,101 @@ export const studentResultService = {
       examName: a.examination_title || 'Unknown Exam',
       date: a.submitted_at || new Date().toISOString(),
       score: a.score,
-      totalMarks: a.total_marks != null ? a.total_marks : 100, // Safe fallback for legacy missing data
+      totalMarks: a.total_marks != null ? a.total_marks : 100,
       percentage: a.percentage,
-      rank: 'N/A',
-      totalParticipants: 'N/A',
+      rank: a.rank ?? 'N/A',
+      totalParticipants: a.total_participants ?? 'N/A',
       percentile: 'N/A',
       timeTaken: a.time_taken_seconds || 0,
-      correctAnswers: 0,
-      incorrectAnswers: 0,
-      unanswered: 0
+      correctAnswers: a.correct_answers || 0,
+      incorrectAnswers: a.wrong_answers || 0,
+      unanswered: a.unanswered || 0
     }));
   },
 
   async getStudentResult(id: string): Promise<StudentResult | undefined> {
     try {
       const attempt: any = await studentExamsApi.getResult(parseInt(id));
-      console.log("[getStudentResult] Backend attempt response:", attempt);
       
       const rank = attempt.rank ?? 'N/A';
       const totalParticipants = attempt.total_participants ?? 'N/A';
-      console.log("[getStudentResult] Extracted rank:", rank, "total:", totalParticipants);
       
       let percentile: number | string = 'N/A';
       if (typeof rank === 'number' && typeof totalParticipants === 'number' && totalParticipants > 0) {
         percentile = Math.round(((totalParticipants - rank) / totalParticipants) * 100);
       }
       
-      let correct = 0;
-      let incorrect = 0;
-      let unanswered = 0;
-      
+      let correct = attempt.correct_answers;
+      let incorrect = attempt.wrong_answers;
+      let unanswered = attempt.unanswered;
+
+      if (correct === undefined || incorrect === undefined || unanswered === undefined) {
+        correct = 0;
+        incorrect = 0;
+        unanswered = 0;
+        if (attempt.answers && Array.isArray(attempt.answers)) {
+          attempt.answers.forEach((ans: any) => {
+            if (!ans.selected_option && !ans.answer_text) {
+              unanswered++;
+            } else if (ans.is_correct) {
+              correct++;
+            } else {
+              incorrect++;
+            }
+          });
+        }
+      }
+
+      const reviewAllowed = Boolean(attempt.can_review_answers ?? attempt.show_correct_answers);
+      let reviews: QuestionReview[] = [];
       if (attempt.answers && Array.isArray(attempt.answers)) {
-        attempt.answers.forEach((ans: any) => {
-          if (!ans.selected_option) {
-            unanswered++;
-          } else if (ans.is_correct) {
-            correct++;
+        reviews = attempt.answers.map((ans: any) => {
+          const questionType = ans.question_type || "mcq";
+          const isSubjective = !["mcq", "true_false"].includes(questionType);
+
+          let status: "Correct" | "Incorrect" | "Unanswered" = "Unanswered";
+          if (isSubjective) {
+            if (ans.answer_text) {
+              status = (ans.marks_awarded && ans.marks_awarded > 0) ? "Correct" : (ans.evaluated_at ? "Incorrect" : "Unanswered");
+            }
           } else {
-            incorrect++;
+            if (ans.selected_option) {
+              status = ans.is_correct ? "Correct" : "Incorrect";
+            }
           }
+
+          let rawCorrectOption = ans.correct_option || null;
+          if (rawCorrectOption) {
+            rawCorrectOption = rawCorrectOption.trim().toUpperCase();
+          }
+
+          const rawExplanation = ans.explanation || "";
+          const explanationText = reviewAllowed
+            ? (rawExplanation.trim() ? rawExplanation : "Explanation unavailable.")
+            : "Correct answers are not available for this examination.";
+
+          return {
+            id: ans.id.toString(),
+            questionId: ans.question,
+            questionText: ans.question_text || `Question ID: ${ans.question}`,
+            questionType: questionType,
+            options: {
+              A: ans.option_a ?? null,
+              B: ans.option_b ?? null,
+              C: ans.option_c ?? null,
+              D: ans.option_d ?? null,
+            },
+            studentAnswer: isSubjective ? (ans.answer_text || null) : (ans.selected_option ? ans.selected_option.trim().toUpperCase() : null),
+            answerText: ans.answer_text || null,
+            correctAnswer: reviewAllowed ? rawCorrectOption : null,
+            modelAnswer: reviewAllowed ? (ans.model_answer || null) : null,
+            status: status,
+            marks: ans.marks_awarded || 0,
+            maxMarks: ans.max_marks || 1,
+            explanation: explanationText,
+            reviewAllowed: reviewAllowed,
+            evaluatedAt: ans.evaluated_at || null,
+          };
         });
       }
 
@@ -133,16 +203,20 @@ export const studentResultService = {
         examId: attempt.examination.toString(),
         examName: attempt.examination_title || 'Unknown Exam',
         score: attempt.score,
-        totalMarks: attempt.total_marks != null ? attempt.total_marks : 100, // Safely fallback if legacy backend response
+        totalMarks: attempt.total_marks != null ? attempt.total_marks : 100,
         percentage: attempt.percentage,
         timeTaken: attempt.time_taken_seconds || 0,
         rank: rank !== 'N/A' ? parseInt(rank) : 'N/A',
         totalParticipants: totalParticipants !== 'N/A' ? parseInt(totalParticipants) : 'N/A',
         percentile: percentile,
-        date: new Date(attempt.started_at).toLocaleDateString(),
+        date: attempt.started_at ? new Date(attempt.started_at).toLocaleDateString() : new Date().toLocaleDateString(),
         correctAnswers: correct,
         incorrectAnswers: incorrect,
-        unanswered: unanswered
+        unanswered: unanswered,
+        accuracy: attempt.accuracy,
+        subjectBreakdown: attempt.subject_breakdown || [],
+        topicBreakdown: attempt.topic_breakdown || [],
+        reviews: reviews,
       };
       return result;
     } catch (error) {
@@ -160,77 +234,16 @@ export const studentResultService = {
   },
 
   async getSubjectPerformance(): Promise<SubjectPerformance[]> {
-    // Analytics endpoints not canonicalized yet
     return apiClient<SubjectPerformance[]>('/analytics/subject-performance/');
   },
 
   async getTopicPerformance(): Promise<TopicPerformance[]> {
-    // Analytics endpoints not canonicalized yet
-    return apiClient<TopicPerformance[]>('/analytics/topic-analysis/');
+    return apiClient<TopicPerformance[]>('/analytics/topic-performance/');
   },
 
   async getQuestionReviews(resultId: string): Promise<QuestionReview[]> {
-    try {
-      const attempt = await studentExamsApi.getResult(parseInt(resultId));
-      const questions = await studentExamsApi.getAttemptQuestions(parseInt(resultId));
-      
-      if (!attempt.answers) return [];
-
-      const reviewAllowed = Boolean(attempt.can_review_answers ?? attempt.show_correct_answers);
-      
-      return attempt.answers.map(ans => {
-        const q = questions.find(question => question.id === ans.question);
-        const questionType = ans.question_type || q?.question_type || "mcq";
-        const isSubjective = !["mcq", "true_false"].includes(questionType);
-
-        let status: "Correct" | "Incorrect" | "Unanswered" = "Unanswered";
-        if (isSubjective) {
-          if (ans.answer_text) {
-            status = (ans.marks_awarded && ans.marks_awarded > 0) ? "Correct" : (ans.evaluated_at ? "Incorrect" : "Unanswered");
-          }
-        } else {
-          if (ans.selected_option) {
-            status = ans.is_correct ? "Correct" : "Incorrect";
-          }
-        }
-        
-        let rawCorrectOption = ans.correct_option || q?.correct_option || null;
-        if (rawCorrectOption) {
-          rawCorrectOption = rawCorrectOption.trim().toUpperCase();
-        }
-
-        const rawExplanation = ans.explanation || q?.explanation || "";
-        const explanationText = reviewAllowed
-          ? (rawExplanation.trim() ? rawExplanation : "Explanation unavailable.")
-          : "Correct answers are not available for this examination.";
-
-        return {
-          id: ans.id.toString(),
-          questionId: ans.question,
-          questionText: ans.question_text || q?.text || `Question ID: ${ans.question}`,
-          questionType: questionType,
-          options: {
-            A: ans.option_a ?? q?.option_a ?? null,
-            B: ans.option_b ?? q?.option_b ?? null,
-            C: ans.option_c ?? q?.option_c ?? null,
-            D: ans.option_d ?? q?.option_d ?? null,
-          },
-          studentAnswer: isSubjective ? (ans.answer_text || null) : (ans.selected_option ? ans.selected_option.trim().toUpperCase() : null),
-          answerText: ans.answer_text || null,
-          correctAnswer: reviewAllowed ? rawCorrectOption : null,
-          modelAnswer: reviewAllowed ? (ans.model_answer || q?.model_answer || null) : null,
-          status: status,
-          marks: ans.marks_awarded || 0,
-          maxMarks: ans.max_marks || q?.marks || 1,
-          explanation: explanationText,
-          reviewAllowed: reviewAllowed,
-          evaluatedAt: ans.evaluated_at || null,
-        };
-      });
-    } catch (e) {
-      console.error("Error fetching question reviews", e);
-      return [];
-    }
+    const res = await this.getStudentResult(resultId);
+    return res?.reviews || [];
   },
 };
 

@@ -54,15 +54,18 @@ export default function SyllabusNotesPortal({
     staleTime: 5 * 60 * 1000,
   });
 
-  // React Query v5 dropped useQuery's onSuccess callback - react to the
-  // resolved data instead, same effect as the old callback (adopt the
-  // server's default-selected preparation into the query key once known).
   useEffect(() => {
-    if (data?.selectedPreparation && data.selectedPreparation.id !== activePrepId) {
+    if (!activePrepId && data?.selectedPreparation) {
+      setActivePrepId(data.selectedPreparation.id);
+    } else if (
+      activePrepId &&
+      data?.authorizedPreparations &&
+      !data.authorizedPreparations.some(p => p.id === activePrepId) &&
+      data.selectedPreparation
+    ) {
       setActivePrepId(data.selectedPreparation.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, activePrepId]);
 
   const error = queryError instanceof Error ? queryError.message : (queryError ? "Failed to load syllabus and notes. Please try again." : null);
 
@@ -86,11 +89,17 @@ export default function SyllabusNotesPortal({
 
   useEffect(() => {
     let active = true;
+    let createdUrl: string | null = null;
     if (viewingMaterial && (viewingMaterial.file_url || viewingMaterial.file)) {
       setLoadingPdf(true);
       notesApi.getMaterialBlobUrl(viewingMaterial.id)
         .then(url => {
-          if (active) setPdfBlobUrl(url);
+          if (active) {
+            createdUrl = url;
+            setPdfBlobUrl(url);
+          } else {
+            URL.revokeObjectURL(url);
+          }
         })
         .catch(err => {
           console.error('Failed to load protected PDF', err);
@@ -104,8 +113,8 @@ export default function SyllabusNotesPortal({
     }
     return () => {
       active = false;
-      if (pdfBlobUrl) {
-        URL.revokeObjectURL(pdfBlobUrl);
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
       }
     };
   }, [viewingMaterial]);
@@ -160,6 +169,13 @@ export default function SyllabusNotesPortal({
     });
     return Array.from(set);
   }, [currentSectionMaterials]);
+
+  // Auto-reset stale subject filter when section or preparation changes
+  useEffect(() => {
+    if (selectedSubject !== 'all' && !availableSubjects.includes(selectedSubject)) {
+      setSelectedSubject('all');
+    }
+  }, [availableSubjects, selectedSubject]);
 
   // Filtered materials
   const filteredMaterials = useMemo(() => {
@@ -261,7 +277,7 @@ export default function SyllabusNotesPortal({
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-2">
-              {activePrep?.name}
+              {activePrep?.name ? `${activePrep.name} — ${pageTitle}` : pageTitle}
             </h1>
             <p className="text-sm text-slate-300 max-w-2xl">
               {pageSubtitle}
@@ -616,8 +632,9 @@ export default function SyllabusNotesPortal({
                             try {
                               await notesApi.downloadMaterial(material.id, `${material.slug || 'note'}.pdf`);
                               toast.success('Download started');
-                            } catch (err: any) {
-                              toast.error(err?.data?.detail || 'Download not authorized or unavailable.');
+                            } catch (err: unknown) {
+                              const errorObj = err as { data?: { detail?: string }; message?: string };
+                              toast.error(errorObj?.data?.detail || errorObj?.message || 'Download not authorized or unavailable.');
                             }
                           }}
                           className="inline-flex items-center justify-center h-8 px-3 rounded-lg border border-border bg-card text-foreground hover:bg-muted text-xs font-semibold transition-colors"
@@ -690,8 +707,9 @@ export default function SyllabusNotesPortal({
                       try {
                         await notesApi.downloadMaterial(viewingMaterial.id, `${viewingMaterial.slug || 'note'}.pdf`);
                         toast.success('Download started');
-                      } catch (err: any) {
-                        toast.error(err?.data?.detail || 'Download not authorized or unavailable.');
+                      } catch (err: unknown) {
+                        const errorObj = err as { data?: { detail?: string }; message?: string };
+                        toast.error(errorObj?.data?.detail || errorObj?.message || 'Download not authorized or unavailable.');
                       }
                     }}
                     className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors"

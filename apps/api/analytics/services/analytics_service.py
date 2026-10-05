@@ -38,7 +38,7 @@ class AnalyticsService:
         the former per-table aggregates."""
         uid = OuterRef('pk')
         obj = QuestionAttempt.objects.filter(session__user=uid, session__completed=True)
-        exam_answers = StudentAnswer.objects.filter(attempt__student=uid, attempt__status='submitted')
+        exam_answers = StudentAnswer.objects.filter(attempt__student=uid, attempt__status__in=['submitted', 'evaluated'])
         row = (
             User.objects.filter(pk=user.pk)
             .annotate(
@@ -50,7 +50,7 @@ class AnalyticsService:
                     SubjectiveAnswer.objects.filter(attempt__student=uid, status='evaluated'),
                     'attempt__student', n=Count('id')), 0),
                 exams_taken=Coalesce(_grouped(
-                    ExaminationAttempt.objects.filter(student=uid, status='submitted'),
+                    ExaminationAttempt.objects.filter(student=uid, status__in=['submitted', 'evaluated']),
                     'student', n=Count('id')), 0),
                 study_seconds=Coalesce(_grouped(
                     PracticeSession.objects.filter(user=uid, completed=True),
@@ -184,19 +184,20 @@ class AnalyticsService:
 
     @staticmethod
     def get_performance_trend(user, days=30):
-        """Returns accuracy trend over the last N days"""
+        """Returns accuracy trend over the last N days from practice sessions and exams."""
+        from django.db.models.functions import TruncDate
         start_date = timezone.now() - timedelta(days=days)
         
         sessions = PracticeSession.objects.filter(
             user=user, completed=True, created_at__gte=start_date
-        ).extra({'date': "date(created_at)"}).values('date').annotate(
+        ).annotate(date=TruncDate('created_at')).values('date').annotate(
             avg_acc=Avg('accuracy'),
             attempts=Count('id')
         )
         
         exams = ExaminationAttempt.objects.filter(
-            student=user, status='submitted', started_at__gte=start_date
-        ).extra({'date': "date(started_at)"}).values('date').annotate(
+            student=user, status__in=['submitted', 'evaluated'], started_at__gte=start_date
+        ).annotate(date=TruncDate('started_at')).values('date').annotate(
             avg_acc=Avg('percentage'),
             attempts=Count('id')
         )
@@ -234,20 +235,50 @@ class AnalyticsService:
 
     @staticmethod
     def get_subject_performance(user):
-        """Returns accuracy per subject"""
-        # Optimize using database aggregation
-        subject_stats = PracticeSession.objects.filter(
+        """Returns accuracy per subject aggregated from practice sessions and completed examination attempts."""
+        subject_data = {}
+
+        # 1. Practice sessions
+        practice_stats = PracticeSession.objects.filter(
             user=user, completed=True, subject__isnull=False
         ).values('subject__name').annotate(
             correct=Sum('correct_count'),
             total=Sum('total_questions')
         )
-                
-        results = []
-        for stat in subject_stats:
+        for stat in practice_stats:
             name = stat["subject__name"]
-            correct = stat["correct"] or 0
-            total = stat["total"] or 0
+            if name:
+                subject_data[name] = {
+                    'correct': stat["correct"] or 0,
+                    'total': stat["total"] or 0,
+                }
+
+        # 2. Examination answers
+        exam_answers = (
+            StudentAnswer.objects.filter(
+                attempt__student=user,
+                attempt__status__in=['submitted', 'evaluated'],
+                question__topic__chapter__subject__isnull=False,
+            )
+            .values('question__topic__chapter__subject__name')
+            .annotate(
+                total=Count('id'),
+                correct=Count('id', filter=Q(is_correct=True)),
+            )
+        )
+        for stat in exam_answers:
+            name = stat['question__topic__chapter__subject__name']
+            if not name:
+                continue
+            if name not in subject_data:
+                subject_data[name] = {'correct': 0, 'total': 0}
+            subject_data[name]['correct'] += (stat['correct'] or 0)
+            subject_data[name]['total'] += (stat['total'] or 0)
+
+        results = []
+        for name, data in subject_data.items():
+            correct = data['correct']
+            total = data['total']
             acc = (correct / total * 100) if total > 0 else 0
             
             if acc >= 80:
@@ -262,20 +293,112 @@ class AnalyticsService:
             results.append({
                 "subject": name,
                 "accuracy": round(acc, 1),
+                "correct": correct,
+                "questions": total,
                 "total_attempted": total,
-                "status": status
+                "status": status,
             })
             
         return sorted(results, key=lambda x: x["accuracy"], reverse=True)
 
     @staticmethod
     def get_topic_performance(user):
-        """Returns detailed topic analysis for priority areas"""
-        progress = UserTopicProgress.objects.filter(user=user, status='completed').select_related('topic', 'topic__chapter__subject')
-        
-        topics = []
+        """Returns detailed topic analysis for priority areas from practice and exam attempts."""
+        topic_data = {}
+
+        # 1. Check UserTopicProgress
+        progress = UserTopicProgress.objects.filter(user=user).select_related('topic', 'topic__chapter__subject')
         for p in progress:
-            acc = p.accuracy or 0
+            if not p.topic:
+                continue
+            topic_data[p.topic.id] = {
+                'topic_id': p.topic.id,
+                'topic': p.topic.name,
+                'subject': p.topic.chapter.subject.name if p.topic.chapter and p.topic.chapter.subject else 'General',
+                'correct': 0,
+                'total': 0,
+                'accuracy': float(p.accuracy or 0),
+                'progress': p.progress,
+            }
+
+        # 2. Aggregate from real student answers in completed exams
+        exam_topic_answers = (
+            StudentAnswer.objects.filter(
+                attempt__student=user,
+                attempt__status__in=['submitted', 'evaluated'],
+                question__topic__isnull=False,
+            )
+            .values(
+                'question__topic_id',
+                'question__topic__name',
+                'question__topic__chapter__subject__name',
+            )
+            .annotate(
+                total=Count('id'),
+                correct=Count('id', filter=Q(is_correct=True)),
+            )
+        )
+        for stat in exam_topic_answers:
+            tid = stat['question__topic_id']
+            if not tid:
+                continue
+            tname = stat['question__topic__name'] or f'Topic {tid}'
+            sname = stat['question__topic__chapter__subject__name'] or 'General'
+            if tid not in topic_data:
+                topic_data[tid] = {
+                    'topic_id': tid,
+                    'topic': tname,
+                    'subject': sname,
+                    'correct': 0,
+                    'total': 0,
+                    'accuracy': 0.0,
+                    'progress': 0,
+                }
+            topic_data[tid]['correct'] += (stat['correct'] or 0)
+            topic_data[tid]['total'] += (stat['total'] or 0)
+
+        # 3. Aggregate from practice session question attempts
+        practice_topic_attempts = (
+            QuestionAttempt.objects.filter(
+                session__user=user,
+                session__completed=True,
+                question__topic__isnull=False,
+            )
+            .values(
+                'question__topic_id',
+                'question__topic__name',
+                'question__topic__chapter__subject__name',
+            )
+            .annotate(
+                total=Count('id'),
+                correct=Count('id', filter=Q(is_correct=True)),
+            )
+        )
+        for stat in practice_topic_attempts:
+            tid = stat['question__topic_id']
+            if not tid:
+                continue
+            tname = stat['question__topic__name'] or f'Topic {tid}'
+            sname = stat['question__topic__chapter__subject__name'] or 'General'
+            if tid not in topic_data:
+                topic_data[tid] = {
+                    'topic_id': tid,
+                    'topic': tname,
+                    'subject': sname,
+                    'correct': 0,
+                    'total': 0,
+                    'accuracy': 0.0,
+                    'progress': 0,
+                }
+            topic_data[tid]['correct'] += (stat['correct'] or 0)
+            topic_data[tid]['total'] += (stat['total'] or 0)
+
+        topics = []
+        for tid, data in topic_data.items():
+            tot = data['total']
+            cor = data['correct']
+            acc = (cor / tot * 100) if tot > 0 else data['accuracy']
+            
             if acc >= 80:
                 status = "Strong"
             elif acc >= 60:
@@ -286,12 +409,15 @@ class AnalyticsService:
                 status = "Weak"
                 
             topics.append({
-                "topic_id": p.topic.id,
-                "topic": p.topic.name,
-                "subject": p.topic.chapter.subject.name,
+                "topic_id": data['topic_id'],
+                "topic": data['topic'],
+                "subject": data['subject'],
                 "accuracy": round(acc, 1),
-                "progress": p.progress,
-                "status": status
+                "progress": data['progress'],
+                "status": status,
+                "performance": status,
+                "questions": tot,
+                "correct": cor,
             })
             
-        return topics
+        return sorted(topics, key=lambda x: x["accuracy"], reverse=True)

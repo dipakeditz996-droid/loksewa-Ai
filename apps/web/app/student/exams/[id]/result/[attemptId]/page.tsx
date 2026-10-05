@@ -10,10 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CheckCircle2, XCircle, LayoutGrid, ArrowLeft, Loader2, AlertTriangle,
-  Play, HelpCircle, FileText, Download, Award, MessageSquare, Clock, Eye,
+  Play, HelpCircle, FileText, Download, Award, MessageSquare, Clock, Eye, Flag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ReportQuestionModal } from "@/components/student/exams/ReportQuestionModal";
 
 export default function ExamResultPage() {
   const params = useParams();
@@ -22,6 +23,8 @@ export default function ExamResultPage() {
   const router = useRouter();
 
   const [currentIdx, setCurrentIdx] = useState<number>(0);
+  const [reportQuestionId, setReportQuestionId] = useState<number | null>(null);
+  const [reportQuestionText, setReportQuestionText] = useState<string>('');
 
   const { data: result, isLoading: isLoadingResult, error } = useQuery({
     queryKey: ['student-attempt-result', attemptId],
@@ -462,10 +465,31 @@ export default function ExamResultPage() {
                     <HelpCircle className="h-3.5 w-3.5" /> Still confused? Ask the Community
                   </Link>
                 )}
+
+                {/* Report a problem button — always visible per question */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportQuestionId(currentQuestion.id);
+                    setReportQuestionText(currentQuestion.text.replace(/<[^>]*>/g, ''));
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-red-400/70 hover:text-red-400 mt-4 ml-auto transition-colors"
+                >
+                  <Flag className="w-3 h-3" /> Report a problem
+                </button>
               </CardContent>
             </Card>
           )}
         </main>
+
+        {/* Report Question Modal */}
+        <ReportQuestionModal
+          isOpen={reportQuestionId !== null}
+          onClose={() => { setReportQuestionId(null); setReportQuestionText(''); }}
+          questionId={reportQuestionId ?? 0}
+          questionText={reportQuestionText}
+          context={{ examinationAttemptId: attemptId }}
+        />
         
         {/* Right Sidebar - Question Palette */}
         <aside className="w-full md:w-80 border-l border-border bg-muted/10 flex flex-col h-[calc(100vh-65px)]">

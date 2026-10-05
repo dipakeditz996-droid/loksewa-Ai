@@ -13,6 +13,7 @@ export default function DuelSetupPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [isCreatingInvite, setIsCreatingInvite] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
+  const [inviteMatchId, setInviteMatchId] = useState<number | null>(null);
   const [joinCode, setJoinCode] = useState("");
   const [isJoining, setIsJoining] = useState(false);
 
@@ -32,6 +33,7 @@ export default function DuelSetupPage() {
     try {
       const match = await gamesApi.createInvite();
       setInviteCode(match.invite_code || "");
+      setInviteMatchId(match.id);
     } catch (err) {
       alert("Failed to create invite");
     } finally {
@@ -108,7 +110,12 @@ export default function DuelSetupPage() {
                 <p className="text-xs text-muted-foreground mt-2">Waiting for them to join...</p>
                 <Button 
                   className="w-full mt-4" 
-                  onClick={() => router.push(`/student/games/duel/${inviteCode}/wait`)}
+                  onClick={() => {
+                    if (inviteMatchId !== null) {
+                      router.push(`/student/games/duel/${inviteMatchId}/wait`);
+                    }
+                  }}
+                  disabled={inviteMatchId === null}
                 >
                   Go to Waiting Room
                 </Button>

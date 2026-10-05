@@ -143,6 +143,9 @@ export interface StudentExamAttempt {
   show_correct_answers?: boolean;
   can_review_answers?: boolean;
   answers: StudentAnswer[];
+  server_time?: string;
+  expires_at?: string | null;
+  remaining_seconds?: number | null;
   // Subjective extensions
   is_subjective?: boolean;
   exam_expires_at?: string | null;

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { marketplaceApi, SellerPayout } from "@/lib/api/marketplace";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AdminPayoutsPage() {
   const [payouts, setPayouts] = useState<SellerPayout[]>([]);
@@ -43,11 +44,11 @@ export default function AdminPayoutsPage() {
         rejectionReason,
         transactionRef
       );
-      alert("Status updated successfully.");
+      toast.success("Status updated successfully.");
       setSelectedPayout(null);
       fetchPayouts();
     } catch (err: any) {
-      alert(err.response?.data?.detail || "Error updating status");
+      toast.error(err?.data?.detail || err?.message || "Error updating status");
     }
   };
 

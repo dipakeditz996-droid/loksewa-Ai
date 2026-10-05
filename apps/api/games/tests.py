@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
+from unittest.mock import patch
 
 from .models import GameProfile
 
@@ -209,6 +210,51 @@ class DuelMatchmakingTests(APITestCase):
         self.assertFalse(res.data['is_bot_match'])
         self.assertEqual(res.data['opponent_type'], 'HUMAN')
         self.assertGreater(res.data['time_remaining_matchmaking'], 0)
+
+    def test_invite_waiting_room_transitions_to_duel_when_opponent_joins(self):
+        self.client.force_authenticate(user=self.student1)
+        invite = self.client.post('/api/games/matchmaking/invite/')
+        self.assertEqual(invite.status_code, status.HTTP_200_OK)
+        match_id = invite.data['id']
+        self.assertTrue(invite.data['invite_code'])
+        self.assertEqual(invite.data['status'], 'SEARCHING')
+
+        waiting_state = self.client.get(f'/api/games/matches/{match_id}/state/')
+        self.assertEqual(waiting_state.status_code, status.HTTP_200_OK)
+        self.assertEqual(waiting_state.data['status'], 'SEARCHING')
+        self.assertEqual(waiting_state.data['invite_code'], invite.data['invite_code'])
+
+        self.client.force_authenticate(user=self.student2)
+        with patch(
+            'games.views.QuestionSelectionService.select',
+            return_value={'questions': self.questions},
+        ):
+            joined = self.client.post(
+                '/api/games/matchmaking/join/',
+                {'invite_code': invite.data['invite_code']},
+                format='json',
+            )
+        self.assertEqual(joined.status_code, status.HTTP_200_OK)
+        self.assertEqual(joined.data['id'], match_id)
+        self.assertEqual(joined.data['status'], 'MATCHED')
+        self.assertEqual(joined.data['player2'], self.student2.id)
+
+        self.client.force_authenticate(user=self.student1)
+        started_state = self.client.get(f'/api/games/matches/{match_id}/state/')
+        self.assertEqual(started_state.status_code, status.HTTP_200_OK)
+        self.assertEqual(started_state.data['status'], 'MATCHED')
+        self.assertIn('current_question', started_state.data)
+
+    def test_invite_waiting_room_can_cancel_open_invite(self):
+        self.client.force_authenticate(user=self.student1)
+        invite = self.client.post('/api/games/matchmaking/invite/')
+        match_id = invite.data['id']
+
+        cancelled = self.client.post(f'/api/games/matches/{match_id}/cancel/')
+
+        self.assertEqual(cancelled.status_code, status.HTTP_200_OK)
+        self.assertEqual(cancelled.data['match_id'], match_id)
+        self.assertEqual(self.GameMatch.objects.get(pk=match_id).status, 'CANCELLED')
 
     def test_human_matchmaking_priority(self):
         # Student 1 starts search
@@ -537,5 +583,3 @@ class DailyDrillTests(APITestCase):
         self.assertEqual(res.data['focus_type'], 'weak_areas')
         question_ids = [q['question_id'] for q in res.data['questions']]
         self.assertIn(course_q.id, question_ids)
-
-

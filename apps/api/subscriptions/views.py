@@ -216,6 +216,7 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             return SubscriptionPayment.objects.all().order_by('-submitted_at')
         return SubscriptionPayment.objects.filter(student=self.request.user).order_by('-submitted_at')
 
+    @transaction.atomic
     def perform_create(self, serializer):
         from rest_framework.exceptions import ValidationError
         plan = serializer.validated_data['plan']
@@ -254,6 +255,8 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
                     raise ValidationError({"course_ids": "Some selected preparations are not eligible for this package."})
 
         payment = serializer.save(student=self.request.user, amount=plan.price)
+        payment.verification_status = 'VERIFICATION_IN_PROGRESS'
+        payment.save(update_fields=['verification_status'])
 
         from courses.models import Course, CourseApplication
         from .models import SubscriptionCourseSelection
@@ -339,12 +342,25 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             message=f"{self.request.user.get_full_name() or self.request.user.username} submitted a payment of NPR {payment.amount} for '{payment.plan.name}'.",
             action_url='/admin-dashboard/applications',
         )
+        from functools import partial
+        from .tasks import enqueue_payment_verification
+        transaction.on_commit(partial(enqueue_payment_verification, payment.id))
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def approve(self, request, pk=None):
         payment = self.get_object()
         if payment.status != 'PENDING':
             return Response({'detail': 'Payment is not pending.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verification is advisory only; the authenticated admin remains the
+        # decision-maker, and the decision is logged for uncertain evidence.
+        if payment.verification_status in (
+            'VERIFIED_UNCERTAIN', 'VERIFICATION_FAILED', 'VERIFICATION_IN_PROGRESS',
+        ):
+            logger.warning(
+                "Admin user_id=%s approved payment_id=%s with verification_status=%s.",
+                request.user.id, payment.id, payment.verification_status,
+            )
 
         # Everything below is one admin action with several dependent writes
         # (payment, subscription, enrollment, invoice, notification) — wrap
@@ -355,6 +371,18 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
             payment.status = 'APPROVED'
             payment.verified_by = request.user
             payment.verified_at = timezone.now()
+            if payment.verification_status in (
+                'VERIFIED_UNCERTAIN', 'VERIFICATION_FAILED', 'VERIFICATION_IN_PROGRESS',
+            ):
+                payment.verification_result = {
+                    **(payment.verification_result or {}),
+                    'admin_decision': {
+                        'action': 'approved',
+                        'admin_id': request.user.id,
+                        'admin_name': request.user.get_full_name() or request.user.username,
+                        'decided_at': payment.verified_at.isoformat(),
+                    },
+                }
 
             # Determine start and expiry dates
             plan = payment.plan
@@ -529,10 +557,38 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         if not reason:
             return Response({'detail': 'Rejection reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Log rejection reason type for audit trail
+        rejection_context = {
+            'admin_id': request.user.id,
+            'admin_name': request.user.get_full_name() or request.user.username,
+            'rejected_at': timezone.now().isoformat(),
+        }
+        
+        # If this is a rejection of an uncertain verification, include context
+        if payment.verification_status in (
+            'VERIFIED_UNCERTAIN', 'VERIFICATION_FAILED', 'VERIFICATION_IN_PROGRESS',
+        ):
+            logger.info(
+                "Admin user_id=%s rejected payment_id=%s with verification_status=%s. "
+                "Verification result: %s. Rejection reason: %s",
+                request.user.id, payment.id, payment.verification_status,
+                payment.verification_result, reason
+            )
+            rejection_context['verification_status'] = payment.verification_status
+            rejection_context['ai_verification_result'] = payment.verification_result
+
         payment.status = 'REJECTED'
         payment.rejection_reason = reason
         payment.verified_by = request.user
         payment.verified_at = timezone.now()
+        payment.verification_result = {
+            **(payment.verification_result or {}),
+            'admin_decision': {
+                **rejection_context,
+                'action': 'rejected',
+                'reason': reason,
+            },
+        }
         payment.save()
         
         from core.notification_service import NotificationService
@@ -550,6 +606,55 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         )
 
         return Response({'status': 'rejected'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def request_manual_verification_review(self, request, pk=None):
+        """
+        Admin manually requests verification review for a payment with uncertain verification status.
+        This is typically used when admin wants to see full details and make a decision on payments
+        where AI verification returned VERIFIED_UNCERTAIN.
+        """
+        payment = self.get_object()
+        
+        if payment.verification_status not in ('VERIFIED_UNCERTAIN', 'VERIFICATION_FAILED'):
+            return Response(
+                {'detail': 'Payment verification must be uncertain or failed to request manual review.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Flag for manual review (admin has acknowledged and is reviewing)
+        # Store the review request in verification_result metadata
+        review_metadata = payment.verification_result or {}
+        review_metadata['manual_review_requested_by'] = {
+            'user_id': request.user.id,
+            'username': request.user.username,
+            'full_name': request.user.get_full_name(),
+            'requested_at': timezone.now().isoformat(),
+        }
+        review_metadata['manual_review_requested'] = True
+        
+        payment.verification_result = review_metadata
+        payment.save(update_fields=['verification_result'])
+        
+        # Notify admin team about the manual review request
+        from core.notification_service import NotificationService
+        NotificationService.notify_admins(
+            notif_type='payment',
+            title='Payment Verification Requested for Manual Review',
+            message=f"{request.user.get_full_name() or request.user.username} has flagged payment_id={payment.id} for manual verification review. "
+                    f"Student: {payment.student.get_full_name() or payment.student.username}, "
+                    f"Amount: NPR {payment.amount}, "
+                    f"Plan: {payment.plan.name}",
+            action_url='/admin-dashboard/applications',
+        )
+        
+        return Response({
+            'status': 'manual_review_requested',
+            'payment_id': payment.id,
+            'verification_status': payment.verification_status,
+            'verification_result': payment.verification_result,
+        })
+
 
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer

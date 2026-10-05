@@ -40,16 +40,25 @@ export default function FullResultPage() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [resultData, subjectsData, topicsData, reviewsData] = await Promise.all([
-          studentResultService.getStudentResult(resultId),
-          studentResultService.getSubjectPerformance(),
-          studentResultService.getTopicPerformance(),
-          studentResultService.getQuestionReviews(resultId),
-        ]);
-        if (resultData) setResult(resultData);
-        setSubjects(subjectsData);
-        setTopics(topicsData);
-        setReviews(reviewsData);
+        const resultData = await studentResultService.getStudentResult(resultId);
+        if (resultData) {
+          setResult(resultData);
+          if (resultData.reviews && resultData.reviews.length > 0) {
+            setReviews(resultData.reviews);
+          }
+          if (resultData.subjectBreakdown && resultData.subjectBreakdown.length > 0) {
+            setSubjects(resultData.subjectBreakdown);
+          } else {
+            const sData = await studentResultService.getSubjectPerformance().catch(() => []);
+            setSubjects(sData);
+          }
+          if (resultData.topicBreakdown && resultData.topicBreakdown.length > 0) {
+            setTopics(resultData.topicBreakdown);
+          } else {
+            const tData = await studentResultService.getTopicPerformance().catch(() => []);
+            setTopics(tData);
+          }
+        }
       } catch (error) {
         console.error("Failed to load result details", error);
       } finally {
@@ -212,34 +221,40 @@ export default function FullResultPage() {
         <div>
           <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Subject-wise Performance</h2>
           <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-muted text-muted-foreground font-medium">
-                <tr>
-                  <th className="px-4 py-3">Subject</th>
-                  <th className="px-4 py-3 text-center">Correct</th>
-                  <th className="px-4 py-3 text-center">Accuracy</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {subjects.map((subj, idx) => (
-                  <tr key={idx}>
-                    <td className="px-4 py-3 font-medium text-primary dark:text-foreground">{subj.subject}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-green-600 font-medium">{subj.correct}</span>
-                      <span className="text-muted-foreground text-xs">/{subj.questions}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-muted/80 rounded-full h-1.5">
-                          <div className="bg-[#D4A72C] h-1.5 rounded-full" style={{ width: `${subj.accuracy}%` }} />
-                        </div>
-                        <span className="text-xs font-semibold w-8 text-right">{subj.accuracy}%</span>
-                      </div>
-                    </td>
+            {subjects.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                No subject breakdown available for this examination.
+              </div>
+            ) : (
+              <table className="w-full text-sm text-left">
+                <thead className="bg-muted text-muted-foreground font-medium">
+                  <tr>
+                    <th className="px-4 py-3">Subject</th>
+                    <th className="px-4 py-3 text-center">Correct</th>
+                    <th className="px-4 py-3 text-center">Accuracy</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {subjects.map((subj, idx) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-3 font-medium text-primary dark:text-foreground">{subj.subject}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-green-600 font-medium">{subj.correct ?? 0}</span>
+                        <span className="text-muted-foreground text-xs">/{subj.questions ?? subj.total_attempted ?? 0}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-full bg-muted/80 rounded-full h-1.5">
+                            <div className="bg-[#D4A72C] h-1.5 rounded-full" style={{ width: `${subj.accuracy}%` }} />
+                          </div>
+                          <span className="text-xs font-semibold w-8 text-right">{subj.accuracy}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
@@ -247,32 +262,44 @@ export default function FullResultPage() {
         <div>
           <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Topic Analysis</h2>
           <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-muted text-muted-foreground font-medium">
-                <tr>
-                  <th className="px-4 py-3">Topic</th>
-                  <th className="px-4 py-3">Performance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {topics.map((topic, idx) => (
-                  <tr key={idx}>
-                    <td className="px-4 py-3 font-medium text-primary dark:text-foreground">{topic.topic}</td>
-                    <td className="px-4 py-3">
-                      {topic.performance === "Strong" && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:text-green-300">STRONG</span>
-                      )}
-                      {topic.performance === "Average" && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">AVERAGE</span>
-                      )}
-                      {topic.performance === "Needs Improvement" && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:text-red-300">NEEDS WORK</span>
-                      )}
-                    </td>
+            {topics.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                No topic breakdown available for this examination.
+              </div>
+            ) : (
+              <table className="w-full text-sm text-left">
+                <thead className="bg-muted text-muted-foreground font-medium">
+                  <tr>
+                    <th className="px-4 py-3">Topic</th>
+                    <th className="px-4 py-3">Performance</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {topics.map((topic, idx) => {
+                    const perf = topic.performance || topic.status || "Average";
+                    const isStrong = perf === "Strong";
+                    const isAverage = perf === "Average" || perf === "Good";
+                    const isNeedsWork = perf === "Needs Improvement" || perf === "Weak";
+                    return (
+                      <tr key={idx}>
+                        <td className="px-4 py-3 font-medium text-primary dark:text-foreground">{topic.topic}</td>
+                        <td className="px-4 py-3">
+                          {isStrong && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 dark:text-green-300">STRONG</span>
+                          )}
+                          {isAverage && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">AVERAGE</span>
+                          )}
+                          {isNeedsWork && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 dark:text-red-300">NEEDS WORK</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

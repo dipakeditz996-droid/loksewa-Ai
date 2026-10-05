@@ -23,7 +23,8 @@ import {
   MessageSquarePlus,
   PenTool,
   CreditCard,
-  Award
+  Award,
+  Flag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -125,6 +126,12 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
         p.startsWith("/student/results/") || 
         p === "/student/feedback" || 
         p.startsWith("/student/feedback/")
+    },
+    { 
+      href: "/student/reports", 
+      label: "My Reports", 
+      icon: Flag,
+      isActive: (p) => p === "/student/reports" || p.startsWith("/student/reports/")
     },
     { 
       href: "/student/leaderboard-analytics", 

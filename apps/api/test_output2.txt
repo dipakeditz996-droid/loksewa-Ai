@@ -1,0 +1,240 @@
+﻿.\\venv\\Scripts\\python.exe : Creating test database for alias 'default' 
+('file:memorydb_default?mode=memory&cache=shared')...
+At line:1 char:1
++ .\\venv\\Scripts\\python.exe manage.py test exams.test_results_analyt ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Creating test d...che=shared')...:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+Found 6 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: corsheaders, messages, rest_framework, rest_framework_simplejwt, staticfiles, storages
+  Apply all migrations: admin, administration, ai_tutor, auth, community, contenttypes, core, courses, exams, games, gamification, marketplace, notes, sessions, study_plan, subscriptions, support, token_blacklist
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0001_initial... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying core.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying exams.0001_initial... OK
+  Applying exams.0002_practicesession_accuracy_and_more... OK
+  Applying exams.0003_modelexam_modelexamattempt_modelexamattemptanswer... OK
+  Applying exams.0004_subjectiveanswer_evaluation_annotation_and_more... OK
+  Applying exams.0005_examcategory_exam_created_at_exam_order_and_more... OK
+  Applying exams.0006_alter_exam_category... OK
+  Applying exams.0007_alter_exam_category... OK
+  Applying exams.0008_question_expected_time_minutes_question_marks_and_more... OK
+  Applying exams.0009_alter_subjectiveanswer_question_and_more... OK
+  Applying exams.0010_question_question_id_question_tags_questionset... OK
+  Applying exams.0011_remove_question_tags_question_ai_generate_options_and_more... OK
+  Applying exams.0012_rename_title_questionset_name_and_more... OK
+  Applying exams.0013_questionset_questions... OK
+  Applying exams.0014_examination_examinationattempt_and_more... OK
+  Applying exams.0015_questionset_set_type_and_more... OK
+  Applying exams.0016_academic_hierarchy_restructure... OK
+  Applying exams.0017_alter_chapter_subject... OK
+  Applying exams.0018_question_created_by... OK
+  Applying exams.0019_question_reference_question_reviewed_at_and_more... OK
+  Applying exams.0020_questionset_reviewed_at_questionset_reviewed_by_and_more... OK
+  Applying exams.0021_examination_reviewed_at_examination_reviewed_by_and_more... OK
+  Applying exams.0022_legacymodelexammigration... OK
+  Applying exams.0023_remove_subject_exam_alter_examination_exam_type... OK
+  Applying marketplace.0001_initial... OK
+  Applying subscriptions.0001_initial... OK
+  Applying courses.0001_initial... OK
+  Applying courses.0002_remove_lesson_module_remove_lesson_topic_course_exam_and_more... OK
+  Applying courses.0003_teachermessage_teacherstudentnote... OK
+  Applying courses.0004_alter_course_thumbnail... OK
+  Applying courses.0005_course_application_and_plan_course_link... OK
+  Applying exams.0024_examination_course... OK
+  Applying exams.0025_examschedule... OK
+  Applying exams.0026_questionattempt_is_viewed_questionattempt_viewed_at... OK
+  Applying exams.0027_alter_practicesession_mode_questionmastery... OK
+  Applying exams.0028_examination_objective_category... OK
+  Applying exams.0029_remove_modelexam_exam_remove_modelexam_questions_and_more... OK
+  Applying exams.0030_calmsessionlog... OK
+  Applying exams.0031_alter_practicesession_mode... OK
+  Applying exams.0032_alter_examination_thumbnail... OK
+  Applying exams.0033_exam_parent... OK
+  Applying exams.0034_seed_registration_exam_categories... OK
+  Applying exams.0035_exam_status... OK
+  Applying core.0002_teacherprofile... OK
+  Applying core.0003_teacherprofile_settings_fields... OK
+  Applying core.0004_notification... OK
+  Applying core.0005_notification_related_id_alter_notification_type... OK
+  Applying core.0006_socialaccount... OK
+  Applying core.0007_adminsettings_position_adminnotification... OK
+  Applying core.0008_tag... OK
+  Applying core.0009_notification_source_admin_notification_and_more... OK
+  Applying core.0010_adminsettings_ai_tutor_daily_message_limit... OK
+  Applying core.0011_adminsettings_ai_tutor_base_prompt... OK
+  Applying core.0012_alter_notification_type_studentfeedback... OK
+  Applying core.0013_adminsettings_audit_log_retention_days... OK
+  Applying core.0014_user_failed_login_attempts_user_locked_until... OK
+  Applying core.0015_user_is_2fa_enabled_user_totp_secret_and_more... OK
+  Applying core.0016_alter_notification_type... OK
+  Applying core.0017_alter_notification_type... OK
+  Applying core.0018_alter_notification_type... OK
+  Applying core.0019_alter_notification_type... OK
+  Applying core.0020_testimonial... OK
+  Applying core.0021_alter_notification_type... OK
+  Applying core.0022_emailotp... OK
+  Applying core.0023_alter_notification_type... OK
+  Applying core.0024_emailotp_generated_by_alter_emailotp_purpose... OK
+  Applying core.0025_websitepage... OK
+  Applying core.0026_seed_website_pages... OK
+  Applying core.0027_adminsettings_enforce_subscription_access... OK
+  Applying core.0028_alter_adminsettings_max_login_attempts... OK
+  Applying exams.0036_question_tag_objects... OK
+  Applying exams.0037_question_hint... OK
+  Applying exams.0038_studentanswer_evaluated_at... OK
+  Applying exams.0039_questionmastery_last_due_review_at... OK
+  Applying exams.0040_examination_allowed_file_types_and_more... OK
+  Applying exams.0041_question_optional_chapter_topic_add_subject_chapter... OK
+  Applying exams.0042_alter_examination_question_paper_pdf_and_more... OK
+  Applying exams.0043_examination_topic_practicesession_shuffle_questions... OK
+  Applying exams.0044_alter_practicesession_mode... OK
+  Applying exams.0045_bookmark_custom_order... OK
+  Applying exams.0046_examinationrequest... OK
+  Applying exams.0047_normalize_objective_exam_categories... OK
+  Applying exams.0048_examination_generation_key... OK
+  Applying exams.0049_extend_examination_requests... OK
+  Applying exams.0050_examschedule_exam_type_and_more... OK
+  Applying marketplace.0002_product_course... OK
+  Applying courses.0006_courseapplication_marketplace_payment... OK
+  Applying courses.0007_alter_course_thumbnail... OK
+  Applying courses.0008_course_coming_soon_status... OK
+  Applying courses.0009_canonical_course_hierarchy_data... OK
+  Applying exams.0051_subjectivequestionset_and_more... OK
+  Applying exams.0052_question_category_question_exam_and_more... OK
+  Applying administration.0001_initial... OK
+  Applying administration.0002_auditlog_details_alter_auditlog_entity_id_csvimport... OK
+  Applying administration.0003_csvimport_difficulty_csvimport_question_type_and_more... OK
+  Applying administration.0004_exportjob... OK
+  Applying administration.0005_csvimport_collection_csvimport_tag_objects... OK
+  Applying administration.0006_csvimport_chapter_csvimport_subject... OK
+  Applying administration.0007_csvimport_category_csvimport_exam_and_more... OK
+  Applying administration.0008_databasebackup_trashitem... OK
+  Applying administration.0009_databasebackup_completed_at_and_more... OK
+  Applying ai_tutor.0001_initial... OK
+  Applying ai_tutor.0002_prompttemplate... OK
+  Applying community.0001_initial... OK
+  Applying games.0001_initial... OK
+  Applying games.0002_weeklyquiz_weeklyquizattempt_weeklyquizanswer_and_more... OK
+  Applying games.0003_gamematch_bot_difficulty_gamematch_exam_and_more... OK
+  Applying games.0004_dailydrillsession_dailydrillquestion... OK
+  Applying gamification.0001_initial... OK
+  Applying gamification.0002_motivation_gamificationprofile_last_study_date_and_more... OK
+  Applying gamification.0003_achievement_studentachievement... OK
+  Applying marketplace.0003_product_author_product_brand_product_condition_and_more... OK
+  Applying marketplace.0004_order_delivery_fee_alter_order_status_and_more... OK
+  Applying marketplace.0005_deliveryfeerule_orderstatushistory... OK
+  Applying marketplace.0006_remove_product_course_remove_product_is_free_and_more... OK
+  Applying marketplace.0007_s2s_marketplace_enhancements... OK
+  Applying marketplace.0008_orderitem_commission_amount_and_more... OK
+  Applying marketplace.0009_marketplacelistingreport_resolved_at_and_more... OK
+  Applying marketplace.0010_marketplacesettings_minimum_payout_amount_and_more... OK
+  Applying marketplace.0011_alter_disputeevidence_image_and_more... OK
+  Applying marketplace.0012_alter_product_description... OK
+  Applying marketplace.0013_marketplacesettings_max_used_book_price_percent_and_more... OK
+  Applying marketplace.0014_fix_imagefield_max_length... OK
+  Applying notes.0001_initial... OK
+  Applying notes.0002_studymaterial_difficulty_studymaterial_external_url_and_more... OK
+  Applying notes.0003_studymaterial_course... OK
+  Applying notes.0004_materialcategory_studymaterial_category_and_more... OK
+  Applying notes.0005_studymaterial_available_to_ai_tutor... OK
+  Applying notes.0006_alter_studymaterial_file... OK
+  Applying notes.0007_studymaterial_chapter_studymaterial_content_category_and_more... OK
+  Applying notes.0008_studymaterial_order... OK
+  Applying notes.0009_add_is_downloadable_to_studymaterial... OK
+  Applying sessions.0001_initial... OK
+  Applying study_plan.0001_initial... OK
+  Applying study_plan.0002_studyplantemplate_studyplan_template_and_more... OK
+  Applying study_plan.0003_studyplantemplate_course_and_more... OK
+  Applying study_plan.0004_plan_daily_questions_optional_target... OK
+  Applying subscriptions.0002_course_application_and_plan_course_link... OK
+  Applying subscriptions.0003_delete_notification... OK
+  Applying subscriptions.0004_alter_subscriptionpayment_screenshot... OK
+  Applying subscriptions.0005_subscriptionplan_allowed_preparation_count_and_more... OK
+  Applying subscriptions.0006_subscriptionplan_eligible_courses_and_more... OK
+  Applying subscriptions.0007_subscription_course_selection... OK
+  Applying subscriptions.0008_alter_subscriptioncourseselection_unique_together_and_more... OK
+  Applying subscriptions.0009_alter_subscriptionplan_status... OK
+  Applying subscriptions.0010_alter_subscriptionplan_description... OK
+  Applying support.0001_initial... OK
+  Applying support.0002_notificationpreference_question_reviews_email_and_more... OK
+  Applying support.0003_studentprofile_focus_mode_enabled... OK
+  Applying support.0004_alter_supportattachment_file... OK
+  Applying support.0005_studentprofile_is_verified_and_more... OK
+  Applying support.0006_studentprofile_access_origin_and_more... OK
+  Applying support.0007_studentprofile_target_course... OK
+  Applying token_blacklist.0001_initial... OK
+  Applying token_blacklist.0002_outstandingtoken_jti_hex... OK
+  Applying token_blacklist.0003_auto_20171017_2007... OK
+  Applying token_blacklist.0004_auto_20171017_2013... OK
+  Applying token_blacklist.0005_remove_outstandingtoken_jti... OK
+  Applying token_blacklist.0006_auto_20171017_2113... OK
+  Applying token_blacklist.0007_auto_20171017_2214... OK
+  Applying token_blacklist.0008_migrate_to_bigautofield... OK
+  Applying token_blacklist.0010_fix_migrate_to_bigautofield... OK
+  Applying token_blacklist.0011_linearizes_history... OK
+  Applying token_blacklist.0012_alter_outstandingtoken_user... OK
+test_analytics_service_aggregation_and_topic_performance 
+(exams.test_results_analytics_e2e.ResultsAnalyticsE2ETests.test_analytics_service_aggregation_and_topic_performance)
+Verifies that AnalyticsService accurately aggregates: ... ok
+test_historical_results_preserved_after_course_expiry 
+(exams.test_results_analytics_e2e.ResultsAnalyticsE2ETests.test_historical_results_preserved_after_course_expiry)
+When student's course enrollment expires, their historical submitted results ... 
+C:\Users\diwas\OneDrive\Desktop\loksewa website\apps\api\venv\Lib\site-packages\django\core\handlers\base.py:63: 
+UserWarning: No directory at: C:\Users\diwas\OneDrive\Desktop\loksewa website\apps\api\staticfiles\
+  mw_instance = middleware(adapted_handler)
+ok
+test_result_consistency_answered_unanswered_and_scoring 
+(exams.test_results_analytics_e2e.ResultsAnalyticsE2ETests.test_result_consistency_answered_unanswered_and_scoring)
+Student answers 6 out of 10 questions: ... FAIL
+test_result_ownership_student_cannot_access_other_student_result (exams.test_results_analytics_e2e.ResultsAnalyticsE2ET
+ests.test_result_ownership_student_cannot_access_other_student_result)
+Student B must be rejected when attempting to access Student A's attempt or result. ... ok
+test_subjective_unpublished_result_hidden_and_published_visible (exams.test_results_analytics_e2e.ResultsAnalyticsE2ETe
+sts.test_subjective_unpublished_result_hidden_and_published_visible)
+Subjective exams must not expose draft/unpublished evaluations to students. ... ok
+test_xp_awarded_once_on_finalize 
+(exams.test_results_analytics_e2e.ResultsAnalyticsE2ETests.test_xp_awarded_once_on_finalize)
+Verifies XP is awarded only once upon attempt completion and not duplicated ... ok
+
+======================================================================
+FAIL: test_result_consistency_answered_unanswered_and_scoring 
+(exams.test_results_analytics_e2e.ResultsAnalyticsE2ETests.test_result_consistency_answered_unanswered_and_scoring)
+Student answers 6 out of 10 questions:
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\diwas\OneDrive\Desktop\loksewa website\apps\api\exams\test_results_analytics_e2e.py", line 194, in 
+test_result_consistency_answered_unanswered_and_scoring
+    # so all 10 assigned questions appear in the answers list (unanswered ones
+AssertionError: 10 != 6
+
+----------------------------------------------------------------------
+Ran 6 tests in 21.490s
+
+FAILED (failures=1)
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+
+  Applying token_blacklist.0013_alter_blacklistedtoken_options_and_more... OK
+System check identified no issues (0 silenced).

@@ -440,18 +440,34 @@ class CourseAndSubscriptionAccessTests(PracticeBase):
         self.assertIn('not enrolled', r.json()['detail'])
         self.assertFalse(PracticeSession.objects.filter(user=self.student).exists())
 
+    def tearDown(self):
+        super().tearDown()
+        from core.models import AdminSettings
+        from django.core.cache import cache
+        s = AdminSettings.get_settings()
+        s.enforce_subscription_access = False
+        s.save()
+        cache.clear()
+
     def test_package_enforcement_blocks_students_without_a_package_but_not_when_off(self):
         from core.models import AdminSettings
+        from django.core.cache import cache
         self.make_questions(3)
         self.assertEqual(self.start().status_code, 200)            # enforcement off (default)
-        settings = AdminSettings.get_settings()
-        settings.enforce_subscription_access = True
-        settings.save()
-        r = self.start()
-        self.assertEqual(r.status_code, 403)
-        self.assertEqual(r.json().get('code'), 'subscription_required')
-        sid = PracticeSession.objects.filter(user=self.student).first().id
-        self.assertEqual(self.answer(sid, Question.objects.first().id, 'b').status_code, 403)
+        try:
+            settings = AdminSettings.get_settings()
+            settings.enforce_subscription_access = True
+            settings.save()
+            r = self.start()
+            self.assertEqual(r.status_code, 403)
+            self.assertEqual(r.json().get('code'), 'subscription_required')
+            sid = PracticeSession.objects.filter(user=self.student).first().id
+            self.assertEqual(self.answer(sid, Question.objects.first().id, 'b').status_code, 403)
+        finally:
+            settings = AdminSettings.get_settings()
+            settings.enforce_subscription_access = False
+            settings.save()
+            cache.clear()
 
 
 class SyllabusListQueryCostTests(PracticeBase):

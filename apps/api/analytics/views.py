@@ -7,7 +7,7 @@ from .services.analytics_service import AnalyticsService
 from .services.ai_service import AIService
 
 class OverviewView(APIView):
-    permission_classes = [IsAuthenticated, HasActiveSubscription]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         course_id = request.query_params.get('course_id')
@@ -15,7 +15,7 @@ class OverviewView(APIView):
         return Response(data)
 
 class PerformanceTrendView(APIView):
-    permission_classes = [IsAuthenticated, HasActiveSubscription]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         days = int(request.query_params.get('days', 30))
@@ -23,14 +23,14 @@ class PerformanceTrendView(APIView):
         return Response(data)
 
 class SubjectPerformanceView(APIView):
-    permission_classes = [IsAuthenticated, HasActiveSubscription]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         data = AnalyticsService.get_subject_performance(request.user)
         return Response(data)
 
 class TopicPerformanceView(APIView):
-    permission_classes = [IsAuthenticated, HasActiveSubscription]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         data = AnalyticsService.get_topic_performance(request.user)

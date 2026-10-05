@@ -85,3 +85,79 @@ class S2STransactionTests(TestCase):
         from django.db.models import ProtectedError
         with self.assertRaises(ProtectedError):
             self.product.delete()
+
+    def test_prevent_self_purchase_at_cart_and_checkout(self):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.seller)
+        
+        # 1. Seller attempts to add own book to cart
+        resp = client.post('/api/marketplace/student/cart/add_item/', {'product_id': self.product.id, 'quantity': 1}, format='json')
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("cannot purchase your own listing", resp.data.get('detail', ''))
+
+    def test_cart_cumulative_stock_validation(self):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.buyer)
+
+        # Product has stock 1
+        # First add succeeds
+        resp1 = client.post('/api/marketplace/student/cart/add_item/', {'product_id': self.product.id, 'quantity': 1}, format='json')
+        self.assertEqual(resp1.status_code, 200)
+
+        # Second add of 1 exceeds available stock
+        resp2 = client.post('/api/marketplace/student/cart/add_item/', {'product_id': self.product.id, 'quantity': 1}, format='json')
+        self.assertEqual(resp2.status_code, 400)
+        self.assertIn("Not enough stock", resp2.data.get('detail', ''))
+
+    def test_student_order_cancellation_restores_stock_and_republishes(self):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.buyer)
+
+        # Place order
+        cart = Cart.objects.create(student=self.buyer)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=1)
+
+        resp = client.post('/api/marketplace/student/orders/checkout/', {
+            'shipping_address': 'Kathmandu',
+            'contact_number': '9800000000'
+        }, format='json')
+        self.assertEqual(resp.status_code, 201)
+        order_id = resp.data['id']
+
+        # Product stock is now 0 and SOLD, not published
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 0)
+        self.assertEqual(self.product.listing_status, 'SOLD')
+        self.assertFalse(self.product.is_published)
+
+        # Buyer cancels unpaid order
+        cancel_resp = client.post(f'/api/marketplace/student/orders/{order_id}/cancel/')
+        self.assertEqual(cancel_resp.status_code, 200)
+        self.assertEqual(cancel_resp.data['status'], 'CANCELLED')
+
+        # Stock is restored and republished
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock, 1)
+        self.assertEqual(self.product.listing_status, 'ACTIVE')
+        self.assertTrue(self.product.is_published)
+
+    def test_marketplace_pagination_support(self):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.buyer)
+
+        # Query with page=1
+        resp = client.get('/api/marketplace/student/products/?page=1&page_size=5')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('count', resp.data)
+        self.assertIn('results', resp.data)
+        self.assertGreaterEqual(resp.data['count'], 1)
+
+        # Query without page returns list for backwards compatibility
+        resp_list = client.get('/api/marketplace/student/products/')
+        self.assertEqual(resp_list.status_code, 200)
+        self.assertIsInstance(resp_list.data, list)
+

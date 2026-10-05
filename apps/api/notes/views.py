@@ -4,9 +4,23 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
 from .models import StudyMaterial, StudentMaterialProgress, StudentMaterialBookmark
 from .serializers import StudyMaterialListSerializer, StudyMaterialDetailSerializer, with_student_state
 from subscriptions.access import has_active_subscription
+
+
+class NotesPagination(PageNumberPagination):
+    """Page number pagination that only activates when 'page' or 'page_size' is present.
+    If neither parameter is passed, returns None to retain standard unpaginated list responses."""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+    def paginate_queryset(self, queryset, request, view=None):
+        if 'page' not in request.query_params and 'page_size' not in request.query_params:
+            return None
+        return super().paginate_queryset(queryset, request, view)
 
 
 class PublicStudyMaterialListView(APIView):
@@ -41,6 +55,7 @@ class PublicStudyMaterialListView(APIView):
 
 class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = NotesPagination
 
     def get_queryset(self):
         from courses.services.course_access_service import CourseAccessService
@@ -103,6 +118,7 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(content__icontains=search)
             )
 
+        queryset = queryset.order_by('order', '-created_at', 'id')
         return with_student_state(queryset, user)
 
     def get_serializer_class(self):
@@ -276,7 +292,20 @@ class StudentPortalSyllabusNotesView(APIView):
         req_exam_id = request.query_params.get('exam') or request.query_params.get('exam_id')
         selected_prep_id = None
 
-        if req_course_id:
+        if req_exam_id:
+            try:
+                candidate_id = int(req_exam_id)
+                if candidate_id in authorized_prep_dict or is_staff_or_teacher:
+                    selected_prep_id = candidate_id
+                else:
+                    return Response(
+                        {"error": "You are not authorized to view content for this preparation."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except (ValueError, TypeError):
+                return Response({"error": "Invalid exam_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        elif req_course_id:
             try:
                 c_id = int(req_course_id)
                 matched = next((info for info in authorized_prep_dict.values() if info['course'] and info['course'].id == c_id), None)
@@ -296,26 +325,11 @@ class StudentPortalSyllabusNotesView(APIView):
                     )
             except (ValueError, TypeError):
                 return Response({"error": "Invalid course_id"}, status=status.HTTP_400_BAD_REQUEST)
-
-        elif req_exam_id:
-            try:
-                candidate_id = int(req_exam_id)
-                if candidate_id in authorized_prep_dict or is_staff_or_teacher:
-                    selected_prep_id = candidate_id
-                else:
-                    return Response(
-                        {"error": "You are not authorized to view content for this preparation."},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-            except (ValueError, TypeError):
-                return Response({"error": "Invalid exam_id"}, status=status.HTTP_400_BAD_REQUEST)
         else:
             if not is_staff_or_teacher:
-                from courses.access import get_student_course_context
-                ctx = get_student_course_context(user)
-                active_c = ctx.get('active_course')
-                if active_c and active_c.get('exam_id') in authorized_prep_dict:
-                    selected_prep_id = active_c['exam_id']
+                profile = getattr(user, 'student_profile', None)
+                if profile and profile.target_position_id in authorized_prep_dict:
+                    selected_prep_id = profile.target_position_id
                 elif authorized_preps_list:
                     selected_prep_id = authorized_preps_list[0]['id']
             elif authorized_preps_list:
@@ -345,25 +359,24 @@ class StudentPortalSyllabusNotesView(APIView):
         selected_exam = selected_info['exam']
         selected_course = selected_info['course']
 
-        from courses.services.course_access_service import CourseAccessService
-
         materials_qs = StudyMaterial.objects.filter(
             exam=selected_exam, status='published'
         ).select_related(
             'subject', 'chapter', 'topic', 'course', 'exam', 'exam__parent', 'exam__category'
         ).order_by('-created_at')
 
-        if selected_course:
+        auth_course_ids = {info['course'].id for info in authorized_prep_dict.values() if info['course']}
+        if req_course_id and not req_exam_id and selected_course:
             materials_qs = materials_qs.filter(Q(course=selected_course) | Q(course__isnull=True))
-
-        materials_qs = CourseAccessService.filter_notes_queryset(user, materials_qs)
-        materials_qs = with_student_state(materials_qs, user)
-
+        elif auth_course_ids and not is_staff_or_teacher:
+            materials_qs = materials_qs.filter(Q(course_id__in=auth_course_ids) | Q(course__isnull=True))
 
         from core.models import AdminSettings
         if AdminSettings.get_settings().enforce_subscription_access and not is_staff_or_teacher:
             if not has_active_subscription(user):
                 materials_qs = materials_qs.filter(access_type='free')
+
+        materials_qs = with_student_state(materials_qs, user)
 
         serializer = StudyMaterialListSerializer(materials_qs, many=True, context={'request': request})
         all_materials = serializer.data
@@ -449,6 +462,7 @@ from .serializers import TeacherStudyMaterialSerializer, AdminStudyMaterialSeria
 class TeacherStudyMaterialViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TeacherStudyMaterialSerializer
+    pagination_class = NotesPagination
 
     def get_queryset(self):
         from courses.models import TeacherCourseAssignment
@@ -478,7 +492,7 @@ class TeacherStudyMaterialViewSet(viewsets.ModelViewSet):
                 Q(title__icontains=search) | Q(description__icontains=search)
             )
 
-        return queryset.order_by('-updated_at')
+        return queryset.order_by('-updated_at', 'id')
 
     def perform_create(self, serializer):
         serializer.save(teacher=self.request.user, status='draft')

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { ChevronLeft, ChevronRight, Clock, AlertTriangle, LayoutGrid, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -118,15 +117,20 @@ export default function ExamAttemptPage() {
     }
   }, [attempt, questions]);
 
-  // Handle timer
+  // Handle server-authoritative timer with clock skew correction
   useEffect(() => {
     if (attempt && exam && attempt.status === 'in-progress') {
+      const serverSkewMs = attempt.server_time
+        ? new Date(attempt.server_time).getTime() - Date.now()
+        : 0;
       const startedAt = new Date(attempt.started_at).getTime();
       const timeLimitMs = exam.time_limit * 60 * 1000;
-      const deadline = startedAt + timeLimitMs;
+      const deadline = attempt.expires_at
+        ? new Date(attempt.expires_at).getTime()
+        : startedAt + timeLimitMs;
       
       const updateTimer = () => {
-        const now = Date.now();
+        const now = Date.now() + serverSkewMs;
         const remaining = Math.max(0, Math.floor((deadline - now) / 1000));
         setTimeLeft(remaining);
         

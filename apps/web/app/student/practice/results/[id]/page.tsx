@@ -149,7 +149,7 @@ export default function PracticeResultPage() {
         </div>
         <div className="bg-card p-5 rounded-[16px] border border-border shadow-sm text-center">
           <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-2">XP Earned</div>
-          <div className="text-3xl font-black text-purple-600">+{session.correct_count * 10}</div>
+          <div className="text-3xl font-black text-purple-600">+{session.correct_count}</div>
         </div>
       </div>
 

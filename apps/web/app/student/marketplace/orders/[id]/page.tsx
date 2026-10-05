@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { marketplaceApi, Order, Review, Dispute } from "@/lib/api/marketplace";
 import { Loader2, Package, ArrowLeft, CheckCircle2, Clock, Truck, FileText, CheckCircle, MapPin, Box, Star, AlertTriangle, MessageSquare } from "lucide-react";
 import { TrustModals } from "@/components/marketplace/trust-modals";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const STATUS_TIMELINE = [
   { id: 'PENDING_PAYMENT', label: 'Pending Payment', icon: FileText },
@@ -24,6 +26,7 @@ export default function StudentOrderDetailPage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
 
   // Modal states
   const [modalType, setModalType] = useState<'REVIEW' | 'DISPUTE'>('REVIEW');
@@ -52,6 +55,21 @@ export default function StudentOrderDetailPage() {
   useEffect(() => {
     fetchOrderData();
   }, [orderId]);
+
+  const handleCancelOrder = async () => {
+    if (!order) return;
+    if (!confirm("Are you sure you want to cancel this order? Stock will be released back to the marketplace.")) return;
+    try {
+      setCancelling(true);
+      const updated = await marketplaceApi.cancelOrder(order.id);
+      setOrder(updated);
+      toast.success("Order cancelled successfully.");
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || "Failed to cancel order.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const openModal = (type: 'REVIEW' | 'DISPUTE', itemId: number) => {
     setModalType(type);
@@ -100,6 +118,28 @@ export default function StudentOrderDetailPage() {
             {order.status.replace(/_/g, " ")}
           </div>
         </div>
+
+        {/* Unpaid Order Action Banner */}
+        {order.status === 'PENDING_PAYMENT' && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h4 className="font-bold text-amber-900 dark:text-amber-200 text-base">Payment Awaiting Submission</h4>
+              <p className="text-sm text-amber-800/80 dark:text-amber-300/70 mt-1">
+                Your order is reserved. Please submit payment proof to confirm, or cancel this order to release stock.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="destructive" 
+                onClick={handleCancelOrder} 
+                disabled={cancelling}
+                className="font-bold"
+              >
+                {cancelling ? "Cancelling..." : "Cancel Order"}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Global Timeline */}
         {order.status !== 'CANCELLED' && order.status !== 'REFUNDED' && (

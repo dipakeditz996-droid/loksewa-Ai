@@ -69,8 +69,8 @@ class CourseAccessTests(PracticeBase):
         r = self.client.post('/api/practice-sessions/', {
             'course': self.course_a.id, 'exam': self.course_b.exam_id, 'mode': 'flexible', 'total_questions': 3,
         }, format='json')
-        self.assertEqual(r.status_code, 200)
-        self.assertEqual(r.json()['session']['exam'], self.exam.id)
+        self.assertEqual(r.status_code, 403)
+        self.assertIn("not part of the selected course", r.json()['detail'])
 
     def test_expired_enrollment_is_denied(self):
         self.enroll(self.course_a, expires_at=timezone.now() - timedelta(days=1))
@@ -94,7 +94,7 @@ class CourseAccessTests(PracticeBase):
             self.course_a.save()
             r = self.create_practice(self.course_a)
             self.assertEqual(r.status_code, 403, status)
-            self.assertIn('not available yet', r.json()['detail'])
+            self.assertIn('not enrolled', r.json()['detail'].lower())
 
     def test_unknown_course_id_looks_the_same_as_not_enrolled(self):
         r = self.client.post('/api/practice-sessions/', {'course': 999999, 'mode': 'flexible'}, format='json')
@@ -190,20 +190,48 @@ class PackageGateTests(PracticeBase):
             r = getattr(self.client, method)(url, {}, format='json') if method == 'post' else self.client.get(url)
             self.assertEqual(r.status_code, 403, url)
 
+    def tearDown(self):
+        super().tearDown()
+        s = AdminSettings.get_settings()
+        s.enforce_subscription_access = False
+        s.save()
+        cache.clear()
+
 
 class RequestOverheadTests(PracticeBase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        s = AdminSettings.get_settings()
+        s.enforce_subscription_access = False
+        s.save()
+        cache.clear()
+
+    def tearDown(self):
+        super().tearDown()
+        s = AdminSettings.get_settings()
+        s.enforce_subscription_access = False
+        s.save()
+        cache.clear()
+
     def test_student_profile_comes_with_the_user_query_not_a_second_one(self):
         StudentProfile.objects.create(user=self.student)
-        s = AdminSettings.get_settings()
-        s.enforce_subscription_access = True
-        s.save()
-        StudentProfile.objects.filter(user=self.student).update(access_origin='ADMIN_GRANTED')
-        with CaptureQueriesContext(connection) as ctx:
-            r = bearer_client(self.student).get('/api/practice-sessions/')
-        self.assertEqual(r.status_code, 200)
-        standalone = [q['sql'] for q in ctx.captured_queries
-                      if 'FROM "support_studentprofile"' in q['sql'] and 'JOIN' not in q['sql']]
-        self.assertEqual(standalone, [], 'the profile should be joined into the user lookup')
+        try:
+            s = AdminSettings.get_settings()
+            s.enforce_subscription_access = True
+            s.save()
+            StudentProfile.objects.filter(user=self.student).update(access_origin='ADMIN_GRANTED')
+            with CaptureQueriesContext(connection) as ctx:
+                r = bearer_client(self.student).get('/api/practice-sessions/')
+            self.assertEqual(r.status_code, 200)
+            standalone = [q['sql'] for q in ctx.captured_queries
+                          if 'FROM "support_studentprofile"' in q['sql'] and 'JOIN' not in q['sql']]
+            self.assertEqual(standalone, [], 'the profile should be joined into the user lookup')
+        finally:
+            s = AdminSettings.get_settings()
+            s.enforce_subscription_access = False
+            s.save()
+            cache.clear()
 
     def test_the_user_is_still_validated_against_the_database_on_every_request(self):
         c = bearer_client(self.student)
@@ -221,26 +249,38 @@ class RequestOverheadTests(PracticeBase):
     def test_only_the_enforcement_flag_is_cached_and_saving_settings_refreshes_it(self):
         cache.clear()
         settings_row = AdminSettings.get_settings()
+        settings_row.enforce_subscription_access = False
+        settings_row.save()
+        cache.clear()
         with CaptureQueriesContext(connection) as ctx:
             self.assertFalse(AdminSettings.is_subscription_enforced())
             self.assertFalse(AdminSettings.is_subscription_enforced())
         self.assertEqual(len([q for q in ctx.captured_queries if 'core_adminsettings' in q['sql']]), 1)  # second call: no query
-        settings_row.enforce_subscription_access = True
-        settings_row.save()                                         # signal drops the cached flag
-        self.assertTrue(AdminSettings.is_subscription_enforced())    # visible at once, in this process
-        cache.clear()
+        try:
+            settings_row.enforce_subscription_access = True
+            settings_row.save()                                         # signal drops the cached flag
+            self.assertTrue(AdminSettings.is_subscription_enforced())    # visible at once, in this process
+        finally:
+            settings_row.enforce_subscription_access = False
+            settings_row.save()
+            cache.clear()
 
     @override_settings(ENFORCE_ACCESS_CACHE_TTL=15)
     def test_a_stale_cached_flag_never_grants_a_student_access_they_lack(self):
         """The cache only holds the global switch; per-student access is still checked."""
         cache.clear()
         self.make_questions(2)
-        s = AdminSettings.get_settings()
-        s.enforce_subscription_access = True
-        s.save()
-        self.assertTrue(AdminSettings.is_subscription_enforced())   # cached True
-        self.assertEqual(self.start().status_code, 403)             # student has no package
-        cache.clear()
+        try:
+            s = AdminSettings.get_settings()
+            s.enforce_subscription_access = True
+            s.save()
+            self.assertTrue(AdminSettings.is_subscription_enforced())   # cached True
+            self.assertEqual(self.start().status_code, 403)             # student has no package
+        finally:
+            s = AdminSettings.get_settings()
+            s.enforce_subscription_access = False
+            s.save()
+            cache.clear()
 
 
 class ResultReadOnlyTests(PracticeBase):

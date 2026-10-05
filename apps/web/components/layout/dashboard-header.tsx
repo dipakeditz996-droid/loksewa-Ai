@@ -87,12 +87,12 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-md px-4 sm:px-8">
-      <div className="flex min-w-0 items-center gap-4">
+    <header className="sticky top-0 z-30 flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-md px-4 sm:px-8 gap-2">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-4 flex-1">
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden"
+          className="lg:hidden shrink-0"
           onClick={onMenuClick}
         >
           <Menu className="h-5 w-5 text-[#0B2545] dark:text-white" />
@@ -115,9 +115,16 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
             </>
           )}
         </div>
+        
+        {/* On mobile, place CourseSwitcher here so it can shrink cleanly */}
+        {role === "student" && (
+          <div className="block lg:hidden min-w-0">
+            <CourseSwitcher />
+          </div>
+        )}
       </div>
 
-      <div className="flex items-center gap-3 sm:gap-5">
+      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
         <div className="hidden md:flex relative w-64 lg:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -127,8 +134,12 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
           />
         </div>
 
-        {/* Active Course Context Switcher - student portal only */}
-        {role === "student" && <CourseSwitcher />}
+        {/* Active Course Context Switcher - desktop only */}
+        {role === "student" && (
+          <div className="hidden lg:block">
+            <CourseSwitcher />
+          </div>
+        )}
 
         {/* Do Not Disturb / Focus Mode - student portal only. */}
         {role === "student" && <FocusModeHeaderToggle />}

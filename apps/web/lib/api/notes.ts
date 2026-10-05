@@ -22,6 +22,7 @@ export interface StudyMaterial {
   course_title?: string;
   is_bookmarked: boolean;
   progress: number;
+  is_downloadable?: boolean;
   content?: string;
   file?: string;
   file_url?: string;
@@ -69,7 +70,8 @@ export const notesApi = {
   getMaterials: async (params?: Record<string, string>): Promise<StudyMaterial[]> => {
     const searchParams = new URLSearchParams(params);
     const qs = searchParams.toString();
-    return apiClient<StudyMaterial[]>(`/notes/materials/${qs ? `?${qs}` : ''}`);
+    const res = await apiClient<StudyMaterial[] | { results: StudyMaterial[] }>(`/notes/materials/${qs ? `?${qs}` : ''}`);
+    return Array.isArray(res) ? res : (res?.results || []);
   },
 
   getMaterial: async (id: string): Promise<StudyMaterial> => {
@@ -77,11 +79,13 @@ export const notesApi = {
   },
 
   getRecentMaterials: async (): Promise<StudyMaterial[]> => {
-    return apiClient<StudyMaterial[]>('/notes/materials/recent/');
+    const res = await apiClient<StudyMaterial[] | { results: StudyMaterial[] }>('/notes/materials/recent/');
+    return Array.isArray(res) ? res : (res?.results || []);
   },
 
   getBookmarkedMaterials: async (): Promise<StudyMaterial[]> => {
-    return apiClient<StudyMaterial[]>('/notes/materials/bookmarks/');
+    const res = await apiClient<StudyMaterial[] | { results: StudyMaterial[] }>('/notes/materials/bookmarks/');
+    return Array.isArray(res) ? res : (res?.results || []);
   },
 
   getStudentPortalView: async (examId?: number, courseId?: number): Promise<StudentPortalResponse> => {

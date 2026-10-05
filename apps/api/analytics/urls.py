@@ -23,6 +23,7 @@ urlpatterns = [
     path('performance-trend/', PerformanceTrendView.as_view(), name='analytics-performance-trend'),
     path('subject-performance/', SubjectPerformanceView.as_view(), name='analytics-subject-performance'),
     path('topic-analysis/', TopicPerformanceView.as_view(), name='analytics-topic-analysis'),
+    path('topic-performance/', TopicPerformanceView.as_view(), name='analytics-topic-performance'),
     path('ai-insight/', AIInsightView.as_view(), name='analytics-ai-insight'),
     
     # Teacher Analytics

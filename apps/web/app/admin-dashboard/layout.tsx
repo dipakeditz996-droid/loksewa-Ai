@@ -48,7 +48,9 @@ import {
   Trash2,
   ArchiveRestore,
   HardDrive,
+  Flag,
 } from "lucide-react";
+
 
 // ===== Sidebar Nav Config =====
 interface NavItem {
@@ -100,6 +102,7 @@ const SIDEBAR_NAV: NavSection[] = [
     items: [
       { title: "Exams & Mock Tests", href: "/admin-dashboard/exams", icon: FileText },
       { title: "Exam Schedule", href: "/admin-dashboard/exams/schedules", icon: CalendarDays },
+      { title: "Question Reports", href: "/admin-dashboard/question-reports", icon: Flag as any },
       { title: "Rankings & Leaderboards", href: "/admin-dashboard/rankings", icon: Trophy },
     ],
   },
@@ -492,10 +495,14 @@ function AdminHeader({
 // ===== Main Layout =====
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Prevent SSR/client hydration mismatch: auth state is only known client-side.
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const html = document.documentElement;
     const body = document.body;
     const hadDark = html.classList.contains("dark");
@@ -515,7 +522,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
   }, []);
 
-  if (loading) {
+  useEffect(() => {
+    if (mounted && !loading && !user) {
+      router.replace("/login");
+    }
+  }, [mounted, loading, user, router]);
+
+  // Before mount: render a static spinner that matches SSR output exactly.
+  if (!mounted || loading) {
     return (
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
@@ -527,10 +541,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   if (!user) {
-    // Not authenticated — redirect to the unified login
-    if (typeof window !== "undefined") {
-      window.location.href = "/login";
-    }
     return (
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">

@@ -120,6 +120,14 @@ class SubscriptionPayment(models.Model):
         ('REJECTED', 'Rejected'),
     )
     
+    VERIFICATION_STATUS_CHOICES = (
+        ('NOT_VERIFIED', 'Not Verified'),
+        ('VERIFICATION_IN_PROGRESS', 'Verification In Progress'),
+        ('VERIFIED_CONFIDENT', 'Verified - Confident'),
+        ('VERIFIED_UNCERTAIN', 'Verified - Uncertain (Awaiting Manual Review)'),
+        ('VERIFICATION_FAILED', 'Verification Failed'),
+    )
+    
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscription_payments')
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT, related_name='subscription_payments')
     subscription = models.OneToOneField(Subscription, on_delete=models.SET_NULL, null=True, blank=True, related_name='payment')
@@ -136,6 +144,24 @@ class SubscriptionPayment(models.Model):
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     rejection_reason = models.TextField(blank=True)
+    
+    # AI/OCR verification state and results
+    verification_status = models.CharField(
+        max_length=30,
+        choices=VERIFICATION_STATUS_CHOICES,
+        default='NOT_VERIFIED',
+        help_text='Tracks AI/OCR verification progress and confidence level'
+    )
+    verification_result = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Stores AI/OCR verification metadata: detected_amount, confidence_score, detected_transaction_id, error_message, etc.'
+    )
+    ai_verification_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when AI verification was performed'
+    )
     
     submitted_at = models.DateTimeField(auto_now_add=True)
     verified_at = models.DateTimeField(null=True, blank=True)

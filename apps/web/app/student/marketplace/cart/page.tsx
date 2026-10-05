@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { marketplaceApi, Cart } from "@/lib/api/marketplace";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trash2, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Trash2, ShoppingBag, Plus, Minus } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
@@ -14,6 +14,7 @@ export default function CartPage() {
   const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const [removingItemId, setRemovingItemId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -32,6 +33,26 @@ export default function CartPage() {
     }
   };
 
+  const handleUpdateQuantity = async (itemId: number, newQty: number, maxStock: number = 99) => {
+    if (newQty < 1) {
+      handleRemove(itemId);
+      return;
+    }
+    if (newQty > maxStock) {
+      toast.error(`Only ${maxStock} in stock`);
+      return;
+    }
+    try {
+      setUpdatingItemId(itemId);
+      await marketplaceApi.updateCartItem(itemId, newQty);
+      await loadCart();
+    } catch (error: any) {
+      toast.error(error?.data?.detail || error?.message || "Failed to update quantity");
+    } finally {
+      setUpdatingItemId(null);
+    }
+  };
+
   const handleRemove = async (itemId: number) => {
     try {
       setRemovingItemId(itemId);
@@ -39,7 +60,7 @@ export default function CartPage() {
       await loadCart();
       toast.success("Item removed from cart");
     } catch (error: any) {
-      toast.error(error.message || "Failed to remove item");
+      toast.error(error?.data?.detail || error?.message || "Failed to remove item");
     } finally {
       setRemovingItemId(null);
     }
@@ -81,6 +102,9 @@ export default function CartPage() {
             {cart.items.map((item) => {
               const product = item.product_details;
               if (!product) return null;
+              const sellerName = product.seller_details
+                ? (product.seller_details.full_name || `${product.seller_details.first_name || ''} ${product.seller_details.last_name || ''}`.trim() || 'Student Seller')
+                : 'LoksewaAI Platform';
               
               return (
                 <div key={item.id} className="bg-card p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row gap-4 relative group">
@@ -103,12 +127,34 @@ export default function CartPage() {
                     <h3 className="font-semibold text-lg line-clamp-2 pr-8">{product.title}</h3>
                     <p className="text-sm text-muted-foreground mt-1">{product.condition ? product.condition.replace('_', ' ') : 'New Book'}</p>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Seller: {product.seller_details ? `${product.seller_details.first_name} ${product.seller_details.last_name}` : 'Unknown'}
+                      Seller: {sellerName}
                     </p>
-                    <div className="mt-auto pt-4 flex items-center justify-between">
+                    <div className="mt-auto pt-4 flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center gap-4">
                         <span className="font-semibold">Rs. {product.final_price}</span>
-                        <span className="text-sm text-muted-foreground">Qty: {item.quantity}</span>
+                        <div className="flex items-center border rounded-lg overflow-hidden bg-background">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, product.stock ?? 99)}
+                            disabled={updatingItemId === item.id || item.quantity <= 1}
+                            className="px-2 py-1 hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="px-3 py-1 text-sm font-medium min-w-[2rem] text-center">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, product.stock ?? 99)}
+                            disabled={updatingItemId === item.id || (product.stock !== undefined && item.quantity >= product.stock)}
+                            className="px-2 py-1 hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                            aria-label="Increase quantity"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <span className="font-bold text-primary">Rs. {(parseFloat(product.final_price) * item.quantity).toFixed(2)}</span>
                     </div>

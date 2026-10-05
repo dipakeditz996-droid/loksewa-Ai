@@ -94,7 +94,15 @@ export interface PaymentMethod {
 export interface PaymentSubmission {
   id: number;
   student: number;
-  student_details?: any;
+  student_details?: {
+    id: number;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+    full_name?: string;
+    email?: string;
+    [key: string]: unknown;
+  };
   product: number | null;
   product_details?: Product;
   order: number | null;
@@ -402,6 +410,8 @@ export const marketplaceApi = {
     max_price?: string;
     search?: string;
     sort?: string;
+    page?: number;
+    page_size?: number;
   }) => {
     const query = new URLSearchParams();
     if (params?.category) query.append("category", params.category);
@@ -413,10 +423,13 @@ export const marketplaceApi = {
     if (params?.max_price) query.append("max_price", params.max_price);
     if (params?.search) query.append("search", params.search);
     if (params?.sort) query.append("sort", params.sort);
+    if (params?.page) query.append("page", params.page.toString());
+    if (params?.page_size) query.append("page_size", params.page_size.toString());
     const qs = query.toString();
-    return apiClient<Product[]>(
+    const res = await apiClient<Product[] | { results: Product[]; count: number }>(
       `/marketplace/student/products/${qs ? `?${qs}` : ""}`
     );
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
   getProduct: async (id: number) => {
     return apiClient<Product>(`/marketplace/student/products/${id}/`);
@@ -424,14 +437,16 @@ export const marketplaceApi = {
 
   // Student - Payment Methods
   getPaymentMethods: async () => {
-    return apiClient<PaymentMethod[]>("/marketplace/student/payment-methods/");
+    const res = await apiClient<PaymentMethod[] | { results: PaymentMethod[] }>("/marketplace/student/payment-methods/");
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
 
   // Student - Payment Submissions
   getSubmissions: async () => {
-    return apiClient<PaymentSubmission[]>(
+    const res = await apiClient<PaymentSubmission[] | { results: PaymentSubmission[] }>(
       "/marketplace/student/payment-submissions/"
     );
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
   submitPayment: async (data: FormData) => {
     return apiClient<PaymentSubmission>(
@@ -442,7 +457,8 @@ export const marketplaceApi = {
 
   // Student - Purchases
   getPurchases: async () => {
-    return apiClient<Purchase[]>("/marketplace/student/purchases/");
+    const res = await apiClient<Purchase[] | { results: Purchase[] }>("/marketplace/student/purchases/");
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
 
   // Student - Cart
@@ -472,10 +488,16 @@ export const marketplaceApi = {
 
   // Student - Orders
   getOrders: async () => {
-    return apiClient<Order[]>("/marketplace/student/orders/");
+    const res = await apiClient<Order[] | { results: Order[] }>("/marketplace/student/orders/");
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
   getOrder: async (id: number) => {
     return apiClient<Order>(`/marketplace/student/orders/${id}/`);
+  },
+  cancelOrder: async (id: number) => {
+    return apiClient<Order>(`/marketplace/student/orders/${id}/cancel/`, {
+      method: "POST",
+    });
   },
   calculateFee: async (data: { delivery_address_id: number }) => {
     return apiClient<{ delivery_fee: string | number }>(
@@ -497,9 +519,10 @@ export const marketplaceApi = {
 
   // Student - Delivery Addresses
   getDeliveryAddresses: async () => {
-    return apiClient<DeliveryAddress[]>(
+    const res = await apiClient<DeliveryAddress[] | { results: DeliveryAddress[] }>(
       "/marketplace/student/delivery-addresses/"
     );
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
   createDeliveryAddress: async (data: Partial<DeliveryAddress>) => {
     return apiClient<DeliveryAddress>(
@@ -521,7 +544,8 @@ export const marketplaceApi = {
 
   // Student - My Listings (seller)
   getMyListings: async () => {
-    return apiClient<Product[]>("/marketplace/student/my-listings/");
+    const res = await apiClient<Product[] | { results: Product[] }>("/marketplace/student/my-listings/");
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
   createListing: async (data: FormData) => {
     return apiClient<Product>("/marketplace/student/my-listings/", {
@@ -556,7 +580,8 @@ export const marketplaceApi = {
 
   // Student - My Sales (seller sees their sold orders)
   getMySales: async () => {
-    return apiClient<SellerSale[]>("/marketplace/student/my-sales/");
+    const res = await apiClient<SellerSale[] | { results: SellerSale[] }>("/marketplace/student/my-sales/");
+    return Array.isArray(res) ? res : (res?.results ?? []);
   },
 
   // Student - Listing Reports

@@ -167,11 +167,15 @@ class SubscriptionPaymentSerializer(serializers.ModelSerializer):
     payment_method_details = PaymentMethodSerializer(source='payment_method', read_only=True)
     student_name = serializers.CharField(source='student.get_full_name', read_only=True)
     selected_courses = serializers.SerializerMethodField()
+    verification_status_display = serializers.CharField(source='get_verification_status_display', read_only=True)
     
     class Meta:
         model = SubscriptionPayment
         fields = '__all__'
-        read_only_fields = ('student', 'amount', 'status', 'rejection_reason', 'verified_at', 'verified_by')
+        read_only_fields = (
+            'student', 'amount', 'status', 'rejection_reason', 'verified_at', 'verified_by',
+            'verification_status', 'verification_result', 'ai_verification_at'
+        )
 
     def get_selected_courses(self, obj):
         apps = list(obj.course_applications.select_related('course', 'course__exam'))

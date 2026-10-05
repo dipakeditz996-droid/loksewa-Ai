@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FileText, Clock, Target, Play, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,10 +55,22 @@ export default function ExamsListingPage() {
   // Exams tab 48h after its scheduled start, so this reads the promoted
   // value rather than the raw admin-set category.
   const oldPastExams = activeExams.filter(e => e.effective_category === "past_year");
-  const modelExams = activeExams.filter(e => e.effective_category === "model");
+  const objectiveExams = activeExams.filter(e => e.effective_category === "model");
   const liveExams = activeExams.filter(e => e.effective_category === "live");
-  const topicwiseExams = activeExams.filter(e => e.effective_category === "topicwise" || (e.exam_type === "subject" && !!e.topic_id));
   const subjectiveExams = activeExams.filter(e => e.exam_type === "subjective");
+
+  const router = useRouter();
+  const handleTabChange = (val: string) => {
+    if (val === "results") {
+      router.push("/student/results");
+      return;
+    }
+    if (val === "create") {
+      router.push("/student/exams/custom-builder");
+      return;
+    }
+    setActiveTab(val);
+  };
 
   const ExamGrid = ({ list, emptyTitle, emptyBody }: { list: StudentExam[]; emptyTitle: string; emptyBody: string }) => {
     if (isLoadingExams && !exams) {
@@ -164,12 +177,6 @@ export default function ExamsListingPage() {
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Mock Exams</h1>
           <p className="text-muted-foreground mt-1">Simulate the real examination environment.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/student/exams/request-subjective"><Button variant="outline">Request Subjective Live Exam</Button></Link>
-          <Link href="/student/results"><Button variant="outline">Past Results</Button></Link>
-          <Link href="/student/exams/custom-builder"><Button variant="outline">Create Your Own</Button></Link>
-          <Link href="/student/subjective"><Button variant="outline">Subjective Practice</Button></Link>
-        </div>
       </div>
 
       {/* Live & Upcoming Countdowns */}
@@ -178,13 +185,14 @@ export default function ExamsListingPage() {
         <MockExamCountdown />
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="mb-6 flex-wrap h-auto">
-          <TabsTrigger value="past_year">Past Year Paper</TabsTrigger>
-          <TabsTrigger value="model">Model Exams</TabsTrigger>
+          <TabsTrigger value="past_year">Old Past Exams</TabsTrigger>
+          <TabsTrigger value="objective">Objective Exams</TabsTrigger>
           <TabsTrigger value="live">Live Exams</TabsTrigger>
-          <TabsTrigger value="topicwise">Topicwise Exam</TabsTrigger>
-          <TabsTrigger value="subjective">Subjective Papers</TabsTrigger>
+          <TabsTrigger value="subjective">Subjective Exams</TabsTrigger>
+          <TabsTrigger value="results">Past Results</TabsTrigger>
+          <TabsTrigger value="create">Create Your Own</TabsTrigger>
         </TabsList>
 
         <TabsContent value="past_year" className="space-y-6">
@@ -195,11 +203,11 @@ export default function ExamsListingPage() {
           />
         </TabsContent>
 
-        <TabsContent value="model" className="space-y-6">
+        <TabsContent value="objective" className="space-y-6">
           <ExamGrid
-            list={modelExams}
-            emptyTitle="No Model Exams"
-            emptyBody="Start-anytime, fixed-duration mock exams will show up here once published."
+            list={objectiveExams}
+            emptyTitle="No Objective Exams"
+            emptyBody="Start-anytime, fixed-duration objective exams will show up here once published."
           />
         </TabsContent>
 
@@ -207,25 +215,18 @@ export default function ExamsListingPage() {
           <ExamGrid
             list={liveExams}
             emptyTitle="No Live Exams Right Now"
-            emptyBody="Live Exams run in a fixed shared window — a completed one moves to Model Exams after 48 hours."
-          />
-        </TabsContent>
-
-        <TabsContent value="topicwise" className="space-y-6">
-          <ExamGrid
-            list={topicwiseExams}
-            emptyTitle="No Topicwise Exams"
-            emptyBody="Published topic-focused examinations will appear here."
+            emptyBody="Live Exams run in a fixed shared window — a completed one moves to Objective Exams after 48 hours."
           />
         </TabsContent>
 
         <TabsContent value="subjective" className="space-y-6">
           <ExamGrid
             list={subjectiveExams}
-            emptyTitle="No Subjective Exams"
-            emptyBody="Published subjective question papers will show up here once published by the Admin."
+            emptyTitle="No exams available for your course yet."
+            emptyBody="New examinations will appear here when they are published."
           />
         </TabsContent>
+
 
       </Tabs>
     </div>

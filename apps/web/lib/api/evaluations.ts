@@ -72,10 +72,11 @@ export const evaluationService = {
     return apiClient<GetResultsResponse>(`/admin/evaluations/?${q.toString()}`);
   },
 
-  getMyResults: async (params?: { page?: number; page_size?: number }): Promise<StudentAttemptListResponse> => {
+  getMyResults: async (params?: { page?: number; page_size?: number; status?: string }): Promise<StudentAttemptListResponse> => {
     const q = new URLSearchParams();
     if (params?.page) q.set("page", String(params.page));
     if (params?.page_size) q.set("page_size", String(params.page_size));
+    q.set("status", params?.status || "results");
     const qs = q.toString();
     return apiClient<StudentAttemptListResponse>(`/student/exam-attempts/${qs ? `?${qs}` : ""}`);
   },

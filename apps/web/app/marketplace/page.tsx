@@ -328,7 +328,7 @@ export default function MarketplacePage() {
                   <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Category</h4>
                   <div className="space-y-2">
                     {["All", ...CATEGORIES].map(cat => (
-                      <label key={cat} className="flex items-center gap-3 cursor-pointer group">
+                      <label key={cat} onClick={() => setSelectedCategory(cat)} className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                           selectedCategory === cat 
                             ? 'bg-[#163E6B] border-[#163E6B] dark:bg-[#D4A72C] dark:border-[#D4A72C]' 
@@ -349,7 +349,7 @@ export default function MarketplacePage() {
                   <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Target Exam</h4>
                   <div className="space-y-2">
                     {EXAMS.map(exam => (
-                      <label key={exam} className="flex items-center gap-3 cursor-pointer group">
+                      <label key={exam} onClick={() => setSelectedExam(exam)} className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
                           selectedExam === exam 
                             ? 'bg-[#163E6B] border-[#163E6B] dark:bg-[#D4A72C] dark:border-[#D4A72C]' 
@@ -370,7 +370,7 @@ export default function MarketplacePage() {
                   <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Price</h4>
                   <div className="space-y-2">
                     {["All Prices", "Under Rs. 500", "Rs. 500-1,000", "Rs. 1,000-2,000", "Rs. 2,000+"].map(price => (
-                      <label key={price} className="flex items-center gap-3 cursor-pointer group">
+                      <label key={price} onClick={() => setSelectedPrice(price)} className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
                           selectedPrice === price 
                             ? 'bg-[#163E6B] border-[#163E6B] dark:bg-[#D4A72C] dark:border-[#D4A72C]' 
@@ -391,7 +391,7 @@ export default function MarketplacePage() {
                   <h4 className="text-sm font-[700] text-slate-900 dark:text-white mb-3">Seller Type</h4>
                   <div className="space-y-2">
                     {["All", "Student Sellers", "Platform"].map(type => (
-                      <label key={type} className="flex items-center gap-3 cursor-pointer group">
+                      <label key={type} onClick={() => setSelectedSellerType(type)} className="flex items-center gap-3 cursor-pointer group">
                         <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${
                           selectedSellerType === type 
                             ? 'bg-[#163E6B] border-[#163E6B] dark:bg-[#D4A72C] dark:border-[#D4A72C]' 

@@ -50,7 +50,6 @@ export default function QuestionBankPage() {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
   const [selectedAiStatus, setSelectedAiStatus] = useState('');
-  const [selectedMapping, setSelectedMapping] = useState<'all' | 'mapped' | 'needs_mapping'>('all');
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   // Tag filter: multi-select, matches ANY of the selected tags
   // (tag_objects__in on the backend) - see QuestionSelectionService docs.
@@ -80,11 +79,11 @@ export default function QuestionBankPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds, selectedMapping, selectedCourse]);
+  }, [debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds, selectedCourse]);
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds, selectedMapping, selectedCourse]);
+  }, [page, debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds, selectedCourse]);
 
   const fetchStats = async () => {
     try {
@@ -134,7 +133,6 @@ export default function QuestionBankPage() {
         difficulty: selectedDifficulty || undefined,
         ai_status: selectedAiStatus || undefined,
         tag_objects__in: selectedTagIds.length > 0 ? selectedTagIds.join(',') : undefined,
-        mapping: selectedMapping !== 'all' ? selectedMapping : undefined,
         course: selectedCourse || undefined,
       });
       // A slower earlier request must not overwrite a newer one's results.
@@ -346,54 +344,35 @@ export default function QuestionBankPage() {
           </div>
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Mapped Questions</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-1">{stats.mapped ?? 0}</p>
+              <p className="text-sm font-medium text-gray-500">Active Questions</p>
+              <p className="text-3xl font-bold text-emerald-600 mt-1">{stats.active}</p>
             </div>
             <div className="p-3 bg-emerald-50 rounded-lg">
               <CheckSquare className="w-6 h-6 text-emerald-600" />
             </div>
           </div>
-          <div className={`p-6 rounded-xl border shadow-sm flex items-center justify-between transition-colors ${
-            (stats.needs_mapping ?? 0) > 0 ? 'bg-amber-50/70 border-amber-200' : 'bg-white border-gray-100'
-          }`}>
+          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-amber-800">Needs Mapping</p>
-              <p className="text-3xl font-bold text-amber-900 mt-1">{stats.needs_mapping ?? 0}</p>
+              <p className="text-sm font-medium text-gray-500">Inactive / Draft</p>
+              <p className="text-3xl font-bold text-gray-700 mt-1">{stats.inactive ?? (stats.total - stats.active)}</p>
             </div>
-            <div className="p-3 bg-amber-100 rounded-lg">
-              <BookOpen className="w-6 h-6 text-amber-600" />
+            <div className="p-3 bg-gray-100 rounded-lg">
+              <BookOpen className="w-6 h-6 text-gray-500" />
             </div>
           </div>
           <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500">Active Questions</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.active}</p>
+              <p className="text-sm font-medium text-gray-500">AI Pending</p>
+              <p className="text-3xl font-bold text-amber-600 mt-1">{stats.ai_pending}</p>
             </div>
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <BookOpen className="w-6 h-6 text-blue-600" />
+            <div className="p-3 bg-amber-50 rounded-lg">
+              <Wand2 className="w-6 h-6 text-amber-500" />
             </div>
           </div>
         </div>
       )}
 
-      {/* Needs Mapping Banner */}
-      {stats && (stats.needs_mapping ?? 0) > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-3 w-3 rounded-full bg-amber-500 animate-pulse shrink-0" />
-            <p className="text-sm font-medium">
-              Some questions need academic mapping before they can be used in student practice. ({stats.needs_mapping} question{(stats.needs_mapping ?? 0) > 1 ? 's' : ''} require course/syllabus mapping)
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSelectedMapping('needs_mapping')}
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors whitespace-nowrap"
-          >
-            Filter Needs Mapping
-          </button>
-        </div>
-      )}
+
 
       {/* Toolbar */}
       <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
@@ -418,7 +397,7 @@ export default function QuestionBankPage() {
             <div className="flex items-center gap-2 mr-2 bg-navy-50 px-3 py-1.5 rounded-lg border border-navy-100 flex-wrap">
               <span className="text-sm font-medium text-navy-800">{selectedIds.size} selected</span>
               <div className="h-4 w-px bg-navy-200 mx-1"></div>
-              <button onClick={() => setIsBulkMapModalOpen(true)} className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1"><BookOpen className="w-3.5 h-3.5"/> Map Academic Scope</button>
+              <button onClick={() => setIsBulkMapModalOpen(true)} className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1"><BookOpen className="w-3.5 h-3.5"/> Reassign Academic Scope</button>
               <div className="h-4 w-px bg-navy-200 mx-1"></div>
               <button onClick={() => setIsCollectionModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1"><FolderPlus className="w-3 h-3"/> Add to Collection</button>
               <button onClick={() => setIsTagModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1 ml-1"><TagIcon className="w-3 h-3"/> Add Tags</button>
@@ -427,15 +406,6 @@ export default function QuestionBankPage() {
               <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-red-600 hover:text-red-800 ml-1">Delete</button>
             </div>
           )}
-          <select 
-            value={selectedMapping} 
-            onChange={(e) => setSelectedMapping(e.target.value as any)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-navy-500 font-medium"
-          >
-            <option value="all">Mapping: All</option>
-            <option value="mapped">Mapping: Mapped Only</option>
-            <option value="needs_mapping">Mapping: Needs Mapping</option>
-          </select>
           <select 
             value={selectedCourse} 
             onChange={(e) => setSelectedCourse(e.target.value)}
@@ -708,7 +678,6 @@ export default function QuestionBankPage() {
                 <th className="p-4 font-medium">Question</th>
                 <th className="p-4 font-medium">Type</th>
                 <th className="p-4 font-medium">Course &amp; Academic Scope</th>
-                <th className="p-4 font-medium">Mapping Status</th>
                 <th className="p-4 font-medium">Status</th>
                 <th className="p-4 font-medium text-right">Actions</th>
               </tr>
@@ -721,14 +690,13 @@ export default function QuestionBankPage() {
                     <td className="p-4"><div className="h-4 w-72 bg-gray-200 rounded mb-1.5" /><div className="h-3 w-40 bg-gray-100 rounded" /></td>
                     <td className="p-4"><div className="h-4 w-16 bg-gray-200 rounded" /></td>
                     <td className="p-4"><div className="h-4 w-32 bg-gray-200 rounded" /></td>
-                    <td className="p-4"><div className="h-5 w-20 bg-gray-200 rounded-full" /></td>
                     <td className="p-4"><div className="h-6 w-20 bg-gray-200 rounded-full" /></td>
                     <td className="p-4 text-right"><div className="h-8 w-8 bg-gray-200 rounded ml-auto" /></td>
                   </tr>
                 ))
               ) : questions.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-500">
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
                     <p className="mb-3">No questions found matching your criteria.</p>
                     <Link
                       href="/admin-dashboard/academic/questions/create"
@@ -744,7 +712,7 @@ export default function QuestionBankPage() {
                 {collectionGroups.map(({ collection, questions: groupQuestions }) => (
                   <tr key={`collection-${collection.id}`} className="hover:bg-indigo-50/40 transition-colors">
                     <td className="p-4"></td>
-                    <td colSpan={6} className="p-0">
+                    <td colSpan={5} className="p-0">
                       <Link
                         href={`/admin-dashboard/academic/collections/${collection.id}`}
                         className="flex items-center justify-between gap-3 px-4 py-3"
@@ -854,23 +822,6 @@ export default function QuestionBankPage() {
                       <div className="text-xs text-gray-500 truncate max-w-[200px] mt-0.5">
                         {q.subject_name || 'No Subject'} {q.chapter_name ? `• ${q.chapter_name}` : ''} {q.topic_name ? `• ${q.topic_name}` : ''}
                       </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold capitalize ${
-                        q.mapping_status === 'mapped'
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : q.mapping_status === 'incomplete'
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : q.mapping_status === 'invalid'
-                          ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                      }`}>
-                        {q.mapping_status_display || (
-                          q.mapping_status === 'mapped' ? 'Mapped' :
-                          q.mapping_status === 'incomplete' ? 'Incomplete' :
-                          q.mapping_status === 'invalid' ? 'Invalid' : 'Unassigned'
-                        )}
-                      </span>
                     </td>
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${

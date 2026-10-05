@@ -317,7 +317,7 @@ export default function CheckoutPage() {
             <p className="text-lg text-slate-600 mb-8">Your order has been received and your payment is pending verification.</p>
             <div className="bg-white dark:bg-white/5 border border-slate-200 rounded-2xl p-8 text-left mb-10 grid grid-cols-2 gap-8">
               <div><p className="text-sm font-semibold text-slate-500">Order ID</p><p className="text-lg font-bold">#ORD-{createdOrder.id}</p></div>
-              <div><p className="text-sm font-semibold text-slate-500">Total Amount</p><p className="text-lg font-bold">Rs. {createdOrder.total_amount}</p></div>
+              <div><p className="text-sm font-semibold text-slate-500">Total Amount</p><p className="text-lg font-bold">Rs. {(Number(createdOrder.total_amount) + Number(createdOrder.delivery_fee || 0)).toFixed(2)}</p></div>
               <div><p className="text-sm font-semibold text-slate-500">Status</p><p className="text-lg font-bold text-yellow-600">Pending Verification</p></div>
               <div><p className="text-sm font-semibold text-slate-500">Transaction Ref</p><p className="text-lg font-bold uppercase">{txnCode}</p></div>
             </div>

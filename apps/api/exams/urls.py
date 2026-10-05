@@ -17,6 +17,8 @@ from .student_exam_views import (
     LeaderboardViewSet,
     CalmSessionLogView
 )
+from .issue_views import StudentQuestionIssueReportViewSet
+
 from .admin_views import (
     AdminExamCategoryViewSet, AdminExamViewSet, AdminPaperViewSet,
     AdminSubjectViewSet, AdminChapterViewSet, AdminTopicViewSet,
@@ -66,6 +68,8 @@ router.register(r'student/exams', StudentExaminationViewSet, basename='student-e
 router.register(r'student/exam-requests', StudentExaminationRequestViewSet, basename='student-exam-request')
 router.register(r'student/exam-attempts', StudentExaminationAttemptViewSet, basename='student-exam-attempt')
 router.register(r'student/leaderboard', LeaderboardViewSet, basename='student-leaderboard')
+router.register(r'student/question-reports', StudentQuestionIssueReportViewSet, basename='student-question-report')
+
 
 # Admin Academic routes
 router.register(r'admin/academic/categories', AdminExamCategoryViewSet, basename='admin-category')

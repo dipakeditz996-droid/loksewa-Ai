@@ -102,6 +102,7 @@ from .data_safety_views import (
 from exams.schedule_views import AdminExamScheduleViewSet
 from core.testimonial_views import AdminTestimonialViewSet
 from core.website_page_views import AdminWebsitePageViewSet
+from exams.issue_views import AdminQuestionIssueReportViewSet
 
 router = DefaultRouter()
 router.register(r'data-safety/trash', AdminTrashViewSet, basename='admin-data-safety-trash')
@@ -120,6 +121,7 @@ router.register(r'website-pages', AdminWebsitePageViewSet, basename='admin-websi
 router.register(r'study-plan-templates', AdminStudyPlanTemplateViewSet, basename='admin-study-plan-templates')
 router.register(r'material-categories', AdminMaterialCategoryViewSet, basename='admin-material-categories')
 router.register(r'material-collections', AdminMaterialCollectionViewSet, basename='admin-material-collections')
+router.register(r'question-reports', AdminQuestionIssueReportViewSet, basename='admin-question-reports')
 router.register(r'syllabus/categories', ExamCategoryViewSet, basename='syllabus-categories')
 router.register(r'syllabus/exams', ExamViewSet, basename='syllabus-exams')
 router.register(r'syllabus/papers', PaperViewSet, basename='syllabus-papers')

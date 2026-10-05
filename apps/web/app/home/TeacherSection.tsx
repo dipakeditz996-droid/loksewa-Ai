@@ -57,17 +57,17 @@ export function TeacherSection() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/login">
-                  <Button className="w-full sm:w-auto bg-[#D4A72C] hover:bg-[#C29322] text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] border-none flex items-center justify-center gap-2 group transition-all hover:-translate-y-0.5 shadow-[0_8px_25px_rgba(212,167,44,0.3)]">
+                <Button asChild className="w-full sm:w-auto bg-[#D4A72C] hover:bg-[#C29322] text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] border-none flex items-center justify-center gap-2 group transition-all hover:-translate-y-0.5 shadow-[0_8px_25px_rgba(212,167,44,0.3)]">
+                  <Link href="/login">
                     Go to Teacher Portal
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </Link>
-                <Link href="/contact">
-                  <Button variant="outline" className="w-full sm:w-auto h-[50px] px-8 rounded-[12px] font-[600] text-[15px] border-slate-300 dark:border-white/10 text-slate-700 dark:text-white bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center transition-all">
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full sm:w-auto h-[50px] px-8 rounded-[12px] font-[600] text-[15px] border-slate-300 dark:border-white/10 text-slate-700 dark:text-white bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center transition-all">
+                  <Link href="/contact">
                     Apply to Teach
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </div>
             </div>
 

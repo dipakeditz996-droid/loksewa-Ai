@@ -47,3 +47,12 @@ class ChapterAdmin(admin.ModelAdmin):
 class UserTopicProgressAdmin(admin.ModelAdmin):
     list_display = ['user', 'topic', 'status', 'progress', 'accuracy', 'last_updated']
     list_filter = ['status', 'topic__chapter__subject']
+
+from .issue_models import QuestionIssueReport
+
+@admin.register(QuestionIssueReport)
+class QuestionIssueReportAdmin(admin.ModelAdmin):
+    list_display = ['id', 'question', 'student', 'issue_type', 'status', 'created_at']
+    list_filter = ['status', 'issue_type']
+    search_fields = ['question__question_id', 'student__username', 'student__email']
+    readonly_fields = ['created_at', 'updated_at', 'reviewed_at', 'reviewed_by']

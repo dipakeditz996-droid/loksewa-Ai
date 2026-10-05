@@ -7,6 +7,10 @@ from core.upload_validators import (
     validate_document_size_20mb, validate_document_extension,
     validate_pdf_upload,
 )
+# Issue reporting — students flag question errors for Admin review.
+# Kept in a separate file to avoid growing models.py further.
+from .issue_models import QuestionIssueReport, validate_evidence_file  # noqa: F401
+
 
 class ExamCategory(models.Model):
     name = models.CharField(max_length=255)

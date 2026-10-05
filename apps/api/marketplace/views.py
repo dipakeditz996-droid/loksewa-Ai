@@ -6,7 +6,19 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from django.db import transaction
 from decimal import Decimal
+from rest_framework.pagination import PageNumberPagination
 from core.pagination import StandardResultsSetPagination
+
+class MarketplacePagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+    def paginate_queryset(self, queryset, request, view=None):
+        if 'page' in request.query_params or 'page_size' in request.query_params:
+            return super().paginate_queryset(queryset, request, view)
+        return None
+
 
 from .models import (
     Product, PaymentMethod, PaymentSubmission, Purchase,
@@ -125,6 +137,7 @@ class AdminProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().select_related('seller').prefetch_related('images').order_by('-created_at')
     serializer_class = ProductSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = MarketplacePagination
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -202,18 +215,24 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = PaymentSubmission.objects.all().order_by('-submitted_at')
     serializer_class = PaymentSubmissionSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = MarketplacePagination
 
     @action(detail=True, methods=['post'], serializer_class=PaymentSubmissionAdminReviewSerializer)
     def review(self, request, pk=None):
-        submission = self.get_object()
-        if submission.status != 'PENDING':
-            return Response(
-                {"detail": "Submission is already processed."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        with transaction.atomic():
+            submission = PaymentSubmission.objects.select_for_update().filter(pk=pk).first()
+            if not submission:
+                return Response({"detail": "Payment submission not found."}, status=status.HTTP_404_NOT_FOUND)
+            if submission.status != 'PENDING':
+                return Response(
+                    {"detail": "Submission is already processed."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        serializer = PaymentSubmissionAdminReviewSerializer(submission, data=request.data, partial=True)
-        if serializer.is_valid():
+            serializer = PaymentSubmissionAdminReviewSerializer(submission, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
             new_status = serializer.validated_data.get('status')
             rejection_reason = serializer.validated_data.get('rejection_reason', '')
 
@@ -223,73 +242,98 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            with transaction.atomic():
-                submission.status = new_status
-                submission.rejection_reason = rejection_reason if new_status == 'REJECTED' else ''
-                submission.verified_at = timezone.now()
-                submission.verified_by = request.user
-                submission.save()
-
-                if new_status == 'APPROVED':
-                    if submission.order:
-                        submission.order.status = 'CONFIRMED'
-                        submission.order.save()
-                    elif submission.product:
-                        Purchase.objects.update_or_create(
-                            student=submission.student,
-                            product=submission.product,
-                            defaults={
-                                'payment_submission': submission,
-                                'amount_paid': submission.submitted_amount,
-                                'status': 'ACTIVE',
-                                'approved_at': timezone.now(),
-                            }
-                        )
-                elif new_status == 'REJECTED':
-                    if submission.order:
-                        submission.order.status = 'PENDING_PAYMENT'
-                        submission.order.save()
-
-            from core.notification_service import NotificationService
-            title = f"Order #{submission.order.id}" if submission.order else (
-                submission.product.title if submission.product else "your item"
-            )
+            submission.status = new_status
+            submission.rejection_reason = rejection_reason if new_status == 'REJECTED' else ''
+            submission.verified_at = timezone.now()
+            submission.verified_by = request.user
+            submission.save()
 
             if new_status == 'APPROVED':
-                NotificationService.notify_admins(
-                    notif_type='payment',
-                    title='Marketplace Order Approved',
-                    message=(
-                        f"{request.user.get_full_name() or request.user.username} approved "
-                        f"{submission.student.get_full_name() or submission.student.username}'s "
-                        f"order for '{title}'."
-                    ),
-                    action_url='/admin-dashboard/marketplace/payments',
-                )
-                # Notify seller if S2S order
                 if submission.order:
-                    seller_ids = set(
-                        submission.order.items
-                        .filter(product__seller__isnull=False)
-                        .values_list('product__seller_id', flat=True)
+                    old_order_status = submission.order.status
+                    submission.order.status = 'CONFIRMED'
+                    submission.order.save(update_fields=['status'])
+                    OrderStatusHistory.objects.create(
+                        order=submission.order,
+                        previous_status=old_order_status,
+                        new_status='CONFIRMED',
+                        changed_by=request.user,
+                        note='Payment approved by admin',
                     )
-                    from core.models import User as UserModel
-                    for seller in UserModel.objects.filter(id__in=seller_ids):
-                        NotificationService.notify_seller_payment_confirmed(seller, submission.order.id)
+                elif submission.product:
+                    Purchase.objects.update_or_create(
+                        student=submission.student,
+                        product=submission.product,
+                        defaults={
+                            'payment_submission': submission,
+                            'amount_paid': submission.submitted_amount,
+                            'status': 'ACTIVE',
+                            'approved_at': timezone.now(),
+                        }
+                    )
             elif new_status == 'REJECTED':
-                NotificationService.notify_admins(
-                    notif_type='payment',
-                    title='Marketplace Order Rejected',
-                    message=(
-                        f"{request.user.get_full_name() or request.user.username} rejected "
-                        f"{submission.student.get_full_name() or submission.student.username}'s "
-                        f"order for '{title}'. Reason: {rejection_reason}"
-                    ),
-                    action_url='/admin-dashboard/marketplace/payments',
-                )
+                if submission.order:
+                    old_order_status = submission.order.status
+                    submission.order.status = 'PENDING_PAYMENT'
+                    submission.order.save(update_fields=['status'])
+                    OrderStatusHistory.objects.create(
+                        order=submission.order,
+                        previous_status=old_order_status,
+                        new_status='PENDING_PAYMENT',
+                        changed_by=request.user,
+                        note=f'Payment rejected by admin: {rejection_reason}',
+                    )
 
-            return Response(PaymentSubmissionSerializer(submission).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        from core.notification_service import NotificationService
+        title = f"Order #{submission.order.id}" if submission.order else (
+            submission.product.title if submission.product else "your item"
+        )
+
+        if new_status == 'APPROVED':
+            NotificationService.notify_admins(
+                notif_type='payment',
+                title='Marketplace Order Approved',
+                message=(
+                    f"{request.user.get_full_name() or request.user.username} approved "
+                    f"{submission.student.get_full_name() or submission.student.username}'s "
+                    f"order for '{title}'."
+                ),
+                action_url='/admin-dashboard/marketplace/payments',
+            )
+            NotificationService.notify_student_payment_approved(
+                student=submission.student,
+                title_ref=title,
+                action_url='/student/marketplace/orders' if submission.order else '/student/marketplace',
+            )
+            # Notify seller if S2S order
+            if submission.order:
+                seller_ids = set(
+                    submission.order.items
+                    .filter(product__seller__isnull=False)
+                    .values_list('product__seller_id', flat=True)
+                )
+                from core.models import User as UserModel
+                for seller in UserModel.objects.filter(id__in=seller_ids):
+                    NotificationService.notify_seller_payment_confirmed(seller, submission.order.id)
+        elif new_status == 'REJECTED':
+            NotificationService.notify_admins(
+                notif_type='payment',
+                title='Marketplace Order Rejected',
+                message=(
+                    f"{request.user.get_full_name() or request.user.username} rejected "
+                    f"{submission.student.get_full_name() or submission.student.username}'s "
+                    f"order for '{title}'. Reason: {rejection_reason}"
+                ),
+                action_url='/admin-dashboard/marketplace/payments',
+            )
+            NotificationService.notify_student_payment_rejected(
+                student=submission.student,
+                title_ref=title,
+                reason=rejection_reason,
+                action_url='/student/marketplace/orders' if submission.order else '/student/marketplace',
+            )
+
+        return Response(PaymentSubmissionSerializer(submission).data)
 
 
 class AdminPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
@@ -326,6 +370,7 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Order.objects.all().select_related('student', 'delivery_address_ref').prefetch_related('items__product').order_by('-created_at')
     serializer_class = OrderSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = MarketplacePagination
 
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):
@@ -350,6 +395,7 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
         from core.notification_service import NotificationService
 
         with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
             order.status = new_status
             order.save()
 
@@ -361,19 +407,25 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
                 note=note,
             )
 
+            # Sync line-item fulfillment_status with order status
+            if new_status in ['PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED']:
+                order.items.exclude(fulfillment_status=new_status).update(fulfillment_status=new_status)
+
             # Mark order items ELIGIBLE for payout when order is DELIVERED
             if new_status == 'DELIVERED' and old_status != 'DELIVERED':
                 order.items.filter(product__seller__isnull=False, payout_status='PENDING').update(payout_status='ELIGIBLE')
 
-            # Return stock on cancellation (but not after delivery)
-            if new_status == 'CANCELLED' and old_status not in ['DELIVERED']:
-                for item in order.items.all():
-                    item.product.stock += item.quantity
-                    item.product.save(update_fields=['stock'])
-                    # Un-SOLD the listing if stock was restored
-                    if item.product.listing_status == 'SOLD' and item.product.stock > 0:
-                        item.product.listing_status = 'ACTIVE'
-                        item.product.save(update_fields=['listing_status'])
+            # Return stock on cancellation (but not after delivery) and cancel pending payouts
+            if new_status in ['CANCELLED', 'REFUNDED']:
+                order.items.filter(payout_status__in=['PENDING', 'ON_HOLD', 'ELIGIBLE']).update(payout_status='CANCELLED')
+                if old_status not in ['DELIVERED']:
+                    for item in order.items.select_related('product').all():
+                        p = Product.objects.select_for_update().get(pk=item.product_id)
+                        p.stock += item.quantity
+                        if p.stock > 0 and p.listing_status == 'SOLD':
+                            p.listing_status = 'ACTIVE'
+                            p.is_published = True
+                        p.save(update_fields=['stock', 'listing_status', 'is_published'])
 
         # Buyer notification
         status_display = dict(Order.STATUS_CHOICES).get(new_status, new_status)
@@ -493,6 +545,7 @@ class AdminListingReportViewSet(viewsets.ReadOnlyModelViewSet):
 class StudentProductViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MarketplacePagination
 
     def get_queryset(self):
         if not _marketplace_enabled():
@@ -575,6 +628,7 @@ class MarketplacePricingPolicyView(APIView):
 class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
     serializer_class = PaymentSubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MarketplacePagination
 
     def get_queryset(self):
         return PaymentSubmission.objects.filter(student=self.request.user).order_by('-submitted_at')
@@ -590,6 +644,8 @@ class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
             raise ValidationError({"detail": "Either product or order must be provided."})
 
         if product:
+            if product.seller and product.seller == self.request.user:
+                raise ValidationError({"detail": "You cannot purchase your own listing."})
             pending = PaymentSubmission.objects.filter(
                 student=self.request.user, product=product, status='PENDING'
             ).exists()
@@ -636,6 +692,12 @@ class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
                 f"payment proof for '{title}' (NPR {expected_amount})."
             ),
             action_url='/admin-dashboard/marketplace/payments',
+        )
+        NotificationService.notify_student_payment_submitted(
+            student=self.request.user,
+            title_ref=title,
+            amount=expected_amount,
+            action_url='/student/marketplace/orders' if order else '/student/marketplace',
         )
 
 
@@ -689,7 +751,13 @@ class CartViewSet(viewsets.ModelViewSet):
     def add_item(self, request):
         cart = self.get_object()
         product_id = request.data.get('product_id')
-        quantity = int(request.data.get('quantity', 1))
+        try:
+            quantity = int(request.data.get('quantity', 1))
+        except (TypeError, ValueError):
+            return Response({"detail": "Invalid quantity"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if quantity <= 0:
+            return Response({"detail": "Quantity must be at least 1"}, status=status.HTTP_400_BAD_REQUEST)
 
         if not product_id:
             return Response({"detail": "product_id is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -710,14 +778,12 @@ class CartViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if product.stock < quantity:
-            return Response({"detail": "Not enough stock"}, status=status.HTTP_400_BAD_REQUEST)
-
         cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
-        if not created:
-            cart_item.quantity += quantity
-        else:
-            cart_item.quantity = quantity
+        target_quantity = quantity if created else (cart_item.quantity + quantity)
+        if product.stock < target_quantity:
+            return Response({"detail": f"Not enough stock. Only {product.stock} available."}, status=status.HTTP_400_BAD_REQUEST)
+
+        cart_item.quantity = target_quantity
         cart_item.save()
 
         return Response(CartSerializer(cart).data)
@@ -769,6 +835,8 @@ class CartItemDetailView(APIView):
         product = item.product
         if not product.is_published or product.listing_status != 'ACTIVE':
             return Response({'detail': 'This product is no longer available.'}, status=status.HTTP_400_BAD_REQUEST)
+        if product.seller and product.seller == request.user:
+            return Response({'detail': 'You cannot purchase your own listing.'}, status=status.HTTP_400_BAD_REQUEST)
         if product.stock < quantity:
             return Response({'detail': f'Only {product.stock} in stock.'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -788,6 +856,7 @@ class CartItemDetailView(APIView):
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MarketplacePagination
 
     def get_queryset(self):
         return Order.objects.filter(student=self.request.user).prefetch_related(
@@ -813,7 +882,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 return rule.fee
             if not rule.province and not rule.district and not rule.municipality:
                 return rule.fee
-        return 100.00
+        return Decimal('0.00')
 
     @action(detail=False, methods=['post'])
     def calculate_fee(self, request):
@@ -827,14 +896,60 @@ class OrderViewSet(viewsets.ModelViewSet):
         fee = self._calculate_delivery_fee(delivery_address)
         return Response({"delivery_fee": fee})
 
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        """Allow a student to cancel their own order while it is still unpaid (PENDING_PAYMENT)."""
+        order = self.get_object()
+        if order.student != request.user:
+            raise PermissionDenied("You can only cancel your own orders.")
+        if order.status != 'PENDING_PAYMENT':
+            return Response(
+                {"detail": f"Order cannot be cancelled in status '{order.status}'. Only unpaid orders can be cancelled directly."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.status != 'PENDING_PAYMENT':
+                return Response({"detail": "Order status has changed."}, status=status.HTTP_400_BAD_REQUEST)
+
+            order.status = 'CANCELLED'
+            order.save(update_fields=['status', 'updated_at'])
+
+            OrderStatusHistory.objects.create(
+                order=order,
+                previous_status='PENDING_PAYMENT',
+                new_status='CANCELLED',
+                changed_by=request.user,
+                note='Cancelled by student before payment',
+            )
+
+            # Return stock
+            for item in order.items.select_related('product').all():
+                p = Product.objects.select_for_update().get(pk=item.product_id)
+                p.stock += item.quantity
+                if p.stock > 0 and p.listing_status == 'SOLD':
+                    p.listing_status = 'ACTIVE'
+                    p.is_published = True
+                p.save(update_fields=['stock', 'listing_status', 'is_published'])
+
+            order.items.update(fulfillment_status='CANCELLED', payout_status='CANCELLED')
+
+        from core.notification_service import NotificationService
+        status_display = dict(Order.STATUS_CHOICES).get('CANCELLED', 'Cancelled')
+        NotificationService.notify_order_status(
+            student=order.student,
+            order_id=order.id,
+            status_display=status_display,
+            action_url='/student/marketplace/orders',
+        )
+
+        return Response(OrderSerializer(order).data)
+
     @action(detail=False, methods=['post'])
     def checkout(self, request):
         if not _marketplace_enabled():
             raise PermissionDenied("The marketplace is currently disabled by the administrator.")
-
-        cart = Cart.objects.filter(student=request.user).first()
-        if not cart or not cart.items.exists():
-            return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
 
         delivery_address_id = request.data.get('delivery_address_id')
         shipping_address_raw = request.data.get('shipping_address')
@@ -871,18 +986,22 @@ class OrderViewSet(viewsets.ModelViewSet):
         from core.notification_service import NotificationService
 
         with transaction.atomic():
+            cart = Cart.objects.select_for_update().filter(student=request.user).first()
+            if not cart or not cart.items.exists():
+                return Response({"detail": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST)
+
             # Lock products for update and validate
-            cart_items = list(cart.items.select_related('product').all())
+            cart_items = list(cart.items.select_related('product', 'product__seller').all())
             for item in cart_items:
                 # Prevent self-purchase (double-check at checkout)
                 if item.product.seller and item.product.seller == request.user:
                     raise ValidationError(f"You cannot purchase your own listing: {item.product.title}")
-                # Stock check
+                # Stock check with lock
                 product = Product.objects.select_for_update().get(pk=item.product.pk)
-                if product.stock < item.quantity:
-                    raise ValidationError(f"Not enough stock for {product.title}")
                 if not product.is_published or product.listing_status not in ('ACTIVE',):
                     raise ValidationError(f"{product.title} is no longer available.")
+                if product.stock < item.quantity:
+                    raise ValidationError(f"Not enough stock for {product.title}")
                 product.stock -= item.quantity
                 # Auto-mark as SOLD when stock reaches 0 (especially important for single-copy used books)
                 if product.stock == 0:
@@ -907,8 +1026,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             for item in cart_items:
                 price = item.product.final_price
                 line_total = price * item.quantity
-                commission = (line_total * Decimal(str(commission_pct))) / Decimal('100.00')
-                seller_earning = line_total - commission
+                commission = ((line_total * Decimal(str(commission_pct))) / Decimal('100.00')).quantize(Decimal('0.01'))
+                seller_earning = (line_total - commission).quantize(Decimal('0.01'))
+                seller_name = (
+                    item.product.seller.get_full_name() or item.product.seller.username
+                    if item.product.seller else "LoksewaAI Platform"
+                )
 
                 OrderItem.objects.create(
                     order=order,
@@ -917,6 +1040,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                     price=price,
                     commission_amount=commission,
                     seller_earning=seller_earning,
+                    snapshot_product_name=item.product.title,
+                    snapshot_seller_name=seller_name,
                 )
 
             OrderStatusHistory.objects.create(
@@ -1096,6 +1221,7 @@ class SellerSalesViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = SellerSaleSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MarketplacePagination
 
     def get_queryset(self):
         return (
@@ -1277,6 +1403,7 @@ class StudentPayoutAccountViewSet(viewsets.ModelViewSet):
 class StudentPayoutViewSet(viewsets.ModelViewSet):
     serializer_class = SellerPayoutSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = MarketplacePagination
     http_method_names = ['get', 'post', 'head', 'options']
 
     def get_queryset(self):
@@ -1390,6 +1517,7 @@ class AdminPayoutViewSet(viewsets.ModelViewSet):
     queryset = SellerPayout.objects.all().select_related('seller', 'payout_account', 'processed_by').order_by('-created_at')
     serializer_class = AdminSellerPayoutSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = MarketplacePagination
 
     @action(detail=True, methods=['post'])
     def update_status(self, request, pk=None):

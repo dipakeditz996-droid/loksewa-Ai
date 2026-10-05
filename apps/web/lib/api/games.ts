@@ -266,6 +266,7 @@ export interface GameQuestion {
 export interface GameMatch {
   id: number;
   status: 'SEARCHING' | 'MATCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  invite_code?: string | null;
   is_bot_match?: boolean;
   bot_difficulty?: string;
   opponent_type?: 'BOT' | 'HUMAN';

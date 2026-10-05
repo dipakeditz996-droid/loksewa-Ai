@@ -10,7 +10,8 @@ remaining-days/expiring-soon/expired computation.
 """
 import base64
 from datetime import timedelta
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
@@ -27,6 +28,7 @@ from subscriptions.models import (
     Invoice, Subscription, SubscriptionCourseSelection,
     SubscriptionPayment, SubscriptionPlan,
 )
+from subscriptions.payment_verification import PaymentProofVerificationService
 
 # A 1x1 GIF - the same dummy upload fixture the marketplace test suite uses,
 # small enough to pass validate_image_size_5mb and validate_image_extension.
@@ -35,6 +37,90 @@ _GIF_DATA = base64.b64decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAA
 
 def _dummy_screenshot(name='proof.gif'):
     return SimpleUploadedFile(name, _GIF_DATA, content_type='image/gif')
+
+
+class PaymentProofVerificationServiceTests(APITestCase):
+    def test_receipt_is_confident_only_when_all_payment_details_match(self):
+        client = Mock()
+        client.models.generate_content.return_value = SimpleNamespace(
+            text=(
+                '{"receipt_legible": true, "payment_completed": true, '
+                '"detected_amount": "2,999.00", '
+                '"detected_transaction_id": "TXN-EXACT-1", '
+                '"confidence_score": 0.98, "notes": "Completed receipt"}'
+            )
+        )
+        payment = SimpleNamespace(
+            screenshot=_dummy_screenshot(),
+            amount='2999.00',
+            transaction_id='TXN-EXACT-1',
+        )
+
+        with patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'}), patch(
+            'subscriptions.payment_verification.genai.Client',
+            return_value=client,
+        ):
+            result = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(result['outcome'], 'confident_match')
+        self.assertTrue(result['amount_matches'])
+        self.assertTrue(result['transaction_id_matches'])
+        self.assertEqual(result['confidence_score'], 0.98)
+
+    def test_low_confidence_receipt_is_manual_review_even_when_fields_match(self):
+        client = Mock()
+        client.models.generate_content.return_value = SimpleNamespace(
+            text=(
+                '{"receipt_legible": true, "payment_completed": true, '
+                '"detected_amount": "2,999.00", '
+                '"detected_transaction_id": "TXN-EXPECTED", '
+                '"confidence_score": 0.94, "notes": "Low-confidence extraction"}'
+            )
+        )
+        payment = SimpleNamespace(
+            screenshot=_dummy_screenshot(),
+            amount='2999.00',
+            transaction_id='TXN-EXPECTED',
+        )
+
+        with patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'}), patch(
+            'subscriptions.payment_verification.genai.Client',
+            return_value=client,
+        ):
+            result = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(result['outcome'], 'manual_review')
+        self.assertTrue(result['amount_matches'])
+        self.assertTrue(result['transaction_id_matches'])
+        self.assertTrue(result['payment_completed'])
+        self.assertEqual(result['confidence_score'], 0.94)
+
+    def test_incomplete_or_mismatched_receipt_is_manual_review(self):
+        client = Mock()
+        client.models.generate_content.return_value = SimpleNamespace(
+            text=(
+                '{"receipt_legible": true, "payment_completed": false, '
+                '"detected_amount": "2,999.00", '
+                '"detected_transaction_id": "TXN-OTHER", '
+                '"confidence_score": 0.99, "notes": "Completion not shown"}'
+            )
+        )
+        payment = SimpleNamespace(
+            screenshot=_dummy_screenshot(),
+            amount='2999.00',
+            transaction_id='TXN-EXPECTED',
+        )
+
+        with patch.dict('os.environ', {'GEMINI_API_KEY': 'test-key'}), patch(
+            'subscriptions.payment_verification.genai.Client',
+            return_value=client,
+        ):
+            result = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(result['outcome'], 'manual_review')
+        self.assertTrue(result['amount_matches'])
+        self.assertFalse(result['transaction_id_matches'])
+        self.assertFalse(result['payment_completed'])
 
 
 class PackageManagementTests(APITestCase):
@@ -717,6 +803,175 @@ class PackageMatchingAndPurchaseFlowTests(APITestCase):
         # Civil plan must NOT be returned because student is preparing for Computer
         self.assertNotIn('PSC Civil 3M', returned_plan_names)
 
+    def test_payment_submission_queues_background_verification(self):
+        self.client.force_authenticate(self.student_a)
+        with patch(
+            'core.storage_backends.google_drive.upload_file',
+            return_value={'id': 'mock-payment-proof-id'},
+        ), patch('subscriptions.tasks.verify_payment_proof.delay') as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post('/api/subscriptions/payments/', {
+                    'plan': self.plan_comp.id,
+                    'payment_method': self.method.id,
+                    'transaction_id': 'TXN-VERIFY-QUEUED',
+                    'screenshot': _dummy_screenshot('receipt.gif'),
+                }, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        payment = SubscriptionPayment.objects.get(pk=response.data['id'])
+        self.assertEqual(payment.status, 'PENDING')
+        self.assertEqual(payment.verification_status, 'VERIFICATION_IN_PROGRESS')
+        enqueue.assert_called_once_with(payment.id)
+
+    def test_queue_failure_marks_payment_failed_and_notifies_for_manual_review(self):
+        payment = SubscriptionPayment.objects.create(
+            student=self.student_a,
+            plan=self.plan_comp,
+            payment_method=self.method,
+            amount=self.plan_comp.price,
+            transaction_id='TXN-VERIFY-QUEUE-ERROR',
+            screenshot='subscriptions/payment_proofs/queue-error.gif',
+            verification_status='VERIFICATION_IN_PROGRESS',
+        )
+
+        with patch(
+            'subscriptions.tasks.verify_payment_proof.delay',
+            side_effect=RuntimeError('Broker unavailable'),
+        ):
+            from subscriptions.tasks import enqueue_payment_verification
+            enqueue_payment_verification(payment.id)
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, 'PENDING')
+        self.assertEqual(payment.verification_status, 'VERIFICATION_FAILED')
+        self.assertEqual(
+            payment.verification_result['error_message'],
+            'Broker unavailable',
+        )
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.student_a,
+            title='Payment Under Manual Review',
+        ).exists())
+
+    def test_uncertain_verification_routes_to_manual_review_without_rejecting(self):
+        payment = SubscriptionPayment.objects.create(
+            student=self.student_a,
+            plan=self.plan_comp,
+            payment_method=self.method,
+            amount=self.plan_comp.price,
+            transaction_id='TXN-VERIFY-UNCERTAIN',
+            screenshot='subscriptions/payment_proofs/uncertain.gif',
+            verification_status='VERIFICATION_IN_PROGRESS',
+        )
+        result = {
+            'outcome': 'manual_review',
+            'receipt_legible': True,
+            'payment_completed': False,
+            'detected_amount': '2999.00',
+            'detected_transaction_id': 'DIFFERENT-TXN',
+            'amount_matches': True,
+            'transaction_id_matches': False,
+            'notes': 'Receipt does not show a completed payment.',
+        }
+
+        with patch(
+            'subscriptions.payment_verification.PaymentProofVerificationService.verify',
+            return_value=result,
+        ):
+            from subscriptions.tasks import verify_payment_proof
+            task_result = verify_payment_proof(payment.id)
+
+        payment.refresh_from_db()
+        self.assertEqual(task_result['status'], 'manual_review')
+        self.assertEqual(payment.status, 'PENDING')
+        self.assertEqual(payment.verification_status, 'VERIFIED_UNCERTAIN')
+        self.assertEqual(payment.verification_result, result)
+        self.assertIsNone(payment.subscription)
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.student_a,
+            title='Payment Under Manual Review',
+        ).exists())
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.admin,
+            title='Subscription Payment Needs Manual Review',
+        ).exists())
+
+        self.client.force_authenticate(self.admin)
+        approval = self.client.post(f'/api/subscriptions/payments/{payment.id}/approve/')
+        self.assertEqual(approval.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, 'APPROVED')
+        self.assertEqual(
+            payment.verification_result['admin_decision']['action'],
+            'approved',
+        )
+
+    def test_verification_provider_failure_keeps_payment_pending_for_admin(self):
+        payment = SubscriptionPayment.objects.create(
+            student=self.student_a,
+            plan=self.plan_comp,
+            payment_method=self.method,
+            amount=self.plan_comp.price,
+            transaction_id='TXN-VERIFY-ERROR',
+            screenshot='subscriptions/payment_proofs/failed.gif',
+            verification_status='VERIFICATION_IN_PROGRESS',
+        )
+
+        with patch(
+            'subscriptions.payment_verification.PaymentProofVerificationService.verify',
+            side_effect=RuntimeError('Provider unavailable'),
+        ):
+            from subscriptions.tasks import verify_payment_proof
+            task_result = verify_payment_proof(payment.id)
+
+        payment.refresh_from_db()
+        self.assertEqual(task_result['status'], 'failed')
+        self.assertEqual(payment.status, 'PENDING')
+        self.assertEqual(payment.verification_status, 'VERIFICATION_FAILED')
+        self.assertEqual(
+            payment.verification_result['error_message'],
+            'Provider unavailable',
+        )
+        self.assertIsNone(payment.subscription)
+        self.assertTrue(Notification.objects.filter(
+            recipient=self.student_a,
+            title='Payment Under Manual Review',
+        ).exists())
+
+    def test_confident_match_is_informational_until_admin_approves(self):
+        payment = SubscriptionPayment.objects.create(
+            student=self.student_a,
+            plan=self.plan_comp,
+            payment_method=self.method,
+            amount=self.plan_comp.price,
+            transaction_id='TXN-VERIFY-MATCH',
+            screenshot='subscriptions/payment_proofs/match.gif',
+            verification_status='VERIFICATION_IN_PROGRESS',
+        )
+        result = {
+            'outcome': 'confident_match',
+            'receipt_legible': True,
+            'payment_completed': True,
+            'detected_amount': str(self.plan_comp.price),
+            'detected_transaction_id': payment.transaction_id,
+            'amount_matches': True,
+            'transaction_id_matches': True,
+            'confidence_score': 0.98,
+        }
+
+        with patch(
+            'subscriptions.payment_verification.PaymentProofVerificationService.verify',
+            return_value=result,
+        ):
+            from subscriptions.tasks import verify_payment_proof
+            task_result = verify_payment_proof(payment.id)
+
+        payment.refresh_from_db()
+        self.assertEqual(task_result['status'], 'verified')
+        self.assertEqual(payment.verification_status, 'VERIFIED_CONFIDENT')
+        self.assertEqual(payment.status, 'PENDING')
+        self.assertIsNone(payment.subscription)
+
     def test_multi_plan_submission_validation_and_admin_approval_unlocks_courses(self):
         self.client.force_authenticate(self.student_a)
 
@@ -780,12 +1035,16 @@ class PackageMatchingAndPurchaseFlowTests(APITestCase):
 
     def test_payment_rejection_stores_reason_and_leaves_unlocked_false(self):
         self.client.force_authenticate(self.student_a)
-        resp = self.client.post('/api/subscriptions/payments/', {
-            'plan': self.plan_comp.id,
-            'payment_method': self.method.id,
-            'transaction_id': 'TXN-REJECT-TEST',
-            'screenshot': _dummy_screenshot('receipt.gif'),
-        }, format='multipart')
+        with patch(
+            'core.storage_backends.google_drive.upload_file',
+            return_value={'id': 'mock-rejected-payment-proof-id'},
+        ):
+            resp = self.client.post('/api/subscriptions/payments/', {
+                'plan': self.plan_comp.id,
+                'payment_method': self.method.id,
+                'transaction_id': 'TXN-REJECT-TEST',
+                'screenshot': _dummy_screenshot('receipt.gif'),
+            }, format='multipart')
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         payment_id = resp.data['id']
 
@@ -799,6 +1058,10 @@ class PackageMatchingAndPurchaseFlowTests(APITestCase):
         payment = SubscriptionPayment.objects.get(id=payment_id)
         self.assertEqual(payment.status, 'REJECTED')
         self.assertEqual(payment.rejection_reason, 'Screenshot is blurred and transaction reference is unreadable.')
+        self.assertEqual(payment.verification_result['admin_decision']['action'], 'rejected')
+        self.assertEqual(
+            payment.verification_result['admin_decision']['reason'],
+            'Screenshot is blurred and transaction reference is unreadable.',
+        )
         self.assertIsNone(payment.subscription)
         self.assertFalse(has_active_subscription(self.student_a))
-

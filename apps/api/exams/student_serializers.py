@@ -179,9 +179,15 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
             return 'This exam is not currently active.'
 
         now = timezone.now()
-        if obj.start_time and now < obj.start_time:
+        is_live_scheduled = obj.objective_category == 'live' and obj.effective_category == 'live'
+        if is_live_scheduled:
+            if obj.start_time and now < obj.start_time:
+                return 'This exam has not opened yet.'
+            if obj.end_time and now > obj.end_time:
+                return 'This exam window has closed.'
+        elif obj.start_time and now < obj.start_time:
             return 'This exam has not opened yet.'
-        if obj.end_time and now > obj.end_time:
+        elif obj.end_time and now > obj.end_time and obj.objective_category not in ('past_year', 'model', 'topicwise'):
             return 'This exam window has closed.'
 
         # Subjective exam must have a valid question paper attached
@@ -525,18 +531,26 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
         )
 
     def get_total_questions(self, obj):
-        return obj.examination.total_questions
+        if obj.examination.total_questions:
+            return obj.examination.total_questions
+        ans_count = obj.answers.count()
+        if ans_count:
+            return ans_count
+        if obj.examination.question_set_id:
+            return obj.examination.question_set.questions.count()
+        from .models import ExaminationQuestion
+        return ExaminationQuestion.objects.filter(examination=obj.examination).count()
 
     def get_correct_answers(self, obj):
         return sum(1 for a in obj.answers.all() if a.is_correct)
 
     def get_wrong_answers(self, obj):
-        return sum(1 for a in obj.answers.all() if not a.is_correct and a.selected_option)
+        return sum(1 for a in obj.answers.all() if not a.is_correct and (a.selected_option or a.answer_text))
 
     def get_unanswered(self, obj):
-        # A subjective answer has no selected_option even when the student
-        # wrote a full response - answer_text is what "answered" means there.
-        return sum(1 for a in obj.answers.all() if not a.selected_option and not a.answer_text)
+        total = self.get_total_questions(obj)
+        attempted = sum(1 for a in obj.answers.all() if a.selected_option or a.answer_text)
+        return max(0, total - attempted)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -564,18 +578,101 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
     has_submitted_answer_pdf = serializers.SerializerMethodField()
     question_scores = serializers.SerializerMethodField()
     subjective_submission = serializers.SerializerMethodField()
+    total_questions = serializers.SerializerMethodField()
+    attempted_questions = serializers.SerializerMethodField()
+    correct_answers = serializers.SerializerMethodField()
+    wrong_answers = serializers.SerializerMethodField()
+    unanswered = serializers.SerializerMethodField()
+    accuracy = serializers.SerializerMethodField()
+    subject_breakdown = serializers.SerializerMethodField()
+    topic_breakdown = serializers.SerializerMethodField()
 
     class Meta:
         model = ExaminationAttempt
         fields = [
             'id', 'examination', 'examination_title', 'examination_exam_type', 'total_marks',
             'is_published', 'started_at', 'submitted_at', 'status', 'score', 'percentage', 'passed',
-            'time_taken_seconds', 'answers', 'needs_evaluation',
+            'time_taken_seconds', 'total_questions', 'attempted_questions', 'correct_answers',
+            'wrong_answers', 'unanswered', 'accuracy', 'subject_breakdown', 'topic_breakdown',
+            'answers', 'needs_evaluation',
             'show_correct_answers', 'can_review_answers',
             'evaluator_feedback', 'evaluator_name', 'evaluated_at', 'has_submitted_answer_pdf',
             'question_scores', 'subjective_submission',
             'rank', 'total_participants'
         ] + TIMING_FIELDS
+
+    def get_total_questions(self, obj):
+        if obj.examination.total_questions:
+            return obj.examination.total_questions
+        ans_count = obj.answers.count()
+        if ans_count:
+            return ans_count
+        if obj.examination.question_set_id:
+            return obj.examination.question_set.questions.count()
+        from .models import ExaminationQuestion
+        return ExaminationQuestion.objects.filter(examination=obj.examination).count()
+
+    def get_attempted_questions(self, obj):
+        return sum(1 for a in obj.answers.all() if a.selected_option or a.answer_text)
+
+    def get_correct_answers(self, obj):
+        return sum(1 for a in obj.answers.all() if a.is_correct)
+
+    def get_wrong_answers(self, obj):
+        return sum(1 for a in obj.answers.all() if not a.is_correct and (a.selected_option or a.answer_text))
+
+    def get_unanswered(self, obj):
+        total = self.get_total_questions(obj)
+        attempted = self.get_attempted_questions(obj)
+        return max(0, total - attempted)
+
+    def get_accuracy(self, obj):
+        attempted = self.get_attempted_questions(obj)
+        if attempted > 0:
+            correct = self.get_correct_answers(obj)
+            return round((correct / attempted * 100), 1)
+        return 0.0
+
+    def get_subject_breakdown(self, obj):
+        subjects = {}
+        for ans in obj.answers.select_related('question__subject', 'question__topic__chapter__subject', 'question__chapter__subject').all():
+            q = ans.question
+            subj = q.subject or (q.topic.chapter.subject if q.topic and q.topic.chapter else None) or (q.chapter.subject if q.chapter else None)
+            name = subj.name if subj else "General"
+            if name not in subjects:
+                subjects[name] = {"subject": name, "questions": 0, "correct": 0, "incorrect": 0, "unanswered": 0}
+            subjects[name]["questions"] += 1
+            if ans.is_correct:
+                subjects[name]["correct"] += 1
+            elif ans.selected_option or ans.answer_text:
+                subjects[name]["incorrect"] += 1
+            else:
+                subjects[name]["unanswered"] += 1
+
+        for s in subjects.values():
+            s["accuracy"] = round((s["correct"] / s["questions"] * 100), 1) if s["questions"] > 0 else 0.0
+
+        return list(subjects.values())
+
+    def get_topic_breakdown(self, obj):
+        topics = {}
+        for ans in obj.answers.select_related('question__topic').all():
+            q = ans.question
+            if not q.topic:
+                continue
+            name = q.topic.name
+            if name not in topics:
+                topics[name] = {"topic": name, "questions": 0, "correct": 0}
+            topics[name]["questions"] += 1
+            if ans.is_correct:
+                topics[name]["correct"] += 1
+
+        res = []
+        for t in topics.values():
+            acc = round((t["correct"] / t["questions"] * 100), 1) if t["questions"] > 0 else 0.0
+            perf = "Strong" if acc >= 80 else ("Average" if acc >= 50 else "Needs Improvement")
+            res.append({"topic": t["topic"], "performance": perf, "accuracy": acc, "questions": t["questions"], "correct": t["correct"]})
+        return res
 
     def get_total_marks(self, obj):
         if hasattr(obj, 'subjective_submission') and obj.subjective_submission.is_published:

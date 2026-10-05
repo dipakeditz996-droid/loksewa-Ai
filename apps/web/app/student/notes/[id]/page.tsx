@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useRef, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle, Loader2 } from 'lucide-react';
 import { notesApi, StudyMaterial } from '@/lib/api/notes';
+import { toast } from 'sonner';
 
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const [material, setMaterial] = useState<StudyMaterial | null>(null);
   const [loading, setLoading] = useState(true);
   const [bookmarking, setBookmarking] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -17,9 +19,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       try {
         const data = await notesApi.getMaterial(resolvedParams.id);
         setMaterial(data);
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Failed to fetch material', err);
-        alert("Could not load material. Please try again.");
+        const errorObj = err as { data?: { detail?: string }; message?: string };
+        toast.error(errorObj?.data?.detail || errorObj?.message || "Could not load material. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -73,10 +76,26 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       const action = material.is_bookmarked ? 'unbookmark' : 'bookmark';
       await notesApi.toggleBookmark(material.id, action);
       setMaterial(prev => prev ? {...prev, is_bookmarked: !prev.is_bookmarked} : prev);
-    } catch (err) {
-      alert("Could not update bookmark.");
+      toast.success(material.is_bookmarked ? "Removed from saved notes" : "Note saved successfully");
+    } catch (err: unknown) {
+      const errorObj = err as { data?: { detail?: string }; message?: string };
+      toast.error(errorObj?.data?.detail || errorObj?.message || "Could not update bookmark.");
     } finally {
       setBookmarking(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!material) return;
+    setDownloading(true);
+    try {
+      await notesApi.downloadMaterial(material.id, `${material.slug || material.title || 'material'}.pdf`);
+      toast.success("Download started");
+    } catch (err: unknown) {
+      const errorObj = err as { data?: { detail?: string }; message?: string };
+      toast.error(errorObj?.data?.detail || errorObj?.message || "Failed to download material");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -107,15 +126,15 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           <ChevronLeft className="w-4 h-4 mr-1" /> Back to Notes
         </Link>
         <div className="flex items-center gap-3">
-          {material.material_type === 'pdf' && material.file && (
-            <a 
-              href={material.file} 
-              target="_blank" 
-              rel="noreferrer"
-              className="inline-flex items-center px-3 py-1.5 border border-border shadow-sm text-sm font-medium rounded text-foreground bg-card hover:bg-muted dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700"
+          {material.material_type === 'pdf' && (material.file || material.file_url) && material.is_downloadable !== false && (
+            <button 
+              onClick={handleDownload}
+              disabled={downloading}
+              className="inline-flex items-center px-3 py-1.5 border border-border shadow-sm text-sm font-medium rounded text-foreground bg-card hover:bg-muted dark:bg-gray-800 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700 disabled:opacity-50"
             >
-              <Download className="w-4 h-4 mr-2" /> Download PDF
-            </a>
+              {downloading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+              {downloading ? 'Downloading...' : 'Download PDF'}
+            </button>
           )}
           <button 
             onClick={toggleBookmark}
@@ -182,7 +201,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         {material.progress >= 100 ? (
           <div className="inline-flex flex-col items-center">
             <CheckCircle className="w-12 h-12 text-green-500 mb-2" />
-            <span className="text-lg font-medium text-foreground dark:text-white">You've completed this material!</span>
+            <span className="text-lg font-medium text-foreground dark:text-white">You&apos;ve completed this material!</span>
           </div>
         ) : (
           <button 

@@ -65,9 +65,15 @@ class PublicSyllabusTreeView(APIView):
     def get(self, request):
         from notes.models import StudyMaterial
 
+        from django.db.models import Prefetch, Count
+        from exams.models import Paper, Subject, Chapter, Topic
+
         categories = ExamCategory.objects.filter(is_active=True).order_by('order', 'id')
         exams = Exam.objects.filter(is_active=True, category__in=categories).select_related('category').prefetch_related(
-            'papers__subjects__chapters__topics',
+            Prefetch('papers', queryset=Paper.objects.filter(is_active=True).order_by('order')),
+            Prefetch('papers__subjects', queryset=Subject.objects.filter(is_active=True).order_by('order')),
+            Prefetch('papers__subjects__chapters', queryset=Chapter.objects.filter(is_active=True).order_by('order')),
+            Prefetch('papers__subjects__chapters__topics', queryset=Topic.objects.filter(is_active=True).order_by('order')),
         ).order_by('order', 'name')
 
         # Uploaded syllabus PDFs/notes, one query for every exam in the tree
@@ -93,23 +99,27 @@ class PublicSyllabusTreeView(APIView):
                 'externalUrl': m.external_url or None,
             })
 
+        # Aggregated question counts in a single O(1) query instead of 1 count per subject
+        question_counts = dict(
+            Question.objects.filter(
+                topic__chapter__subject__paper__exam__in=exams,
+                status='approved'
+            ).values('topic__chapter__subject_id').annotate(c=Count('id')).values_list('topic__chapter__subject_id', 'c')
+        )
+
         def build_papers(exam):
             papers = []
             subjects_count = 0
-            for paper in exam.papers.filter(is_active=True).order_by('order'):
+            for paper in exam.papers.all():
                 subjects = []
-                for subject in paper.subjects.filter(is_active=True).order_by('order'):
+                for subject in paper.subjects.all():
                     topic_groups = []
                     topics_count = 0
-                    for chapter in subject.chapters.filter(is_active=True).order_by('order'):
-                        topics = list(
-                            chapter.topics.filter(is_active=True).order_by('order').values_list('name', flat=True)
-                        )
+                    for chapter in subject.chapters.all():
+                        topics = [t.name for t in chapter.topics.all()]
                         topics_count += len(topics)
                         topic_groups.append({'id': chapter.id, 'name': chapter.title, 'topics': topics})
-                    questions_count = Question.objects.filter(
-                        topic__chapter__subject=subject, status='approved'
-                    ).count()
+                    questions_count = question_counts.get(subject.id, 0)
                     subjects.append({
                         'id': subject.id,
                         'name': subject.name,

@@ -601,11 +601,36 @@ class CourseAccessService:
     @classmethod
     def get_all_course_exam_ids(cls) -> Set[int]:
         """Returns all exam IDs associated with published courses."""
+        from django.core.cache import cache
+        cached = cache.get('all_course_exam_ids')
+        if cached is not None:
+            return cached
+
         from courses.models import Course
-        published_courses = Course.objects.filter(status='published', exam_id__isnull=False)
+        published_courses = list(Course.objects.filter(status='published', exam_id__isnull=False))
+        if not published_courses:
+            return set()
+
+        from exams.models import Exam
+        rows = list(Exam.objects.filter(is_active=True).values_list('id', 'parent_id', 'status'))
+        children: Dict[Optional[int], list] = {}
+        for exam_id, parent_id, _status in rows:
+            children.setdefault(parent_id, []).append(exam_id)
+        status_of = {exam_id: status for exam_id, _p, status in rows}
+
         all_ids: Set[int] = set()
         for c in published_courses:
-            all_ids.update(cls.get_course_exam_ids(c))
+            covered: Set[int] = set()
+            stack = [c.exam_id] if c.exam_id in status_of else []
+            while stack:
+                node = stack.pop()
+                if node in covered:
+                    continue
+                covered.add(node)
+                stack.extend(children.get(node, []))
+            all_ids.update({i for i in covered if status_of.get(i) == 'active'})
+
+        cache.set('all_course_exam_ids', all_ids, 60)
         return all_ids
 
     @classmethod

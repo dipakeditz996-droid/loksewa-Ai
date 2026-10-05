@@ -30,9 +30,12 @@ interface Payment {
   verification_result: {
     detected_amount?: string | null;
     detected_transaction_id?: string | null;
+    detected_provider?: string | null;
     amount_matches?: boolean;
     transaction_id_matches?: boolean;
     payment_completed?: boolean;
+    is_duplicate_transaction?: boolean;
+    is_duplicate_image?: boolean;
     notes?: string | null;
     error_message?: string;
   };

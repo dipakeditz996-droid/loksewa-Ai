@@ -62,6 +62,39 @@ class PublicCourseListViewTests(APITestCase):
         response = self.client.get('/api/courses/public/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_course_hierarchy_includes_active_categories_regardless_of_database_ids(self):
+        category = ExamCategory.objects.create(name='Imported Exam Category', order=1)
+        level = Exam.objects.create(name='Imported Level', category=category, order=1)
+        preparation = Exam.objects.create(
+            name='Imported Preparation',
+            category=category,
+            parent=level,
+            order=1,
+        )
+        course = Course.objects.create(
+            title='Imported Preparation Course',
+            slug='imported-preparation-course',
+            status='published',
+            exam=preparation,
+        )
+
+        response = self.client.get('/api/courses/hierarchy/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        returned_category = next(
+            item for item in response.data if item['id'] == category.id
+        )
+        returned_level = next(
+            item for item in returned_category['exams'] if item['id'] == level.id
+        )
+        returned_preparation = next(
+            item for item in returned_level['children'] if item['id'] == preparation.id
+        )
+        self.assertEqual(
+            [item['id'] for item in returned_preparation['courses']],
+            [course.id],
+        )
+
 
 class TeacherCourseViewSetTests(APITestCase):
     def setUp(self):

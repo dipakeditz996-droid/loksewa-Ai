@@ -57,7 +57,12 @@ def enqueue_payment_verification(payment_id):
     try:
         verify_payment_proof.delay(payment_id)
     except Exception as exc:
-        _mark_verification_failed(payment_id, exc)
+        logger.info(
+            "Celery broker unavailable (%s); executing verification in background thread for payment_id=%s",
+            exc, payment_id
+        )
+        import threading
+        threading.Thread(target=verify_payment_proof, args=(payment_id,), daemon=True).start()
 
 
 @shared_task(name='subscriptions.tasks.verify_payment_proof')
@@ -89,7 +94,7 @@ def verify_payment_proof(payment_id):
     ).update(
         verification_status=(
             'VERIFIED_CONFIDENT'
-            if result.get('outcome') == 'confident_match'
+            if result.get('outcome') == 'AUTO_VERIFIED'
             else 'VERIFIED_UNCERTAIN'
         ),
         verification_result=result,
@@ -98,9 +103,18 @@ def verify_payment_proof(payment_id):
     if not updated:
         return {'status': 'skipped'}
 
-    if result.get('outcome') != 'confident_match':
+    if result.get('outcome') == 'AUTO_VERIFIED':
+        from .services import approve_payment_logic
+        try:
+            approve_payment_logic(payment, admin_user=None)
+        except Exception as e:
+            logger.exception("Auto-approval failed for payment_id=%s: %s", payment.id, e)
+            _notify_manual_review(payment, 'Auto-verification succeeded but auto-approval failed.')
+            return {'status': 'manual_review'}
+        return {'status': 'verified'}
+    else:
         _notify_manual_review(payment, 'The receipt did not match all submitted payment details.')
-    return {'status': 'verified' if result.get('outcome') == 'confident_match' else 'manual_review'}
+        return {'status': 'manual_review'}
 
 
 @shared_task(name='subscriptions.tasks.notify_expiring_and_expired_subscriptions')

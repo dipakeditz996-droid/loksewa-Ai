@@ -305,11 +305,10 @@ class ProgressiveHierarchyAPIView(APIView):
         from exams.models import ExamCategory, Exam
         from courses.models import Course
 
-        # Active ExamCategories only (PSC Exams, License Exam, Entrance Exam, University Exam)
-        # Filter out legacy dev categories that are no longer canonical
+        # Keep this data-driven: category primary keys are database-specific and
+        # may differ between environments (for example, after imports/seeding).
         categories = ExamCategory.objects.filter(
-            is_active=True,
-            id__in=[19, 20, 21, 22]  # PSC, License, Entrance, University
+            is_active=True
         ).order_by('order', 'id')
 
         all_exams = list(Exam.objects.filter(is_active=True).order_by('order', 'id'))

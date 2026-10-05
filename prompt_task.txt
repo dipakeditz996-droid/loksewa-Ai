@@ -1,0 +1,1767 @@
+<USER_REQUEST>
+# LoksewaAI — Own Payment OCR Verification + Automatic Validation + Admin Review System
+
+We are continuing development of the existing LoksewaAI platform.
+
+The current Student → Package Checkout → Payment Submission flow is failing with an HTTP 500 error when submitting payment details.
+
+The goal of this task is to:
+
+1. Fix the existing payment submission 500 error.
+2. Build an internal payment screenshot OCR and verification system.
+3. Do NOT depend on an external AI API for basic payment verification.
+4. Extract payment information from uploaded screenshots using our own OCR pipeline.
+5. Validate extracted information against the expected package/payment data.
+6. Automatically classify payments as:
+
+   * Automatically Verified / High Confidence
+   * Needs Admin Review
+   * Rejected
+7. If OCR cannot confidently verify the payment, NEVER immediately cancel the payment.
+8. Instead show:
+
+   > "Payment could not be automatically verified. Your payment has been sent for Admin approval."
+9. Allow Admin to manually verify the screenshot later.
+10. Provide temporary/provisional access only according to the safe verification rules defined below.
+11. Keep the existing Django → PostgreSQL/Supabase architecture.
+12. Do NOT create a second payment/authentication architecture.
+
+---
+
+# 1. IMPORTANT — AUDIT FIRST
+
+Before changing code, deeply inspect the existing payment architecture.
+
+Find:
+
+### Frontend
+
+* Student package listing
+* Package checkout
+* Payment checkout page
+* Payment screenshot upload
+* Transaction/reference ID input
+* Payment submission API
+* Payment success/error states
+* Student subscription/access handling
+* Payment history
+
+Search for:
+
+```text
+payment
+payments
+checkout
+transaction
+reference
+receipt
+screenshot
+subscription
+subscriptionplan
+subscriptioncourse
+purchase
+package
+eSewa
+Khalti
+bank
+```
+
+### Backend
+
+Inspect:
+
+```text
+apps/api/
+```
+
+especially:
+
+* subscriptions
+* payments
+* users
+* courses
+* notifications
+* authentication
+* file uploads/storage
+* permissions
+
+Find:
+
+* Payment model
+* Payment serializer
+* Payment views
+* Payment URLs
+* Subscription model
+* SubscriptionPlan
+* SubscriptionCourseSelection
+* payment approval workflow
+* admin payment review
+* notification service
+* existing storage service
+
+Do NOT create duplicate payment/subscription models.
+
+---
+
+# 2. FIRST PRIORITY — FIX CURRENT HTTP 500
+
+The current browser console shows:
+
+```text
+Failed to load resource:
+the server responded with a status of 500
+```
+
+during payment submission.
+
+Before implementing OCR, reproduce and diagnose this exact failure.
+
+Trace:
+
+```text
+Student Checkout
+      ↓
+Submit Payment
+      ↓
+Next.js API client
+      ↓
+Django endpoint
+      ↓
+Serializer
+      ↓
+File upload handling
+      ↓
+Payment creation
+      ↓
+Subscription/payment relationship
+      ↓
+Database
+```
+
+Inspect the actual Django traceback.
+
+Do NOT hide the error with frontend fallback UI.
+
+Do NOT simply change the frontend to ignore the 500.
+
+Find and fix the actual backend root cause.
+
+Check especially:
+
+* multipart/form-data handling
+* screenshot upload
+* serializer validation
+* required/optional fields
+* payment amount
+* subscription/package ID
+* authenticated user
+* file storage
+* database constraints
+* foreign keys
+* duplicate transaction/reference IDs
+* subscription creation
+* transaction atomicity
+* notification creation
+* file size/type validation
+
+The payment submission must first work reliably WITHOUT OCR.
+
+---
+
+# 3. EXISTING PAYMENT FLOW MUST REMAIN THE SOURCE OF TRUTH
+
+Do NOT rebuild the existing subscription architecture.
+
+Reuse existing:
+
+```text
+SubscriptionPlan
+Subscription
+SubscriptionCourseSelection
+Payment
+User
+Course
+```
+
+or their actual repository equivalents.
+
+The final architecture should remain:
+
+```text
+Student
+   ↓
+Select Package
+   ↓
+Checkout
+   ↓
+Payment Submission
+   ↓
+Payment Record
+   ↓
+Verification
+   ↓
+Subscription
+   ↓
+Course Access
+```
+
+Do not create:
+
+* New Student model
+* New Package model
+* New Subscription model
+* New Payment model if an equivalent already exists
+* Separate Supabase payment system
+
+---
+
+# 4. PAYMENT SCREENSHOT OCR
+
+After the current payment submission flow is stable, implement an internal OCR pipeline.
+
+The system should process the uploaded payment screenshot on the backend.
+
+Do NOT send the payment screenshot to:
+
+* OpenAI
+* Gemini
+* Claude
+* external AI APIs
+
+for the core OCR/verification process.
+
+Use a local/server-side OCR solution that is compatible with the existing deployment environment.
+
+Possible technologies may include:
+
+* Tesseract OCR
+* PaddleOCR
+* OpenCV preprocessing
+* another maintained OCR library already compatible with the repository
+
+FIRST inspect whether the repository already contains OCR/image-processing functionality.
+
+If none exists, choose the smallest reliable solution that works with the current Django deployment environment.
+
+Do NOT introduce an unnecessarily heavy AI infrastructure.
+
+---
+
+# 5. OCR PIPELINE
+
+Conceptually:
+
+```text
+Uploaded Screenshot
+        ↓
+Image Validation
+        ↓
+Image Preprocessing
+        ↓
+OCR
+        ↓
+Raw Extracted Text
+        ↓
+Field Extraction
+        ↓
+Normalization
+        ↓
+Payment Validation Engine
+```
+
+Possible preprocessing:
+
+* resize
+* grayscale
+* contrast enhancement
+* denoise
+* thresholding
+* crop/region processing
+* orientation correction
+
+Do not destroy the original uploaded image.
+
+Always preserve the original payment receipt.
+
+---
+
+# 6. INFORMATION TO EXTRACT
+
+Where present, attempt to extract:
+
+### Payment Provider
+
+Examples:
+
+```text
+eSewa
+Khalti
+Bank
+Other
+```
+
+### Sender/account information
+
+* sender/account name
+* sender mobile/account number
+
+### Receiver information
+
+* receiver/account name
+* receiver number/account
+
+### Amount
+
+Example:
+
+```text
+NPR 1500
+Rs. 1,500
+1500.00
+```
+
+Normalize to a numeric monetary value.
+
+### Transaction/reference ID
+
+Examples:
+
+```text
+Transaction ID
+Reference ID
+Txn ID
+Payment ID
+```
+
+### Date
+
+Normalize to a consistent date format.
+
+### Time
+
+Normalize to a consistent time format where available.
+
+### Raw OCR text
+
+Store separately for debugging/audit where appropriate.
+
+---
+
+# 7. OCR CONFIDENCE
+
+The OCR engine may provide confidence scores.
+
+Store:
+
+```text
+ocr_status
+ocr_confidence
+```
+
+where supported.
+
+Do NOT treat OCR confidence as proof that a payment is genuine.
+
+Example:
+
+```text
+OCR confidence: 94%
+```
+
+means the OCR read the image clearly.
+
+It does NOT mean:
+
+```text
+Payment is definitely genuine.
+```
+
+---
+
+# 8. PAYMENT VERIFICATION ENGINE
+
+Create a backend service such as:
+
+```text
+PaymentVerificationService
+```
+
+ONLY if no equivalent verification service already exists.
+
+This service should contain deterministic business rules.
+
+Conceptually:
+
+```text
+PaymentVerificationService
+        ↓
+OCR extracted fields
+        ↓
+Expected payment data
+        ↓
+Validation rules
+        ↓
+Verification result
+```
+
+Do not create a second payment architecture.
+
+---
+
+# 9. EXPECTED PAYMENT DATA
+
+The verification engine must know what payment was expected.
+
+Use the actual selected package/subscription.
+
+For example:
+
+```text
+Expected Package:
+Civil Sub Engineer — 3 Months
+
+Expected Amount:
+NPR 1500
+
+Expected Payment Receiver:
+LoksewaAI / configured account
+
+Expected Receiver Number:
+configured payment account
+```
+
+Do NOT hardcode package prices in frontend code.
+
+Use the existing:
+
+```text
+SubscriptionPlan
+```
+
+or actual package model.
+
+---
+
+# 10. AMOUNT VALIDATION
+
+Compare:
+
+```text
+OCR Amount
+vs
+Expected Payment Amount
+```
+
+If:
+
+```text
+OCR amount = expected amount
+```
+
+then:
+
+```text
+amount_match = true
+```
+
+If not:
+
+```text
+amount_match = false
+```
+
+Do NOT automatically approve a payment merely because the amount matches.
+
+Amount is only one verification signal.
+
+---
+
+# 11. RECEIVER VALIDATION
+
+Where the configured payment receiver is visible in the screenshot, compare it with the configured official account.
+
+For example:
+
+```text
+Expected Receiver:
+LoksewaAI
+
+Expected Number:
+98XXXXXXXX
+```
+
+Normalize:
+
+* spaces
+* hyphens
+* case
+* common formatting differences
+
+Then compare.
+
+Do not require exact OCR text equality if normal formatting differences are expected.
+
+---
+
+# 12. TRANSACTION ID VALIDATION
+
+Transaction/reference ID is one of the most important fields.
+
+Validate:
+
+* exists
+* reasonable format
+* not obviously malformed
+* not previously used for another payment
+* not already approved
+* not already associated with another student/payment
+
+Add a database-level uniqueness protection where appropriate.
+
+IMPORTANT:
+
+Never allow the same successful transaction/reference ID to be reused to obtain multiple subscriptions.
+
+---
+
+# 13. DATE/TIME VALIDATION
+
+Where date/time is visible:
+
+Compare it with the payment submission time.
+
+Reject or flag obviously impossible situations such as:
+
+```text
+Receipt date far in the future
+```
+
+or an excessively old transaction.
+
+Use a reasonable configurable tolerance.
+
+Do NOT reject legitimate payments solely because the screenshot timestamp is unavailable.
+
+If OCR cannot extract date/time:
+
+```text
+date_time_match = UNKNOWN
+```
+
+not:
+
+```text
+FALSE
+```
+
+---
+
+# 14. ACCOUNT NAME VALIDATION
+
+If sender/account name is available:
+
+Store it.
+
+Do not require exact name matching with the student's registered name unless the existing business rules explicitly require it.
+
+Names can legitimately differ.
+
+Treat it as:
+
+```text
+supporting signal
+```
+
+not absolute proof.
+
+---
+
+# 15. PAYMENT PROVIDER DETECTION
+
+Attempt to identify:
+
+```text
+eSewa
+Khalti
+Bank
+Unknown
+```
+
+using OCR text/layout where possible.
+
+Do NOT assume provider from the uploaded filename.
+
+Example:
+
+Bad:
+
+```text
+WhatsApp Image 2026...
+→ assume Khalti
+```
+
+Correct:
+
+```text
+OCR/layout/content
+→ detect likely provider
+```
+
+---
+
+# 16. SCREENSHOT TAMPERING / MANIPULATION HEURISTICS
+
+Do NOT claim that the system can perfectly detect AI-generated or edited screenshots.
+
+Instead implement a conservative:
+
+```text
+image_integrity_status
+```
+
+using available non-AI heuristics.
+
+Possible checks:
+
+* image metadata where available
+* image dimensions
+* suspicious re-encoding
+* inconsistent text rendering where technically detectable
+* OCR layout consistency
+* unexpected duplicated regions
+* suspicious visual artifacts
+* impossible payment formatting
+* mismatch between extracted fields
+* duplicate image hash
+* duplicate transaction ID
+
+Calculate a:
+
+```text
+suspicion level
+```
+
+only if the implementation has real evidence.
+
+Possible:
+
+```text
+NORMAL
+SUSPICIOUS
+UNKNOWN
+```
+
+Do NOT label an image:
+
+> "AI Generated"
+
+unless there is a genuinely validated detector.
+
+Prefer wording:
+
+> "Potentially suspicious receipt"
+
+instead of claiming certainty.
+
+---
+
+# 17. IMAGE HASH / DUPLICATE RECEIPT DETECTION
+
+Generate a cryptographic hash for the original uploaded file.
+
+For example:
+
+```text
+SHA-256
+```
+
+Store it where appropriate.
+
+Use it to detect the exact same image being submitted repeatedly.
+
+Also independently check:
+
+```text
+transaction/reference ID
+```
+
+because a different screenshot of the same payment should still be detected.
+
+---
+
+# 18. VERIFICATION RESULT
+
+Create a clear backend result.
+
+For example:
+
+```text
+AUTO_VERIFIED
+NEEDS_ADMIN_REVIEW
+REJECTED
+```
+
+Do NOT expose internal technical confidence details unnecessarily to students.
+
+Internally, store validation signals.
+
+Example:
+
+```json
+{
+  "amount_match": true,
+  "receiver_match": true,
+  "transaction_id_present": true,
+  "transaction_id_duplicate": false,
+  "date_match": true,
+  "ocr_confidence": 0.94,
+  "image_integrity": "NORMAL",
+  "result": "AUTO_VERIFIED"
+}
+```
+
+Adapt to the project's actual serializer/model conventions.
+
+---
+
+# 19. VERY IMPORTANT — OCR FAILURE MUST NOT AUTOMATICALLY CANCEL
+
+If OCR cannot confidently extract enough information:
+
+DO NOT do:
+
+```text
+OCR failed
+↓
+Cancel payment
+```
+
+Instead:
+
+```text
+OCR failed / insufficient verification
+        ↓
+NEEDS_ADMIN_REVIEW
+        ↓
+Payment remains pending
+        ↓
+Admin can manually inspect
+```
+
+Student message:
+
+> **We couldn't automatically verify your payment. Your payment has been sent for Admin approval.**
+
+This is mandatory.
+
+---
+
+# 20. AUTOMATIC VERIFICATION RULE
+
+Only automatically verify when the payment satisfies a conservative set of real checks.
+
+For example:
+
+```text
+Amount matches
+AND
+transaction ID exists
+AND
+transaction ID is not already used
+AND
+receiver matches where available
+AND
+no serious integrity/suspicion issue
+AND
+OCR extracted required information with sufficient confidence
+```
+
+Do not require every optional field if the receipt legitimately doesn't contain it.
+
+Do not invent a numerical "92% genuine" score without a defensible model.
+
+Prefer explicit rule results.
+
+---
+
+# 21. TEMPORARY / PROVISIONAL ACCESS
+
+The system may grant provisional access ONLY when the payment meets the configured high-confidence automatic verification criteria.
+
+Do NOT silently convert a pending payment into a permanently approved subscription.
+
+Use an explicit state such as:
+
+```text
+PROVISIONAL
+```
+
+or the closest existing subscription/payment state.
+
+Conceptually:
+
+```text
+AUTO_VERIFIED
+      ↓
+PROVISIONAL ACCESS
+      ↓
+Admin final review
+      ↓
+┌──────────────┬───────────────┐
+│ APPROVED     │ REJECTED      │
+↓              ↓
+Permanent      Revoke access
+```
+
+If the existing business requirement wants automatic approvals to remain final, do not invent unnecessary manual review. However, if provisional access is implemented, make it clearly revocable and auditable.
+
+---
+
+# 22. ADMIN REVIEW
+
+Admin should have a Payment Verification/Review interface using the existing Admin payment architecture.
+
+Show:
+
+### Student
+
+* name
+* email
+* phone
+
+### Package
+
+* package name
+* amount
+* duration
+* selected courses
+
+### Uploaded receipt
+
+Display the original image.
+
+### OCR extracted data
+
+```text
+Provider
+Sender
+Receiver
+Amount
+Transaction ID
+Date
+Time
+OCR confidence
+Image integrity
+```
+
+### Validation results
+
+```text
+Amount: ✓
+Receiver: ✓
+Transaction ID: ✓
+Duplicate transaction: ✓ No duplicate
+Date: ✓
+OCR: ✓
+```
+
+Use clear statuses.
+
+---
+
+# 23. ADMIN ACTIONS
+
+Admin can:
+
+### Approve
+
+Payment becomes fully approved and subscription remains active.
+
+### Reject
+
+Payment is rejected.
+
+Require a rejection reason.
+
+### Keep Pending
+
+Leave it for later review.
+
+### Re-run Verification
+
+If the system supports reprocessing.
+
+Do not overwrite the original OCR/audit data without preserving history.
+
+---
+
+# 24. STUDENT STATUS
+
+Student should see clear states.
+
+### Auto verified
+
+> Payment verified successfully. Your package access is active.
+
+### Admin review
+
+> We couldn't automatically verify your payment. Your payment is waiting for Admin approval.
+
+### Rejected
+
+> Your payment could not be verified.
+
+If rejected, show the Admin-provided reason only if safe and appropriate.
+
+Do not expose private Admin notes.
+
+---
+
+# 25. SUBSCRIPTION ACCESS SAFETY
+
+Do NOT grant access merely because:
+
+```text
+Payment object exists
+```
+
+Access must depend on the actual payment/subscription state.
+
+Use the existing:
+
+```text CourseAccessService
+```
+
+or equivalent.
+
+Conceptually:
+
+```text
+Payment
+  ↓
+Verification State
+  ↓
+Subscription State
+  ↓
+Course Access
+```
+
+A rejected payment must NOT grant access.
+
+A pending payment must NOT grant permanent access.
+
+A provisional payment must be explicitly revocable.
+
+---
+
+# 26. IF ADMIN REJECTS AFTER PROVISIONAL ACCESS
+
+If provisional access was granted and Admin later determines the payment is invalid:
+
+```text
+Admin Rejects
+       ↓
+Payment = REJECTED
+       ↓
+Provisional Subscription = REVOKED
+       ↓
+Course Access Removed
+```
+
+IMPORTANT:
+
+Do NOT delete the student's historical payment/subscription record.
+
+Preserve it for audit.
+
+---
+
+# 27. NOTIFICATIONS
+
+Reuse the existing:
+
+```text
+NotificationService
+```
+
+Do NOT create another notification system.
+
+Notify student when:
+
+### Payment submitted
+
+> Payment received and is being verified.
+
+### Auto verification
+
+> Your payment has been automatically verified and your package access is active.
+
+### Admin review
+
+> We couldn't automatically verify your payment. Your payment is waiting for Admin approval.
+
+### Approved
+
+> Your payment has been approved.
+
+### Rejected
+
+> Your payment has been rejected.
+
+---
+
+# 28. PAYMENT AUDIT TRAIL
+
+Every important state change should be auditable.
+
+Preserve:
+
+```text
+submitted_at
+ocr_processed_at
+verification_result
+reviewed_by
+reviewed_at
+approval/rejection reason
+previous state
+new state
+```
+
+Do not expose sensitive internal information to students.
+
+---
+
+# 29. FILE STORAGE
+
+Use the existing file/storage architecture.
+
+Do NOT create a separate storage provider just for payment screenshots.
+
+Payment receipts may contain sensitive financial information.
+
+Ensure:
+
+* private storage
+* authorized access only
+* no public bucket exposure
+* no service credentials in frontend
+* no sensitive URLs leaked unnecessarily
+
+---
+
+# 30. SECURITY
+
+Never trust frontend values for:
+
+```text
+student_id
+amount
+package_price
+receiver
+verification_status
+subscription_status
+reviewed_by
+```
+
+The backend must derive authoritative values.
+
+The frontend should only submit:
+
+```text
+selected package/payment reference
+transaction/reference ID
+receipt file
+```
+
+and any other legitimately user-entered payment information.
+
+The backend calculates/loads expected price from the package.
+
+---
+
+# 31. PAYMENT AMOUNT MUST BE SERVER AUTHORITATIVE
+
+Never trust:
+
+```text
+frontend amount = NPR 100
+```
+
+when the package actually costs:
+
+```text
+NPR 1500
+```
+
+The backend must load the package price from the canonical SubscriptionPlan/package model.
+
+The OCR amount is then compared against that server-side expected amount.
+
+---
+
+# 32. CONCURRENCY / DUPLICATE SUBMISSION
+
+Protect against:
+
+* double-click submission
+* same transaction submitted twice
+* same screenshot submitted repeatedly
+* concurrent approval
+* concurrent subscription creation
+
+Use:
+
+* database transactions
+* unique constraints where appropriate
+* idempotency protection
+* proper locking where necessary
+
+Do not create duplicate subscriptions from one payment.
+
+---
+
+# 33. NO FAKE VERIFICATION
+
+This is extremely important.
+
+Do NOT implement:
+
+```text
+if OCR found amount:
+    approve()
+```
+
+Do NOT implement:
+
+```text
+if confidence > 50:
+    genuine = true
+```
+
+without a real defensible rule.
+
+The verification engine must use multiple independent signals.
+
+If uncertain:
+
+```text
+NEEDS_ADMIN_REVIEW
+```
+
+is the correct outcome.
+
+---
+
+# 34. OCR TECHNOLOGY SELECTION
+
+Before adding dependencies:
+
+1. Check whether OCR already exists.
+2. Check the deployment environment.
+3. Check Render/build environment if backend is hosted there.
+4. Check whether system-level binaries such as Tesseract can actually be installed.
+5. Prefer a deployment-compatible solution.
+
+Do not add a package that works locally but breaks production deployment.
+
+If a heavy OCR engine is unsuitable for the current deployment, implement a clean abstraction:
+
+```text
+OCRService
+```
+
+so the engine can be changed later without changing PaymentVerificationService.
+
+---
+
+# 35. SERVICE ARCHITECTURE
+
+Prefer:
+
+```text
+PaymentSubmissionService
+        ↓
+PaymentVerificationService
+        ↓
+OCRService
+        ↓
+PaymentValidationRules
+```
+
+Only create these services if equivalent services do not already exist.
+
+Do not over-engineer the codebase.
+
+---
+
+# 36. ERROR HANDLING
+
+The payment API must never return an unexplained generic 500 for normal validation failures.
+
+Return appropriate API responses for:
+
+* invalid package
+* invalid transaction ID
+* invalid file
+* duplicate transaction
+* unsupported file type
+* oversized image
+* OCR failure
+* database validation error
+
+Internal unexpected exceptions should still be logged server-side.
+
+Do not expose stack traces to students.
+
+---
+
+# 37. FRONTEND ERROR UX
+
+Replace the current generic:
+
+> Failed to submit payment. Please verify your details.
+
+with meaningful states.
+
+Examples:
+
+### Successful
+
+> Payment submitted successfully.
+
+### Automatic verification
+
+> Payment verified. Your package access is active.
+
+### Admin review
+
+> We couldn't automatically verify your payment. Your payment has been sent for Admin approval.
+
+### Duplicate transaction
+
+> This transaction/reference ID has already been submitted.
+
+### Invalid receipt
+
+> We couldn't process this receipt. Please upload a clear payment screenshot.
+
+### Server error
+
+> Something went wrong while submitting your payment. Please try again.
+
+Add retry where appropriate.
+
+---
+
+# 38. DO NOT BLOCK PAYMENT SUBMISSION ON OCR IF OCR IS TEMPORARILY UNAVAILABLE
+
+This is important for reliability.
+
+If OCR engine fails because of:
+
+* timeout
+* dependency failure
+* temporary processing error
+
+the payment submission itself should remain recorded as:
+
+```text
+PENDING_VERIFICATION
+```
+
+where safe.
+
+Then Admin can review manually.
+
+Do NOT lose the payment submission.
+
+Do NOT force the student to submit repeatedly.
+
+---
+
+# 39. ADMIN REVIEW FALLBACK
+
+Even if:
+
+```text
+OCR unavailable
+```
+
+Admin must still be able to:
+
+```text
+View original receipt
+↓
+Manually inspect
+↓
+Approve / Reject
+```
+
+The system must never become unusable merely because OCR is unavailable.
+
+---
+
+# 40. PERFORMANCE
+
+OCR can be CPU-intensive.
+
+Do not make the entire checkout request unnecessarily slow if the existing architecture supports asynchronous processing.
+
+Preferred architecture if practical:
+
+```text
+Payment Submitted
+       ↓
+Payment = PENDING_VERIFICATION
+       ↓
+Background OCR/verification
+       ↓
+Verification Result
+       ↓
+Notification
+```
+
+If background workers already exist, reuse them.
+
+Do not introduce Celery/Redis solely for this feature unless the repository already uses them or there is a clear deployment-safe reason.
+
+If asynchronous processing is not currently available, implement a safe synchronous fallback with timeout/error handling.
+
+---
+
+# 41. ADMIN DASHBOARD METRICS
+
+If the existing Admin Payment page has summary cards, use real data:
+
+```text
+Pending Verification
+Auto Verified
+Needs Admin Review
+Approved
+Rejected
+```
+
+Do not create fake numbers.
+
+---
+
+# 42. TESTING
+
+## Backend
+
+Run:
+
+```bash
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python manage.py test
+```
+
+## Frontend
+
+Run:
+
+```bash
+pnpm --filter web check-types
+pnpm --filter web lint
+pnpm --filter web build
+```
+
+---
+
+# 43. AUTOMATED TEST CASES
+
+Test:
+
+### Payment submission
+
+* valid payment submission
+* invalid package
+* invalid file
+* oversized file
+* unsupported file
+* duplicate transaction ID
+* double submission
+
+### OCR
+
+* valid receipt image
+* poor-quality image
+* OCR cannot extract required fields
+* OCR engine failure
+* missing date
+* missing receiver
+* missing transaction ID
+
+### Verification
+
+* amount matches
+* amount mismatch
+* receiver matches
+* receiver mismatch
+* duplicate transaction
+* valid transaction
+* suspicious image
+* unknown image integrity
+
+### State machine
+
+```text
+PENDING
+→ AUTO_VERIFIED
+→ PROVISIONAL/ACTIVE
+
+PENDING
+→ NEEDS_ADMIN_REVIEW
+→ APPROVED
+
+PENDING
+→ NEEDS_ADMIN_REVIEW
+→ REJECTED
+```
+
+If provisional access exists:
+
+```text
+PROVISIONAL
+→ APPROVED
+```
+
+and:
+
+```text
+PROVISIONAL
+→ REJECTED
+→ ACCESS REVOKED
+```
+
+---
+
+# 44. SECURITY TESTS
+
+Verify:
+
+* Student cannot approve own payment.
+* Student cannot modify verification status.
+* Student cannot modify package price.
+* Student cannot submit payment for another student.
+* Student cannot access another student's receipt.
+* Teacher cannot access Admin payment verification unless explicitly authorized.
+* Admin can review authorized payments.
+* Duplicate transaction cannot obtain multiple subscriptions.
+* Payment screenshots are not publicly accessible.
+* No database/storage credentials are exposed.
+
+---
+
+# 45. MANUAL E2E TEST
+
+Test the complete flow:
+
+```text
+Student Login
+      ↓
+Courses / Packages
+      ↓
+Select Package
+      ↓
+Checkout
+      ↓
+Upload Payment Screenshot
+      ↓
+Enter Transaction ID
+      ↓
+Submit Payment
+      ↓
+OCR Processing
+      ↓
+Automatic Verification
+```
+
+Test Case A:
+
+```text
+Valid clear receipt
+↓
+OCR extracts correct information
+↓
+Amount matches
+↓
+Receiver matches
+↓
+Transaction unique
+↓
+AUTO_VERIFIED
+↓
+Access granted according to configured rule
+```
+
+Test Case B:
+
+```text
+Blurry/unclear receipt
+↓
+OCR cannot verify
+↓
+NEEDS_ADMIN_REVIEW
+↓
+Student sees:
+"Payment could not be automatically verified.
+Your payment has been sent for Admin approval."
+↓
+Admin opens receipt
+↓
+Admin approves
+↓
+Access becomes active
+```
+
+Test Case C:
+
+```text
+Wrong amount
+↓
+Validation fails
+↓
+Admin Review or Rejection according to configured rules
+```
+
+Test Case D:
+
+```text
+Same transaction ID submitted by another student
+↓
+Duplicate detected
+↓
+No second subscription
+```
+
+Test Case E:
+
+```text
+Provisional access granted
+↓
+Admin later rejects
+↓
+Subscription revoked
+↓
+Historical payment record preserved
+```
+
+---
+
+# 46. IMPORTANT — DO NOT CLAIM "100% FRAUD DETECTION"
+
+This system is a:
+
+> **Payment Receipt OCR + Rule-Based Verification System**
+
+It is NOT a bank/payment gateway verification API.
+
+A screenshot alone cannot cryptographically prove that money actually reached the account.
+
+Therefore UI wording should be conservative:
+
+Good:
+
+> Automatically verified
+
+> High-confidence receipt match
+
+> Waiting for Admin approval
+
+Bad:
+
+> 100% genuine payment
+
+> AI confirmed this payment is real
+
+> Money definitely received
+
+Unless the platform later integrates with an actual payment provider API/bank statement reconciliation system.
+
+---
+
+# 47. FUTURE EXTENSIBILITY
+
+Design the verification layer so actual provider APIs can be added later:
+
+```text
+PaymentVerificationService
+        ├── ReceiptOCRVerifier
+        ├── ManualAdminVerifier
+        └── ProviderAPIVerifier (future)
+```
+
+Do NOT implement provider APIs now unless they already exist.
+
+The current system should work independently.
+
+---
+
+# 48. FINAL REPORT
+
+After implementation provide:
+
+## 1. Current 500 Error
+
+* Root cause
+* File/endpoint responsible
+* Fix applied
+
+## 2. Payment Architecture
+
+Show:
+
+```text
+Checkout
+↓
+Payment
+↓
+OCR
+↓
+Verification
+↓
+Subscription
+↓
+Course Access
+```
+
+## 3. OCR
+
+* OCR technology used
+* Why it was selected
+* Deployment compatibility
+
+## 4. Verification Rules
+
+List actual rules implemented.
+
+## 5. Admin Review
+
+Explain:
+
+* pending
+* auto verified
+* admin review
+* approved
+* rejected
+* provisional access if implemented
+
+## 6. Database Changes
+
+List:
+
+* models
+* fields
+* indexes
+* migrations
+
+## 7. API Changes
+
+List exact endpoints.
+
+## 8. Files Changed
+
+List exact backend/frontend files.
+
+## 9. Security
+
+Explain payment receipt protection and permission enforcement.
+
+## 10. Tests
+
+Report actual:
+
+* Django check
+* Django tests
+* TypeScript
+* ESLint
+* production build
+* manual payment E2E
+
+## 11. Remaining Limitations
+
+Clearly state that screenshot-based verification cannot prove actual bank settlement and that Admin/provider verification remains the final authority when automatic verification is uncertain.
+
+---
+
+# DEFINITION OF DONE
+
+* [ ] Existing payment 500 error is fixed
+* [ ] Payment submission works without OCR dependency
+* [ ] Existing Payment/Subscription architecture is reused
+* [ ] Receipt screenshot is securely stored
+* [ ] Internal OCR pipeline works
+* [ ] Amount extraction works
+* [ ] Transaction ID extraction works
+* [ ] Date/time extraction works where available
+* [ ] Receiver extraction works where available
+* [ ] Provider detection works where possible
+* [ ] OCR confidence is tracked where supported
+* [ ] Rule-based verification is implemented
+* [ ] Duplicate transaction protection exists
+* [ ] Duplicate receipt detection exists
+* [ ] Suspicious image heuristics exist where technically reliable
+* [ ] OCR failure does NOT automatically cancel the payment
+* [ ] OCR failure sends payment to Admin Review
+* [ ] Admin can inspect original receipt
+* [ ] Admin can inspect extracted OCR data
+* [ ] Admin can approve
+* [ ] Admin can reject
+* [ ] Admin can keep payment pending
+* [ ] Rejection reason is supported
+* [ ] Student receives correct status
+* [ ] Existing NotificationService is reused
+* [ ] Subscription access follows payment state
+* [ ] Provisional access, if implemented, is explicitly revocable
+* [ ] Rejected provisional payments revoke access safely
+* [ ] Historical payment records are preserved
+* [ ] No external AI API is required for core verification
+* [ ] No Supabase credentials are exposed
+* [ ] No duplicate payment/subscription architecture is introduced
+* [ ] Backend permissions are enforced
+* [ ] Backend tests pass
+* [ ] Frontend type-check passes
+* [ ] Lint passes
+* [ ] Production build passes
+* [ ] Manual E2E payment flow is verified
+
+# MOST IMPORTANT RULE
+
+Build this as a **reliable internal verification assistant**, not as a fake "AI payment detector".
+
+The system should prefer:
+
+```text
+CLEAR + MATCHING
+      ↓
+AUTO VERIFIED
+
+UNCERTAIN
+      ↓
+ADMIN REVIEW
+
+CLEARLY INVALID / DUPLICATE
+      ↓
+REJECT
+```
+
+Never let OCR failure destroy a legitimate payment submission.
+
+Never let OCR alone claim that money was genuinely received.
+
+The original payment receipt must always remain available to authorized Admins for manual verification.
+
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-05T15:11:17+05:45.
+
+The user's current state is as follows:
+Other open documents:
+- c:\Users\diwas\OneDrive\Desktop\loksewa website\apps\web\components\admin\questions\BulkQuestionEntry.tsx (LANGUAGE_TSX)
+- c:\Users\diwas\OneDrive\Desktop\loksewa website\apps\web\components\admin\questions\SingleQuestionForm.tsx (LANGUAGE_TSX)
+- c:\Users\diwas\OneDrive\Desktop\loksewa website\apps\api\administration\question_serializers.py (LANGUAGE_PYTHON)
+- c:\Users\diwas\OneDrive\Desktop\loksewa website\apps\api\administration\urls.py (LANGUAGE_PYTHON)
+- c:\Users\diwas\OneDrive\Desktop\loksewa website\apps\api\administration\data_safety_serializers.py (LANGUAGE_PYTHON)
+</ADDITIONAL_METADATA>

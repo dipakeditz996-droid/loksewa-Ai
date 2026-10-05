@@ -134,11 +134,12 @@ class SubscriptionPayment(models.Model):
     
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.PROTECT, related_name='subscription_payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    transaction_id = models.CharField(max_length=255, unique=True)
+    transaction_id = models.CharField(max_length=255)
     
     screenshot = models.ImageField(
         upload_to='subscriptions/payment_proofs/',
         validators=[validate_image_size_5mb, validate_image_extension],
+        max_length=500,
     )
     note = models.TextField(blank=True)
     

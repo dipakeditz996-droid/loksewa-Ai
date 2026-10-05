@@ -196,7 +196,39 @@ export default function AdminApplicationsPage() {
     }
   };
 
+  const getOcrBadge = (status: string) => {
+    switch (status) {
+      case "VERIFIED_CONFIDENT":
+        return (
+          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-semibold">
+            <CheckCircle2 className="w-2.5 h-2.5 mr-1 text-emerald-600" /> OCR Verified
+          </Badge>
+        );
+      case "VERIFIED_UNCERTAIN":
+        return (
+          <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-semibold">
+            <Clock className="w-2.5 h-2.5 mr-1 text-amber-600" /> Needs Review
+          </Badge>
+        );
+      case "VERIFICATION_FAILED":
+        return (
+          <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-semibold">
+            <XCircle className="w-2.5 h-2.5 mr-1 text-rose-600" /> OCR Unavailable
+          </Badge>
+        );
+      case "VERIFICATION_IN_PROGRESS":
+        return (
+          <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-semibold animate-pulse">
+            <RefreshCw className="w-2.5 h-2.5 mr-1 animate-spin text-blue-600" /> Verifying...
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
   const rows: Row[] = [
+
     ...payments.map((p): Row => ({ kind: "payment", id: p.id, data: p })),
     ...freeApplications.map((a): Row => ({ kind: "free_application", id: a.id, data: a })),
   ].sort((a, b) => {
@@ -371,32 +403,49 @@ export default function AdminApplicationsPage() {
                           {new Date(payment.submitted_at).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4">
-                          {getStatusBadge(payment.status)}
-                          <p className="mt-1 text-xs text-slate-500">
-                            AI: {payment.verification_status_display || payment.verification_status || "Not checked"}
-                          </p>
-                          {payment.verification_result?.detected_amount && (
-                            <p className="text-xs text-slate-500">
-                              Detected: Rs. {payment.verification_result.detected_amount}
-                              {payment.verification_result.amount_matches === false ? " (amount mismatch)" : ""}
-                            </p>
-                          )}
-                          {payment.verification_result?.detected_transaction_id && (
-                            <p className="text-xs text-slate-500 break-all">
-                              Receipt TXN: {payment.verification_result.detected_transaction_id}
-                              {payment.verification_result.transaction_id_matches === false ? " (ID mismatch)" : ""}
-                            </p>
-                          )}
-                          {payment.verification_result?.notes && (
-                            <p className="mt-1 max-w-48 text-xs text-slate-500">
-                              {payment.verification_result.notes}
-                            </p>
-                          )}
-                          {payment.verification_result?.error_message && (
-                            <p className="mt-1 max-w-48 text-xs text-amber-700">
-                              Manual check required: {payment.verification_result.error_message}
-                            </p>
-                          )}
+                          <div className="flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {getStatusBadge(payment.status)}
+                              {payment.verification_status && getOcrBadge(payment.verification_status)}
+                            </div>
+
+                            {payment.verification_result && (
+                              <div className="text-[11px] space-y-0.5 mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100 max-w-56">
+                                {payment.verification_result.detected_provider && (
+                                  <p className="font-semibold text-slate-700">
+                                    Provider: <span className="text-blue-600">{payment.verification_result.detected_provider}</span>
+                                  </p>
+                                )}
+                                {payment.verification_result.detected_amount && (
+                                  <p className={payment.verification_result.amount_matches ? "text-emerald-700 font-medium" : "text-amber-700 font-medium"}>
+                                    Detected: NPR {payment.verification_result.detected_amount}
+                                    {payment.verification_result.amount_matches ? " ✓" : " ⚠ mismatch"}
+                                  </p>
+                                )}
+                                {payment.verification_result.detected_transaction_id && (
+                                  <p className={payment.verification_result.transaction_id_matches ? "text-emerald-700 font-mono break-all" : "text-amber-700 font-mono break-all"}>
+                                    TXN: {payment.verification_result.detected_transaction_id}
+                                    {payment.verification_result.transaction_id_matches ? " ✓" : " ⚠ mismatch"}
+                                  </p>
+                                )}
+                                {payment.verification_result.is_duplicate_transaction && (
+                                  <span className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                    ⚠ Duplicate Txn ID
+                                  </span>
+                                )}
+                                {payment.verification_result.is_duplicate_image && (
+                                  <span className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                    ⚠ Duplicate Receipt Image
+                                  </span>
+                                )}
+                                {payment.verification_result.notes && (
+                                  <p className="text-slate-500 text-[10px] leading-tight pt-0.5">
+                                    {payment.verification_result.notes}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           {payment.status === "PENDING" ? (

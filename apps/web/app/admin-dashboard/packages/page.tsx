@@ -589,8 +589,8 @@ export default function AdminPackagesPage() {
                         <Badge
                           className={
                             plan.status === "ACTIVE"
-                              ? "bg-emerald-100 text-emerald-800 border-none font-medium"
-                              : "bg-slate-100 text-slate-500 border-none font-medium"
+                              ? "bg-emerald-100 text-emerald-800 border-none font-medium hover:bg-emerald-200"
+                              : "bg-slate-100 text-slate-500 border-none font-medium hover:bg-slate-200"
                           }
                         >
                           {plan.status === "ACTIVE"

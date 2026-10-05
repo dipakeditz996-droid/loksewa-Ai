@@ -224,14 +224,14 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
             <CheckCircle2 className="w-9 h-9" />
           </div>
           <div className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-3 py-1 rounded-full">
-              Payment Under Review
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full">
+              Admin Review
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-foreground">
               Payment Submitted Successfully!
             </h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              Your payment proof has been submitted to admin for verification. Your package and learning access will unlock as soon as verified.
+              Payment could not be automatically verified. Your payment has been sent for Admin approval.
             </p>
           </div>
 

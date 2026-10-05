@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Flag, Search, Filter, Loader2, AlertTriangle, ChevronLeft, ChevronRight,
-  CheckCircle2, XCircle, Eye, MessageSquare, Clock, User, BookOpen, X,
+  Flag, Search, Loader2, AlertTriangle, ChevronLeft, ChevronRight,
+  CheckCircle2, Eye, Clock, User, BookOpen, X, ChevronDown,
 } from 'lucide-react';
 import {
   adminReportsApi,
@@ -122,28 +122,20 @@ export default function AdminQuestionReportsPage() {
         </div>
 
         {/* Status filter */}
-        <select
+        <CustomDropdown
           value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as ReportStatus | ''); setPage(1); }}
-          className="bg-white/5 border border-white/10 rounded-xl text-white/70 text-sm px-3 py-2 focus:outline-none"
-        >
-          <option value="">All Statuses</option>
-          {ALL_STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-          ))}
-        </select>
+          onChange={(v) => { setStatusFilter(v as ReportStatus | ''); setPage(1); }}
+          options={[{ value: '', label: 'All Statuses' }, ...ALL_STATUSES.map(s => ({ value: s, label: STATUS_LABELS[s] }))]}
+          placeholder="All Statuses"
+        />
 
         {/* Issue type filter */}
-        <select
+        <CustomDropdown
           value={issueTypeFilter}
-          onChange={(e) => { setIssueTypeFilter(e.target.value as IssueType | ''); setPage(1); }}
-          className="bg-white/5 border border-white/10 rounded-xl text-white/70 text-sm px-3 py-2 focus:outline-none"
-        >
-          <option value="">All Issue Types</option>
-          {ALL_ISSUE_TYPES.map((t) => (
-            <option key={t} value={t}>{ISSUE_TYPE_LABELS[t]}</option>
-          ))}
-        </select>
+          onChange={(v) => { setIssueTypeFilter(v as IssueType | ''); setPage(1); }}
+          options={[{ value: '', label: 'All Issue Types' }, ...ALL_ISSUE_TYPES.map(t => ({ value: t, label: ISSUE_TYPE_LABELS[t] }))]}
+          placeholder="All Issue Types"
+        />
       </div>
 
       {/* Table */}
@@ -419,17 +411,18 @@ function ReportDetailDrawer({
               {/* Admin action */}
               <Section title="Admin Action">
                 <div className="space-y-3">
-                  <select
+                  <CustomDropdown
                     value={newStatus}
-                    onChange={(e) => setNewStatus(e.target.value as ReportStatus)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl text-white/70 text-sm px-3 py-2.5 focus:outline-none focus:border-white/20"
-                  >
-                    <option value="">— Select new status —</option>
-                    <option value="UNDER_REVIEW">Under Review</option>
-                    <option value="RESOLVED">Resolved (issue confirmed &amp; fixed or noted)</option>
-                    <option value="REJECTED">Rejected (question is correct)</option>
-                    <option value="NEEDS_INFORMATION">Needs Information from student</option>
-                  </select>
+                    onChange={(v) => setNewStatus(v as ReportStatus)}
+                    options={[
+                      { value: '', label: '— Select new status —' },
+                      { value: 'UNDER_REVIEW', label: 'Under Review' },
+                      { value: 'RESOLVED', label: 'Resolved (issue confirmed & fixed or noted)' },
+                      { value: 'REJECTED', label: 'Rejected (question is correct)' },
+                      { value: 'NEEDS_INFORMATION', label: 'Needs Information from student' },
+                    ]}
+                    placeholder="— Select new status —"
+                  />
                   <textarea
                     value={adminNote}
                     onChange={(e) => setAdminNote(e.target.value)}
@@ -480,6 +473,67 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div>
       <p className="text-white/30 text-[10px] uppercase tracking-wider font-semibold mb-2">{title}</p>
       {children}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Dropdown — fixes invisible option text on dark-themed Windows browsers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CustomDropdown({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectedLabel = options.find(o => o.value === value)?.label ?? placeholder;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl text-white/70 text-sm px-3 py-2 focus:outline-none hover:bg-white/8 hover:border-white/20 transition-colors min-w-[140px]"
+      >
+        <span className="flex-1 text-left truncate">{selectedLabel}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-white/40 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 min-w-full bg-[#1c2133] border border-white/15 rounded-xl shadow-2xl overflow-hidden">
+          {options.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                opt.value === value
+                  ? 'bg-blue-500/20 text-blue-300'
+                  : 'text-white/70 hover:bg-white/8 hover:text-white'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

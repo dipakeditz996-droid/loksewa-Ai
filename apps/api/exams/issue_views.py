@@ -99,7 +99,6 @@ class AdminQuestionIssueReportViewSet(viewsets.GenericViewSet):
             )
             .annotate(_reports_count=Count(
                 'question__issue_reports',
-                filter=Q(question__issue_reports__isnull=False),
                 distinct=True,
             ))
             .order_by('-created_at')

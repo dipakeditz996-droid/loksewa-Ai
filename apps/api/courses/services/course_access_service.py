@@ -463,7 +463,10 @@ class CourseAccessService:
 
         auth_courses = cls.get_accessible_courses(user)
         if not auth_courses.exists():
-            return bool(examination.status in ('published', 'live') and examination.course_id is None and examination.exam_id is None)
+            # Students without any course enrollment can access platform-wide exams
+            # (course_id is None). The exam may still have an exam_id for academic
+            # hierarchy purposes — that does NOT require enrollment.
+            return bool(examination.status in ('published', 'live') and examination.course_id is None)
 
         if examination.course_id:
             return auth_courses.filter(id=examination.course_id).exists()

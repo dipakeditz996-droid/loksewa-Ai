@@ -310,23 +310,50 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             return Response({'detail': 'Unsupported question type for a subjective examination.'}, status=status.HTTP_400_BAD_REQUEST)
         selection_type = None if question_type == 'mixed' else question_type
         excluded_ids = list(existing.examination_questions.values_list('question_id', flat=True)) if existing and regenerate else []
-        selection = QuestionSelectionService().select(
-            exam_id=academic_exam.id,
-            subject_id=subject.id if subject else None,
-            topic_id=topic.id if topic else None,
-            question_type=selection_type,
-            count=question_count,
-            randomize=True,
-            exclude_ids=excluded_ids,
-        )
-        if not selection['satisfied']:
+
+        # Admins manage the full question bank — bypass the course-gating in
+        # QuestionSelectionService.get_base_queryset() which gates on published
+        # courses and would always return zero results in test/empty environments.
+        import random as _random
+        from exams.models import Question as _Question
+        from django.db.models import Q as _Q
+
+        admin_qs = _Question.objects.filter(status='approved')
+        if topic:
+            admin_qs = admin_qs.filter(topic=topic)
+        elif subject:
+            admin_qs = admin_qs.filter(
+                _Q(topic__chapter__subject=subject) |
+                _Q(topic__chapter__subject_id=subject.id)
+            )
+        else:
+            admin_qs = admin_qs.filter(
+                _Q(topic__chapter__subject__paper__exam_id=academic_exam.id) |
+                _Q(topic__chapter__subject__paper__exam=academic_exam)
+            )
+        if selection_type:
+            if selection_type == 'subjective':
+                admin_qs = admin_qs.filter(question_type__in=_Question.SUBJECTIVE_TYPES)
+            elif selection_type == 'objective':
+                admin_qs = admin_qs.filter(question_type__in=_Question.OBJECTIVE_TYPES)
+            else:
+                admin_qs = admin_qs.filter(question_type=selection_type)
+        if excluded_ids:
+            admin_qs = admin_qs.exclude(id__in=excluded_ids)
+
+        available_ids = list(admin_qs.values_list('id', flat=True).distinct())
+        total_available = len(available_ids)
+        if total_available < question_count:
             return Response({
                 'detail': 'Not enough approved questions are available for this paper.',
-                'requested': selection['requested'], 'available': selection['available'],
-                'selected': selection['selected'], 'warnings': selection['warnings'],
+                'requested': question_count, 'available': total_available,
+                'selected': 0, 'warnings': [
+                    f'Only {total_available} approved question(s) are available for the selected criteria, but {question_count} were requested.'
+                ],
             }, status=status.HTTP_409_CONFLICT)
 
-        questions = selection['questions']
+        selected_ids = _random.sample(available_ids, question_count)
+        questions = list(_Question.objects.filter(id__in=selected_ids))
         total_marks = sum(question.marks or 0 for question in questions)
         title = str(request.data.get('title') or f'{academic_exam.name} Subjective Live Exam').strip()
         if not title:
@@ -544,7 +571,7 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             errors.append("Passing Marks cannot exceed Total Marks.")
         if exam.start_time and exam.end_time and exam.end_time <= exam.start_time:
             errors.append("The end time must come after the start time.")
-        if exam.objective_category == 'live':
+        if exam.exam_type != 'subjective' and exam.objective_category == 'live':
             if not exam.start_time:
                 errors.append("A scheduled Live Exam needs a start time.")
             if not exam.end_time:

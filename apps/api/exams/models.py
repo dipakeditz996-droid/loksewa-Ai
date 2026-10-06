@@ -783,11 +783,7 @@ class Examination(models.Model):
 
     @property
     def requires_admin_request(self):
-        return (
-            self.starts_anytime_after_approval
-            or (self.exam_type == 'subject' and self.topic_id is not None)
-            or (self.exam_type == 'subjective' and not self.is_scheduled_live)
-        )
+        return self.exam_type == 'subjective' and not self.is_scheduled_live
 
     def __str__(self):
         return self.title

@@ -282,7 +282,7 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        if examination.exam_type == 'subjective' and not examination.question_paper_pdf:
+        if examination.exam_type == 'subjective' and examination.is_scheduled_live and not examination.question_paper_pdf:
             return Response(
                 {'detail': 'Question paper for this subjective exam is not available yet.'},
                 status=status.HTTP_400_BAD_REQUEST,

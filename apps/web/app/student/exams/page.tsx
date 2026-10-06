@@ -270,13 +270,13 @@ function ExamCard({ exam, isLive }: { exam: StudentExam; isLive?: boolean }) {
               </>
             ) : approvalRequired ? (
               <>
-                <ChevronRight className="h-4 w-4" />
-                View Details & Request Access
+                <FileText className="h-4 w-4" />
+                Request Admin for Exam
               </>
             ) : (
               <>
                 <Play className="h-4 w-4" />
-                View Details
+                Start Exam
               </>
             )}
           </Button>
@@ -468,7 +468,9 @@ export default function ExamsListingPage() {
                       ) : subCategory === "topic-wise" || subCategory === "old-paper" || subCategory === "model" ? (
                         <p className="flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="h-4 w-4 shrink-0 text-primary/70" />
-                          Request admin access; after approval, your exam timer starts when you begin.
+                          {mainCategory === "subjective" && subCategory === "topic-wise"
+                            ? "Request an exam from admin. Once approved, you can start and view expert solutions."
+                            : "Direct access available; start whenever you are ready."}
                         </p>
                       ) : null}
                     </div>

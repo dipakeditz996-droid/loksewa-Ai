@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { studentExamsApi } from "@/lib/api/student-exams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { ArrowLeft, Clock, Target, Play, ShieldAlert, FileText, CheckCircle2, BookOpenCheck } from "lucide-react";
+import { ArrowLeft, Clock, Target, Play, ShieldAlert, FileText, CheckCircle2, BookOpenCheck, Eye, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -35,9 +35,11 @@ function getErrorDetail(error: unknown, fallback: string) {
 export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const examId = Number(params.id);
   const [isStarting, setIsStarting] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [loadingQuestionPaper, setLoadingQuestionPaper] = useState(false);
 
   const { data: exam, isLoading, error } = useQuery({
     queryKey: ['student-exam', examId],
@@ -94,14 +96,14 @@ export default function ExamDetailsPage() {
   };
 
   useEffect(() => {
-    if (searchParams.get("view") === "solution") {
+    if (exam?.exam_type === "subjective" && searchParams.get("view") === "solution") {
       void viewExpertSolution();
       setTimeout(() => {
         const el = document.getElementById("expert-solution-section");
         if (el) el.scrollIntoView({ behavior: "smooth" });
       }, 350);
     }
-  }, [searchParams]);
+  }, [searchParams, exam?.exam_type]);
 
   const handleStartExam = () => {
     setIsStarting(true);
@@ -252,11 +254,7 @@ export default function ExamDetailsPage() {
             </div>
           </div>
 
-          {(exam.exam_type === "subjective" ||
-            exam.exam_type === "subject" ||
-            exam.objective_category === "past_year" ||
-            exam.objective_category === "model" ||
-            exam.objective_category === "topicwise") && (
+          {exam.exam_type === "subjective" && (
             <section className="mt-6 space-y-3 border-t border-border/50 pt-5" id="expert-solution-section" aria-labelledby="expert-solution-heading">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 id="expert-solution-heading" className="font-semibold text-lg">Expert Solution</h3>

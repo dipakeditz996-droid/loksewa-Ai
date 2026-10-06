@@ -783,7 +783,7 @@ class Examination(models.Model):
 
     @property
     def requires_admin_request(self):
-        return self.exam_type == 'subjective' and not self.is_scheduled_live
+        return self.exam_type == 'subjective' and self.objective_category == 'live'
 
     def __str__(self):
         return self.title

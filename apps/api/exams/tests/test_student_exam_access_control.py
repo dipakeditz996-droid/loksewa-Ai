@@ -303,53 +303,29 @@ class StudentExamAccessControlTestCase(APITestCase):
         self.assertEqual([exam['id'] for exam in response.data], [civil_test.id])
         self.assertEqual(response.data[0]['topic_id'], self.topic_civil.id)
 
-    def test_mock_exam_requires_admin_approval_before_attempt_creation(self):
+    def test_objective_mock_exam_can_start_without_admin_approval(self):
         self.client.force_authenticate(self.student_civil)
-        request_url = '/api/student/exam-requests/'
-        first = self.client.post(request_url, {'examination': self.civil_exam.id}, format='json')
-        self.assertEqual(first.status_code, 201)
-        self.assertEqual(first.data['status'], 'pending')
+        details = self.client.get(f'/api/student/exams/{self.civil_exam.id}/')
+        self.assertEqual(details.status_code, 200)
+        self.assertFalse(details.data['requires_admin_request'])
+        self.assertTrue(details.data['can_start'])
 
-        duplicate = self.client.post(request_url, {'examination': self.civil_exam.id}, format='json')
-        self.assertEqual(duplicate.status_code, 200)
-        self.assertEqual(ExaminationRequest.objects.filter(student=self.student_civil, examination=self.civil_exam).count(), 1)
-
-        blocked = self.client.post(f'/api/student/exams/{self.civil_exam.id}/start/')
-        self.assertEqual(blocked.status_code, 403)
-        self.assertFalse(ExaminationAttempt.objects.filter(student=self.student_civil, examination=self.civil_exam).exists())
-
-        self.client.force_authenticate(self.admin_user)
-        approved = self.client.post(f'/api/admin/exam-requests/{first.data["id"]}/approve/')
-        self.assertEqual(approved.status_code, 200)
-        self.assertEqual(approved.data['status'], 'approved')
-
-        self.client.force_authenticate(self.student_civil)
         started = self.client.post(f'/api/student/exams/{self.civil_exam.id}/start/')
         self.assertEqual(started.status_code, 201)
         self.assertTrue(ExaminationAttempt.objects.filter(student=self.student_civil, examination=self.civil_exam).exists())
+        self.assertFalse(ExaminationRequest.objects.filter(
+            student=self.student_civil, examination=self.civil_exam
+        ).exists())
 
-    def test_approved_model_exam_ignores_global_schedule_and_uses_attempt_duration(self):
+    def test_objective_model_exam_ignores_global_schedule_and_uses_attempt_duration(self):
         now = timezone.now()
         self.civil_exam.start_time = now + timedelta(days=2)
         self.civil_exam.end_time = now + timedelta(minutes=30)
         self.civil_exam.save(update_fields=['start_time', 'end_time'])
         self.client.force_authenticate(self.student_civil)
 
-        requested = self.client.post(
-            '/api/student/exam-requests/',
-            {'examination': self.civil_exam.id},
-            format='json',
-        )
-        self.assertEqual(requested.status_code, 201)
-
-        self.client.force_authenticate(self.admin_user)
-        approved = self.client.post(
-            f'/api/admin/exam-requests/{requested.data["id"]}/approve/'
-        )
-        self.assertEqual(approved.status_code, 200)
-
-        self.client.force_authenticate(self.student_civil)
         details = self.client.get(f'/api/student/exams/{self.civil_exam.id}/')
+        self.assertFalse(details.data['requires_admin_request'])
         self.assertTrue(details.data['can_start'])
 
         started = self.client.post(f'/api/student/exams/{self.civil_exam.id}/start/')
@@ -447,9 +423,14 @@ class StudentExamAccessControlTestCase(APITestCase):
         self.assertEqual(subjective_upload_expires_at(attempt), scheduled_end)
 
     def test_admin_rejection_reason_is_persisted_and_student_cannot_review_requests(self):
+        subjective_exam = Examination.objects.create(
+            title='Civil Subjective Requestable Exam', exam_type='subjective', objective_category='live',
+            category=self.category, exam=self.exam_civil, course=self.course_civil,
+            status='published', time_limit=90, total_marks=10,
+        )
         self.client.force_authenticate(self.student_civil)
         created = self.client.post(
-            '/api/student/exam-requests/', {'examination': self.civil_exam.id}, format='json'
+            '/api/student/exam-requests/', {'examination': subjective_exam.id}, format='json'
         )
         request_id = created.data['id']
         self.assertEqual(self.client.post(f'/api/admin/exam-requests/{request_id}/approve/').status_code, 403)

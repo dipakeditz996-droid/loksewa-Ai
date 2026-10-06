@@ -83,6 +83,11 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                 course__isnull=True,
             )
             if self.action == 'list':
+                base_qs = base_qs.exclude(exam_type='custom').exclude(objective_category='custom')
+                if self.request.query_params.get('topicwise', '').lower() in ('1', 'true', 'yes'):
+                    base_qs = base_qs.filter(
+                        Q(exam_type='subject') | Q(objective_category='topicwise') | Q(topic__isnull=False)
+                    )
                 return base_qs
             return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
 
@@ -129,7 +134,9 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'list':
             base_qs = base_qs.exclude(exam_type='custom').exclude(objective_category='custom')
             if self.request.query_params.get('topicwise', '').lower() in ('1', 'true', 'yes'):
-                base_qs = base_qs.filter(exam_type='subject', topic__isnull=False)
+                base_qs = base_qs.filter(
+                    Q(exam_type='subject') | Q(objective_category='topicwise') | Q(topic__isnull=False)
+                )
             return base_qs
         return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
 

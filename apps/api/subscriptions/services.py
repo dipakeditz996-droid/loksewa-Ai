@@ -28,10 +28,20 @@ def approve_payment_logic(payment, admin_user=None):
                 admin_dict['admin_name'] = admin_user.get_full_name() or admin_user.username
             else:
                 admin_dict['admin_name'] = 'System (Auto-Verified)'
-                
+
             payment.verification_result = {
                 **(payment.verification_result or {}),
                 'admin_decision': admin_dict,
+            }
+        # For VERIFIED_CONFIDENT (auto-approved), just note it was system-approved
+        elif payment.verification_status == 'VERIFIED_CONFIDENT' and not admin_user:
+            payment.verification_result = {
+                **(payment.verification_result or {}),
+                'admin_decision': {
+                    'action': 'approved',
+                    'admin_name': 'System (Auto-Verified)',
+                    'decided_at': payment.verified_at.isoformat(),
+                },
             }
 
         plan = payment.plan
@@ -64,7 +74,10 @@ def approve_payment_logic(payment, admin_user=None):
         )
 
         payment.subscription = subscription
-        payment.save()
+        # Use update_fields so we don't accidentally overwrite verification_status
+        # that was already set to VERIFIED_CONFIDENT by the background task.
+        update_fields = ['status', 'verified_by', 'verified_at', 'subscription', 'verification_result']
+        payment.save(update_fields=update_fields)
 
         enrolled_course_title = plan.name
         try:

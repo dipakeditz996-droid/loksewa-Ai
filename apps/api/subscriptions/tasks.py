@@ -74,7 +74,6 @@ def verify_payment_proof(payment_id):
     payment = SubscriptionPayment.objects.filter(
         pk=payment_id,
         status='PENDING',
-        verification_status='VERIFICATION_IN_PROGRESS',
     ).select_related('student', 'plan').first()
     if not payment:
         return {'status': 'skipped'}
@@ -90,7 +89,6 @@ def verify_payment_proof(payment_id):
     updated = SubscriptionPayment.objects.filter(
         pk=payment_id,
         status='PENDING',
-        verification_status='VERIFICATION_IN_PROGRESS',
     ).update(
         verification_status=(
             'VERIFIED_CONFIDENT'
@@ -105,6 +103,9 @@ def verify_payment_proof(payment_id):
 
     if result.get('outcome') == 'AUTO_VERIFIED':
         from .services import approve_payment_logic
+        # Refresh from DB so approve_payment_logic sees the updated verification_status
+        # (VERIFIED_CONFIDENT) and doesn't overwrite it via update_fields.
+        payment.refresh_from_db()
         try:
             approve_payment_logic(payment, admin_user=None)
         except Exception as e:
@@ -113,7 +114,8 @@ def verify_payment_proof(payment_id):
             return {'status': 'manual_review'}
         return {'status': 'verified'}
     else:
-        _notify_manual_review(payment, 'The receipt did not match all submitted payment details.')
+        detail_msg = "; ".join(result.get('failure_reasons', [])) or 'The receipt did not match all submitted payment details.'
+        _notify_manual_review(payment, detail_msg)
         return {'status': 'manual_review'}
 
 

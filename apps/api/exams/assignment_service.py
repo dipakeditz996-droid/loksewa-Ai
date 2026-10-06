@@ -77,7 +77,7 @@ class SubjectiveExamAssignmentService:
                 title=selected_set.title,
                 description=selected_set.description,
                 exam_type='subjective',
-                objective_category=None,
+                objective_category='live',
                 category=locked_request.academic_exam.category,
                 exam=locked_request.academic_exam,
                 course=locked_request.course or selected_set.course,

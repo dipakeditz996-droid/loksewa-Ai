@@ -57,6 +57,30 @@ export default function PracticeSetupPage() {
         <h1 className="mt-2 text-3xl font-bold text-primary dark:text-foreground">Practice</h1>
       </header>
 
+      <section aria-labelledby="topicwise-heading">
+        <div className="mb-5 border-b border-border pb-4">
+          <h2 id="topicwise-heading" className="text-xl font-bold text-primary dark:text-foreground">Topicwise Practice</h2>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Link href="/student/practice/study" className="group flex min-h-32 items-center gap-4 border border-border p-5 transition-colors hover:bg-muted/40">
+            <BookOpen className="h-6 w-6 shrink-0 text-amber-600" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-primary dark:text-foreground">Topicwise Study</span>
+              <span className="mt-1 block text-sm text-muted-foreground">Learn at your own pace. No timer, no fixed count, answers available while studying.</span>
+            </span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
+          </Link>
+          <Link href="/student/practice/tests" className="group flex min-h-32 items-center gap-4 border border-border p-5 transition-colors hover:bg-muted/40">
+            <ClipboardList className="h-6 w-6 shrink-0 text-sky-700" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-primary dark:text-foreground">Topicwise Test</span>
+              <span className="mt-1 block text-sm text-muted-foreground">Take an admin-created test with a fixed question set and strict timer.</span>
+            </span>
+            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
+          </Link>
+        </div>
+      </section>
+
       <section aria-labelledby="quick-start-heading">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -97,30 +121,6 @@ export default function PracticeSetupPage() {
               <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
             </button>
           ))}
-        </div>
-      </section>
-
-      <section aria-labelledby="topicwise-heading">
-        <div className="mb-5 border-b border-border pb-4">
-          <h2 id="topicwise-heading" className="text-xl font-bold text-primary dark:text-foreground">Topicwise Practice</h2>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <Link href="/student/practice/study" className="group flex min-h-32 items-center gap-4 border border-border p-5 transition-colors hover:bg-muted/40">
-            <BookOpen className="h-6 w-6 shrink-0 text-amber-600" aria-hidden="true" />
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold text-primary dark:text-foreground">Topicwise Study</span>
-              <span className="mt-1 block text-sm text-muted-foreground">Learn at your own pace. No timer, no fixed count, answers available while studying.</span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
-          </Link>
-          <Link href="/student/practice/tests" className="group flex min-h-32 items-center gap-4 border border-border p-5 transition-colors hover:bg-muted/40">
-            <ClipboardList className="h-6 w-6 shrink-0 text-sky-700" aria-hidden="true" />
-            <span className="min-w-0 flex-1">
-              <span className="block font-semibold text-primary dark:text-foreground">Topicwise Test</span>
-              <span className="mt-1 block text-sm text-muted-foreground">Take an admin-created test with a fixed question set and strict timer.</span>
-            </span>
-            <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" aria-hidden="true" />
-          </Link>
         </div>
       </section>
     </main>

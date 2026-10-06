@@ -10,8 +10,7 @@ export interface StudentExam {
   description: string;
   exam_type: string;
   objective_category: ObjectiveCategory;
-  // Same as objective_category, except a Live Exam auto-promotes to "model"
-  // 48h after its scheduled start — group listings by this, not the raw value.
+  // Student-facing listing category.
   effective_category: ObjectiveCategory;
   category_name: string;
   course_id?: number | null;
@@ -401,4 +400,3 @@ export const studentExamsApi = {
     return await res.blob();
   },
 };
-

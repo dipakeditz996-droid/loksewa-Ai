@@ -103,7 +103,14 @@ class StudentUpcomingMockExamSerializer(serializers.ModelSerializer):
         user = self._user()
         if not user or not user.is_authenticated:
             return False
-        if obj.computed_status != 'LIVE':
+        now = timezone.now()
+        if (
+            not obj.is_scheduled_live
+            or not obj.start_time
+            or not obj.end_time
+            or now < obj.start_time
+            or now > obj.end_time
+        ):
             return False
         if self.get_has_attempted(obj):
             return False
@@ -115,4 +122,3 @@ class StudentUpcomingMockExamSerializer(serializers.ModelSerializer):
             return None
         active = obj.attempts.filter(student=user, status='in-progress').first()
         return active.id if active else None
-

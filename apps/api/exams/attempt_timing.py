@@ -27,7 +27,7 @@ def attempt_expires_at(attempt):
         return None
     deadline = attempt.started_at + timezone.timedelta(seconds=total)
     exam = getattr(attempt, 'examination', None)
-    if exam and getattr(exam, 'objective_category', None) == 'live' and getattr(exam, 'effective_category', None) == 'live':
+    if exam and getattr(exam, 'is_scheduled_live', False):
         end_time = getattr(exam, 'end_time', None)
         if end_time and end_time < deadline:
             deadline = end_time
@@ -86,6 +86,11 @@ def subjective_upload_expires_at(attempt):
 
     buffer_minutes = getattr(attempt.examination, 'upload_deadline_minutes', 30) or 30
     deadline = exam_expires + timezone.timedelta(minutes=buffer_minutes)
+
+    if getattr(attempt.examination, 'is_scheduled_live', False):
+        scheduled_end = getattr(attempt.examination, 'end_time', None)
+        if scheduled_end and scheduled_end < deadline:
+            deadline = scheduled_end
 
     fixed_end = getattr(attempt.examination, 'upload_end_time', None)
     if fixed_end and fixed_end < deadline:

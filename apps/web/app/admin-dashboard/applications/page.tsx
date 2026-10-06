@@ -36,6 +36,7 @@ interface Payment {
     payment_completed?: boolean;
     is_duplicate_transaction?: boolean;
     is_duplicate_image?: boolean;
+    failure_reasons?: string[];
     notes?: string | null;
     error_message?: string;
   };
@@ -114,6 +115,8 @@ export default function AdminApplicationsPage() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [revokeReason, setRevokeReason] = useState("");
 
   useEffect(() => {
     fetchAll();
@@ -165,6 +168,28 @@ export default function AdminApplicationsPage() {
     } catch (error) {
       console.error("Failed to reject payment", error);
       alert("Failed to reject payment");
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handlePaymentRevoke = async (id: number) => {
+    if (!revokeReason.trim()) {
+      alert("Please enter a reason for revoking this payment.");
+      return;
+    }
+    setActioningId(`payment-${id}`);
+    try {
+      await apiClient(`/subscriptions/payments/${id}/revoke/`, {
+        method: "POST",
+        body: JSON.stringify({ reason: revokeReason }),
+      });
+      setRevokingId(null);
+      setRevokeReason("");
+      await fetchAll();
+    } catch (error) {
+      console.error("Failed to revoke payment", error);
+      alert("Failed to revoke payment");
     } finally {
       setActioningId(null);
     }
@@ -278,6 +303,45 @@ export default function AdminApplicationsPage() {
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
                 Confirm Reject
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revoke Modal — for already-approved (auto-verified) payments */}
+      {revokingId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-[20px] shadow-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-center gap-2">
+              <XCircle className="w-5 h-5 text-red-600" />
+              <h3 className="text-lg font-bold text-[#0B2545]">Revoke Auto-Approved Payment</h3>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+              ⚠ This will <strong>cancel the student&apos;s subscription and course access</strong>. The student will be notified.
+            </div>
+            <p className="text-sm text-slate-500">Provide a reason for revoking this payment.</p>
+            <textarea
+              className="w-full border border-slate-200 rounded-xl p-3 text-sm resize-none min-h-[100px] focus:outline-none focus:ring-2 focus:ring-red-300"
+              placeholder="e.g. Fraudulent receipt, duplicate transaction..."
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+            />
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setRevokingId(null); setRevokeReason(""); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={actioningId === `payment-${revokingId}`}
+                onClick={() => handlePaymentRevoke(revokingId)}
+                className="bg-red-700 hover:bg-red-800 text-white"
+              >
+                {actioningId === `payment-${revokingId}` ? "Revoking..." : "Confirm Revoke"}
               </Button>
             </div>
           </div>
@@ -413,7 +477,7 @@ export default function AdminApplicationsPage() {
                             </div>
 
                             {payment.verification_result && (
-                              <div className="text-[11px] space-y-0.5 mt-1 bg-slate-50 p-2 rounded-lg border border-slate-100 max-w-56">
+                              <div className="text-[11px] space-y-1 mt-1 bg-slate-50 p-2.5 rounded-lg border border-slate-200 max-w-64">
                                 {payment.verification_result.detected_provider && (
                                   <p className="font-semibold text-slate-700">
                                     Provider: <span className="text-blue-600">{payment.verification_result.detected_provider}</span>
@@ -441,7 +505,21 @@ export default function AdminApplicationsPage() {
                                     ⚠ Duplicate Receipt Image
                                   </span>
                                 )}
-                                {payment.verification_result.notes && (
+
+                                {/* Specific verification failure reasons */}
+                                {payment.verification_result.failure_reasons && payment.verification_result.failure_reasons.length > 0 && (
+                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200/60 bg-amber-50/80 -mx-1 p-1.5 rounded">
+                                    <p className="font-bold text-amber-900 text-[10px] mb-0.5">Reason not auto-verified:</p>
+                                    <ul className="list-disc pl-3 space-y-0.5 text-amber-800 text-[10px] leading-tight">
+                                      {payment.verification_result.failure_reasons.map((reason, idx) => (
+                                        <li key={idx}>{reason}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Notes if not already captured by failure reasons */}
+                                {payment.verification_result.notes && (!payment.verification_result.failure_reasons || payment.verification_result.failure_reasons.length === 0) && (
                                   <p className="text-slate-500 text-[10px] leading-tight pt-0.5">
                                     {payment.verification_result.notes}
                                   </p>
@@ -470,6 +548,27 @@ export default function AdminApplicationsPage() {
                                 className="bg-emerald-600 hover:bg-emerald-700 text-white"
                               >
                                 {isActioning ? "..." : "Approve"}
+                              </Button>
+                            </div>
+                          ) : payment.status === "APPROVED" ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 border-slate-200"
+                                onClick={() => screenshotUrl && setLightboxSrc(screenshotUrl)}
+                                disabled={!screenshotUrl}
+                              >
+                                <Eye className="h-3.5 w-3.5" /> View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isActioning}
+                                onClick={() => setRevokingId(payment.id)}
+                                className="border-red-200 text-red-600 hover:bg-red-50 text-xs"
+                              >
+                                <XCircle className="h-3 w-3 mr-1" /> Revoke
                               </Button>
                             </div>
                           ) : (

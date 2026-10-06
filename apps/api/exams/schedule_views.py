@@ -284,11 +284,16 @@ class StudentUpcomingMockExamView(APIView):
         # Upcoming/Live Mock Exam countdown banner is ONLY for official scheduled mock exams, NEVER on-demand custom exams
         base_qs = base_qs.exclude(exam_type='custom').exclude(objective_category='custom')
         base_qs = base_qs.filter(exam_type__in=['mock', 'full', 'position'])
+        base_qs = base_qs.filter(
+            objective_category='live',
+            start_time__isnull=False,
+            end_time__isnull=False,
+        )
 
-        # Find live exams first (where end_time is future or None)
+        # Find live exams first, then show the next scheduled exam.
         live_exam = base_qs.filter(
-            Q(start_time__lte=now) | Q(start_time__isnull=True),
-            Q(end_time__gt=now) | Q(end_time__isnull=True)
+            start_time__lte=now,
+            end_time__gt=now,
         ).select_related('category', 'exam').order_by('-start_time').first()
 
         if live_exam:

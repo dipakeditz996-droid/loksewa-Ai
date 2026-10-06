@@ -49,6 +49,13 @@ const OBJECTIVE_CATEGORIES: { value: Exclude<ObjectiveCategory, null | "topicwis
   { value: "live", label: "Live Exam", hint: "Fixed start/end window shared by every student; no pause or restart once begun." },
 ];
 
+const SUBJECTIVE_CATEGORIES: { value: Exclude<ObjectiveCategory, null>; label: string; hint: string }[] = [
+  { value: "past_year", label: "Old Paper Exam", hint: "Original past year question paper with official PDF." },
+  { value: "model", label: "Model Exam", hint: "Standard timed practice subjective paper with PDF & handwritten upload." },
+  { value: "live", label: "Live Exam", hint: "Synchronous scheduled subjective examination window." },
+  { value: "topicwise", label: "Topic-wise Exam", hint: "Focused chapter or topic subjective practice test." },
+];
+
 /** Django accepts ISO-8601; <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm". */
 const toIso = (local: string) => (local ? new Date(local).toISOString() : null);
 const toLocal = (iso?: string | null) => {
@@ -104,8 +111,8 @@ export default function CreateExamPage() {
   const [examType, setExamType] = useState<ExaminationType>(
     initialMajorType === "topicwise" ? "subject" : initialMajorType === "subjective" ? "subjective" : "mock"
   );
-  const [objectiveCategory, setObjectiveCategory] = useState<Exclude<ObjectiveCategory, null | "custom"> | "">(
-    initialMajorType === "objective" ? "model" : ""
+  const [objectiveCategory, setObjectiveCategory] = useState<Exclude<ObjectiveCategory, null> | "">(
+    initialMajorType === "objective" || initialMajorType === "subjective" ? "model" : ""
   );
   const [instructions, setInstructions] = useState("");
 
@@ -159,7 +166,7 @@ export default function CreateExamPage() {
     setDescription(e.description || "");
     setExamType(e.exam_type);
     setMajorType(getMajorExamType(e.exam_type));
-    setObjectiveCategory((e.objective_category as Exclude<ObjectiveCategory, null | "topicwise">) || "");
+    setObjectiveCategory((e.objective_category as Exclude<ObjectiveCategory, null>) || "");
     setInstructions(e.instructions || "");
     setCourseId(e.course || undefined);
     setCategoryId(e.category || undefined);
@@ -220,7 +227,7 @@ export default function CreateExamPage() {
         if (!active) return;
         setExamType("subjective");
         setMajorType("subjective");
-        setObjectiveCategory("");
+        setObjectiveCategory("live");
         setTitle(examRequest.examination_title);
         setCategoryId(position.category ?? undefined);
         setPositionId(position.id);
@@ -243,7 +250,7 @@ export default function CreateExamPage() {
         if (!active) return;
         setExamType("subjective");
         setMajorType("subjective");
-        setObjectiveCategory("");
+        setObjectiveCategory((prev) => prev || "model");
         setTitle((prev) => (prev ? prev : `${setDetails.title} Examination`));
         if (setDetails.category_id || setDetails.exam_category) {
           setCategoryId(setDetails.category_id || setDetails.exam_category);
@@ -518,8 +525,8 @@ export default function CreateExamPage() {
       setStep(2);
       return null;
     }
-    if (examType === "subject" && (!courseId || !subjectId || !topicId)) {
-      toast.error("Choose a course, subject, and topic for a Topicwise Test.");
+    if (examType === "subject" && (!courseId || !subjectId || !chapterId)) {
+      toast.error("Choose a course, subject, and chapter for a Topicwise Test.");
       setStep(2);
       return null;
     }
@@ -765,10 +772,14 @@ export default function CreateExamPage() {
                         setObjectiveCategory("");
                       } else if (item.id === "subjective") {
                         setExamType("subjective");
-                        setObjectiveCategory("");
+                        if (!objectiveCategory) {
+                          setObjectiveCategory("model");
+                        }
                       } else {
                         setExamType("mock");
-                        setObjectiveCategory("model");
+                        if (!objectiveCategory) {
+                          setObjectiveCategory("model");
+                        }
                       }
                     }}
                     className={`text-left p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
@@ -834,6 +845,36 @@ export default function CreateExamPage() {
             </div>
           )}
 
+          {/* Subjective Sub-Category Selector (ONLY when Subjective Exam is selected) */}
+          {majorType === "subjective" && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <label className={label}>Subjective Exam Category *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {SUBJECTIVE_CATEGORIES.map((subtype) => {
+                  const active = objectiveCategory === subtype.value;
+                  return (
+                    <button
+                      key={subtype.label}
+                      type="button"
+                      onClick={() => {
+                        setExamType("subjective");
+                        setObjectiveCategory(subtype.value);
+                      }}
+                      className={`p-3 rounded-lg border text-left transition-all ${
+                        active
+                          ? "border-purple-600 bg-white ring-2 ring-purple-600/20 shadow-sm"
+                          : "border-slate-200 bg-white hover:border-purple-200"
+                      }`}
+                    >
+                      <div className="font-semibold text-xs text-slate-900">{subtype.label}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">{subtype.hint}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className={label}>Description</label>
             <textarea
@@ -869,6 +910,63 @@ export default function CreateExamPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
+              <label className={label}>Exam Category *</label>
+              <select
+                value={categoryId ?? ""}
+                onChange={(e) => {
+                  const nextCatId = e.target.value ? Number(e.target.value) : undefined;
+                  setCategoryId(nextCatId);
+                  if (courseId) {
+                    const currentCourse = courseOptions.find((c) => c.id === courseId);
+                    if (currentCourse?.exam?.category_id && currentCourse.exam.category_id !== nextCatId) {
+                      setCourseId(undefined);
+                    }
+                  }
+                  setPositionId(undefined);
+                  setSubjectId(undefined);
+                  setChapterId(undefined);
+                  setTopicId(undefined);
+                }}
+                disabled={academicLoading.categories}
+                className={`${field} disabled:bg-slate-50`}
+              >
+                <option value="">{academicLoading.categories ? "Loading categories..." : "Select category"}</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={label}>Position / Level *</label>
+              <select
+                value={positionId ?? ""}
+                onChange={(e) => {
+                  const nextPosId = e.target.value ? Number(e.target.value) : undefined;
+                  setPositionId(nextPosId);
+                  if (courseId) {
+                    const currentCourse = courseOptions.find((c) => c.id === courseId);
+                    if (currentCourse?.exam?.id && currentCourse.exam.id !== nextPosId) {
+                      setCourseId(undefined);
+                    }
+                  }
+                  setSubjectId(undefined);
+                  setChapterId(undefined);
+                  setTopicId(undefined);
+                }}
+                disabled={!categoryId || academicLoading.positions}
+                className={`${field} disabled:bg-slate-50`}
+              >
+                <option value="">{!categoryId ? "Select category first" : academicLoading.positions ? "Loading positions..." : "Select position / level"}</option>
+                {positions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label className={label}>Course {examType === "subject" ? "*" : ""}</label>
               <select
                 value={courseId ?? ""}
@@ -876,8 +974,12 @@ export default function CreateExamPage() {
                   const nextId = event.target.value ? Number(event.target.value) : undefined;
                   const selectedCourse = courseOptions.find((course) => course.id === nextId);
                   setCourseId(nextId);
-                  setCategoryId(selectedCourse?.exam?.category_id ?? undefined);
-                  setPositionId(selectedCourse?.exam?.id);
+                  if (selectedCourse?.exam?.category_id) {
+                    setCategoryId(selectedCourse.exam.category_id);
+                  }
+                  if (selectedCourse?.exam?.id) {
+                    setPositionId(selectedCourse.exam.id);
+                  }
                   setSubjectId(undefined);
                   setChapterId(undefined);
                   setTopicId(undefined);
@@ -886,34 +988,17 @@ export default function CreateExamPage() {
                 className={`${field} disabled:bg-slate-50`}
               >
                 <option value="">{academicLoading.courses ? "Loading courses..." : "Select course"}</option>
-                {courseOptions.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={label}>Exam Category *</label>
-              <select
-                value={categoryId ?? ""}
-                onChange={e => {
-                  setCategoryId(e.target.value ? Number(e.target.value) : undefined);
-                  setPositionId(undefined); setSubjectId(undefined); setChapterId(undefined); setTopicId(undefined);
-                }}
-                disabled={academicLoading.categories || (examType === "subject" && !!courseId)}
-                className={`${field} disabled:bg-slate-50`}
-              >
-                <option value="">{academicLoading.categories ? "Loading categories..." : "Select category"}</option>
-                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={label}>Position / Level *</label>
-              <select
-                value={positionId ?? ""}
-                onChange={e => { setPositionId(e.target.value ? Number(e.target.value) : undefined); setSubjectId(undefined); setChapterId(undefined); setTopicId(undefined); }}
-                disabled={!categoryId || academicLoading.positions || (examType === "subject" && !!courseId)}
-                className={`${field} disabled:bg-slate-50`}
-              >
-                <option value="">{!categoryId ? "Select category first" : academicLoading.positions ? "Loading positions..." : "Select position"}</option>
-                {positions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {courseOptions
+                  .filter((course) => {
+                    if (positionId && course.exam?.id && course.exam.id !== positionId) return false;
+                    if (categoryId && course.exam?.category_id && course.exam.category_id !== categoryId) return false;
+                    return true;
+                  })
+                  .map((course) => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
@@ -931,32 +1016,18 @@ export default function CreateExamPage() {
               </select>
             </div>
             {majorType !== "subjective" && (
-              <>
-                <div>
-                  <label className={label}>Chapter</label>
-                  <select
-                    value={chapterId ?? ""}
-                    onChange={(event) => { setChapterId(event.target.value ? Number(event.target.value) : undefined); setTopicId(undefined); }}
-                    disabled={!subjectId}
-                    className={`${field} disabled:bg-slate-50`}
-                  >
-                    <option value="">{subjectId ? "Select chapter" : "Select subject first"}</option>
-                    {chapters.map((chapter: any) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={label}>Topic {examType === "subject" ? "*" : ""}</label>
-                  <select
-                    value={topicId ?? ""}
-                    onChange={(event) => setTopicId(event.target.value ? Number(event.target.value) : undefined)}
-                    disabled={!chapterId}
-                    className={`${field} disabled:bg-slate-50`}
-                  >
-                    <option value="">{chapterId ? "Select topic" : "Select chapter first"}</option>
-                    {topics.map((topic: any) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}
-                  </select>
-                </div>
-              </>
+              <div>
+                <label className={label}>Chapter {examType === "subject" ? "*" : ""}</label>
+                <select
+                  value={chapterId ?? ""}
+                  onChange={(event) => { setChapterId(event.target.value ? Number(event.target.value) : undefined); setTopicId(undefined); }}
+                  disabled={!subjectId}
+                  className={`${field} disabled:bg-slate-50`}
+                >
+                  <option value="">{subjectId ? "Select chapter" : "Select subject first"}</option>
+                  {chapters.map((chapter: any) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
+                </select>
+              </div>
             )}
           </div>
         </div>
@@ -1189,6 +1260,7 @@ export default function CreateExamPage() {
           <QuestionSelectionWorkspace
             examinationId={examId}
             defaultSubjectId={subjectId ?? null}
+            defaultChapterId={chapterId ?? null}
             defaultTopicId={topicId ?? null}
             defaultCollectionId={defaultCollectionId}
             onSelectionChange={handleSelectionChange}

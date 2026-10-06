@@ -328,6 +328,124 @@ class StudentExamAccessControlTestCase(APITestCase):
         self.assertEqual(started.status_code, 201)
         self.assertTrue(ExaminationAttempt.objects.filter(student=self.student_civil, examination=self.civil_exam).exists())
 
+    def test_approved_model_exam_ignores_global_schedule_and_uses_attempt_duration(self):
+        now = timezone.now()
+        self.civil_exam.start_time = now + timedelta(days=2)
+        self.civil_exam.end_time = now + timedelta(minutes=30)
+        self.civil_exam.save(update_fields=['start_time', 'end_time'])
+        self.client.force_authenticate(self.student_civil)
+
+        requested = self.client.post(
+            '/api/student/exam-requests/',
+            {'examination': self.civil_exam.id},
+            format='json',
+        )
+        self.assertEqual(requested.status_code, 201)
+
+        self.client.force_authenticate(self.admin_user)
+        approved = self.client.post(
+            f'/api/admin/exam-requests/{requested.data["id"]}/approve/'
+        )
+        self.assertEqual(approved.status_code, 200)
+
+        self.client.force_authenticate(self.student_civil)
+        details = self.client.get(f'/api/student/exams/{self.civil_exam.id}/')
+        self.assertTrue(details.data['can_start'])
+
+        started = self.client.post(f'/api/student/exams/{self.civil_exam.id}/start/')
+        self.assertEqual(started.status_code, 201)
+        attempt = ExaminationAttempt.objects.get(pk=started.data['id'])
+
+        from exams.attempt_timing import attempt_expires_at
+        self.assertEqual(
+            attempt_expires_at(attempt),
+            attempt.started_at + timedelta(minutes=self.civil_exam.time_limit),
+        )
+
+    def test_live_exam_is_unavailable_before_start_and_closes_at_scheduled_end(self):
+        now = timezone.now()
+        live_exam = Examination.objects.create(
+            title='Scheduled Civil Live Exam',
+            exam_type='mock',
+            objective_category='live',
+            category=self.category,
+            exam=self.exam_civil,
+            course=self.course_civil,
+            status='published',
+            time_limit=60,
+            total_marks=1,
+            start_time=now + timedelta(hours=1),
+            end_time=now + timedelta(hours=2),
+        )
+        self.client.force_authenticate(self.student_civil)
+
+        early = self.client.post(f'/api/student/exams/{live_exam.id}/start/')
+        self.assertEqual(early.status_code, 400)
+
+        live_exam.start_time = timezone.now() - timedelta(minutes=1)
+        live_exam.end_time = timezone.now() + timedelta(minutes=2)
+        live_exam.save(update_fields=['start_time', 'end_time'])
+        started = self.client.post(f'/api/student/exams/{live_exam.id}/start/')
+        self.assertEqual(started.status_code, 201)
+        attempt = ExaminationAttempt.objects.get(pk=started.data['id'])
+
+        from exams.attempt_timing import attempt_expires_at
+        self.assertEqual(attempt_expires_at(attempt), live_exam.end_time)
+
+        live_exam.end_time = timezone.now() - timedelta(seconds=1)
+        live_exam.save(update_fields=['end_time'])
+        state = self.client.get(f'/api/student/exam-attempts/{attempt.id}/state/')
+        self.assertEqual(state.status_code, 200)
+        self.assertEqual(state.data['status'], 'submitted')
+
+    def test_live_exam_without_a_schedule_cannot_be_started(self):
+        live_exam = Examination.objects.create(
+            title='Unscheduled Civil Live Exam',
+            exam_type='mock',
+            objective_category='live',
+            category=self.category,
+            exam=self.exam_civil,
+            course=self.course_civil,
+            status='published',
+            time_limit=60,
+            total_marks=1,
+        )
+        self.client.force_authenticate(self.student_civil)
+
+        response = self.client.post(f'/api/student/exams/{live_exam.id}/start/')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['detail'], 'This Live Exam schedule is not configured.')
+        self.assertFalse(ExaminationAttempt.objects.filter(
+            student=self.student_civil, examination=live_exam
+        ).exists())
+
+    def test_subjective_live_answer_upload_cannot_extend_past_scheduled_end(self):
+        now = timezone.now()
+        scheduled_end = now + timedelta(minutes=2)
+        exam = Examination.objects.create(
+            title='Scheduled Civil Subjective Live Exam',
+            exam_type='subjective',
+            objective_category='live',
+            category=self.category,
+            exam=self.exam_civil,
+            course=self.course_civil,
+            status='published',
+            time_limit=60,
+            total_marks=10,
+            start_time=now - timedelta(minutes=1),
+            end_time=scheduled_end,
+            upload_deadline_minutes=30,
+        )
+        attempt = ExaminationAttempt.objects.create(
+            examination=exam,
+            student=self.student_civil,
+            status='in-progress',
+        )
+
+        from exams.attempt_timing import subjective_upload_expires_at
+        self.assertEqual(subjective_upload_expires_at(attempt), scheduled_end)
+
     def test_admin_rejection_reason_is_persisted_and_student_cannot_review_requests(self):
         self.client.force_authenticate(self.student_civil)
         created = self.client.post(
@@ -705,4 +823,3 @@ class StudentExamAccessControlTestCase(APITestCase):
         res_unauth = self.client.get(f'/api/student/exams/academic-hierarchy/?course_id={self.course_computer.id}')
         self.assertEqual(res_unauth.status_code, 200)
         self.assertEqual(res_unauth.data, [])
-

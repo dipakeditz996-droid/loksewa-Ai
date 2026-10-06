@@ -100,6 +100,7 @@ class SubjectiveQuestionBankAssignmentTests(APITestCase):
         self.assertEqual(request.examination_id, exam.id)
         self.assertEqual(request.status, 'approved')
         self.assertEqual(exam.title, qset.title)
+        self.assertEqual(exam.objective_category, 'live')
 
     def test_manual_assignment_is_idempotent_for_same_request(self):
         pdf = SimpleUploadedFile('set-two.pdf', make_pdf_bytes(), content_type='application/pdf')

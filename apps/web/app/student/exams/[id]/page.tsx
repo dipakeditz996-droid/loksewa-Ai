@@ -44,12 +44,13 @@ export default function ExamDetailsPage() {
     queryFn: () => studentExamsApi.getExamDetails(examId)
   });
 
-  const requiresAdminRequest = Boolean(
-    exam &&
-    exam.requires_admin_request &&
-    !exam.can_start
-  );
-  const { data: examRequests = [], isLoading: isLoadingRequests, refetch: refetchRequests } = useQuery({
+  const requiresAdminRequest = Boolean(exam?.requires_admin_request);
+  const {
+    data: examRequests = [],
+    isLoading: isLoadingRequests,
+    isError: isRequestsError,
+    refetch: refetchRequests,
+  } = useQuery({
     queryKey: ["student-exam-requests"],
     queryFn: studentExamsApi.getExamRequests,
     enabled: requiresAdminRequest,
@@ -91,6 +92,16 @@ export default function ExamDetailsPage() {
       setSolutionMessage(getErrorDetail(solutionError, "Expert solution is not available yet."));
     }
   };
+
+  useEffect(() => {
+    if (searchParams.get("view") === "solution") {
+      void viewExpertSolution();
+      setTimeout(() => {
+        const el = document.getElementById("expert-solution-section");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+      }, 350);
+    }
+  }, [searchParams]);
 
   const handleStartExam = () => {
     setIsStarting(true);
@@ -150,6 +161,24 @@ export default function ExamDetailsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {requiresAdminRequest && examRequest && (
+            <Badge
+              variant="outline"
+              className={
+                examRequest.status === "approved"
+                  ? "mb-4 border-emerald-500/50 text-emerald-700 dark:text-emerald-300"
+                  : examRequest.status === "rejected"
+                  ? "mb-4 border-destructive/50 text-destructive"
+                  : "mb-4 border-amber-500/50 text-amber-700 dark:text-amber-300"
+              }
+            >
+              {examRequest.status === "approved"
+                ? "Approved"
+                : examRequest.status === "rejected"
+                ? "Rejected"
+                : "Pending Approval"}
+            </Badge>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-4 mb-6 border-y border-border/50">
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground text-sm flex items-center gap-1">
@@ -223,8 +252,12 @@ export default function ExamDetailsPage() {
             </div>
           </div>
 
-          {exam.exam_type !== "subjective" && ((exam.objective_category === "past_year" || exam.objective_category === "model") || (exam.exam_type === "subject" && !!exam.topic_id)) && (
-            <section className="mt-6 space-y-3 border-t border-border/50 pt-5" aria-labelledby="expert-solution-heading">
+          {(exam.exam_type === "subjective" ||
+            exam.exam_type === "subject" ||
+            exam.objective_category === "past_year" ||
+            exam.objective_category === "model" ||
+            exam.objective_category === "topicwise") && (
+            <section className="mt-6 space-y-3 border-t border-border/50 pt-5" id="expert-solution-section" aria-labelledby="expert-solution-heading">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 id="expert-solution-heading" className="font-semibold text-lg">Expert Solution</h3>
                 <Button variant="outline" size="sm" onClick={() => void viewExpertSolution()}>
@@ -293,6 +326,13 @@ export default function ExamDetailsPage() {
               )
             ) : requiresAdminRequest && isLoadingRequests ? (
               <Button disabled className="w-full sm:w-auto">Checking request status...</Button>
+            ) : requiresAdminRequest && isRequestsError ? (
+              <div className="flex items-center gap-3 text-sm text-destructive" role="alert">
+                <span>Unable to check your approval status.</span>
+                <Button variant="outline" size="sm" onClick={() => void refetchRequests()}>
+                  Retry
+                </Button>
+              </div>
             ) : requiresAdminRequest && !examRequest ? (
               <Button
                 disabled={requestExamMutation.isPending}

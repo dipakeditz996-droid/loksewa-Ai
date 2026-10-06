@@ -382,7 +382,7 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
                         generation_key=generation_key,
                         title=title,
                         exam_type='subjective',
-                        objective_category=None,
+                        objective_category='live',
                         category=academic_exam.category,
                         exam=academic_exam,
                         course=course,
@@ -402,6 +402,7 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
                     )
 
                 examination.title = title
+                examination.objective_category = 'live'
                 examination.course = course
                 examination.subject = subject
                 examination.topic = topic
@@ -543,6 +544,11 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             errors.append("Passing Marks cannot exceed Total Marks.")
         if exam.start_time and exam.end_time and exam.end_time <= exam.start_time:
             errors.append("The end time must come after the start time.")
+        if exam.objective_category == 'live':
+            if not exam.start_time:
+                errors.append("A scheduled Live Exam needs a start time.")
+            if not exam.end_time:
+                errors.append("A scheduled Live Exam needs an end time.")
         if not is_subjective_pdf and exam.total_questions and assigned < exam.total_questions:
             errors.append(
                 f"This exam targets {exam.total_questions} question(s) but only {assigned} "
@@ -1238,4 +1244,3 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
 
         serializer = AdminSubjectiveSubmissionDetailSerializer(submission)
         return Response(serializer.data)
-

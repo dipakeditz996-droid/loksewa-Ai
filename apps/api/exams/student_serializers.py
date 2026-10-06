@@ -160,13 +160,7 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
         return latest.status == 'evaluated' or (latest.status == 'submitted' and obj.result_visibility == 'immediate')
 
     def get_requires_admin_request(self, obj):
-        return bool(
-            obj.course_id is not None
-            and (
-                obj.objective_category in ('past_year', 'model', 'topicwise')
-                or (obj.exam_type == 'subject' and obj.topic_id is not None)
-            )
-        )
+        return obj.requires_admin_request
 
     def get_can_start(self, obj):
         return self.get_start_blocked_reason(obj) is None
@@ -179,16 +173,18 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
             return 'This exam is not currently active.'
 
         now = timezone.now()
-        is_live_scheduled = obj.objective_category == 'live' and obj.effective_category == 'live'
-        if is_live_scheduled:
+        if obj.is_scheduled_live:
+            if not obj.start_time or not obj.end_time:
+                return 'This Live Exam schedule is not configured.'
             if obj.start_time and now < obj.start_time:
                 return 'This exam has not opened yet.'
             if obj.end_time and now > obj.end_time:
                 return 'This exam window has closed.'
-        elif obj.start_time and now < obj.start_time:
-            return 'This exam has not opened yet.'
-        elif obj.end_time and now > obj.end_time and obj.objective_category not in ('past_year', 'model', 'topicwise'):
-            return 'This exam window has closed.'
+        elif not obj.starts_anytime_after_approval:
+            if obj.start_time and now < obj.start_time:
+                return 'This exam has not opened yet.'
+            if obj.end_time and now > obj.end_time:
+                return 'This exam window has closed.'
 
         # Subjective exam must have a valid question paper attached
         if obj.exam_type == 'subjective' and not obj.question_paper_pdf:

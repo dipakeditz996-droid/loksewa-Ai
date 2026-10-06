@@ -53,8 +53,8 @@ _TXN_PATTERNS = [
 ]
 
 _DATE_PATTERNS = [
-    r"\b(20\d{2})[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12]\d|3[01])\b", # YYYY-MM-DD
-    r"\b(0[1-9]|[12]\d|3[01])[-/](0[1-9]|1[0-2])[-/](20\d{2})\b", # DD-MM-YYYY
+    r"(?:^|[^\d])(20\d{2})[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])(?=\b|[^\d]|\d{2}:\d{2}|$)", # YYYY-MM-DD
+    r"(?:^|[^\d])(0[1-9]|[12]\d|3[01])[-/.](0[1-9]|1[0-2])[-/.](20\d{2})(?=\b|[^\d]|\d{2}:\d{2}|$)", # DD-MM-YYYY
 ]
 
 _SUCCESS_KEYWORDS = [
@@ -233,15 +233,34 @@ def _check_txn(full_text: str, detected_ids: List[str], expected: str) -> Tuple[
 def _check_date(detected_dates: List[date], expected_date: date) -> Tuple[str, Optional[str]]:
     if not detected_dates:
         return "UNKNOWN", None
-    if expected_date in detected_dates:
-        return "PASS", str(expected_date)
-    # Check if any detected date is in the future
+
+    valid_dates = []
+    future_dates = []
+    too_old_dates = []
+
     for d in detected_dates:
-        if d > expected_date:
-            return "FAIL", str(d) # Future date is a hard fail
-    # Otherwise just mismatch
-    closest = min(detected_dates, key=lambda x: abs((x - expected_date).days))
-    return "FAIL", str(closest)
+        days_diff = (d - expected_date).days
+        # Allow +1 day for timezone drift (Nepal UTC+5:45)
+        if days_diff > 1:
+            future_dates.append(d)
+        elif days_diff < -60:
+            too_old_dates.append(d)
+        else:
+            valid_dates.append(d)
+
+    if valid_dates:
+        if expected_date in valid_dates:
+            return "PASS", str(expected_date)
+        closest = min(valid_dates, key=lambda x: abs((x - expected_date).days))
+        return "PASS", str(closest)
+
+    if future_dates:
+        return "FAIL", f"{future_dates[0]} (future date)"
+
+    if too_old_dates:
+        return "FAIL", f"{too_old_dates[0]} (older than 60 days)"
+
+    return "UNKNOWN", None
 
 def _check_receiver_match(full_text: str, provider: str, payment_method) -> str:
     if not payment_method:
@@ -267,11 +286,9 @@ def _check_receiver_match(full_text: str, provider: str, payment_method) -> str:
             if len(name_clean) >= 3 and name_clean in text_norm:
                 name_pass = True
         
-        if phone_pass and name_pass:
+        if phone_pass or name_pass:
             return "PASS"
-        if not phone_pass and not name_pass:
-            return "UNKNOWN" # might just be unreadable
-        return "FAIL" # partial match but missing the other, strict fail
+        return "UNKNOWN"
         
     elif provider == "Bank":
         account_num = getattr(payment_method, "account_number", "")
@@ -279,9 +296,7 @@ def _check_receiver_match(full_text: str, provider: str, payment_method) -> str:
             acc_clean = re.sub(r"[^0-9]", "", account_num)
             if len(acc_clean) >= 6 and acc_clean in re.sub(r"[^0-9]", "", full_text):
                 return "PASS"
-            # Since bank receipts vary greatly, if not found, it's UNKNOWN rather than strict FAIL unless clear mismatch.
-            # But let's follow the rule: if we can't verify the account, it's UNKNOWN.
-            return "UNKNOWN"
+        return "UNKNOWN"
             
     return "UNKNOWN"
 
@@ -323,38 +338,56 @@ class PaymentProofVerificationService:
     def verify(self, payment) -> Dict[str, Any]:
         image_bytes = self._read_screenshot(payment)
         if image_bytes is None:
-            return self._fallback_result("Could not read screenshot.", ocr_engine="storage_error")
+            return self._fallback_result(
+                "Could not read screenshot.",
+                ocr_engine="storage_error",
+                failure_reasons=["Receipt screenshot could not be read from storage."]
+            )
 
         image_hash = hashlib.sha256(image_bytes).hexdigest()
 
         duplicate_status, dup_warnings = _check_duplicates(payment, image_hash, payment.transaction_id)
         if duplicate_status == "FAIL":
-            # Fast fail if duplicated
-            return self._fallback_result("Duplicate transaction detected.", outcome="REJECTED", image_hash=image_hash)
+            return self._fallback_result(
+                "Duplicate transaction detected.",
+                outcome="REJECTED",
+                image_hash=image_hash,
+                failure_reasons=dup_warnings or ["Duplicate transaction or receipt image detected."]
+            )
 
         try:
             image = _preprocess_image(image_bytes)
         except Exception as exc:
-            return self._fallback_result(f"Image parsing failed: {exc}", image_hash=image_hash, ocr_engine="image_error")
+            return self._fallback_result(
+                f"Image parsing failed: {exc}",
+                image_hash=image_hash,
+                ocr_engine="image_error",
+                failure_reasons=[f"Image parsing failed: {exc}"]
+            )
 
         raw_text, ocr_engine_name = _run_ocr(image)
 
         if ocr_engine_name == "none" or len(raw_text.strip()) < 15:
             return self._fallback_result(
-                "OCR could not extract legible text.",
-                image_hash=image_hash, ocr_engine=ocr_engine_name
+                "OCR could not extract legible text from receipt screenshot.",
+                image_hash=image_hash,
+                ocr_engine=ocr_engine_name,
+                failure_reasons=["Receipt image is blurry or contains illegible text."]
             )
 
         norm_text = _normalise(raw_text)
         has_failure = any(kw in norm_text for kw in _FAILURE_KEYWORDS)
         if has_failure:
-            return self._fallback_result("Failure/declined keyword detected in receipt.", outcome="REJECTED", image_hash=image_hash, ocr_engine=ocr_engine_name)
+            return self._fallback_result(
+                "Failure/declined keyword detected in receipt.",
+                outcome="REJECTED",
+                image_hash=image_hash,
+                ocr_engine=ocr_engine_name,
+                failure_reasons=["Receipt indicates payment failed or was declined."]
+            )
 
         provider = _detect_provider(raw_text)
-        if provider == "UNKNOWN":
-            provider_status = "UNKNOWN"
-        else:
-            provider_status = "PASS"
+        provider_status = "PASS" if provider != "UNKNOWN" else "UNKNOWN"
 
         today = timezone.localtime(timezone.now()).date()
         date_status, det_date = _check_date(_extract_dates(raw_text), today)
@@ -362,24 +395,52 @@ class PaymentProofVerificationService:
         txn_status, det_txn = _check_txn(raw_text, _extract_transaction_ids(raw_text), payment.transaction_id)
         receiver_status = _check_receiver_match(raw_text, provider, getattr(payment, "payment_method", None))
 
-        all_checks = [provider_status, date_status, amount_status, txn_status, receiver_status]
-        
-        # Decision Engine
-        if "FAIL" in all_checks:
-            outcome = "NEEDS_ADMIN_REVIEW"
-        elif all(s == "PASS" for s in all_checks):
+        # Automatic verification decision:
+        # A payment is AUTO_VERIFIED if:
+        # 1. Exact amount matches expected amount (within tolerance)
+        # 2. Transaction ID matches expected transaction ID
+        # 3. Not a duplicate transaction or screenshot
+        # 4. Receipt is legible, completed, and not marked failed/cancelled
+        # 5. Receiver does not fail
+        # 6. Date does not fail (is not in the future or expired)
+        can_auto_verify = (
+            amount_status == "PASS"
+            and txn_status == "PASS"
+            and duplicate_status == "PASS"
+            and not has_failure
+            and receiver_status != "FAIL"
+            and date_status != "FAIL"
+        )
+
+        failure_reasons: List[str] = []
+        if can_auto_verify:
             outcome = "AUTO_VERIFIED"
+            notes = "Receipt verified successfully. Amount, Transaction ID, and payment details verified."
         else:
             outcome = "NEEDS_ADMIN_REVIEW"
+            if duplicate_status == "FAIL":
+                failure_reasons.extend(dup_warnings)
+            if has_failure:
+                failure_reasons.append("Receipt indicates payment failed or was declined.")
+            if amount_status == "FAIL":
+                failure_reasons.append(f"Amount mismatch: expected NPR {payment.amount}, detected NPR {det_amount} on receipt.")
+            elif amount_status == "UNKNOWN":
+                failure_reasons.append(f"Expected amount NPR {payment.amount} not detected on receipt.")
+            if txn_status == "FAIL":
+                failure_reasons.append(f"Transaction ID mismatch: expected '{payment.transaction_id}', detected '{det_txn}' on receipt.")
+            elif txn_status == "UNKNOWN":
+                failure_reasons.append(f"Transaction ID '{payment.transaction_id}' not found on receipt.")
+            if date_status == "FAIL":
+                failure_reasons.append(f"Receipt date issue: {det_date}.")
+            if receiver_status == "FAIL":
+                failure_reasons.append("Receiver merchant or account details mismatch.")
+            if provider_status == "UNKNOWN" and not failure_reasons:
+                failure_reasons.append("Payment provider could not be identified from receipt.")
 
-        notes_parts = []
-        if provider_status != "PASS": notes_parts.append("Provider unknown.")
-        if amount_status == "FAIL": notes_parts.append(f"Amount mismatch (detected {det_amount}).")
-        if txn_status == "FAIL": notes_parts.append("Transaction ID mismatch.")
-        if date_status == "FAIL": notes_parts.append(f"Date mismatch or future date (detected {det_date}).")
-        if receiver_status == "FAIL": notes_parts.append("Receiver merchant/account mismatch.")
-        
-        notes = "Receipt verified successfully." if outcome == "AUTO_VERIFIED" else "Payment sent for Admin approval. " + " ".join(notes_parts)
+            if not failure_reasons:
+                failure_reasons.append("Receipt details require manual administrator review.")
+
+            notes = "Payment sent for Admin approval: " + "; ".join(failure_reasons)
 
         return {
             "outcome": outcome,
@@ -395,6 +456,7 @@ class PaymentProofVerificationService:
             "detected_provider": provider if provider != "UNKNOWN" else None,
             "is_duplicate_transaction": duplicate_status == "FAIL",
             "is_duplicate_image": duplicate_status == "FAIL",
+            "failure_reasons": failure_reasons,
             "notes": notes,
             "extracted_text_preview": raw_text[:800],
         }
@@ -417,7 +479,9 @@ class PaymentProofVerificationService:
         outcome: str = "NEEDS_ADMIN_REVIEW",
         image_hash: str = "",
         ocr_engine: str = "unavailable",
+        failure_reasons: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
+        reasons = failure_reasons or [notes]
         return {
             "outcome": outcome,
             "ocr_engine": ocr_engine,
@@ -432,6 +496,7 @@ class PaymentProofVerificationService:
             "detected_provider": None,
             "is_duplicate_transaction": False,
             "is_duplicate_image": False,
-            "notes": notes,
+            "failure_reasons": reasons,
+            "notes": notes if "Payment sent for Admin approval" in notes else f"Payment sent for Admin approval: {notes}",
             "extracted_text_preview": "",
         }

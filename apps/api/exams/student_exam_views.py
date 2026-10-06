@@ -172,7 +172,7 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['get'], url_path='expert-solution')
     def expert_solution(self, request, pk=None):
         examination = self.get_object()
-        if examination.objective_category == 'live':
+        if examination.is_scheduled_live:
             return Response(
                 {'detail': 'Expert solutions are unavailable for scheduled Live Exams.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -239,21 +239,13 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             student=user, examination=examination
         ).order_by('-created_at').first()
 
-        if exam_request and exam_request.status in ('pending', 'rejected'):
+        if examination.requires_admin_request and exam_request and exam_request.status in ('pending', 'rejected'):
             return Response(
                 {'detail': 'Admin approval is required before starting this examination.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        requires_request = (
-            examination.course_id is not None
-            and (
-                examination.objective_category in ('past_year', 'model', 'topicwise')
-                or (examination.exam_type == 'subject' and examination.topic_id is not None)
-            )
-        )
-
-        if requires_request and not ExaminationRequest.objects.filter(
+        if examination.requires_admin_request and not ExaminationRequest.objects.filter(
             student=user, examination=examination, status='approved'
         ).exists():
             return Response(
@@ -262,8 +254,23 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         now = timezone.now()
-        is_live_scheduled = examination.objective_category == 'live' and examination.effective_category == 'live'
-        if is_live_scheduled:
+        if examination.is_scheduled_live:
+            if not examination.start_time or not examination.end_time:
+                return Response(
+                    {'detail': 'This Live Exam schedule is not configured.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if now < examination.start_time:
+                return Response(
+                    {'detail': 'This exam has not opened yet.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if now > examination.end_time:
+                return Response(
+                    {'detail': 'This exam window has closed.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif not examination.starts_anytime_after_approval:
             if examination.start_time and now < examination.start_time:
                 return Response(
                     {'detail': 'This exam has not opened yet.'},
@@ -274,16 +281,6 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     {'detail': 'This exam window has closed.'},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-        elif examination.start_time and now < examination.start_time:
-            return Response(
-                {'detail': 'This exam has not opened yet.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        elif examination.end_time and now > examination.end_time and examination.objective_category not in ('past_year', 'model', 'topicwise'):
-            return Response(
-                {'detail': 'This exam window has closed.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         if examination.exam_type == 'subjective' and not examination.question_paper_pdf:
             return Response(
@@ -306,7 +303,7 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             # flag. Live Exams additionally forbid resume unconditionally
             # (the category's "no pause/restart" rule), not left to the
             # per-exam checkbox.
-            resume_allowed = examination.allow_resume and examination.objective_category != 'live'
+            resume_allowed = examination.allow_resume and not examination.is_scheduled_live
 
             if active_attempt:
                 # An attempt that ran out of time while the student was away is
@@ -704,12 +701,7 @@ class StudentExaminationRequestViewSet(viewsets.ReadOnlyModelViewSet):
         if not examination:
             return Response({'detail': 'Published examination not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        requestable = (
-            examination.objective_category in ('past_year', 'model', 'topicwise')
-            or examination.exam_type == 'subjective'
-            or (examination.exam_type == 'subject' and examination.topic_id is not None)
-        )
-        if not requestable:
+        if not examination.requires_admin_request:
             return Response({'detail': 'This examination does not require an admin request.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from courses.access import is_examination_authorized_for_student

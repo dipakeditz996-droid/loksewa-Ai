@@ -203,18 +203,18 @@ export const adminReportsApi = {
     if (params?.page)       qs.set('page', String(params.page));
     if (params?.page_size)  qs.set('page_size', String(params.page_size));
     const query = qs.toString();
-    return apiClient<AdminReportListResponse>(`/admin-api/question-reports/${query ? `?${query}` : ''}`);
+    return apiClient<AdminReportListResponse>(`/admin/question-reports/${query ? `?${query}` : ''}`);
   },
 
   retrieve: (id: number): Promise<AdminQuestionReportDetail> =>
-    apiClient<AdminQuestionReportDetail>(`/admin-api/question-reports/${id}/`),
+    apiClient<AdminQuestionReportDetail>(`/admin/question-reports/${id}/`),
 
   patch: (id: number, payload: AdminReportPatchPayload): Promise<AdminQuestionReportDetail> =>
-    apiClient<AdminQuestionReportDetail>(`/admin-api/question-reports/${id}/`, {
+    apiClient<AdminQuestionReportDetail>(`/admin/question-reports/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
     }),
 
   summary: (): Promise<AdminReportSummary> =>
-    apiClient<AdminReportSummary>('/admin-api/question-reports/summary/'),
+    apiClient<AdminReportSummary>('/admin/question-reports/summary/'),
 };

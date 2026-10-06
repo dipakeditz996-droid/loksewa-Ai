@@ -17,6 +17,8 @@ interface Props {
   examinationId: number;
   /** The exam's own academic targeting, used as the default bank scope. */
   defaultSubjectId?: number | null;
+  /** Locks the question bank to the configured Topicwise Test chapter. */
+  defaultChapterId?: number | null;
   /** Locks the question bank to the configured Topicwise Test topic. */
   defaultTopicId?: number | null;
   /** Pre-selects a QuestionCollection as the bank source - set when arriving
@@ -32,7 +34,7 @@ const DIFFICULTY_TONE: Record<string, string> = {
 };
 
 export function QuestionSelectionWorkspace({
-  examinationId, defaultSubjectId, defaultTopicId, defaultCollectionId, onSelectionChange,
+  examinationId, defaultSubjectId, defaultChapterId, defaultTopicId, defaultCollectionId, onSelectionChange,
 }: Props) {
   // Bank (left)
   const [bank, setBank] = useState<PaginatedBank | null>(null);
@@ -45,7 +47,7 @@ export function QuestionSelectionWorkspace({
   // Filters
   const [showFilters, setShowFilters] = useState(false);
   const [subjectId, setSubjectId] = useState<number | undefined>(defaultSubjectId ?? undefined);
-  const [chapterId, setChapterId] = useState<number | undefined>();
+  const [chapterId, setChapterId] = useState<number | undefined>(defaultChapterId ?? undefined);
   const [topicId, setTopicId] = useState<number | undefined>(defaultTopicId ?? undefined);
   const [questionType, setQuestionType] = useState("");
   const [difficulty, setDifficulty] = useState("");

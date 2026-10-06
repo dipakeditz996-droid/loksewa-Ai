@@ -268,7 +268,7 @@ function LoginContent() {
               )}
 
               {step === "twofa" ? (
-                <form key="twofa-form" onSubmit={handleTwoFactorSubmit} className="space-y-5">
+                <form key="twofa-form" onSubmit={handleTwoFactorSubmit} className="space-y-5" suppressHydrationWarning>
                   <div className="space-y-1.5">
                     <label htmlFor="twofa-code" className="text-[11px] font-bold text-white/90">Authentication Code</label>
                     <div className="relative group">
@@ -286,6 +286,7 @@ function LoginContent() {
                         className="h-[50px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-widest focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
                         style={{ color: 'white' }}
                         required
+                        suppressHydrationWarning
                       />
                     </div>
                   </div>
@@ -294,6 +295,7 @@ function LoginContent() {
                     <Button
                       type="submit"
                       disabled={isLoading}
+                      suppressHydrationWarning
                       className="w-full h-[50px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-[#0A1118] text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none"
                     >
                       {isLoading ? "Verifying..." : (
@@ -306,6 +308,7 @@ function LoginContent() {
 
                   <button
                     type="button"
+                    suppressHydrationWarning
                     onClick={() => {
                       setStep("credentials");
                       setTwoFactorCode("");
@@ -317,7 +320,7 @@ function LoginContent() {
                   </button>
                 </form>
               ) : (
-              <form key="credentials-form" onSubmit={handleLogin} className="space-y-5">
+              <form key="credentials-form" onSubmit={handleLogin} className="space-y-5" suppressHydrationWarning>
                 <div className="space-y-1.5">
                   <label htmlFor="email" className="text-[11px] font-bold text-white/90">Email or Username</label>
                   <div className="relative group">
@@ -331,6 +334,7 @@ function LoginContent() {
                       className="h-[50px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
                       style={{ color: 'white' }}
                       required 
+                      suppressHydrationWarning
                     />
                   </div>
                 </div>
@@ -348,9 +352,11 @@ function LoginContent() {
                       className="h-[50px] w-full pl-11 pr-12 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
                       style={{ color: 'white' }}
                       required 
+                      suppressHydrationWarning
                     />
                     <button 
                       type="button"
+                      suppressHydrationWarning
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors"
                     >
@@ -368,6 +374,7 @@ function LoginContent() {
                   <Button 
                     type="submit" 
                     disabled={isLoading}
+                    suppressHydrationWarning
                     className="w-full h-[50px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-[#0A1118] text-[15px] font-bold rounded-[10px] transition-all flex items-center justify-center gap-2 shadow-[0_4px_20px_rgba(212,167,44,0.25)] border-none"
                   >
                     {isLoading ? "Logging in..." : (

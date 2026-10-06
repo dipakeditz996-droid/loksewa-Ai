@@ -2,7 +2,7 @@
 Views for the Question Issue Report system.
 
 Student endpoints  → /api/student/question-reports/
-Admin endpoints    → /api/admin-api/question-reports/   (administration app urlconf)
+Admin endpoints    → /api/admin/question-reports/   (administration app urlconf)
 """
 import logging
 

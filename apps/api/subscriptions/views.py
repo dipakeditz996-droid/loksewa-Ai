@@ -352,20 +352,25 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         if payment.status != 'PENDING':
             return Response({'detail': 'Payment is not pending.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verification is advisory only; the authenticated admin remains the
-        # decision-maker, and the decision is logged for uncertain evidence.
-        if payment.verification_status in (
-            'VERIFIED_UNCERTAIN', 'VERIFICATION_FAILED', 'VERIFICATION_IN_PROGRESS',
-        ):
+        verification_result = payment.verification_result or {}
+        manual_review_requested = bool(verification_result.get('manual_review_requested'))
+
+        # Allow approval only after verification has reached a clear state. When
+        # the proof is uncertain, failed, or still running, admin approval must be
+        # preceded by an explicit manual-review step to avoid silently activating
+        # a payment without complete evidence.
+        if payment.verification_status == 'VERIFICATION_IN_PROGRESS':
+            return Response(
+                {'detail': 'Payment verification is still in progress. Please wait for it to finish before approving.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if payment.verification_status in ('VERIFIED_UNCERTAIN', 'VERIFICATION_FAILED'):
             logger.warning(
-                "Admin user_id=%s approved payment_id=%s with verification_status=%s.",
+                "Admin user_id=%s approved payment_id=%s with verification_status=%s after manual review.",
                 request.user.id, payment.id, payment.verification_status,
             )
 
-        # Everything below is one admin action with several dependent writes
-        # (payment, subscription, enrollment, invoice, notification) — wrap
-        # it so a failure partway through rolls back cleanly instead of
-        # leaving e.g. an APPROVED payment with no subscription/enrollment.
         from .services import approve_payment_logic
         approve_payment_logic(payment, admin_user=request.user)
         return Response({'status': 'approved'})
@@ -430,6 +435,76 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         )
 
         return Response({'status': 'rejected'})
+
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def revoke(self, request, pk=None):
+        """Revoke an already-approved payment (e.g., when admin overrides an auto-verified payment).
+        This deactivates the subscription and enrollment and notifies the student."""
+        from courses.models import Enrollment
+        from django.db import transaction as db_transaction
+
+        payment = self.get_object()
+        if payment.status != 'APPROVED':
+            return Response({'detail': 'Only approved payments can be revoked.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = request.data.get('reason', '')
+        if not reason:
+            return Response({'detail': 'Revocation reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with db_transaction.atomic():
+            # Deactivate subscription
+            if payment.subscription:
+                payment.subscription.status = 'CANCELLED'
+                payment.subscription.save(update_fields=['status'])
+
+            # Deactivate enrollments linked to this payment's courses
+            from courses.models import CourseApplication
+            apps = CourseApplication.objects.filter(subscription_payment=payment)
+            for app in apps:
+                Enrollment.objects.filter(
+                    student=payment.student, course=app.course
+                ).update(status='cancelled')
+                app.status = 'rejected'
+                app.reviewed_by = request.user
+                app.reviewed_at = timezone.now()
+                app.save()
+
+            if payment.plan and payment.plan.course:
+                Enrollment.objects.filter(
+                    student=payment.student, course=payment.plan.course
+                ).update(status='cancelled')
+
+            payment.status = 'REJECTED'
+            payment.rejection_reason = reason
+            payment.verified_by = request.user
+            payment.verified_at = timezone.now()
+            payment.verification_result = {
+                **(payment.verification_result or {}),
+                'admin_decision': {
+                    'action': 'revoked',
+                    'admin_id': request.user.id,
+                    'admin_name': request.user.get_full_name() or request.user.username,
+                    'revoked_at': timezone.now().isoformat(),
+                    'reason': reason,
+                },
+            }
+            payment.save()
+
+        logger.warning(
+            "Admin user_id=%s REVOKED payment_id=%s (was auto-verified). Reason: %s",
+            request.user.id, payment.id, reason
+        )
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_student_payment_rejected(
+            student=payment.student,
+            title_ref=payment.plan.name,
+            reason=reason,
+            action_url='/student/purchases',
+        )
+        return Response({'status': 'revoked'})
+
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def request_manual_verification_review(self, request, pk=None):

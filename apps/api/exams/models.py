@@ -645,11 +645,9 @@ class Examination(models.Model):
         ('rejected', 'Rejected'),
         ('archived', 'Archived'),
     )
-    # The four finalized Objective Exam categories from the client
-    # requirements doc. Deliberately separate from `exam_type` (a content
-    # classification like mock/full/subjective) and from `category` (the
-    # admin-defined ExamCategory taxonomy, e.g. "Loksewa"). Left blank for
-    # exam_type='subjective' exams, which sit outside this scheme entirely.
+    # Student-facing exam category. Kept separate from `exam_type` (the
+    # execution/content type) and `category` (the academic taxonomy). The
+    # field name is retained for API and database compatibility.
     OBJECTIVE_CATEGORIES = (
         ('past_year', 'Past Year Paper'),
         ('model', 'Model Exam'),
@@ -772,14 +770,24 @@ class Examination(models.Model):
 
     @property
     def effective_category(self):
-        """`objective_category`, except a Live Exam auto-promotes into the
-        Model Exams listing 48 hours after its first scheduled start. This is
-        a display-time computation (like `computed_status`) rather than a
-        stored mutation, so it never depends on a scheduled job having run."""
-        if self.objective_category == 'live' and self.start_time:
-            if timezone.now() >= self.start_time + timezone.timedelta(hours=48):
-                return 'model'
+        """Category shown in student listings."""
         return self.objective_category
+
+    @property
+    def is_scheduled_live(self):
+        return self.objective_category == 'live'
+
+    @property
+    def starts_anytime_after_approval(self):
+        return self.objective_category in ('past_year', 'model', 'topicwise')
+
+    @property
+    def requires_admin_request(self):
+        return (
+            self.starts_anytime_after_approval
+            or (self.exam_type == 'subject' and self.topic_id is not None)
+            or (self.exam_type == 'subjective' and not self.is_scheduled_live)
+        )
 
     def __str__(self):
         return self.title

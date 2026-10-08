@@ -76,6 +76,7 @@ from .collection_views import QuestionCollectionViewSet
 from .exam_views import (
     ExaminationViewSet,
     AdminSubjectiveSubmissionViewSet,
+    AdminSubjectiveCheckingRequestViewSet,
     AdminExaminationRequestViewSet,
     SubjectiveQuestionSetViewSet,
 )
@@ -115,6 +116,7 @@ router.register(r'exams', ExaminationViewSet, basename='admin-examination')
 router.register(r'exam-requests', AdminExaminationRequestViewSet, basename='admin-exam-request')
 router.register(r'subjective-question-sets', SubjectiveQuestionSetViewSet, basename='admin-subjective-question-set')
 router.register(r'subjective-submissions', AdminSubjectiveSubmissionViewSet, basename='admin-subjective-submissions')
+router.register(r'subjective-checking-requests', AdminSubjectiveCheckingRequestViewSet, basename='admin-subjective-checking-requests')
 router.register(r'schedules', AdminExamScheduleViewSet, basename='admin-exam-schedules')
 router.register(r'testimonials', AdminTestimonialViewSet, basename='admin-testimonials')
 router.register(r'website-pages', AdminWebsitePageViewSet, basename='admin-website-pages')

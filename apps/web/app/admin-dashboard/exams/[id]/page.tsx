@@ -11,6 +11,7 @@ import { StatTile } from "@/components/admin/exams/StatTile";
 import { EmptyState } from "@/components/admin/exams/ExamStateViews";
 import { adminExamApi } from "@/lib/api/admin-exams";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { AdminExpertSolutionManager } from "@/components/admin/exams/AdminExpertSolutionManager";
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -27,7 +28,7 @@ export default function ExamOverviewPage() {
   const validId = Number.isFinite(examId) && examId > 0;
 
   // Shares the cache entry populated by the exam detail layout — no extra request.
-  const { data: exam, isLoading } = useQuery({
+  const { data: exam, isLoading, refetch } = useQuery({
     queryKey: ["admin", "exam", examId],
     queryFn: () => adminExamApi.getExam(examId),
     enabled: validId,
@@ -153,6 +154,10 @@ export default function ExamOverviewPage() {
           )}
         </div>
       </div>
+
+      {exam.exam_type === "subjective" && (
+        <AdminExpertSolutionManager exam={exam} onUpdated={() => void refetch()} />
+      )}
     </div>
   );
 }

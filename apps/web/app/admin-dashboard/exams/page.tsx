@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Search, Filter, PlusCircle, FileText, ChevronRight, MoreHorizontal, ClipboardList, Inbox, Award,
-  Clock, DownloadCloud, Lock, Unlock, Eye, HelpCircle, Archive, Trash2, Calendar
+  Clock, DownloadCloud, Lock, Unlock, Eye, HelpCircle, Archive, Trash2, Calendar, FileCheck
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -135,7 +135,7 @@ export default function ExamsOverviewPage() {
       
       {/* Top Actions & Analytics Cards */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-2">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full md:w-3/4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 w-full md:w-3/4">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
             <p className="text-sm font-semibold text-slate-500 mb-1">Total Exams</p>
             <h3 className="text-2xl font-bold text-[#0B2545]">{stats?.totalExams || 0}</h3>
@@ -152,8 +152,26 @@ export default function ExamsOverviewPage() {
             <p className="text-sm font-semibold text-slate-500 mb-1">Drafts</p>
             <h3 className="text-2xl font-bold text-amber-600">{stats?.draftModelExams || 0}</h3>
           </div>
+          <Link href="/admin-dashboard/exams/evaluation-requests" className="block">
+            <div className="bg-white p-4 rounded-xl border border-indigo-200 hover:border-indigo-400 transition-colors shadow-sm cursor-pointer group">
+              <p className="text-sm font-semibold text-indigo-700 mb-1 flex items-center justify-between">
+                <span>Evaluation Queue</span>
+                {Number(stats?.pendingEvaluationRequests || 0) > 0 && (
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                )}
+              </p>
+              <h3 className="text-2xl font-bold text-indigo-600 group-hover:text-indigo-700">
+                {stats?.pendingEvaluationRequests || 0}
+              </h3>
+            </div>
+          </Link>
         </div>
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <Link href="/admin-dashboard/exams/evaluation-requests" className="w-full sm:w-auto">
+            <Button variant="outline" className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50">
+              <FileCheck className="w-4 h-4 mr-2 text-indigo-600" /> Evaluation Queue
+            </Button>
+          </Link>
           <Link href="/admin-dashboard/exams/submissions" className="w-full sm:w-auto">
             <Button variant="outline" className="w-full border-purple-200 text-purple-700 hover:bg-purple-50">
               <Award className="w-4 h-4 mr-2 text-purple-600" /> Submissions

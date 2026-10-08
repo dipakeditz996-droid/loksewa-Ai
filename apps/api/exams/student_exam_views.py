@@ -179,16 +179,48 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['get'], url_path='expert-solution')
     def expert_solution(self, request, pk=None):
         examination = self.get_object()
-        if examination.is_scheduled_live:
-            return Response(
-                {'detail': 'Expert solutions are unavailable for scheduled Live Exams.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+        user = request.user
+        if user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            if not is_examination_authorized_for_student(user, examination):
+                return Response(
+                    {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         if ExaminationAttempt.objects.filter(
-            examination=examination, student=request.user, status__in=('in-progress', 'upload_pending')
+            examination=examination, student=user, status__in=('in-progress', 'upload_pending')
         ).exists():
             return Response(
                 {'detail': 'Expert solutions are unavailable while an examination attempt is active.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if examination.exam_type == 'subjective':
+            if not examination.is_expert_solution_published or not examination.expert_solution_pdf:
+                return Response({'detail': 'No Expert Solution has been published for this exam yet.'}, status=status.HTTP_404_NOT_FOUND)
+
+            if request.query_params.get('download') in ('1', 'true', 'yes'):
+                from django.http import FileResponse
+                try:
+                    return FileResponse(examination.expert_solution_pdf.open('rb'), content_type='application/pdf')
+                except Exception as e:
+                    return Response({'detail': f'Could not open expert solution PDF: {e}'}, status=status.HTTP_404_NOT_FOUND)
+
+            return Response({
+                'examination': examination.id,
+                'title': examination.title,
+                'exam_type': 'subjective',
+                'is_expert_solution_published': True,
+                'has_expert_solution_pdf': True,
+                'page_count': examination.expert_solution_page_count,
+                'file_size': examination.expert_solution_file_size,
+                'published_at': examination.expert_solution_published_at,
+            })
+
+        if examination.is_scheduled_live:
+            return Response(
+                {'detail': 'Expert solutions are unavailable for scheduled Live Exams.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -214,6 +246,36 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         if not solutions:
             return Response({'detail': 'Expert solution is not available yet.'}, status=status.HTTP_404_NOT_FOUND)
         return Response({'examination': examination.id, 'title': examination.title, 'solutions': solutions})
+
+    @action(detail=True, methods=['get'], url_path='expert-solution-pdf')
+    def expert_solution_pdf(self, request, pk=None):
+        """Securely stream expert solution PDF for authorized students."""
+        examination = self.get_object()
+        user = request.user
+        if user.role == 'student':
+            from courses.access import is_examination_authorized_for_student
+            if not is_examination_authorized_for_student(user, examination):
+                return Response(
+                    {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        if ExaminationAttempt.objects.filter(
+            examination=examination, student=user, status__in=('in-progress', 'upload_pending')
+        ).exists():
+            return Response(
+                {'detail': 'Expert solutions are unavailable while an examination attempt is active.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if not examination.is_expert_solution_published or not examination.expert_solution_pdf:
+            return Response({'detail': 'No Expert Solution has been published for this exam yet.'}, status=status.HTTP_404_NOT_FOUND)
+
+        from django.http import FileResponse
+        try:
+            return FileResponse(examination.expert_solution_pdf.open('rb'), content_type='application/pdf')
+        except Exception as e:
+            return Response({'detail': f'Could not open expert solution PDF: {e}'}, status=status.HTTP_404_NOT_FOUND)
 
     @action(detail=True, methods=['post'])
     def start(self, request, pk=None):
@@ -734,7 +796,7 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     pagination_class = StandardResultsSetPagination
     
     def get_permissions(self):
-        if self.action in ['active', 'state', 'list', 'result', 'retrieve']:
+        if self.action in ['active', 'state', 'list', 'result', 'retrieve', 'request_checking', 'checking_status']:
             return [IsAuthenticated()]
         return super().get_permissions()
     
@@ -1021,26 +1083,17 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         if attempt.status in ('in-progress', 'upload_pending'):
             return Response({'detail': 'Exam not yet submitted.'}, status=status.HTTP_400_BAD_REQUEST)
             
-        if attempt.examination.result_visibility == 'manual' and attempt.status != 'evaluated':
-            return Response({'detail': 'Result pending manual review.'}, status=status.HTTP_403_FORBIDDEN)
-            
-        if attempt.examination.result_visibility == 'after_end':
-            if attempt.examination.end_time and timezone.now() < attempt.examination.end_time:
-                return Response({'detail': 'Result will be available after the exam window ends.'}, status=status.HTTP_403_FORBIDDEN)
-
-        # Subjective answer-sheet uploads are a separate flow from the canonical
-        # in-app descriptive-exam path. Only uploaded submissions that exist and
-        # are still unpublished should block the student's result view.
         from .attempt_timing import is_subjective_exam
-        if is_subjective_exam(attempt):
-            sub = getattr(attempt, 'subjective_submission', None)
-            if sub is not None and not sub.is_published:
-                return Response({
-                    'detail': 'Your answer sheet has been submitted. Your result is currently being evaluated.',
-                    'status': attempt.status,
-                    'is_published': False,
-                    'needs_evaluation': True,
-                }, status=status.HTTP_403_FORBIDDEN)
+        is_subj = is_subjective_exam(attempt)
+
+        # For objective exams with restricted visibility:
+        if not is_subj:
+            if attempt.examination.result_visibility == 'manual' and attempt.status != 'evaluated':
+                return Response({'detail': 'Result pending manual review.'}, status=status.HTTP_403_FORBIDDEN)
+                
+            if attempt.examination.result_visibility == 'after_end':
+                if attempt.examination.end_time and timezone.now() < attempt.examination.end_time:
+                    return Response({'detail': 'Result will be available after the exam window ends.'}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(attempt)
         return Response(serializer.data)
@@ -1215,6 +1268,98 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             return FileResponse(attempt.subjective_submission.answer_pdf.open('rb'), content_type='application/pdf')
         except Exception as e:
             return Response({'detail': f'Could not open answer-sheet PDF: {e}'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='request-checking')
+    def request_checking(self, request, pk=None):
+        """
+        Student requests manual checking for their submitted subjective exam answer sheet.
+        """
+        from django.db import transaction
+        from core.notification_service import NotificationService
+        from .models import SubjectiveCheckingRequest
+
+        attempt = self.get_object()
+        user = request.user
+
+        # 1. Verify student owns the submission
+        if attempt.student_id != user.id:
+            return Response({'detail': 'You do not have permission to request checking for this attempt.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Verify submission belongs to a Subjective Exam
+        if attempt.examination.exam_type != 'subjective':
+            return Response({'detail': 'Manual checking is only available for Subjective Examinations.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Verify attempt is submitted (cannot be draft, started, or in_progress)
+        if attempt.status not in ('submitted', 'evaluated', 'completed'):
+            return Response({'detail': 'Attempt must be submitted before requesting evaluation.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4. Verify answer sheet has been submitted successfully
+        if not hasattr(attempt, 'subjective_submission') or not attempt.subjective_submission.answer_pdf:
+            return Response({'detail': 'Please submit your answer sheet before requesting manual checking.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        submission = attempt.subjective_submission
+        if submission.status not in ('submitted', 'evaluated', 'processing', 'under_review'):
+            return Response({'detail': 'Answer sheet submission is not in a valid state for manual checking.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .serializers import SubjectiveCheckingRequestSerializer
+
+        with transaction.atomic():
+            # 5. Check existing active request (pending, accepted, in_progress) -> return existing
+            existing_active = (
+                SubjectiveCheckingRequest.objects
+                .select_for_update()
+                .filter(submission=submission, status__in=['pending', 'accepted', 'in_progress'])
+                .first()
+            )
+            if existing_active:
+                serializer = SubjectiveCheckingRequestSerializer(existing_active)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            # 6. Check if already completed -> return existing
+            completed_req = SubjectiveCheckingRequest.objects.filter(submission=submission, status='completed').first()
+            if completed_req:
+                serializer = SubjectiveCheckingRequestSerializer(completed_req)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            # Create new checking request
+            checking_req = SubjectiveCheckingRequest.objects.create(
+                student=user,
+                submission=submission,
+                status='pending',
+            )
+
+            transaction.on_commit(lambda: NotificationService.notify_checking_request_submitted(checking_req))
+
+        serializer = SubjectiveCheckingRequestSerializer(checking_req)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='evaluation-request')
+    def evaluation_request(self, request, pk=None):
+        """Canonical endpoint alias for subjective manual checking/evaluation request."""
+        return self.request_checking(request, pk=pk)
+
+    @action(detail=True, methods=['get'], url_path='checking-status')
+    def checking_status(self, request, pk=None):
+        """
+        Check the status of the manual checking request for this attempt's subjective submission.
+        """
+        attempt = self.get_object()
+        if not hasattr(attempt, 'subjective_submission'):
+            return Response({
+                'has_submission': False,
+                'checking_request': None,
+                'status': 'no_submission',
+            })
+
+        submission = attempt.subjective_submission
+        latest_req = submission.latest_checking_request
+        from .serializers import SubjectiveCheckingRequestSerializer
+        return Response({
+            'has_submission': bool(submission.answer_pdf),
+            'submission_status': submission.status,
+            'is_published': submission.is_published,
+            'checking_request': SubjectiveCheckingRequestSerializer(latest_req).data if latest_req else None,
+        })
 
 
 class TeacherExaminationAttemptViewSet(viewsets.ReadOnlyModelViewSet):

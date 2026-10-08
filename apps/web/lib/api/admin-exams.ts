@@ -84,6 +84,11 @@ export interface Examination {
   question_paper_pdf?: string | null;
   question_paper_page_count?: number;
   question_paper_file_size?: number;
+  expert_solution_pdf?: string | null;
+  expert_solution_page_count?: number;
+  expert_solution_file_size?: number;
+  is_expert_solution_published?: boolean;
+  expert_solution_published_at?: string | null;
   answer_upload_enabled?: boolean;
   upload_deadline_minutes?: number;
   upload_start_time?: string | null;
@@ -102,6 +107,44 @@ export interface AdminCourseOption {
   } | null;
 }
 
+export interface SubjectiveCheckingRequest {
+  id: number;
+  student: number;
+  student_id: number;
+  student_name: string;
+  student_username?: string;
+  student_email?: string;
+  submission: number;
+  attempt_id: number;
+  examination_id: number;
+  examination_title: string;
+  exam_type?: string;
+  duration_minutes?: number | null;
+  course_id?: number | null;
+  course_title?: string | null;
+  subject_title?: string | null;
+  attempt_started_at?: string;
+  attempt_status?: string;
+  submission_date: string;
+  submission_status: string;
+  page_count?: number;
+  file_size_bytes?: number;
+  file_name?: string | null;
+  has_answer_pdf: boolean;
+  answer_pdf_url?: string | null;
+  is_published?: boolean;
+  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected';
+  status_display: string;
+  assigned_evaluator: number | null;
+  assigned_evaluator_name: string | null;
+  reviewed_by: number | null;
+  reviewed_by_name: string | null;
+  rejection_reason: string;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AdminSubjectiveSubmission {
   id: number;
   attempt_id: number;
@@ -111,6 +154,8 @@ export interface AdminSubjectiveSubmission {
   student_email: string;
   examination_id: number;
   examination_title: string;
+  course_id?: number | null;
+  course_title?: string | null;
   status: string;
   attempt_status: string;
   started_at: string;
@@ -129,6 +174,7 @@ export interface AdminSubjectiveSubmission {
   evaluated_at: string | null;
   is_published: boolean;
   published_at: string | null;
+  checking_request?: SubjectiveCheckingRequest | null;
   created_at: string;
   updated_at: string;
 }
@@ -541,6 +587,60 @@ export const adminExamApi = {
     return await res.blob();
   },
 
+  uploadExpertSolutionPdf: async (id: number, file: File, publish?: boolean) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (publish) formData.append('publish', 'true');
+    return apiClient<{
+      detail: string;
+      page_count: number;
+      file_size: number;
+      filename: string;
+      is_published: boolean;
+      published_at: string | null;
+    }>(
+      `/admin/exams/${id}/expert-solution/`,
+      { method: 'POST', body: formData }
+    );
+  },
+
+  publishExpertSolution: async (id: number) => {
+    return apiClient<{
+      detail: string;
+      is_published: boolean;
+      published_at: string | null;
+    }>(
+      `/admin/exams/${id}/expert-solution/publish/`,
+      { method: 'POST' }
+    );
+  },
+
+  unpublishExpertSolution: async (id: number) => {
+    return apiClient<{
+      detail: string;
+      is_published: boolean;
+    }>(
+      `/admin/exams/${id}/expert-solution/unpublish/`,
+      { method: 'POST' }
+    );
+  },
+
+  deleteExpertSolution: async (id: number) => {
+    return apiClient<{ detail: string }>(
+      `/admin/exams/${id}/expert-solution/`,
+      { method: 'DELETE' }
+    );
+  },
+
+  getExpertSolutionBlob: async (id: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/exams/${id}/expert-solution/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to load expert solution PDF');
+    return await res.blob();
+  },
+
   assignSubjectiveSet: async (id: number, questionSetId: number) => {
     return apiClient<Examination>(`/admin/exams/${id}/assign-subjective-set/`, {
       method: 'POST',
@@ -611,6 +711,59 @@ export const adminExamApi = {
   getAnswerSheetBlob: async (submissionId: number) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/subjective-submissions/${submissionId}/answer-sheet/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Failed to load answer sheet PDF');
+    return await res.blob();
+  },
+
+  // Checking requests
+  getSubjectiveCheckingRequests: async (params?: {
+    status?: string;
+    exam_id?: number;
+    course_id?: number;
+    student_id?: number;
+    search?: string;
+    ordering?: string;
+    date_from?: string;
+    date_to?: string;
+  }) => {
+    const qs = buildQueryString(params);
+    return apiClient<SubjectiveCheckingRequest[]>(`/admin/subjective-checking-requests/${qs}`);
+  },
+
+  getSubjectiveCheckingRequestStats: async () => {
+    return apiClient<{
+      total: number;
+      pending: number;
+      accepted: number;
+      in_progress: number;
+      completed: number;
+      rejected: number;
+    }>('/admin/subjective-checking-requests/stats/');
+  },
+
+  getSubjectiveCheckingRequest: async (id: number) => {
+    return apiClient<SubjectiveCheckingRequest>(`/admin/subjective-checking-requests/${id}/`);
+  },
+
+  acceptSubjectiveCheckingRequest: async (id: number, data?: { evaluator_id?: number }) => {
+    return apiClient<SubjectiveCheckingRequest>(`/admin/subjective-checking-requests/${id}/accept/`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  rejectSubjectiveCheckingRequest: async (id: number, data: { rejection_reason: string }) => {
+    return apiClient<SubjectiveCheckingRequest>(`/admin/subjective-checking-requests/${id}/reject/`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  getSubjectiveCheckingRequestAnswerSheetBlob: async (id: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/subjective-checking-requests/${id}/answer-sheet/`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error('Failed to load answer sheet PDF');

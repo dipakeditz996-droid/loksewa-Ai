@@ -21,7 +21,7 @@ class ExamCategorySerializer(serializers.ModelSerializer):
         return obj.exams.count()
 
     def get_notes_count(self, obj):
-        return StudyMaterial.objects.filter(exam__category=obj).count()
+        return StudyMaterial.objects.filter(exam__category=obj).exclude(status='archived').count()
 
     def get_questions_count(self, obj):
         return Question.objects.filter(topic__chapter__subject__paper__exam__category=obj).count()
@@ -52,7 +52,7 @@ class ExamSerializer(serializers.ModelSerializer):
         return obj.papers.count()
 
     def get_notes_count(self, obj):
-        return StudyMaterial.objects.filter(exam=obj).count()
+        return StudyMaterial.objects.filter(exam=obj).exclude(status='archived').count()
 
     def get_questions_count(self, obj):
         return Question.objects.filter(topic__chapter__subject__paper__exam=obj).count()
@@ -105,7 +105,7 @@ class SubjectSerializer(serializers.ModelSerializer):
     def get_notes_count(self, obj):
         return StudyMaterial.objects.filter(
             Q(subject=obj) | Q(chapter__subject=obj) | Q(topic__chapter__subject=obj)
-        ).distinct().count()
+        ).exclude(status='archived').distinct().count()
 
     def get_questions_count(self, obj):
         return Question.objects.filter(topic__chapter__subject=obj).count()
@@ -174,7 +174,7 @@ class ChapterSerializer(serializers.ModelSerializer):
     def get_notes_count(self, obj):
         return StudyMaterial.objects.filter(
             Q(chapter=obj) | Q(topic__chapter=obj)
-        ).distinct().count()
+        ).exclude(status='archived').distinct().count()
 
     def get_questions_count(self, obj):
         return Question.objects.filter(topic__chapter=obj).count()
@@ -220,7 +220,7 @@ class TopicSerializer(serializers.ModelSerializer):
         }
 
     def get_notes_count(self, obj):
-        return StudyMaterial.objects.filter(topic=obj).count()
+        return StudyMaterial.objects.filter(topic=obj).exclude(status='archived').count()
 
     def get_questions_count(self, obj):
         return Question.objects.filter(topic=obj).count()

@@ -1305,6 +1305,9 @@ class AdminExamsOverviewView(APIView):
                 "createdAt": me.created_at.isoformat(),
             })
 
+        from exams.models import SubjectiveCheckingRequest
+        pending_evaluation_requests = SubjectiveCheckingRequest.objects.filter(status='pending').count()
+
         payload = {
             "totalExams": total_exams,
             "activeExams": active_exams,
@@ -1312,6 +1315,7 @@ class AdminExamsOverviewView(APIView):
             "publishedModelExams": published_model_exams,
             "draftModelExams": draft_model_exams,
             "totalAttempts": total_attempts,
+            "pendingEvaluationRequests": pending_evaluation_requests,
             "recentExams": recent_data,
         }
         try:
@@ -2524,6 +2528,8 @@ class AdminStudyMaterialsView(APIView):
 
         if status_filter and status_filter != 'all':
             qs = qs.filter(status=status_filter)
+        else:
+            qs = qs.exclude(status='archived')
 
         if content_category:
             qs = qs.filter(content_category=content_category)
@@ -3007,7 +3013,7 @@ class AdminStudyMaterialsHierarchyView(APIView):
         all_exams = Exam.objects.filter(category__in=categories, is_active=True)
         exam_ids = all_exams.values_list('id', flat=True)
 
-        counts = StudyMaterial.objects.filter(exam_id__in=exam_ids).values('exam_id', 'content_category').annotate(count=Count('id'))
+        counts = StudyMaterial.objects.filter(exam_id__in=exam_ids).exclude(status='archived').values('exam_id', 'content_category').annotate(count=Count('id'))
         count_map = {}
         for item in counts:
             eid = item['exam_id']
@@ -3147,10 +3153,10 @@ class AdminPreparationAcademicTreeView(APIView):
         topic_to_chap = {t.id: c.id for c in chaps for t in c.topics.all()}
         chap_to_sub = {c.id: s.id for s in subjects for c in s.chapters.all()}
 
-        # 1. Study Materials counts (O(1) query) — exclude syllabus category
+        # 1. Study Materials counts (O(1) query) — exclude syllabus category and archived (soft-deleted) notes
         notes_qs = StudyMaterial.objects.filter(
             exam_id=exam_id
-        ).exclude(content_category='syllabus').values('id', 'subject_id', 'chapter_id', 'topic_id')
+        ).exclude(content_category='syllabus').exclude(status='archived').values('id', 'subject_id', 'chapter_id', 'topic_id')
         top_notes_count = Counter()
         chap_notes_ids = defaultdict(set)
         sub_notes_ids = defaultdict(set)

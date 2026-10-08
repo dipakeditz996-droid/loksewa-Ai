@@ -5,9 +5,9 @@ export interface StudentResult {
   id: string;
   examId: string;
   examName: string;
-  score: number;
+  score: number | null;
   totalMarks: number;
-  percentage: number;
+  percentage: number | null;
   timeTaken: number;
   rank: number | string;
   totalParticipants: number | string;
@@ -20,6 +20,19 @@ export interface StudentResult {
   subjectBreakdown?: SubjectPerformance[];
   topicBreakdown?: TopicPerformance[];
   reviews?: QuestionReview[];
+  isSubjective?: boolean;
+  needsEvaluation?: boolean;
+  isPublished?: boolean;
+  status?: string;
+  hasSubmittedAnswerPdf?: boolean;
+  checkingRequest?: {
+    id: number;
+    status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected';
+    status_display: string;
+    rejection_reason?: string;
+    created_at: string;
+    reviewed_at?: string | null;
+  } | null;
 }
 
 export interface SubjectPerformance {
@@ -217,6 +230,21 @@ export const studentResultService = {
         subjectBreakdown: attempt.subject_breakdown || [],
         topicBreakdown: attempt.topic_breakdown || [],
         reviews: reviews,
+        isSubjective: Boolean(
+          attempt.is_subjective ||
+          attempt.examination_exam_type === 'subjective' ||
+          attempt.subjective_submission ||
+          attempt.has_submitted_answer_pdf
+        ),
+        needsEvaluation: Boolean(attempt.needs_evaluation),
+        isPublished: Boolean(
+          attempt.is_published ??
+          attempt.subjective_submission?.is_published ??
+          (attempt.status === 'evaluated' && !attempt.needs_evaluation)
+        ),
+        status: attempt.status,
+        hasSubmittedAnswerPdf: Boolean(attempt.has_submitted_answer_pdf || attempt.subjective_submission?.has_answer_pdf),
+        checkingRequest: attempt.checking_request || attempt.subjective_submission?.checking_request || null,
       };
       return result;
     } catch (error) {

@@ -49,6 +49,7 @@ import {
   ArchiveRestore,
   HardDrive,
   Flag,
+  FileCheck,
 } from "lucide-react";
 
 
@@ -101,6 +102,7 @@ const SIDEBAR_NAV: NavSection[] = [
     title: "Exams",
     items: [
       { title: "Exams & Mock Tests", href: "/admin-dashboard/exams", icon: FileText },
+      { title: "Evaluation Requests", href: "/admin-dashboard/exams/evaluation-requests", icon: FileCheck },
       { title: "Exam Schedule", href: "/admin-dashboard/exams/schedules", icon: CalendarDays },
       { title: "Question Reports", href: "/admin-dashboard/question-reports", icon: Flag as any },
       { title: "Rankings & Leaderboards", href: "/admin-dashboard/rankings", icon: Trophy },

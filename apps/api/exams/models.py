@@ -744,6 +744,17 @@ class Examination(models.Model):
         ),
     )
 
+    # Expert Solution PDF Configuration (independent of attempts and checking requests)
+    expert_solution_pdf = models.FileField(
+        upload_to='subjective_exams/expert_solutions/%Y/%m/', null=True, blank=True,
+        max_length=500,
+        validators=[validate_document_size_20mb, validate_document_extension, validate_pdf_upload],
+    )
+    expert_solution_page_count = models.IntegerField(default=0, blank=True)
+    expert_solution_file_size = models.IntegerField(default=0, blank=True)
+    is_expert_solution_published = models.BooleanField(default=False)
+    expert_solution_published_at = models.DateTimeField(null=True, blank=True)
+
     # Moderation Workflow
     reviewer_comment = models.TextField(blank=True, null=True)
     reviewed_by = models.ForeignKey(User, related_name='reviewed_mock_exams', on_delete=models.SET_NULL, null=True, blank=True)
@@ -783,7 +794,9 @@ class Examination(models.Model):
 
     @property
     def requires_admin_request(self):
-        return self.exam_type == 'subjective' and self.objective_category == 'live'
+        # Taking a published Subjective Exam does NOT require Admin approval.
+        # Manual checking is an optional workflow requested AFTER submitting.
+        return False
 
     def __str__(self):
         return self.title
@@ -1025,6 +1038,10 @@ class SubjectiveSubmission(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    @property
+    def latest_checking_request(self):
+        return self.checking_requests.order_by('-created_at').first()
+
     def __str__(self):
         return f"Subjective Submission for Attempt #{self.attempt_id} ({self.status})"
 
@@ -1057,6 +1074,51 @@ class SubjectiveQuestionScore(models.Model):
 
     def __str__(self):
         return f"Submission #{self.submission_id} - Q{self.question_number}: {self.marks_obtained}/{self.max_marks}"
+
+
+class SubjectiveCheckingRequest(models.Model):
+    """
+    Separate student-initiated workflow to request manual checking for a submitted answer sheet.
+    Admins can accept or reject the checking request with reasons.
+    Rejecting a request does NOT invalidate the student's submission or attempt.
+    """
+    STATUS_CHOICES = (
+        ('pending', 'Checking Request Pending'),
+        ('accepted', 'Checking Accepted'),
+        ('in_progress', 'Checking in Progress'),
+        ('completed', 'Checking Completed'),
+        ('rejected', 'Request Rejected'),
+    )
+
+    submission = models.ForeignKey(
+        SubjectiveSubmission, on_delete=models.CASCADE, related_name='checking_requests'
+    )
+    student = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='subjective_checking_requests'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    assigned_evaluator = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='assigned_checking_requests'
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='reviewed_checking_requests'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['submission', 'status']),
+            models.Index(fields=['student', 'status']),
+        ]
+
+    def __str__(self):
+        return f"Checking Request #{self.id} for Submission #{self.submission_id} ({self.status})"
 
 class ExamSchedule(models.Model):
     """

@@ -703,6 +703,122 @@ class NotificationService:
         )
 
     @classmethod
+    def notify_checking_request_submitted(cls, checking_request):
+        """
+        Notifies admins when a student requests manual checking for a subjective exam submission.
+        """
+        from .models import AdminSettings
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return
+
+        related_id = f"checking-request-submitted:{checking_request.id}"
+        if Notification.objects.filter(related_id=related_id, recipient__role__in=['admin', 'super-admin']).exists():
+            return
+
+        submission = checking_request.submission
+        student = checking_request.student
+        student_name = student.get_full_name() or student.username
+        exam = submission.attempt.examination
+
+        admins = resolve_audience('admins')
+        Notification.objects.bulk_create([
+            Notification(
+                recipient=admin,
+                type='evaluation',
+                related_id=related_id,
+                title="New Subjective Evaluation Request",
+                message=f'{student_name} requested manual evaluation for "{exam.title}".',
+                action_url=f"/admin-dashboard/exams/evaluation-requests",
+                priority='important',
+            )
+            for admin in admins
+        ])
+
+    @classmethod
+    def notify_checking_request_accepted(cls, checking_request):
+        """
+        Notifies student that their manual checking request was accepted by an administrator/evaluator.
+        """
+        submission = checking_request.submission
+        exam = submission.attempt.examination
+        return cls._student_notify_once(
+            recipient=checking_request.student,
+            notif_type='evaluation',
+            related_id=f'checking-req-accepted:{checking_request.id}',
+            title='Manual Checking Request Accepted',
+            message=f'Your manual checking request for "{exam.title}" has been accepted and assigned to an evaluator.',
+            action_url=f'/student/exams/{exam.id}/result/{submission.attempt_id}',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_checking_request_rejected(cls, checking_request):
+        """
+        Notifies student that their manual checking request could not be accepted, including the admin rejection reason.
+        Does NOT invalidate student attempt or submission.
+        """
+        submission = checking_request.submission
+        exam = submission.attempt.examination
+        reason = checking_request.rejection_reason or "An evaluator is currently unavailable. You may try again later."
+        return cls._student_notify_once(
+            recipient=checking_request.student,
+            notif_type='evaluation',
+            related_id=f'checking-req-rejected:{checking_request.id}',
+            title='Manual Checking Request Update',
+            message=f'Your checking request for "{exam.title}" could not be accepted: {reason}',
+            action_url=f'/student/exams/{exam.id}/result/{submission.attempt_id}',
+            priority='important',
+        )
+
+    @classmethod
+    def notify_expert_solution_published(cls, examination):
+        """
+        Notifies students enrolled in or authorized for an exam that an Expert Solution PDF is now available.
+        """
+        from .models import AdminSettings
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.notifications_enabled or not admin_settings.enable_in_app_notifications:
+            return 0
+
+        if examination.course_id:
+            students = resolve_audience('course', course_id=examination.course_id)
+        else:
+            students = resolve_audience('students')
+
+        student_ids = list(students.values_list('id', flat=True))
+        if not student_ids:
+            return 0
+
+        related_id = f'expert-solution:{examination.id}'
+        already = set(
+            Notification.objects.filter(
+                type='exam', related_id=related_id, recipient_id__in=student_ids
+            ).values_list('recipient_id', flat=True)
+        )
+        opted_out = set(
+            NotificationPreference.objects.filter(
+                user_id__in=student_ids, exam_reminders=False
+            ).values_list('user_id', flat=True)
+        )
+
+        rows = [
+            Notification(
+                recipient_id=sid,
+                type='exam',
+                related_id=related_id,
+                title='Expert Solution Published',
+                message=f'An Expert Solution PDF is now available for "{examination.title}".',
+                action_url=f'/student/exams/{examination.id}',
+                priority='normal',
+            )
+            for sid in student_ids
+            if sid not in already and sid not in opted_out
+        ]
+        Notification.objects.bulk_create(rows, batch_size=500)
+        return len(rows)
+
+    @classmethod
     def notify_study_plan_created(cls, plan):
         return cls._student_notify_once(
             recipient=plan.student,

@@ -954,10 +954,16 @@ export function AcademicNodeDetailsPanel({
                             className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
                               mat.status === "published"
                                 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                : mat.status === "archived"
+                                ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
                                 : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
                             }`}
                           >
-                            {mat.status === "published" ? "Published" : "Draft"}
+                            {mat.status === "published"
+                              ? "Published"
+                              : mat.status === "archived"
+                              ? "Archived"
+                              : "Draft"}
                           </span>
 
                           {mat.accessType === "premium" && (

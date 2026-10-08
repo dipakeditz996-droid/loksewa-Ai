@@ -528,14 +528,12 @@ export function SubjectiveExamAttemptView({
                       Replace / Re-upload
                     </button>
                   )}
-                  {isCompleted && (
-                    <Button
-                      onClick={() => router.replace(`/student/exams/${examId}/result/${attemptId}`)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
-                    >
-                      View Result Portal
-                    </Button>
-                  )}
+                  <Button
+                    onClick={() => router.replace(`/student/exams/${examId}/result/${attemptId}`)}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 inline-flex items-center"
+                  >
+                    View Status &amp; Request Checking <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               </div>
             ) : (

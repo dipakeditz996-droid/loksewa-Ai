@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { studentExamsApi, isSubjectiveQuestionType } from "@/lib/api/student-exams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CheckCircle2, XCircle, LayoutGrid, ArrowLeft, Loader2, AlertTriangle,
   Play, HelpCircle, FileText, Download, Award, MessageSquare, Clock, Eye, Flag,
+  Send, RefreshCw, CheckCircle, ShieldAlert, AlertCircle, FileCheck, Info
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -21,10 +23,12 @@ export default function ExamResultPage() {
   const attemptId = Number(params.attemptId);
   const examId = Number(params.id);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [reportQuestionId, setReportQuestionId] = useState<number | null>(null);
   const [reportQuestionText, setReportQuestionText] = useState<string>('');
+  const [downloadingExpertPdf, setDownloadingExpertPdf] = useState(false);
 
   const { data: result, isLoading: isLoadingResult, error } = useQuery({
     queryKey: ['student-attempt-result', attemptId],
@@ -37,6 +41,53 @@ export default function ExamResultPage() {
     queryFn: () => studentExamsApi.getAttemptQuestions(attemptId),
     refetchOnWindowFocus: false,
   });
+
+  const isSubjective =
+    result?.is_subjective ||
+    result?.examination_exam_type === "subjective" ||
+    result?.has_answer_pdf ||
+    result?.has_submitted_answer_pdf ||
+    Boolean(result?.subjective_submission);
+
+  const { data: checkingStatusData, isLoading: isLoadingChecking } = useQuery({
+    queryKey: ['student-checking-status', attemptId],
+    queryFn: () => studentExamsApi.getCheckingStatus(attemptId),
+    enabled: Boolean(isSubjective),
+    refetchOnWindowFocus: true,
+  });
+
+  const { data: expertSolutionInfo, isLoading: isLoadingExpertInfo } = useQuery({
+    queryKey: ['student-expert-solution-info', examId],
+    queryFn: () => studentExamsApi.getSubjectiveExpertSolutionInfo(examId),
+    enabled: Boolean(isSubjective),
+    refetchOnWindowFocus: false,
+  });
+
+  const requestCheckingMutation = useMutation({
+    mutationFn: () => studentExamsApi.requestManualChecking(attemptId),
+    onSuccess: (data) => {
+      toast.success(data.detail || "Manual checking request submitted successfully!");
+      queryClient.invalidateQueries({ queryKey: ['student-attempt-result', attemptId] });
+      queryClient.invalidateQueries({ queryKey: ['student-checking-status', attemptId] });
+    },
+    onError: (err: any) => {
+      const msg = err?.data?.error || err?.data?.detail || err?.message || "Failed to submit checking request.";
+      toast.error(msg);
+    },
+  });
+
+  const handleDownloadExpertSolution = async () => {
+    try {
+      setDownloadingExpertPdf(true);
+      const blob = await studentExamsApi.getExpertSolutionPdfBlob(examId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (err: any) {
+      toast.error(err.message || "Could not load expert solution PDF");
+    } finally {
+      setDownloadingExpertPdf(false);
+    }
+  };
 
   if (isLoadingResult || isLoadingQuestions) {
     return (
@@ -68,13 +119,6 @@ export default function ExamResultPage() {
   const correctCount = result.answers?.filter((a: any) => a.is_correct)?.length ?? 0;
   const incorrectCount = result.answers?.filter((a: any) => a.is_correct === false && a.selected_option)?.length ?? 0;
   const unattemptedCount = totalQuestions - (result.answers?.filter((a: any) => a.selected_option || a.answer_text)?.length ?? 0);
-
-  const isSubjective =
-    result.is_subjective ||
-    result.examination_exam_type === "subjective" ||
-    result.has_answer_pdf ||
-    result.has_submitted_answer_pdf ||
-    Boolean(result.subjective_submission);
 
   const handleViewAnswerSheet = async () => {
     try {
@@ -117,26 +161,321 @@ export default function ExamResultPage() {
         </header>
 
         <main className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8 space-y-6">
-          {!isPublished ? (
-            <Card className="border-border/60 shadow-sm bg-amber-500/5 border-amber-500/20">
-              <CardHeader className="text-center pb-4">
-                <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-amber-500/10 border border-amber-500/30">
-                  <Clock className="h-8 w-8 text-amber-500 animate-pulse" />
+          {/* Manual Checking Request Workflow */}
+          {(() => {
+            const checkingRequest =
+              checkingStatusData?.checking_request ??
+              (result as any).checking_request ??
+              result.subjective_submission?.checking_request ??
+              null;
+
+            if (!checkingRequest) {
+              return (
+                <Card className="border-indigo-500/30 bg-indigo-500/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
+                          <FileCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold text-foreground">
+                            Request Manual Checking
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Have an experienced Loksewa teacher grade your handwritten answer sheet question-by-question.
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+                        Optional
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-3 text-xs text-muted-foreground leading-relaxed">
+                    Submit a manual checking request if you want a detailed assessment with individual question scores and qualitative examiner feedback.
+                  </CardContent>
+                  <CardFooter className="pt-0 flex flex-wrap items-center gap-3">
+                    <Button
+                      onClick={() => requestCheckingMutation.mutate()}
+                      disabled={requestCheckingMutation.isPending}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs gap-2 shadow-sm"
+                    >
+                      {requestCheckingMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting Request...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" /> Request Manual Checking
+                        </>
+                      )}
+                    </Button>
+                    <span className="text-[11px] text-muted-foreground">
+                      No admin pre-approval was required to take the exam. Checking requests are reviewed by administrators.
+                    </span>
+                  </CardFooter>
+                </Card>
+              );
+            }
+
+            if (checkingRequest.status === "pending") {
+              return (
+                <Card className="border-amber-500/30 bg-amber-500/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                          <Clock className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold text-amber-800 dark:text-amber-300">
+                            Checking Request Pending
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Submitted on {new Date(checkingRequest.created_at).toLocaleString()}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant="warning">Pending Review</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-3 text-xs text-muted-foreground leading-relaxed">
+                    Your manual checking request has been recorded and is currently awaiting administrator review. An evaluator will be assigned based on faculty capacity.
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            if (checkingRequest.status === "accepted") {
+              return (
+                <Card className="border-blue-500/30 bg-blue-500/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/30 text-blue-600 dark:text-blue-400">
+                          <CheckCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold text-blue-800 dark:text-blue-300">
+                            Checking Accepted
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Accepted by admin{checkingRequest.reviewed_at ? ` on ${new Date(checkingRequest.reviewed_at).toLocaleDateString()}` : ""}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-blue-600 text-white">Accepted</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-3 text-xs text-muted-foreground leading-relaxed">
+                    Your checking request has been accepted. Your answer sheet is scheduled with an evaluator and grading will commence shortly.
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            if (checkingRequest.status === "in_progress") {
+              return (
+                <Card className="border-indigo-500/30 bg-indigo-500/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold text-indigo-800 dark:text-indigo-300">
+                            Checking in Progress
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Your answer sheet is currently being marked question-by-question.
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge className="bg-indigo-600 text-white">In Progress</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-3 text-xs text-muted-foreground leading-relaxed">
+                    The assigned evaluator is reviewing each question and providing qualitative remarks. Marks will appear automatically once published.
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            if (checkingRequest.status === "completed") {
+              return (
+                <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                          <Award className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold text-emerald-800 dark:text-emerald-300">
+                            Checking Completed
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Evaluation finalized and results published
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant="success">Checking Completed</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-3 text-xs text-muted-foreground leading-relaxed">
+                    Your subjective exam has been graded. Review your question-wise breakdown and feedback below.
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            if (checkingRequest.status === "rejected") {
+              return (
+                <Card className="border-rose-500/30 bg-rose-500/5 shadow-sm">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-rose-500/10 flex items-center justify-center border border-rose-500/30 text-rose-600 dark:text-rose-400">
+                          <XCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold text-rose-800 dark:text-rose-300">
+                            Request Rejected
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Decision date: {checkingRequest.reviewed_at ? new Date(checkingRequest.reviewed_at).toLocaleString() : "Recently"}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant="destructive">Request Rejected</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0 pb-3 space-y-2">
+                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-3 text-xs space-y-1">
+                      <span className="font-semibold text-rose-700 dark:text-rose-300 uppercase tracking-wider block">
+                        Reason from Administrator:
+                      </span>
+                      <p className="text-sm font-medium text-rose-950 dark:text-rose-100">
+                        "{checkingRequest.rejection_reason || "Evaluator capacity currently unavailable."}"
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Important:</strong> Rejecting a checking request does <em>not</em> cancel, delete, or invalidate your exam attempt or submitted answer sheet. You can submit another checking request below or view the Expert Solution PDF.
+                    </p>
+                  </CardContent>
+                  <CardFooter className="pt-0">
+                    <Button
+                      onClick={() => requestCheckingMutation.mutate()}
+                      disabled={requestCheckingMutation.isPending}
+                      variant="outline"
+                      className="border-rose-400/50 hover:bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold text-xs gap-2"
+                    >
+                      {requestCheckingMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting Request...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" /> Submit New Checking Request
+                        </>
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            }
+
+            return null;
+          })()}
+
+          {/* Expert Solution PDF Card (Available independently of checking request) */}
+          <Card className="border-border/60 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-foreground">
+                      Expert Solution PDF
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Official model solutions and marking scheme prepared by Loksewa faculty
+                    </CardDescription>
+                  </div>
                 </div>
-                <CardTitle className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-                  Evaluation Under Review
+                {expertSolutionInfo?.is_expert_solution_published ? (
+                  <Badge variant="success">Published</Badge>
+                ) : (
+                  <Badge variant="secondary">Not Yet Published</Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3">
+              {expertSolutionInfo?.is_expert_solution_published ? (
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  {expertSolutionInfo.page_count && (
+                    <span>• {expertSolutionInfo.page_count} Pages</span>
+                  )}
+                  {expertSolutionInfo.file_size && (
+                    <span>• {(expertSolutionInfo.file_size / (1024 * 1024)).toFixed(2)} MB</span>
+                  )}
+                  {expertSolutionInfo.published_at && (
+                    <span>• Published on {new Date(expertSolutionInfo.published_at).toLocaleDateString()}</span>
+                  )}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground flex items-center gap-2 py-1">
+                  <Info className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>No Expert Solution has been published for this exam yet.</span>
+                </div>
+              )}
+            </CardContent>
+            {expertSolutionInfo?.is_expert_solution_published && (
+              <CardFooter className="pt-0">
+                <Button
+                  onClick={handleDownloadExpertSolution}
+                  disabled={downloadingExpertPdf}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs gap-2 shadow-sm"
+                >
+                  {downloadingExpertPdf ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5" /> Preview / Download Expert Solution PDF
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            )}
+          </Card>
+
+          {!isPublished ? (
+            <Card className="border-border/60 shadow-sm bg-muted/10">
+              <CardHeader className="text-center pb-4">
+                <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-muted/30 border">
+                  <Clock className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <CardTitle className="text-2xl font-bold">
+                  Answer Sheet Submitted
                 </CardTitle>
                 <CardDescription className="text-base mt-2 max-w-lg mx-auto">
-                  Your handwritten answer sheet has been securely submitted and is awaiting evaluation by our examiners.
-                  Your score and qualitative feedback will appear here as soon as the result is published.
+                  Your handwritten answer sheet is safely recorded. If you requested manual checking and it is accepted, your question-by-question marks and evaluator feedback will appear here once published.
                 </CardDescription>
               </CardHeader>
               <CardFooter className="flex justify-center gap-3 pt-2">
-                <Button onClick={handleViewAnswerSheet} variant="outline" className="gap-2">
+                <Button onClick={handleViewAnswerSheet} variant="outline" className="gap-2 text-xs font-semibold">
                   <Eye className="w-4 h-4" /> View Submitted Answer Sheet
                 </Button>
                 <Link href="/student/exams">
-                  <Button className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Back to Examinations</Button>
+                  <Button className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold text-xs">
+                    Back to Examinations
+                  </Button>
                 </Link>
               </CardFooter>
             </Card>
@@ -527,8 +866,4 @@ export default function ExamResultPage() {
       </div>
     </div>
   );
-}
-
-function Badge({ children, variant, className }: any) {
-  return <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-semibold", className)}>{children}</span>;
 }

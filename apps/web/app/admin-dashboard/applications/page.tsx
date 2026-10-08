@@ -31,8 +31,14 @@ interface Payment {
     detected_amount?: string | null;
     detected_transaction_id?: string | null;
     detected_provider?: string | null;
+    detected_recipient?: string | null;
+    detected_date?: string | null;
+    detected_time?: string | null;
+    detected_status?: string | null;
     amount_matches?: boolean;
     transaction_id_matches?: boolean;
+    receiver_matches?: boolean;
+    date_matches?: boolean;
     payment_completed?: boolean;
     is_duplicate_transaction?: boolean;
     is_duplicate_image?: boolean;
@@ -483,10 +489,28 @@ export default function AdminApplicationsPage() {
                                     Provider: <span className="text-blue-600">{payment.verification_result.detected_provider}</span>
                                   </p>
                                 )}
+                                {payment.verification_result.detected_status && (
+                                  <p className="text-slate-600">
+                                    Status: <span className="text-emerald-700 font-medium">{payment.verification_result.detected_status}</span>
+                                  </p>
+                                )}
+                                {payment.verification_result.detected_recipient && (
+                                  <p className={payment.verification_result.receiver_matches ? "text-emerald-700 font-medium" : "text-slate-600 font-medium"}>
+                                    Recipient: {payment.verification_result.detected_recipient}
+                                    {payment.verification_result.receiver_matches ? " ✓" : ""}
+                                  </p>
+                                )}
                                 {payment.verification_result.detected_amount && (
                                   <p className={payment.verification_result.amount_matches ? "text-emerald-700 font-medium" : "text-amber-700 font-medium"}>
                                     Detected: NPR {payment.verification_result.detected_amount}
                                     {payment.verification_result.amount_matches ? " ✓" : " ⚠ mismatch"}
+                                  </p>
+                                )}
+                                {payment.verification_result.detected_date && (
+                                  <p className={payment.verification_result.date_matches ? "text-emerald-700" : "text-amber-700"}>
+                                    Date: {payment.verification_result.detected_date}
+                                    {payment.verification_result.detected_time ? ` ${payment.verification_result.detected_time}` : ""}
+                                    {payment.verification_result.date_matches ? " ✓" : " ⚠"}
                                   </p>
                                 )}
                                 {payment.verification_result.detected_transaction_id && (

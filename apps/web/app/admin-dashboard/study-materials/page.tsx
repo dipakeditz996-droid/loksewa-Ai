@@ -488,11 +488,13 @@ export function AdminContentManager() {
   // Delete note material
   const handleDeleteMaterial = async () => {
     if (!deleteConfirmMaterial) return;
+    const deletedId = deleteConfirmMaterial.id;
     setIsProcessing(true);
     try {
-      await adminStudyMaterialApi.remove(deleteConfirmMaterial.id);
+      await adminStudyMaterialApi.remove(deletedId);
       toast.success("Material deleted successfully");
       setDeleteConfirmMaterial(null);
+      setMaterials((prev) => prev.filter((m) => m.id !== deletedId));
       loadMaterials();
       loadHierarchy(true);
       if (selectedPrepId) loadAcademicTree(selectedPrepId);

@@ -555,18 +555,21 @@ class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
     percentage = serializers.SerializerMethodField()
     has_answer_pdf = serializers.SerializerMethodField()
     is_pdf = serializers.SerializerMethodField()
+    course_id = serializers.IntegerField(source='attempt.examination.course_id', read_only=True, allow_null=True)
+    course_title = serializers.CharField(source='attempt.examination.course.title', read_only=True, allow_null=True)
+    checking_request = serializers.SerializerMethodField()
     file_name = serializers.SerializerMethodField()
-    evaluator_name = serializers.SerializerMethodField()
 
     class Meta:
         from .models import SubjectiveSubmission
         model = SubjectiveSubmission
         fields = [
             'id', 'attempt_id', 'student_id', 'student_name', 'student_username', 'student_email',
-            'examination_id', 'examination_title', 'status', 'attempt_status', 'started_at',
+            'examination_id', 'examination_title', 'course_id', 'course_title',
+            'status', 'attempt_status', 'started_at',
             'submitted_at', 'page_count', 'file_size_bytes', 'has_answer_pdf', 'is_pdf', 'file_name',
             'score', 'total_marks', 'percentage', 'ocr_status', 'evaluator', 'evaluator_name',
-            'evaluated_at', 'is_published', 'published_at', 'created_at', 'updated_at'
+            'evaluated_at', 'is_published', 'published_at', 'checking_request', 'created_at', 'updated_at'
         ]
 
     def get_student_name(self, obj):
@@ -611,6 +614,22 @@ class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
         score = self.get_score(obj)
         return round((score / total) * 100, 2) if total > 0 else 0.0
 
+    def get_checking_request(self, obj):
+        req = getattr(obj, 'latest_checking_request', None)
+        if not req:
+            return None
+        return {
+            'id': req.id,
+            'status': req.status,
+            'status_display': req.get_status_display(),
+            'assigned_evaluator_id': req.assigned_evaluator_id,
+            'assigned_evaluator_name': (req.assigned_evaluator.get_full_name() or req.assigned_evaluator.username) if req.assigned_evaluator else None,
+            'rejection_reason': req.rejection_reason,
+            'reviewed_by_name': (req.reviewed_by.get_full_name() or req.reviewed_by.username) if req.reviewed_by else None,
+            'reviewed_at': req.reviewed_at,
+            'created_at': req.created_at,
+        }
+
 
 class AdminSubjectiveSubmissionDetailSerializer(serializers.ModelSerializer):
     student_id = serializers.IntegerField(source='attempt.student.id', read_only=True)
@@ -619,6 +638,8 @@ class AdminSubjectiveSubmissionDetailSerializer(serializers.ModelSerializer):
     student_email = serializers.CharField(source='attempt.student.email', read_only=True)
     examination_id = serializers.IntegerField(source='attempt.examination.id', read_only=True)
     examination_title = serializers.CharField(source='attempt.examination.title', read_only=True)
+    course_id = serializers.IntegerField(source='attempt.examination.course_id', read_only=True, allow_null=True)
+    course_title = serializers.CharField(source='attempt.examination.course.title', read_only=True, allow_null=True)
     attempt_id = serializers.IntegerField(source='attempt.id', read_only=True)
     started_at = serializers.DateTimeField(source='attempt.started_at', read_only=True)
     submitted_at = serializers.DateTimeField(source='attempt.submitted_at', read_only=True)
@@ -633,18 +654,20 @@ class AdminSubjectiveSubmissionDetailSerializer(serializers.ModelSerializer):
     evaluator_name = serializers.SerializerMethodField()
     pages = SubjectiveSubmissionPageSerializer(many=True, read_only=True)
     question_scores = serializers.SerializerMethodField()
+    checking_request = serializers.SerializerMethodField()
 
     class Meta:
         from .models import SubjectiveSubmission
         model = SubjectiveSubmission
         fields = [
             'id', 'attempt_id', 'student_id', 'student_name', 'student_username', 'student_email',
-            'examination_id', 'examination_title', 'status', 'attempt_status', 'started_at',
+            'examination_id', 'examination_title', 'course_id', 'course_title',
+            'status', 'attempt_status', 'started_at',
             'submitted_at', 'time_taken_seconds', 'page_count', 'file_size_bytes', 'has_answer_pdf',
             'is_pdf', 'file_name', 'raw_ocr_text', 'extracted_text', 'ocr_status', 'ocr_error',
             'score', 'total_marks', 'percentage', 'evaluator', 'evaluator_name', 'evaluator_feedback',
-            'evaluated_at', 'is_published', 'published_at', 'pages', 'question_scores', 'created_at',
-            'updated_at'
+            'evaluated_at', 'is_published', 'published_at', 'pages', 'question_scores', 'checking_request',
+            'created_at', 'updated_at'
         ]
 
     def get_is_pdf(self, obj):
@@ -692,3 +715,107 @@ class AdminSubjectiveSubmissionDetailSerializer(serializers.ModelSerializer):
     def get_question_scores(self, obj):
         scores = obj.question_scores.all().order_by('question_number', 'id')
         return SubjectiveQuestionScoreSerializer(scores, many=True).data
+
+    def get_checking_request(self, obj):
+        req = getattr(obj, 'latest_checking_request', None)
+        if not req:
+            return None
+        return {
+            'id': req.id,
+            'status': req.status,
+            'status_display': req.get_status_display(),
+            'assigned_evaluator_id': req.assigned_evaluator_id,
+            'assigned_evaluator_name': (req.assigned_evaluator.get_full_name() or req.assigned_evaluator.username) if req.assigned_evaluator else None,
+            'rejection_reason': req.rejection_reason,
+            'reviewed_by_name': (req.reviewed_by.get_full_name() or req.reviewed_by.username) if req.reviewed_by else None,
+            'reviewed_at': req.reviewed_at,
+            'created_at': req.created_at,
+        }
+
+
+class SubjectiveCheckingRequestSerializer(serializers.ModelSerializer):
+    student_id = serializers.IntegerField(source='student.id', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    student_username = serializers.CharField(source='student.username', read_only=True)
+    student_email = serializers.CharField(source='student.email', read_only=True)
+    examination_id = serializers.IntegerField(source='submission.attempt.examination_id', read_only=True)
+    examination_title = serializers.CharField(source='submission.attempt.examination.title', read_only=True)
+    exam_type = serializers.CharField(source='submission.attempt.examination.exam_type', read_only=True)
+    duration_minutes = serializers.IntegerField(source='submission.attempt.examination.duration_minutes', read_only=True, allow_null=True)
+    course_id = serializers.IntegerField(source='submission.attempt.examination.course_id', read_only=True, allow_null=True)
+    course_title = serializers.CharField(source='submission.attempt.examination.course.title', read_only=True, allow_null=True)
+    subject_title = serializers.SerializerMethodField()
+    attempt_id = serializers.IntegerField(source='submission.attempt_id', read_only=True)
+    attempt_started_at = serializers.DateTimeField(source='submission.attempt.started_at', read_only=True)
+    attempt_status = serializers.CharField(source='submission.attempt.status', read_only=True)
+    submission_date = serializers.DateTimeField(source='submission.attempt.submitted_at', read_only=True)
+    submission_status = serializers.CharField(source='submission.status', read_only=True)
+    page_count = serializers.IntegerField(source='submission.page_count', read_only=True)
+    file_size_bytes = serializers.IntegerField(source='submission.file_size_bytes', read_only=True)
+    file_name = serializers.SerializerMethodField()
+    is_published = serializers.BooleanField(source='submission.is_published', read_only=True)
+    assigned_evaluator_name = serializers.SerializerMethodField()
+    reviewed_by_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    has_answer_pdf = serializers.SerializerMethodField()
+    answer_pdf_url = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import SubjectiveCheckingRequest
+        model = SubjectiveCheckingRequest
+        fields = [
+            'id', 'submission', 'student', 'student_id', 'student_name', 'student_username', 'student_email',
+            'status', 'status_display', 'examination_id', 'examination_title', 'exam_type', 'duration_minutes',
+            'course_id', 'course_title', 'subject_title', 'attempt_id', 'attempt_started_at', 'attempt_status',
+            'submission_date', 'submission_status', 'page_count', 'file_size_bytes', 'file_name',
+            'is_published', 'has_answer_pdf', 'answer_pdf_url',
+            'assigned_evaluator', 'assigned_evaluator_name',
+            'reviewed_by', 'reviewed_by_name', 'reviewed_at',
+            'rejection_reason', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'id', 'student', 'student_id', 'student_name', 'student_username', 'student_email',
+            'status', 'status_display', 'examination_id', 'examination_title', 'exam_type', 'duration_minutes',
+            'course_id', 'course_title', 'subject_title', 'attempt_id', 'attempt_started_at', 'attempt_status',
+            'submission_date', 'submission_status', 'page_count', 'file_size_bytes', 'file_name',
+            'is_published', 'has_answer_pdf', 'answer_pdf_url', 'assigned_evaluator_name',
+            'reviewed_by', 'reviewed_by_name', 'reviewed_at',
+            'created_at', 'updated_at',
+        ]
+
+    def get_student_name(self, obj):
+        return obj.student.get_full_name() or obj.student.username
+
+    def get_subject_title(self, obj):
+        exam = getattr(getattr(obj.submission, 'attempt', None), 'examination', None)
+        if not exam:
+            return None
+        if hasattr(exam, 'subject') and exam.subject:
+            return getattr(exam.subject, 'name', None) or getattr(exam.subject, 'title', None)
+        if hasattr(exam, 'course') and exam.course:
+            return getattr(exam.course, 'title', None)
+        return None
+
+    def get_file_name(self, obj):
+        if obj.submission and obj.submission.answer_pdf:
+            import os
+            return os.path.basename(obj.submission.answer_pdf.name)
+        return None
+
+    def get_assigned_evaluator_name(self, obj):
+        if obj.assigned_evaluator:
+            return obj.assigned_evaluator.get_full_name() or obj.assigned_evaluator.username
+        return None
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by:
+            return obj.reviewed_by.get_full_name() or obj.reviewed_by.username
+        return None
+
+    def get_has_answer_pdf(self, obj):
+        return bool(obj.submission and obj.submission.answer_pdf)
+
+    def get_answer_pdf_url(self, obj):
+        if obj.submission and obj.submission.answer_pdf:
+            return f"/api/admin/subjective-checking-requests/{obj.id}/answer-sheet/"
+        return None

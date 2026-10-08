@@ -15,10 +15,23 @@ import {
   FileBadge,
   Trophy,
   BarChart3,
+  FileText,
+  FileCheck,
+  Send,
+  Loader2,
+  Eye,
+  RefreshCw,
+  Info,
+  CheckCircle,
+  ArrowRight,
+  MessageSquare,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { studentResultService } from "@/lib/api/student-results";
+import { studentExamsApi } from "@/lib/api/student-exams";
 import {
   StudentResult,
   SubjectPerformance,
@@ -26,6 +39,7 @@ import {
   QuestionReview,
 } from "@/lib/api/student-results";
 import { CelebrationModal } from "@/components/student/results/CelebrationModal";
+import toast from "react-hot-toast";
 
 export default function FullResultPage() {
   const params = useParams();
@@ -36,6 +50,9 @@ export default function FullResultPage() {
   const [topics, setTopics] = useState<TopicPerformance[]>([]);
   const [reviews, setReviews] = useState<QuestionReview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submittingChecking, setSubmittingChecking] = useState(false);
+  const [downloadingExpertPdf, setDownloadingExpertPdf] = useState(false);
+  const [expertSolutionInfo, setExpertSolutionInfo] = useState<any>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -58,6 +75,12 @@ export default function FullResultPage() {
             const tData = await studentResultService.getTopicPerformance().catch(() => []);
             setTopics(tData);
           }
+
+          if (resultData.isSubjective && resultData.examId) {
+            studentExamsApi.getSubjectiveExpertSolutionInfo(parseInt(resultData.examId))
+              .then((info) => setExpertSolutionInfo(info))
+              .catch(() => setExpertSolutionInfo(null));
+          }
         }
       } catch (error) {
         console.error("Failed to load result details", error);
@@ -67,6 +90,54 @@ export default function FullResultPage() {
     }
     fetchData();
   }, [resultId]);
+
+  const handleRequestChecking = async () => {
+    if (!result) return;
+    setSubmittingChecking(true);
+    try {
+      const res = await studentExamsApi.requestManualChecking(parseInt(result.id));
+      toast.success(res.detail || "Manual evaluation request submitted successfully!");
+      setResult((prev) => prev ? {
+        ...prev,
+        checkingRequest: {
+          id: res.id,
+          status: 'pending',
+          status_display: 'Pending Review',
+          created_at: new Date().toISOString(),
+        }
+      } : null);
+    } catch (err: any) {
+      const msg = err?.data?.error || err?.data?.detail || err?.message || "Failed to submit evaluation request.";
+      toast.error(msg);
+    } finally {
+      setSubmittingChecking(false);
+    }
+  };
+
+  const handleViewAnswerSheet = async () => {
+    if (!result) return;
+    try {
+      const blob = await studentExamsApi.getAnswerSheetBlob(parseInt(result.id));
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch {
+      toast.error("Could not load submitted answer sheet.");
+    }
+  };
+
+  const handleDownloadExpertSolution = async () => {
+    if (!result) return;
+    try {
+      setDownloadingExpertPdf(true);
+      const blob = await studentExamsApi.getExpertSolutionPdfBlob(parseInt(result.examId));
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (err: any) {
+      toast.error(err.message || "Could not load expert solution PDF");
+    } finally {
+      setDownloadingExpertPdf(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -92,6 +163,300 @@ export default function FullResultPage() {
     const s = seconds % 60;
     return `${m}m ${s}s`;
   };
+
+  const isSubjective = Boolean(result.isSubjective || result.hasSubmittedAnswerPdf || result.needsEvaluation);
+  const isPublished = Boolean(result.isPublished && result.score !== null);
+
+  if (isSubjective && !isPublished) {
+    const checkingRequest = result.checkingRequest;
+
+    return (
+      <div className="p-4 sm:p-8 max-w-5xl mx-auto space-y-6">
+        {/* Top Nav */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <Link href="/student/results" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary dark:text-foreground mb-2 transition-colors">
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              Back to Results
+            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl sm:text-3xl font-bold text-primary dark:text-foreground">{result.examName}</h1>
+              <Badge variant="outline" className="border-indigo-500/40 text-indigo-500 font-semibold text-xs">
+                Subjective Examination
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Attempt #{result.id} · Submitted on {result.date}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href={`/student/exams/${result.examId}/result/${result.id}`}>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold">
+                Exam Workspace <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {/* Evaluation / Checking Request Status Banner */}
+        {!checkingRequest ? (
+          <Card className="border-indigo-500/30 bg-indigo-500/5 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-500">
+                    <FileCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-foreground">
+                      Request for Evaluation
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Submit your answer sheet for manual checking by a Loksewa expert evaluator
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline" className="border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+                  Optional
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 text-sm text-muted-foreground leading-relaxed">
+              Your handwritten answer sheet has been securely submitted. You can now request manual checking to receive question-by-question scoring and personalized examiner feedback.
+            </CardContent>
+            <CardFooter className="pt-0 flex flex-wrap items-center gap-3">
+              <Button
+                onClick={handleRequestChecking}
+                disabled={submittingChecking}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm gap-2 shadow-sm"
+              >
+                {submittingChecking ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Submitting Request...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" /> Request for Evaluation
+                  </>
+                )}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                No admin pre-approval is required. Evaluator capacity is verified upon request.
+              </span>
+            </CardFooter>
+          </Card>
+        ) : checkingRequest.status === "pending" ? (
+          <Card className="border-amber-500/30 bg-amber-500/5 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                    <Clock className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-amber-800 dark:text-amber-300">
+                      Checking Request Pending
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Submitted on {new Date(checkingRequest.created_at).toLocaleString()}
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="warning">Pending Review</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 text-sm text-muted-foreground leading-relaxed">
+              Your manual checking request has been submitted and is awaiting administrator review. An evaluator will be assigned based on faculty capacity.
+            </CardContent>
+          </Card>
+        ) : checkingRequest.status === "accepted" ? (
+          <Card className="border-blue-500/30 bg-blue-500/5 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/30 text-blue-600 dark:text-blue-400">
+                    <CheckCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-blue-800 dark:text-blue-300">
+                      Checking Accepted
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Your answer sheet is scheduled with an assigned evaluator
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge className="bg-blue-600 text-white">Accepted</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 text-sm text-muted-foreground leading-relaxed">
+              Your evaluation request was accepted. Question-by-question marking will begin shortly.
+            </CardContent>
+          </Card>
+        ) : checkingRequest.status === "in_progress" ? (
+          <Card className="border-indigo-500/30 bg-indigo-500/5 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/30 text-indigo-600 dark:text-indigo-400">
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-indigo-800 dark:text-indigo-300">
+                      Checking in Progress
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      An evaluator is actively reviewing your answer sheet
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge className="bg-indigo-600 text-white">In Progress</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 text-sm text-muted-foreground leading-relaxed">
+              Your answer sheet is currently being marked. Final marks and examiner feedback will appear once published.
+            </CardContent>
+          </Card>
+        ) : checkingRequest.status === "rejected" ? (
+          <Card className="border-rose-500/30 bg-rose-500/5 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center border border-rose-500/30 text-rose-600 dark:text-rose-400">
+                    <XCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg font-bold text-rose-800 dark:text-rose-300">
+                      Evaluation Request Rejected
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Decision date: {checkingRequest.reviewed_at ? new Date(checkingRequest.reviewed_at).toLocaleString() : "Recently"}
+                    </CardDescription>
+                  </div>
+                </div>
+                <Badge variant="destructive">Request Rejected</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 space-y-2">
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-3 text-xs space-y-1">
+                <span className="font-semibold text-rose-700 dark:text-rose-300 uppercase tracking-wider block">
+                  Reason from Administrator:
+                </span>
+                <p className="text-sm font-medium text-rose-950 dark:text-rose-100">
+                  "{checkingRequest.rejection_reason || "Evaluator capacity currently unavailable."}"
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                <strong>Note:</strong> Your submitted answer sheet remains completely safe and valid. You can submit another evaluation request when capacity becomes available.
+              </p>
+            </CardContent>
+            <CardFooter className="pt-0">
+              <Button
+                onClick={handleRequestChecking}
+                disabled={submittingChecking}
+                variant="outline"
+                className="border-rose-400/50 hover:bg-rose-500/10 text-rose-700 dark:text-rose-300 font-semibold text-xs gap-2"
+              >
+                {submittingChecking ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting Request...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5" /> Submit New Evaluation Request
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        ) : null}
+
+        {/* Answer Sheet and Expert Solution Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Submitted Answer Sheet Card */}
+          <Card className="border-border/60 shadow-sm flex flex-col justify-between">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold">Submitted Answer Sheet</CardTitle>
+                  <CardDescription className="text-xs">
+                    Your uploaded handwritten PDF / photos
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 text-xs text-muted-foreground">
+              Answer sheet safely recorded on {result.date}. You can preview the exact document submitted for evaluation.
+            </CardContent>
+            <CardFooter className="pt-0">
+              <Button
+                onClick={handleViewAnswerSheet}
+                variant="outline"
+                className="gap-2 text-xs font-semibold w-full sm:w-auto"
+              >
+                <Eye className="w-4 h-4" /> View Submitted Answer Sheet
+              </Button>
+            </CardFooter>
+          </Card>
+
+          {/* Expert Solution PDF Card */}
+          <Card className="border-border/60 shadow-sm flex flex-col justify-between">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                    <FileBadge className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold">Official Expert Solution</CardTitle>
+                    <CardDescription className="text-xs">
+                      Official marking scheme and model answers
+                    </CardDescription>
+                  </div>
+                </div>
+                {expertSolutionInfo?.is_expert_solution_published ? (
+                  <Badge variant="success">Published</Badge>
+                ) : (
+                  <Badge variant="secondary">Not Yet Published</Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 pb-3 text-xs text-muted-foreground">
+              {expertSolutionInfo?.is_expert_solution_published
+                ? "Access model answers and detailed explanations prepared by Loksewa faculty."
+                : "No Expert Solution has been published for this exam yet."}
+            </CardContent>
+            <CardFooter className="pt-0">
+              {expertSolutionInfo?.is_expert_solution_published ? (
+                <Button
+                  onClick={handleDownloadExpertSolution}
+                  disabled={downloadingExpertPdf}
+                  className="bg-primary text-primary-foreground font-semibold text-xs gap-2 w-full sm:w-auto"
+                >
+                  {downloadingExpertPdf ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="w-3.5 h-3.5" /> View Expert Solution PDF
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">
+                  Will become available once published by faculty.
+                </span>
+              )}
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const totalCorrect = result.correctAnswers;
   const totalIncorrect = result.incorrectAnswers;
@@ -124,7 +489,7 @@ export default function FullResultPage() {
       </div>
 
       {/* Celebration Modal for Top Ranks */}
-      {typeof result.rank === "number" && (
+      {typeof result.rank === "number" && typeof result.score === "number" && typeof result.percentage === "number" && (
         <CelebrationModal
           rank={result.rank}
           score={result.score}
@@ -144,10 +509,12 @@ export default function FullResultPage() {
           <div className="text-center md:text-left flex-1">
             <p className="text-[#D4A72C] font-semibold tracking-wider text-sm uppercase mb-2">Final Score</p>
             <div className="flex items-end justify-center md:justify-start gap-2 mb-2">
-              <span className="text-6xl font-black">{result.score}</span>
+              <span className="text-6xl font-black">{result.score ?? "--"}</span>
               <span className="text-xl text-white/60 mb-2">/ {result.totalMarks}</span>
             </div>
-            <p className="text-white/80 font-medium">You scored {result.percentage}% on this exam.</p>
+            <p className="text-white/80 font-medium">
+              {result.percentage !== null ? `You scored ${result.percentage}% on this exam.` : "Evaluation in progress."}
+            </p>
           </div>
           
           <div className="flex-1 w-full flex flex-col gap-4">
@@ -205,7 +572,7 @@ export default function FullResultPage() {
           </div>
           <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">
             <Award className="w-6 h-6 text-[#D4A72C] mb-2" />
-            <p className="text-2xl font-bold text-primary dark:text-foreground">{result.percentage}%</p>
+            <p className="text-2xl font-bold text-primary dark:text-foreground">{result.percentage !== null ? `${result.percentage}%` : "--"}</p>
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-1">Accuracy</p>
           </div>
           <div className="bg-card p-4 rounded-xl border border-border text-center flex flex-col items-center">

@@ -75,6 +75,9 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
     is_result_published = serializers.SerializerMethodField()
     requires_admin_request = serializers.SerializerMethodField()
 
+    has_expert_solution = serializers.SerializerMethodField()
+    is_expert_solution_published = serializers.BooleanField(read_only=True)
+
     # The raw admin-set category, plus effective_category which auto-promotes
     # a Live Exam into the Model Exams listing 48h after its scheduled start
     # — the student list groups by effective_category, not the raw value.
@@ -95,12 +98,16 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
             'is_result_published', 'requires_admin_request',
             'can_start', 'start_blocked_reason',
             'has_question_paper', 'question_paper_page_count',
+            'has_expert_solution', 'is_expert_solution_published',
             'upload_deadline_minutes', 'answer_upload_enabled',
             'allowed_file_types', 'max_upload_size_mb', 'evaluation_type',
         ]
 
     def get_has_question_paper(self, obj):
         return bool(obj.question_paper_pdf)
+
+    def get_has_expert_solution(self, obj):
+        return bool(obj.expert_solution_pdf and obj.is_expert_solution_published)
 
     # -- helpers -----------------------------------------------------------
     def _user(self):
@@ -469,6 +476,17 @@ class StudentExaminationAttemptSerializer(AttemptTimingMixin, serializers.ModelS
     def get_subjective_submission(self, obj):
         if hasattr(obj, 'subjective_submission'):
             sub = obj.subjective_submission
+            latest_req = sub.latest_checking_request
+            checking_request_data = None
+            if latest_req:
+                checking_request_data = {
+                    'id': latest_req.id,
+                    'status': latest_req.status,
+                    'status_display': latest_req.get_status_display(),
+                    'rejection_reason': latest_req.rejection_reason,
+                    'created_at': latest_req.created_at.isoformat(),
+                    'reviewed_at': latest_req.reviewed_at.isoformat() if latest_req.reviewed_at else None,
+                }
             return {
                 'id': sub.id,
                 'status': sub.status,
@@ -477,6 +495,7 @@ class StudentExaminationAttemptSerializer(AttemptTimingMixin, serializers.ModelS
                 'has_answer_pdf': bool(sub.answer_pdf),
                 'ocr_status': sub.ocr_status,
                 'is_published': sub.is_published,
+                'checking_request': checking_request_data,
                 'created_at': sub.created_at.isoformat(),
             }
         return None
@@ -491,6 +510,7 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
     wrong_answers = serializers.SerializerMethodField()
     unanswered = serializers.SerializerMethodField()
     needs_evaluation = serializers.SerializerMethodField()
+    checking_request_status = serializers.SerializerMethodField()
 
     class Meta:
         model = ExaminationAttempt
@@ -498,8 +518,15 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
             'id', 'examination', 'examination_title', 'total_marks', 'is_published', 'started_at', 'submitted_at',
             'status', 'score', 'percentage', 'passed', 'time_taken_seconds',
             'total_questions', 'correct_answers', 'wrong_answers', 'unanswered', 'needs_evaluation',
+            'checking_request_status',
             'rank', 'total_participants'
         ] + TIMING_FIELDS
+
+    def get_checking_request_status(self, obj):
+        if hasattr(obj, 'subjective_submission'):
+            req = obj.subjective_submission.latest_checking_request
+            return req.status if req else None
+        return None
 
     def get_total_marks(self, obj):
         if hasattr(obj, 'subjective_submission') and obj.subjective_submission.is_published:
@@ -779,6 +806,17 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
                     }
                     for qs in sub.question_scores.order_by('question_number', 'id')
                 ]
+            latest_req = sub.latest_checking_request
+            checking_request_data = None
+            if latest_req:
+                checking_request_data = {
+                    'id': latest_req.id,
+                    'status': latest_req.status,
+                    'status_display': latest_req.get_status_display(),
+                    'rejection_reason': latest_req.rejection_reason,
+                    'created_at': latest_req.created_at.isoformat(),
+                    'reviewed_at': latest_req.reviewed_at.isoformat() if latest_req.reviewed_at else None,
+                }
             return {
                 'id': sub.id,
                 'status': sub.status,
@@ -789,6 +827,7 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
                 'evaluated_at': sub.evaluated_at.isoformat() if sub.evaluated_at and sub.is_published else None,
                 'is_published': sub.is_published,
                 'published_at': sub.published_at.isoformat() if sub.published_at else None,
+                'checking_request': checking_request_data,
                 'question_scores': question_scores,
             }
         return None

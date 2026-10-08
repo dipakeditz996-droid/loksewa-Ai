@@ -882,6 +882,139 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         except Exception as e:
             return Response({'detail': f'Could not open question paper: {e}'}, status=status.HTTP_404_NOT_FOUND)
 
+    @action(detail=True, methods=['post'], url_path='expert-solution')
+    def upload_expert_solution(self, request, pk=None):
+        import os
+        import io
+        from PIL import Image, ImageOps
+        from django.core.files.base import ContentFile
+        from core.notification_service import NotificationService
+
+        exam = self.get_object()
+        file = request.FILES.get('file') or request.FILES.get('expert_solution') or request.FILES.get('pdf_file')
+        if not file:
+            return Response({'detail': 'No expert solution file was provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        if file.size < 100:
+            return Response({'detail': 'The uploaded file is empty or corrupted.'}, status=status.HTTP_400_BAD_REQUEST)
+        if file.size > 25 * 1024 * 1024:
+            return Response({'detail': 'File size exceeds maximum allowed limit (25MB).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        file_name_lower = file.name.lower()
+        content = file.read()
+        file.seek(0)
+
+        # 1. Handle PDF
+        if file_name_lower.endswith('.pdf') or content.startswith(b'%PDF-'):
+            if not content.startswith(b'%PDF-'):
+                return Response({'detail': 'The uploaded file is not a valid PDF document (missing %PDF- header).'}, status=status.HTTP_400_BAD_REQUEST)
+            page_count = max(1, content.count(b'/Type /Page\n') + content.count(b'/Type /Page\r') + content.count(b'/Type/Page'))
+            final_file = file
+            final_file.seek(0)
+            final_size = file.size
+        # 2. Handle image formats (JPG, PNG, WEBP) by converting to standardized PDF
+        elif any(file_name_lower.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp')) or (file.content_type and file.content_type.startswith('image/')):
+            try:
+                img = Image.open(file)
+                try:
+                    img = ImageOps.exif_transpose(img)
+                except Exception:
+                    pass
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                pdf_buffer = io.BytesIO()
+                img.save(pdf_buffer, format='PDF', quality=85, resolution=150.0)
+                pdf_bytes = pdf_buffer.getvalue()
+                clean_name = f"{os.path.splitext(file.name)[0]}_solution.pdf"
+                final_file = ContentFile(pdf_bytes, name=clean_name)
+                page_count = 1
+                final_size = len(pdf_bytes)
+            except Exception as e:
+                return Response({'detail': f'Failed to process expert solution image: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({'detail': 'Only PDF documents and image files (JPG, PNG, WEBP) are accepted for the expert solution.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Delete existing file if replacing
+        if exam.expert_solution_pdf:
+            exam.expert_solution_pdf.delete(save=False)
+
+        should_publish = str(request.data.get('publish', '')).lower() in ('true', '1', 'yes')
+
+        exam.expert_solution_pdf = final_file
+        exam.expert_solution_page_count = page_count
+        exam.expert_solution_file_size = final_size
+        if should_publish:
+            exam.is_expert_solution_published = True
+            exam.expert_solution_published_at = timezone.now()
+        exam.save(update_fields=[
+            'expert_solution_pdf', 'expert_solution_page_count', 'expert_solution_file_size',
+            'is_expert_solution_published', 'expert_solution_published_at', 'updated_at'
+        ])
+
+        if should_publish:
+            NotificationService.notify_expert_solution_published(exam)
+
+        return Response({
+            'detail': 'Expert solution uploaded successfully.',
+            'page_count': page_count,
+            'file_size': final_size,
+            'filename': os.path.basename(exam.expert_solution_pdf.name),
+            'is_published': exam.is_expert_solution_published,
+            'published_at': exam.expert_solution_published_at,
+        }, status=status.HTTP_200_OK)
+
+    @upload_expert_solution.mapping.delete
+    def delete_expert_solution(self, request, pk=None):
+        exam = self.get_object()
+        if exam.expert_solution_pdf:
+            exam.expert_solution_pdf.delete(save=False)
+            exam.expert_solution_pdf = None
+            exam.expert_solution_page_count = 0
+            exam.expert_solution_file_size = 0
+            exam.is_expert_solution_published = False
+            exam.expert_solution_published_at = None
+            exam.save(update_fields=[
+                'expert_solution_pdf', 'expert_solution_page_count', 'expert_solution_file_size',
+                'is_expert_solution_published', 'expert_solution_published_at', 'updated_at'
+            ])
+        return Response({'detail': 'Expert solution removed successfully.'})
+
+    @upload_expert_solution.mapping.get
+    def get_expert_solution(self, request, pk=None):
+        from django.http import FileResponse
+        exam = self.get_object()
+        if not exam.expert_solution_pdf:
+            return Response({'detail': 'No expert solution uploaded for this exam.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            return FileResponse(exam.expert_solution_pdf.open('rb'), content_type='application/pdf')
+        except Exception as e:
+            return Response({'detail': f'Could not open expert solution: {e}'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='expert-solution/publish')
+    def publish_expert_solution(self, request, pk=None):
+        from core.notification_service import NotificationService
+        exam = self.get_object()
+        if not exam.expert_solution_pdf:
+            return Response({'detail': 'Cannot publish: Please upload an Expert Solution PDF first.'}, status=status.HTTP_400_BAD_REQUEST)
+        exam.is_expert_solution_published = True
+        exam.expert_solution_published_at = timezone.now()
+        exam.save(update_fields=['is_expert_solution_published', 'expert_solution_published_at', 'updated_at'])
+        NotificationService.notify_expert_solution_published(exam)
+        return Response({
+            'detail': 'Expert solution published successfully.',
+            'is_published': True,
+            'published_at': exam.expert_solution_published_at,
+        })
+
+    @action(detail=True, methods=['post'], url_path='expert-solution/unpublish')
+    def unpublish_expert_solution(self, request, pk=None):
+        exam = self.get_object()
+        exam.is_expert_solution_published = False
+        exam.save(update_fields=['is_expert_solution_published', 'updated_at'])
+        return Response({
+            'detail': 'Expert solution unpublished successfully.',
+            'is_published': False,
+        })
+
     @action(detail=True, methods=['get'], url_path='submissions')
     def submissions(self, request, pk=None):
         from exams.models import SubjectiveSubmission
@@ -1207,6 +1340,11 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
             attempt.passed = total_score >= pass_marks
             attempt.status = 'evaluated'
             attempt.save(update_fields=['status', 'score', 'percentage', 'passed'])
+
+            # If there is an active checking request, advance it to in_progress
+            submission.checking_requests.filter(status__in=['pending', 'accepted']).update(
+                status='in_progress', assigned_evaluator=request.user, updated_at=timezone.now()
+            )
             submission.save()
 
         serializer = AdminSubjectiveSubmissionDetailSerializer(submission)
@@ -1267,7 +1405,186 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
             attempt.status = 'evaluated'
             attempt.save(update_fields=['status', 'score', 'percentage', 'passed'])
 
+            # If there is a checking request, mark it completed
+            submission.checking_requests.filter(status__in=['pending', 'accepted', 'in_progress']).update(
+                status='completed', updated_at=timezone.now()
+            )
+
             transaction.on_commit(lambda: NotificationService.notify_subjective_result_published(submission))
 
         serializer = AdminSubjectiveSubmissionDetailSerializer(submission)
         return Response(serializer.data)
+
+
+class AdminSubjectiveCheckingRequestViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsEvaluatorUser]
+    http_method_names = ['get', 'post', 'head', 'options']
+
+    def get_queryset(self):
+        from django.db import models as db_models
+        from django.utils.dateparse import parse_date
+        from exams.models import SubjectiveCheckingRequest
+        queryset = (
+            SubjectiveCheckingRequest.objects
+            .select_related(
+                'student', 'submission', 'submission__attempt',
+                'submission__attempt__examination', 'submission__attempt__examination__course',
+                'assigned_evaluator', 'reviewed_by'
+            )
+            .all()
+        )
+
+        status_param = self.request.query_params.get('status')
+        if status_param and status_param != 'all':
+            if status_param == 'evaluating':
+                queryset = queryset.filter(status='in_progress')
+            elif status_param == 'evaluated':
+                queryset = queryset.filter(status='completed')
+            else:
+                queryset = queryset.filter(status=status_param)
+
+        exam_id = self.request.query_params.get('exam_id')
+        if exam_id:
+            queryset = queryset.filter(submission__attempt__examination_id=exam_id)
+
+        course_id = self.request.query_params.get('course_id')
+        if course_id:
+            queryset = queryset.filter(submission__attempt__examination__course_id=course_id)
+
+        student_id = self.request.query_params.get('student_id')
+        if student_id:
+            queryset = queryset.filter(student_id=student_id)
+
+        date_from = self.request.query_params.get('date_from')
+        if date_from:
+            d = parse_date(date_from)
+            if d:
+                queryset = queryset.filter(created_at__date__gte=d)
+
+        date_to = self.request.query_params.get('date_to')
+        if date_to:
+            d = parse_date(date_to)
+            if d:
+                queryset = queryset.filter(created_at__date__lte=d)
+
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                db_models.Q(student__username__icontains=search) |
+                db_models.Q(student__email__icontains=search) |
+                db_models.Q(student__first_name__icontains=search) |
+                db_models.Q(student__last_name__icontains=search) |
+                db_models.Q(submission__attempt__examination__title__icontains=search)
+            )
+
+        ordering = self.request.query_params.get('ordering', '-created_at')
+        allowed_ordering = {
+            'newest_request': '-created_at',
+            'oldest_request': 'created_at',
+            '-created_at': '-created_at',
+            'created_at': 'created_at',
+            'newest_submission': '-submission__attempt__submitted_at',
+            'oldest_submission': 'submission__attempt__submitted_at',
+            '-submission_date': '-submission__attempt__submitted_at',
+            'submission_date': 'submission__attempt__submitted_at',
+        }
+        order_field = allowed_ordering.get(ordering, '-created_at')
+        return queryset.order_by(order_field)
+
+    def get_serializer_class(self):
+        from exams.serializers import SubjectiveCheckingRequestSerializer
+        return SubjectiveCheckingRequestSerializer
+
+    @action(detail=False, methods=['get'], url_path='stats')
+    def stats(self, request):
+        """Aggregate metrics for admin subjective checking requests."""
+        from exams.models import SubjectiveCheckingRequest
+        base_qs = SubjectiveCheckingRequest.objects.all()
+        return Response({
+            'total': base_qs.count(),
+            'pending': base_qs.filter(status='pending').count(),
+            'accepted': base_qs.filter(status='accepted').count(),
+            'in_progress': base_qs.filter(status='in_progress').count(),
+            'completed': base_qs.filter(status='completed').count(),
+            'rejected': base_qs.filter(status='rejected').count(),
+        })
+
+    @action(detail=True, methods=['post'], url_path='accept')
+    def accept(self, request, pk=None):
+        """
+        Accept checking request and optionally assign evaluator.
+        """
+        from django.db import transaction
+        from core.notification_service import NotificationService
+        checking_request = self.get_object()
+
+        if checking_request.status in ('accepted', 'in_progress'):
+            return Response({'detail': f'Checking request is already {checking_request.status}.'}, status=status.HTTP_400_BAD_REQUEST)
+        if checking_request.status == 'completed':
+            return Response({'detail': 'Checking request has already been completed.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        evaluator_id = request.data.get('evaluator_id') or request.data.get('evaluator')
+        evaluator_user = None
+        if evaluator_id:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            evaluator_user = User.objects.filter(pk=evaluator_id).first()
+
+        with transaction.atomic():
+            checking_request.status = 'accepted'
+            checking_request.reviewed_by = request.user
+            checking_request.reviewed_at = timezone.now()
+            if evaluator_user:
+                checking_request.assigned_evaluator = evaluator_user
+            checking_request.save()
+
+            submission = checking_request.submission
+            if evaluator_user:
+                submission.evaluator = evaluator_user
+                submission.save(update_fields=['evaluator'])
+
+            transaction.on_commit(lambda: NotificationService.notify_checking_request_accepted(checking_request))
+
+        serializer = self.get_serializer(checking_request)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='reject')
+    def reject(self, request, pk=None):
+        """
+        Reject checking request with a mandatory reason.
+        Does NOT delete or cancel the student's exam attempt or submitted answer sheet.
+        """
+        from django.db import transaction
+        from core.notification_service import NotificationService
+        checking_request = self.get_object()
+
+        if checking_request.status in ('completed', 'in_progress'):
+            return Response({'detail': f'Cannot reject a request that is {checking_request.status}.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        reason = str(request.data.get('rejection_reason', '') or request.data.get('reason', '')).strip()
+        if not reason:
+            return Response({'detail': 'A rejection reason is required to reject a checking request.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            checking_request.status = 'rejected'
+            checking_request.rejection_reason = reason
+            checking_request.reviewed_by = request.user
+            checking_request.reviewed_at = timezone.now()
+            checking_request.save()
+
+            transaction.on_commit(lambda: NotificationService.notify_checking_request_rejected(checking_request))
+
+        serializer = self.get_serializer(checking_request)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='answer-sheet')
+    def answer_sheet(self, request, pk=None):
+        checking_request = self.get_object()
+        submission = checking_request.submission
+        if not submission or not submission.answer_pdf:
+            return Response({'detail': 'No answer-sheet file available.'}, status=status.HTTP_404_NOT_FOUND)
+        from django.http import FileResponse
+        try:
+            return FileResponse(submission.answer_pdf.open('rb'), content_type='application/pdf')
+        except Exception as e:
+            return Response({'detail': f'Could not open answer-sheet file: {e}'}, status=status.HTTP_404_NOT_FOUND)

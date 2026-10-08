@@ -46,7 +46,7 @@ export default function ExamDetailsPage() {
     queryFn: () => studentExamsApi.getExamDetails(examId)
   });
 
-  const requiresAdminRequest = Boolean(exam?.requires_admin_request);
+  const requiresAdminRequest = exam?.exam_type !== "subjective" && Boolean(exam?.requires_admin_request);
   const {
     data: examRequests = [],
     isLoading: isLoadingRequests,
@@ -60,6 +60,20 @@ export default function ExamDetailsPage() {
   const examRequest = examRequests.find((item) => item.examination === examId);
   const [expertSolution, setExpertSolution] = useState<{ title: string; solutions: Awaited<ReturnType<typeof studentExamsApi.getExpertSolution>>["solutions"] } | null>(null);
   const [solutionMessage, setSolutionMessage] = useState("");
+  const [loadingExpertSolutionPdf, setLoadingExpertSolutionPdf] = useState(false);
+
+  const handleDownloadExpertSolutionPdf = async () => {
+    setLoadingExpertSolutionPdf(true);
+    try {
+      const blob = await studentExamsApi.getExpertSolutionPdfBlob(examId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (err: any) {
+      toast.error(err?.message || "No Expert Solution has been published for this exam yet.");
+    } finally {
+      setLoadingExpertSolutionPdf(false);
+    }
+  };
 
   const startExamMutation = useMutation({
     mutationFn: () => studentExamsApi.startExam(examId),
@@ -257,22 +271,45 @@ export default function ExamDetailsPage() {
           {exam.exam_type === "subjective" && (
             <section className="mt-6 space-y-3 border-t border-border/50 pt-5" id="expert-solution-section" aria-labelledby="expert-solution-heading">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 id="expert-solution-heading" className="font-semibold text-lg">Expert Solution</h3>
-                <Button variant="outline" size="sm" onClick={() => void viewExpertSolution()}>
-                  <BookOpenCheck className="mr-2 h-4 w-4" />View Expert Solution
-                </Button>
+                <div className="flex items-center gap-2">
+                  <h3 id="expert-solution-heading" className="font-semibold text-lg text-foreground">Expert Solution PDF</h3>
+                  {exam.is_expert_solution_published ? (
+                    <Badge className="bg-emerald-600 text-white text-xs">Published</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground border-border text-xs">Unpublished</Badge>
+                  )}
+                </div>
               </div>
-              {solutionMessage && <p className="text-sm text-muted-foreground" role="status">{solutionMessage}</p>}
-              {expertSolution && (
-                <div className="space-y-4">
-                  {expertSolution.solutions.map((solution, index) => (
-                    <article key={solution.id} className="border-b border-border/60 pb-4">
-                      <p className="font-medium">{index + 1}. {solution.text}</p>
-                      {solution.correct_option && <p className="mt-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">Correct answer: {solution.correct_option}</p>}
-                      {solution.model_answer && <p className="mt-2 whitespace-pre-wrap text-sm">{solution.model_answer}</p>}
-                      {solution.explanation && <p className="mt-2 whitespace-pre-wrap text-sm text-muted-foreground">{solution.explanation}</p>}
-                    </article>
-                  ))}
+
+              {exam.is_expert_solution_published ? (
+                <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <BookOpenCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Official Expert Solution Available</p>
+                      <p className="text-xs text-muted-foreground">
+                        Prepared by Loksewa PSC experts with comprehensive model answers and grading guidelines.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleDownloadExpertSolutionPdf}
+                    disabled={loadingExpertSolutionPdf}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5 shrink-0"
+                  >
+                    {loadingExpertSolutionPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                    Preview &amp; Download Solution PDF
+                  </Button>
+                </div>
+              ) : (
+                <div className="p-5 rounded-xl border border-dashed border-border bg-muted/20 text-center space-y-1.5">
+                  <BookOpenCheck className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                  <p className="text-sm font-medium text-foreground">No Expert Solution has been published for this exam yet.</p>
+                  <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                    The model solution PDF will become available here once published by the faculty.
+                  </p>
                 </div>
               )}
             </section>

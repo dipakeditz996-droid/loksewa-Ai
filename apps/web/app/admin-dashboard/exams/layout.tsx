@@ -5,12 +5,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { 
-  FileText, LayoutDashboard, PlusCircle, FolderTree, Menu, X, Trophy
+  FileText, LayoutDashboard, PlusCircle, FolderTree, Menu, X, Trophy, FileCheck, Award
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const EXAMS_NAV = [
   { title: "Overview", href: "/admin-dashboard/exams", icon: LayoutDashboard, exact: true },
+  { title: "Evaluation Requests", href: "/admin-dashboard/exams/evaluation-requests", icon: FileCheck },
+  { title: "Submissions", href: "/admin-dashboard/exams/submissions", icon: Award },
   { title: "Create Exam", href: "/admin-dashboard/exams/new", icon: PlusCircle },
   { title: "Categories", href: "/admin-dashboard/exams/categories", icon: FolderTree },
 ];

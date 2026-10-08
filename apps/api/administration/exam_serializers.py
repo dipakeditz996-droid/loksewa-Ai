@@ -49,11 +49,14 @@ class ExaminationSerializer(serializers.ModelSerializer):
             'start_time', 'end_time', 'status', 'created_at', 'updated_at', 
             'eligibility_rules', 'attempts_count',
             'question_paper_pdf', 'question_paper_page_count', 'question_paper_file_size',
+            'expert_solution_pdf', 'expert_solution_page_count', 'expert_solution_file_size',
+            'is_expert_solution_published', 'expert_solution_published_at',
             'answer_upload_enabled', 'upload_deadline_minutes', 'upload_start_time',
             'upload_end_time', 'allowed_file_types', 'max_upload_size_mb', 'evaluation_type', 'request_id'
         ]
         read_only_fields = [
-            'created_by', 'status', 'question_paper_page_count', 'question_paper_file_size'
+            'created_by', 'status', 'question_paper_page_count', 'question_paper_file_size',
+            'expert_solution_page_count', 'expert_solution_file_size', 'expert_solution_published_at'
         ]
 
     def validate(self, attrs):

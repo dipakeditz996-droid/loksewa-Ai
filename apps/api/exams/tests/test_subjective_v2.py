@@ -54,7 +54,10 @@ class SubjectiveExamWorkflowTests(APITestCase):
     def tearDownClass(cls):
         super().tearDownClass()
         cls._storage_override.disable()
-        cls._media_directory.cleanup()
+        try:
+            cls._media_directory.cleanup()
+        except Exception:
+            pass
 
     def setUp(self):
         # 1. Users

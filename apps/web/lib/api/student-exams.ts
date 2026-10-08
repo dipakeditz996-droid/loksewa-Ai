@@ -43,6 +43,8 @@ export interface StudentExam {
   requires_admin_request?: boolean;
   has_question_paper?: boolean;
   question_paper_page_count?: number;
+  has_expert_solution?: boolean;
+  is_expert_solution_published?: boolean;
   can_start?: boolean;
   start_blocked_reason?: string | null;
 }
@@ -157,6 +159,7 @@ export interface StudentExamAttempt {
   is_published?: boolean;
   published_at?: string | null;
   extracted_text?: string;
+  checking_request_status?: string | null;
 }
 
 export interface StudentExamResult extends StudentExamAttempt {
@@ -184,6 +187,14 @@ export interface StudentExamResult extends StudentExamAttempt {
     evaluated_at: string | null;
     is_published: boolean;
     published_at: string | null;
+    checking_request?: {
+      id: number;
+      status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected';
+      status_display: string;
+      rejection_reason?: string;
+      created_at: string;
+      reviewed_at?: string | null;
+    } | null;
     question_scores?: {
       id?: number;
       question_number: number;
@@ -398,5 +409,59 @@ export const studentExamsApi = {
     });
     if (!res.ok) throw new Error('Failed to load submitted answer sheet');
     return await res.blob();
+  },
+
+  requestManualChecking: async (attemptId: number) => {
+    return await apiClient<{
+      id: number;
+      status: string;
+      status_display: string;
+      detail?: string;
+    }>(`/student/exam-attempts/${attemptId}/request-checking/`, {
+      method: 'POST',
+    });
+  },
+
+  getCheckingStatus: async (attemptId: number) => {
+    return await apiClient<{
+      has_submission: boolean;
+      submission_status?: string;
+      is_published?: boolean;
+      checking_request: {
+        id: number;
+        status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected';
+        status_display: string;
+        rejection_reason?: string;
+        created_at: string;
+        reviewed_at?: string | null;
+      } | null;
+    }>(`/student/exam-attempts/${attemptId}/checking-status/`);
+  },
+
+  getExpertSolutionPdfBlob: async (examId: number) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/student/exams/${examId}/expert-solution-pdf/`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error('No Expert Solution has been published for this exam yet.');
+      }
+      throw new Error('Failed to load expert solution PDF');
+    }
+    return await res.blob();
+  },
+
+  getSubjectiveExpertSolutionInfo: async (examId: number) => {
+    return await apiClient<{
+      examination: number;
+      title: string;
+      exam_type: string;
+      is_expert_solution_published: boolean;
+      has_expert_solution_pdf: boolean;
+      page_count?: number;
+      file_size?: number;
+      published_at?: string | null;
+    }>(`/student/exams/${examId}/expert-solution/`);
   },
 };

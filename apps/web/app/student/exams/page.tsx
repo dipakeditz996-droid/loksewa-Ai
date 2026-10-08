@@ -158,7 +158,7 @@ function LiveStatusBadge({ exam }: { exam: StudentExam }) {
 // Exam Card
 // ---------------------------------------------------------------------------
 function ExamCard({ exam, isLive }: { exam: StudentExam; isLive?: boolean }) {
-  const approvalRequired = exam.requires_admin_request && !exam.can_start && !exam.active_attempt_id;
+  const approvalRequired = exam.exam_type !== "subjective" && exam.requires_admin_request && !exam.can_start && !exam.active_attempt_id;
 
   return (
     <Card className="border-border/60 flex flex-col hover:border-primary/30 transition-colors group">
@@ -289,7 +289,7 @@ function ExamCard({ exam, isLive }: { exam: StudentExam; isLive?: boolean }) {
               className="w-full gap-2 text-primary border-primary/25 hover:bg-primary/5 hover:text-primary"
             >
               <BookOpenCheck className="h-4 w-4" />
-              View Expert Solution
+              {exam.is_expert_solution_published ? "View Expert Solution PDF" : "Expert Solution"}
             </Button>
           </Link>
         )}

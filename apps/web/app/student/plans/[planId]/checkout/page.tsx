@@ -192,7 +192,11 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
       queryClient.invalidateQueries({ queryKey: ["my-enrollment"] });
     } catch (err: any) {
       console.error(err);
-      setError(err.detail || err.error || err.message || "Failed to submit payment. Please verify your details.");
+      let msg = err.detail || err.error || err.message;
+      if (!msg || msg === "Failed to fetch") {
+        msg = "Unable to connect to the server. Please check your network connection and try again.";
+      }
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }

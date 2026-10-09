@@ -274,7 +274,7 @@ if _active_db_url:
     _conn_max_age_env = os.environ.get('DJANGO_CONN_MAX_AGE') or os.environ.get('CONN_MAX_AGE')
     _conn_max_age = int(_conn_max_age_env) if _conn_max_age_env else (60 if _is_pooled else 600)
 
-    _conn_health_checks = _env_bool('DJANGO_CONN_HEALTH_CHECKS', False)
+    _conn_health_checks = _env_bool('DJANGO_CONN_HEALTH_CHECKS', True)
 
     DATABASES = {
         'default': dj_database_url.parse(
@@ -401,8 +401,22 @@ def _parse_origins(env_value):
 CORS_ALLOWED_ORIGINS = _parse_origins(os.environ.get('CORS_ALLOWED_ORIGINS', ''))
 if not CORS_ALLOWED_ORIGINS and not DEBUG:
     raise RuntimeError("CORS_ALLOWED_ORIGINS must be explicitly set in production.")
-CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
+CORS_ALLOW_ALL_ORIGINS = DEBUG or not bool(CORS_ALLOWED_ORIGINS)
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_PRIVATE_NETWORK = True
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'access-control-request-private-network',
+]
 
 CSRF_TRUSTED_ORIGINS = _parse_origins(os.environ.get('CSRF_TRUSTED_ORIGINS', ''))
 if not CSRF_TRUSTED_ORIGINS and not DEBUG:

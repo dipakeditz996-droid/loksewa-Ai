@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
 
 function extractErrorMessage(data: any): string {
   if (!data) return "An API error occurred";
@@ -147,7 +147,16 @@ async function executeRequest<T>(
     cache: 'no-store',
   };
 
-  let response = await fetch(url, config);
+  let response: Response;
+  try {
+    response = await fetch(url, config);
+  } catch (err: any) {
+    throw new ApiError(0, {
+      detail: err?.message === "Failed to fetch"
+        ? "Unable to connect to the backend server. Please verify your connection and ensure the server is running."
+        : (err?.message || "Network request failed")
+    });
+  }
 
   // Handle Token Expiration or Missing Token
   if (response.status === 401) {

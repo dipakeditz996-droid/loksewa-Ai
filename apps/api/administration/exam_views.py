@@ -1015,6 +1015,189 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             'is_published': False,
         })
 
+    @action(detail=True, methods=['post'], url_path='process-expert-solution')
+    def process_expert_solution(self, request, pk=None):
+        from exams.subjective_expert_service import SubjectiveExpertSolutionService
+        exam = self.get_object()
+        if not exam.expert_solution_pdf:
+            return Response({'detail': 'Please upload an Expert Solution PDF first.'}, status=status.HTTP_400_BAD_REQUEST)
+        service = SubjectiveExpertSolutionService()
+        result = service.process_expert_solution_pdf(exam)
+        return Response(result, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='rubrics')
+    def get_rubrics(self, request, pk=None):
+        exam = self.get_object()
+        eq_qs = exam.examination_questions.select_related('question').order_by('order', 'id')
+        data = []
+        for eq in eq_qs:
+            data.append({
+                'examination_question_id': eq.id,
+                'question_id': eq.question_id,
+                'question_text': eq.question.text,
+                'order': eq.order,
+                'question_number': eq.display_number,
+                'max_marks': eq.marks,
+                'evaluation_type': eq.evaluation_type,
+                'model_solution': eq.model_solution,
+                'rubric': eq.rubric or [],
+                'rubric_approved': eq.rubric_approved,
+                'rubric_version': eq.rubric_version,
+            })
+        return Response({
+            'examination_id': exam.id,
+            'title': exam.title,
+            'expert_solution_rubric_generated': exam.expert_solution_rubric_generated,
+            'expert_solution_version': exam.expert_solution_version,
+            'has_expert_solution_pdf': bool(exam.expert_solution_pdf),
+            'questions': data,
+        })
+
+    @action(detail=True, methods=['post'], url_path='update-rubrics')
+    def update_rubrics(self, request, pk=None):
+        from django.db import transaction
+        exam = self.get_object()
+        questions_payload = request.data.get('rubrics') or request.data.get('questions') or []
+        if not isinstance(questions_payload, list):
+            return Response({'detail': 'rubrics must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        eq_map = {eq.id: eq for eq in exam.examination_questions.all()}
+        validated_updates = []
+
+        for item in questions_payload:
+            eq_id = item.get('examination_question_id') or item.get('question_id') or item.get('id')
+            if eq_id not in eq_map:
+                continue
+            eq = eq_map[eq_id]
+            rubric = item.get('rubric', [])
+            if not isinstance(rubric, list):
+                return Response({'detail': f'Rubric for {eq.display_number} must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            crit_sum = 0.0
+            cleaned_crit = []
+            for c_idx, c in enumerate(rubric):
+                try:
+                    c_max = float(c.get('max_marks', 0))
+                except (ValueError, TypeError):
+                    return Response({'detail': f'{eq.display_number}: Criterion max_marks must be a number.'}, status=status.HTTP_400_BAD_REQUEST)
+                if c_max <= 0:
+                    return Response({'detail': f'{eq.display_number}: Criterion max_marks must be greater than 0.'}, status=status.HTTP_400_BAD_REQUEST)
+                crit_sum += c_max
+                crit_desc = str(c.get('criterion') or c.get('description') or f"Criterion {c_idx+1}").strip()
+                cleaned_crit.append({
+                    'id': str(c.get('id') or f'c{c_idx+1}'),
+                    'criterion': crit_desc,
+                    'description': crit_desc,
+                    'max_marks': round(c_max, 2),
+                    'expected_concepts': c.get('expected_concepts', []),
+                    'alternative_solutions': c.get('alternative_solutions', []),
+                    'formulas_or_steps': c.get('formulas_or_steps', []),
+                    'diagram_requirements': str(c.get('diagram_requirements', '')),
+                    'partial_credit_rules': str(c.get('partial_credit_rules', '')),
+                    'common_misconceptions': str(c.get('common_misconceptions', '')),
+                })
+
+            if cleaned_crit and abs(crit_sum - eq.marks) > 0.05:
+                return Response({
+                    'detail': f'{eq.display_number}: Sum of criterion marks ({crit_sum:g}) must equal question maximum marks ({eq.marks:g}).'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            model_solution = str(item.get('model_solution', eq.model_solution) or '')
+            approved = bool(item.get('rubric_approved', item.get('approved', True)))
+            evaluation_type = item.get('evaluation_type', eq.evaluation_type)
+            validated_updates.append((eq, cleaned_crit, model_solution, approved, evaluation_type))
+
+        with transaction.atomic():
+            for eq, cleaned_crit, model_solution, approved, evaluation_type in validated_updates:
+                eq.rubric = cleaned_crit
+                eq.model_solution = model_solution
+                eq.rubric_approved = approved
+                eq.evaluation_type = evaluation_type
+                eq.rubric_version = (eq.rubric_version or 0) + 1
+                eq.save(update_fields=['rubric', 'model_solution', 'rubric_approved', 'evaluation_type', 'rubric_version'])
+
+            exam.expert_solution_rubric_generated = True
+            exam.save(update_fields=['expert_solution_rubric_generated', 'updated_at'])
+
+        return self.get_rubrics(request, pk=pk)
+
+    @action(detail=True, methods=['post'], url_path='configure-subjective-questions')
+    def configure_subjective_questions(self, request, pk=None):
+        from django.db import transaction
+        exam = self.get_object()
+        questions_payload = request.data.get('questions', [])
+        if not isinstance(questions_payload, list) or not questions_payload:
+            return Response({'detail': 'questions must be a non-empty list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        eq_map = {eq.id: eq for eq in exam.examination_questions.all()}
+        seen_numbers = set()
+        validated_items = []
+        total_marks = 0.0
+
+        for idx, item in enumerate(questions_payload):
+            raw_num = str(item.get('question_number') or f"Q{idx+1}").strip()
+            if raw_num in seen_numbers:
+                return Response({'detail': f'Duplicate question number: "{raw_num}". Each question must have a unique identifier.'}, status=status.HTTP_400_BAD_REQUEST)
+            seen_numbers.add(raw_num)
+
+            try:
+                marks = float(item.get('marks', 10))
+            except (ValueError, TypeError):
+                return Response({'detail': f'Question {raw_num}: Marks must be a valid number.'}, status=status.HTTP_400_BAD_REQUEST)
+            if marks <= 0:
+                return Response({'detail': f'Question {raw_num}: Maximum marks must be greater than 0.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            eval_type = item.get('evaluation_type', 'descriptive') or 'descriptive'
+            order = int(item.get('order', idx + 1))
+            text = item.get('text', f'Question {raw_num}')
+            eq_id = item.get('examination_question_id') or item.get('id')
+            total_marks += marks
+            validated_items.append((eq_id, raw_num, marks, eval_type, order, text))
+
+        with transaction.atomic():
+            for eq_id, raw_num, marks, eval_type, order, text in validated_items:
+                if eq_id and eq_id in eq_map:
+                    eq = eq_map[eq_id]
+                    eq.question_number = raw_num
+                    eq.marks = marks
+                    eq.evaluation_type = eval_type
+                    eq.order = order
+                    eq.save(update_fields=['question_number', 'marks', 'evaluation_type', 'order'])
+                else:
+                    existing_eq = exam.examination_questions.filter(order=order).first()
+                    if existing_eq:
+                        existing_eq.question_number = raw_num
+                        existing_eq.marks = marks
+                        existing_eq.evaluation_type = eval_type
+                        existing_eq.save(update_fields=['question_number', 'marks', 'evaluation_type'])
+                    else:
+                        from exams.models import Question, ExaminationQuestion
+                        q = Question.objects.create(
+                            text=text,
+                            question_type='subjective',
+                            marks=marks,
+                            category=exam.category,
+                            exam=exam.exam
+                        )
+                        ExaminationQuestion.objects.create(
+                            examination=exam,
+                            question=q,
+                            order=order,
+                            question_number=raw_num,
+                            marks=marks,
+                            evaluation_type=eval_type
+                        )
+
+            exam.total_questions = len(validated_items)
+            exam.total_marks = total_marks
+            exam.save(update_fields=['total_questions', 'total_marks', 'updated_at'])
+
+        return Response({
+            'detail': 'Question structure and maximum marks updated successfully.',
+            'total_questions': exam.total_questions,
+            'total_marks': exam.total_marks,
+        }, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['get'], url_path='submissions')
     def submissions(self, request, pk=None):
         from exams.models import SubjectiveSubmission
@@ -1250,6 +1433,38 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
         serializer = AdminSubjectiveSubmissionDetailSerializer(submission)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'], url_path='auto-mark')
+    def auto_mark(self, request, pk=None):
+        from exams.subjective_auto_marking_service import SubjectiveAutoMarkingService
+        from exams.serializers import AdminSubjectiveSubmissionDetailSerializer
+        submission = self.get_object()
+        service = SubjectiveAutoMarkingService()
+        service.evaluate_submission(submission)
+        submission.refresh_from_db()
+        serializer = AdminSubjectiveSubmissionDetailSerializer(submission)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='confirm-evaluation')
+    def confirm_evaluation(self, request, pk=None):
+        from exams.serializers import AdminSubjectiveSubmissionDetailSerializer
+        submission = self.get_object()
+        now_str = timezone.now().isoformat()
+        trail = list(submission.audit_trail or [])
+        trail.append({
+            'timestamp': now_str,
+            'user': request.user.username,
+            'action': 'confirmed_evaluation',
+            'reason': request.data.get('reason', 'Admin confirmed AI evaluation results.'),
+        })
+        submission.evaluation_status = 'admin_confirmed'
+        submission.status = 'evaluated'
+        submission.audit_trail = trail
+        submission.evaluator = request.user
+        submission.question_scores.filter(status='ai_evaluated').update(status='admin_confirmed')
+        submission.save(update_fields=['evaluation_status', 'status', 'audit_trail', 'evaluator', 'updated_at'])
+        serializer = AdminSubjectiveSubmissionDetailSerializer(submission)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'], url_path='evaluate')
     def evaluate(self, request, pk=None):
         from exams.models import SubjectiveQuestionScore
@@ -1273,6 +1488,8 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
         validated_scores = []
         total_score = 0.0
         total_max = 0.0
+        audit_entries = []
+        now_str = timezone.now().isoformat()
 
         for idx, q_score in enumerate(question_scores_data):
             try:
@@ -1302,11 +1519,36 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
                 }, status=status.HTTP_400_BAD_REQUEST)
 
             feedback = str(q_score.get('feedback', '') or '').strip()
+            criterion_scores = q_score.get('criterion_scores', [])
+            q_status = q_score.get('status', 'admin_confirmed')
+            admin_notes = str(q_score.get('admin_notes', '') or '').strip()
+            strengths = str(q_score.get('strengths', '') or '').strip()
+            improvements = str(q_score.get('improvements', '') or '').strip()
+            student_answer_text = str(q_score.get('student_answer_text', '') or '').strip()
+
+            # Record audit entry if score changed
+            existing_qs = submission.question_scores.filter(question_number=q_num).first()
+            if existing_qs and abs(existing_qs.marks_obtained - marks_obtained) > 0.001:
+                audit_entries.append({
+                    'timestamp': now_str,
+                    'user': request.user.username,
+                    'question_number': q_num,
+                    'previous_marks': existing_qs.marks_obtained,
+                    'new_marks': marks_obtained,
+                    'reason': q_score.get('adjustment_reason', 'Manual adjustment by evaluator.'),
+                })
+
             validated_scores.append({
                 'question_number': q_num,
                 'marks_obtained': marks_obtained,
                 'max_marks': max_marks,
-                'feedback': feedback
+                'feedback': feedback,
+                'criterion_scores': criterion_scores,
+                'status': q_status,
+                'admin_notes': admin_notes,
+                'strengths': strengths,
+                'improvements': improvements,
+                'student_answer_text': student_answer_text,
             })
             total_score += marks_obtained
             total_max += max_marks
@@ -1317,6 +1559,12 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
             submission.evaluator = request.user
             submission.evaluated_at = timezone.now()
             submission.status = 'evaluated'
+            submission.evaluation_status = 'admin_confirmed'
+
+            if audit_entries:
+                trail = list(submission.audit_trail or [])
+                trail.extend(audit_entries)
+                submission.audit_trail = trail
 
             submission.question_scores.all().delete()
             for q in validated_scores:
@@ -1325,7 +1573,13 @@ class AdminSubjectiveSubmissionViewSet(viewsets.ModelViewSet):
                     question_number=q['question_number'],
                     marks_obtained=q['marks_obtained'],
                     max_marks=q['max_marks'],
-                    feedback=q['feedback']
+                    feedback=q['feedback'],
+                    criterion_scores=q['criterion_scores'],
+                    status=q['status'],
+                    admin_notes=q['admin_notes'],
+                    strengths=q['strengths'],
+                    improvements=q['improvements'],
+                    student_answer_text=q['student_answer_text'],
                 )
 
             attempt = submission.attempt

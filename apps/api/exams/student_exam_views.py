@@ -1086,8 +1086,20 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         from .attempt_timing import is_subjective_exam
         is_subj = is_subjective_exam(attempt)
 
-        # For objective exams with restricted visibility:
-        if not is_subj:
+        # For subjective exams, never expose results until published
+        if is_subj:
+            if hasattr(attempt, 'subjective_submission') and not attempt.subjective_submission.is_published:
+                return Response(
+                    {'detail': 'Your subjective answers are currently being evaluated. Results will be published once evaluation is complete.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            elif not hasattr(attempt, 'subjective_submission') and attempt.status != 'evaluated':
+                return Response(
+                    {'detail': 'Your subjective answers are currently being evaluated. Results will be published once evaluation is complete.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        else:
+            # For objective exams with restricted visibility:
             if attempt.examination.result_visibility == 'manual' and attempt.status != 'evaluated':
                 return Response({'detail': 'Result pending manual review.'}, status=status.HTTP_403_FORBIDDEN)
                 
@@ -1241,6 +1253,18 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             except Exception as notif_err:
                 import logging
                 logging.getLogger(__name__).warning("Failed to send admin subjective submission notification: %s", notif_err)
+
+            # Trigger background AI auto-marking
+            try:
+                from .tasks import process_subjective_submission_task
+                process_subjective_submission_task.delay(submission.id)
+            except Exception:
+                try:
+                    from .subjective_auto_marking_service import SubjectiveAutoMarkingService
+                    SubjectiveAutoMarkingService().evaluate_submission(submission)
+                except Exception as eval_err:
+                    import logging
+                    logging.getLogger(__name__).warning("Fallback auto-marking failed: %s", eval_err)
 
             return Response({
                 'detail': 'Answer sheet uploaded and submitted successfully.',

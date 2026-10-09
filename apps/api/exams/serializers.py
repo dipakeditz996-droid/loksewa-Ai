@@ -532,11 +532,49 @@ class SubjectiveSubmissionPageSerializer(serializers.ModelSerializer):
 
 class SubjectiveQuestionScoreSerializer(serializers.ModelSerializer):
     question_text = serializers.CharField(source='question.text', read_only=True)
+    question_label = serializers.SerializerMethodField()
+    model_solution = serializers.SerializerMethodField()
+    rubric = serializers.SerializerMethodField()
 
     class Meta:
         from .models import SubjectiveQuestionScore
         model = SubjectiveQuestionScore
-        fields = ['id', 'question', 'question_text', 'question_number', 'marks_obtained', 'max_marks', 'feedback']
+        fields = [
+            'id', 'question', 'question_text', 'question_number', 'question_label',
+            'marks_obtained', 'max_marks', 'feedback', 'criterion_scores', 'status',
+            'confidence_score', 'review_reason', 'admin_notes', 'strengths',
+            'improvements', 'student_answer_text', 'pages_referred', 'rubric_snapshot',
+            'model_solution', 'rubric'
+        ]
+
+    def get_question_label(self, obj):
+        try:
+            eq = obj.submission.attempt.examination.examination_questions.filter(order=obj.question_number).first()
+            if eq:
+                return eq.display_number
+        except Exception:
+            pass
+        return f"Q{obj.question_number}"
+
+    def get_model_solution(self, obj):
+        try:
+            eq = obj.submission.attempt.examination.examination_questions.filter(order=obj.question_number).first()
+            if eq and eq.model_solution:
+                return eq.model_solution
+        except Exception:
+            pass
+        return getattr(obj.question, 'model_answer', '') if obj.question else ''
+
+    def get_rubric(self, obj):
+        if obj.rubric_snapshot:
+            return obj.rubric_snapshot
+        try:
+            eq = obj.submission.attempt.examination.examination_questions.filter(order=obj.question_number).first()
+            if eq and eq.rubric:
+                return eq.rubric
+        except Exception:
+            pass
+        return []
 
 
 class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
@@ -568,7 +606,8 @@ class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
             'examination_id', 'examination_title', 'course_id', 'course_title',
             'status', 'attempt_status', 'started_at',
             'submitted_at', 'page_count', 'file_size_bytes', 'has_answer_pdf', 'is_pdf', 'file_name',
-            'score', 'total_marks', 'percentage', 'ocr_status', 'evaluator', 'evaluator_name',
+            'score', 'total_marks', 'percentage', 'ocr_status', 'evaluation_status', 'quality_gate_passed',
+            'evaluator', 'evaluator_name',
             'evaluated_at', 'is_published', 'published_at', 'checking_request', 'created_at', 'updated_at'
         ]
 
@@ -665,6 +704,7 @@ class AdminSubjectiveSubmissionDetailSerializer(serializers.ModelSerializer):
             'status', 'attempt_status', 'started_at',
             'submitted_at', 'time_taken_seconds', 'page_count', 'file_size_bytes', 'has_answer_pdf',
             'is_pdf', 'file_name', 'raw_ocr_text', 'extracted_text', 'ocr_status', 'ocr_error',
+            'evaluation_status', 'quality_gate_passed', 'quality_gate_details', 'audit_trail',
             'score', 'total_marks', 'percentage', 'evaluator', 'evaluator_name', 'evaluator_feedback',
             'evaluated_at', 'is_published', 'published_at', 'pages', 'question_scores', 'checking_request',
             'created_at', 'updated_at'

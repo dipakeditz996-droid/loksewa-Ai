@@ -346,6 +346,12 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         from .tasks import enqueue_payment_verification
         transaction.on_commit(partial(enqueue_payment_verification, payment.id))
 
+    @action(detail=True, methods=['get'], url_path='status')
+    def status_check(self, request, pk=None):
+        payment = self.get_object()
+        serializer = self.get_serializer(payment)
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def approve(self, request, pk=None):
         payment = self.get_object()

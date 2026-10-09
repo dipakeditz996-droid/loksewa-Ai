@@ -17,18 +17,45 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 from core import google_drive
 
 
+def _drive_file_id_matches(value, file_id):
+    """Return True when the stored Drive-backed file value resolves to the same
+    file ID. The backend stores Drive object names in the form
+    '<file_id>__original.pdf', so exact ID comparison is safer than a broad
+    substring match that can accidentally classify unrelated files as protected."""
+    if not value:
+        return False
+    name = str(value).replace('\\', '/')
+    if '/' in name:
+        name = name.rsplit('/', 1)[1]
+    if '__' not in name:
+        return False
+    stored_id, _, _ = name.partition('__')
+    return stored_id == file_id
+
+
 @xframe_options_exempt
 def drive_media_proxy(request, file_id):
     from notes.models import StudyMaterial
     from exams.models import Examination, SubjectiveSubmission
     from django.http import HttpResponseForbidden
 
-    # Reject unauthenticated/direct proxy access for protected course resources
-    is_protected = (
-        StudyMaterial.objects.filter(file__contains=file_id).exists() or
-        Examination.objects.filter(question_paper_pdf__contains=file_id).exists() or
-        SubjectiveSubmission.objects.filter(answer_pdf__contains=file_id).exists()
+    # Reject unauthenticated/direct proxy access for genuinely protected materials.
+    # Official syllabus PDFs remain public; only restricted exam/submission materials
+    # should be blocked through this proxy.
+    protected_study_materials = StudyMaterial.objects.exclude(content_category='syllabus').only('file')
+    is_protected = any(
+        _drive_file_id_matches(material.file.name, file_id)
+        for material in protected_study_materials
     )
+
+    if not is_protected:
+        question_paper_values = Examination.objects.filter(question_paper_pdf__isnull=False).values_list('question_paper_pdf', flat=True)
+        answer_pdf_values = SubjectiveSubmission.objects.filter(answer_pdf__isnull=False).values_list('answer_pdf', flat=True)
+        is_protected = any(
+            _drive_file_id_matches(value, file_id)
+            for value in list(question_paper_values) + list(answer_pdf_values)
+        )
+
     if is_protected:
         return HttpResponseForbidden("Direct access to protected materials via Drive proxy is forbidden. Please access files via the authorized download API.")
 

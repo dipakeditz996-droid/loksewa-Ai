@@ -549,19 +549,92 @@ export default function ExamResultPage() {
               {questionScoresList.length > 0 && (
                 <Card className="border-border/60 shadow-sm">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Question-Wise Marks Breakdown</CardTitle>
+                    <CardTitle className="text-base font-bold">Question-Wise Marks &amp; Rubric Feedback</CardTitle>
+                    <CardDescription className="text-xs">
+                      Detailed assessment of each answer against the official expert rubric
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="divide-y divide-border/60">
+                    <div className="space-y-4">
                       {questionScoresList.map((qs: any, i: number) => (
-                        <div key={i} className="py-3 flex items-center justify-between">
-                          <div>
-                            <span className="font-semibold text-sm">Question #{qs.question_number}</span>
-                            {qs.feedback && <p className="text-xs text-muted-foreground mt-0.5">{qs.feedback}</p>}
+                        <div key={i} className="p-4 rounded-xl border border-border/70 bg-card space-y-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-border/50">
+                            <div>
+                              <span className="font-bold text-sm text-foreground">
+                                Question #{qs.question_number}
+                              </span>
+                              {qs.evaluation_type && (
+                                <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] uppercase font-mono bg-muted text-muted-foreground">
+                                  {qs.evaluation_type}
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-extrabold text-sm text-primary">
+                              {qs.marks_obtained} / {qs.max_marks} marks
+                            </span>
                           </div>
-                          <span className="font-bold text-sm">
-                            {qs.marks_obtained} / {qs.max_marks}
-                          </span>
+
+                          {/* Criterion breakdown if available */}
+                          {qs.criterion_scores && qs.criterion_scores.length > 0 && (
+                            <div className="p-2.5 rounded-lg bg-muted/30 border border-border/40 text-xs space-y-1.5">
+                              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+                                Criterion Scores
+                              </span>
+                              {qs.criterion_scores.map((crit: any, cIdx: number) => (
+                                <div key={cIdx} className="flex justify-between items-center text-xs">
+                                  <span className="text-foreground/90">{crit.criterion}</span>
+                                  <span className="font-semibold text-primary">
+                                    {crit.awarded_marks} / {crit.max_marks}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Strengths */}
+                          {qs.strengths && qs.strengths.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide flex items-center gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> What You Did Well:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {qs.strengths.map((str: string, sIdx: number) => (
+                                  <span
+                                    key={sIdx}
+                                    className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-500/20"
+                                  >
+                                    {str}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Improvements */}
+                          {qs.improvements && qs.improvements.length > 0 && (
+                            <div className="space-y-1">
+                              <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide flex items-center gap-1">
+                                <Info className="w-3.5 h-3.5" /> Suggested Improvements:
+                              </span>
+                              <div className="flex flex-wrap gap-1.5">
+                                {qs.improvements.map((imp: string, iIdx: number) => (
+                                  <span
+                                    key={iIdx}
+                                    className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs border border-amber-500/20"
+                                  >
+                                    {imp}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* General feedback remark */}
+                          {qs.feedback && (
+                            <div className="pt-1 text-xs text-muted-foreground italic">
+                              Examiner note: &ldquo;{qs.feedback}&rdquo;
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

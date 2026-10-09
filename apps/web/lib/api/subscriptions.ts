@@ -86,6 +86,32 @@ export interface SubscriptionPayment {
   note: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   rejection_reason: string;
+  verification_status?: "PENDING" | "VERIFICATION_IN_PROGRESS" | "VERIFIED_CONFIDENT" | "VERIFIED_UNCERTAIN" | "VERIFICATION_FAILED";
+  verification_status_display?: string;
+  verification_result?: {
+    outcome?: "AUTO_VERIFIED" | "NEEDS_ADMIN_REVIEW" | "REJECTED";
+    detected_amount?: string | null;
+    detected_transaction_id?: string | null;
+    detected_date?: string | null;
+    detected_time?: string | null;
+    detected_recipient?: string | null;
+    detected_status?: string | null;
+    detected_provider?: string | null;
+    detected_bank_name?: string | null;
+    detected_sender_name?: string | null;
+    detected_sender_account?: string | null;
+    detected_recipient_account?: string | null;
+    amount_matches?: boolean;
+    transaction_id_matches?: boolean;
+    receiver_matches?: boolean;
+    date_matches?: boolean;
+    payment_completed?: boolean;
+    is_duplicate_transaction?: boolean;
+    is_duplicate_image?: boolean;
+    failure_reasons?: string[];
+    notes?: string | null;
+    error_message?: string;
+  } | null;
   submitted_at: string;
   verified_at: string | null;
   verified_by: number | null;
@@ -119,6 +145,8 @@ export const subscriptionsApi = {
     return apiClient<AvailablePlansResponse>(`/subscriptions/plans/available/${qs}`);
   },
   getPlan: (id: number | string): Promise<SubscriptionPlan> => apiClient<SubscriptionPlan>(`/subscriptions/plans/${id}/`),
+  getPayment: (id: number | string): Promise<SubscriptionPayment> => apiClient<SubscriptionPayment>(`/subscriptions/payments/${id}/`),
+  getPaymentStatus: (id: number | string): Promise<SubscriptionPayment> => apiClient<SubscriptionPayment>(`/subscriptions/payments/${id}/status/`),
   mySubscriptions: (): Promise<Subscription[]> => apiClient<Subscription[]>("/subscriptions/my-subscriptions/"),
   myPayments: (): Promise<SubscriptionPayment[]> => apiClient<SubscriptionPayment[]>("/subscriptions/payments/"),
   submitPayment: (formData: FormData): Promise<SubscriptionPayment> =>

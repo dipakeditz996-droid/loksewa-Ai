@@ -389,3 +389,444 @@ Value Date: {today}
         self.assertTrue(res["amount_matches"])
         self.assertTrue(res["transaction_id_matches"])
         self.assertTrue(res["receiver_matches"])
+
+    # -------------------------------------------------------------------------
+    # eSewa edge cases
+    # -------------------------------------------------------------------------
+
+    def test_esewa_blurry_unreadable_goes_to_admin_review(self):
+        """Blurry or illegible eSewa screenshot is routed to admin review."""
+        payment = self._create_payment(amount="150.00", txn="1SSZYH4")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=("blurry text", "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["receipt_legible"])
+        self.assertTrue(any("illegible text" in r.lower() or "blurry" in r.lower() for r in res["failure_reasons"]))
+
+    # -------------------------------------------------------------------------
+    # Khalti Test Matrix
+    # -------------------------------------------------------------------------
+
+    def test_khalti_alternative_mobile_layout_auto_verified(self):
+        """Khalti mobile layout with 'Paid to' and 12-hour timestamp verifies successfully."""
+        today = timezone.localtime(timezone.now()).date().strftime("%d %b %Y")
+        ocr_sample = f"""
+Payment Successful
+Khalti
+Rs. 150.00
+Paid to: Loksewa Nepal
+Mobile: 9851234567
+Date: {today} 11:45 AM
+Transaction ID: KHL-99881122
+"""
+        payment = self._create_payment(amount="150.00", txn="KHL-99881122", method=self.khalti_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertEqual(res["detected_provider"], "Khalti")
+        self.assertTrue(res["amount_matches"])
+        self.assertTrue(res["transaction_id_matches"])
+        self.assertTrue(res["receiver_matches"])
+        self.assertEqual(res["detected_amount"], "150.00")
+        self.assertEqual(res["detected_time"], "11:45 AM")
+
+    def test_khalti_wrong_amount_fails_auto_verify(self):
+        """Khalti screenshot with wrong amount goes to admin review."""
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Khalti
+Payment Successful
+Amount: Rs. 300.00
+Receiver: Loksewa Nepal
+Txn ID: KHL-WRONG-AMT
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="KHL-WRONG-AMT", method=self.khalti_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["amount_matches"])
+        self.assertTrue(any("Amount mismatch" in r for r in res["failure_reasons"]))
+
+    def test_khalti_wrong_date_fails_auto_verify(self):
+        """Khalti screenshot with date from 90 days ago goes to admin review."""
+        old_date = (timezone.localtime(timezone.now()).date() - timedelta(days=90)).strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Khalti
+Payment Successful
+Amount: Rs. 150.00
+Receiver: Loksewa Nepal
+Txn ID: KHL-OLD-DATE
+Date: {old_date}
+"""
+        payment = self._create_payment(amount="150.00", txn="KHL-OLD-DATE", method=self.khalti_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["date_matches"])
+        self.assertTrue(any("older than 60 days" in r for r in res["failure_reasons"]))
+
+    def test_khalti_wrong_merchant_fails_auto_verify(self):
+        """Khalti screenshot paid to another merchant goes to admin review."""
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Khalti
+Payment Successful
+Amount: Rs. 150.00
+Receiver: Other Unrelated Business
+Txn ID: KHL-WRONG-MCH
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="KHL-WRONG-MCH", method=self.khalti_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["receiver_matches"])
+
+    def test_khalti_duplicate_transaction_fails_auto_verify(self):
+        """Khalti transaction already approved cannot be reused."""
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.khalti_method,
+            amount=Decimal("150.00"),
+            transaction_id="KHL-DUP-1122",
+            screenshot=SimpleUploadedFile("kold.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Khalti Digital Wallet
+Transaction Successful
+Amount: Rs. 150.00
+Receiver: Loksewa Nepal
+Txn ID: KHL-DUP-1122
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="KHL-DUP-1122", method=self.khalti_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+
+    # -------------------------------------------------------------------------
+    # Bank Transfer Test Matrix
+    # -------------------------------------------------------------------------
+
+    def test_bank_nic_asia_auto_verified(self):
+        """NIC Asia Bank transfer auto-verifies when details match."""
+        self.bank_method.bank_name = "NIC ASIA Bank"
+        self.bank_method.account_number = "22334455667788"
+        self.bank_method.save()
+
+        today = timezone.localtime(timezone.now()).date().strftime("%d/%m/%Y")
+        ocr_sample = f"""
+NIC ASIA MoBank
+Transfer Successful
+NPR 150.00
+Transferred To: Loksewa Institute Pvt Ltd
+Beneficiary Account: 22334455667788
+Transaction Number: NICASIA-TXN-778899
+Date: {today} 14:15
+"""
+        payment = self._create_payment(amount="150.00", txn="NICASIA-TXN-778899", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertEqual(res["detected_provider"], "Bank")
+        self.assertEqual(res["detected_bank_name"], "NIC ASIA Bank")
+        self.assertTrue(res["amount_matches"])
+        self.assertTrue(res["transaction_id_matches"])
+        self.assertTrue(res["receiver_matches"])
+
+    def test_bank_global_ime_auto_verified(self):
+        """Global IME Bank transfer auto-verifies."""
+        self.bank_method.bank_name = "Global IME Bank"
+        self.bank_method.account_number = "09876543210123"
+        self.bank_method.save()
+
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Global IME Bank
+Fund Transfer Successful
+Debit Amount: NPR 150.00
+Sender Name: Ram Sharma
+Beneficiary Name: Loksewa Institute Pvt Ltd
+Beneficiary A/C: 09876543210123
+Journal Number: GIME-JRN-445566
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="GIME-JRN-445566", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertEqual(res["detected_provider"], "Bank")
+        self.assertEqual(res["detected_bank_name"], "Global IME Bank")
+        self.assertEqual(res["detected_sender_name"], "Ram Sharma")
+        self.assertTrue(res["amount_matches"])
+        self.assertTrue(res["transaction_id_matches"])
+
+    def test_bank_connect_ips_auto_verified(self):
+        """ConnectIPS interbank transfer auto-verifies."""
+        today = timezone.localtime(timezone.now()).date().strftime("%d-%m-%Y")
+        ocr_sample = f"""
+ConnectIPS Transfer
+Payment Successful
+Transfer Amount: NPR 150.00
+Credited To: Loksewa Institute Pvt Ltd
+Credited A/C: 01234567890123
+Trace Number: CIPS-TRACE-112233
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="CIPS-TRACE-112233", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertEqual(res["detected_provider"], "Bank")
+        self.assertEqual(res["detected_bank_name"], "ConnectIPS")
+        self.assertTrue(res["amount_matches"])
+        self.assertTrue(res["transaction_id_matches"])
+        self.assertTrue(res["receiver_matches"])
+
+    def test_bank_masked_account_matches(self):
+        """Bank receipt with masked account matching last 4 digits verifies successfully."""
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        # Configured account number in self.bank_method is "01234567890123", ending with "0123"
+        ocr_sample = f"""
+Nabil Bank
+Transaction Successful
+Amount: NPR 150.00
+Beneficiary Name: Loksewa Institute Pvt Ltd
+Beneficiary Account: XXXXXXXX0123
+RRN: RRN-MASK-9988
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="RRN-MASK-9988", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["receiver_matches"])
+
+    def test_bank_wrong_beneficiary_fails_auto_verify(self):
+        """Bank transfer to another beneficiary fails receiver match and goes to admin review."""
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Nabil Bank
+Fund Transfer Successful
+Debit Amount: NPR 150.00
+Beneficiary Name: Completely Different Person
+Beneficiary A/C: 99999999999999
+Reference Number: NABIL-WRONG-REC
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="NABIL-WRONG-REC", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["receiver_matches"])
+
+    def test_bank_wrong_amount_fails_auto_verify(self):
+        """Bank transfer with mismatched amount goes to admin review."""
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Nabil Bank
+Fund Transfer Successful
+Debit Amount: NPR 5000.00
+Beneficiary Name: Loksewa Institute Pvt Ltd
+Beneficiary A/C: 01234567890123
+Reference Number: NABIL-WRONG-AMT
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="NABIL-WRONG-AMT", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["amount_matches"])
+
+    def test_bank_duplicate_transaction_fails_auto_verify(self):
+        """Bank reference number already used cannot be auto-verified."""
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.bank_method,
+            amount=Decimal("150.00"),
+            transaction_id="NABIL-DUP-REF",
+            screenshot=SimpleUploadedFile("bold.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Nabil Bank
+Fund Transfer Successful
+Debit Amount: NPR 150.00
+Beneficiary Name: Loksewa Institute Pvt Ltd
+Beneficiary A/C: 01234567890123
+Reference Number: NABIL-DUP-REF
+Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="NABIL-DUP-REF", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+
+    # -------------------------------------------------------------------------
+    # Cross-Provider Duplicate Tests
+    # -------------------------------------------------------------------------
+
+    def test_cross_provider_esewa_txn_reused_in_khalti_fails(self):
+        """An eSewa transaction code reused in a Khalti submission is flagged as duplicate."""
+        # Existing eSewa payment approved
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="SHARED-TXN-1122",
+            screenshot=SimpleUploadedFile("esewa.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Khalti Digital Wallet
+Transaction Successful
+Amount: Rs. 150.00
+Receiver: Loksewa Nepal
+Txn ID: SHARED-TXN-1122
+Date: {today}
+"""
+        # Submitted as Khalti
+        khalti_payment = self._create_payment(amount="150.00", txn="SHARED-TXN-1122", method=self.khalti_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(khalti_payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+
+    def test_cross_provider_khalti_txn_reused_in_bank_fails(self):
+        """A Khalti transaction ID reused in a Bank transfer is flagged as duplicate."""
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.khalti_method,
+            amount=Decimal("150.00"),
+            transaction_id="KHL-BANK-CROSS-1",
+            screenshot=SimpleUploadedFile("khalti.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Nabil Bank
+Fund Transfer Successful
+Debit Amount: NPR 150.00
+Beneficiary Name: Loksewa Institute Pvt Ltd
+Beneficiary A/C: 01234567890123
+Reference Number: KHL-BANK-CROSS-1
+Date: {today}
+"""
+        bank_payment = self._create_payment(amount="150.00", txn="KHL-BANK-CROSS-1", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(bank_payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+
+    def test_same_txn_reused_by_another_student_fails(self):
+        """Another student attempting to reuse an approved transaction code is flagged."""
+        student_b = User.objects.create_user(username="student_b", password="pw", role="student")
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="STUDENT-A-TXN",
+            screenshot=SimpleUploadedFile("a.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+        today_str = timezone.localtime(timezone.now()).date().strftime("%d %b, %Y").upper()
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 02:32 PM
+Transaction Code
+STUDENT-A-TXN
+"""
+        img_bytes = _create_test_image_bytes()
+        upload = SimpleUploadedFile("b.png", img_bytes, content_type="image/png")
+        payment_b = SubscriptionPayment.objects.create(
+            student=student_b,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="STUDENT-A-TXN",
+            screenshot=upload,
+            status="PENDING",
+        )
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment_b)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+        self.assertTrue(any("already used in Payment" in r for r in res["failure_reasons"]))
+
+    def test_normalized_payment_verification_data_structure(self):
+        """Check that verification_data contains the normalized fields required."""
+        today = timezone.localtime(timezone.now()).date().strftime("%Y-%m-%d")
+        ocr_sample = f"""
+Nabil Bank Mobile Banking
+Fund Transfer Successful
+Debit Amount: NPR 150.00
+Beneficiary Name: Loksewa Institute Pvt Ltd
+Beneficiary A/C: 01234567890123
+Reference Number: NABIL998877
+Value Date: {today}
+"""
+        payment = self._create_payment(amount="150.00", txn="NABIL998877", method=self.bank_method)
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertIn("verification_data", res)
+        vdata = res["verification_data"]
+        self.assertEqual(vdata["provider"], "Bank")
+        self.assertEqual(vdata["amount"], "150.00")
+        self.assertEqual(vdata["currency"], "NPR")
+        self.assertEqual(vdata["bank_name"], "Nabil Bank")
+        self.assertEqual(vdata["transaction_id"], "NABIL998877")
+        self.assertEqual(vdata["transaction_date"], today)
+
+    # -------------------------------------------------------------------------
+    # Live Status Endpoint Tests
+    # -------------------------------------------------------------------------
+
+    def test_student_can_check_payment_status(self):
+        """Student can check status of their payment via GET /api/subscriptions/payments/{id}/status/."""
+        payment = self._create_payment(amount="150.00", txn="STATUS-CHECK-1")
+        self.client.force_authenticate(user=self.student)
+        response = self.client.get(f"/api/subscriptions/payments/{payment.id}/status/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["id"], payment.id)
+        self.assertEqual(response.data["status"], "PENDING")
+        self.assertIn("verification_status", response.data)
+
+    def test_student_cannot_check_other_student_payment(self):
+        """Student cannot query status of another student's payment."""
+        other_student = User.objects.create_user(username="other_stud", password="pw", role="student")
+        payment = self._create_payment(amount="150.00", txn="OTHER-STUD-1")
+        self.client.force_authenticate(user=other_student)
+        response = self.client.get(f"/api/subscriptions/payments/{payment.id}/status/")
+        self.assertEqual(response.status_code, 404)
+
+

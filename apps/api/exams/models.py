@@ -754,6 +754,10 @@ class Examination(models.Model):
     expert_solution_file_size = models.IntegerField(default=0, blank=True)
     is_expert_solution_published = models.BooleanField(default=False)
     expert_solution_published_at = models.DateTimeField(null=True, blank=True)
+    expert_solution_extracted_text = models.TextField(blank=True, help_text="Text extracted from Expert Solution PDF")
+    expert_solution_rubric_generated = models.BooleanField(default=False)
+    expert_solution_version = models.IntegerField(default=1)
+    auto_publish_eligible = models.BooleanField(default=False, help_text="Auto-publish results when AI quality gate passes")
 
     # Moderation Workflow
     reviewer_comment = models.TextField(blank=True, null=True)
@@ -928,6 +932,24 @@ class ExaminationQuestion(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
     order = models.IntegerField(default=0)
     marks = models.FloatField(default=1)
+    question_number = models.CharField(max_length=20, blank=True, help_text="Canonical label, e.g. Q1, Q2, 1(a)")
+    evaluation_type = models.CharField(
+        max_length=30, default='descriptive',
+        choices=(
+            ('descriptive', 'Descriptive'),
+            ('numerical', 'Numerical/Derivation'),
+            ('diagram', 'Diagram-based'),
+            ('mcq', 'Objective MCQ'),
+        )
+    )
+    model_solution = models.TextField(blank=True, help_text="Solution extracted for this question")
+    rubric = models.JSONField(default=list, blank=True, help_text="Structured marking rubric criteria")
+    rubric_approved = models.BooleanField(default=False)
+    rubric_version = models.IntegerField(default=1)
+
+    @property
+    def display_number(self):
+        return self.question_number or f"Q{self.order}"
 
     class Meta:
         unique_together = ('examination', 'question')
@@ -1032,6 +1054,23 @@ class SubjectiveSubmission(models.Model):
     is_published = models.BooleanField(default=False)
     published_at = models.DateTimeField(null=True, blank=True)
 
+    # Auto-Marking & Quality Gate
+    evaluation_status = models.CharField(
+        max_length=30, default='pending',
+        choices=(
+            ('pending', 'Pending'),
+            ('ocr_processing', 'OCR Processing'),
+            ('ai_evaluating', 'AI Evaluating'),
+            ('ai_evaluated', 'AI Evaluated'),
+            ('needs_review', 'Needs Review'),
+            ('admin_confirmed', 'Admin Confirmed'),
+            ('published', 'Published'),
+        )
+    )
+    quality_gate_passed = models.BooleanField(default=False)
+    quality_gate_details = models.JSONField(default=dict, blank=True)
+    audit_trail = models.JSONField(default=list, blank=True, help_text="Audit log of score changes")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1068,6 +1107,25 @@ class SubjectiveQuestionScore(models.Model):
     marks_obtained = models.FloatField(default=0)
     max_marks = models.FloatField(default=10)
     feedback = models.TextField(blank=True)
+
+    criterion_scores = models.JSONField(default=list, blank=True, help_text="Criterion-wise partial scores")
+    status = models.CharField(
+        max_length=30, default='pending',
+        choices=(
+            ('pending', 'Pending'),
+            ('ai_evaluated', 'AI Evaluated'),
+            ('needs_review', 'Needs Review'),
+            ('admin_confirmed', 'Admin Confirmed'),
+        )
+    )
+    confidence_score = models.FloatField(default=1.0)
+    review_reason = models.TextField(blank=True)
+    admin_notes = models.TextField(blank=True, help_text="Internal evaluator notes")
+    strengths = models.TextField(blank=True, help_text="What student did well")
+    improvements = models.TextField(blank=True, help_text="Suggested improvements")
+    student_answer_text = models.TextField(blank=True, help_text="Extracted student answer text")
+    pages_referred = models.JSONField(default=list, blank=True, help_text="Source page numbers")
+    rubric_snapshot = models.JSONField(default=list, blank=True, help_text="Approved rubric criteria snapshot")
 
     class Meta:
         ordering = ['question_number', 'id']

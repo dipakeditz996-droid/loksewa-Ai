@@ -109,13 +109,14 @@ export default function CheckoutPage() {
         formData.append("course_ids", course.id.toString());
       });
       
-      await subscriptionsApi.submitPayment(formData);
-      setSuccess(true);
+      const res = await subscriptionsApi.submitPayment(formData);
       
       // Clear localStorage
       localStorage.removeItem("onboarding_selected_plan_id");
       localStorage.removeItem("onboarding_selected_courses");
       
+      // Navigate to live payment verification screen
+      router.push(`/student/payment/verification/${res.id}`);
     } catch (err: any) {
       console.error(err);
       setError(err.message || "Payment submission failed. Please try again.");

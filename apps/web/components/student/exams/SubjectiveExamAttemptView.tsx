@@ -538,6 +538,38 @@ export function SubjectiveExamAttemptView({
               </div>
             ) : (
               <>
+                {/* Section 5: Student Answer-Sheet Disclaimer Panel */}
+                <div className="rounded-xl border border-amber-500/40 bg-gradient-to-br from-amber-950/30 to-slate-900/60 p-4 sm:p-5 space-y-3 shadow-md">
+                  <div className="flex items-center gap-2.5 text-amber-300 font-bold text-sm sm:text-base">
+                    <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span>Important: Answer Numbering Instructions</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+                    Please clearly write the correct question number before every answer, for example, <strong className="text-white">Q.No. 1</strong>, <strong className="text-white">Q.No. 2</strong> and <strong className="text-white">Q.No. 3</strong>. Keep each answer identifiable and separate from the next answer. If a question has subparts, clearly label them as <strong className="text-white">Q.No. 1(a)</strong>, <strong className="text-white">Q.No. 1(b)</strong>, etc. If an answer continues on another page, clearly indicate that it continues the previous question.
+                  </p>
+                  <p className="text-xs text-amber-200/90 leading-relaxed font-medium">
+                    The system uses these question numbers to match your answers with the correct questions and Expert Solutions. Missing or unclear numbering may require manual evaluation.
+                  </p>
+                  <div className="pt-2 border-t border-amber-500/20 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] sm:text-xs text-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Upload clear, high-contrast, well-lit pages</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Keep all pages in correct numerical order</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Avoid blurred, cropped or unreadable scans</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Label question subparts (a, b) and continuations</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Upload action buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Camera capture */}

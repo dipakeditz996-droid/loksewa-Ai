@@ -177,19 +177,9 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
 
     try {
       const res = await subscriptionsApi.submitPayment(formData);
-      setSubmitSuccess({
-        paymentId: res.id,
-        planName: plan.name,
-        amount: plan.price,
-        transactionId: transactionId.trim(),
-        selectedCoursesCount: selectedCourseIds.length,
-      });
-      // The dashboard's package block (latestPayment/status) and enrollment
-      // status both just changed server-side - targeted invalidation so the
-      // student sees "pending verification" immediately on their next visit
-      // instead of stale "no package" data for up to the cache's staleTime.
       queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["my-enrollment"] });
+      router.push(`/student/payment/verification/${res.id}`);
     } catch (err: any) {
       console.error(err);
       let msg = err.detail || err.error || err.message;

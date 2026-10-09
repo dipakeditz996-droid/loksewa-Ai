@@ -187,12 +187,62 @@ export interface SubjectiveSubmissionPage {
   created_at: string;
 }
 
+export interface CriterionScore {
+  criterion: string;
+  max_marks: number;
+  awarded_marks: number;
+  comment?: string;
+}
+
+export interface RubricCriterion {
+  criterion: string;
+  max_marks: number;
+  expected_concepts?: string[];
+  alternative_explanations?: string[];
+  formula_or_steps?: string[];
+  diagram_requirements?: string[];
+  partial_credit_rules?: string[];
+  misconceptions?: string[];
+}
+
+export interface QuestionRubricData {
+  question_id: number;
+  question_number: number;
+  display_number?: string;
+  marks: number;
+  evaluation_type?: 'descriptive' | 'numerical' | 'diagram' | 'mcq' | string;
+  model_solution?: string;
+  rubric: RubricCriterion[];
+  rubric_approved?: boolean;
+  rubric_version?: number;
+}
+
+export interface ExamRubricsResponse {
+  exam_id: number;
+  exam_title: string;
+  is_expert_solution_published: boolean;
+  rubrics: QuestionRubricData[];
+}
+
 export interface SubjectiveQuestionScore {
   id: number;
   question_number: number;
+  question_id?: number;
+  question_text?: string;
   marks_obtained: number;
   max_marks: number;
   feedback: string;
+  evaluation_type?: string;
+  status?: string;
+  confidence_score?: number;
+  review_reason?: string;
+  admin_notes?: string;
+  strengths?: string[];
+  improvements?: string[];
+  student_answer_text?: string;
+  pages_referred?: number[];
+  criterion_scores?: CriterionScore[];
+  rubric_snapshot?: RubricCriterion[];
 }
 
 export interface AdminSubjectiveSubmissionDetail extends AdminSubjectiveSubmission {
@@ -203,6 +253,23 @@ export interface AdminSubjectiveSubmissionDetail extends AdminSubjectiveSubmissi
   evaluator_feedback: string;
   pages: SubjectiveSubmissionPage[];
   question_scores: SubjectiveQuestionScore[];
+  evaluation_status?: 'pending' | 'ocr_processing' | 'ai_evaluating' | 'ai_evaluated' | 'needs_review' | 'admin_confirmed' | 'result_published';
+  quality_gate_passed?: boolean;
+  quality_gate_details?: {
+    checks: Record<string, boolean>;
+    flags: string[];
+    avg_confidence: number;
+    all_questions_mapped: boolean;
+  };
+  audit_trail?: {
+    action: string;
+    by?: string;
+    at: string;
+    notes?: string;
+    previous_score?: number;
+    new_score?: number;
+    changes?: any[];
+  }[];
 }
 
 export interface AdminExaminationRequest {
@@ -648,6 +715,44 @@ export const adminExamApi = {
     });
   },
 
+  processExpertSolution: async (id: number, options?: { force_ocr?: boolean; generate_rubrics?: boolean }) => {
+    return apiClient<{
+      detail: string;
+      questions_detected: number;
+      rubrics_generated: boolean;
+      version: number;
+    }>(`/admin/exams/${id}/process-expert-solution/`, {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    });
+  },
+
+  getRubrics: async (id: number) => {
+    return apiClient<ExamRubricsResponse>(`/admin/exams/${id}/rubrics/`);
+  },
+
+  updateRubrics: async (id: number, rubrics: Array<{ question_id: number; rubric?: any[]; model_solution?: string; rubric_approved?: boolean }>) => {
+    return apiClient<{
+      detail: string;
+      rubrics: QuestionRubricData[];
+    }>(`/admin/exams/${id}/update-rubrics/`, {
+      method: 'POST',
+      body: JSON.stringify({ rubrics }),
+    });
+  },
+
+  configureSubjectiveQuestions: async (id: number, questions: Array<{ id?: number; question_number: number; marks: number; evaluation_type?: string }>) => {
+    return apiClient<{
+      detail: string;
+      questions: any[];
+      total_marks: number;
+      total_questions: number;
+    }>(`/admin/exams/${id}/configure-subjective-questions/`, {
+      method: 'POST',
+      body: JSON.stringify({ questions }),
+    });
+  },
+
   getExamSubmissions: async (examId: number, status?: string) => {
     const query = status ? `?status=${status}` : '';
     return apiClient<AdminSubjectiveSubmission[]>(`/admin/exams/${examId}/submissions/${query}`);
@@ -693,12 +798,26 @@ export const adminExamApi = {
       score?: number;
       marks_obtained?: number;
       evaluator_feedback?: string;
-      question_scores?: { question_number: number; marks_obtained: number; max_marks: number; feedback?: string }[];
+      question_scores?: { question_number: number; marks_obtained: number; max_marks: number; feedback?: string; criterion_scores?: any[]; admin_notes?: string }[];
     }
   ) => {
     return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/evaluate/`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  autoMarkSubmission: async (submissionId: number, options?: { force?: boolean }) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/auto-mark/`, {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    });
+  },
+
+  confirmEvaluation: async (submissionId: number, data?: { notes?: string; publish?: boolean }) => {
+    return apiClient<AdminSubjectiveSubmissionDetail>(`/admin/subjective-submissions/${submissionId}/confirm-evaluation/`, {
+      method: 'POST',
+      body: JSON.stringify(data || {}),
     });
   },
 

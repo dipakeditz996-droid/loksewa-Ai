@@ -35,6 +35,10 @@ interface Payment {
     detected_date?: string | null;
     detected_time?: string | null;
     detected_status?: string | null;
+    detected_bank_name?: string | null;
+    detected_sender_name?: string | null;
+    detected_sender_account?: string | null;
+    detected_recipient_account?: string | null;
     amount_matches?: boolean;
     transaction_id_matches?: boolean;
     receiver_matches?: boolean;
@@ -489,14 +493,26 @@ export default function AdminApplicationsPage() {
                                     Provider: <span className="text-blue-600">{payment.verification_result.detected_provider}</span>
                                   </p>
                                 )}
+                                {payment.verification_result.detected_bank_name && (
+                                  <p className="text-slate-600">
+                                    Bank: <span className="text-indigo-700 font-medium">{payment.verification_result.detected_bank_name}</span>
+                                  </p>
+                                )}
                                 {payment.verification_result.detected_status && (
                                   <p className="text-slate-600">
                                     Status: <span className="text-emerald-700 font-medium">{payment.verification_result.detected_status}</span>
                                   </p>
                                 )}
+                                {payment.verification_result.detected_sender_name && (
+                                  <p className="text-slate-600">
+                                    Sender: <span className="font-medium text-slate-800">{payment.verification_result.detected_sender_name}</span>
+                                    {payment.verification_result.detected_sender_account ? ` (${payment.verification_result.detected_sender_account})` : ""}
+                                  </p>
+                                )}
                                 {payment.verification_result.detected_recipient && (
                                   <p className={payment.verification_result.receiver_matches ? "text-emerald-700 font-medium" : "text-slate-600 font-medium"}>
                                     Recipient: {payment.verification_result.detected_recipient}
+                                    {payment.verification_result.detected_recipient_account ? ` (${payment.verification_result.detected_recipient_account})` : ""}
                                     {payment.verification_result.receiver_matches ? " ✓" : ""}
                                   </p>
                                 )}

@@ -210,6 +210,10 @@ class StudentSignupView(APIView):
                         action_url='/admin-dashboard/applications',
                     )
 
+                # Auto-grant default Free Plan entitlement
+                from subscriptions.entitlements import EntitlementService
+                EntitlementService.ensure_free_plan_entitlement(user)
+
                 from administration.models import AuditLog
                 AuditLog.objects.create(
                     actor=None, action='REGISTRATION_CREATED',
@@ -289,6 +293,10 @@ class VerifyEmailOTPView(APIView):
             actor=None, action='REGISTRATION_OTP_VERIFIED',
             entity_type='User', entity_id=str(user.id), details={'email': email},
         )
+
+        # Ensure free plan entitlement is active
+        from subscriptions.entitlements import EntitlementService
+        EntitlementService.ensure_free_plan_entitlement(user)
 
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
@@ -765,6 +773,9 @@ def _get_package_status(user):
 
     active_subscription = get_active_subscription(user)
     is_admin_granted = has_admin_granted_access(user)
+    if not active_subscription and not is_admin_granted and user.is_active and getattr(user, 'role', None) == 'student':
+        from subscriptions.entitlements import EntitlementService
+        active_subscription = EntitlementService.ensure_free_plan_entitlement(user)
     latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
     latest_payment_data = None
     if latest_payment and not active_subscription:
@@ -860,6 +871,10 @@ class SocialLoginView(APIView):
             else:
                 # Teachers and admins have no onboarding requirement
                 profile_complete = True
+
+            if user.role == 'student':
+                from subscriptions.entitlements import EntitlementService
+                EntitlementService.ensure_free_plan_entitlement(user)
 
             from rest_framework_simplejwt.tokens import RefreshToken
             update_last_login(None, user)

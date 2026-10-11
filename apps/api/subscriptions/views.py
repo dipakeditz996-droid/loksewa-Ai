@@ -31,6 +31,8 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'available']:
             return [permissions.AllowAny()]
+        if self.action == 'activate_free':
+            return [permissions.IsAuthenticated()]
         return [IsAdminUser()]
 
     def get_queryset(self):
@@ -249,6 +251,7 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
             status='INACTIVE',
             is_published=False,
             is_featured=False,
+            is_default_free=False,
             terms=plan.terms,
             display_order=plan.display_order + 1,
         )
@@ -256,6 +259,37 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         new_plan.free_mock_exams.set(plan.free_mock_exams.all())
         serializer = self.get_serializer(new_plan)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='set-default-free', permission_classes=[IsAdminUser])
+    def set_default_free(self, request, pk=None):
+        plan = self.get_object()
+        if plan.price > 0:
+            return Response({'error': 'Only packages with price Rs. 0.00 can be designated as the default Free Plan.'}, status=status.HTTP_400_BAD_REQUEST)
+        if plan.status != 'ACTIVE' or not plan.is_published:
+            return Response({'error': 'Default Free Plan must be published and active.'}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            SubscriptionPlan.objects.exclude(pk=plan.pk).filter(is_default_free=True).update(is_default_free=False)
+            plan.is_default_free = True
+            plan.save(update_fields=['is_default_free'])
+        return Response({'status': 'success', 'plan_id': plan.id, 'is_default_free': True})
+
+    @action(detail=True, methods=['post'], url_path='activate-free')
+    def activate_free(self, request, pk=None):
+        plan = self.get_object()
+        if plan.price > 0:
+            return Response({'error': 'This is a paid package. Please complete the verified payment checkout.'}, status=status.HTTP_400_BAD_REQUEST)
+        if plan.status != 'ACTIVE' or not plan.is_published:
+            return Response({'error': 'This package is not currently available for activation.'}, status=status.HTTP_400_BAD_REQUEST)
+        from .entitlements import EntitlementService
+        sub = EntitlementService.activate_free_plan(request.user, plan)
+        return Response({
+            'success': True,
+            'status': 'activated',
+            'subscription_id': sub.id,
+            'plan_id': plan.id,
+            'plan_name': plan.name,
+            'message': f"Free package '{plan.name}' activated successfully."
+        })
 
     @action(detail=True, methods=['post'], url_path='toggle-status', permission_classes=[IsAdminUser])
     def toggle_status(self, request, pk=None):
@@ -375,6 +409,11 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         plan = serializer.validated_data['plan']
         if plan.status != 'ACTIVE':
             raise ValidationError({'plan': 'This package is no longer available for purchase.'})
+
+        if plan.price <= 0 or getattr(plan, 'is_default_free', False):
+            raise ValidationError({
+                "detail": "Free packages do not require payment or verification. Please activate the free package directly."
+            })
 
         is_resubmission = (
             str(self.request.data.get('is_resubmission', '')).lower() in ('true', '1')

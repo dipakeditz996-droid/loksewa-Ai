@@ -534,6 +534,16 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         # collection_id as a question source.
         tag_id = request.data.get('tag')
 
+        # Enforce Practice Entitlements
+        if request.user.role == 'student':
+            from subscriptions.entitlements import EntitlementService
+            p_allowed, p_reason, p_info = EntitlementService.check_practice_access(request.user, total_questions)
+            if not p_allowed:
+                return Response(
+                    {'detail': p_reason, 'feature': 'practice_questions', 'remaining': p_info.get('remaining', 0), 'upgrade_url': p_info.get('upgrade_url', '/student/plans')},
+                    status=403
+                )
+
         # Enforce Enrollment Access Control
         if not course_id and request.user.role == 'student':
             from courses.access import get_student_course_context
@@ -631,6 +641,10 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         )
 
         QuestionAttempt.objects.bulk_create([QuestionAttempt(session=session, question=q) for q in questions])
+
+        if request.user.role == 'student':
+            from subscriptions.entitlements import EntitlementService
+            EntitlementService.consume_practice_questions(request.user, len(questions))
 
         from .serializers import SecureQuestionSerializer
         response_data = {

@@ -74,6 +74,24 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
                 'status': 'Archived packages cannot be republished.'
             })
 
+        is_default_free = data.get('is_default_free', getattr(self.instance, 'is_default_free', False))
+        price = data.get('price', getattr(self.instance, 'price', 0))
+        status_val = data.get('status', getattr(self.instance, 'status', 'ACTIVE'))
+        is_published = data.get('is_published', getattr(self.instance, 'is_published', True))
+
+        if is_default_free:
+            from decimal import Decimal
+            try:
+                p_dec = Decimal(str(price))
+            except Exception:
+                p_dec = Decimal('0')
+            if p_dec > Decimal('0'):
+                raise serializers.ValidationError({'price': 'The default Free Plan must have a price of Rs. 0.00.'})
+            if status_val != 'ACTIVE':
+                raise serializers.ValidationError({'status': 'The default Free Plan must have an ACTIVE status.'})
+            if not is_published:
+                raise serializers.ValidationError({'is_published': 'The default Free Plan must be published.'})
+
         package_type = data.get('package_type', getattr(self.instance, 'package_type', 'SINGLE'))
         course = data.get('course', getattr(self.instance, 'course', None))
         eligible_courses = data.get('eligible_courses')

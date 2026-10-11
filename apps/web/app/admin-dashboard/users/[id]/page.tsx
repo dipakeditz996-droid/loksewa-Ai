@@ -51,7 +51,7 @@ interface UserDetail {
     adminGrantReason?: string;
     grantedBy?: string | null;
     startDate: string;
-    expiryDate: string;
+    expiryDate: string | null;
     isActive: boolean;
   }[];
   subscription?: {
@@ -65,7 +65,7 @@ interface UserDetail {
     adminGrantReason?: string;
     grantedBy?: string | null;
     startDate: string;
-    expiryDate: string;
+    expiryDate: string | null;
     isActive: boolean;
   } | null;
   examStats?: { totalAttempts: number; averagePercentage: number | null; passedCount: number };

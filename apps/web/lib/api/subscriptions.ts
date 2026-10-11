@@ -5,6 +5,8 @@ export interface SubscriptionPlan {
   name: string;
   slug?: string | null;
   description: string;
+  is_default_free?: boolean;
+  is_free?: boolean;
   has_expiry?: boolean;
   duration: number | null;
   duration_unit: "DAYS" | "WEEKS" | "MONTHS" | "YEAR" | null;
@@ -43,6 +45,13 @@ export interface SubscriptionPlan {
   is_flexible: boolean;
   allowed_preparation_count: number;
   exam_quotas?: Record<string, { enabled?: boolean; attempts?: number }>;
+  feature_limits?: Record<string, {
+    enabled?: boolean;
+    quota?: number;
+    unit?: string;
+    reset_policy?: string;
+    title?: string;
+  }>;
   free_mock_exams?: number[];
   free_mock_attempts?: number;
   notes_access_type?: "NONE" | "COURSE_NOTES" | "ALL";
@@ -192,6 +201,33 @@ export interface EffectiveEntitlements {
     remaining: number;
     is_unlimited: boolean;
   }>;
+  objective_exams?: Record<string, {
+    enabled: boolean;
+    total_allowed: number;
+    consumed: number;
+    reserved: number;
+    remaining: number;
+    is_unlimited: boolean;
+  }>;
+  subjective_exams?: Record<string, {
+    enabled: boolean;
+    total_allowed: number;
+    consumed: number;
+    reserved: number;
+    remaining: number;
+    is_unlimited: boolean;
+  }>;
+  games?: Record<string, {
+    enabled: boolean;
+    total_allowed: number;
+    consumed: number;
+    reserved: number;
+    remaining: number;
+    is_unlimited: boolean;
+  }>;
+  modules?: Record<string, {
+    enabled: boolean;
+  }>;
   ai_tutor: {
     enabled: boolean;
     total_credits: number;
@@ -263,8 +299,18 @@ export const subscriptionsApi = {
     apiClient<SubscriptionPayment>("/subscriptions/payments/", { method: "POST", body: formData }),
   resubmitPayment: (id: number | string, formData: FormData): Promise<SubscriptionPayment> =>
     apiClient<SubscriptionPayment>(`/subscriptions/payments/${id}/resubmit/`, { method: "POST", body: formData }),
+  activateFreePlan: (id: number | string, data?: { course_ids?: number[] }): Promise<{ success: boolean; message: string; subscription_id: number; is_already_active: boolean }> =>
+    apiClient<{ success: boolean; message: string; subscription_id: number; is_already_active: boolean }>(
+      `/subscriptions/plans/${id}/activate-free/`,
+      { method: "POST", body: data ? JSON.stringify(data) : undefined }
+    ),
 
   // Admin - plan CRUD & actions
+  setDefaultFreePlan: (id: number | string): Promise<{ success: boolean; message: string; is_default_free: boolean }> =>
+    apiClient<{ success: boolean; message: string; is_default_free: boolean }>(
+      `/subscriptions/plans/${id}/set-default-free/`,
+      { method: "POST" }
+    ),
   adminListPlans: (): Promise<SubscriptionPlan[]> => apiClient<SubscriptionPlan[]>("/subscriptions/plans/"),
   adminCreatePlan: (data: SubscriptionPlanInput): Promise<SubscriptionPlan> =>
     apiClient<SubscriptionPlan>("/subscriptions/plans/", { method: "POST", body: JSON.stringify(data) }),

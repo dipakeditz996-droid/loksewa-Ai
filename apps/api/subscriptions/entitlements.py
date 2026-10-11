@@ -3,9 +3,11 @@ package benefits, course access, exam quotas, AI tutor allowances,
 and auditable consumption tracking for LoksewaAI.
 """
 
+import logging
+from datetime import timedelta
 from typing import Dict, Any, Optional, Tuple
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from core.models import User, AdminSettings
 from courses.services.course_access_service import CourseAccessService
@@ -14,6 +16,8 @@ from .models import (
 )
 from .access import has_admin_granted_access
 
+logger = logging.getLogger(__name__)
+
 
 class EntitlementService:
     """The authoritative engine for package entitlement and quota enforcement."""
@@ -21,31 +25,149 @@ class EntitlementService:
     @classmethod
     def get_active_subscription(cls, user: User) -> Optional[Subscription]:
         """Returns the student's active Subscription, supporting both optional
-        duration-based expiry and quota-based / lifetime subscriptions."""
+        duration-based expiry and quota-based / lifetime subscriptions.
+        Active PAID subscriptions strictly take priority over Free subscriptions."""
         if not user or not user.is_authenticated:
             return None
 
         now = timezone.now()
-        # Find active subscriptions: either expiry_date is null (quota-only) or expiry_date > now
-        subs = (
-            Subscription.objects.filter(student=user, status='ACTIVE')
-            .filter(expiry_date__isnull=True)
+        # 1. First look for active PAID subscriptions (plan__price > 0)
+        paid_subs = (
+            Subscription.objects.filter(
+                student=user,
+                status='ACTIVE',
+                plan__price__gt=0,
+            )
+            .filter(Q(expiry_date__isnull=True) | Q(expiry_date__gt=now))
+            .select_related('plan')
+            .order_by(F('expiry_date').desc(nulls_first=True), '-created_at')
+        )
+        first_paid = paid_subs.first()
+        if first_paid:
+            return first_paid
+
+        # 2. If no active paid subscription, look for active FREE subscriptions
+        free_subs = (
+            Subscription.objects.filter(
+                student=user,
+                status='ACTIVE',
+            )
+            .filter(Q(expiry_date__isnull=True) | Q(expiry_date__gt=now))
             .select_related('plan')
             .order_by('-created_at')
         )
-        first_sub = subs.first()
-        if first_sub:
-            return first_sub
+        return free_subs.first()
 
-        # Or duration-based active subscription
-        return (
-            Subscription.objects.filter(
-                student=user, status='ACTIVE', expiry_date__gt=now
+    @classmethod
+    def get_default_free_plan(cls) -> Optional[SubscriptionPlan]:
+        """Finds the configured default Free Plan, ensuring it is published and active."""
+        plan = SubscriptionPlan.objects.filter(
+            is_default_free=True,
+            status='ACTIVE',
+            is_published=True,
+            price=0
+        ).first()
+        if not plan:
+            # Fallback to any published, active plan with price 0
+            plan = SubscriptionPlan.objects.filter(
+                price=0,
+                status='ACTIVE',
+                is_published=True
+            ).order_by('id').first()
+        return plan
+
+    @classmethod
+    def ensure_free_plan_entitlement(cls, user: User) -> Optional[Subscription]:
+        """
+        Idempotently assigns the default Free Plan to an eligible student.
+        - Preserves existing paid subscriptions (does not replace them).
+        - Preserves Admin-granted access.
+        - Does not grant to suspended/inactive students.
+        - Safe under concurrent calls.
+        """
+        if not user or not user.is_authenticated or not user.is_active:
+            return None
+        if getattr(user, 'role', None) != 'student':
+            return None
+
+        # 1. Check if user already has an active subscription
+        active_sub = cls.get_active_subscription(user)
+        if active_sub:
+            if active_sub.plan.price > 0:
+                # Student already has an active paid entitlement - do NOT override
+                return active_sub
+            if active_sub.plan.price == 0 or getattr(active_sub.plan, 'is_default_free', False):
+                # Student already has an active free entitlement - reuse it
+                return active_sub
+
+        # 2. Check if student has admin-granted access
+        if has_admin_granted_access(user):
+            return None
+
+        default_plan = cls.get_default_free_plan()
+        if not default_plan:
+            logger.warning("No default Free Plan configured. Cannot auto-grant free access for user %s", user.id)
+            return None
+
+        return cls.activate_free_plan(user, default_plan)
+
+    @classmethod
+    def activate_free_plan(cls, user: User, plan: SubscriptionPlan) -> Subscription:
+        """
+        Activates a genuinely free plan for a student with transactional safety.
+        """
+        if plan.price > 0:
+            raise ValueError("Only zero-cost packages can be activated as Free Plans.")
+        if plan.status != 'ACTIVE' or not plan.is_published:
+            raise ValueError("Package is not active or published.")
+
+        with transaction.atomic():
+            # Check existing active free subscription for this user
+            existing_free = Subscription.objects.select_for_update().filter(
+                student=user,
+                status='ACTIVE',
+                plan=plan
+            ).first()
+
+            if existing_free and existing_free.is_active:
+                sub = existing_free
+            else:
+                expiry = None
+                if plan.has_expiry and plan.duration:
+                    expiry = timezone.now() + timedelta(days=plan.duration)
+
+                sub = Subscription.objects.create(
+                    student=user,
+                    plan=plan,
+                    status='ACTIVE',
+                    source='FREE_PLAN',
+                    admin_grant_reason='Automatic Free Plan Activation',
+                    start_date=timezone.now(),
+                    expiry_date=expiry,
+                )
+
+            # Auto-enroll in plan course if SINGLE or BUNDLE
+            if plan.course_id and plan.course and plan.course.status == 'published':
+                from courses.models import Enrollment
+                Enrollment.objects.get_or_create(
+                    student=user,
+                    course=plan.course,
+                    defaults={'status': 'active'}
+                )
+
+            # Initialize entitlements & quotas
+            cls.grant_plan_entitlements(
+                student=user,
+                plan=plan,
+                subscription=sub,
+                reason="Activated Free Plan"
             )
-            .select_related('plan')
-            .order_by('-expiry_date')
-            .first()
-        )
+
+            # Invalidate cached context
+            from courses.access import invalidate_student_course_context
+            invalidate_student_course_context(user.id)
+
+        return sub
 
     @classmethod
     def _parse_cat_quota(cls, quotas: Optional[dict], cat: str) -> Tuple[bool, int]:
@@ -57,6 +179,10 @@ class EntitlementService:
             raw = quotas.get(cat.lower())
         if raw is None:
             raw = quotas.get(cat.upper())
+        if raw is None and cat == 'model':
+            raw = quotas.get('mock') or quotas.get('MOCK')
+        elif raw is None and cat == 'mock':
+            raw = quotas.get('model') or quotas.get('MODEL')
         if raw is None:
             return True, -1
         if isinstance(raw, dict):
@@ -86,6 +212,8 @@ class EntitlementService:
 
         is_admin_granted = has_admin_granted_access(user)
         active_sub = cls.get_active_subscription(user)
+        if not active_sub and not is_admin_granted and user.is_active and getattr(user, 'role', None) == 'student':
+            active_sub = cls.ensure_free_plan_entitlement(user)
         plan = active_sub.plan if active_sub else None
 
         # Accessible courses via CourseAccessService
@@ -99,14 +227,15 @@ class EntitlementService:
         entitlements_qs = StudentEntitlement.objects.filter(student=user)
         entitlements_by_feature = {e.feature: e for e in entitlements_qs}
 
-        # Categories
-        exam_categories = ['past_year', 'model', 'live', 'topicwise', 'mock']
-        exams_status = {}
-        for cat in exam_categories:
-            key = f"exam:{cat}"
-            ent = entitlements_by_feature.get(key)
+        # Objective Exam Categories
+        obj_categories = ['total', 'past_year', 'model', 'live', 'topicwise', 'mock', 'free_mock']
+        obj_exams_status = {}
+        for cat in obj_categories:
+            key = f"exam:objective:{cat}" if cat != 'total' else "exam:objective:total"
+            legacy_key = f"exam:{cat}" if cat not in ('total', 'free_mock') else ("exam:free_mock" if cat == 'free_mock' else None)
+            ent = entitlements_by_feature.get(key) or (entitlements_by_feature.get(legacy_key) if legacy_key else None)
             if ent:
-                exams_status[cat] = {
+                obj_exams_status[cat] = {
                     "enabled": True,
                     "total_allowed": ent.total_allowed,
                     "consumed": ent.consumed,
@@ -115,17 +244,28 @@ class EntitlementService:
                     "is_unlimited": ent.is_unlimited,
                 }
             elif plan:
-                enabled, attempts = cls._parse_cat_quota(plan.exam_quotas, cat)
-                exams_status[cat] = {
-                    "enabled": enabled,
-                    "total_allowed": attempts,
+                fl = (plan.feature_limits or {}).get(key, {})
+                if isinstance(fl, dict) and 'enabled' in fl:
+                    en = fl.get('enabled', True)
+                    att = fl.get('quota', 0) if en else 0
+                else:
+                    en, att = cls._parse_cat_quota(plan.exam_quotas, cat)
+                    if cat == 'free_mock':
+                        en = bool(plan.free_mock_attempts != 0)
+                        att = plan.free_mock_attempts
+                    elif cat == 'total':
+                        en = True
+                        att = -1 if plan.package_type == 'BUNDLE' else 20
+                obj_exams_status[cat] = {
+                    "enabled": en,
+                    "total_allowed": att,
                     "consumed": 0,
                     "reserved": 0,
-                    "remaining": attempts,
-                    "is_unlimited": attempts == -1,
+                    "remaining": att,
+                    "is_unlimited": att == -1,
                 }
             elif is_admin_granted:
-                exams_status[cat] = {
+                obj_exams_status[cat] = {
                     "enabled": True,
                     "total_allowed": -1,
                     "consumed": 0,
@@ -134,7 +274,114 @@ class EntitlementService:
                     "is_unlimited": True,
                 }
             else:
-                exams_status[cat] = {
+                obj_exams_status[cat] = {
+                    "enabled": False,
+                    "total_allowed": 0,
+                    "consumed": 0,
+                    "reserved": 0,
+                    "remaining": 0,
+                    "is_unlimited": False,
+                }
+
+        # Subjective Exam Categories
+        subj_categories = ['total', 'past_year', 'model', 'live', 'topicwise', 'mock', 'evaluation']
+        subj_exams_status = {}
+        for cat in subj_categories:
+            key = f"exam:subjective:{cat}" if cat not in ('total', 'evaluation') else ("exam:subjective:total" if cat == 'total' else "evaluation:subjective")
+            ent = entitlements_by_feature.get(key)
+            if ent:
+                subj_exams_status[cat] = {
+                    "enabled": True,
+                    "total_allowed": ent.total_allowed,
+                    "consumed": ent.consumed,
+                    "reserved": ent.reserved,
+                    "remaining": ent.remaining,
+                    "is_unlimited": ent.is_unlimited,
+                }
+            elif plan:
+                fl = (plan.feature_limits or {}).get(key, {})
+                if isinstance(fl, dict) and 'enabled' in fl:
+                    en = fl.get('enabled', True)
+                    att = fl.get('quota', 0) if en else 0
+                else:
+                    en = True
+                    att = -1 if plan.package_type == 'BUNDLE' else (3 if cat == 'evaluation' else 5)
+                subj_exams_status[cat] = {
+                    "enabled": en,
+                    "total_allowed": att,
+                    "consumed": 0,
+                    "reserved": 0,
+                    "remaining": att,
+                    "is_unlimited": att == -1,
+                }
+            elif is_admin_granted:
+                subj_exams_status[cat] = {
+                    "enabled": True,
+                    "total_allowed": -1,
+                    "consumed": 0,
+                    "reserved": 0,
+                    "remaining": -1,
+                    "is_unlimited": True,
+                }
+            else:
+                subj_exams_status[cat] = {
+                    "enabled": False,
+                    "total_allowed": 0,
+                    "consumed": 0,
+                    "reserved": 0,
+                    "remaining": 0,
+                    "is_unlimited": False,
+                }
+
+        # Legacy exams_status mapping for full backward compatibility with older tests/pages
+        exams_status = {}
+        for cat in ['past_year', 'model', 'live', 'topicwise', 'mock', 'free_mock']:
+            exams_status[cat] = obj_exams_status.get(cat, {
+                "enabled": False, "total_allowed": 0, "consumed": 0, "reserved": 0, "remaining": 0, "is_unlimited": False
+            })
+
+        # Games Status
+        games_list = ['1v1', 'survival', 'weekly_quiz', 'daily_drill']
+        games_status = {}
+        for g in games_list:
+            key = f"game:{g}"
+            ent = entitlements_by_feature.get(key)
+            if ent:
+                games_status[g] = {
+                    "enabled": True,
+                    "total_allowed": ent.total_allowed,
+                    "consumed": ent.consumed,
+                    "reserved": ent.reserved,
+                    "remaining": ent.remaining,
+                    "is_unlimited": ent.is_unlimited,
+                }
+            elif plan:
+                fl = (plan.feature_limits or {}).get(key, {})
+                if isinstance(fl, dict) and 'enabled' in fl:
+                    en = fl.get('enabled', True)
+                    quota = fl.get('quota', 0) if en else 0
+                else:
+                    en = True
+                    quota = -1 if plan.package_type == 'BUNDLE' else (2 if g == 'weekly_quiz' else 10)
+                games_status[g] = {
+                    "enabled": en,
+                    "total_allowed": quota,
+                    "consumed": 0,
+                    "reserved": 0,
+                    "remaining": quota,
+                    "is_unlimited": quota == -1,
+                }
+            elif is_admin_granted:
+                games_status[g] = {
+                    "enabled": True,
+                    "total_allowed": -1,
+                    "consumed": 0,
+                    "reserved": 0,
+                    "remaining": -1,
+                    "is_unlimited": True,
+                }
+            else:
+                games_status[g] = {
                     "enabled": False,
                     "total_allowed": 0,
                     "consumed": 0,
@@ -181,6 +428,16 @@ class EntitlementService:
             "can_download": plan.can_download_notes if plan else (True if is_admin_granted else False),
         }
 
+        # Platform Modules Access
+        modules_status = {
+            "study_plans": {
+                "enabled": (is_admin_granted or (plan and (plan.feature_limits or {}).get('module:study_plans', {}).get('enabled', True) if plan else False))
+            },
+            "analytics": {
+                "enabled": (is_admin_granted or (plan and (plan.feature_limits or {}).get('module:analytics', {}).get('enabled', True) if plan else False))
+            }
+        }
+
         # Subscription metadata
         sub_data = None
         if active_sub:
@@ -214,6 +471,15 @@ class EntitlementService:
                 "duration": plan.duration,
                 "duration_unit": plan.duration_unit,
                 "features": plan.features or [],
+                "feature_limits": getattr(plan, "feature_limits", {}) or {},
+                "is_default_free": getattr(plan, "is_default_free", False),
+                "is_free": getattr(plan, "is_free", False),
+                "free_mock_attempts": getattr(plan, "free_mock_attempts", 0),
+                "notes_access_type": getattr(plan, "notes_access_type", "COURSE_NOTES"),
+                "can_download_notes": getattr(plan, "can_download_notes", False),
+                "ai_credits": getattr(plan, "ai_credits", 0),
+                "ai_daily_limit": getattr(plan, "ai_daily_limit", 0),
+                "reset_frequency": getattr(plan, "reset_frequency", "NEVER"),
             }
 
         # Recent ledger history (last 10 events)
@@ -230,8 +496,12 @@ class EntitlementService:
             "courses": courses_data,
             "notes": notes_access,
             "exams": exams_status,
+            "objective_exams": obj_exams_status,
+            "subjective_exams": subj_exams_status,
+            "games": games_status,
             "ai_tutor": ai_status,
             "practice": practice_status,
+            "modules": modules_status,
             "usage_history": recent_ledger,
         }
 
@@ -269,8 +539,33 @@ class EntitlementService:
         plan = active_sub.plan if active_sub else None
 
         # 2. Check if this specific exam is configured as a Free Mock Exam in the student's plan
-        if plan and plan.free_mock_exams.filter(id=examination.id).exists():
-            return True, "Exam is included free in your package.", {"is_unlimited": True, "remaining": -1}
+        is_free_mock = bool(plan and plan.free_mock_exams.filter(id=examination.id).exists())
+        if is_free_mock:
+            if plan.free_mock_attempts == -1:
+                return True, "Exam is included free in your package.", {"is_unlimited": True, "remaining": -1}
+            elif plan.free_mock_attempts > 0:
+                ent, _ = StudentEntitlement.objects.get_or_create(
+                    student=user,
+                    feature='exam:free_mock',
+                    defaults={
+                        'subscription': active_sub,
+                        'total_allowed': plan.free_mock_attempts,
+                        'consumed': 0,
+                        'reserved': 0,
+                    }
+                )
+                if not ent.is_unlimited and ent.remaining <= 0:
+                    return False, "You've used all your included Free Mock Exam attempts. Upgrade your package to unlock more attempts.", {
+                        "feature": "exam:free_mock",
+                        "remaining": 0,
+                        "total_allowed": ent.total_allowed,
+                        "upgrade_url": "/student/plans"
+                    }
+                return True, "Free mock attempt available.", {
+                    "is_unlimited": False,
+                    "remaining": ent.remaining,
+                    "total_allowed": ent.total_allowed
+                }
 
         # 3. Check Course Access for course-specific examinations
         if examination.course_id:
@@ -279,39 +574,85 @@ class EntitlementService:
                     "upgrade_url": "/student/plans", "feature": "course_access"
                 }
 
-        # 4. Resolve Category Quota
-        cat = examination.effective_category or 'mock'
-        feature_key = f"exam:{cat}"
+        # 4. Resolve Objective vs Subjective Category & Overall Quotas
+        is_subj = getattr(examination, 'exam_type', None) == 'subjective'
+        cat = examination.effective_category or ('model' if is_subj else 'mock')
+        exam_type_label = "Subjective" if is_subj else "Objective"
 
-        enabled, default_attempts = cls._parse_cat_quota(plan.exam_quotas if plan else None, cat)
-        if not enabled:
-            default_attempts = 0
+        if is_free_mock and plan and plan.free_mock_attempts > 0:
+            cat_feature_key = "exam:free_mock"
+            alt_cat_key = None
+        elif is_subj:
+            cat_feature_key = f"exam:subjective:{cat}"
+            alt_cat_key = None
+        else:
+            cat_feature_key = f"exam:objective:{cat}"
+            alt_cat_key = f"exam:{cat}"
 
-        entitlement, _ = StudentEntitlement.objects.get_or_create(
-            student=user,
-            feature=feature_key,
-            defaults={
-                'subscription': active_sub,
-                'total_allowed': default_attempts if plan else (-1 if is_admin_granted else 0),
-                'consumed': 0,
-                'reserved': 0,
+        total_feature_key = "exam:subjective:total" if is_subj else "exam:objective:total"
+
+        # If student is on a free plan, and this is a mock/model exam not in free_mock_exams, and free_mock_exams are configured:
+        if plan and getattr(plan, 'is_free', False) and cat in ('model', 'mock') and plan.free_mock_exams.exists() and not is_free_mock:
+            return False, f"This {exam_type_label} Mock Exam is not included in your Free Plan. Upgrade your package to unlock all Mock Exams.", {
+                "feature": cat_feature_key,
+                "remaining": 0,
+                "upgrade_url": "/student/plans"
             }
-        )
 
-        if entitlement.is_unlimited:
-            return True, "Unlimited attempts configured.", {"is_unlimited": True, "remaining": -1}
+        # Check category entitlement
+        entitlement = StudentEntitlement.objects.filter(student=user, feature=cat_feature_key).first()
+        alt_ent = StudentEntitlement.objects.filter(student=user, feature=alt_cat_key).first() if alt_cat_key else None
+        if entitlement and alt_ent:
+            if not alt_ent.is_unlimited and (entitlement.is_unlimited or alt_ent.remaining < entitlement.remaining):
+                entitlement = alt_ent
+        elif not entitlement and alt_ent:
+            entitlement = alt_ent
 
-        if entitlement.remaining <= 0:
-            return False, f"Attempt quota for {cat.replace('_', ' ').title()} Exams has been exhausted.", {
-                "feature": feature_key,
+        if not entitlement:
+            if plan and plan.feature_limits and cat_feature_key in plan.feature_limits:
+                fl = plan.feature_limits[cat_feature_key]
+                default_attempts = fl.get('quota', 0) if fl.get('enabled', True) else 0
+            elif plan:
+                enabled, attempts = cls._parse_cat_quota(plan.exam_quotas, cat)
+                default_attempts = attempts if enabled else 0
+            elif is_admin_granted:
+                default_attempts = -1
+            else:
+                default_attempts = 0
+
+            entitlement, _ = StudentEntitlement.objects.get_or_create(
+                student=user,
+                feature=cat_feature_key,
+                defaults={
+                    'subscription': active_sub,
+                    'total_allowed': default_attempts,
+                    'consumed': 0,
+                    'reserved': 0,
+                }
+            )
+
+        if not entitlement.is_unlimited and entitlement.remaining <= 0:
+            return False, f"Attempt quota for {cat.replace('_', ' ').title()} {exam_type_label} Exams has been exhausted.", {
+                "feature": cat_feature_key,
                 "remaining": 0,
                 "total_allowed": entitlement.total_allowed,
                 "upgrade_url": "/student/plans"
             }
 
+        # Check overall category limit if configured
+        total_ent = StudentEntitlement.objects.filter(student=user, feature=total_feature_key).first()
+        if total_ent and not total_ent.is_unlimited and total_ent.remaining <= 0:
+            return False, f"Overall attempt quota for {exam_type_label} Exams has been exhausted. Upgrade your package for more attempts.", {
+                "feature": total_feature_key,
+                "remaining": 0,
+                "total_allowed": total_ent.total_allowed,
+                "upgrade_url": "/student/plans"
+            }
+
+        rem = min(entitlement.remaining, total_ent.remaining) if (total_ent and not total_ent.is_unlimited and not entitlement.is_unlimited) else entitlement.remaining
         return True, "Quota available.", {
-            "is_unlimited": False,
-            "remaining": entitlement.remaining,
+            "is_unlimited": entitlement.is_unlimited and (not total_ent or total_ent.is_unlimited),
+            "remaining": rem,
             "total_allowed": entitlement.total_allowed
         }
 
@@ -320,59 +661,133 @@ class EntitlementService:
         """
         Concurrency-safe atomic check and attempt reservation.
         Prevents multiple simultaneous browser requests from exceeding quota.
+        Enforces both category-specific and overall exam limits without double counting.
         """
         if CourseAccessService.is_privileged(user) or getattr(examination, 'is_free', False):
             return True, "Exempt from quota consumption.", {}
 
-        cat = examination.effective_category or 'mock'
-        feature_key = f"exam:{cat}"
+        active_sub = cls.get_active_subscription(user)
+        plan = active_sub.plan if active_sub else None
+
+        is_free_mock = bool(plan and plan.free_mock_exams.filter(id=examination.id).exists())
+        if is_free_mock and plan.free_mock_attempts == -1:
+            return True, "Exempt from quota consumption (unlimited free mock).", {}
+
+        is_subj = getattr(examination, 'exam_type', None) == 'subjective'
+        cat = examination.effective_category or ('model' if is_subj else 'mock')
+        exam_type_label = "Subjective" if is_subj else "Objective"
+
+        if is_free_mock and plan and plan.free_mock_attempts > 0:
+            cat_feature_key = "exam:free_mock"
+            alt_cat_key = None
+        elif is_subj:
+            cat_feature_key = f"exam:subjective:{cat}"
+            alt_cat_key = None
+        else:
+            cat_feature_key = f"exam:objective:{cat}"
+            alt_cat_key = f"exam:{cat}"
+
+        total_feature_key = "exam:subjective:total" if is_subj else "exam:objective:total"
+
+        # If student is on a free plan, and this is a mock/model exam not in free_mock_exams:
+        if plan and getattr(plan, 'is_free', False) and cat in ('model', 'mock') and not is_free_mock:
+            return False, f"This {exam_type_label} Mock Exam requires a paid package upgrade.", {
+                "feature": cat_feature_key,
+                "remaining": 0,
+                "upgrade_url": "/student/plans"
+            }
 
         with transaction.atomic():
+            # 1. Fetch & lock category entitlement
             entitlement = (
                 StudentEntitlement.objects
                 .select_for_update()
-                .filter(student=user, feature=feature_key)
+                .filter(student=user, feature=cat_feature_key)
                 .first()
             )
-            active_sub = cls.get_active_subscription(user)
+            alt_ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature=alt_cat_key)
+                .first()
+            ) if alt_cat_key else None
 
-            if not entitlement:
-                plan = active_sub.plan if active_sub else None
-                default_quota = (
-                    plan.exam_quotas.get(cat, {}).get('attempts', -1)
-                    if plan and plan.exam_quotas else -1 if has_admin_granted_access(user) else 0
-                )
+            active_sub = cls.get_active_subscription(user)
+            plan = active_sub.plan if active_sub else None
+
+            if not entitlement and not alt_ent:
+                if is_free_mock and plan and plan.free_mock_attempts > 0:
+                    default_quota = plan.free_mock_attempts
+                elif plan and plan.feature_limits and cat_feature_key in plan.feature_limits:
+                    fl = plan.feature_limits[cat_feature_key]
+                    default_quota = fl.get('quota', 0) if fl.get('enabled', True) else 0
+                elif plan:
+                    enabled, attempts = cls._parse_cat_quota(plan.exam_quotas, cat)
+                    default_quota = attempts if enabled else 0
+                elif has_admin_granted_access(user):
+                    default_quota = -1
+                else:
+                    default_quota = 0
+
                 entitlement = StudentEntitlement.objects.create(
                     student=user,
                     subscription=active_sub,
-                    feature=feature_key,
+                    feature=cat_feature_key,
                     total_allowed=default_quota,
                     consumed=0,
                     reserved=0,
                 )
+            elif not entitlement and alt_ent:
+                entitlement = alt_ent
 
-            if not entitlement.is_unlimited:
-                if entitlement.remaining <= 0:
-                    return False, f"Attempt quota for {cat.replace('_', ' ').title()} Exams exhausted.", {
-                        "feature": feature_key, "remaining": 0, "upgrade_url": "/student/plans"
-                    }
+            # Check stricter of the two if both exist
+            ent_to_check = entitlement
+            if entitlement and alt_ent:
+                if not alt_ent.is_unlimited and (entitlement.is_unlimited or alt_ent.remaining < entitlement.remaining):
+                    ent_to_check = alt_ent
 
-                # Reserve 1 attempt
+            if not ent_to_check.is_unlimited and ent_to_check.remaining <= 0:
+                return False, f"Attempt quota for {cat.replace('_', ' ').title()} {exam_type_label} Exams exhausted.", {
+                    "feature": cat_feature_key, "remaining": 0, "upgrade_url": "/student/plans"
+                }
+
+            # 2. Fetch & lock total category entitlement if configured
+            total_ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature=total_feature_key)
+                .first()
+            )
+            if total_ent and not total_ent.is_unlimited and total_ent.remaining <= 0:
+                return False, f"Overall attempt quota for {exam_type_label} Exams exhausted. Upgrade your package for more attempts.", {
+                    "feature": total_feature_key, "remaining": 0, "upgrade_url": "/student/plans"
+                }
+
+            # 3. Reserve 1 attempt on category entitlement (and alt_ent if present)
+            if entitlement and not entitlement.is_unlimited:
                 entitlement.reserved = F('reserved') + 1
                 entitlement.save(update_fields=['reserved'])
+            if alt_ent and alt_ent.id != getattr(entitlement, 'id', None) and not alt_ent.is_unlimited:
+                alt_ent.reserved = F('reserved') + 1
+                alt_ent.save(update_fields=['reserved'])
+
+            # 4. Reserve 1 attempt on total entitlement if present and not unlimited
+            if total_ent and not total_ent.is_unlimited:
+                total_ent.reserved = F('reserved') + 1
+                total_ent.save(update_fields=['reserved'])
 
             # Log to audit ledger
             UsageLedger.objects.create(
                 student=user,
                 subscription=active_sub,
-                feature=feature_key,
+                feature=cat_feature_key,
                 event_type='RESERVE',
                 amount=1,
                 reference_id=str(attempt_id) if attempt_id else f"exam_{examination.id}",
                 reason=f"Reserved attempt for {examination.title}"
             )
 
-        return True, "Attempt reserved.", {"feature": feature_key}
+        return True, "Attempt reserved.", {"feature": cat_feature_key, "total_feature": total_feature_key}
 
     @classmethod
     def consume_exam_attempt(cls, attempt) -> None:
@@ -383,39 +798,87 @@ class EntitlementService:
         if getattr(examination, 'is_free', False):
             return
 
-        cat = examination.effective_category or 'mock'
-        feature_key = f"exam:{cat}"
+        is_subj = getattr(examination, 'exam_type', None) == 'subjective'
+        cat = examination.effective_category or ('model' if is_subj else 'mock')
         user = attempt.student
+        active_sub = cls.get_active_subscription(user)
+        plan = active_sub.plan if active_sub else None
+        is_free_mock = bool(plan and plan.free_mock_exams.filter(id=examination.id).exists())
+        if is_free_mock and plan.free_mock_attempts == -1:
+            return
+
+        if is_free_mock and plan and plan.free_mock_attempts > 0:
+            cat_feature_key = "exam:free_mock"
+            alt_cat_key = None
+        elif is_subj:
+            cat_feature_key = f"exam:subjective:{cat}"
+            alt_cat_key = None
+        else:
+            cat_feature_key = f"exam:objective:{cat}"
+            alt_cat_key = f"exam:{cat}"
+
+        total_feature_key = "exam:subjective:total" if is_subj else "exam:objective:total"
 
         with transaction.atomic():
             entitlement = (
                 StudentEntitlement.objects
                 .select_for_update()
-                .filter(student=user, feature=feature_key)
+                .filter(student=user, feature=cat_feature_key)
                 .first()
             )
-            if not entitlement:
-                return
+            alt_ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature=alt_cat_key)
+                .first()
+            ) if alt_cat_key else None
 
-            if not entitlement.is_unlimited:
-                # Settle: reduce reserved, increment consumed
-                new_reserved = max(0, entitlement.reserved - 1)
-                entitlement.reserved = new_reserved
-                entitlement.consumed = F('consumed') + 1
-                entitlement.save(update_fields=['reserved', 'consumed'])
-            else:
-                entitlement.consumed = F('consumed') + 1
-                entitlement.save(update_fields=['consumed'])
-
-            UsageLedger.objects.create(
-                student=user,
-                subscription=entitlement.subscription,
-                feature=feature_key,
-                event_type='CONSUME',
-                amount=1,
-                reference_id=str(attempt.id),
-                reason=f"Consumed attempt for {examination.title}"
+            total_ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature=total_feature_key)
+                .first()
             )
+
+            if entitlement:
+                if not entitlement.is_unlimited:
+                    new_reserved = max(0, entitlement.reserved - 1)
+                    entitlement.reserved = new_reserved
+                    entitlement.consumed = F('consumed') + 1
+                    entitlement.save(update_fields=['reserved', 'consumed'])
+                else:
+                    entitlement.consumed = F('consumed') + 1
+                    entitlement.save(update_fields=['consumed'])
+
+                UsageLedger.objects.create(
+                    student=user,
+                    subscription=entitlement.subscription,
+                    feature=entitlement.feature,
+                    event_type='CONSUME',
+                    amount=1,
+                    reference_id=str(attempt.id),
+                    reason=f"Consumed attempt for {examination.title}"
+                )
+
+            if alt_ent and alt_ent.id != getattr(entitlement, 'id', None):
+                if not alt_ent.is_unlimited:
+                    new_alt_res = max(0, alt_ent.reserved - 1)
+                    alt_ent.reserved = new_alt_res
+                    alt_ent.consumed = F('consumed') + 1
+                    alt_ent.save(update_fields=['reserved', 'consumed'])
+                else:
+                    alt_ent.consumed = F('consumed') + 1
+                    alt_ent.save(update_fields=['consumed'])
+
+            if total_ent:
+                if not total_ent.is_unlimited:
+                    new_tot_res = max(0, total_ent.reserved - 1)
+                    total_ent.reserved = new_tot_res
+                    total_ent.consumed = F('consumed') + 1
+                    total_ent.save(update_fields=['reserved', 'consumed'])
+                else:
+                    total_ent.consumed = F('consumed') + 1
+                    total_ent.save(update_fields=['consumed'])
 
     @classmethod
     def release_exam_attempt(cls, attempt) -> None:
@@ -423,33 +886,70 @@ class EntitlementService:
         Releases a reservation if an attempt is cancelled or invalidated.
         """
         examination = attempt.examination
-        cat = examination.effective_category or 'mock'
-        feature_key = f"exam:{cat}"
+        is_subj = getattr(examination, 'exam_type', None) == 'subjective'
+        cat = examination.effective_category or ('model' if is_subj else 'mock')
         user = attempt.student
+        active_sub = cls.get_active_subscription(user)
+        plan = active_sub.plan if active_sub else None
+        is_free_mock = bool(plan and plan.free_mock_exams.filter(id=examination.id).exists())
+        if is_free_mock and plan.free_mock_attempts == -1:
+            return
+
+        if is_free_mock and plan and plan.free_mock_attempts > 0:
+            cat_feature_key = "exam:free_mock"
+            alt_cat_key = None
+        elif is_subj:
+            cat_feature_key = f"exam:subjective:{cat}"
+            alt_cat_key = None
+        else:
+            cat_feature_key = f"exam:objective:{cat}"
+            alt_cat_key = f"exam:{cat}"
+
+        total_feature_key = "exam:subjective:total" if is_subj else "exam:objective:total"
 
         with transaction.atomic():
             entitlement = (
                 StudentEntitlement.objects
                 .select_for_update()
-                .filter(student=user, feature=feature_key)
+                .filter(student=user, feature=cat_feature_key)
                 .first()
             )
-            if not entitlement or entitlement.is_unlimited:
-                return
+            alt_ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature=alt_cat_key)
+                .first()
+            ) if alt_cat_key else None
 
-            new_reserved = max(0, entitlement.reserved - 1)
-            entitlement.reserved = new_reserved
-            entitlement.save(update_fields=['reserved'])
-
-            UsageLedger.objects.create(
-                student=user,
-                subscription=entitlement.subscription,
-                feature=feature_key,
-                event_type='RELEASE',
-                amount=-1,
-                reference_id=str(attempt.id),
-                reason=f"Released reservation for {examination.title}"
+            total_ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature=total_feature_key)
+                .first()
             )
+
+            if entitlement and not entitlement.is_unlimited:
+                new_reserved = max(0, entitlement.reserved - 1)
+                entitlement.reserved = new_reserved
+                entitlement.save(update_fields=['reserved'])
+
+                UsageLedger.objects.create(
+                    student=user,
+                    subscription=entitlement.subscription,
+                    feature=entitlement.feature,
+                    event_type='RELEASE',
+                    amount=-1,
+                    reference_id=str(attempt.id),
+                    reason=f"Released reservation for {examination.title}"
+                )
+
+            if alt_ent and alt_ent.id != getattr(entitlement, 'id', None) and not alt_ent.is_unlimited:
+                alt_ent.reserved = max(0, alt_ent.reserved - 1)
+                alt_ent.save(update_fields=['reserved'])
+
+            if total_ent and not total_ent.is_unlimited:
+                total_ent.reserved = max(0, total_ent.reserved - 1)
+                total_ent.save(update_fields=['reserved'])
 
     # =========================================================================
     # AI TUTOR QUOTA & SETTLEMENT
@@ -528,100 +1028,154 @@ class EntitlementService:
     # =========================================================================
 
     @classmethod
+    def _grant_single_entitlement(cls, student: User, subscription: Optional[Subscription], feature: str, total_allowed: int, reset_frequency: str = 'NEVER', admin_user: Optional[User] = None, reason: str = ""):
+        ent, created = StudentEntitlement.objects.get_or_create(
+            student=student,
+            feature=feature,
+            defaults={
+                'subscription': subscription,
+                'total_allowed': total_allowed,
+                'consumed': 0,
+                'reserved': 0,
+                'reset_frequency': reset_frequency,
+            }
+        )
+        if not created:
+            ent.subscription = subscription
+            if total_allowed == -1 or ent.total_allowed == -1:
+                ent.total_allowed = -1
+            else:
+                ent.total_allowed = max(ent.total_allowed, total_allowed)
+            ent.reset_frequency = reset_frequency
+            ent.save(update_fields=['subscription', 'total_allowed', 'reset_frequency'])
+
+        UsageLedger.objects.create(
+            student=student,
+            subscription=subscription,
+            feature=feature,
+            event_type='GRANT',
+            amount=total_allowed,
+            reason=reason or f"Granted {feature} quota",
+            admin_user=admin_user
+        )
+        return ent
+
+    @classmethod
     def grant_plan_entitlements(cls, student: User, plan: SubscriptionPlan, subscription: Optional[Subscription] = None, admin_user: Optional[User] = None, reason: str = "") -> None:
         """
-        Initializes or upgrades student's entitlements when a plan is purchased
-        or granted by an administrator.
+        Initializes or upgrades student's entitlements across ALL platform modules
+        when a plan is purchased, activated, or granted by an administrator.
         """
         with transaction.atomic():
-            # 1. Exam categories
+            fl = plan.feature_limits or {}
+            reset_freq = plan.reset_frequency
+
+            # 1. Objective Exam categories
             quotas = plan.exam_quotas or {}
             for cat in ['past_year', 'model', 'live', 'topicwise']:
-                enabled, attempts = cls._parse_cat_quota(quotas, cat)
-                if not enabled:
-                    attempts = 0
+                key = f"exam:objective:{cat}"
+                legacy_key = f"exam:{cat}"
+                if key in fl:
+                    cfg = fl[key]
+                    attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else (int(cfg) if isinstance(cfg, (int, float)) else 0)
+                else:
+                    enabled, attempts = cls._parse_cat_quota(quotas, cat)
+                    if not enabled:
+                        attempts = 0
 
-                ent, created = StudentEntitlement.objects.get_or_create(
-                    student=student,
-                    feature=f"exam:{cat}",
-                    defaults={
-                        'subscription': subscription,
-                        'total_allowed': attempts,
-                        'consumed': 0,
-                        'reserved': 0,
-                        'reset_frequency': plan.reset_frequency,
-                    }
-                )
-                if not created:
-                    # Upgrade / update quota
-                    ent.subscription = subscription
-                    if attempts == -1 or ent.total_allowed == -1:
-                        ent.total_allowed = -1
-                    else:
-                        ent.total_allowed = max(ent.total_allowed, attempts)
-                    ent.save(update_fields=['subscription', 'total_allowed'])
+                cls._grant_single_entitlement(student, subscription, key, attempts, reset_freq, admin_user, reason or f"Granted {plan.name} {cat} objective quota")
+                cls._grant_single_entitlement(student, subscription, legacy_key, attempts, reset_freq, admin_user, reason or f"Granted {plan.name} {cat} quota")
 
-                UsageLedger.objects.create(
-                    student=student,
-                    subscription=subscription,
-                    feature=f"exam:{cat}",
-                    event_type='GRANT',
-                    amount=attempts,
-                    reason=reason or f"Granted {plan.name} package",
-                    admin_user=admin_user
-                )
+            # 1b. Total Objective Exam attempts
+            tot_obj_key = "exam:objective:total"
+            if tot_obj_key in fl:
+                cfg = fl[tot_obj_key]
+                tot_obj_attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
+            else:
+                tot_obj_attempts = -1 if plan.package_type == 'BUNDLE' else 25
+            cls._grant_single_entitlement(student, subscription, tot_obj_key, tot_obj_attempts, reset_freq, admin_user, reason or f"Granted {plan.name} total objective exam quota")
 
-            # 2. AI Tutor credits
+            # 1c. Free Mock Exams quota
+            free_mock_attempts = getattr(plan, 'free_mock_attempts', 0)
+            if free_mock_attempts != 0:
+                cls._grant_single_entitlement(student, subscription, "exam:free_mock", free_mock_attempts, reset_freq, admin_user, reason or f"Granted {plan.name} free mock quota")
+
+            # 2. Subjective Exam categories
+            for cat in ['past_year', 'model', 'live', 'topicwise']:
+                key = f"exam:subjective:{cat}"
+                if key in fl:
+                    cfg = fl[key]
+                    attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else (int(cfg) if isinstance(cfg, (int, float)) else 0)
+                else:
+                    attempts = -1 if plan.package_type == 'BUNDLE' else 5
+                cls._grant_single_entitlement(student, subscription, key, attempts, reset_freq, admin_user, reason or f"Granted {plan.name} {cat} subjective quota")
+
+            # 2b. Total Subjective Exam attempts
+            tot_subj_key = "exam:subjective:total"
+            if tot_subj_key in fl:
+                cfg = fl[tot_subj_key]
+                tot_subj_attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
+            else:
+                tot_subj_attempts = -1 if plan.package_type == 'BUNDLE' else 10
+            cls._grant_single_entitlement(student, subscription, tot_subj_key, tot_subj_attempts, reset_freq, admin_user, reason or f"Granted {plan.name} total subjective exam quota")
+
+            # 2c. Subjective Evaluation Checking requests
+            eval_key = "evaluation:subjective"
+            if eval_key in fl:
+                cfg = fl[eval_key]
+                eval_quota = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
+            else:
+                eval_quota = -1 if plan.package_type == 'BUNDLE' else 3
+            cls._grant_single_entitlement(student, subscription, eval_key, eval_quota, reset_freq, admin_user, reason or f"Granted {plan.name} subjective evaluation quota")
+
+            # 3. Games Quotas
+            games_defaults = {'1v1': 10, 'survival': 10, 'weekly_quiz': 2, 'daily_drill': 30}
+            for g, def_q in games_defaults.items():
+                key = f"game:{g}"
+                if key in fl:
+                    cfg = fl[key]
+                    g_quota = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
+                else:
+                    g_quota = -1 if plan.package_type == 'BUNDLE' else def_q
+                cls._grant_single_entitlement(student, subscription, key, g_quota, reset_freq, admin_user, reason or f"Granted {plan.name} {g} game quota")
+
+            # 4. AI Tutor credits
             ai_credits = plan.ai_credits
-            ai_ent, created = StudentEntitlement.objects.get_or_create(
-                student=student,
-                feature='ai_credits',
-                defaults={
-                    'subscription': subscription,
-                    'total_allowed': ai_credits,
-                    'consumed': 0,
-                    'reserved': 0,
-                    'reset_frequency': plan.reset_frequency,
-                }
-            )
-            if not created:
-                ai_ent.subscription = subscription
-                if ai_credits == -1 or ai_ent.total_allowed == -1:
-                    ai_ent.total_allowed = -1
-                else:
-                    ai_ent.total_allowed = max(ai_ent.total_allowed, ai_credits)
-                ai_ent.save(update_fields=['subscription', 'total_allowed'])
+            if "ai_credits" in fl:
+                cfg = fl["ai_credits"]
+                ai_credits = cfg.get('quota', ai_credits) if isinstance(cfg, dict) else int(cfg)
+            cls._grant_single_entitlement(student, subscription, "ai_credits", ai_credits, reset_freq, admin_user, reason or f"Granted {plan.name} AI credits")
 
-            UsageLedger.objects.create(
-                student=student,
-                subscription=subscription,
-                feature='ai_credits',
-                event_type='GRANT',
-                amount=ai_credits,
-                reason=reason or f"Granted {plan.name} AI credits",
-                admin_user=admin_user
-            )
+            if "ai:study_plan" in fl:
+                cfg = fl["ai:study_plan"]
+                sp_q = cfg.get('quota', 2) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
+                cls._grant_single_entitlement(student, subscription, "ai:study_plan", sp_q, reset_freq, admin_user, reason or f"Granted {plan.name} AI study plan quota")
 
-            # 3. Practice questions
+            # 5. Practice questions
             prac_limit = plan.practice_question_limit
-            prac_ent, created = StudentEntitlement.objects.get_or_create(
-                student=student,
-                feature='practice_questions',
-                defaults={
-                    'subscription': subscription,
-                    'total_allowed': prac_limit,
-                    'consumed': 0,
-                    'reserved': 0,
-                    'reset_frequency': plan.reset_frequency,
-                }
-            )
-            if not created:
-                prac_ent.subscription = subscription
-                if prac_limit == -1 or prac_ent.total_allowed == -1:
-                    prac_ent.total_allowed = -1
-                else:
-                    prac_ent.total_allowed = max(prac_ent.total_allowed, prac_limit)
-                prac_ent.save(update_fields=['subscription', 'total_allowed'])
+            if "practice_questions" in fl:
+                cfg = fl["practice_questions"]
+                prac_limit = cfg.get('quota', prac_limit) if isinstance(cfg, dict) else int(cfg)
+            cls._grant_single_entitlement(student, subscription, "practice_questions", prac_limit, reset_freq, admin_user, reason or f"Granted {plan.name} practice questions")
+            cls._grant_single_entitlement(student, subscription, "practice:questions", prac_limit, reset_freq, admin_user, reason or f"Granted {plan.name} practice questions")
+
+            if "practice:sessions" in fl:
+                cfg = fl["practice:sessions"]
+                ps_q = cfg.get('quota', -1) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
+                cls._grant_single_entitlement(student, subscription, "practice:sessions", ps_q, reset_freq, admin_user, reason or f"Granted {plan.name} practice sessions quota")
+
+            # 6. Notes Downloads
+            dl_quota = -1 if plan.can_download_notes else 0
+            if "notes:downloads" in fl:
+                cfg = fl["notes:downloads"]
+                dl_quota = cfg.get('quota', dl_quota) if isinstance(cfg, dict) else int(cfg)
+            cls._grant_single_entitlement(student, subscription, "notes:downloads", dl_quota, reset_freq, admin_user, reason or f"Granted {plan.name} notes downloads")
+
+            # 7. Learning Modules
+            for mod in ['study_plans', 'analytics']:
+                mod_key = f"module:{mod}"
+                mod_en = 1 if (mod_key not in fl or (isinstance(fl[mod_key], dict) and fl[mod_key].get('enabled', True))) else 0
+                cls._grant_single_entitlement(student, subscription, mod_key, mod_en, reset_freq, admin_user, reason or f"Granted {plan.name} {mod} access")
 
     @classmethod
     def admin_adjust_quota(cls, student: User, feature: str, delta: int, admin_user: User, reason: str) -> StudentEntitlement:
@@ -649,3 +1203,260 @@ class EntitlementService:
             )
 
             return ent
+
+    @classmethod
+    def can_download_notes(cls, user: User, course=None) -> bool:
+        """Determines whether student has permission to download notes PDF."""
+        if CourseAccessService.is_privileged(user):
+            return True
+        sub = cls.get_active_subscription(user)
+        if not sub or not sub.plan:
+            return False
+        if not sub.plan.can_download_notes:
+            return False
+        ent = StudentEntitlement.objects.filter(student=user, feature='notes:downloads').first()
+        if ent and not ent.is_unlimited and ent.remaining <= 0:
+            return False
+        return True
+
+    @classmethod
+    def check_practice_access(cls, user: User, count: int = 1, mode: Optional[str] = None) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Determines whether student can start practice session.
+        Checks practice_enabled and practice_question_limit.
+        """
+        if CourseAccessService.is_privileged(user):
+            return True, "Privileged access.", {"is_unlimited": True}
+
+        active_sub = cls.get_active_subscription(user)
+        plan = active_sub.plan if active_sub else None
+
+        if plan and not plan.practice_enabled:
+            return False, "Your package does not include Practice mode. Please upgrade to unlock Practice.", {
+                "upgrade_url": "/student/plans", "feature": "practice_questions", "remaining": 0
+            }
+
+        ent = StudentEntitlement.objects.filter(student=user, feature='practice_questions').first()
+        if not ent:
+            ent = StudentEntitlement.objects.filter(student=user, feature='practice:questions').first()
+
+        if ent and not ent.is_unlimited and ent.remaining < count and ent.remaining <= 0:
+            return False, "You've used all your included Practice questions. Upgrade your package for more questions.", {
+                "upgrade_url": "/student/plans", "feature": "practice_questions", "remaining": 0
+            }
+
+        remaining = ent.remaining if ent and not ent.is_unlimited else -1
+        return True, "Practice allowed.", {
+            "is_unlimited": ent.is_unlimited if ent else (plan.practice_question_limit == -1 if plan else True),
+            "remaining": remaining
+        }
+
+    @classmethod
+    def consume_practice_questions(cls, user: User, count: int = 1) -> None:
+        """Records consumed practice questions in StudentEntitlement and UsageLedger."""
+        if count <= 0:
+            return
+        active_sub = cls.get_active_subscription(user)
+        with transaction.atomic():
+            ent = (
+                StudentEntitlement.objects
+                .select_for_update()
+                .filter(student=user, feature__in=['practice_questions', 'practice:questions'])
+                .first()
+            )
+            if ent:
+                ent.consumed = F('consumed') + count
+                ent.save(update_fields=['consumed'])
+
+            UsageLedger.objects.create(
+                student=user,
+                subscription=active_sub,
+                feature='practice_questions',
+                event_type='CONSUME',
+                amount=count,
+                reason=f"Practiced {count} questions"
+            )
+
+    # =========================================================================
+    # GAMES ENTITLEMENTS (1v1, SURVIVAL, WEEKLY QUIZ, DAILY DRILL)
+    # =========================================================================
+
+    @classmethod
+    def check_game_access(cls, user: User, game_mode: str) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Determines whether `user` can participate in `game_mode` ('1v1', 'survival', 'weekly_quiz', 'daily_drill').
+        """
+        if not user or not user.is_authenticated:
+            return False, "Authentication required.", {}
+
+        if CourseAccessService.is_privileged(user):
+            return True, "Privileged user access granted.", {"is_unlimited": True, "remaining": -1}
+
+        is_admin_granted = has_admin_granted_access(user)
+        active_sub = cls.get_active_subscription(user)
+        if not active_sub and not is_admin_granted and user.is_active and getattr(user, 'role', None) == 'student':
+            active_sub = cls.ensure_free_plan_entitlement(user)
+
+        feature_key = f"game:{game_mode}"
+        game_names = {
+            '1v1': '1v1 Multiplayer Battles',
+            'survival': 'Solo Survival Quiz',
+            'weekly_quiz': 'Weekly Grand Quiz',
+            'daily_drill': 'Daily Drill Challenge',
+        }
+        game_label = game_names.get(game_mode, f"{game_mode.title()} Games")
+
+        entitlement = StudentEntitlement.objects.filter(student=user, feature=feature_key).first()
+        if not entitlement and active_sub and active_sub.plan:
+            plan = active_sub.plan
+            fl = (plan.feature_limits or {}).get(feature_key, {})
+            if isinstance(fl, dict) and not fl.get('enabled', True):
+                return False, f"Your package does not include access to {game_label}. Please upgrade to play.", {
+                    "feature": feature_key, "remaining": 0, "upgrade_url": "/student/plans"
+                }
+            quota = fl.get('quota', -1 if plan.package_type == 'BUNDLE' else 10) if isinstance(fl, dict) else int(fl)
+            entitlement = StudentEntitlement.objects.create(
+                student=user,
+                subscription=active_sub,
+                feature=feature_key,
+                total_allowed=quota,
+                consumed=0,
+                reserved=0,
+                reset_frequency=plan.reset_frequency,
+            )
+
+        if not entitlement:
+            if is_admin_granted:
+                return True, "Admin-granted unlimited games access.", {"is_unlimited": True, "remaining": -1}
+            return False, f"Your package does not include access to {game_label}. Please upgrade your package.", {
+                "feature": feature_key, "remaining": 0, "upgrade_url": "/student/plans"
+            }
+
+        if entitlement.is_unlimited:
+            return True, "Unlimited game matches allowed.", {"is_unlimited": True, "remaining": -1, "feature": feature_key}
+
+        if entitlement.remaining <= 0:
+            return False, f"You have exhausted your included matches for {game_label}. Please upgrade your package for more games.", {
+                "feature": feature_key, "remaining": 0, "total_allowed": entitlement.total_allowed, "upgrade_url": "/student/plans"
+            }
+
+        return True, "Game access allowed.", {
+            "is_unlimited": False,
+            "remaining": entitlement.remaining,
+            "total_allowed": entitlement.total_allowed,
+            "feature": feature_key
+        }
+
+    @classmethod
+    def consume_game_match(cls, user: User, game_mode: str, reference_id: Any = None) -> None:
+        """
+        Atomically charges 1 game match/session for `game_mode`.
+        """
+        if CourseAccessService.is_privileged(user):
+            return
+
+        feature_key = f"game:{game_mode}"
+        with transaction.atomic():
+            ent = StudentEntitlement.objects.select_for_update().filter(student=user, feature=feature_key).first()
+            if ent:
+                ent.consumed = F('consumed') + 1
+                ent.save(update_fields=['consumed'])
+                UsageLedger.objects.create(
+                    student=user,
+                    subscription=ent.subscription,
+                    feature=feature_key,
+                    event_type='CONSUME',
+                    amount=1,
+                    reference_id=str(reference_id) if reference_id else '',
+                    reason=f"Played {game_mode} match/session #{reference_id or ''}"
+                )
+
+    # =========================================================================
+    # SUBJECTIVE EVALUATION CHECKING REQUESTS
+    # =========================================================================
+
+    @classmethod
+    def check_evaluation_access(cls, user: User) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Verifies student has remaining subjective evaluation/checking request allowance.
+        """
+        if CourseAccessService.is_privileged(user):
+            return True, "Privileged user access.", {"is_unlimited": True, "remaining": -1}
+
+        is_admin_granted = has_admin_granted_access(user)
+        active_sub = cls.get_active_subscription(user)
+        feature_key = "evaluation:subjective"
+
+        ent = StudentEntitlement.objects.filter(student=user, feature=feature_key).first()
+        if not ent and active_sub and active_sub.plan:
+            plan = active_sub.plan
+            fl = (plan.feature_limits or {}).get(feature_key, {})
+            quota = fl.get('quota', 3) if isinstance(fl, dict) else int(fl)
+            ent = StudentEntitlement.objects.create(
+                student=user,
+                subscription=active_sub,
+                feature=feature_key,
+                total_allowed=quota,
+                consumed=0,
+                reserved=0,
+                reset_frequency=plan.reset_frequency,
+            )
+
+        if not ent:
+            if is_admin_granted:
+                return True, "Admin-granted evaluation access.", {"is_unlimited": True, "remaining": -1}
+            return False, "Your package does not include Subjective Exam Checking. Please upgrade your package.", {
+                "feature": feature_key, "remaining": 0, "upgrade_url": "/student/plans"
+            }
+
+        if ent.is_unlimited:
+            return True, "Unlimited evaluation requests allowed.", {"is_unlimited": True, "remaining": -1}
+
+        if ent.remaining <= 0:
+            return False, "You have used all your included Subjective Evaluation requests. Upgrade to a package with more evaluation quota.", {
+                "feature": feature_key, "remaining": 0, "total_allowed": ent.total_allowed, "upgrade_url": "/student/plans"
+            }
+
+        return True, "Evaluation quota available.", {"is_unlimited": False, "remaining": ent.remaining, "total_allowed": ent.total_allowed}
+
+    @classmethod
+    def consume_evaluation(cls, user: User, request_id: Any = None) -> None:
+        """
+        Records consumption of 1 subjective evaluation request.
+        """
+        feature_key = "evaluation:subjective"
+        with transaction.atomic():
+            ent = StudentEntitlement.objects.select_for_update().filter(student=user, feature=feature_key).first()
+            if ent:
+                ent.consumed = F('consumed') + 1
+                ent.save(update_fields=['consumed'])
+                UsageLedger.objects.create(
+                    student=user,
+                    subscription=ent.subscription,
+                    feature=feature_key,
+                    event_type='CONSUME',
+                    amount=1,
+                    reference_id=str(request_id) if request_id else '',
+                    reason=f"Requested manual checking for subjective submission #{request_id or ''}"
+                )
+
+    # =========================================================================
+    # OPTIONAL PLATFORM MODULES (STUDY PLANS, ANALYTICS)
+    # =========================================================================
+
+    @classmethod
+    def check_module_access(cls, user: User, module_key: str) -> bool:
+        """
+        Checks whether student has access to an optional platform module.
+        """
+        if CourseAccessService.is_privileged(user):
+            return True
+        active_sub = cls.get_active_subscription(user)
+        if not active_sub or not active_sub.plan:
+            return False
+        plan = active_sub.plan
+        feature_key = f"module:{module_key}" if not module_key.startswith("module:") else module_key
+        fl = (plan.feature_limits or {}).get(feature_key)
+        if isinstance(fl, dict):
+            return fl.get('enabled', True) and fl.get('quota', 1) != 0
+        return True

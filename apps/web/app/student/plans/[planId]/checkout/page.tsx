@@ -15,13 +15,18 @@ import {
   FileText,
   X,
   Clock,
+  Sparkles,
+  Zap,
+  BookOpen,
+  Bot,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { apiClient } from "@/lib/api/client";
-import { subscriptionsApi, SubscriptionPlan } from "@/lib/api/subscriptions";
+import { subscriptionsApi, SubscriptionPlan, EffectiveEntitlements } from "@/lib/api/subscriptions";
 import { RetryImage } from "@/components/ui/retry-image";
 import Link from "next/link";
 import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
@@ -32,10 +37,13 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
   const unwrappedParams = use(params);
 
   const [plan, setPlan] = useState<SubscriptionPlan | null>(null);
+  const [entitlements, setEntitlements] = useState<EffectiveEntitlements | null>(null);
   const [methods, setMethods] = useState<any[]>([]);
   const [selectedMethod, setSelectedMethod] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isActivatingFree, setIsActivatingFree] = useState(false);
+  const [freeActivated, setFreeActivated] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,13 +65,15 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
     setIsLoading(true);
     setError(null);
     try {
-      const [planRes, methodsRes, studentPrefRes] = await Promise.all([
+      const [planRes, methodsRes, studentPrefRes, entitlementsRes] = await Promise.all([
         subscriptionsApi.getPlan(unwrappedParams.planId),
         apiClient<any[]>("/marketplace/student/payment-methods/").catch(() => []),
         subscriptionsApi.listAvailablePlans().catch(() => null),
+        subscriptionsApi.getMyEntitlements().catch(() => null),
       ]);
 
       setPlan(planRes);
+      setEntitlements(entitlementsRes);
 
       // Pre-select course based on student preference or plan configuration
       if (planRes.package_type === "SINGLE") {
@@ -134,9 +144,43 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
     }
   };
 
+  const handleActivateFree = async () => {
+    if (!plan) return;
+    if (plan.package_type === "MULTI" && selectedCourseIds.length === 0) {
+      setError("Please select at least 1 preparation for this package.");
+      return;
+    }
+    setIsActivatingFree(true);
+    setError(null);
+    try {
+      const payload = plan.package_type === "MULTI" && selectedCourseIds.length > 0 ? { course_ids: selectedCourseIds } : undefined;
+      await subscriptionsApi.activateFreePlan(plan.id, payload);
+      setFreeActivated(true);
+      queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["my-enrollment"] });
+      queryClient.invalidateQueries({ queryKey: ["my-entitlements"] });
+    } catch (err: any) {
+      console.error(err);
+      let msg = err.detail || err.error || err.message;
+      if (!msg || msg === "Failed to fetch") {
+        msg = "Unable to connect to the server. Please check your network connection and try again.";
+      }
+      setError(msg);
+    } finally {
+      setIsActivatingFree(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!plan || !selectedMethod) return;
+    if (!plan) return;
+
+    if (plan.is_default_free || plan.is_free || Number(plan.price) === 0) {
+      setError("Free packages do not require payment or verification. Please activate the plan directly.");
+      return;
+    }
+
+    if (!selectedMethod) return;
 
     if (!transactionId.trim()) {
       setError("Please enter the transaction reference ID.");
@@ -209,6 +253,302 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
     );
   }
 
+  const isFreePlan = Boolean(plan.is_default_free || plan.is_free || Number(plan.price) === 0);
+  const isAlreadyActive = Boolean(
+    freeActivated ||
+    (entitlements?.has_active_package && (entitlements.subscription?.plan_id === plan.id || entitlements.plan?.id === plan.id))
+  );
+
+  const eligibleDetails = plan.eligible_courses_details || [];
+  const maxPreparations = plan.allowed_preparation_count || 1;
+
+  // Free Plan Special Flow
+  if (isFreePlan) {
+    if (isAlreadyActive) {
+      return (
+        <div className="min-h-screen bg-muted/20 pb-24">
+          <div className="bg-[#0F1822] text-white pt-10 pb-20 px-4 border-b border-white/10">
+            <div className="max-w-4xl mx-auto space-y-3">
+              <Button
+                variant="ghost"
+                onClick={() => router.push("/student/plans")}
+                className="mb-2 -ml-3 text-white/70 hover:text-white hover:bg-white/10 text-xs"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Packages
+              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[11px] font-bold uppercase">
+                  Active Package
+                </Badge>
+                <span className="text-xs text-white/60">
+                  {plan.has_expiry !== false && plan.duration ? `Valid for ${plan.duration} ${plan.duration_unit}` : "Lifetime / Quota-only"}
+                </span>
+              </div>
+              <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight">
+                {plan.name} is Active!
+              </h1>
+              <p className="text-white/70 text-sm max-w-2xl">
+                Your Free Preparation Plan is fully activated and ready to use. Start taking mock tests, practicing questions, and studying with AI right away.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 lg:p-8 max-w-4xl mx-auto -mt-12">
+            <div className="bg-card border border-emerald-500/30 rounded-[24px] p-6 md:p-10 shadow-xl space-y-8">
+              <div className="flex items-center gap-4 border-b border-border/80 pb-6">
+                <div className="w-14 h-14 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/20">
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
+                      Free Plan Active
+                    </span>
+                    <span className="text-xs text-muted-foreground font-semibold">No Payment Required</span>
+                  </div>
+                  <h2 className="text-xl md:text-2xl font-black text-foreground mt-1">
+                    You Have Full Access to Free Features
+                  </h2>
+                </div>
+              </div>
+
+              {/* Entitlement Quotas Grid */}
+              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-[18px] bg-muted/40 border border-border/70 space-y-1">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Mock Exam Quota
+                  </span>
+                  <p className="text-lg font-black text-foreground">
+                    {(plan.free_mock_attempts ?? 0) > 0 ? `${plan.free_mock_attempts} Free Attempts` : "Included in Plan"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Curated model tests & free mock papers</p>
+                </div>
+
+                <div className="p-4 rounded-[18px] bg-muted/40 border border-border/70 space-y-1">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Study Notes
+                  </span>
+                  <p className="text-lg font-black text-foreground">
+                    {plan.notes_access_type === "NONE" ? "Not Included" : "Course Notes Included"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">In-app syllabus notes & guides</p>
+                </div>
+
+                <div className="p-4 rounded-[18px] bg-muted/40 border border-border/70 space-y-1">
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                    AI Tutor Assistant
+                  </span>
+                  <p className="text-lg font-black text-purple-600 dark:text-purple-400">
+                    {plan.ai_tutor_enabled !== false ? `${(plan.ai_credits ?? 500).toLocaleString()} Credits` : "Disabled"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">Instant doubt resolution & study tips</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Button asChild className="flex-1 bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-xl h-12 shadow-md">
+                  <Link href="/student">Go to Student Dashboard</Link>
+                </Button>
+                <Button asChild variant="outline" className="flex-1 rounded-xl h-12 font-semibold">
+                  <Link href="/student/exams">Start Free Mock Exam</Link>
+                </Button>
+                <Button asChild variant="ghost" className="rounded-xl h-12 text-xs font-semibold text-muted-foreground hover:text-foreground">
+                  <Link href="/student/plans">Explore Premium Upgrades</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Free plan not yet active: Show clean Activation Flow
+    return (
+      <div className="min-h-screen bg-muted/20 pb-24">
+        {/* Top Banner */}
+        <div className="bg-[#0F1822] text-white pt-10 pb-20 px-4 border-b border-white/10">
+          <div className="max-w-4xl mx-auto space-y-3">
+            <Button
+              variant="ghost"
+              onClick={() => router.push("/student/plans")}
+              className="mb-2 -ml-3 text-white/70 hover:text-white hover:bg-white/10 text-xs"
+            >
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to Packages
+            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="bg-[#D4A72C]/20 text-[#D4A72C] border-[#D4A72C]/30 text-[11px] font-bold uppercase">
+                Free Tier • Rs. 0.00
+              </Badge>
+              <span className="text-xs text-white/60">
+                No Payment • Instant Access
+              </span>
+            </div>
+            <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight">
+              Activate: {plan.name}
+            </h1>
+            <p className="text-white/70 text-sm max-w-2xl">
+              Get started with Loksewa preparation completely free. No payment methods, no bank transfers, and no admin verification required.
+            </p>
+          </div>
+        </div>
+
+        {/* Content Box */}
+        <div className="p-4 lg:p-8 max-w-4xl mx-auto -mt-12">
+          <div className="bg-card border border-border/80 rounded-[24px] p-6 md:p-10 shadow-xl space-y-8">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 bg-[#D4A72C]/10 text-[#D4A72C] rounded-2xl flex items-center justify-center shrink-0 border border-[#D4A72C]/20">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#D4A72C] bg-[#D4A72C]/10 px-2.5 py-0.5 rounded-full">
+                  100% Free Plan
+                </span>
+                <h2 className="text-xl md:text-2xl font-black text-foreground mt-1.5">
+                  Confirm Instant Activation
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Activate this package to immediately unlock your free mock exams, study materials, and AI Tutor allowance.
+                </p>
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs flex items-center gap-2.5">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* If MULTI choice needed */}
+            {plan.package_type === "MULTI" && (
+              <div className="space-y-3 pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-foreground">
+                    Select Your Preparation (Up to {maxPreparations})
+                  </h3>
+                  <span className="text-xs font-semibold text-[#D4A72C]">
+                    {selectedCourseIds.length} / {maxPreparations} Selected
+                  </span>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3 pt-1">
+                  {eligibleDetails.map((course) => {
+                    const isSelected = selectedCourseIds.includes(course.id);
+                    const isDisabled = !isSelected && selectedCourseIds.length >= maxPreparations;
+                    return (
+                      <div
+                        key={course.id}
+                        onClick={() => !isDisabled && handleToggleCourse(course.id)}
+                        className={`p-3.5 rounded-[14px] border transition-all cursor-pointer flex items-center justify-between ${
+                          isSelected
+                            ? "border-[#D4A72C] bg-[#D4A72C]/10 shadow-sm"
+                            : isDisabled
+                            ? "opacity-50 border-border bg-muted/40 cursor-not-allowed"
+                            : "border-border hover:border-foreground/20 bg-card hover:bg-muted/40"
+                        }`}
+                      >
+                        <span className="text-xs font-bold text-foreground">{course.title}</span>
+                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${isSelected ? "bg-[#D4A72C] border-[#D4A72C] text-[#0A1118]" : "border-border bg-background"}`}>
+                          {isSelected && <Check className="w-3.5 h-3.5" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Included Entitlements Highlights */}
+            <div className="space-y-3 pt-2 border-t border-border/60">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Included Benefits in {plan.name}
+              </h3>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="p-3.5 rounded-xl bg-muted/40 border border-border/60 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">
+                      {(plan.free_mock_attempts ?? 0) > 0 ? `${plan.free_mock_attempts} Free Mock Test Attempts` : "Curated Mock Exams"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">Practice real Loksewa exam patterns</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-muted/40 border border-border/60 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#D4A72C]/10 text-[#D4A72C] flex items-center justify-center shrink-0">
+                    <BookOpen className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">Loksewa Study Notes</span>
+                    <span className="text-[11px] text-muted-foreground">Syllabus-aligned learning materials</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-muted/40 border border-border/60 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">
+                      {(plan.ai_credits ?? 500).toLocaleString()} AI Tutor Credits
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">Ask questions & get instant explanations</span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-muted/40 border border-border/60 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">Practice Questions</span>
+                    <span className="text-[11px] text-muted-foreground">Topic-wise practice & self-test</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Zero Cost Breakdown Box */}
+            <div className="p-4 rounded-2xl bg-muted/50 border border-border/80 flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-foreground block">Total Payable Amount</span>
+                <span className="text-[11px] text-muted-foreground">Zero charge • No payment info required</span>
+              </div>
+              <div className="text-right">
+                <span className="text-2xl font-black text-emerald-500">Rs. 0.00</span>
+                <span className="text-[10px] uppercase font-bold text-emerald-500 block">100% Free</span>
+              </div>
+            </div>
+
+            {/* Activation Button */}
+            <div className="space-y-3 pt-2">
+              <Button
+                onClick={handleActivateFree}
+                disabled={isActivatingFree}
+                aria-busy={isActivatingFree}
+                className="w-full h-13 text-base font-bold bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isActivatingFree ? (
+                  <ButtonSpinner text="Activating Your Free Plan..." />
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" /> Activate Free Plan Now
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-center text-muted-foreground">
+                By activating, you immediately gain access to the included Loksewa materials. You can upgrade to a Premium plan at any time.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // If Payment Submitted Successfully
   if (submitSuccess) {
     return (
@@ -263,9 +603,6 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
       </div>
     );
   }
-
-  const eligibleDetails = plan.eligible_courses_details || [];
-  const maxPreparations = plan.allowed_preparation_count || 1;
 
   return (
     <div className="min-h-screen bg-muted/20 pb-24">

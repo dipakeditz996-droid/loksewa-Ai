@@ -723,8 +723,15 @@ class AdminUsersView(APIView):
             elif plan.package_type == 'ALL_ACCESS':
                 selected_pkg_courses = list(Course.objects.filter(status='published'))
 
-            # Calculate individual expiry for this plan
-            if plan.duration_unit == 'DAYS':
+            # Quota-based and lifetime plans intentionally have no expiry.
+            if not plan.has_expiry:
+                pkg_expiry_date = None
+            elif plan.duration is None:
+                return Response(
+                    {'error': f"Package '{plan.name}' must have a duration when expiry is enabled."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            elif plan.duration_unit == 'DAYS':
                 delta = timedelta(days=plan.duration)
             elif plan.duration_unit == 'WEEKS':
                 delta = timedelta(weeks=plan.duration)
@@ -734,7 +741,8 @@ class AdminUsersView(APIView):
                 delta = timedelta(days=365 * plan.duration)
             else:
                 delta = timedelta(days=plan.duration)
-            pkg_expiry_date = start_date + delta
+            if plan.has_expiry:
+                pkg_expiry_date = start_date + delta
 
             validated_packages.append({
                 'plan': plan,
@@ -772,7 +780,12 @@ class AdminUsersView(APIView):
                 student_target_position = exam_position or (primary_course.exam if primary_course else None)
 
                 # Longest expiry date for StudentProfile
-                max_profile_expiry = max((vp['expiry_date'] for vp in validated_packages), default=None)
+                package_expiries = [vp['expiry_date'] for vp in validated_packages]
+                max_profile_expiry = (
+                    max(package_expiries)
+                    if package_expiries and all(expiry is not None for expiry in package_expiries)
+                    else None
+                )
 
                 StudentProfile.objects.create(
                     user=user, phone=phone,
@@ -852,7 +865,7 @@ class AdminUsersView(APIView):
                                     'package_name': cs['plan'].name,
                                     'package_type': cs['plan'].package_type,
                                     'subscription_id': cs['subscription'].id,
-                                    'expiry_date': cs['expiry_date'].isoformat(),
+                                    'expiry_date': cs['expiry_date'].isoformat() if cs['expiry_date'] else None,
                                     'courses': [{'id': c.id, 'title': c.title} for c in cs['courses']],
                                 }
                                 for cs in created_subscriptions
@@ -864,7 +877,7 @@ class AdminUsersView(APIView):
                             'package_name': first_sub['plan'].name,
                             'package_type': first_sub['plan'].package_type,
                             'subscription_id': first_sub['subscription'].id,
-                            'expiry_date': first_sub['expiry_date'].isoformat(),
+                            'expiry_date': first_sub['expiry_date'].isoformat() if first_sub['expiry_date'] else None,
                             'courses': [{'id': c.id, 'title': c.title} for c in first_sub['courses']],
                             'enrollments_count': len(all_enrolled_courses),
                         },
@@ -904,7 +917,7 @@ class AdminUsersView(APIView):
                     "packageType": cs['plan'].package_type,
                     "subscriptionId": cs['subscription'].id,
                     "courses": [c.title for c in cs['courses']],
-                    "expiryDate": cs['expiry_date'].isoformat(),
+                    "expiryDate": cs['expiry_date'].isoformat() if cs['expiry_date'] else None,
                 }
                 for cs in created_subscriptions
             ],
@@ -988,7 +1001,7 @@ class AdminUserDetailView(APIView):
                     "adminGrantReason": s.admin_grant_reason,
                     "grantedBy": s.granted_by.username if s.granted_by else None,
                     "startDate": s.start_date.isoformat(),
-                    "expiryDate": s.expiry_date.isoformat(),
+                    "expiryDate": s.expiry_date.isoformat() if s.expiry_date else None,
                     "isActive": s.is_active,
                 }
                 for s in active_subs

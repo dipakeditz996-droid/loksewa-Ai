@@ -16,12 +16,15 @@ Drive file ID is folded into the *returned* name as a filename prefix:
 "courses/thumbnails/<file_id>__foo.jpg". That returned value is what
 actually gets stored in the model's FileField/ImageField column.
 """
+import logging
 import mimetypes
 
 from django.core.files.base import ContentFile
-from django.core.files.storage import Storage
+from django.core.files.storage import Storage, FileSystemStorage
 
 from core import google_drive
+
+logger = logging.getLogger(__name__)
 
 
 def _split_name(name):
@@ -63,12 +66,29 @@ def _parse_file_id(name):
 
 
 class GoogleDriveStorage(Storage):
+    """
+    Dual-mode resilient storage backend.
+    Attempts primary upload and access via Google Drive.
+    If Google Drive credentials fail (e.g. expired refresh token), network is down,
+    or Google Drive is unreachable, seamlessly falls back to local FileSystemStorage
+    without raising 500 errors.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._local_storage = FileSystemStorage()
+
     def _open(self, name, mode='rb'):
         file_id = _parse_file_id(name)
-        if file_id is None:
-            raise FileNotFoundError(f'"{name}" was not saved by GoogleDriveStorage.')
-        data = google_drive.download_file(file_id)
-        return ContentFile(data, name=name)
+        if file_id is not None:
+            try:
+                data = google_drive.download_file(file_id)
+                return ContentFile(data, name=name)
+            except Exception as exc:
+                logger.warning('Google Drive download failed for "%s" (%s); attempting local storage fallback.', name, exc)
+        if self._local_storage.exists(name):
+            return self._local_storage.open(name, mode=mode)
+        raise FileNotFoundError(f'"{name}" could not be opened from Google Drive or local storage.')
 
     def _save(self, name, content):
         name = name.replace('\\', '/')
@@ -79,55 +99,71 @@ class GoogleDriveStorage(Storage):
         if hasattr(file_obj, 'seek'):
             file_obj.seek(0)
 
-        drive_file = google_drive.upload_file(name, file_obj, mime_type=mime_type)
-
-        directory, basename = _split_name(name)
-        clean_basename = basename.replace('__', '_')
-        new_basename = f"{drive_file['id']}__{clean_basename}"
-        return f'{directory}/{new_basename}' if directory else new_basename
+        try:
+            drive_file = google_drive.upload_file(name, file_obj, mime_type=mime_type)
+            directory, basename = _split_name(name)
+            clean_basename = basename.replace('__', '_')
+            new_basename = f"{drive_file['id']}__{clean_basename}"
+            return f'{directory}/{new_basename}' if directory else new_basename
+        except Exception as drive_exc:
+            logger.warning('Google Drive upload failed (%s). Safely falling back to local storage for "%s".', drive_exc, name)
+            if hasattr(file_obj, 'seek'):
+                file_obj.seek(0)
+            return self._local_storage.save(name, content)
 
     def exists(self, name):
         file_id = _parse_file_id(name)
-        if file_id is None:
-            # Never-saved candidate name - Drive has no notion of a path
-            # being "taken", so there's nothing to collide with.
-            return False
-        return google_drive.get_file(file_id) is not None
+        if file_id is not None:
+            try:
+                if google_drive.get_file(file_id) is not None:
+                    return True
+            except Exception:
+                pass
+        return self._local_storage.exists(name)
 
     def delete(self, name):
         file_id = _parse_file_id(name)
-        if file_id is None:
-            return
-        google_drive.delete_file(file_id)
+        if file_id is not None:
+            try:
+                google_drive.delete_file(file_id)
+            except Exception:
+                pass
+        if self._local_storage.exists(name):
+            try:
+                self._local_storage.delete(name)
+            except Exception:
+                pass
 
     def size(self, name):
         file_id = _parse_file_id(name)
-        if file_id is None:
-            raise FileNotFoundError(f'"{name}" was not saved by GoogleDriveStorage.')
-        meta = google_drive.get_file(file_id)
-        if meta is None:
-            raise FileNotFoundError(f'Drive file for "{name}" no longer exists.')
-        return int(meta.get('size', 0))
+        if file_id is not None:
+            try:
+                meta = google_drive.get_file(file_id)
+                if meta is not None:
+                    return int(meta.get('size', 0))
+            except Exception:
+                pass
+        if self._local_storage.exists(name):
+            return self._local_storage.size(name)
+        raise FileNotFoundError(f'File "{name}" not found in Drive or local storage.')
 
     def url(self, name):
-        # Unlike _open/size/delete, this must never raise: DRF (and any
-        # other generic serializer) calls .url on every request that touches
-        # a FileField, so one legacy or malformed name would 500 an entire
-        # response. Names not in our own "<file_id>__basename" format (data
-        # from before this storage backend existed, or a test fixture using
-        # a plain placeholder string) just get no URL, same as an empty field.
         file_id = _parse_file_id(name)
-        if file_id is None:
-            return ''
-        _, basename = _split_name(name)
-        prefix = f'{file_id}__'
-        if basename.startswith(prefix):
-            original_filename = basename[len(prefix):]
-        else:
-            original_filename = basename.split('__', 1)[1] if '__' in basename else basename
-        return google_drive.get_file_url(file_id, filename=original_filename)
+        if file_id is not None:
+            _, basename = _split_name(name)
+            prefix = f'{file_id}__'
+            if basename.startswith(prefix):
+                original_filename = basename[len(prefix):]
+            else:
+                original_filename = basename.split('__', 1)[1] if '__' in basename else basename
+            try:
+                return google_drive.get_file_url(file_id, filename=original_filename)
+            except Exception:
+                pass
+        try:
+            return self._local_storage.url(name)
+        except Exception:
+            return f'/media/{name}'
 
     def get_available_name(self, name, max_length=None):
-        # Every save produces a distinct Drive file ID regardless of the
-        # requested name, so there's never a real collision to avoid here.
-        return name
+        return self._local_storage.get_available_name(name, max_length=max_length)

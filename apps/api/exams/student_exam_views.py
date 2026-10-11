@@ -1337,6 +1337,7 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Answer sheet submission is not in a valid state for manual checking.'}, status=status.HTTP_400_BAD_REQUEST)
 
         from .serializers import SubjectiveCheckingRequestSerializer
+        from subscriptions.entitlements import EntitlementService
 
         with transaction.atomic():
             # 5. Check existing active request (pending, accepted, in_progress) -> return existing
@@ -1356,12 +1357,28 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
                 serializer = SubjectiveCheckingRequestSerializer(completed_req)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
+            # 7. Check subjective evaluation entitlement before creating new request
+            eval_allowed, eval_reason, eval_info = EntitlementService.check_evaluation_access(user)
+            if not eval_allowed:
+                return Response(
+                    {
+                        'detail': eval_reason or "Subjective evaluation quota exhausted. Upgrade your package for more subjective checks.",
+                        'feature': 'evaluation:subjective',
+                        'remaining': eval_info.get('remaining', 0),
+                        'upgrade_url': eval_info.get('upgrade_url', '/student/plans'),
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             # Create new checking request
             checking_req = SubjectiveCheckingRequest.objects.create(
                 student=user,
                 submission=submission,
                 status='pending',
             )
+
+            # Consume 1 subjective evaluation entitlement
+            EntitlementService.consume_evaluation(user, checking_req.id)
 
             transaction.on_commit(lambda: NotificationService.notify_checking_request_submitted(checking_req))
 

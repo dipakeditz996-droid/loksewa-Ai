@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { CheckCircle2, XCircle, Clock, Eye, Gift, ImageIcon, RefreshCw, X, ZoomIn } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Eye, Gift, ImageIcon, RefreshCw, X, ZoomIn, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +39,11 @@ interface Payment {
     detected_sender_name?: string | null;
     detected_sender_account?: string | null;
     detected_recipient_account?: string | null;
+    detected_sender_bank?: string | null;
+    detected_receiver_bank?: string | null;
+    detected_transfer_mode?: string | null;
+    detected_service_charge?: string | null;
+    detected_total_amount?: string | null;
     amount_matches?: boolean;
     transaction_id_matches?: boolean;
     receiver_matches?: boolean;
@@ -49,6 +54,7 @@ interface Payment {
     failure_reasons?: string[];
     notes?: string | null;
     error_message?: string;
+    error_type?: string;
   };
   submitted_at: string;
   selected_courses?: { id: number; title: string }[];
@@ -234,7 +240,7 @@ export default function AdminApplicationsPage() {
     }
   };
 
-  const getOcrBadge = (status: string) => {
+  const getOcrBadge = (status: string, result?: Payment["verification_result"]) => {
     switch (status) {
       case "VERIFIED_CONFIDENT":
         return (
@@ -248,12 +254,22 @@ export default function AdminApplicationsPage() {
             <Clock className="w-2.5 h-2.5 mr-1 text-amber-600" /> Needs Review
           </Badge>
         );
-      case "VERIFICATION_FAILED":
+      case "VERIFICATION_FAILED": {
+        const errType = result?.error_type;
+        const label =
+          errType === "SYSTEM_ERROR"
+            ? "Service Unavailable"
+            : errType === "BLURRY_OR_ILLEGIBLE"
+            ? "Proof Unclear"
+            : errType === "FORMAT_ERROR"
+            ? "Format Unsupported"
+            : "Requires Review";
         return (
           <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-semibold">
-            <XCircle className="w-2.5 h-2.5 mr-1 text-rose-600" /> OCR Unavailable
+            <XCircle className="w-2.5 h-2.5 mr-1 text-rose-600" /> {label}
           </Badge>
         );
+      }
       case "VERIFICATION_IN_PROGRESS":
         return (
           <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-semibold animate-pulse">
@@ -457,19 +473,30 @@ export default function AdminApplicationsPage() {
                         </td>
                         <td className="px-6 py-4">
                           {screenshotUrl ? (
-                            <button
-                              onClick={() => setLightboxSrc(screenshotUrl)}
-                              className="group relative overflow-hidden rounded-lg border border-slate-200 hover:border-[#0B2545] transition-all shadow-sm"
-                            >
-                              <img
-                                src={screenshotUrl}
-                                alt="Payment proof"
-                                className="w-14 h-14 object-cover group-hover:opacity-80 transition-opacity"
-                              />
-                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">
-                                <Eye className="w-4 h-4 text-white" />
-                              </div>
-                            </button>
+                            screenshotUrl.toLowerCase().endsWith(".pdf") ? (
+                              <a
+                                href={screenshotUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition text-xs font-semibold shadow-sm"
+                              >
+                                <FileText className="w-4 h-4 text-red-600" /> View PDF
+                              </a>
+                            ) : (
+                              <button
+                                onClick={() => setLightboxSrc(screenshotUrl)}
+                                className="group relative overflow-hidden rounded-lg border border-slate-200 hover:border-[#0B2545] transition-all shadow-sm"
+                              >
+                                <img
+                                  src={screenshotUrl}
+                                  alt="Payment proof"
+                                  className="w-14 h-14 object-cover group-hover:opacity-80 transition-opacity"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 transition-opacity">
+                                  <Eye className="w-4 h-4 text-white" />
+                                </div>
+                              </button>
+                            )
                           ) : (
                             <span className="text-xs text-slate-300 flex items-center gap-1">
                               <ImageIcon className="w-3.5 h-3.5" /> No proof
@@ -483,7 +510,7 @@ export default function AdminApplicationsPage() {
                           <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {getStatusBadge(payment.status)}
-                              {payment.verification_status && getOcrBadge(payment.verification_status)}
+                              {payment.verification_status && getOcrBadge(payment.verification_status, payment.verification_result)}
                             </div>
 
                             {payment.verification_result && (
@@ -493,7 +520,22 @@ export default function AdminApplicationsPage() {
                                     Provider: <span className="text-blue-600">{payment.verification_result.detected_provider}</span>
                                   </p>
                                 )}
-                                {payment.verification_result.detected_bank_name && (
+                                {payment.verification_result.detected_transfer_mode && (
+                                  <p className="text-slate-600">
+                                    Mode: <span className="text-blue-700 font-medium">{payment.verification_result.detected_transfer_mode}</span>
+                                  </p>
+                                )}
+                                {payment.verification_result.detected_sender_bank && (
+                                  <p className="text-slate-600">
+                                    From Bank: <span className="text-slate-800 font-medium">{payment.verification_result.detected_sender_bank}</span>
+                                  </p>
+                                )}
+                                {payment.verification_result.detected_receiver_bank && (
+                                  <p className="text-slate-600">
+                                    To Bank: <span className="text-indigo-700 font-medium">{payment.verification_result.detected_receiver_bank}</span>
+                                  </p>
+                                )}
+                                {!payment.verification_result.detected_receiver_bank && payment.verification_result.detected_bank_name && (
                                   <p className="text-slate-600">
                                     Bank: <span className="text-indigo-700 font-medium">{payment.verification_result.detected_bank_name}</span>
                                   </p>

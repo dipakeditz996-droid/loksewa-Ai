@@ -59,11 +59,78 @@ import {
 } from "@/lib/api/subscriptions";
 import { publicApi, PublicCourse } from "@/lib/api/public-api";
 import { adminSyllabusApi, AdminExamCategory, AdminPosition } from "@/lib/api/admin-syllabus";
+import { adminExamApi } from "@/lib/api/admin-exams";
+
+export interface PlatformFeatureItem {
+  key: string;
+  category: "objective_exams" | "subjective_exams" | "games" | "practice" | "notes" | "ai" | "modules";
+  categoryLabel: string;
+  title: string;
+  description: string;
+  defaultQuota: number;
+  unit: string;
+  supportsUnlimited: boolean;
+  allowedResetPolicies: string[];
+}
+
+export const PLATFORM_FEATURES: PlatformFeatureItem[] = [
+  // Objective Exams
+  { key: "exam:objective:total", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Total Objective Exam Attempts", description: "Overall combined attempts across all objective exam categories (-1 = unlimited)", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:past_year", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Past Year Objective Exams", description: "Attempts for official Loksewa past year question papers", defaultQuota: 10, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:model", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Model Exams", description: "Standard Loksewa objective model exams prepared by experts", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:mock", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Mock Exams", description: "Full-length timed simulated mock exams", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:live", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Live Scheduled Exams", description: "Scheduled live rank exams with real-time ranking and percentiles", defaultQuota: 2, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:topicwise", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Topicwise Tests", description: "Targeted tests focused on specific syllabus topics/chapters", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+
+  // Subjective Exams
+  { key: "exam:subjective:total", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Total Subjective Exam Attempts", description: "Overall combined attempts across all subjective exam papers (-1 = unlimited)", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:subjective:past_year", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Past Year Subjective Papers", description: "Authentic subjective papers from previous years", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:subjective:model", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Subjective Model Exams", description: "Comprehensive subjective model exams with solution guides", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:subjective:mock", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Subjective Mock Exams", description: "Full-length timed subjective mock examinations", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:subjective:live", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Subjective Live Scheduled Exams", description: "Time-bound live subjective tests", defaultQuota: 2, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:subjective:topicwise", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Subjective Topicwise Tests", description: "Subjective chapter and section drills", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "evaluation:subjective", category: "subjective_exams", categoryLabel: "Subjective Examinations", title: "Manual Subjective Checking / Evaluation", description: "Teacher / expert manual review and grading of student answer PDFs", defaultQuota: 3, unit: "requests", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY"] },
+
+  // Games Limits
+  { key: "game:1v1", category: "games", categoryLabel: "Gamification & Quiz Battles", title: "1v1 Multiplayer Battles", description: "Real-time 1v1 battle matches against peers or bots", defaultQuota: 10, unit: "matches", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "DAILY", "WEEKLY", "MONTHLY"] },
+  { key: "game:survival", category: "games", categoryLabel: "Gamification & Quiz Battles", title: "Solo Survival Game", description: "Survival runs with streak multiplier and sudden death", defaultQuota: 10, unit: "runs", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "DAILY", "WEEKLY", "MONTHLY"] },
+  { key: "game:weekly_quiz", category: "games", categoryLabel: "Gamification & Quiz Battles", title: "Weekly Grand Quiz", description: "Competitive weekly leaderboard quiz", defaultQuota: 2, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "WEEKLY", "MONTHLY"] },
+  { key: "game:daily_drill", category: "games", categoryLabel: "Gamification & Quiz Battles", title: "Daily Drill Challenge", description: "Daily curated 10-question drill for syllabus weak areas", defaultQuota: 30, unit: "drills", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "DAILY", "MONTHLY"] },
+
+  // Practice Limits
+  { key: "practice_questions", category: "practice", categoryLabel: "Question Practice Engine", title: "Practice Questions Allowance", description: "Total individual questions answered in Random & Topicwise practice", defaultQuota: -1, unit: "questions", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "DAILY", "MONTHLY"] },
+  { key: "practice:sessions", category: "practice", categoryLabel: "Question Practice Engine", title: "Practice Sessions Allowance", description: "Number of practice sessions student can initiate", defaultQuota: -1, unit: "sessions", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "DAILY", "MONTHLY"] },
+
+  // Notes & Downloads
+  { key: "notes:downloads", category: "notes", categoryLabel: "Notes & Course Materials", title: "Notes PDF Downloads Allowance", description: "Maximum PDF downloads of study materials (-1 = unlimited)", defaultQuota: -1, unit: "downloads", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY"] },
+
+  // AI Features
+  { key: "ai_credits", category: "ai", categoryLabel: "AI Tutor & Smart Learning", title: "AI Tutor Credits / Tokens", description: "Internal tokens consumed for chat explanations and question hints", defaultQuota: 5000, unit: "credits", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY"] },
+  { key: "ai:study_plan", category: "ai", categoryLabel: "AI Tutor & Smart Learning", title: "AI Study Plan Generator Allowance", description: "AI-assisted personalized study plan schedule generation", defaultQuota: 2, unit: "plans", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY"] },
+
+  // Platform Modules
+  { key: "module:study_plans", category: "modules", categoryLabel: "Platform Modules & Features", title: "Study Plans Module Access", description: "Access to interactive study timetable and daily syllabus planner", defaultQuota: 1, unit: "access", supportsUnlimited: false, allowedResetPolicies: ["NEVER"] },
+  { key: "module:analytics", category: "modules", categoryLabel: "Platform Modules & Features", title: "Advanced Analytics Module", description: "Access to performance analytics, mastery radar, and weak-topic diagnostics", defaultQuota: 1, unit: "access", supportsUnlimited: false, allowedResetPolicies: ["NEVER"] },
+];
+
+export const DEFAULT_FEATURE_LIMITS: Record<string, { enabled: boolean; quota: number; unit: string; reset_policy: string; title: string }> = Object.fromEntries(
+  PLATFORM_FEATURES.map((f) => [
+    f.key,
+    {
+      enabled: true,
+      quota: f.defaultQuota,
+      unit: f.unit,
+      reset_policy: "NEVER",
+      title: f.title,
+    },
+  ])
+);
 
 const EMPTY_FORM: SubscriptionPlanInput = {
   name: "",
   slug: "",
   description: "",
+  is_default_free: false,
   has_expiry: true,
   duration: 30,
   duration_unit: "DAYS",
@@ -73,6 +140,7 @@ const EMPTY_FORM: SubscriptionPlanInput = {
   badge: "NONE",
   display_badge: "",
   features: [],
+  feature_limits: DEFAULT_FEATURE_LIMITS,
   course: null,
   package_type: "SINGLE",
   course_access_type: "SELECTED",
@@ -142,7 +210,8 @@ export default function AdminPackagesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<SubscriptionPlanInput>(EMPTY_FORM);
-  const [activeTab, setActiveTab] = useState<"basic" | "validity" | "courses" | "exams" | "notes_ai">("basic");
+  const [activeTab, setActiveTab] = useState<"basic" | "validity" | "courses" | "exams" | "notes_ai" | "platform_limits">("basic");
+  const [limitCategoryFilter, setLimitCategoryFilter] = useState<string>("all");
   const [saving, setSaving] = useState(false);
   const [togglingPlanId, setTogglingPlanId] = useState<number | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<number | null>(null);
@@ -166,6 +235,11 @@ export default function AdminPackagesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
 
+  // Default free & preview states
+  const [settingDefaultFreeId, setSettingDefaultFreeId] = useState<number | null>(null);
+  const [previewPlan, setPreviewPlan] = useState<SubscriptionPlan | null>(null);
+  const [availableExams, setAvailableExams] = useState<any[]>([]);
+
   // Hierarchy filter inside the course picker inside modal
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [selectedLevel, setSelectedLevel] = useState<string>("ALL");
@@ -178,11 +252,15 @@ export default function AdminPackagesPage() {
       publicApi.getCourses(),
       adminSyllabusApi.getCategories().catch(() => [] as AdminExamCategory[]),
       adminSyllabusApi.getPositions().catch(() => [] as AdminPosition[]),
+      adminExamApi.getExams().catch(() => ({ results: [] })),
     ])
-      .then(([planData, coursesData, categoriesData, examsData]) => {
+      .then(([planData, coursesData, categoriesData, examsData, allExamsData]) => {
         setPlans([...planData].sort((a, b) => a.display_order - b.display_order));
         if (coursesData) setCourses(coursesData);
         setAcademicExams(examsData);
+        if (allExamsData && allExamsData.results) {
+          setAvailableExams(allExamsData.results);
+        }
         if (categoriesData && categoriesData.length > 0) {
           const names = categoriesData
             .filter((cat) => cat.is_active)
@@ -193,6 +271,19 @@ export default function AdminPackagesPage() {
       })
       .catch(() => toast.error("Failed to load packages."))
       .finally(() => setLoading(false));
+  };
+
+  const handleSetDefaultFree = async (plan: SubscriptionPlan) => {
+    setSettingDefaultFreeId(plan.id);
+    try {
+      await subscriptionsApi.setDefaultFreePlan(plan.id);
+      toast.success(`"${plan.name}" is now designated as the Default Free Plan!`);
+      load();
+    } catch (err: any) {
+      toast.error(err.detail || err.error || "Failed to set default free plan.");
+    } finally {
+      setSettingDefaultFreeId(null);
+    }
   };
 
   useEffect(load, []);
@@ -231,6 +322,7 @@ export default function AdminPackagesPage() {
       name: plan.name,
       slug: plan.slug || "",
       description: plan.description,
+      is_default_free: plan.is_default_free || false,
       has_expiry: plan.has_expiry ?? true,
       duration: plan.duration ?? 30,
       duration_unit: plan.duration_unit ?? "DAYS",
@@ -254,6 +346,9 @@ export default function AdminPackagesPage() {
       },
       free_mock_exams: plan.free_mock_exams || [],
       free_mock_attempts: plan.free_mock_attempts || 0,
+      feature_limits: plan.feature_limits && Object.keys(plan.feature_limits).length > 0
+        ? { ...DEFAULT_FEATURE_LIMITS, ...plan.feature_limits }
+        : DEFAULT_FEATURE_LIMITS,
       notes_access_type: plan.notes_access_type || "COURSE_NOTES",
       can_download_notes: plan.can_download_notes || false,
       practice_enabled: plan.practice_enabled ?? true,
@@ -278,6 +373,7 @@ export default function AdminPackagesPage() {
       setForm((prev) => ({
         ...prev,
         name: "Free Preparation Tier",
+        is_default_free: true,
         price: "0",
         original_price: null,
         discount: "0",
@@ -299,6 +395,28 @@ export default function AdminPackagesPage() {
         ai_tutor_enabled: true,
         ai_credits: 200,
         ai_daily_limit: 5,
+        feature_limits: {
+          ...DEFAULT_FEATURE_LIMITS,
+          "exam:objective:total": { enabled: true, quota: 10, unit: "attempts", reset_policy: "NEVER", title: "Total Objective Exam Attempts" },
+          "exam:objective:past_year": { enabled: false, quota: 0, unit: "attempts", reset_policy: "NEVER", title: "Past Year Objective Exams" },
+          "exam:objective:model": { enabled: false, quota: 0, unit: "attempts", reset_policy: "NEVER", title: "Objective Model Exams" },
+          "exam:objective:mock": { enabled: false, quota: 0, unit: "attempts", reset_policy: "NEVER", title: "Objective Mock Exams" },
+          "exam:objective:live": { enabled: false, quota: 0, unit: "attempts", reset_policy: "NEVER", title: "Objective Live Scheduled Exams" },
+          "exam:objective:topicwise": { enabled: true, quota: 3, unit: "attempts", reset_policy: "NEVER", title: "Objective Topicwise Tests" },
+          "exam:subjective:total": { enabled: false, quota: 0, unit: "attempts", reset_policy: "NEVER", title: "Total Subjective Exam Attempts" },
+          "evaluation:subjective": { enabled: false, quota: 0, unit: "requests", reset_policy: "NEVER", title: "Subjective Checking Requests" },
+          "game:1v1": { enabled: true, quota: 3, unit: "matches", reset_policy: "NEVER", title: "1v1 Multiplayer Battles" },
+          "game:survival": { enabled: true, quota: 3, unit: "runs", reset_policy: "NEVER", title: "Solo Survival Game" },
+          "game:weekly_quiz": { enabled: true, quota: 1, unit: "attempts", reset_policy: "NEVER", title: "Weekly Grand Quiz" },
+          "game:daily_drill": { enabled: true, quota: 5, unit: "drills", reset_policy: "NEVER", title: "Daily Drill Challenge" },
+          "practice_questions": { enabled: true, quota: 50, unit: "questions", reset_policy: "NEVER", title: "Practice Questions Allowance" },
+          "practice:sessions": { enabled: true, quota: 5, unit: "sessions", reset_policy: "NEVER", title: "Practice Sessions Allowance" },
+          "notes:downloads": { enabled: false, quota: 0, unit: "downloads", reset_policy: "NEVER", title: "Notes PDF Downloads" },
+          "ai_credits": { enabled: true, quota: 200, unit: "credits", reset_policy: "NEVER", title: "AI Tutor Credits" },
+          "ai:study_plan": { enabled: true, quota: 1, unit: "plans", reset_policy: "NEVER", title: "AI Study Plan Generator" },
+          "module:study_plans": { enabled: true, quota: 1, unit: "access", reset_policy: "NEVER", title: "Study Plans Module" },
+          "module:analytics": { enabled: false, quota: 0, unit: "access", reset_policy: "NEVER", title: "Advanced Analytics Module" },
+        },
       }));
       toast.success("Applied Free Tier template.");
     } else if (preset === "PREMIUM") {
@@ -326,6 +444,33 @@ export default function AdminPackagesPage() {
         ai_tutor_enabled: true,
         ai_credits: 5000,
         ai_daily_limit: 30,
+        feature_limits: {
+          ...DEFAULT_FEATURE_LIMITS,
+          "exam:objective:total": { enabled: true, quota: 50, unit: "attempts", reset_policy: "NEVER", title: "Total Objective Exam Attempts" },
+          "exam:objective:past_year": { enabled: true, quota: 15, unit: "attempts", reset_policy: "NEVER", title: "Past Year Objective Exams" },
+          "exam:objective:model": { enabled: true, quota: 10, unit: "attempts", reset_policy: "NEVER", title: "Objective Model Exams" },
+          "exam:objective:mock": { enabled: true, quota: 10, unit: "attempts", reset_policy: "NEVER", title: "Objective Mock Exams" },
+          "exam:objective:live": { enabled: true, quota: 5, unit: "attempts", reset_policy: "NEVER", title: "Objective Live Scheduled Exams" },
+          "exam:objective:topicwise": { enabled: true, quota: -1, unit: "attempts", reset_policy: "NEVER", title: "Objective Topicwise Tests" },
+          "exam:subjective:total": { enabled: true, quota: 20, unit: "attempts", reset_policy: "NEVER", title: "Total Subjective Exam Attempts" },
+          "exam:subjective:past_year": { enabled: true, quota: 10, unit: "attempts", reset_policy: "NEVER", title: "Past Year Subjective Papers" },
+          "exam:subjective:model": { enabled: true, quota: 10, unit: "attempts", reset_policy: "NEVER", title: "Subjective Model Exams" },
+          "exam:subjective:mock": { enabled: true, quota: 5, unit: "attempts", reset_policy: "NEVER", title: "Subjective Mock Exams" },
+          "exam:subjective:live": { enabled: true, quota: 5, unit: "attempts", reset_policy: "NEVER", title: "Subjective Live Scheduled Exams" },
+          "exam:subjective:topicwise": { enabled: true, quota: -1, unit: "attempts", reset_policy: "NEVER", title: "Subjective Topicwise Tests" },
+          "evaluation:subjective": { enabled: true, quota: 5, unit: "requests", reset_policy: "NEVER", title: "Subjective Checking Requests" },
+          "game:1v1": { enabled: true, quota: 25, unit: "matches", reset_policy: "NEVER", title: "1v1 Multiplayer Battles" },
+          "game:survival": { enabled: true, quota: 25, unit: "runs", reset_policy: "NEVER", title: "Solo Survival Game" },
+          "game:weekly_quiz": { enabled: true, quota: 5, unit: "attempts", reset_policy: "NEVER", title: "Weekly Grand Quiz" },
+          "game:daily_drill": { enabled: true, quota: 60, unit: "drills", reset_policy: "NEVER", title: "Daily Drill Challenge" },
+          "practice_questions": { enabled: true, quota: -1, unit: "questions", reset_policy: "NEVER", title: "Practice Questions Allowance" },
+          "practice:sessions": { enabled: true, quota: -1, unit: "sessions", reset_policy: "NEVER", title: "Practice Sessions Allowance" },
+          "notes:downloads": { enabled: true, quota: 10, unit: "downloads", reset_policy: "NEVER", title: "Notes PDF Downloads" },
+          "ai_credits": { enabled: true, quota: 5000, unit: "credits", reset_policy: "NEVER", title: "AI Tutor Credits" },
+          "ai:study_plan": { enabled: true, quota: 5, unit: "plans", reset_policy: "NEVER", title: "AI Study Plan Generator" },
+          "module:study_plans": { enabled: true, quota: 1, unit: "access", reset_policy: "NEVER", title: "Study Plans Module" },
+          "module:analytics": { enabled: true, quota: 1, unit: "access", reset_policy: "NEVER", title: "Advanced Analytics Module" },
+        },
       }));
       toast.success("Applied Premium Package template.");
     } else if (preset === "PRO") {
@@ -355,6 +500,18 @@ export default function AdminPackagesPage() {
         ai_tutor_enabled: true,
         ai_credits: 25000,
         ai_daily_limit: 100,
+        feature_limits: Object.fromEntries(
+          PLATFORM_FEATURES.map((f) => [
+            f.key,
+            {
+              enabled: true,
+              quota: -1,
+              unit: f.unit,
+              reset_policy: "NEVER",
+              title: f.title,
+            },
+          ])
+        ),
       }));
       toast.success("Applied Pro All-Access template.");
     }
@@ -575,8 +732,13 @@ export default function AdminPackagesPage() {
                       <td className="px-5 py-4 min-w-[260px]">
                         <div className="flex items-start gap-2">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900 text-sm">{plan.name}</span>
+                              {plan.is_default_free && (
+                                <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300 font-bold">
+                                  ★ Default Free Plan
+                                </Badge>
+                              )}
                               {plan.badge !== "NONE" && (
                                 <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-300 font-semibold">
                                   {plan.badge.replace("_", " ")}
@@ -700,6 +862,35 @@ export default function AdminPackagesPage() {
                         </Button>
 
                         <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPreviewPlan(plan)}
+                          title="Preview as Student"
+                          className="h-8 text-xs text-slate-600 hover:text-slate-900"
+                        >
+                          <Eye className="w-3.5 h-3.5 mr-1 text-[#0B2545]" /> Preview
+                        </Button>
+
+                        {!plan.is_default_free && (Number(plan.price) === 0 || plan.is_free) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleSetDefaultFree(plan)}
+                            disabled={settingDefaultFreeId === plan.id}
+                            title="Make Default Free Plan"
+                            className="h-8 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-semibold"
+                          >
+                            {settingDefaultFreeId === plan.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <>
+                                <Sparkles className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Set Default Free
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        <Button
                           variant="outline"
                           size="sm"
                           onClick={() => duplicatePlan(plan)}
@@ -817,12 +1008,13 @@ export default function AdminPackagesPage() {
               { id: "courses", label: "Course Access" },
               { id: "exams", label: "Exam Quotas & Mocks" },
               { id: "notes_ai", label: "Notes & AI Tutor" },
+              { id: "platform_limits", label: "Feature Limits & Access" },
             ].map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id as any)}
-                className={`py-2.5 px-3 border-b-2 font-medium transition-colors ${
+                className={`py-2.5 px-3 border-b-2 font-medium transition-colors whitespace-nowrap ${
                   activeTab === t.id
                     ? "border-[#0B2545] text-[#0B2545] font-bold"
                     : "border-transparent text-slate-500 hover:text-slate-800"
@@ -838,6 +1030,38 @@ export default function AdminPackagesPage() {
             {/* TAB 1: BASIC INFO & PRICING */}
             {activeTab === "basic" && (
               <div className="space-y-4">
+                {/* Default Free Plan Toggle Banner */}
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
+                      <span className="text-xs font-bold text-emerald-900">
+                        Designate as Default Free Plan
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      When enabled, newly registered students automatically receive this plan without payment, checkout, or admin review.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={form.is_default_free || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setForm({
+                          ...form,
+                          is_default_free: checked,
+                          price: checked ? "0" : (form.price === "0" ? "999" : form.price),
+                          has_expiry: checked ? false : form.has_expiry,
+                        });
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold text-slate-700">
@@ -882,12 +1106,17 @@ export default function AdminPackagesPage() {
                     </Label>
                     <Input
                       type="number"
-                      value={form.price}
+                      disabled={form.is_default_free}
+                      value={form.is_default_free ? "0" : form.price}
                       onChange={(e) => setForm({ ...form, price: e.target.value })}
                       placeholder="e.g. 1999"
-                      className="h-9 text-xs font-bold text-slate-900"
+                      className="h-9 text-xs font-bold text-slate-900 disabled:bg-slate-100 disabled:text-slate-500"
                     />
-                    <span className="text-[10px] text-slate-400">Set 0 for free package.</span>
+                    {form.is_default_free ? (
+                      <span className="text-[10px] text-emerald-600 font-bold">Locked at Rs. 0 (Free Plan)</span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Set 0 for free package.</span>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
@@ -1229,7 +1458,7 @@ export default function AdminPackagesPage() {
                 </div>
 
                 {/* Free Mock Tests Included */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-amber-50/30 space-y-2">
+                <div className="p-4 rounded-xl border border-slate-200 bg-amber-50/30 space-y-3">
                   <h4 className="font-semibold text-xs text-amber-900 flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-amber-600" /> Free Mock Exam Allowance
                   </h4>
@@ -1244,6 +1473,48 @@ export default function AdminPackagesPage() {
                       className="h-8 text-xs max-w-[140px]"
                     />
                     <span className="text-xs text-slate-500">free attempts included</span>
+                  </div>
+
+                  {/* Selective Free Mock Tests Picker */}
+                  <div className="pt-2 border-t border-amber-200/60 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold text-amber-950">
+                        Designated Free Mock Tests (Optional):
+                      </Label>
+                      <span className="text-[10px] text-amber-800 font-medium">
+                        {(form.free_mock_exams?.length || 0) === 0 ? "All mock tests eligible" : `${form.free_mock_exams?.length} specific tests selected`}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-amber-700">
+                      Leave empty to allow students to take any published Mock Exam up to the quota limit. Or select specific Mock Exams to restrict free attempts.
+                    </p>
+                    <div className="max-h-36 overflow-y-auto border border-amber-200 rounded-lg p-2 space-y-1 bg-white">
+                      {availableExams.length === 0 ? (
+                        <span className="text-xs text-slate-400 p-1 block">No examinations found.</span>
+                      ) : (
+                        availableExams.map((exam: any) => {
+                          const isSelected = form.free_mock_exams?.includes(exam.id);
+                          return (
+                            <div
+                              key={exam.id}
+                              onClick={() => {
+                                const cur = form.free_mock_exams || [];
+                                const next = isSelected ? cur.filter((id: number) => id !== exam.id) : [...cur, exam.id];
+                                setForm({ ...form, free_mock_exams: next });
+                              }}
+                              className={`flex items-center justify-between p-2 rounded cursor-pointer text-xs transition-colors ${
+                                isSelected
+                                  ? "bg-amber-100 text-amber-950 font-semibold border border-amber-300"
+                                  : "hover:bg-slate-50 border border-transparent text-slate-700"
+                              }`}
+                            >
+                              <span className="truncate pr-2">{exam.title}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-amber-700 shrink-0" />}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1373,6 +1644,198 @@ export default function AdminPackagesPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 6: COMPLETE PLATFORM-WIDE FEATURE LIMITS & ACCESS */}
+            {activeTab === "platform_limits" && (
+              <div className="space-y-5">
+                <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50 flex items-start gap-3">
+                  <Layers className="w-5 h-5 text-[#0B2545] shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-[#0B2545]">Platform-Wide Feature Limits & Entitlements</h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      Configure granular allowances for all student-facing features across LoksewaAI. An unset quota must never automatically mean Unlimited. Click <strong>Set Unlimited</strong> (-1) only when unlimited access is explicitly desired.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Filter Categories Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap pb-1 border-b border-slate-100">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase mr-1">Filter:</span>
+                  {[
+                    { id: "all", label: "All Features" },
+                    { id: "objective_exams", label: "Objective Exams" },
+                    { id: "subjective_exams", label: "Subjective Exams" },
+                    { id: "games", label: "Games & Battles" },
+                    { id: "practice", label: "Practice Engine" },
+                    { id: "notes", label: "Notes & Downloads" },
+                    { id: "ai", label: "AI Tutor & Tools" },
+                    { id: "modules", label: "Platform Modules" },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setLimitCategoryFilter(cat.id)}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
+                        limitCategoryFilter === cat.id
+                          ? "bg-[#0B2545] text-white font-bold"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Grid of configurable features */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {PLATFORM_FEATURES
+                    .filter((feat) => limitCategoryFilter === "all" || feat.category === limitCategoryFilter)
+                    .map((feat) => {
+                      const currentLimit = form.feature_limits?.[feat.key] || {
+                        enabled: true,
+                        quota: feat.defaultQuota,
+                        unit: feat.unit,
+                        reset_policy: "NEVER",
+                        title: feat.title,
+                      };
+
+                      const isEnabled = currentLimit.enabled ?? true;
+                      const quotaVal = currentLimit.quota ?? feat.defaultQuota;
+                      const resetPolicyVal = currentLimit.reset_policy || "NEVER";
+
+                      return (
+                        <div
+                          key={feat.key}
+                          className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                            isEnabled
+                              ? "border-slate-200 bg-white shadow-sm"
+                              : "border-slate-200/60 bg-slate-50/50 opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs font-bold text-slate-900">{feat.title}</span>
+                                <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal text-slate-500 bg-slate-50">
+                                  {feat.categoryLabel}
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{feat.description}</p>
+                            </div>
+
+                            {/* Enabled Toggle */}
+                            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={isEnabled}
+                                onChange={(e) => {
+                                  const updated = {
+                                    ...form.feature_limits,
+                                    [feat.key]: {
+                                      ...currentLimit,
+                                      enabled: e.target.checked,
+                                    },
+                                  };
+                                  setForm({ ...form, feature_limits: updated });
+                                }}
+                                className="rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545]"
+                              />
+                              <span className={isEnabled ? "text-emerald-700 font-bold" : "text-slate-400"}>
+                                {isEnabled ? "Enabled" : "Disabled"}
+                              </span>
+                            </label>
+                          </div>
+
+                          {isEnabled ? (
+                            <div className="pt-2 border-t border-slate-100 space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 flex-1">
+                                  <Label className="text-[11px] font-semibold text-slate-600 shrink-0">
+                                    Included Quota:
+                                  </Label>
+                                  <Input
+                                    type="number"
+                                    value={quotaVal}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value);
+                                      const updated = {
+                                        ...form.feature_limits,
+                                        [feat.key]: {
+                                          ...currentLimit,
+                                          quota: isNaN(val) ? 0 : val,
+                                        },
+                                      };
+                                      setForm({ ...form, feature_limits: updated });
+                                    }}
+                                    className="h-8 text-xs font-bold max-w-[100px]"
+                                  />
+                                  <span className="text-[11px] text-slate-500 font-medium">
+                                    {quotaVal === -1 ? "(Unlimited)" : feat.unit}
+                                  </span>
+                                </div>
+
+                                {feat.supportsUnlimited && (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const updated = {
+                                        ...form.feature_limits,
+                                        [feat.key]: {
+                                          ...currentLimit,
+                                          quota: -1,
+                                        },
+                                      };
+                                      setForm({ ...form, feature_limits: updated });
+                                    }}
+                                    className={`h-7 text-[11px] px-2 ${
+                                      quotaVal === -1 ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold" : ""
+                                    }`}
+                                  >
+                                    Set Unlimited (-1)
+                                  </Button>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
+                                <span className="text-slate-500 font-medium">Reset Policy:</span>
+                                <Select
+                                  value={resetPolicyVal}
+                                  onValueChange={(val) => {
+                                    const updated = {
+                                      ...form.feature_limits,
+                                      [feat.key]: {
+                                        ...currentLimit,
+                                        reset_policy: val,
+                                      },
+                                    };
+                                    setForm({ ...form, feature_limits: updated });
+                                  }}
+                                >
+                                  <SelectTrigger className="h-7 text-[11px] w-36">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="NEVER">Never (Lifetime)</SelectItem>
+                                    <SelectItem value="DAILY">Daily Reset</SelectItem>
+                                    <SelectItem value="WEEKLY">Weekly Reset</SelectItem>
+                                    <SelectItem value="MONTHLY">Monthly Reset</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-slate-400 italic">
+                              This feature is excluded from this package. Students attempting access will receive an upgrade prompt.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -1550,6 +2013,76 @@ export default function AdminPackagesPage() {
             >
               {deletingPlanId ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
               Confirm Safe Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Student Package Preview Modal */}
+      <Dialog open={Boolean(previewPlan)} onOpenChange={(open) => !open && setPreviewPlan(null)}>
+        <DialogContent className="max-w-md p-6 rounded-[24px] border border-border shadow-2xl bg-card">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <Eye className="w-4 h-4 text-[#D4A72C]" /> Student Package Preview
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Live representation of how this package appears to students on the pricing &amp; plans page.
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewPlan && (
+            <div className="bg-[#0F1822] text-white rounded-[22px] p-6 border-2 border-[#D4A72C] shadow-xl space-y-5 my-2">
+              <div className="flex items-center justify-between">
+                <Badge className="bg-[#D4A72C]/20 text-[#D4A72C] text-[10px] font-bold uppercase tracking-wider">
+                  {previewPlan.package_type} PACKAGE
+                </Badge>
+                <span className="text-xs text-white/70">
+                  {previewPlan.has_expiry !== false && previewPlan.duration ? `${previewPlan.duration} ${previewPlan.duration_unit}` : "Lifetime Quota"}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-white">{previewPlan.name}</h3>
+                <p className="text-xs text-white/70 mt-1 line-clamp-2">
+                  {previewPlan.description || "Comprehensive Loksewa preparation with dedicated study features."}
+                </p>
+              </div>
+              <div className="py-2 border-y border-white/10 flex items-baseline gap-2">
+                <span className="text-3xl font-black text-white">Rs. {previewPlan.price}</span>
+                {previewPlan.is_default_free && (
+                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                    Default Free Plan
+                  </span>
+                )}
+              </div>
+              <div className="space-y-2 text-xs text-white/90">
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-[#D4A72C]" />
+                  <span>Model Mock Exams: <strong>{previewPlan.exam_quotas?.model?.attempts === -1 ? "Unlimited" : previewPlan.exam_quotas?.model?.attempts ?? 0} attempts</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Free Mock Tests: <strong>{previewPlan.free_mock_attempts ?? 0} free attempts</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-purple-400" />
+                  <span>AI Tutor: <strong>{previewPlan.ai_tutor_enabled ? `${previewPlan.ai_credits ?? 0} credits` : "Disabled"}</strong></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Study Notes: <strong>{previewPlan.notes_access_type}</strong></span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPreviewPlan(null)}
+              className="w-full text-xs rounded-xl h-10"
+            >
+              Close Preview
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -48,3 +48,46 @@ validate_image_extension = FileExtensionValidator(
 validate_document_extension = FileExtensionValidator(
     allowed_extensions=['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webp']
 )
+
+
+def validate_receipt_size_10mb(file):
+    """Enforce a strict 10MB limit on payment evidence documents/images."""
+    if file.size > 10 * 1024 * 1024:
+        raise ValidationError("File too large - maximum receipt size is 10MB.")
+
+
+def validate_receipt_file(file):
+    """
+    Validates payment receipts across supported formats:
+    Images: JPEG, JPG, PNG, WebP
+    Documents: PDF bank receipts
+    """
+    name = (getattr(file, 'name', '') or '').lower()
+    allowed_exts = ('.jpg', '.jpeg', '.png', '.webp', '.pdf')
+    if not any(name.endswith(ext) for ext in allowed_exts):
+        raise ValidationError(
+            "Unsupported file format. Please upload a receipt screenshot (JPG, PNG, WebP) or bank PDF receipt."
+        )
+
+    if file.size <= 5:
+        raise ValidationError("The uploaded receipt file is empty or invalid.")
+
+    if name.endswith('.pdf'):
+        current_position = file.tell() if hasattr(file, 'tell') else None
+        header = file.read(5)
+        if current_position is not None:
+            file.seek(current_position)
+        if header != b'%PDF-':
+            raise ValidationError("The uploaded PDF is corrupted or invalid.")
+    else:
+        # Image header verification
+        try:
+            from PIL import Image
+            current_position = file.tell() if hasattr(file, 'tell') else None
+            with Image.open(file) as img:
+                img.verify()
+            if current_position is not None:
+                file.seek(current_position)
+        except Exception as exc:
+            raise ValidationError(f"Receipt image is corrupted or invalid: {exc}")
+

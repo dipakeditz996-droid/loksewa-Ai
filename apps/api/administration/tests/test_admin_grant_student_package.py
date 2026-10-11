@@ -167,6 +167,42 @@ class AdminGrantStudentPackageTests(APITestCase):
         self.assertEqual(log.details['grant_reason'], 'Full scholarship awarded by Admin')
         self.assertNotIn('password', log.details)
 
+    def test_admin_grant_lifetime_package_without_duration(self):
+        lifetime_plan = SubscriptionPlan.objects.create(
+            name='Lifetime Quota Package',
+            package_type='SINGLE',
+            has_expiry=False,
+            duration=None,
+            duration_unit=None,
+            course=self.course_civil5,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            CREATE_URL,
+            _student_payload(
+                exam_category_id=self.category.id,
+                package_id=lifetime_plan.id,
+            ),
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertIsNone(response.data['packagesGranted'][0]['expiryDate'])
+
+        user = User.objects.get(username='adminstudent')
+        subscription = Subscription.objects.get(student=user, plan=lifetime_plan)
+        self.assertIsNone(subscription.expiry_date)
+        self.assertTrue(subscription.is_active)
+        self.assertIsNone(StudentProfile.objects.get(user=user).admin_access_expiry)
+
+        detail_response = self.client.get(f'{CREATE_URL}{user.id}/')
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK, detail_response.data)
+        self.assertIsNone(detail_response.data['subscription']['expiryDate'])
+
+        log = AuditLog.objects.get(action='ADMIN_STUDENT_GRANTED_PACKAGE', entity_id=str(user.id))
+        self.assertIsNone(log.details['expiry_date'])
+
     # ---- 2. Multi Package Grant ---------------------------------------------
 
     def test_admin_grant_multi_package_success(self):
@@ -568,4 +604,3 @@ class AdminGrantStudentPackageTests(APITestCase):
         authorized = ctx_res.data.get('authorized_courses', [])
         authorized_ids = {c['id'] for c in authorized}
         self.assertEqual(authorized_ids, {self.course_civil5.id, self.course_civil7.id, self.course_electrical.id})
-

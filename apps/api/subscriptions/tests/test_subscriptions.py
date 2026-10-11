@@ -1007,6 +1007,7 @@ class PackageMatchingAndPurchaseFlowTests(APITestCase):
         self.assertEqual(resp_idor_approve.status_code, status.HTTP_403_FORBIDDEN)
 
         # 5. Admin approves payment
+        SubscriptionPayment.objects.filter(id=payment_id).update(verification_status='VERIFIED_CONFIDENT')
         self.client.force_authenticate(self.admin)
         resp_approve = self.client.post(f'/api/subscriptions/payments/{payment_id}/approve/')
         self.assertEqual(resp_approve.status_code, status.HTTP_200_OK)

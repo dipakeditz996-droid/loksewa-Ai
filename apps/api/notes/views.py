@@ -156,6 +156,16 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 {"detail": "Downloads are disabled for this study material."},
                 status=status.HTTP_403_FORBIDDEN
             )
+        if not is_inline and not CourseAccessService.is_privileged(request.user):
+            from subscriptions.access import get_active_subscription, has_admin_granted_access
+            if not has_admin_granted_access(request.user):
+                active_sub = get_active_subscription(request.user)
+                can_dl = active_sub.plan.can_download_notes if (active_sub and active_sub.plan) else False
+                if not can_dl:
+                    return Response(
+                        {"detail": "Your current package does not permit downloading notes as PDF. Please upgrade your package to enable downloads."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
         if not material.file:
             return Response(
                 {"detail": "No file attached to this material."},

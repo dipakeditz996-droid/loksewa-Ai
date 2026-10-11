@@ -20,7 +20,8 @@ class PublicPackageListView(APIView):
             elif plan.duration_unit == 'YEAR':
                 duration_days = plan.duration * 365
                 
-            duration_label = f"{plan.duration} {plan.duration_unit.title()}"
+            unit_str = plan.duration_unit or 'days'
+            duration_label = f"{plan.duration} {unit_str.title()}"
             
             # Use badge to determine if it's popular
             is_popular = plan.badge in ['POPULAR', 'BEST_VALUE', 'RECOMMENDED']

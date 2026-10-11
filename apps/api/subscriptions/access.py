@@ -20,13 +20,30 @@ def has_admin_granted_access(user):
 def get_active_subscription(user):
     """Returns the student's current active Subscription, or None.
     'Active' means status=='ACTIVE' AND (expiry_date is NULL or expiry_date > now) -
-    matching Subscription.is_active exactly."""
+    matching Subscription.is_active exactly.
+    Paid active subscriptions strictly take precedence over Free subscriptions."""
     if not user or not user.is_authenticated:
         return None
     from .models import Subscription
     from django.db.models import Q, F
 
     now = timezone.now()
+    # 1. Paid subscriptions first
+    paid_sub = (
+        Subscription.objects.filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
+            student=user,
+            status='ACTIVE',
+            plan__price__gt=0,
+        )
+        .select_related('plan')
+        .order_by(F('expiry_date').desc(nulls_first=True), '-created_at')
+        .first()
+    )
+    if paid_sub:
+        return paid_sub
+
+    # 2. Free subscriptions fallback
     return (
         Subscription.objects.filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
@@ -34,7 +51,7 @@ def get_active_subscription(user):
             status='ACTIVE',
         )
         .select_related('plan')
-        .order_by(F('expiry_date').desc(nulls_first=True))
+        .order_by('-created_at')
         .first()
     )
 

@@ -53,6 +53,9 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         if not _study_plans_enabled():
             raise PermissionDenied("Study plans are currently disabled by the administrator.")
+        from subscriptions.entitlements import EntitlementService
+        if not EntitlementService.check_module_access(self.request.user, 'module:study_plans'):
+            raise PermissionDenied("Your current package does not include Study Plans. Upgrade your package to create study plans.")
         self._authorise_exam(serializer.validated_data.get('exam'))
         plan = serializer.save(student=self.request.user)
         # Generate initial tasks

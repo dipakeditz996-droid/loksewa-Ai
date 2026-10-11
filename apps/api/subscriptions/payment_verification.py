@@ -29,7 +29,7 @@ from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from typing import Optional, Tuple, List, Dict, Any
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageEnhance
 import numpy as np
 from django.utils import timezone
 
@@ -52,6 +52,11 @@ class PaymentVerificationData:
     bank_account: Optional[str] = None
     sender_name: Optional[str] = None
     sender_account: Optional[str] = None
+    sender_bank: Optional[str] = None
+    receiver_bank: Optional[str] = None
+    transfer_mode: Optional[str] = None
+    service_charge: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
     transaction_id: Optional[str] = None
     reference_id: Optional[str] = None
     transaction_date: Optional[date] = None
@@ -73,6 +78,11 @@ class PaymentVerificationData:
             "bank_account": self.bank_account,
             "sender_name": self.sender_name,
             "sender_account": self.sender_account,
+            "sender_bank": self.sender_bank,
+            "receiver_bank": self.receiver_bank,
+            "transfer_mode": self.transfer_mode,
+            "service_charge": str(self.service_charge) if self.service_charge is not None else None,
+            "total_amount": str(self.total_amount) if self.total_amount is not None else None,
             "transaction_id": self.transaction_id,
             "reference_id": self.reference_id,
             "transaction_date": str(self.transaction_date) if self.transaction_date else None,
@@ -87,6 +97,39 @@ class PaymentVerificationData:
 # Provider & Layout Detection Patterns
 # ---------------------------------------------------------------------------
 
+_SWIFT_BANK_CODES = {
+    "KMBL": "Kumari Bank Limited",
+    "KMBLNPKA": "Kumari Bank Limited",
+    "SBL": "Siddhartha Bank Limited",
+    "SBLNPKA": "Siddhartha Bank Limited",
+    "NABIL": "Nabil Bank Limited",
+    "NABILNPKA": "Nabil Bank Limited",
+    "GBIME": "Global IME Bank Limited",
+    "GBIMENPKA": "Global IME Bank Limited",
+    "NICA": "NIC ASIA Bank Limited",
+    "NICANPKA": "NIC ASIA Bank Limited",
+    "HBL": "Himalayan Bank Limited",
+    "HBLNPKA": "Himalayan Bank Limited",
+    "NBL": "Nepal Bank Limited",
+    "NBLNPKA": "Nepal Bank Limited",
+    "RBB": "Rastriya Banijya Bank",
+    "RBBLNPKA": "Rastriya Banijya Bank",
+    "PRVU": "Prabhu Bank Limited",
+    "PRBUNPKA": "Prabhu Bank Limited",
+    "SANIMA": "Sanima Bank Limited",
+    "MBL": "Machhapuchchhre Bank Limited",
+    "NIMB": "Nepal Investment Mega Bank Limited",
+    "EBL": "Everest Bank Limited",
+    "NSBI": "Nepal SBI Bank Limited",
+    "NSBINPKA": "Nepal SBI Bank Limited",
+    "SCB": "Standard Chartered Bank Nepal",
+    "CZBIL": "Citizens Bank International",
+    "LBL": "Laxmi Sunrise Bank",
+    "SRBL": "Laxmi Sunrise Bank",
+    "ADBL": "Agricultural Development Bank",
+    "PCBL": "Prime Commercial Bank",
+}
+
 _PROVIDER_PATTERNS = [
     ("eSewa", [r"\besewa\b", r"\be-sewa\b"]),
     ("Khalti", [r"\bkhalti\b"]),
@@ -99,25 +142,27 @@ _PROVIDER_PATTERNS = [
         r"\brbb\b", r"\bkrishi\s*bikas\b", r"\badbl\b", r"\bnepal\s*sbi\b",
         r"\bstandard\s*chartered\b", r"\bprime\s*(?:commercial)?\s*bank\b",
         r"\bconnect\s*ips\b", r"\bconnectips\b", r"\bnchl\b", r"\bfonepay\b",
-        r"\binterbank\b", r"\bips\s*transfer\b", r"\bfund\s*transfer\b"
+        r"\binterbank\b", r"\bips\s*transfer\b", r"\bfund\s*transfer\b",
+        r"\bkmbl(?:npka)?\b", r"\bsbl(?:npka)?\b"
     ]),
 ]
 
 _NEPALESE_BANKS = [
-    ("Nabil Bank", [r"\bnabil\s*(?:bank)?\b"]),
-    ("Global IME Bank", [r"\bglobal\s*ime\s*(?:bank)?\b", r"\bglobal\s*bank\b"]),
-    ("NIC ASIA Bank", [r"\bnic\s*asia\s*(?:bank)?\b"]),
-    ("Nepal Bank", [r"\bnepal\s*bank\s*(?:ltd|limited)?\b"]),
+    ("Kumari Bank", [r"\bkumari\s*(?:bank)?\b", r"\bkmbl(?:npka)?\b"]),
+    ("Siddhartha Bank", [r"\bsiddhartha\s*(?:bank)?\b", r"\bsbl(?:npka)?\b"]),
+    ("Nabil Bank", [r"\bnabil\s*(?:bank)?\b", r"\bnabilnpka\b"]),
+    ("Global IME Bank", [r"\bglobal\s*ime\s*(?:bank)?\b", r"\bglobal\s*bank\b", r"\bgbime\b"]),
+    ("NIC ASIA Bank", [r"\bnic\s*asia\s*(?:bank)?\b", r"\bnica\b"]),
+    ("Nepal Bank", [r"\bnepal\s*bank\s*(?:ltd|limited)?\b", r"\bnbl\b"]),
     ("Rastriya Banijya Bank", [r"\brastriya\s*banijya\s*(?:bank)?\b", r"\brbb\b"]),
     ("Himalayan Bank", [r"\bhimalayan\s*(?:bank)?\b", r"\bhbl\b"]),
-    ("Siddhartha Bank", [r"\bsiddhartha\s*(?:bank)?\b", r"\bsbl\b"]),
     ("Sanima Bank", [r"\bsanima\s*(?:bank)?\b"]),
-    ("Prabhu Bank", [r"\bprabhu\s*(?:bank)?\b"]),
-    ("Kumari Bank", [r"\bkumari\s*(?:bank)?\b"]),
+    ("Prabhu Bank", [r"\bprabhu\s*(?:bank)?\b", r"\bprvu\b"]),
     ("Everest Bank", [r"\beverest\s*(?:bank)?\b", r"\bebl\b"]),
     ("Machhapuchchhre Bank", [r"\bmachhapuchchhre\s*(?:bank)?\b", r"\bmbl\b"]),
+    ("Nepal Investment Mega Bank", [r"\bnepal\s*investment\s*(?:mega)?\s*bank\b", r"\bnimb\b", r"\bmega\s*bank\b"]),
     ("Laxmi Sunrise Bank", [r"\blaxmi\s*sunrise\s*(?:bank)?\b", r"\blaxmi\s*(?:bank)?\b", r"\bsunrise\s*(?:bank)?\b"]),
-    ("Citizens Bank", [r"\bcitizens\s*(?:bank)?\b"]),
+    ("Citizens Bank", [r"\bcitizens\s*(?:bank)?\b", r"\bczbil\b"]),
     ("Agricultural Development Bank", [r"\bagricultural\s*development\s*bank\b", r"\badbl\b", r"\bkrishi\s*bikas\s*bank\b"]),
     ("Nepal SBI Bank", [r"\bnepal\s*sbi\s*(?:bank)?\b", r"\bsbi\s*bank\b"]),
     ("Standard Chartered Bank", [r"\bstandard\s*chartered\s*(?:bank)?\b", r"\bscb\b"]),
@@ -148,13 +193,12 @@ _AMOUNT_PATTERNS = [
     r"(\d[\d,]*(?:\.\d{1,2})?)\s*(?:NPR|NRS|Rs\.?|\u20a8|\u0930\u0941)",
     r"(?:amount|total(?:\s+amount)?|paid|payment|transferred|transfer\s+amount|debit\s+amount)\s*[:\-.]?\s*(?:NPR|NRS|Rs\.?)?\s*(\d[\d,]*(?:\.\d{1,2})?)",
     r"\b(\d{1,7}\.\d{2})\b",
-    r"\b(\d{2,7})\b",
 ]
 
 _TXN_PATTERNS = [
     # Explicit labeled formats
     r"(?:transaction\s+(?:code|id|no|#|num|number)|reference\s+(?:code|id|no|#|num|number)|txn\s*(?:code|id|no|#|num)?|ref\s*(?:code|id|no|#|num)?|order\s*(?:id|no|#)?|receipt\s*(?:id|no|#)?|voucher\s*(?:no|num|number)?|journal\s*(?:no|num|number)?|trace\s*(?:no|num|number)?|rrn)\s*[:\-#.]?\s*([A-Za-z0-9\-_]{5,35})",
-    r"(?:txn|transaction|ref(?:erence)?|order|receipt|tnx|payment)[^\w\n]?\s*(?:id|no|#|code)?\s*[:\-#.]?\s*([A-Za-z0-9\-_]{5,35})",
+    r"(?:txn|transaction|ref(?:erence)?|order|receipt|tnx|payment)\s*[:\-#.]\s*([A-Za-z0-9\-_]{5,35})",
     r"\b([A-Z0-9]{10,35})\b",
     r"\b([A-Za-z0-9]{6,16})\b",
 ]
@@ -163,7 +207,12 @@ _TXN_BLACKLIST = {
     'SUCCESSFUL', 'PAYMENT', 'DETAILS', 'TRANSFERRED', 'COMPLETED',
     'PENDING', 'TRANSACTION', 'REFERENCE', 'DOWNLOAD', 'STATEMENT',
     'APPROVED', 'CONFIRMED', 'RECEIPT', 'CANCELLED', 'REJECTED',
-    'BENEFICIARY', 'RECIPIENT', 'AMOUNT', 'ACCOUNT'
+    'BENEFICIARY', 'RECIPIENT', 'AMOUNT', 'ACCOUNT', 'TRANSACTIONSUCCESS',
+    'DOWNLOADRECEIPT', 'ONLINE', 'DONE', 'REMARKS', 'CHANNEL',
+    'ATTRLBUTE', 'ATTRIBUTE', 'INITLATOR', 'INITIATOR', 'SERVICE',
+    'INTERBANK', 'FONEPAY', 'CONNECTIPS', 'TOTAL', 'CHARGE',
+    'TXNAMOUNT', 'TOTALAMOUNT', 'SENDER', 'RECEIVER', 'SUCCESS',
+    'EXAM', 'DATE/TIME', 'DATETIME', 'FONEPAYINTERBANK', 'FONEPAYINTER'
 }
 
 _RECIPIENT_PATTERNS = [
@@ -261,28 +310,217 @@ def _validate_image_content(image_bytes: bytes) -> Tuple[bool, str, Optional[Ima
     return True, "", image
 
 
+def _extract_document_or_image_content(
+    content_bytes: bytes, filename: str = ""
+) -> Tuple[bool, str, Optional[Image.Image], str, str]:
+    """
+    Universal payment document and screenshot extractor.
+    Supports:
+      - Digital text PDFs (extracts embedded text directly)
+      - Scanned / Image PDFs (renders page 0 to high-res image for OCR)
+      - Images (JPEG, PNG, WebP)
+    Returns: (is_valid, error_message, pil_image_or_none, digital_text, doc_type)
+    """
+    is_pdf = content_bytes.startswith(b"%PDF") or filename.lower().endswith(".pdf")
+
+    if is_pdf:
+        if len(content_bytes) < 64:
+            return False, "PDF receipt file is corrupted or empty.", None, "", "pdf"
+
+        # 1. Try PyMuPDF (pymupdf / fitz)
+        try:
+            import pymupdf  # type: ignore
+            doc = pymupdf.open(stream=content_bytes, filetype="pdf")
+            if len(doc) == 0:
+                return False, "PDF receipt contains no pages.", None, "", "pdf"
+
+            extracted_text = ""
+            for page_num in range(min(len(doc), 3)):
+                p_text = doc[page_num].get_text()
+                if p_text:
+                    extracted_text += "\n" + p_text.strip()
+
+            extracted_text = extracted_text.strip()
+            # If PDF has rich selectable text (digital bank transfer PDF)
+            if len(extracted_text) >= 40:
+                return True, "", None, extracted_text, "pdf_digital"
+
+            # Scanned or image-only PDF: render first page
+            page0 = doc[0]
+            pix = page0.get_pixmap(dpi=150)
+            rendered_image = Image.open(BytesIO(pix.tobytes("png"))).convert("RGB")
+            return True, "", rendered_image, extracted_text, "pdf_scanned"
+        except Exception as pdf_exc:
+            logger.warning("PyMuPDF PDF extraction failed: %s", pdf_exc)
+
+        # 2. Fallback to pypdf for digital text
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(BytesIO(content_bytes))
+            pypdf_text = ""
+            for p in reader.pages[:3]:
+                t = p.extract_text()
+                if t:
+                    pypdf_text += "\n" + t
+            pypdf_text = pypdf_text.strip()
+            if len(pypdf_text) >= 40:
+                return True, "", None, pypdf_text, "pdf_digital"
+        except Exception as pypdf_exc:
+            logger.warning("pypdf extraction failed: %s", pypdf_exc)
+
+        return False, "Unable to extract text or render scanned PDF receipt.", None, "", "pdf"
+
+    # Image handling (JPEG, PNG, WebP, etc.)
+    valid_img, img_err, image = _validate_image_content(content_bytes)
+    if not valid_img or image is None:
+        return False, img_err, None, "", "image"
+
+    return True, "", image, "", "image"
+
+
+def _preprocess_image_variants(image: Image.Image) -> List[Tuple[str, Image.Image]]:
+    """Generates alternative OCR-ready variants (original, contrast-enhanced, inverted for dark-mode)."""
+    variants = [("original", image)]
+    try:
+        gray = image.convert("L")
+        mean_lum = float(np.mean(np.array(gray)))
+        # Dark mode screenshot detection: invert colors
+        if mean_lum < 110:
+            inverted = ImageOps.invert(image)
+            variants.append(("inverted_dark_mode", inverted))
+
+        # Contrast-enhanced variant
+        enhanced = ImageEnhance.Contrast(image).enhance(1.7)
+        variants.append(("contrast_boost", enhanced))
+    except Exception as exc:
+        logger.debug("Image preprocessing variant generation skipped: %s", exc)
+    return variants
+
+
 def _run_ocr(image: Image.Image) -> Tuple[str, str]:
+    """Runs OCR across available engines and preprocessing variants."""
     engine = _get_rapid_ocr()
     if engine is not None:
-        try:
-            img_np = np.array(image)
-            ocr_results, _ = engine(img_np)
-            if ocr_results:
-                return "\n".join([res[1] for res in ocr_results]), "rapidocr"
-            else:
-                return "", "rapidocr"
-        except Exception as exc:
-            logger.warning("RapidOCR execution failed: %s", exc)
+        for variant_name, img_variant in _preprocess_image_variants(image):
+            try:
+                img_np = np.array(img_variant)
+                ocr_results, _ = engine(img_np)
+                if ocr_results:
+                    raw_text = "\n".join([res[1] for res in ocr_results])
+                    if len(raw_text.strip()) >= 15:
+                        return raw_text, f"rapidocr_{variant_name}"
+            except Exception as exc:
+                logger.warning("RapidOCR execution failed on variant %s: %s", variant_name, exc)
 
     if _configure_tesseract():
         try:
             import pytesseract
             raw_text = pytesseract.image_to_string(image, lang="eng", config="--psm 6")
-            return raw_text, "pytesseract"
+            if len(raw_text.strip()) >= 15:
+                return raw_text, "pytesseract"
         except Exception as exc:
             logger.warning("Pytesseract execution failed: %s", exc)
 
     return "", "none"
+
+
+def _scan_consecutive_key_values(text: str) -> Dict[str, str]:
+    """
+    Parses consecutive label/value pairs from mobile banking screens and digital receipts,
+    e.g.:
+      Reference Code
+      232992986
+      Txn Amount (NPR)
+      150.00
+      Receiver's Account
+      269###19000001
+    """
+    kv: Dict[str, str] = {}
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+    label_patterns = [
+        ("reference_code", r"^(?:reference\s*(?:code|id|no|number)|ref\s*(?:code|id|no)|transaction\s*(?:id|code|no)|txn\s*(?:id|code|no)|voucher\s*(?:no|number)|trace\s*(?:id|no))$"),
+        ("txn_amount", r"^(?:txn\s*amount(?:\s*\([a-z]+\))?|transfer\s*amount(?:\s*\([a-z]+\))?|amount(?:\s*\([a-z]+\))?)$"),
+        ("charge", r"^(?:charge(?:\s*\([a-z]+\))?|service\s*charge(?:\s*\([a-z]+\))?|fee(?:\s*\([a-z]+\))?)$"),
+        ("total_amount", r"^(?:total\s*amount(?:\s*\([a-z]+\))?|total(?:\s*\([a-z]+\))?)$"),
+        ("sender_name", r"^(?:sender(?:'s)?\s*name|from\s*name|remitter(?:'s)?\s*name|payer(?:'s)?\s*name)$"),
+        ("sender_account", r"^(?:sender(?:'s)?\s*account|from\s*a/?c|debit\s*a/?c|debited\s*from\s*a/?c)$"),
+        ("receiver_name", r"^(?:receiver(?:'s)?\s*name|recipient(?:'s)?\s*name|beneficiary(?:'s)?\s*name|payee(?:'s)?\s*name|to\s*name)$"),
+        ("receiver_account", r"^(?:receiver(?:'s)?\s*account|beneficiary\s*a/?c|credit\s*a/?c|credited\s*to\s*a/?c|to\s*a/?c|destination\s*a/?c)$"),
+        ("date_time", r"^(?:date\s*/\s*time|txn\s*date|date|transaction\s*date)$"),
+        ("payment_attribute", r"^(?:payment\s*attribute|attribute)$"),
+        ("service_name", r"^(?:service\s*name|payment\s*service|transfer\s*channel)$"),
+        ("initiator", r"^(?:initiator|initiated\s*by)$"),
+        ("remarks", r"^(?:remarks|purpose|description)$"),
+    ]
+
+    for i, line in enumerate(lines):
+        clean_line = line.strip().lower()
+        clean_line = re.sub(r"[:\-#.]+$", "", clean_line).strip()
+        for key, pat in label_patterns:
+            if re.match(pat, clean_line, re.IGNORECASE):
+                if i + 1 < len(lines):
+                    next_val = lines[i + 1].strip()
+                    is_another_label = any(re.match(p, next_val.lower().rstrip(":-#.")) for _, p in label_patterns)
+                    if not is_another_label and key not in kv:
+                        kv[key] = next_val
+                break
+
+    return kv
+
+
+def _accounts_match(detected: Optional[str], expected: Optional[str]) -> bool:
+    """Matches detected bank accounts against expected accounts, supporting mask symbols (*, #, X)."""
+    if not detected or not expected:
+        return False
+    det_clean = detected.strip()
+    exp_clean = re.sub(r"[^0-9A-Za-z]", "", expected)
+    if not exp_clean:
+        return False
+
+    # 1. Masked accounts with prefix and suffix: e.g. 269###19000001, 269***19000001, 269XXX19000001
+    mask_match = re.match(r"^([0-9A-Za-z]+?)[#*Xx\-]+([0-9A-Za-z]+)$", det_clean)
+    if mask_match:
+        prefix = mask_match.group(1)
+        suffix = mask_match.group(2)
+        if len(prefix) >= 2 and len(suffix) >= 3 and exp_clean.startswith(prefix) and exp_clean.endswith(suffix):
+            return True
+
+    # 2. Suffix-only mask: e.g. ***19000001, ###19000001, XXX19000001
+    suffix_match = re.match(r"^[#*Xx\-]+([0-9A-Za-z]{4,12})$", det_clean)
+    if suffix_match:
+        suffix = suffix_match.group(1)
+        if exp_clean.endswith(suffix):
+            return True
+
+    # 3. Exact or substring without punctuation
+    det_alphanumeric = re.sub(r"[^0-9A-Za-z]", "", det_clean)
+    if det_alphanumeric and (det_alphanumeric in exp_clean or exp_clean in det_alphanumeric):
+        return True
+
+    return False
+
+
+def _names_match(detected: Optional[str], expected: Optional[str]) -> bool:
+    """Matches detected receiver/merchant name against expected name, supporting partial masking (*, #)."""
+    if not detected or not expected:
+        return False
+    det_clean = _normalise(detected)
+    exp_clean = _normalise(expected)
+    if not exp_clean:
+        return False
+
+    if det_clean in exp_clean or exp_clean in det_clean:
+        return True
+
+    # Match unmasked words of length >= 3 (e.g. "***** PANDEY" matching "SUJAN PANDEY")
+    det_tokens = re.findall(r"[A-Za-z]{3,}", det_clean)
+    exp_tokens = set(re.findall(r"[A-Za-z]{3,}", exp_clean))
+    if det_tokens:
+        for t in det_tokens:
+            if t in exp_tokens:
+                return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -305,11 +543,30 @@ def _check_payment_status(text: str) -> Tuple[str, Optional[str]]:
 def _extract_amounts(text: str) -> List[Decimal]:
     amounts = []
     seen = set()
+
+    # Prioritize amount from structured consecutive key-values if detected
+    kv = _scan_consecutive_key_values(text)
+    for amt_key in ["txn_amount", "amount", "total_amount"]:
+        if amt_key in kv:
+            clean_str = re.sub(r"[^\d.]", "", kv[amt_key].replace(",", ""))
+            try:
+                v = Decimal(clean_str)
+                if v > 0 and v not in seen:
+                    seen.add(v)
+                    amounts.append(v)
+            except InvalidOperation:
+                pass
+
     for pattern in _AMOUNT_PATTERNS:
         for match in re.finditer(pattern, text, re.IGNORECASE):
             raw = match.group(1).replace(",", "").strip()
             try:
                 val = Decimal(raw)
+                # Ignore standalone years (e.g. 2024..2030) and phone numbers (98/97 followed by 8 digits)
+                if val in {Decimal(y) for y in range(2020, 2035)}:
+                    continue
+                if Decimal("9700000000") <= val <= Decimal("9899999999"):
+                    continue
                 if val > 0 and val not in seen:
                     seen.add(val)
                     amounts.append(val)
@@ -320,6 +577,17 @@ def _extract_amounts(text: str) -> List[Decimal]:
 def _extract_transaction_ids(text: str) -> List[str]:
     ids = []
     seen = set()
+
+    # 1. Prioritize reference codes identified from label-value pairs
+    kv = _scan_consecutive_key_values(text)
+    for ref_k in ["reference_code", "reference_id", "transaction_id", "txn_id", "voucher_no", "trace_id"]:
+        if ref_k in kv:
+            cand = re.sub(r"[^A-Za-z0-9\-_]", "", kv[ref_k]).strip()
+            cand_u = cand.upper()
+            if cand and cand_u not in seen and cand_u not in _TXN_BLACKLIST and len(cand) >= 5:
+                seen.add(cand_u)
+                ids.append(cand)
+
     for pattern in _TXN_PATTERNS:
         for match in re.finditer(pattern, text, re.IGNORECASE):
             candidate = match.group(1).strip()
@@ -617,7 +885,7 @@ class BankReceiptParser(BaseReceiptParser):
     Provider-agnostic Nepalese Bank & Interbank Transfer parser.
     Supports Nabil, Global IME, NIC Asia, Nepal Bank, Himalayan, Siddhartha, Sanima,
     Prabhu, Kumari, Everest, Machhapuchchhre, Laxmi Sunrise, Citizens, ADBL, RBB,
-    Nepal SBI, Standard Chartered, ConnectIPS, Fonepay, and generic bank transfer slips.
+    Nepal SBI, Standard Chartered, ConnectIPS, Fonepay Interbank, and generic bank transfer slips.
     """
 
     def parse(self, text: str, payment_method=None) -> PaymentVerificationData:
@@ -626,41 +894,173 @@ class BankReceiptParser(BaseReceiptParser):
         txns = _extract_transaction_ids(text)
         dates = _extract_dates(text)
         times = _extract_times(text)
+        kv = _scan_consecutive_key_values(text)
 
-        # Bank Identification
-        bank_name = _extract_bank_name(text)
-        if not bank_name and payment_method and getattr(payment_method, "bank_name", ""):
-            bank_name = getattr(payment_method, "bank_name", "")
+        # 1. Structured Amounts & Charges
+        amount = None
+        service_charge = None
+        total_amount = None
 
-        # Sender details
-        sender_name = _extract_sender_name(text)
-        sender_acct = _extract_account_numbers(text, [
-            r"(?:sender\s+a/?c|debit\s+a/?c|debited\s+from\s+a/?c|from\s+a/?c|from\s+account)\s*[:\-]?\s*([A-Za-z0-9\*X\-]{4,30})",
+        if kv.get("txn_amount"):
+            try:
+                amount = Decimal(re.sub(r"[^\d.]", "", kv["txn_amount"].replace(",", "")))
+            except InvalidOperation:
+                pass
+        if kv.get("charge"):
+            try:
+                service_charge = Decimal(re.sub(r"[^\d.]", "", kv["charge"].replace(",", "")))
+            except InvalidOperation:
+                pass
+        if kv.get("total_amount"):
+            try:
+                total_amount = Decimal(re.sub(r"[^\d.]", "", kv["total_amount"].replace(",", "")))
+            except InvalidOperation:
+                pass
+
+        # Fallback to general amount extraction
+        if amount is None and amounts:
+            amount = amounts[0]
+
+        # 2. Transaction / Reference Code
+        ref_id = kv.get("reference_code") or (txns[0] if txns else None)
+
+        # 3. Interbank & Attribute Parsing (e.g. KMBLNPKA:2690351219000001)
+        receiver_bank = None
+        sender_bank = None
+        transfer_mode = kv.get("service_name") or ("Fonepay Interbank" if "fonepay" in text.lower() else None)
+
+        attribute = kv.get("payment_attribute")
+        if not attribute:
+            attr_match = re.search(r"\b([A-Za-z0-9]{4,12}:[0-9A-Za-z#*]{6,30})\b", text)
+            if attr_match:
+                attribute = attr_match.group(1).strip()
+
+        if attribute and ":" in attribute:
+            swift_prefix, attr_account = attribute.split(":", 1)
+            swift_clean = swift_prefix.upper().strip()
+            if swift_clean in _SWIFT_BANK_CODES:
+                receiver_bank = _SWIFT_BANK_CODES[swift_clean]
+
+        # 4. Paragraph Pattern Parsing (e.g. "payment of NPR 150.00 with Charge 10.00 from A/C 009###392 for KMBLNPKA:...")
+        para_match = re.search(
+            r"payment\s+of\s+(?:npr|rs\.?)?\s*([\d,.]+)\s+with\s+charge\s+([\d,.]+)\s+from\s+a/?c\s+([0-9#*A-Za-z]+)\s+for\s+([A-Za-z0-9:]+)",
+            text, re.IGNORECASE
+        )
+        if para_match:
+            try:
+                if amount is None:
+                    amount = Decimal(para_match.group(1).replace(",", ""))
+                if service_charge is None:
+                    service_charge = Decimal(para_match.group(2).replace(",", ""))
+            except InvalidOperation:
+                pass
+            para_sender_acct = para_match.group(3)
+            para_for = para_match.group(4)
+            if ":" in para_for and not receiver_bank:
+                sw = para_for.split(":", 1)[0].upper()
+                if sw in _SWIFT_BANK_CODES:
+                    receiver_bank = _SWIFT_BANK_CODES[sw]
+
+        # 5. Bank Identification (Sender vs Receiver)
+        detected_bank = _extract_bank_name(text)
+        if not receiver_bank:
+            receiver_bank = detected_bank
+
+        # Check for Siddhartha Bank (account prefix 009 or explicit text)
+        sender_acct_raw = kv.get("sender_account") or _extract_account_numbers(text, [
+            r"(?:sender\s+a/?c|debit\s+a/?c|debited\s+from\s+a/?c|from\s+a/?c|from\s+account)\s*[:\-]?\s*([A-Za-z0-9\*#X\-]{4,30})",
+        ])
+        if (sender_acct_raw and sender_acct_raw.startswith("009")) or ("siddhartha" in text.lower()):
+            sender_bank = "Siddhartha Bank Limited"
+
+        # If receiver bank is still not found and payment method has bank name, adopt it
+        if not receiver_bank and payment_method and getattr(payment_method, "bank_name", ""):
+            receiver_bank = getattr(payment_method, "bank_name", "")
+
+        # 6. Sender & Receiver Names/Accounts
+        sender_name = kv.get("sender_name") or _extract_sender_name(text)
+        sender_acct = sender_acct_raw
+
+        recipient_name = kv.get("receiver_name") or _extract_recipient(text)
+        receiver_acct = kv.get("receiver_account") or _extract_account_numbers(text, [
+            r"(?:beneficiary\s+a/?c|credit\s+a/?c|credited\s+to\s+a/?c|to\s+a/?c|to\s+account|a/?c\s+no|account\s+number)\s*[:\-]?\s*([A-Za-z0-9\*#X\-]{4,30})",
         ])
 
-        # Beneficiary / Receiver details
-        recipient_name = _extract_recipient(text)
-        receiver_acct = _extract_account_numbers(text, [
-            r"(?:beneficiary\s+a/?c|credit\s+a/?c|credited\s+to\s+a/?c|to\s+a/?c|to\s+account|a/?c\s+no|account\s+number)\s*[:\-]?\s*([A-Za-z0-9\*X\-]{4,30})",
-        ])
+        # If attribute provides full account while receiver_acct is masked, keep full account
+        if attribute and ":" in attribute:
+            attr_acct = attribute.split(":", 1)[1]
+            if attr_acct and not any(ch in attr_acct for ch in ["#", "*", "X"]):
+                receiver_acct = attr_acct
 
         return PaymentVerificationData(
             provider="Bank",
             status=status_code,
-            amount=amounts[0] if amounts else None,
+            amount=amount,
             currency="NPR",
             merchant_name=recipient_name,
             merchant_account=receiver_acct,
-            bank_name=bank_name,
+            bank_name=receiver_bank or detected_bank,
             bank_account=receiver_acct,
             sender_name=sender_name,
             sender_account=sender_acct,
-            transaction_id=txns[0] if txns else None,
-            reference_id=txns[1] if len(txns) > 1 else (txns[0] if txns else None),
+            sender_bank=sender_bank,
+            receiver_bank=receiver_bank,
+            transfer_mode=transfer_mode,
+            service_charge=service_charge,
+            total_amount=total_amount,
+            transaction_id=ref_id,
+            reference_id=txns[1] if len(txns) > 1 else ref_id,
             transaction_date=dates[0] if dates else None,
             transaction_time=times[0] if times else None,
             raw_ocr_text=text,
-            ocr_confidence=0.96 if (amounts and txns and bank_name) else 0.80,
+            ocr_confidence=0.96 if (amount and ref_id and (receiver_bank or detected_bank)) else 0.80,
+        )
+
+
+class GenericReceiptParser(BaseReceiptParser):
+    """
+    Fallback parser for generic or unrecognized Nepalese bank receipts and vouchers.
+    Extracts transaction reference, amounts, dates, and receiver information
+    without requiring a predetermined bank template.
+    """
+
+    def parse(self, text: str, payment_method=None) -> PaymentVerificationData:
+        status_code, _ = _check_payment_status(text)
+        amounts = _extract_amounts(text)
+        txns = _extract_transaction_ids(text)
+        dates = _extract_dates(text)
+        times = _extract_times(text)
+        recipient = _extract_recipient(text)
+        bank_name = _extract_bank_name(text)
+        kv = _scan_consecutive_key_values(text)
+
+        ref_id = kv.get("reference_code") or (txns[0] if txns else None)
+        amt = None
+        if kv.get("txn_amount"):
+            try:
+                amt = Decimal(re.sub(r"[^\d.]", "", kv["txn_amount"].replace(",", "")))
+            except InvalidOperation:
+                pass
+        if amt is None and amounts:
+            amt = amounts[0]
+
+        return PaymentVerificationData(
+            provider="Generic",
+            status=status_code,
+            amount=amt,
+            currency="NPR",
+            merchant_name=recipient or kv.get("receiver_name"),
+            merchant_account=kv.get("receiver_account"),
+            bank_name=bank_name,
+            bank_account=kv.get("receiver_account"),
+            sender_name=kv.get("sender_name") or _extract_sender_name(text),
+            sender_account=kv.get("sender_account"),
+            transaction_id=ref_id,
+            reference_id=txns[1] if len(txns) > 1 else ref_id,
+            transaction_date=dates[0] if dates else None,
+            transaction_time=times[0] if times else None,
+            raw_ocr_text=text,
+            ocr_confidence=0.75 if (amt and ref_id) else 0.50,
         )
 
 
@@ -671,7 +1071,7 @@ def _get_parser_for_provider(provider: str) -> BaseReceiptParser:
         return KhaltiReceiptParser()
     elif provider == "Bank":
         return BankReceiptParser()
-    return BaseReceiptParser()
+    return GenericReceiptParser()
 
 
 # ---------------------------------------------------------------------------
@@ -785,6 +1185,7 @@ def _check_receiver_match(
     payment_method,
     detected_bank_name: Optional[str] = None,
     detected_receiver_account: Optional[str] = None,
+    detected_receiver_bank: Optional[str] = None,
 ) -> Tuple[str, Optional[str]]:
     if not payment_method:
         return "UNKNOWN", None
@@ -800,17 +1201,18 @@ def _check_receiver_match(
         if len(phone_clean) >= 6 and phone_clean in re.sub(r"[^0-9]", "", full_text):
             return "PASS", merchant_phone
 
-        # Masked account number check for banks (e.g. XXXX1234 or ********1234)
+        # Robust account match (handles prefix, suffix, and mask characters like 269###19000001)
         if detected_receiver_account:
-            det_acct_digits = re.sub(r"[^0-9]", "", detected_receiver_account)
-            if len(det_acct_digits) >= 3 and phone_clean.endswith(det_acct_digits):
+            if _accounts_match(detected_receiver_account, merchant_phone):
                 return "PASS", merchant_phone
 
-    # 2. Bank name match for Bank Transfer
-    if provider == "Bank" and cfg_bank_name:
+    # 2. Receiving Bank Match (cross-bank transfer verification)
+    target_bank = detected_receiver_bank or detected_bank_name
+    if target_bank and cfg_bank_name:
+        det_bank_clean = _normalise(target_bank)
         cfg_bank_clean = _normalise(cfg_bank_name)
-        if cfg_bank_clean in text_norm:
-            pass  # Positive indicator for Bank
+        if det_bank_clean in cfg_bank_clean or cfg_bank_clean in det_bank_clean:
+            pass  # Positive confirmation of destination bank
 
     # 3. Account / Merchant name match
     if merchant_name:
@@ -819,26 +1221,17 @@ def _check_receiver_match(
         if len(name_clean) >= 3 and name_clean in text_norm:
             return "PASS", merchant_name
 
-        # Match against extracted recipient
+        # Match against extracted recipient (supporting masked names like ***** PANDEY)
         if detected_recipient:
-            det_clean = _normalise(detected_recipient)
-            if det_clean in name_clean or name_clean in det_clean:
+            if _names_match(detected_recipient, merchant_name):
                 return "PASS", detected_recipient
 
-            # Word-set overlap
-            cfg_words = [w for w in name_clean.split() if len(w) >= 3]
-            det_words = [w for w in det_clean.split() if len(w) >= 3]
-            if cfg_words and all(w in det_words for w in cfg_words):
-                return "PASS", detected_recipient
-            if det_words and all(w in cfg_words for w in det_words):
-                return "PASS", detected_recipient
-
-    # If recipient was explicitly extracted but contradicts configured receiver
+    # If recipient was explicitly extracted without masks but contradicts configured receiver
     if detected_recipient and merchant_name:
-        det_clean = _normalise(detected_recipient)
-        name_clean = _normalise(merchant_name)
-        if len(det_clean) >= 3 and not (det_clean in name_clean or name_clean in det_clean):
-            return "FAIL", detected_recipient
+        if not _names_match(detected_recipient, merchant_name):
+            # Only fail if it's clearly a different name without mask symbols
+            if not any(ch in detected_recipient for ch in ["*", "#", "X"]):
+                return "FAIL", detected_recipient
 
     return "UNKNOWN", None
 
@@ -979,6 +1372,7 @@ class CommonPaymentVerificationEngine:
             payment_method,
             detected_bank_name=vdata.bank_name,
             detected_receiver_account=vdata.bank_account,
+            detected_receiver_bank=vdata.receiver_bank,
         )
 
         # 6. Global Duplicate Check
@@ -1064,6 +1458,11 @@ class CommonPaymentVerificationEngine:
             "detected_sender_name": vdata.sender_name,
             "detected_sender_account": vdata.sender_account,
             "detected_recipient_account": vdata.bank_account or vdata.merchant_account,
+            "detected_sender_bank": vdata.sender_bank,
+            "detected_receiver_bank": vdata.receiver_bank,
+            "detected_transfer_mode": vdata.transfer_mode,
+            "detected_service_charge": str(vdata.service_charge) if vdata.service_charge is not None else None,
+            "detected_total_amount": str(vdata.total_amount) if vdata.total_amount is not None else None,
             "is_duplicate_transaction": duplicate_status == "FAIL",
             "is_duplicate_image": duplicate_status == "FAIL",
             "is_resubmission": is_resubmission or bool((getattr(payment, "verification_result", None) or {}).get("is_resubmission")),
@@ -1095,6 +1494,11 @@ class CommonPaymentVerificationEngine:
             "detected_sender_name": vdata.sender_name,
             "detected_sender_account": vdata.sender_account,
             "detected_recipient_account": vdata.bank_account or vdata.merchant_account,
+            "detected_sender_bank": vdata.sender_bank,
+            "detected_receiver_bank": vdata.receiver_bank,
+            "detected_transfer_mode": vdata.transfer_mode,
+            "detected_service_charge": str(vdata.service_charge) if vdata.service_charge is not None else None,
+            "detected_total_amount": str(vdata.total_amount) if vdata.total_amount is not None else None,
             "is_duplicate_transaction": False,
             "is_duplicate_image": False,
             "is_resubmission": False,
@@ -1144,18 +1548,28 @@ class PaymentProofVerificationService:
                 failure_reasons=dup_warnings or ["Duplicate transaction or receipt image detected."]
             )
 
-        # Image validation
-        valid_img, img_err, image = _validate_image_content(image_bytes)
-        if not valid_img or image is None:
+        # Document / Screenshot validation & extraction (PDF or Image)
+        file_name = getattr(payment.screenshot, "name", "")
+        valid_doc, doc_err, image, digital_text, doc_type = _extract_document_or_image_content(
+            image_bytes, filename=file_name
+        )
+        if not valid_doc:
             return self._fallback_result(
-                img_err,
+                doc_err,
                 outcome="NEEDS_ADMIN_REVIEW",
                 image_hash=image_hash,
-                ocr_engine="image_error",
-                failure_reasons=[img_err]
+                ocr_engine="format_error",
+                failure_reasons=[doc_err]
             )
 
-        raw_text, ocr_engine_name = _run_ocr(image)
+        if digital_text and len(digital_text.strip()) >= 30:
+            raw_text = digital_text
+            ocr_engine_name = "digital_pdf"
+        elif image is not None:
+            raw_text, ocr_engine_name = _run_ocr(image)
+        else:
+            raw_text = ""
+            ocr_engine_name = "none"
 
         if ocr_engine_name == "none" or len(raw_text.strip()) < 15:
             return self._fallback_result(
@@ -1163,7 +1577,7 @@ class PaymentProofVerificationService:
                 outcome="NEEDS_ADMIN_REVIEW",
                 image_hash=image_hash,
                 ocr_engine=ocr_engine_name,
-                failure_reasons=["Receipt image is blurry or contains illegible text."]
+                failure_reasons=["Receipt proof is blurry or contains illegible text."]
             )
 
         # Provider detection

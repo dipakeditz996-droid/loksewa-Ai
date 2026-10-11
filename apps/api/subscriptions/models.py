@@ -3,7 +3,10 @@ from core.models import User
 from marketplace.models import PaymentMethod
 from datetime import timedelta
 from django.utils import timezone
-from core.upload_validators import validate_image_size_5mb, validate_image_extension
+from core.upload_validators import (
+    validate_image_size_5mb, validate_image_extension,
+    validate_receipt_size_10mb, validate_receipt_file,
+)
 
 class SubscriptionPlan(models.Model):
     DURATION_UNIT_CHOICES = (
@@ -92,6 +95,11 @@ class SubscriptionPlan(models.Model):
         default=dict, blank=True,
         help_text="Configured attempts per category. -1 represents Unlimited."
     )
+    # Complete Platform-wide Feature Limits & Access
+    feature_limits = models.JSONField(
+        default=dict, blank=True,
+        help_text="Detailed platform-wide feature limits and entitlements for Objective Exams, Subjective Exams, Games, Practice, AI, Notes, and Modules."
+    )
     free_mock_exams = models.ManyToManyField(
         'exams.Examination',
         blank=True,
@@ -134,6 +142,11 @@ class SubscriptionPlan(models.Model):
         default='NEVER'
     )
 
+    is_default_free = models.BooleanField(
+        default=False,
+        help_text="Designates this package as the default Free Plan automatically granted to students on registration."
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     is_published = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
@@ -142,6 +155,27 @@ class SubscriptionPlan(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def is_free(self):
+        return self.price <= 0 or self.is_default_free
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        super().clean()
+        if self.is_default_free:
+            if self.price > 0:
+                raise ValidationError({'price': 'The default Free Plan must have a price of Rs. 0.00.'})
+            if self.status != 'ACTIVE':
+                raise ValidationError({'status': 'The default Free Plan must have an ACTIVE status.'})
+            if not self.is_published:
+                raise ValidationError({'is_published': 'The default Free Plan must be published.'})
+
+    def save(self, *args, **kwargs):
+        if self.is_default_free:
+            # Atomically ensure only one plan is marked as default free
+            SubscriptionPlan.objects.exclude(pk=self.pk).filter(is_default_free=True).update(is_default_free=False)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} - {self.price}"
@@ -156,6 +190,7 @@ class Subscription(models.Model):
     SOURCE_CHOICES = (
         ('CUSTOMER_PAYMENT', 'Customer Payment'),
         ('ADMIN_GRANT', 'Admin Grant'),
+        ('FREE_PLAN', 'Free Plan'),
     )
     
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
@@ -285,10 +320,11 @@ class SubscriptionPayment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     transaction_id = models.CharField(max_length=255)
     
-    screenshot = models.ImageField(
+    screenshot = models.FileField(
         upload_to='subscriptions/payment_proofs/',
-        validators=[validate_image_size_5mb, validate_image_extension],
+        validators=[validate_receipt_size_10mb, validate_receipt_file],
         max_length=500,
+        help_text='Uploaded payment evidence (screenshot or PDF bank receipt)'
     )
     note = models.TextField(blank=True)
     

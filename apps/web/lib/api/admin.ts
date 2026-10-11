@@ -147,7 +147,7 @@ export interface AdminCreateUserResponse {
     packageType: string;
     subscriptionId: number;
     courses: string[];
-    expiryDate: string;
+    expiryDate: string | null;
   }>;
   enrolledCourses?: string[];
   message: string;

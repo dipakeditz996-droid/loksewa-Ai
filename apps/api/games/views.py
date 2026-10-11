@@ -142,6 +142,20 @@ class MatchmakingView(views.APIView):
                 existing_match = transition_to_bot_match(existing_match)
             return Response(GameMatchSerializer(existing_match).data)
 
+        # Check 1v1 game access quota before creating or joining a new match
+        from subscriptions.entitlements import EntitlementService
+        allowed, reason, info = EntitlementService.check_game_access(user, '1v1')
+        if not allowed:
+            return Response(
+                {
+                    'error': reason,
+                    'feature': info.get('feature', 'game:1v1'),
+                    'remaining': info.get('remaining', 0),
+                    'upgrade_url': info.get('upgrade_url', '/student/plans'),
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # 2. Determine student course context (e.g. PSC 5th Level Civil)
         exam_id = None
         try:
@@ -183,6 +197,7 @@ class MatchmakingView(views.APIView):
                     first_q.deadline = timezone.now() + timedelta(seconds=QUESTION_TIME_SECONDS + 5)
                     first_q.save()
                 waiting_match.save()
+                EntitlementService.consume_game_match(user, '1v1', waiting_match.id)
                 return Response(GameMatchSerializer(waiting_match).data)
 
             # 4. No human waiting match -> Create new search with 20s timeout window
@@ -194,6 +209,7 @@ class MatchmakingView(views.APIView):
                 exam_id=exam_id,
                 matchmaking_timeout_at=timeout_at
             )
+            EntitlementService.consume_game_match(user, '1v1', new_match.id)
             return Response(GameMatchSerializer(new_match).data)
 
 class MatchCancelView(views.APIView):
@@ -221,6 +237,19 @@ class InviteMatchView(views.APIView):
 
     def post(self, request):
         user = request.user
+        from subscriptions.entitlements import EntitlementService
+        allowed, reason, info = EntitlementService.check_game_access(user, '1v1')
+        if not allowed:
+            return Response(
+                {
+                    'error': reason,
+                    'feature': info.get('feature', 'game:1v1'),
+                    'remaining': info.get('remaining', 0),
+                    'upgrade_url': info.get('upgrade_url', '/student/plans'),
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # Cancel old invites
         GameMatch.objects.filter(player1=user, status='SEARCHING', is_invite_only=True).update(status='CANCELLED')
 
@@ -229,6 +258,7 @@ class InviteMatchView(views.APIView):
             is_invite_only=True,
             invite_code=generate_invite_code()
         )
+        EntitlementService.consume_game_match(user, '1v1', match.id)
         return Response(GameMatchSerializer(match).data)
 
 class JoinMatchView(views.APIView):
@@ -475,6 +505,19 @@ class SurvivalStartView(views.APIView):
 
     def post(self, request):
         user = request.user
+        from subscriptions.entitlements import EntitlementService
+        allowed, reason, info = EntitlementService.check_game_access(user, 'survival')
+        if not allowed:
+            return Response(
+                {
+                    'error': reason,
+                    'feature': info.get('feature', 'game:survival'),
+                    'remaining': info.get('remaining', 0),
+                    'upgrade_url': info.get('upgrade_url', '/student/plans'),
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         # Cancel previous active
         SurvivalGame.objects.filter(player=user, status='IN_PROGRESS').update(status='COMPLETED')
         
@@ -484,6 +527,7 @@ class SurvivalStartView(views.APIView):
         game.current_question = q
         game.question_deadline = timezone.now() + timedelta(seconds=t + 2)
         game.save()
+        EntitlementService.consume_game_match(user, 'survival', game.id)
         
         return Response(ActiveSurvivalSerializer(game).data)
 
@@ -696,18 +740,32 @@ class WeeklyQuizStartView(views.APIView):
     def post(self, request):
         quiz = get_or_create_weekly_quiz(request.user)
 
-        # Check for in-progress attempt to resume
+        # Check for in-progress attempt to resume (resuming does not charge quota)
         attempt = WeeklyQuizAttempt.objects.filter(
             quiz=quiz, student=request.user, status='IN_PROGRESS'
         ).first()
 
         if not attempt:
+            from subscriptions.entitlements import EntitlementService
+            allowed, reason, info = EntitlementService.check_game_access(request.user, 'weekly_quiz')
+            if not allowed:
+                return Response(
+                    {
+                        'error': reason,
+                        'feature': info.get('feature', 'game:weekly_quiz'),
+                        'remaining': info.get('remaining', 0),
+                        'upgrade_url': info.get('upgrade_url', '/student/plans'),
+                    },
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
             attempt = WeeklyQuizAttempt.objects.create(
                 quiz=quiz,
                 student=request.user,
                 total_questions=quiz.quiz_questions.count(),
                 status='IN_PROGRESS'
             )
+            EntitlementService.consume_game_match(request.user, 'weekly_quiz', attempt.id)
 
         questions = quiz.quiz_questions.select_related('question').order_by('order')
         questions_data = WeeklyQuizQuestionClientSerializer(questions, many=True).data
@@ -1236,7 +1294,21 @@ class DailyDrillStartView(views.APIView):
                     existing_session.save(update_fields=['status', 'time_taken_seconds', 'completed_at'])
             return Response(DailyDrillSessionSerializer(existing_session).data)
 
-        # 2. Determine student's authorized course/exam
+        # 2. Check game entitlement for daily drill
+        from subscriptions.entitlements import EntitlementService
+        allowed, reason, info = EntitlementService.check_game_access(request.user, 'daily_drill')
+        if not allowed:
+            return Response(
+                {
+                    'error': reason or "Daily Drill allowance exhausted. Upgrade your package for more games access.",
+                    'feature': info.get('feature', 'game:daily_drill'),
+                    'remaining': info.get('remaining', 0),
+                    'upgrade_url': info.get('upgrade_url', '/student/plans'),
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # 3. Determine student's authorized course/exam
         from courses.access import get_student_course_context, authorized_exam_ids
         ctx = get_student_course_context(request.user)
         course_title = "Loksewa General Preparation"
@@ -1255,7 +1327,7 @@ class DailyDrillStartView(views.APIView):
             elif hasattr(request.user, 'student_profile') and request.user.student_profile.target_position_id:
                 exam_id = request.user.student_profile.target_position_id
 
-        # 3. Question Selection with Weak Areas Prioritization
+        # 4. Question Selection with Weak Areas Prioritization
         weak_mastery_qs = QuestionMastery.objects.filter(
             user=request.user,
             question__status='approved',
@@ -1315,7 +1387,7 @@ class DailyDrillStartView(views.APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # 4. Atomic Session Creation
+        # 5. Atomic Session Creation & Entitlement Consumption
         with transaction.atomic():
             exam_obj = Exam.objects.filter(id=exam_id).first() if exam_id else None
             session = DailyDrillSession.objects.create(
@@ -1334,6 +1406,7 @@ class DailyDrillStartView(views.APIView):
                     question=q,
                     order=idx
                 )
+            EntitlementService.consume_game_match(request.user, 'daily_drill', session.id)
 
         return Response(DailyDrillSessionSerializer(session).data, status=status.HTTP_201_CREATED)
 

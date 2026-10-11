@@ -38,7 +38,14 @@ def _mark_verification_failed(payment_id, error):
         return
 
     payment.verification_status = 'VERIFICATION_FAILED'
-    payment.verification_result = {'error_message': str(error)[:500]}
+    payment.verification_result = {
+        'outcome': 'NEEDS_ADMIN_REVIEW',
+        'error_type': 'verification_engine_failure',
+        'error_message': str(error)[:500],
+        'receipt_legible': False,
+        'notes': 'Automatic verification engine encountered an unexpected error; forwarded for administrator review.',
+        'failure_reasons': [f'Verification engine error: {str(error)[:200]}'],
+    }
     payment.ai_verification_at = timezone.now()
     payment.save(update_fields=[
         'verification_status', 'verification_result', 'ai_verification_at',
@@ -52,17 +59,114 @@ def _mark_verification_failed(payment_id, error):
     _notify_manual_review(payment, 'Automatic verification was unavailable.')
 
 
-def enqueue_payment_verification(payment_id):
-    """Queue verification after the payment transaction has committed."""
+def dispatch_payment_verification_sync(payment_id: int):
+    """Executes verification and updates payment status."""
+    from .models import SubscriptionPayment
+    from .payment_verification import PaymentProofVerificationService
+
+    payment = SubscriptionPayment.objects.filter(
+        pk=payment_id,
+        status='PENDING',
+    ).select_related('student', 'plan').first()
+    if not payment:
+        return {'status': 'skipped'}
+
     try:
-        verify_payment_proof.delay(payment_id)
+        result = PaymentProofVerificationService().verify(payment)
     except Exception as exc:
-        logger.info(
-            "Celery broker unavailable (%s); executing verification in background thread for payment_id=%s",
-            exc, payment_id
+        _mark_verification_failed(payment_id, exc)
+        return {'status': 'failed'}
+
+    updated = SubscriptionPayment.objects.filter(
+        pk=payment_id,
+        status='PENDING',
+    ).update(
+        verification_status=(
+            'VERIFIED_CONFIDENT'
+            if result.get('outcome') in ('AUTO_VERIFIED', 'confident_match')
+            else 'VERIFIED_UNCERTAIN'
+        ),
+        verification_result=result,
+        ai_verification_at=timezone.now(),
+    )
+    if not updated:
+        return {'status': 'skipped'}
+
+    if result.get('outcome') in ('AUTO_VERIFIED', 'confident_match'):
+        from .services import approve_payment_logic
+        payment.refresh_from_db()
+        try:
+            approve_payment_logic(payment, admin_user=None)
+        except Exception as e:
+            logger.exception("Auto-approval failed for payment_id=%s: %s", payment.id, e)
+            _notify_manual_review(payment, 'Auto-verification succeeded but auto-approval failed.')
+            return {'status': 'manual_review'}
+        return {'status': 'verified'}
+
+    return {'status': 'manual_review'}
+
+
+def enqueue_payment_verification(payment_id: int):
+    """
+    Guarantees asynchronous execution of payment verification:
+    1. If Celery is configured and an active worker is reachable, enqueues via Celery task.
+    2. If Celery is eager (testing or CELERY_TASK_ALWAYS_EAGER), executes synchronously.
+    3. Otherwise (broker unreachable, no worker, connection refused), spawns a background
+       daemon thread with proper database connection cleanup.
+    Never lets an unavailable Celery broker cause VERIFICATION_FAILED or 'OCR Unavailable'!
+    """
+    import sys
+    import threading
+    from django.conf import settings
+    from django.db import connection
+
+    # Eager mode (tests / local eager config)
+    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False) or 'test' in sys.argv:
+        try:
+            res = verify_payment_proof.apply(args=[payment_id])
+            logger.info("Executed payment verification #%d via eager task %s", payment_id, res.id)
+            return str(res.id)
+        except Exception as exc:
+            logger.warning("Eager task execution failed, running directly: %s", exc)
+            dispatch_payment_verification_sync(payment_id)
+            return "sync-executed"
+
+    # Live Celery worker check
+    celery_dispatched = False
+    broker_url = getattr(settings, 'CELERY_BROKER_URL', '')
+    if broker_url and 'redis' in broker_url:
+        try:
+            from backend.celery import app as celery_app
+            pings = celery_app.control.ping(timeout=0.2)
+            if pings:
+                res = verify_payment_proof.apply_async(args=[payment_id])
+                logger.info("Enqueued payment #%d to active Celery worker %s", payment_id, res.id)
+                celery_dispatched = True
+                return str(res.id)
+        except Exception as ping_err:
+            logger.debug("Celery worker not available: %s. Using thread worker.", ping_err)
+
+    if not celery_dispatched:
+        def _thread_worker(pid: int):
+            connection.close()  # clean per-thread connection
+            try:
+                dispatch_payment_verification_sync(pid)
+            except Exception as thread_err:
+                logger.exception("Background thread failed for payment #%d: %s", pid, thread_err)
+                _mark_verification_failed(pid, thread_err)
+            finally:
+                connection.close()
+
+        thread = threading.Thread(
+            target=_thread_worker,
+            args=(payment_id,),
+            name=f"payment-verify-{payment_id}",
+            daemon=True,
         )
-        import threading
-        threading.Thread(target=verify_payment_proof, args=(payment_id,), daemon=True).start()
+        thread.start()
+        logger.info("Started background thread worker for payment #%d", payment_id)
+        return f"thread-{payment_id}"
+
 
 
 @shared_task(name='subscriptions.tasks.verify_payment_proof')

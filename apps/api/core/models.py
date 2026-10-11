@@ -387,7 +387,7 @@ class AdminSettings(models.Model):
         """Get or create the singleton settings object with fast caching."""
         try:
             cached = cache.get(cls.SETTINGS_CACHE_KEY)
-            if cached is not None:
+            if cached is not None and cls.objects.filter(pk=cached.pk).exists():
                 return cached
         except Exception:
             pass
@@ -399,6 +399,8 @@ class AdminSettings(models.Model):
         return obj
 
     def save(self, *args, **kwargs):
+        if self.pk and not self.__class__.objects.filter(pk=self.pk).exists():
+            kwargs.pop('update_fields', None)
         super().save(*args, **kwargs)
         try:
             cache.delete(self.SETTINGS_CACHE_KEY)

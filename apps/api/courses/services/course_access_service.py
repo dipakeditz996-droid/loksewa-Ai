@@ -93,9 +93,12 @@ class CourseAccessService:
             if not plan:
                 continue
 
+            if getattr(plan, 'course_access_type', 'SELECTED') == 'NONE':
+                continue
+
             pkg_type = getattr(plan, 'package_type', 'SINGLE')
 
-            if pkg_type == 'ALL_ACCESS':
+            if pkg_type == 'ALL_ACCESS' or getattr(plan, 'course_access_type', None) == 'ALL_ACCESS':
                 # ALL_ACCESS unlocks all currently published courses
                 return Course.objects.filter(status='published')
 

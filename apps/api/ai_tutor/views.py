@@ -86,15 +86,9 @@ class SendMessageView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS
             )
 
-        # Usage limiting (admin-configurable via AdminSettings.ai_tutor_daily_message_limit)
+        # Today's usage record
         today = datetime.date.today()
         usage, created = TutorUsage.objects.get_or_create(student=request.user, date=today)
-
-        if usage.request_count >= ai_tutor_settings.ai_tutor_daily_message_limit:
-            return Response(
-                {"error": "Daily limit reached. Please try again tomorrow."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS
-            )
 
         # Save user message
         user_msg = Message.objects.create(
@@ -105,7 +99,13 @@ class SendMessageView(APIView):
         
         # Generate AI response
         ai_service = AITutorService()
-        response_text = ai_service.generate_response(conversation, content)
+        try:
+            response_text = ai_service.generate_response(conversation, content)
+        except Exception as e:
+            return Response(
+                {"error": f"AI Tutor service temporarily unavailable: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
 
         # Save AI message
         ai_msg = Message.objects.create(

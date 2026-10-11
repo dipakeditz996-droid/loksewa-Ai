@@ -215,14 +215,14 @@ class Subscription(models.Model):
     def is_active(self):
         if self.status != 'ACTIVE':
             return False
-        if self.expiry_date:
+        if self.expiry_date and self.expiry_date.year >= 2000:
             return self.expiry_date > timezone.now()
         # Quota-only / lifetime packages remain active until explicitly cancelled or exhausted
         return True
 
     @property
     def has_expiry(self):
-        return self.expiry_date is not None
+        return bool(self.expiry_date and self.expiry_date.year >= 2000)
 
 
 class StudentEntitlement(models.Model):

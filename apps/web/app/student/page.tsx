@@ -133,6 +133,7 @@ export default function StudentDashboardPage() {
   } = useQuery({
     queryKey: ["student-dashboard", effectiveCourseId ?? null],
     queryFn: () => dashboardApi.getStudentDashboard(effectiveCourseId),
+    enabled: !isCtxLoading,
     staleTime: 45 * 1000,
   });
   const loading = !data && (isCtxLoading || isDashboardLoading);

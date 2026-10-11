@@ -152,9 +152,13 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         return "Admin Granted" if obj.source == 'ADMIN_GRANT' else "Student Payment"
 
     def get_authorized_courses(self, obj):
+        request = self.context.get('request')
+        cache_attr = f'_auth_courses_{obj.student_id}'
+        if request and hasattr(request, cache_attr):
+            return getattr(request, cache_attr)
         from courses.models import Enrollment
         enrollments = Enrollment.objects.filter(student=obj.student, status='active').select_related('course', 'course__exam')
-        return [
+        res = [
             {
                 "id": e.course.id,
                 "title": e.course.title,
@@ -162,6 +166,9 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             }
             for e in enrollments
         ]
+        if request:
+            setattr(request, cache_attr, res)
+        return res
 
     has_expiry = serializers.BooleanField(read_only=True)
 
@@ -169,7 +176,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         """Derived from expiry_date when present."""
         if obj.status != 'ACTIVE':
             return 0
-        if not obj.expiry_date:
+        if not obj.expiry_date or obj.expiry_date.year < 2000:
             return None
         delta = obj.expiry_date - timezone.now()
         return max(delta.days, 0)
@@ -177,7 +184,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     def get_computed_status(self, obj):
         if obj.status != 'ACTIVE':
             return obj.status
-        if not obj.expiry_date:
+        if not obj.expiry_date or obj.expiry_date.year < 2000:
             return 'ACTIVE'
         if obj.expiry_date <= timezone.now():
             return 'EXPIRED'

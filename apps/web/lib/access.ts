@@ -4,7 +4,7 @@
 
 export interface UserSubscription {
   status: string;
-  expiry_date: string;
+  expiry_date: string | null;
   plan_details: {
     features: string[];
   };
@@ -21,10 +21,13 @@ export function hasFeature(subscription: UserSubscription | null | undefined, fe
   
   if (subscription.status !== 'ACTIVE') return false;
   
-  const expiryDate = new Date(subscription.expiry_date);
-  const now = new Date();
-  
-  if (expiryDate <= now) return false;
+  if (subscription.expiry_date) {
+    const expiryDate = new Date(subscription.expiry_date);
+    const now = new Date();
+    if (!isNaN(expiryDate.getTime()) && expiryDate.getUTCFullYear() >= 2000 && expiryDate <= now) {
+      return false;
+    }
+  }
   
   // If the plan has features array, check if it includes the requested feature
   if (subscription.plan_details?.features) {

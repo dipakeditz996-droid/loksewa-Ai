@@ -791,7 +791,7 @@ def _get_package_status(user):
         }
 
     rem_days = None
-    if active_subscription and active_subscription.expiry_date:
+    if active_subscription and active_subscription.expiry_date and active_subscription.expiry_date.year >= 2000:
         rem_days = max((active_subscription.expiry_date - timezone.now()).days, 0)
 
     result = {
@@ -801,7 +801,7 @@ def _get_package_status(user):
         "planName": active_subscription.plan.name if active_subscription else None,
         "status": active_subscription.status if active_subscription else None,
         "hasExpiry": active_subscription.has_expiry if active_subscription else False,
-        "expiryDate": active_subscription.expiry_date.isoformat() if (active_subscription and active_subscription.expiry_date) else None,
+        "expiryDate": active_subscription.expiry_date.isoformat() if (active_subscription and active_subscription.expiry_date and active_subscription.expiry_date.year >= 2000) else None,
         "remainingDays": rem_days,
         "latestPayment": latest_payment_data,
     }

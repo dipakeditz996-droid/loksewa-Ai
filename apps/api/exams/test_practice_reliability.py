@@ -491,6 +491,8 @@ class SyllabusListQueryCostTests(PracticeBase):
                         if t == 0:
                             UserTopicProgress.objects.create(user=self.student, topic=topic, status='in-progress',
                                                              progress=40, accuracy=75)
+        from core.models import AdminSettings
+        AdminSettings.get_settings()
         with CaptureQueriesContext(connection) as ctx:
             r = self.client.get('/api/exams/')
         self.assertEqual(r.status_code, 200)

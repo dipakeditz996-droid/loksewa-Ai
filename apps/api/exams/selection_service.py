@@ -54,10 +54,7 @@ class QuestionSelectionService:
         from courses.services.course_access_service import CourseAccessService
 
         all_course_exam_ids = list(CourseAccessService.get_all_course_exam_ids())
-        qs = Question.objects.filter(status=self.APPROVED_STATUS).select_related(
-            "topic", "topic__chapter", "topic__chapter__subject",
-            "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
-        )
+        qs = Question.objects.filter(status=self.APPROVED_STATUS)
         if all_course_exam_ids:
             qs = qs.filter(
                 Q(exam_id__in=all_course_exam_ids) |
@@ -398,11 +395,21 @@ class QuestionSelectionService:
             ids = list(base_qs.values_list("id", flat=True))
             selected_ids = random.sample(ids, count) if len(ids) >= count else ids
             from .models import Question
-            questions = list(Question.objects.filter(id__in=selected_ids))
+            questions = list(
+                Question.objects.filter(id__in=selected_ids).select_related(
+                    "topic", "topic__chapter", "topic__chapter__subject",
+                    "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
+                )
+            )
             # Shuffle to avoid consistent ordering by id
             random.shuffle(questions)
         else:
-            questions = list(base_qs[:count])
+            questions = list(
+                base_qs.select_related(
+                    "topic", "topic__chapter", "topic__chapter__subject",
+                    "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
+                )[:count]
+            )
 
         return {
             "questions": questions,
@@ -440,7 +447,12 @@ class QuestionSelectionService:
             selected_questions.extend(selected_ids)
 
         from .models import Question
-        questions = list(Question.objects.filter(id__in=selected_questions))
+        questions = list(
+            Question.objects.filter(id__in=selected_questions).select_related(
+                "topic", "topic__chapter", "topic__chapter__subject",
+                "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
+            )
+        )
         if randomize:
             random.shuffle(questions)
 
@@ -478,7 +490,12 @@ class QuestionSelectionService:
                 )
 
         from .models import Question
-        questions = list(Question.objects.filter(id__in=selected_ids))
+        questions = list(
+            Question.objects.filter(id__in=selected_ids).select_related(
+                "topic", "topic__chapter", "topic__chapter__subject",
+                "topic__chapter__subject__paper", "topic__chapter__subject__paper__exam"
+            )
+        )
         if randomize:
             random.shuffle(questions)
 

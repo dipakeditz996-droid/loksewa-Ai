@@ -62,6 +62,14 @@ class CourseAccessService:
         if cls.is_privileged(user):
             return Course.objects.filter(status='published')
 
+        cached_ids = getattr(user, '_accessible_course_ids_cache', None)
+        if cached_ids is not None:
+            if cached_ids == '__all__':
+                return Course.objects.filter(status='published')
+            if not cached_ids:
+                return Course.objects.none()
+            return Course.objects.filter(id__in=cached_ids, status='published')
+
         now = timezone.now()
         accessible_course_ids: Set[int] = set()
 
@@ -100,6 +108,7 @@ class CourseAccessService:
 
             if pkg_type == 'ALL_ACCESS' or getattr(plan, 'course_access_type', None) == 'ALL_ACCESS':
                 # ALL_ACCESS unlocks all currently published courses
+                setattr(user, '_accessible_course_ids_cache', '__all__')
                 return Course.objects.filter(status='published')
 
             sub_payment = None
@@ -178,6 +187,7 @@ class CourseAccessService:
             except Exception:
                 pass
 
+        setattr(user, '_accessible_course_ids_cache', accessible_course_ids)
         if not accessible_course_ids:
             return Course.objects.none()
 
@@ -251,6 +261,10 @@ class CourseAccessService:
         if cls.is_privileged(user):
             return None
 
+        cached_exam_ids = getattr(user, '_accessible_exam_ids_cache', None)
+        if cached_exam_ids is not None and exams is None:
+            return cached_exam_ids
+
         accessible_courses = cls.get_accessible_courses(user)
         if not accessible_courses.exists():
             return set()
@@ -280,7 +294,10 @@ class CourseAccessService:
             covered.add(node)
             stack.extend(children.get(node, []))
 
-        return {i for i in covered if status_of.get(i) == 'active'}
+        res = {i for i in covered if status_of.get(i) == 'active'}
+        if exams is None:
+            setattr(user, '_accessible_exam_ids_cache', res)
+        return res
 
     @classmethod
     def get_accessible_academic_scope(cls, user) -> Dict[str, Any]:

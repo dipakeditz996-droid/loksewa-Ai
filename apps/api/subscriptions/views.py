@@ -352,7 +352,9 @@ class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Subscription.objects.filter(student=self.request.user).order_by('-created_at')
+        return Subscription.objects.filter(student=self.request.user).select_related(
+            'plan', 'granted_by', 'plan__course', 'student'
+        ).prefetch_related('plan__eligible_courses').order_by('-created_at')
 
     @action(detail=False, methods=['get'], url_path='my-entitlements')
     def my_entitlements(self, request):
@@ -399,9 +401,12 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        qs = SubscriptionPayment.objects.select_related(
+            'plan', 'student', 'plan__course', 'verified_by'
+        )
         if self.request.user.role in ['admin', 'super-admin']:
-            return SubscriptionPayment.objects.all().order_by('-submitted_at')
-        return SubscriptionPayment.objects.filter(student=self.request.user).order_by('-submitted_at')
+            return qs.order_by('-submitted_at')
+        return qs.filter(student=self.request.user).order_by('-submitted_at')
 
     @transaction.atomic
     def perform_create(self, serializer):

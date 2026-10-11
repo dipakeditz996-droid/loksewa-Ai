@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { 
-  CheckCircle2, XCircle, Clock, Eye, AlertCircle, Calendar, 
+  CheckCircle2, XCircle, Clock, Eye, AlertCircle, 
   ShieldCheck, ArrowRight, Sparkles, CreditCard, Copy, Check, 
-  Printer, X, BookOpen
+  Printer, X, BookOpen, Infinity as InfinityIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,17 +26,21 @@ interface Subscription {
     id?: number;
     name: string;
     package_type?: string;
-    duration: number;
-    duration_unit: string;
+    duration?: number | null;
+    duration_unit?: string | null;
     price: string;
     features?: string[];
   };
   status: string;
-  start_date: string;
-  expiry_date: string;
-  remaining_days: number;
+  source?: string;
+  start_date: string | null;
+  expiry_date: string | null;
+  has_expiry?: boolean;
+  remaining_days: number | null;
   computed_status: "ACTIVE" | "EXPIRING_SOON" | "EXPIRED" | "CANCELLED";
   authorized_courses?: AuthorizedCourse[];
+  granted_by_username?: string | null;
+  access_source?: string;
 }
 
 interface Payment {
@@ -69,9 +73,45 @@ interface TimeRemaining {
   isExpired: boolean;
 }
 
-function calculateExactTimeRemaining(expiryDateStr: string): TimeRemaining {
-  const expiry = new Date(expiryDateStr).getTime();
-  const now = new Date().getTime();
+/**
+ * Validates that a date string is not null/empty, not NaN, and not the Unix epoch (1970).
+ */
+function isValidDate(dateStr: string | null | undefined): boolean {
+  if (!dateStr || dateStr === "null" || dateStr === "undefined" || dateStr.trim() === "") {
+    return false;
+  }
+  const d = new Date(dateStr);
+  const time = d.getTime();
+  if (isNaN(time)) return false;
+  // Guard against Unix epoch (1970) or timestamps prior to year 2000
+  if (d.getUTCFullYear() < 2000) return false;
+  return true;
+}
+
+function formatSubscriptionDate(dateStr: string | null | undefined, fallback: string = "—"): string {
+  if (!isValidDate(dateStr)) return fallback;
+  return new Date(dateStr!).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+}
+
+function formatSubscriptionDateTime(dateStr: string | null | undefined, fallback: string = "—"): string {
+  if (!isValidDate(dateStr)) return fallback;
+  return new Date(dateStr!).toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function calculateExactTimeRemaining(expiryDateStr: string | null | undefined): TimeRemaining | null {
+  if (!isValidDate(expiryDateStr)) return null;
+  const expiry = new Date(expiryDateStr!).getTime();
+  const now = Date.now();
   const diff = expiry - now;
 
   if (diff <= 0) {
@@ -102,20 +142,6 @@ export function StudentPurchasesContent() {
     fetchData();
   }, []);
 
-  // Live real-time countdown timer ticking every second
-  useEffect(() => {
-    if (!activeSubscription?.expiry_date) return;
-
-    // Initial calculation
-    setTimeRemaining(calculateExactTimeRemaining(activeSubscription.expiry_date));
-
-    const interval = setInterval(() => {
-      setTimeRemaining(calculateExactTimeRemaining(activeSubscription.expiry_date));
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [activeSubscription?.expiry_date]);
-
   const fetchData = async () => {
     setIsLoading(true);
     try {
@@ -125,12 +151,37 @@ export function StudentPurchasesContent() {
         dashboardApi.getStudentDashboard().catch(() => null)
       ]);
 
-      const active = (subsRes || []).find((s: Subscription) => s.status === "ACTIVE");
-      if (active) {
-        setActiveSubscription(active);
+      const allSubs = Array.isArray(subsRes) ? subsRes : [];
+      const now = new Date();
+
+      // Check whether a subscription is active according to backend rules
+      const isSubActive = (s: Subscription) => {
+        if (s.status !== "ACTIVE" || s.computed_status === "EXPIRED") return false;
+        if (s.expiry_date && isValidDate(s.expiry_date)) {
+          return new Date(s.expiry_date) > now;
+        }
+        return true;
+      };
+
+      // Priority matches backend get_active_subscription:
+      // 1. Paid active subscription
+      // 2. Free active subscription
+      // 3. Fallback: latest expired subscription if student has no active one
+      const paidActive = allSubs.find((s) => isSubActive(s) && Number(s.plan_details?.price || 0) > 0);
+      const freeActive = allSubs.find((s) => isSubActive(s));
+      const latestExpired = allSubs.find((s) => s.status === "EXPIRED" || s.computed_status === "EXPIRED");
+
+      if (paidActive) {
+        setActiveSubscription(paidActive);
+      } else if (freeActive) {
+        setActiveSubscription(freeActive);
+      } else if (latestExpired) {
+        setActiveSubscription(latestExpired);
+      } else {
+        setActiveSubscription(null);
       }
 
-      setPayments(paymentsRes || []);
+      setPayments(Array.isArray(paymentsRes) ? paymentsRes : []);
       setIsAdminGranted(!!dashboard?.package?.isAdminGranted);
     } catch (error) {
       console.error("Failed to load purchases:", error);
@@ -138,6 +189,65 @@ export function StudentPurchasesContent() {
       setIsLoading(false);
     }
   };
+
+  // Expiry state calculation
+  const expiryInfo = useMemo(() => {
+    if (!activeSubscription) {
+      return { hasExpiry: false, isExpired: false, label: "No Expiry", daysRemaining: null };
+    }
+
+    const hasExpiryConfigured = Boolean(
+      activeSubscription.has_expiry &&
+      activeSubscription.expiry_date &&
+      isValidDate(activeSubscription.expiry_date)
+    );
+
+    if (!hasExpiryConfigured) {
+      return {
+        hasExpiry: false,
+        isExpired: false,
+        label: "No Expiry",
+        daysRemaining: null
+      };
+    }
+
+    const expiryTime = new Date(activeSubscription.expiry_date!).getTime();
+    const isPast = expiryTime <= Date.now() || activeSubscription.status === "EXPIRED" || activeSubscription.computed_status === "EXPIRED";
+    const formatted = formatSubscriptionDate(activeSubscription.expiry_date);
+
+    if (isPast) {
+      return {
+        hasExpiry: true,
+        isExpired: true,
+        label: `Expired (${formatted})`,
+        daysRemaining: 0
+      };
+    }
+
+    const diffDays = Math.max(0, Math.ceil((expiryTime - Date.now()) / (1000 * 60 * 60 * 24)));
+    return {
+      hasExpiry: true,
+      isExpired: false,
+      label: formatted,
+      daysRemaining: diffDays
+    };
+  }, [activeSubscription]);
+
+  // Live countdown timer ONLY for subscriptions with genuine future expiry
+  useEffect(() => {
+    if (!expiryInfo.hasExpiry || expiryInfo.isExpired || !activeSubscription?.expiry_date) {
+      setTimeRemaining(null);
+      return;
+    }
+
+    const updateTimer = () => {
+      setTimeRemaining(calculateExactTimeRemaining(activeSubscription.expiry_date));
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [expiryInfo.hasExpiry, expiryInfo.isExpired, activeSubscription?.expiry_date]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -173,17 +283,11 @@ export function StudentPurchasesContent() {
   // Find latest pending payment if any
   const pendingPayment = payments.find((p) => p.status === "PENDING");
 
-  // Calculate percentage of time passed
-  const calculateProgress = () => {
-    if (!activeSubscription?.start_date || !activeSubscription?.expiry_date) return 100;
-    const start = new Date(activeSubscription.start_date).getTime();
-    const expiry = new Date(activeSubscription.expiry_date).getTime();
-    const now = new Date().getTime();
-    const total = expiry - start;
-    const remaining = expiry - now;
-    if (total <= 0) return 0;
-    return Math.max(0, Math.min(100, Math.round((remaining / total) * 100)));
-  };
+  // Determine if package type is meaningful (not generic SINGLE or STANDARD)
+  const pkgType = activeSubscription?.plan_details?.package_type;
+  const isMeaningfulType = Boolean(
+    pkgType && !["STANDARD", "SINGLE"].includes(pkgType.toUpperCase())
+  );
 
   return (
     <div className="space-y-8">
@@ -198,11 +302,18 @@ export function StudentPurchasesContent() {
           </p>
         </div>
 
-        <Button asChild className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold shadow-md">
-          <Link href="/student/plans">
-            <Sparkles className="w-4 h-4 mr-1.5" /> Buy Another Course
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Button asChild variant="outline" className="font-semibold text-xs h-9">
+            <Link href="/student/courses">
+              <BookOpen className="w-4 h-4 mr-1.5" /> My Courses
+            </Link>
+          </Button>
+          <Button asChild className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold shadow-md text-xs h-9">
+            <Link href="/student/plans">
+              <Sparkles className="w-4 h-4 mr-1.5" /> Browse Packages
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {success && (
@@ -224,18 +335,18 @@ export function StudentPurchasesContent() {
                 <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-base text-amber-300">Payment Verification Under Review</span>
                   <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/40 text-[10px] uppercase font-bold">
                     Pending Admin Verification
                   </Badge>
                 </div>
                 <p className="text-sm text-amber-200/80 mt-1">
-                  Package: <strong className="text-amber-100">{pendingPayment.plan_details?.name || "Selected Package"}</strong> • Amount: <strong className="text-amber-100">Rs. {pendingPayment.amount}</strong>
+                  Package: <strong className="text-amber-100">{pendingPayment.plan_details?.name || "Selected Package"}</strong> • Amount: <strong className="text-amber-100">NPR {pendingPayment.amount}</strong>
                 </p>
                 <div className="text-xs text-amber-200/60 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
                   <span>Txn ID: <code className="bg-black/30 px-1.5 py-0.5 rounded font-mono">{pendingPayment.transaction_id}</code></span>
-                  <span>Submitted: {new Date(pendingPayment.submitted_at).toLocaleString()}</span>
+                  <span>Submitted: {formatSubscriptionDateTime(pendingPayment.submitted_at)}</span>
                   {pendingPayment.payment_method_details?.display_name && (
                     <span>Method: {pendingPayment.payment_method_details.display_name}</span>
                   )}
@@ -256,21 +367,35 @@ export function StudentPurchasesContent() {
 
       {/* ── Active Subscription Details ───────────────────────── */}
       <div className="bg-card rounded-3xl border border-border shadow-sm p-6 lg:p-8 space-y-6">
-        <div className="flex items-center justify-between border-b border-border pb-4">
+        <div className="flex items-center justify-between border-b border-border pb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-[#D4A72C]/10 rounded-xl">
               <Sparkles className="w-5 h-5 text-[#D4A72C]" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-foreground">Current Active Plan</h2>
-              <p className="text-xs text-muted-foreground">Authorized access details and live remaining validity</p>
+              <p className="text-xs text-muted-foreground">Authorized package access details and validity status</p>
             </div>
           </div>
           {activeSubscription && (
-            <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-3 py-1 font-bold uppercase">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-ping" />
-              Active Subscription
-            </Badge>
+            <div>
+              {expiryInfo.isExpired ? (
+                <Badge className="bg-red-500/20 text-red-400 border border-red-500/30 text-xs px-3 py-1 font-bold uppercase">
+                  <XCircle className="w-3.5 h-3.5 mr-1.5" />
+                  Subscription Expired
+                </Badge>
+              ) : activeSubscription.computed_status === "EXPIRING_SOON" ? (
+                <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs px-3 py-1 font-bold uppercase">
+                  <Clock className="w-3.5 h-3.5 mr-1.5 animate-pulse" />
+                  Expiring Soon
+                </Badge>
+              ) : (
+                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs px-3 py-1 font-bold uppercase">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-ping" />
+                  Active Subscription
+                </Badge>
+              )}
+            </div>
           )}
         </div>
 
@@ -284,14 +409,22 @@ export function StudentPurchasesContent() {
 
               <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                 {/* Left col: Plan info */}
-                <div className="lg:col-span-6 space-y-4">
+                <div className="lg:col-span-7 space-y-4">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-[#D4A72C] text-[#0A1118]">
-                      {activeSubscription.plan_details.package_type || "PREMIUM"} PACKAGE
-                    </span>
-                    <span className="text-xs text-white/70">
-                      Duration: {activeSubscription.plan_details.duration} {activeSubscription.plan_details.duration_unit}
-                    </span>
+                    {isMeaningfulType && (
+                      <span className="text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-[#D4A72C] text-[#0A1118]">
+                        {pkgType!.replace(/_/g, " ")} PACKAGE
+                      </span>
+                    )}
+                    {activeSubscription.plan_details.duration ? (
+                      <span className="text-xs text-white/70">
+                        Duration: {activeSubscription.plan_details.duration} {activeSubscription.plan_details.duration_unit?.toLowerCase()}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-white/70 flex items-center gap-1">
+                        <InfinityIcon className="w-3.5 h-3.5 text-[#D4A72C]" /> Duration: Ongoing Access
+                      </span>
+                    )}
                   </div>
 
                   <div>
@@ -299,92 +432,135 @@ export function StudentPurchasesContent() {
                       {activeSubscription.plan_details.name}
                     </h3>
                     <p className="text-sm text-slate-300 mt-1">
-                      Price: <span className="font-bold text-white">NPR {activeSubscription.plan_details.price}</span>
+                      Price:{" "}
+                      <span className="font-bold text-white">
+                        {Number(activeSubscription.plan_details.price || 0) <= 0
+                          ? "NPR 0.00 (Free)"
+                          : `NPR ${activeSubscription.plan_details.price}`}
+                      </span>
                     </p>
                   </div>
 
                   {/* Dates */}
-                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/15 text-xs text-slate-300">
+                  <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/15 text-xs text-slate-300">
                     <div>
-                      <span className="text-slate-400 block">Activated On:</span>
+                      <span className="text-slate-400 block mb-0.5">Activated On:</span>
                       <span className="font-semibold text-white">
-                        {new Date(activeSubscription.start_date).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric"
-                        })}
+                        {formatSubscriptionDate(activeSubscription.start_date, "Active")}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block">Expires On:</span>
-                      <span className="font-semibold text-[#D4A72C]">
-                        {new Date(activeSubscription.expiry_date).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric"
-                        })}
-                      </span>
+                      <span className="text-slate-400 block mb-0.5">Expires On:</span>
+                      {expiryInfo.hasExpiry ? (
+                        expiryInfo.isExpired ? (
+                          <span className="font-semibold text-red-300">
+                            {expiryInfo.label}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-[#D4A72C]">
+                            {expiryInfo.label}
+                          </span>
+                        )
+                      ) : (
+                        <span className="font-semibold text-emerald-400 flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5" /> No Expiry
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Right col: EXACT LIVE COUNTDOWN */}
-                <div className="lg:col-span-6 flex flex-col items-center lg:items-end justify-center">
-                  <div className="w-full max-w-sm bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center shadow-inner">
-                    <div className="text-xs uppercase tracking-widest text-[#D4A72C] font-bold mb-3 flex items-center justify-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" /> Exact Remaining Time
-                    </div>
-
-                    {timeRemaining && (
-                      <div className="grid grid-cols-4 gap-2 text-center">
-                        <div className="bg-white/10 rounded-xl p-2.5">
-                          <span className="text-2xl sm:text-3xl font-black text-white block">
-                            {timeRemaining.days}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Days</span>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-2.5">
-                          <span className="text-2xl sm:text-3xl font-black text-white block">
-                            {String(timeRemaining.hours).padStart(2, "0")}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Hours</span>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-2.5">
-                          <span className="text-2xl sm:text-3xl font-black text-white block">
-                            {String(timeRemaining.minutes).padStart(2, "0")}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Mins</span>
-                        </div>
-                        <div className="bg-white/10 rounded-xl p-2.5">
-                          <span className="text-2xl sm:text-3xl font-black text-[#D4A72C] block">
-                            {String(timeRemaining.seconds).padStart(2, "0")}
-                          </span>
-                          <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Secs</span>
-                        </div>
+                {/* Right col: Conditional validity panel */}
+                <div className="lg:col-span-5 flex flex-col items-center lg:items-end justify-center">
+                  {expiryInfo.hasExpiry && !expiryInfo.isExpired ? (
+                    /* Valid Future Expiry: Countdown timer */
+                    <div className="w-full max-w-sm bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center shadow-inner">
+                      <div className="text-xs uppercase tracking-widest text-[#D4A72C] font-bold mb-3 flex items-center justify-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" /> Remaining Time
                       </div>
-                    )}
 
-                    {/* Progress bar */}
-                    <div className="mt-4 space-y-1.5">
-                      <div className="flex justify-between text-[11px] text-slate-300">
-                        <span>Access Remaining</span>
-                        <span className="font-bold text-[#D4A72C]">{calculateProgress()}%</span>
-                      </div>
-                      <div className="w-full bg-white/20 rounded-full h-2 overflow-hidden">
-                        <div
-                          className="bg-[#D4A72C] h-full transition-all duration-1000 rounded-full"
-                          style={{ width: `${calculateProgress()}%` }}
-                        />
+                      {timeRemaining ? (
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div className="bg-white/10 rounded-xl p-2.5">
+                            <span className="text-2xl sm:text-3xl font-black text-white block">
+                              {timeRemaining.days}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Days</span>
+                          </div>
+                          <div className="bg-white/10 rounded-xl p-2.5">
+                            <span className="text-2xl sm:text-3xl font-black text-white block">
+                              {String(timeRemaining.hours).padStart(2, "0")}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Hours</span>
+                          </div>
+                          <div className="bg-white/10 rounded-xl p-2.5">
+                            <span className="text-2xl sm:text-3xl font-black text-white block">
+                              {String(timeRemaining.minutes).padStart(2, "0")}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Mins</span>
+                          </div>
+                          <div className="bg-white/10 rounded-xl p-2.5">
+                            <span className="text-2xl sm:text-3xl font-black text-[#D4A72C] block">
+                              {String(timeRemaining.seconds).padStart(2, "0")}
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Secs</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-200 font-medium py-3">
+                          {expiryInfo.daysRemaining !== null ? `${expiryInfo.daysRemaining} days remaining` : "Active"}
+                        </div>
+                      )}
+
+                      <div className="mt-3 text-[11px] text-slate-300">
+                        Valid until {expiryInfo.label}
                       </div>
                     </div>
-                  </div>
+                  ) : expiryInfo.isExpired ? (
+                    /* Expired status box */
+                    <div className="w-full max-w-sm bg-red-950/40 backdrop-blur-md border border-red-500/30 rounded-2xl p-5 text-center shadow-inner space-y-3">
+                      <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-300 flex items-center justify-center mx-auto">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-white">Subscription Expired</div>
+                        <p className="text-xs text-red-200/80 mt-1">
+                          This plan expired on {formatSubscriptionDate(activeSubscription.expiry_date)}.
+                        </p>
+                      </div>
+                      <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs w-full">
+                        <Link href="/student/plans">Renew / Upgrade Plan</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    /* Non-expiring tier (e.g. Free Tier): clean, reassuring panel without false timers */
+                    <div className="w-full max-w-sm bg-white/5 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center shadow-inner space-y-3">
+                      <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-white">Non-Expiring Tier</div>
+                        <p className="text-xs text-slate-300 mt-1">
+                          This package does not have an expiration date. You have ongoing access to its authorized materials and quotas.
+                        </p>
+                      </div>
+                      <div className="pt-1 flex items-center justify-center gap-2">
+                        <Button asChild variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-xs bg-transparent">
+                          <Link href="/student/courses">Go to Courses</Link>
+                        </Button>
+                        <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs">
+                          <Link href="/student/plans">Explore More Plans</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Authorized / Purchased Courses Section */}
             <div className="bg-muted/40 rounded-2xl p-5 border border-border">
-              <div className="flex items-center justify-between mb-3.5">
+              <div className="flex items-center justify-between mb-3.5 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <BookOpen className="w-4 h-4 text-[#D4A72C]" />
                   <h4 className="font-bold text-sm text-foreground uppercase tracking-wide">
@@ -405,20 +581,20 @@ export function StudentPurchasesContent() {
                       key={course.id}
                       className="bg-card border border-border rounded-xl p-3.5 flex items-center justify-between hover:border-[#D4A72C]/50 transition-colors"
                     >
-                      <div className="space-y-0.5">
-                        <div className="font-bold text-sm text-foreground line-clamp-1">{course.title}</div>
+                      <div className="space-y-0.5 min-w-0 pr-2">
+                        <div className="font-bold text-sm text-foreground truncate">{course.title}</div>
                         {course.exam && (
-                          <div className="text-[11px] text-muted-foreground font-medium">{course.exam}</div>
+                          <div className="text-[11px] text-muted-foreground font-medium truncate">{course.exam}</div>
                         )}
                       </div>
-                      <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] shrink-0 ml-2">
+                      <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] shrink-0">
                         Authorized
                       </Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground flex items-center justify-between">
+                <div className="text-sm text-muted-foreground flex items-center justify-between flex-wrap gap-3">
                   <span>Course enrollment active under this subscription plan.</span>
                   <Button asChild size="sm" variant="outline" className="h-8 text-xs font-semibold">
                     <Link href="/student/courses">Open My Courses</Link>
@@ -463,7 +639,7 @@ export function StudentPurchasesContent() {
 
       {/* ── Payment & Purchase History ───────────────────────── */}
       <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden">
-        <div className="p-6 lg:p-8 border-b border-border flex items-center justify-between">
+        <div className="p-6 lg:p-8 border-b border-border flex items-center justify-between flex-wrap gap-2">
           <div>
             <h2 className="text-lg font-bold text-foreground">Payment & Order History</h2>
             <p className="text-xs text-muted-foreground">Complete log of all submitted payments and verification receipts</p>
@@ -495,8 +671,19 @@ export function StudentPurchasesContent() {
                 </tr>
               ) : payments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                    No payment records found.
+                  <td colSpan={7} className="px-6 py-16 text-center">
+                    <div className="max-w-sm mx-auto space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mx-auto text-muted-foreground">
+                        <CreditCard className="w-6 h-6" />
+                      </div>
+                      <h3 className="font-bold text-foreground text-base">No Payment Records Found</h3>
+                      <p className="text-xs text-muted-foreground">
+                        You have not submitted any payment orders yet. Once you purchase a package, your payment evidence and verification receipts will be logged here.
+                      </p>
+                      <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs mt-1">
+                        <Link href="/student/plans">Browse Available Packages</Link>
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -541,16 +728,12 @@ export function StudentPurchasesContent() {
 
                     {/* Amount */}
                     <td className="px-6 py-4 font-bold text-foreground">
-                      Rs. {payment.amount}
+                      NPR {payment.amount}
                     </td>
 
                     {/* Date */}
                     <td className="px-6 py-4 text-muted-foreground text-xs">
-                      {new Date(payment.submitted_at).toLocaleDateString("en-US", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric"
-                      })}
+                      {formatSubscriptionDate(payment.submitted_at)}
                     </td>
 
                     {/* Status */}
@@ -660,7 +843,7 @@ export function StudentPurchasesContent() {
                 <div className="flex justify-between py-1.5 border-b border-border/50">
                   <span className="text-muted-foreground">Payment Date:</span>
                   <span className="text-foreground">
-                    {new Date(receiptPayment.submitted_at).toLocaleString()}
+                    {formatSubscriptionDateTime(receiptPayment.submitted_at)}
                   </span>
                 </div>
 
@@ -668,7 +851,7 @@ export function StudentPurchasesContent() {
                   <div className="flex justify-between py-1.5 border-b border-border/50">
                     <span className="text-muted-foreground">Verified On:</span>
                     <span className="text-foreground">
-                      {new Date(receiptPayment.verified_at).toLocaleString()}
+                      {formatSubscriptionDateTime(receiptPayment.verified_at)}
                     </span>
                   </div>
                 )}

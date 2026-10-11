@@ -6,15 +6,22 @@ import from here.
 from django.utils import timezone
 
 def has_admin_granted_access(user):
+    if not user or not user.is_authenticated:
+        return False
+    cached = getattr(user, '_cached_admin_granted_access', None)
+    if cached is not None:
+        return cached
     from support.models import StudentProfile
+    res = False
     try:
-        profile = user.student_profile
-        if profile.access_origin == 'ADMIN_GRANTED':
+        profile = getattr(user, 'student_profile', None)
+        if profile and profile.access_origin == 'ADMIN_GRANTED':
             if profile.admin_access_expiry is None or profile.admin_access_expiry > timezone.now():
-                return True
-    except StudentProfile.DoesNotExist:
+                res = True
+    except Exception:
         pass
-    return False
+    setattr(user, '_cached_admin_granted_access', res)
+    return res
 
 
 def get_active_subscription(user):
@@ -24,6 +31,10 @@ def get_active_subscription(user):
     Paid active subscriptions strictly take precedence over Free subscriptions."""
     if not user or not user.is_authenticated:
         return None
+    cached = getattr(user, '_cached_active_subscription', None)
+    if cached is not None:
+        return None if cached == '__none__' else cached
+
     from .models import Subscription
     from django.db.models import Q, F
 
@@ -41,10 +52,11 @@ def get_active_subscription(user):
         .first()
     )
     if paid_sub:
+        setattr(user, '_cached_active_subscription', paid_sub)
         return paid_sub
 
     # 2. Free subscriptions fallback
-    return (
+    free_sub = (
         Subscription.objects.filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
             student=user,
@@ -54,6 +66,8 @@ def get_active_subscription(user):
         .order_by('-created_at')
         .first()
     )
+    setattr(user, '_cached_active_subscription', free_sub or '__none__')
+    return free_sub
 
 
 def has_active_subscription(user):

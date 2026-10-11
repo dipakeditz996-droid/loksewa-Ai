@@ -106,7 +106,7 @@ if __name__ == '__main__':
     results.append(benchmark_endpoint("Notes & Syllabus Portal", "/api/notes/student/portal/", student))
     
     # 5. Examinations List (Mock exams / practice exams)
-    results.append(benchmark_endpoint("Student Examinations List", "/api/exams/examinations/", student))
+    results.append(benchmark_endpoint("Student Examinations List", "/api/student/exams/", student))
     
     # 6. Admin Dashboard Stats
     results.append(benchmark_endpoint("Admin Dashboard Stats", "/api/admin/dashboard/stats/", admin))

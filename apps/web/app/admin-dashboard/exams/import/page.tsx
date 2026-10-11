@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Layers,
   BookOpen,
+  Target,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { adminQuestionApi, ImportReport, ImportRow } from "@/lib/api/admin-questions";
@@ -24,7 +25,7 @@ import { adminExamApi, ObjectiveCategory } from "@/lib/api/admin-exams";
 import { AcademicDependentSelect } from "@/components/admin/syllabus/AcademicDependentSelect";
 
 type ImportCategory = Exclude<ObjectiveCategory, null | "custom">;
-type ExamMode = "objective" | "subjective";
+type ExamMode = "objective" | "topicwise" | "subjective";
 
 const MISSING_LABELS: Record<string, string> = {
   options: "Options A–D",
@@ -123,14 +124,17 @@ export default function ImportExamPage() {
   };
 
   // ----------------------------------------------------
-  // Objective Exam Handlers
+  // Objective & Topicwise Exam Handlers
   // ----------------------------------------------------
+  const isTopicwise = examMode === "topicwise";
+
   const canAnalyzeObjective = Boolean(
     objectiveFile &&
       objectiveTitle.trim() &&
       objectiveDuration > 0 &&
       category &&
-      position
+      position &&
+      (!isTopicwise || (subject && chapter))
   );
 
   const handleObjectiveUpload = async () => {
@@ -138,7 +142,12 @@ export default function ImportExamPage() {
     setBusy(true);
     try {
       const res = await adminQuestionApi.uploadCSV(objectiveFile, {
-        topic: topic || '',
+        category,
+        position,
+        subject,
+        chapter,
+        topic: topic || "",
+        question_type: "mcq",
       });
       setReport(res);
       setStep(2);
@@ -170,16 +179,17 @@ export default function ImportExamPage() {
       if (!createdId) {
         const created = await adminExamApi.createExam({
           title: objectiveTitle.trim(),
-          exam_type: "mock",
-          objective_category: objectiveCategory,
+          exam_type: isTopicwise ? "subject" : "mock",
+          objective_category: isTopicwise ? "topicwise" : objectiveCategory,
           category,
           exam: position,
           subject: subject ?? null,
+          topic: topic ?? null,
           time_limit: objectiveDuration, // Persisted server-authoritative duration!
         } as any);
         createdId = created.id;
         setCreatedExamId(created.id);
-        setCreatedExamMode("objective");
+        setCreatedExamMode(isTopicwise ? "topicwise" : "objective");
       }
       if (allQuestionIds.length > 0) {
         await adminExamApi.addQuestions(createdId, allQuestionIds);
@@ -219,12 +229,14 @@ export default function ImportExamPage() {
   // Subjective Exam Handlers
   // ----------------------------------------------------
   const handlePdfFileSelect = (file: File) => {
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Please upload a valid PDF document.");
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isImage = file.type.startsWith("image/") || /\.(jpe?g|png|webp|bmp|tiff?)$/i.test(file.name);
+    if (!isPdf && !isImage) {
+      toast.error("Please upload a valid PDF document or image file (JPG, PNG, WEBP).");
       return;
     }
     if (file.size > 20 * 1024 * 1024) {
-      toast.error("Question paper PDF must not exceed 20MB.");
+      toast.error("Question paper must not exceed 20MB.");
       return;
     }
     setSubjectivePdfFile(file);
@@ -309,8 +321,16 @@ export default function ImportExamPage() {
       {/* Stepper */}
       <div className="flex items-center justify-between mb-8 px-4">
         {[
-          { n: 1, label: examMode === "objective" ? "Details & Upload" : "Subjective Setup & PDF" },
-          { n: 2, label: examMode === "objective" ? "Review & Import" : "Exam Review" },
+          {
+            n: 1,
+            label:
+              examMode === "subjective"
+                ? "Subjective Setup & PDF"
+                : examMode === "topicwise"
+                ? "Topicwise Setup & Excel"
+                : "Details & Upload",
+          },
+          { n: 2, label: examMode === "subjective" ? "Exam Review" : "Review & Import" },
           { n: 3, label: "Draft Exam Created" },
         ].map((s, i) => (
           <div key={s.n} className={i === 0 ? "flex items-center flex-1" : "flex items-center flex-1 justify-end"}>
@@ -336,7 +356,7 @@ export default function ImportExamPage() {
           {/* Mode Switcher */}
           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
             <label className="block text-sm font-semibold text-gray-800 mb-2">Examination Mode &amp; Question Type</label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
                 type="button"
                 onClick={() => setExamMode("objective")}
@@ -354,9 +374,33 @@ export default function ImportExamPage() {
                   <CheckCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Objective Examination</h3>
+                  <h3 className="font-bold text-gray-900">Objective Exam</h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Multiple Choice &amp; True/False questions. Uploaded questions populate the canonical Master Question Bank with automatic duplicate reuse. Single exam countdown.
+                    Standard MCQ examinations (Model, Past Year, Live). Automatic Question Bank deduplication.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExamMode("topicwise")}
+                className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all ${
+                  examMode === "topicwise"
+                    ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-600/10"
+                    : "border-gray-200 hover:bg-gray-50 text-gray-600"
+                }`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                    examMode === "topicwise" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  <Target className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900">Topicwise Test</h3>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Focused topic practice test. Upload questions directly into syllabus topic with automatic validation.
                   </p>
                 </div>
               </button>
@@ -378,9 +422,9 @@ export default function ImportExamPage() {
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900">Subjective Examination</h3>
+                  <h3 className="font-bold text-gray-900">Subjective Exam</h3>
                   <p className="text-xs text-gray-500 mt-1">
-                    Upload official Question Paper PDF. Persistent Dual Timers (Writing Time + Upload Window). Handwritten answer capture, A4 compilation, and evaluator grading. Does NOT pollute Question Bank.
+                    Upload official Question Paper PDF with Dual Timers. Evaluator grading workflow.
                   </p>
                 </div>
               </button>
@@ -388,14 +432,14 @@ export default function ImportExamPage() {
           </div>
 
           {/* ========================================================= */}
-          {/* OBJECTIVE EXAM WORKFLOW                                   */}
+          {/* OBJECTIVE & TOPICWISE EXAM WORKFLOW                       */}
           {/* ========================================================= */}
-          {examMode === "objective" && (
+          {(examMode === "objective" || examMode === "topicwise") && (
             <div className="space-y-6">
               <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
                 <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                   <CheckCircle className="w-5 h-5 text-blue-600" />
-                  Objective Exam Configuration
+                  {isTopicwise ? "Topicwise Test Configuration" : "Objective Exam Configuration"}
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -407,7 +451,11 @@ export default function ImportExamPage() {
                       id="obj-title"
                       value={objectiveTitle}
                       onChange={(e) => setObjectiveTitle(e.target.value)}
-                      placeholder="e.g. PSC Section Officer Paper I – Objective Model Test 01"
+                      placeholder={
+                        isTopicwise
+                          ? "e.g. Fundamental Rights – Constitution of Nepal (Topicwise Test)"
+                          : "e.g. PSC Section Officer Paper I – Objective Model Test 01"
+                      }
                       className={inputCls}
                     />
                   </div>
@@ -416,16 +464,22 @@ export default function ImportExamPage() {
                     <label htmlFor="obj-cat" className="block text-sm font-medium text-gray-700 mb-1">
                       Exam Category
                     </label>
-                    <select
-                      id="obj-cat"
-                      value={objectiveCategory}
-                      onChange={(e) => setObjectiveCategory(e.target.value as ImportCategory)}
-                      className={inputCls}
-                    >
-                      <option value="model">Model Exam</option>
-                      <option value="old_past">Old Past Exam</option>
-                      <option value="live">Live Exam</option>
-                    </select>
+                    {isTopicwise ? (
+                      <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 font-medium">
+                        Topicwise Practice Test
+                      </div>
+                    ) : (
+                      <select
+                        id="obj-cat"
+                        value={objectiveCategory}
+                        onChange={(e) => setObjectiveCategory(e.target.value as ImportCategory)}
+                        className={inputCls}
+                      >
+                        <option value="model">Model Exam</option>
+                        <option value="old_past">Old Past Exam</option>
+                        <option value="live">Live Exam</option>
+                      </select>
+                    )}
                   </div>
 
                   <div>
@@ -455,7 +509,9 @@ export default function ImportExamPage() {
                 <div className="pt-6 border-t border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-900 mb-1">Syllabus &amp; Question Bank Target</h3>
                   <p className="text-sm text-gray-500 mb-4">
-                    Category and Position are required. Subject, Chapter, and Topic are optional — questions will be stored under the selected Topic in the Master Question Bank if provided.
+                    {isTopicwise
+                      ? "Category, Position, Subject, and Chapter are required for Topicwise tests. Topic is optional."
+                      : "Category and Position are required. Subject, Chapter, and Topic are optional — questions will be stored under the selected Topic in the Master Question Bank if provided."}
                   </p>
                   <AcademicDependentSelect
                     category={category}
@@ -465,7 +521,7 @@ export default function ImportExamPage() {
                     topic={topic}
                     onChange={handleAcademicChange}
                     maxLevel="topic"
-                    requiredLevels={["category", "position"]}
+                    requiredLevels={isTopicwise ? ["category", "position", "subject", "chapter"] : ["category", "position"]}
                     layout="grid"
                   />
                 </div>
@@ -517,7 +573,7 @@ export default function ImportExamPage() {
 
                   {!canAnalyzeObjective && (
                     <p className="text-sm text-amber-600 mt-4 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" /> Please enter a title, select category and position, set duration (&gt;0), and choose a file.
+                      <AlertCircle className="w-4 h-4" /> Please enter a title, select {isTopicwise ? "category, position, subject, and chapter" : "category and position"}, set duration (&gt;0), and choose a file.
                     </p>
                   )}
 
@@ -654,25 +710,25 @@ export default function ImportExamPage() {
                   <div className="bg-purple-50 w-16 h-16 rounded-full flex items-center justify-center mb-6">
                     <FileText className="w-8 h-8 text-purple-600" />
                   </div>
-                  <h2 className="text-xl font-bold text-gray-900 mb-2">Upload Question Paper PDF</h2>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Upload Question Paper (PDF or Image)</h2>
                   <p className="text-gray-500 text-center mb-6 text-sm">
-                    Upload the official PDF question paper. Students will view or download this document during their active writing window.
+                    Upload the official PDF question paper or photo/image (JPG, PNG, WEBP). Students will view this document during their active writing window.
                   </p>
 
                   <div className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 hover:bg-gray-50 transition-colors text-center relative">
                     <input
                       ref={pdfInputRef}
                       type="file"
-                      aria-label="Question Paper PDF"
-                      accept=".pdf,application/pdf"
+                      aria-label="Question Paper"
+                      accept=".pdf,application/pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                       onChange={(e) => e.target.files?.[0] && handlePdfFileSelect(e.target.files[0])}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     {!subjectivePdfFile ? (
                       <div>
                         <UploadCloud className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                        <p className="font-medium text-gray-700">Click to select or drag and drop PDF</p>
-                        <p className="text-xs text-gray-400 mt-1">PDF format only (Max 20MB)</p>
+                        <p className="font-medium text-gray-700">Click to select or drag and drop PDF or Image</p>
+                        <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG, WEBP (Max 20MB)</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -835,21 +891,25 @@ export default function ImportExamPage() {
           </div>
 
           <span className="text-xs uppercase tracking-wider font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
-            {createdExamMode === "objective" ? "Objective Examination Created" : "Subjective Examination Created"}
+            {createdExamMode === "subjective"
+              ? "Subjective Examination Created"
+              : createdExamMode === "topicwise"
+              ? "Topicwise Test Created"
+              : "Objective Examination Created"}
           </span>
 
           <h2 className="text-2xl font-bold text-gray-900 mt-3 mb-2">
-            &ldquo;{createdExamMode === "objective" ? objectiveTitle.trim() : subjectiveTitle.trim()}&rdquo;
+            &ldquo;{createdExamMode === "subjective" ? subjectiveTitle.trim() : objectiveTitle.trim()}&rdquo;
           </h2>
 
           <p className="text-gray-500 mb-6 text-sm">
-            {createdExamMode === "objective" ? (
+            {createdExamMode === "subjective" ? (
               <>
-                Created as draft with <strong>{totalAttachedCount}</strong> questions attached ({importedIds?.length ?? 0} new in Master Question Bank, {skippedDuplicates} existing canonical questions reused). Exam duration configured to <strong>{objectiveDuration} minutes</strong>.
+                Subjective exam created with <strong>{writingDuration} minutes</strong> writing time and <strong>{uploadDuration} minutes</strong> upload deadline. Question Paper PDF attached ({pdfPageCount} pages, {formatBytes(pdfFileSize)}). Master Question Bank remains clean.
               </>
             ) : (
               <>
-                Subjective exam created with <strong>{writingDuration} minutes</strong> writing time and <strong>{uploadDuration} minutes</strong> upload deadline. Question Paper PDF attached ({pdfPageCount} pages, {formatBytes(pdfFileSize)}). Master Question Bank remains clean.
+                Created as draft with <strong>{totalAttachedCount}</strong> questions attached ({importedIds?.length ?? 0} new in Master Question Bank, {skippedDuplicates} existing canonical questions reused). Exam duration configured to <strong>{objectiveDuration} minutes</strong>.
               </>
             )}
           </p>
@@ -857,9 +917,11 @@ export default function ImportExamPage() {
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-8 text-left space-y-2 text-xs text-slate-700">
             <div className="flex justify-between py-1 border-b border-slate-200">
               <span className="text-slate-500 font-medium">Exam Type:</span>
-              <span className="font-semibold text-slate-900 capitalize">{createdExamMode}</span>
+              <span className="font-semibold text-slate-900 capitalize">
+                {createdExamMode === "topicwise" ? "Topicwise Test (MCQ)" : createdExamMode}
+              </span>
             </div>
-            {createdExamMode === "objective" ? (
+            {createdExamMode !== "subjective" ? (
               <>
                 <div className="flex justify-between py-1 border-b border-slate-200">
                   <span className="text-slate-500 font-medium">Exam Duration:</span>

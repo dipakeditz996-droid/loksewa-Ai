@@ -1,14 +1,14 @@
 """
-Subjective Auto-Marking Engine.
+Subjective Rule-Based Auto-Marking Engine (NO AI / NO LLM).
 
 Handles:
-1. Parsing student answer sheets (selectable text vs OCR multimodal).
-2. Question number detection, boundary identification, and multi-page answer joining.
-3. Mapping student answers to examination questions.
-4. Semantic evaluation against approved Expert Solutions and rubrics.
-5. Question-wise partial marking by rubric criteria.
-6. Diagrams, formulas, and numerical derivation evaluation.
-7. Quality gate & routing uncertain marks to Admin review.
+1. Parsing student answer sheets (selectable text vs traditional OCR).
+2. Question number detection, boundary identification, subquestions, and multi-page answer continuation.
+3. Mapping student answers to canonical ExaminationQuestions.
+4. Rule-based, deterministic evaluation against approved Expert Solutions and rubrics.
+5. Question-wise partial marking by rubric criteria with domain synonyms and negation detection.
+6. Separation of OCR confidence, mapping confidence, and marking confidence.
+7. Quality gate & routing uncertain/contradictory answers to Admin review.
 8. Safe calculation and validation of scores and audit trail.
 """
 
@@ -25,11 +25,10 @@ from .models import (
     Examination, ExaminationQuestion, ExaminationAttempt,
     SubjectiveSubmission, SubjectiveSubmissionPage, SubjectiveQuestionScore
 )
-from .subjective_expert_service import extract_pdf_pages_text
+from .ocr_service import SubjectiveOCRService
+from .subjective_text_comparator import RuleBasedAnswerComparator
 
 logger = logging.getLogger(__name__)
-
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
 
 def detect_student_answers_by_question(
@@ -37,12 +36,19 @@ def detect_student_answers_by_question(
 ) -> Dict[str, Dict[str, Any]]:
     """
     Detects question boundaries and extracts text for each question.
+    Supports:
+    - 1, Q1, Q.1, Question 1, Ans 1, 1.
+    - 2(a), Q2(a), 2 (a), Q2.a, 3(b)
+    - Devanagari numerals (१, २, ३(क)...)
+    - Cross-page continuation across multiple pages.
     Returns: {
-        'Q1': {'text': '...', 'pages': [1, 2], 'confidence': 0.95},
-        'Q2': {'text': '...', 'pages': [2, 3], 'confidence': 0.90},
+        'Q1': {'text': '...', 'pages': [1, 2], 'confidence': 0.95, 'has_duplicates': False},
+        'Q2': {'text': '...', 'pages': [2], 'confidence': 0.95, 'has_duplicates': False},
+        'Q3(A)': {'text': '...', 'pages': [2, 3], 'confidence': 0.95, 'has_duplicates': False},
     }
     """
     nepali_digit_map = {'०': '0', '१': '1', '२': '2', '३': '3', '४': '4', '५': '5', '६': '6', '७': '7', '८': '8', '९': '9'}
+    nepali_sub_map = {'क': 'A', 'ख': 'B', 'ग': 'C', 'घ': 'D', 'ङ': 'E'}
 
     def normalize_num(raw: str) -> str:
         res = ""
@@ -50,19 +56,46 @@ def detect_student_answers_by_question(
             res += nepali_digit_map.get(ch, ch)
         return res
 
-    # Page-by-page mapping if pages_data is available
+    # Regex matching:
+    # Q.1, Question 1, 1., 1(a), Q1(a), Q. 1 (a), प्रश्न १, प्रश्न १(क)
+    q_regex = re.compile(
+        r'^(?:(?:Question|Q\.?No\.?|Q\.?|Que\.?|Ans\.?|Answer|प्रश्न(?:\s*नं\.?)?)\s*[:.-]?\s*)?'
+        r'(\d+|[०-९]+)'
+        r'(?:\s*[\(\[]\s*([a-zA-Z]|[क-ङ]|[ivxIVX]+)\s*[\)\]]|\s*[\.-]?\s*([a-zA-Z]|[क-ङ]|[ivxIVX]+))?'
+        r'(?:\s*[\.:\)\-\]]|\s+|$|\Z)',
+        re.IGNORECASE
+    )
+
+    def extract_header_and_key(line: str) -> Optional[Tuple[str, str, int]]:
+        stripped = line.strip()
+        match = q_regex.match(stripped)
+        if not match:
+            return None
+        raw_num = match.group(1) or ""
+        norm_num = normalize_num(raw_num)
+        if not norm_num:
+            return None
+
+        sub_part = match.group(2) or match.group(3) or ""
+        sub_part_clean = nepali_sub_map.get(sub_part, sub_part).upper()
+
+        if sub_part_clean:
+            key = f"Q{norm_num}({sub_part_clean})"
+        else:
+            key = f"Q{norm_num}"
+
+        end_pos = match.end()
+        remainder = stripped[end_pos:].strip()
+        return key, remainder, end_pos
+
+    question_answers: Dict[str, Dict[str, Any]] = {}
+    current_q_key: Optional[str] = None
+    current_lines: List[str] = []
+    current_pages: List[int] = []
+    seen_headers: set = set()
+    duplicate_headers: set = set()
+
     if pages_data:
-        question_answers: Dict[str, Dict[str, Any]] = {}
-        current_q_key: Optional[str] = None
-        current_lines: List[str] = []
-        current_pages: List[int] = []
-
-        q_regex = re.compile(
-            r'^(?:Question|Q\.?No\.?|Q\.?|Que\.?|Ans\.?|Answer|प्रश्न(?:\s*नं\.?)?)\s*[:.-]?\s*(\d+|[०-९]+|[A-Za-z]\w*)|'
-            r'^(\d+|[०-९]+)\s*[\.)\-]\s+',
-            re.IGNORECASE
-        )
-
         for p in pages_data:
             p_num = p['page_number']
             p_text = p.get('text', '') or ''
@@ -72,24 +105,33 @@ def detect_student_answers_by_question(
                 stripped = line.strip()
                 if not stripped:
                     continue
-                match = q_regex.match(stripped)
-                if match:
+
+                header_info = extract_header_and_key(stripped)
+                if header_info:
+                    key, remainder, _ = header_info
+                    if key in seen_headers:
+                        duplicate_headers.add(key)
+                    else:
+                        seen_headers.add(key)
+
                     # Flush previous question
                     if current_q_key:
                         joined = "\n".join(current_lines).strip()
                         if current_q_key in question_answers:
                             question_answers[current_q_key]['text'] += "\n\n" + joined
-                            question_answers[current_q_key]['pages'].extend([x for x in current_pages if x not in question_answers[current_q_key]['pages']])
+                            for pg in current_pages:
+                                if pg not in question_answers[current_q_key]['pages']:
+                                    question_answers[current_q_key]['pages'].append(pg)
                         else:
                             question_answers[current_q_key] = {
                                 'text': joined,
-                                'pages': list(set(current_pages)),
+                                'pages': list(dict.fromkeys(current_pages)),
                                 'confidence': 0.95,
+                                'has_duplicates': False,
                             }
-                    raw_num = match.group(1) or match.group(2) or ""
-                    norm_num = normalize_num(raw_num)
-                    current_q_key = f"Q{norm_num}" if norm_num.isdigit() else norm_num.upper()
-                    current_lines = [stripped[match.end():].strip()]
+
+                    current_q_key = key
+                    current_lines = [remainder] if remainder else []
                     current_pages = [p_num]
                 else:
                     if current_q_key:
@@ -97,93 +139,121 @@ def detect_student_answers_by_question(
                         if p_num not in current_pages:
                             current_pages.append(p_num)
 
+        # Flush final question
         if current_q_key and current_lines:
             joined = "\n".join(current_lines).strip()
             if current_q_key in question_answers:
                 question_answers[current_q_key]['text'] += "\n\n" + joined
-                question_answers[current_q_key]['pages'].extend([x for x in current_pages if x not in question_answers[current_q_key]['pages']])
+                for pg in current_pages:
+                    if pg not in question_answers[current_q_key]['pages']:
+                        question_answers[current_q_key]['pages'].append(pg)
             else:
                 question_answers[current_q_key] = {
                     'text': joined,
-                    'pages': list(set(current_pages)),
+                    'pages': list(dict.fromkeys(current_pages)),
                     'confidence': 0.95,
+                    'has_duplicates': False,
                 }
 
-        if question_answers:
-            return question_answers
+        for k in question_answers:
+            if k in duplicate_headers:
+                question_answers[k]['has_duplicates'] = True
 
-    # Fallback to document-level splitting
-    pattern = re.compile(
-        r'(?:^|\n)\s*'
-        r'(?:(?:Question|Q\.?No\.?|Q\.?|Que\.?|Ans\.?|Answer|प्रश्न(?:\s*नं\.?)?)\s*[:.-]?\s*(\d+|[०-९]+|[A-Za-z]\w*)|'
-        r'(\d+|[०-९]+)\s*[\.)\-]\s+)'
-        r'(.*?)(?=(?:\n\s*(?:(?:Question|Q\.?No\.?|Q\.?|Que\.?|Ans\.?|Answer|प्रश्न(?:\s*नं\.?)?)\s*[:.-]?\s*(\d+|[०-९]+|[A-Za-z]\w*)|(?:\d+|[०-९]+)\s*[\.)\-]\s+))|\Z)',
-        re.IGNORECASE | re.DOTALL
-    )
+    # Fallback if no page structure or empty match
+    if not question_answers and raw_text.strip():
+        lines = raw_text.split('\n')
+        current_q_key = None
+        current_lines = []
+        seen_headers = set()
+        duplicate_headers = set()
 
-    matches = pattern.findall(raw_text)
-    answers: Dict[str, Dict[str, Any]] = {}
-    if matches:
-        for m in matches:
-            q_num_raw = m[0] or m[1] or ""
-            content = (m[2] or "").strip()
-            norm = normalize_num(q_num_raw)
-            if norm:
-                key = f"Q{norm}" if norm.isdigit() else norm.upper()
-                answers[key] = {
-                    'text': content,
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            header_info = extract_header_and_key(stripped)
+            if header_info:
+                key, remainder, _ = header_info
+                if key in seen_headers:
+                    duplicate_headers.add(key)
+                else:
+                    seen_headers.add(key)
+
+                if current_q_key:
+                    joined = "\n".join(current_lines).strip()
+                    if current_q_key in question_answers:
+                        question_answers[current_q_key]['text'] += "\n\n" + joined
+                    else:
+                        question_answers[current_q_key] = {
+                            'text': joined,
+                            'pages': [1],
+                            'confidence': 0.85,
+                            'has_duplicates': False,
+                        }
+                current_q_key = key
+                current_lines = [remainder] if remainder else []
+            else:
+                if current_q_key:
+                    current_lines.append(stripped)
+
+        if current_q_key and current_lines:
+            joined = "\n".join(current_lines).strip()
+            if current_q_key in question_answers:
+                question_answers[current_q_key]['text'] += "\n\n" + joined
+            else:
+                question_answers[current_q_key] = {
+                    'text': joined,
                     'pages': [1],
-                    'confidence': 0.90,
+                    'confidence': 0.85,
+                    'has_duplicates': False,
                 }
-    else:
-        if raw_text.strip():
-            answers['Q1'] = {
-                'text': raw_text.strip(),
-                'pages': [1],
-                'confidence': 0.70,
-            }
 
-    return answers
+        for k in question_answers:
+            if k in duplicate_headers:
+                question_answers[k]['has_duplicates'] = True
+
+    # If still no headers matched, default entire content to Q1 with lower confidence
+    if not question_answers and raw_text.strip():
+        question_answers['Q1'] = {
+            'text': raw_text.strip(),
+            'pages': [1],
+            'confidence': 0.40,
+            'has_duplicates': False,
+        }
+
+    return question_answers
 
 
 class SubjectiveAutoMarkingService:
+    """
+    Deterministic rule-based subjective auto-marking service.
+    Zero generative AI or external LLM dependencies.
+    """
+
     @classmethod
     def auto_mark_submission(cls, submission: SubjectiveSubmission) -> Dict[str, Any]:
         return cls().evaluate_submission(submission)
 
     def __init__(self):
-        self.is_mock = not bool(GEMINI_API_KEY)
-        if not self.is_mock:
-            from google import genai
-            self.client = genai.Client(api_key=GEMINI_API_KEY)
-            self.model_name = 'gemini-2.5-flash'
-        else:
-            self.client = None
-            self.model_name = 'mock'
+        self.comparator = RuleBasedAnswerComparator()
 
     def evaluate_submission(self, submission: SubjectiveSubmission) -> Dict[str, Any]:
         """
-        Executes end-to-end auto-evaluation for a subjective submission:
-        OCR / Extraction -> Question Mapping -> Rubric-Based Marking -> Quality Gate.
+        Executes end-to-end rule-based evaluation for a subjective submission:
+        OCR / Extraction -> Question Mapping -> Deterministic Rubric Marking -> Quality Gate.
         """
         submission.evaluation_status = 'ocr_processing'
         submission.save(update_fields=['evaluation_status'])
 
-        # 1. Extract or retrieve student answer text & pages
-        if submission.ocr_status == 'failed':
-            raw_text = submission.extracted_text or ""
-            pages_data = []
-            ocr_readable = False
-            ocr_confidence = 0.10
-        else:
-            raw_text, pages_data = self._extract_student_text_and_pages(submission)
-            submission.raw_ocr_text = raw_text
-            if not submission.extracted_text:
-                submission.extracted_text = raw_text
-            submission.ocr_status = 'completed'
-            submission.save(update_fields=['raw_ocr_text', 'extracted_text', 'ocr_status'])
-            ocr_readable = len(raw_text.strip()) >= 20 and not raw_text.strip().startswith("[OCR Error]")
-            ocr_confidence = 0.95 if ocr_readable else 0.20
+        # 1. OCR Extraction using local PyMuPDF / RapidOCR
+        raw_text, pages_data, ocr_confidence = self._extract_student_text_and_pages(submission)
+        submission.raw_ocr_text = raw_text
+        if not submission.extracted_text:
+            submission.extracted_text = raw_text
+
+        ocr_readable = len(raw_text.strip()) >= 20 and not raw_text.strip().startswith("[OCR Error]") and not raw_text.strip().startswith("[Handwritten page scan captured")
+        submission.ocr_status = 'completed' if ocr_readable else 'failed'
+        submission.save(update_fields=['raw_ocr_text', 'extracted_text', 'ocr_status'])
 
         # 2. Detect student questions
         submission.evaluation_status = 'ai_evaluating'
@@ -200,24 +270,52 @@ class SubjectiveAutoMarkingService:
         uncertain_questions = []
         scores_created = []
 
+        mapping_confidences = []
+        marking_confidences = []
+
         with transaction.atomic():
             submission.question_scores.all().delete()
 
             for eq in exam_questions:
-                q_label = eq.question_number or f"Q{eq.order}"
-                q_clean_num = re.sub(r'[^0-9]', '', q_label) or str(eq.order)
-                lookup_key = f"Q{q_clean_num}"
+                # Sanitize question label: if no digits (e.g. OCR noise like "WER", "UANTITY"), fallback to Q{order}
+                raw_label = (eq.question_number or '').strip()
+                if not raw_label or not re.search(r'\d', raw_label):
+                    q_label = f"Q{eq.order}"
+                else:
+                    q_label = raw_label
 
-                student_q_data = detected_answers.get(lookup_key) or detected_answers.get(q_label)
+                q_clean_num = re.sub(r'[^0-9]', '', q_label) or str(eq.order)
+                base_key = f"Q{q_clean_num}"
+
+                # Match by explicit key, normalized upper label, or base key
+                student_q_data = (
+                    detected_answers.get(q_label.upper()) or
+                    detected_answers.get(f"Q{q_label.upper()}") or
+                    detected_answers.get(base_key)
+                )
+
+                # Fallback to positional order if lookup misses
                 if not student_q_data and detected_answers:
-                    # Fallback by order
-                    keys = list(detected_answers.keys())
-                    if eq.order - 1 < len(keys):
-                        student_q_data = detected_answers[keys[eq.order - 1]]
+                    pos_key = f"Q{eq.order}"
+                    student_q_data = detected_answers.get(pos_key)
+                    if not student_q_data:
+                        keys = list(detected_answers.keys())
+                        if eq.order - 1 < len(keys):
+                            student_q_data = detected_answers[keys[eq.order - 1]]
 
                 student_answer_text = student_q_data['text'] if student_q_data else ""
                 pages_referred = student_q_data.get('pages', []) if student_q_data else []
-                mapping_confidence = student_q_data.get('confidence', 0.5) if student_q_data else 0.0
+                map_conf = student_q_data.get('confidence', 0.5) if student_q_data else 0.0
+                has_dup = student_q_data.get('has_duplicates', False) if student_q_data else False
+
+                if has_dup:
+                    map_conf = min(map_conf, 0.50)
+                    flagged_reasons.append(f"{q_label}: Duplicate question answer sections detected.")
+
+                if not student_q_data:
+                    map_conf = 0.0
+
+                mapping_confidences.append(map_conf)
 
                 # Ensure rubric is present
                 rubric = eq.rubric or []
@@ -233,7 +331,7 @@ class SubjectiveAutoMarkingService:
                     eq.rubric = rubric
                     eq.save(update_fields=['rubric'])
 
-                # Evaluate question answer
+                # Evaluate question answer with deterministic comparator
                 eval_result = self.evaluate_single_question_answer(
                     question_text=eq.question.text,
                     max_marks=float(eq.marks),
@@ -244,7 +342,14 @@ class SubjectiveAutoMarkingService:
                     ocr_readable=ocr_readable,
                 )
 
+                marking_confidences.append(eval_result.get('confidence_score', 0.8))
+
                 q_status = eval_result['status']
+                if map_conf < 0.60 and student_answer_text:
+                    q_status = 'needs_review'
+                    if f"{q_label}: Uncertain question boundary" not in flagged_reasons:
+                        flagged_reasons.append(f"{q_label}: Uncertain question boundary or low mapping confidence.")
+
                 if q_status == 'needs_review':
                     uncertain_questions.append(q_label)
                     if eval_result.get('review_reason'):
@@ -292,19 +397,25 @@ class SubjectiveAutoMarkingService:
             attempt.passed = total_exam_score >= pass_marks
 
             if not ocr_readable:
-                flagged_reasons.append('No readable handwriting text found')
+                flagged_reasons.append('No readable handwriting text found; requires manual review.')
+
+            avg_map_conf = round(sum(mapping_confidences) / len(mapping_confidences), 2) if mapping_confidences else 0.0
+            avg_mark_conf = round(sum(marking_confidences) / len(marking_confidences), 2) if marking_confidences else 0.0
 
             # Quality gate evaluation
             quality_passed = (
                 ocr_readable and
                 len(uncertain_questions) == 0 and
-                ocr_confidence >= 0.85
+                ocr_confidence >= 0.70 and
+                avg_map_conf >= 0.70 and
+                avg_mark_conf >= 0.70
             )
 
             submission.quality_gate_passed = quality_passed
             submission.quality_gate_details = {
-                'ocr_readability': ocr_confidence,
-                'mapping_reliability': 1.0 if not uncertain_questions else 0.7,
+                'ocr_confidence': round(ocr_confidence, 2),
+                'mapping_confidence': avg_map_conf,
+                'marking_confidence': avg_mark_conf,
                 'uncertain_questions': uncertain_questions,
                 'flagged_reasons': flagged_reasons,
                 'flags': flagged_reasons,
@@ -350,9 +461,8 @@ class SubjectiveAutoMarkingService:
         student_answer: str, ocr_readable: bool = True
     ) -> Dict[str, Any]:
         """
-        Evaluates a single student answer against its Expert Solution and rubric criteria.
+        Evaluates a single student answer using deterministic multi-signal comparison.
         """
-        # Rule: OCR failure must NEVER silently award zero marks; route to needs_review
         if not ocr_readable or not student_answer.strip():
             return {
                 'marks_obtained': 0.0,
@@ -363,198 +473,55 @@ class SubjectiveAutoMarkingService:
                         'description': c.get('description', ''),
                         'max_marks': c.get('max_marks', 1.0),
                         'marks_obtained': 0.0,
-                        'feedback': 'Handwritten answer unclear or scan unreadable. Routed to manual review.',
+                        'feedback': 'Answer unreadable or unanswered. Routed to manual review.',
                         'status': 'needs_review',
                     }
                     for i, c in enumerate(rubric)
                 ],
                 'status': 'needs_review',
                 'confidence_score': 0.1,
-                'review_reason': 'OCR transcription unclear; handwriting illegible. Requires manual Admin verification.',
-                'admin_notes': 'Automated OCR was unable to transcribe this section with confidence.',
+                'review_reason': 'OCR transcription unclear or answer blank. Requires manual Admin verification.',
+                'admin_notes': 'Automated OCR produced insufficient text for reliable marking.',
                 'strengths': '',
-                'improvements': 'Please ensure answer sheet pages are clearly scanned and lit properly.',
+                'improvements': 'Please ensure answer sheet pages are clearly legible and numbered.',
                 'overall_feedback': 'Answer requires manual evaluation by examiner.',
             }
 
-        return self._call_ai_evaluation(
-            question_text, max_marks, evaluation_type, expert_solution, rubric, student_answer
+        return self.comparator.evaluate_answer(
+            student_answer=student_answer,
+            expert_solution=expert_solution,
+            rubric=rubric,
+            max_marks=max_marks,
+            question_text=question_text,
+            evaluation_type=evaluation_type
         )
-
-    def _call_ai_evaluation(
-        self, question_text: str, max_marks: float, evaluation_type: str,
-        expert_solution: str, rubric: List[Dict[str, Any]], student_answer: str
-    ) -> Dict[str, Any]:
-        if self.is_mock or not self.client:
-            return self._fallback_question_evaluation(
-                question_text, max_marks, evaluation_type, expert_solution, rubric, student_answer
-            )
-
-        try:
-            from google.genai import types
-            rubric_json_str = json.dumps(rubric, indent=2)
-            prompt = (
-                f"You are an authoritative subjective examination evaluator for Loksewa (PSC Nepal).\n"
-                f"Carefully evaluate this student's handwritten answer against the approved Expert Solution and Rubric.\n\n"
-                f"Question: {question_text}\n"
-                f"Evaluation Type: {evaluation_type}\n"
-                f"Total Maximum Marks: {max_marks}\n\n"
-                f"Approved Expert Solution:\n{expert_solution}\n\n"
-                f"Approved Rubric Criteria:\n{rubric_json_str}\n\n"
-                f"Student Answer Text:\n{student_answer}\n\n"
-                f"Marking Guidelines:\n"
-                f"1. Semantic matching: evaluate conceptual understanding, reasoning, and key arguments. Do not require verbatim wording.\n"
-                f"2. For numerical questions: verify formula identification, calculation steps, and final units.\n"
-                f"3. For diagram questions: check component representation, connections, and labeling.\n"
-                f"4. Partial credit: award partial credit for partially correct reasoning or incomplete derivations.\n"
-                f"5. For EACH criterion in the rubric, assign 'marks_obtained' (between 0 and criterion.max_marks) and concise 'feedback'.\n"
-                f"6. Provide constructive 'strengths' and 'improvements'.\n"
-                f"7. If answer is illegible, contradictory, or doubtful, set status to 'needs_review' with 'review_reason'.\n"
-                f"8. Output JSON only: {{\"criterion_scores\": [ {{\"criterion_id\": \"...\", \"marks_obtained\": 1.5, \"feedback\": \"...\"}} ], \"strengths\": \"...\", \"improvements\": \"...\", \"status\": \"ai_evaluated\" or \"needs_review\", \"confidence_score\": 0.95}}"
-            )
-
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=[types.Content(role='user', parts=[types.Part.from_text(text=prompt)])],
-            )
-            raw = (response.text or "").strip()
-            if raw.startswith("```"):
-                raw = re.sub(r"^```(?:json)?\s*", "", raw)
-                raw = re.sub(r"\s*```$", "", raw)
-
-            parsed = json.loads(raw)
-            return self._validate_and_assemble_eval_result(parsed, rubric, max_marks)
-        except Exception as e:
-            logger.warning(f"AI auto-marking failed, using fallback: {e}")
-            return self._fallback_question_evaluation(
-                question_text, max_marks, evaluation_type, expert_solution, rubric, student_answer
-            )
-
-    def _fallback_question_evaluation(
-        self, question_text: str, max_marks: float, evaluation_type: str,
-        expert_solution: str, rubric: List[Dict[str, Any]], student_answer: str
-    ) -> Dict[str, Any]:
-        """Deterministic evaluation for test and offline environments."""
-        clean_student = student_answer.lower()
-        # Estimate conceptual coverage by semantic keyword / token overlap
-        key_tokens = set(re.findall(r'\b\w{4,}\b', (question_text + " " + expert_solution).lower()))
-        student_tokens = set(re.findall(r'\b\w{4,}\b', clean_student))
-
-        overlap = len(key_tokens.intersection(student_tokens))
-        ratio = min(1.0, max(0.40, overlap / max(1, len(key_tokens) * 0.5)))
-
-        criterion_scores = []
-        total_obtained = 0.0
-
-        for idx, c in enumerate(rubric):
-            c_max = float(c.get('max_marks', 1.0))
-            awarded = round(c_max * ratio, 2)
-            awarded = min(c_max, max(0.0, awarded))
-            total_obtained += awarded
-
-            criterion_scores.append({
-                'criterion_id': c.get('id', f'c{idx + 1}'),
-                'description': c.get('description', ''),
-                'max_marks': c_max,
-                'marks_obtained': awarded,
-                'feedback': f"Good understanding demonstrated. Awarded {awarded:g}/{c_max:g} marks.",
-                'status': 'ai_evaluated',
-            })
-
-        total_obtained = round(min(max_marks, total_obtained), 2)
-        return {
-            'marks_obtained': total_obtained,
-            'max_marks': max_marks,
-            'criterion_scores': criterion_scores,
-            'status': 'ai_evaluated',
-            'confidence_score': 0.92,
-            'review_reason': '',
-            'admin_notes': '',
-            'strengths': 'Clearly structured answer with core conceptual explanations.',
-            'improvements': 'Include more specific statutory/technical citations and complete conclusions.',
-            'overall_feedback': f"Scored {total_obtained}/{max_marks} marks based on approved rubric.",
-        }
-
-    def _validate_and_assemble_eval_result(
-        self, parsed: Dict[str, Any], rubric: List[Dict[str, Any]], max_marks: float
-    ) -> Dict[str, Any]:
-        """Validates AI evaluation scores against rubric bounds."""
-        crit_map = {str(c.get('id', f'c{i+1}')): c for i, c in enumerate(rubric)}
-        raw_crit_scores = parsed.get('criterion_scores', [])
-        score_lookup = {str(item.get('criterion_id')): item for item in raw_crit_scores if isinstance(item, dict)}
-
-        final_criterion_scores = []
-        total_obtained = 0.0
-
-        for idx, c in enumerate(rubric):
-            cid = str(c.get('id', f'c{idx + 1}'))
-            c_max = float(c.get('max_marks', 1.0))
-            item = score_lookup.get(cid)
-
-            if item:
-                try:
-                    awarded = float(item.get('marks_obtained', 0.0))
-                except (ValueError, TypeError):
-                    awarded = 0.0
-                feedback = str(item.get('feedback', '') or '').strip()
-            else:
-                awarded = round(c_max * 0.7, 2)
-                feedback = "Evaluated against rubric criterion."
-
-            awarded = max(0.0, min(c_max, round(awarded, 2)))
-            total_obtained += awarded
-
-            final_criterion_scores.append({
-                'criterion_id': cid,
-                'description': c.get('description', ''),
-                'max_marks': c_max,
-                'marks_obtained': awarded,
-                'feedback': feedback,
-                'status': 'ai_evaluated',
-            })
-
-        total_obtained = round(min(max_marks, total_obtained), 2)
-        status_val = parsed.get('status', 'ai_evaluated')
-        if status_val not in ('ai_evaluated', 'needs_review'):
-            status_val = 'ai_evaluated'
-
-        conf = float(parsed.get('confidence_score', 0.90))
-
-        return {
-            'marks_obtained': total_obtained,
-            'max_marks': max_marks,
-            'criterion_scores': final_criterion_scores,
-            'status': status_val,
-            'confidence_score': conf,
-            'review_reason': parsed.get('review_reason', ''),
-            'admin_notes': parsed.get('admin_notes', ''),
-            'strengths': parsed.get('strengths', 'Good conceptual structure.'),
-            'improvements': parsed.get('improvements', 'Expand on specific examples.'),
-            'overall_feedback': f"Score: {total_obtained:g}/{max_marks:g}",
-        }
 
     def _extract_student_text_and_pages(
         self, submission: SubjectiveSubmission
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        """Extracts text from answer PDF or page images."""
-        if submission.answer_pdf:
-            submission.answer_pdf.open('rb')
-            try:
-                pages_data = extract_pdf_pages_text(submission.answer_pdf)
-            finally:
-                submission.answer_pdf.close()
+    ) -> Tuple[str, List[Dict[str, Any]], float]:
+        """
+        Extracts text from answer PDF or page images via PyMuPDF or OpenCV + RapidOCR.
+        Returns: (full_text, pages_data, avg_ocr_confidence)
+        """
+        if submission.extracted_text and not submission.answer_pdf and not submission.pages.exists():
+            pages_data = [{'page_number': 1, 'text': submission.extracted_text, 'confidence': 0.95}]
+            return submission.extracted_text, pages_data, 0.95
 
-            has_selectable = any(p['has_selectable_text'] for p in pages_data)
-            all_text = "\n\n".join(f"--- Page {p['page_number']} ---\n{p['text']}" for p in pages_data if p['text'])
+        if submission.raw_ocr_text and not submission.answer_pdf and not submission.pages.exists():
+            pages_data = [{'page_number': 1, 'text': submission.raw_ocr_text, 'confidence': 0.95}]
+            return submission.raw_ocr_text, pages_data, 0.95
 
-            if has_selectable and len(all_text.strip()) >= 50:
-                return all_text, pages_data
+        if not submission.answer_pdf and not submission.pages.exists():
+            return "", [], 0.10
 
-        # Fallback to OCR service
-        from .ocr_service import SubjectiveOCRService
-        extracted = SubjectiveOCRService.extract_and_transcribe_submission(submission)
-        dummy_pages = [{'page_number': 1, 'text': extracted, 'has_selectable_text': False}]
-        return extracted, dummy_pages
+        ocr_service = SubjectiveOCRService()
+        pages_data = ocr_service.extract_pages_data(submission)
+        full_text = "\n\n".join(p['text'] for p in pages_data if p.get('text')).strip()
+
+        confidences = [p.get('confidence', 0.8) for p in pages_data if p.get('confidence')]
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.50
+
+        return full_text, pages_data, avg_conf
 
     def _compile_overall_feedback(self, scores: List[SubjectiveQuestionScore]) -> str:
         """Assembles summary evaluator feedback."""

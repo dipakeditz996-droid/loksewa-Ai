@@ -1010,7 +1010,7 @@ export default function UsersManagementPage() {
                                 const isAlreadySelectedElsewhere = otherSelectedPids.has(pkg.id);
                                 return (
                                   <option key={pkg.id} value={pkg.id} disabled={isAlreadySelectedElsewhere}>
-                                    {pkg.name} — {pkg.package_type} (NPR {pkg.price} / {pkg.duration} {pkg.duration_unit.toLowerCase()})
+                                    {pkg.name} — {pkg.package_type} (NPR {pkg.price} / {pkg.duration ? `${pkg.duration} ${(pkg.duration_unit || "Days").toLowerCase()}` : "Lifetime Quota"})
                                     {isAlreadySelectedElsewhere ? " (Already added)" : ""}
                                   </option>
                                 );
@@ -1034,7 +1034,7 @@ export default function UsersManagementPage() {
                                     NPR {plan.price}
                                   </span>
                                   <span className="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                                    {plan.duration} {plan.duration_unit.toLowerCase()}
+                                    {plan.duration ? `${plan.duration} ${(plan.duration_unit || "Days").toLowerCase()}` : "Lifetime Quota"}
                                   </span>
                                 </div>
                               </div>
@@ -1217,7 +1217,7 @@ export default function UsersManagementPage() {
                             <div key={slot.id} className="p-2 rounded bg-background/80 border border-border/70 text-[11px]">
                               <div className="flex items-center justify-between font-bold text-foreground">
                                 <span>✓ {plan.name} ({plan.package_type})</span>
-                                <span className="text-muted-foreground">{plan.duration} {plan.duration_unit.toLowerCase()}</span>
+                                <span className="text-muted-foreground">{plan.duration ? `${plan.duration} ${(plan.duration_unit || "Days").toLowerCase()}` : "Lifetime"}</span>
                               </div>
                               {configuredCourses.length > 0 && (
                                 <p className="text-muted-foreground mt-0.5">

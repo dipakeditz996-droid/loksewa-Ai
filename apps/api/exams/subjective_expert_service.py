@@ -21,8 +21,6 @@ import pypdf
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-
 
 def extract_pdf_pages_text(file_obj) -> List[Dict[str, Any]]:
     """
@@ -91,16 +89,11 @@ def split_text_into_question_blocks(full_text: str) -> Dict[str, str]:
     return blocks
 
 
+
 class SubjectiveExpertSolutionService:
     def __init__(self):
-        self.is_mock = not bool(GEMINI_API_KEY)
-        if not self.is_mock:
-            from google import genai
-            self.client = genai.Client(api_key=GEMINI_API_KEY)
-            self.model_name = 'gemini-2.5-flash'
-        else:
-            self.client = None
-            self.model_name = 'mock'
+        # Strictly rule-based, deterministic evaluation - No external AI/LLMs
+        pass
 
     def process_expert_solution_pdf(self, examination) -> Dict[str, Any]:
         """
@@ -202,82 +195,34 @@ class SubjectiveExpertSolutionService:
 
         return {
             'total_questions_processed': len(results),
+            'questions_detected': len(results),
+            'rubrics_generated': True,
             'has_selectable_text': has_selectable,
             'questions': results,
+            'rubrics': results,
         }
 
     def _extract_via_multimodal_vision(self, examination) -> str:
-        """Uses Gemini 2.5 Flash to transcribe scanned / handwritten Expert Solution PDF."""
-        if self.is_mock:
-            return (
-                "Q1. Public Administration Principles: Good governance, transparency, and accountability under Nepalese Constitution.\n\n"
-                "Q2. Structural Analysis: Calculation of bending moment for simply supported beams with uniformly distributed loads.\n\n"
-                "Q3. Circuit Operation: Working principle and carrier movement of an NPN bipolar junction transistor."
-            )
-
-        from google.genai import types
-        prompt = (
-            "You are an expert academic evaluator. Extract and transcribe the complete solution "
-            "from this official examination Expert Solution document.\n"
-            "Organize clearly by question number (e.g. Q1, Q2, Question 3) and subparts (a, b).\n"
-            "Preserve all mathematical formulas, derivation steps, diagram annotations, and Devanagari/English script."
-        )
-        parts = [types.Part.from_text(text=prompt)]
-
+        """Extracts text using traditional OCR (PyMuPDF + OpenCV + RapidOCR) without external AI."""
+        from .ocr_service import SubjectiveOCRService
+        if not examination.expert_solution_pdf:
+            return ""
         examination.expert_solution_pdf.open('rb')
         try:
-            pdf_bytes = examination.expert_solution_pdf.read()
-            parts.append(types.Part.from_bytes(data=pdf_bytes, mime_type='application/pdf'))
+            return SubjectiveOCRService.extract_text_from_pdf(examination.expert_solution_pdf)
+        except Exception as e:
+            logger.warning(f"Traditional OCR extraction on Expert Solution failed: {e}")
+            return ""
         finally:
             examination.expert_solution_pdf.close()
-
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=[types.Content(role='user', parts=parts)],
-        )
-        return response.text or ""
 
     def generate_rubric_for_question(
         self, question_text: str, solution_text: str, max_marks: float, evaluation_type: str = 'descriptive'
     ) -> List[Dict[str, Any]]:
         """
-        Generates a structured marking rubric criteria list where sum(criterion.max_marks) == max_marks.
+        Deterministically generates a structured marking rubric criteria list where sum(criterion.max_marks) == max_marks.
+        Extracts key expected concepts from the approved Expert Solution text.
         """
-        if self.is_mock or not self.client:
-            return self._generate_fallback_rubric(question_text, solution_text, max_marks, evaluation_type)
-
-        try:
-            from google.genai import types
-            prompt = (
-                f"You are a chief examination evaluator for Loksewa Public Service Commission subjective exams.\n"
-                f"Create a structured marking rubric for the following question and approved Expert Solution:\n\n"
-                f"Question: {question_text}\n"
-                f"Evaluation Type: {evaluation_type}\n"
-                f"Total Maximum Marks: {max_marks}\n\n"
-                f"Expert Solution:\n{solution_text}\n\n"
-                f"Requirements:\n"
-                f"1. Break down into 3 to 6 distinct criteria (e.g. concept definitions, derivation steps, diagrams, conclusions).\n"
-                f"2. Each criterion must have: id, description, max_marks, expected_concepts, alternative_solutions, partial_credit_rules.\n"
-                f"3. CRITICAL: The sum of max_marks across all criteria MUST EQUAL EXACTLY {max_marks}.\n"
-                f"4. Return ONLY a valid JSON list of criteria objects, no markdown backticks or commentary."
-            )
-
-            response = self.client.models.generate_content(
-                model=self.model_name,
-                contents=[types.Content(role='user', parts=[types.Part.from_text(text=prompt)])],
-            )
-            raw = (response.text or "").strip()
-            # Clean markdown codeblocks if present
-            if raw.startswith("```"):
-                raw = re.sub(r"^```(?:json)?\s*", "", raw)
-                raw = re.sub(r"\s*```$", "", raw)
-
-            parsed = json.loads(raw)
-            if isinstance(parsed, list) and len(parsed) > 0:
-                return self._normalize_rubric_totals(parsed, max_marks)
-        except Exception as e:
-            logger.warning(f"AI rubric generation failed, using fallback: {e}")
-
         return self._generate_fallback_rubric(question_text, solution_text, max_marks, evaluation_type)
 
     @staticmethod
@@ -293,9 +238,11 @@ class SubjectiveExpertSolutionService:
                 mm = 1.0
             mm = max(0.25, mm)
             current_sum += mm
+            crit_desc = str(c.get('criterion') or c.get('description') or f"Criterion {idx + 1}").strip()
             cleaned.append({
                 'id': str(c.get('id') or f"c{idx + 1}"),
-                'description': str(c.get('description') or f"Criterion {idx + 1}"),
+                'criterion': crit_desc,
+                'description': crit_desc,
                 'max_marks': round(mm, 2),
                 'expected_concepts': c.get('expected_concepts') or [],
                 'alternative_solutions': c.get('alternative_solutions') or [],
@@ -324,7 +271,13 @@ class SubjectiveExpertSolutionService:
     def _generate_fallback_rubric(
         self, question_text: str, solution_text: str, max_marks: float, evaluation_type: str
     ) -> List[Dict[str, Any]]:
-        """Generates deterministic, highly balanced rubric criteria when AI is offline or in test."""
+        """Generates deterministic, highly balanced rubric criteria derived from question type and solution text."""
+        # Extract key concept phrases from solution text
+        extracted_concepts = []
+        if solution_text:
+            lines = [l.strip().lstrip('•*-123456789.) ') for l in solution_text.split('\n') if len(l.strip()) > 10]
+            extracted_concepts = [l for l in lines if not l.startswith('---')][:6]
+
         if evaluation_type == 'diagram':
             weights = [0.25, 0.35, 0.25, 0.15]
             descriptions = [
@@ -359,11 +312,15 @@ class SubjectiveExpertSolutionService:
                 m = round(max_marks * w, 2)
                 running += m
 
+            expected = [desc]
+            if idx < len(extracted_concepts) and extracted_concepts[idx]:
+                expected.append(extracted_concepts[idx])
+
             criteria.append({
                 'id': f"c{idx + 1}",
                 'description': desc,
                 'max_marks': m,
-                'expected_concepts': [desc],
+                'expected_concepts': expected,
                 'alternative_solutions': ["Valid alternative formulations accepted."],
                 'formulas_or_steps': [],
                 'diagram_requirements': "Diagram required with clear labels." if "diagram" in desc.lower() else "",

@@ -42,6 +42,7 @@ import { LoksewaExamCountdown } from "@/components/student/countdown/LoksewaExam
 import { MockExamCountdown } from "@/components/student/countdown/MockExamCountdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOptionalStudentContext } from "@/contexts/StudentContext";
+import { StudentEntitlementsUsageWidget } from "@/components/student/dashboard/StudentEntitlementsUsageWidget";
 
 // ─── Widget IDs ────────────────────────────────────────────────────────────────
 const FULL_WIDTH_WIDGETS = [
@@ -600,6 +601,11 @@ export default function StudentDashboardPage() {
             )}
           </div>
         </div>
+      </section>
+      
+      {/* Dynamic Package, Entitlements & Usage Tracking */}
+      <section>
+        <StudentEntitlementsUsageWidget />
       </section>
 
       {/* Official Loksewa Exam Countdown & Upcoming Mock Exam Banner */}

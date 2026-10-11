@@ -19,7 +19,7 @@ export default function ExamSubmissionsPage() {
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   const {
-    data: submissions = [],
+    data: rawSubmissions = [],
     isLoading,
     isRefetching,
     refetch,
@@ -29,6 +29,12 @@ export default function ExamSubmissionsPage() {
     enabled: Number.isFinite(examId) && examId > 0,
     refetchInterval: 15000, // Auto-refresh every 15s to pick up student uploads
   });
+
+  const submissions = useMemo<AdminSubjectiveSubmission[]>(() => {
+    if (Array.isArray(rawSubmissions)) return rawSubmissions;
+    if (rawSubmissions && Array.isArray((rawSubmissions as any).results)) return (rawSubmissions as any).results;
+    return [];
+  }, [rawSubmissions]);
 
   const stats = useMemo(() => {
     const total = submissions.length;

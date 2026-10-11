@@ -112,8 +112,17 @@ class SubjectivePdfService:
         if not content.startswith(b'%PDF-'):
             raise ValidationError("Uploaded file is not a valid PDF document.")
 
-        # Estimate page count by counting /Type /Page occurrences in PDF stream
-        page_count = max(1, content.count(b'/Type /Page\n') + content.count(b'/Type /Page\r') + content.count(b'/Type/Page'))
+        # Accurately compute page count using PyMuPDF with safe fallback
+        try:
+            try:
+                import pymupdf as fitz
+            except ImportError:
+                import fitz
+            doc = fitz.open(stream=content, filetype="pdf")
+            page_count = max(1, len(doc))
+            doc.close()
+        except Exception:
+            page_count = max(1, content.count(b'/Type /Page\n') + content.count(b'/Type /Page\r') + content.count(b'/Type/Page'))
         total_bytes = len(content)
 
         file_name = getattr(file_obj, 'name', None) or "answer-sheet.pdf"

@@ -576,6 +576,17 @@ class SubjectiveQuestionScoreSerializer(serializers.ModelSerializer):
             pass
         return []
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        for field in ('strengths', 'improvements'):
+            val = ret.get(field)
+            if isinstance(val, str):
+                items = [line.strip().lstrip('•-*✓△ ') for line in val.split('\n') if line.strip()]
+                ret[field] = items
+            elif not isinstance(val, list):
+                ret[field] = []
+        return ret
+
 
 class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
     student_id = serializers.IntegerField(source='attempt.student.id', read_only=True)
@@ -597,6 +608,7 @@ class AdminSubjectiveSubmissionListSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source='attempt.examination.course.title', read_only=True, allow_null=True)
     checking_request = serializers.SerializerMethodField()
     file_name = serializers.SerializerMethodField()
+    evaluator_name = serializers.SerializerMethodField()
 
     class Meta:
         from .models import SubjectiveSubmission

@@ -25,8 +25,8 @@ interface QuestionScoreItem {
   confidence_score?: number;
   review_reason?: string;
   admin_notes?: string;
-  strengths?: string[];
-  improvements?: string[];
+  strengths?: string[] | string;
+  improvements?: string[] | string;
   student_answer_text?: string;
   pages_referred?: number[];
   criterion_scores?: Array<{
@@ -35,6 +35,18 @@ interface QuestionScoreItem {
     awarded_marks: number;
     comment?: string;
   }>;
+}
+
+function parseStringList(val: unknown): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(String).filter(Boolean);
+  if (typeof val === "string") {
+    return val
+      .split(/\r?\n/)
+      .map((s) => s.trim().replace(/^[•\-\*✓△]\s*/, ""))
+      .filter(Boolean);
+  }
+  return [];
 }
 
 export default function SubmissionEvaluationPage() {
@@ -103,8 +115,8 @@ export default function SubmissionEvaluationPage() {
           confidence_score: qs.confidence_score,
           review_reason: qs.review_reason,
           admin_notes: qs.admin_notes || "",
-          strengths: qs.strengths || [],
-          improvements: qs.improvements || [],
+          strengths: parseStringList(qs.strengths),
+          improvements: parseStringList(qs.improvements),
           student_answer_text: qs.student_answer_text,
           pages_referred: qs.pages_referred,
           criterion_scores: qs.criterion_scores,
@@ -440,12 +452,7 @@ export default function SubmissionEvaluationPage() {
             disabled={autoMarkMutation.isPending || !submission.has_answer_pdf}
             className="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 transition-all disabled:opacity-50"
           >
-            {autoMarkMutation.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5" />
-            )}
-            {autoMarkMutation.isPending ? "Auto-Marking..." : "Auto-Mark with AI"}
+            {autoMarkMutation.isPending ? "Evaluating..." : "Run Rule-Based Auto-Marking"}
           </button>
 
           {(submission.evaluation_status === "needs_review" || submission.evaluation_status === "ai_evaluated") && (
@@ -815,7 +822,7 @@ export default function SubmissionEvaluationPage() {
                               )}
                               {q.status === "ai_evaluated" && (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-100 text-purple-800 font-medium">
-                                  AI Graded
+                                  Provisional (Auto-Graded)
                                 </span>
                               )}
                             </div>
@@ -906,26 +913,31 @@ export default function SubmissionEvaluationPage() {
                           )}
 
                           {/* Strengths & Improvements tags */}
-                          {((q.strengths && q.strengths.length > 0) || (q.improvements && q.improvements.length > 0)) && (
-                            <div className="mb-2.5 flex flex-wrap gap-1 text-[11px]">
-                              {q.strengths?.map((str, sIdx) => (
-                                <span
-                                  key={sIdx}
-                                  className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium"
-                                >
-                                  ✓ {str}
-                                </span>
-                              ))}
-                              {q.improvements?.map((imp, iIdx) => (
-                                <span
-                                  key={iIdx}
-                                  className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium"
-                                >
-                                  △ {imp}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {(() => {
+                            const strList = parseStringList(q.strengths);
+                            const impList = parseStringList(q.improvements);
+                            if (strList.length === 0 && impList.length === 0) return null;
+                            return (
+                              <div className="mb-2.5 flex flex-wrap gap-1 text-[11px]">
+                                {strList.map((str, sIdx) => (
+                                  <span
+                                    key={sIdx}
+                                    className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium"
+                                  >
+                                    ✓ {str}
+                                  </span>
+                                ))}
+                                {impList.map((imp, iIdx) => (
+                                  <span
+                                    key={iIdx}
+                                    className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-medium"
+                                  >
+                                    △ {imp}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
 
                           <div className="grid grid-cols-2 gap-3 mb-2.5">
                             <div>

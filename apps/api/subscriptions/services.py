@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 from django.utils import timezone
 from django.db import transaction
-from .models import Subscription, Invoice, SubscriptionCourseSelection
+from .models import Subscription, Invoice, SubscriptionCourseSelection, SubscriptionPayment
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,11 @@ def approve_payment_logic(payment, admin_user=None):
     from core.notification_service import NotificationService
     
     with transaction.atomic():
+        # Idempotency guard: If payment is already approved and activated, return existing subscription
+        if payment.status == 'APPROVED' and payment.subscription_id:
+            logger.info("Payment %s is already approved with subscription %s; skipping duplicate activation.", payment.id, payment.subscription_id)
+            return payment.subscription
+
         payment.status = 'APPROVED'
         if admin_user:
             payment.verified_by = admin_user
@@ -52,18 +57,20 @@ def approve_payment_logic(payment, admin_user=None):
         if active_sub:
             start_date = active_sub.expiry_date
 
-        if plan.duration_unit == 'DAYS':
-            delta = timedelta(days=plan.duration)
-        elif plan.duration_unit == 'WEEKS':
-            delta = timedelta(weeks=plan.duration)
-        elif plan.duration_unit == 'MONTHS':
-            delta = timedelta(days=30 * plan.duration)
-        elif plan.duration_unit == 'YEAR':
-            delta = timedelta(days=365 * plan.duration)
+        if plan.has_expiry and plan.duration:
+            if plan.duration_unit == 'DAYS':
+                delta = timedelta(days=plan.duration)
+            elif plan.duration_unit == 'WEEKS':
+                delta = timedelta(weeks=plan.duration)
+            elif plan.duration_unit == 'MONTHS':
+                delta = timedelta(days=30 * plan.duration)
+            elif plan.duration_unit == 'YEAR':
+                delta = timedelta(days=365 * plan.duration)
+            else:
+                delta = timedelta(days=plan.duration)
+            expiry_date = start_date + delta
         else:
-            delta = timedelta(days=plan.duration)
-
-        expiry_date = start_date + delta
+            expiry_date = None
 
         subscription = Subscription.objects.create(
             student=payment.student,
@@ -73,11 +80,31 @@ def approve_payment_logic(payment, admin_user=None):
             expiry_date=expiry_date
         )
 
+        from .entitlements import EntitlementService
+        EntitlementService.grant_plan_entitlements(
+            student=payment.student,
+            plan=plan,
+            subscription=subscription,
+            admin_user=admin_user,
+            reason=f"Payment #{payment.id} approved ({plan.name})"
+        )
+
         payment.subscription = subscription
         # Use update_fields so we don't accidentally overwrite verification_status
         # that was already set to VERIFIED_CONFIDENT by the background task.
         update_fields = ['status', 'verified_by', 'verified_at', 'subscription', 'verification_result']
         payment.save(update_fields=update_fields)
+
+        # Clean up any prior PENDING payments for the same student & plan that this payment supersedes
+        prior_pendings = SubscriptionPayment.objects.filter(
+            student=payment.student,
+            plan=payment.plan,
+            status='PENDING',
+        ).exclude(id=payment.id)
+        for prior in prior_pendings:
+            prior.status = 'REJECTED'
+            prior.rejection_reason = f'Superseded by approved Payment #{payment.id}.'
+            prior.save(update_fields=['status', 'rejection_reason'])
 
         enrolled_course_title = plan.name
         try:
@@ -160,12 +187,13 @@ def approve_payment_logic(payment, admin_user=None):
         except Exception:
             logger.exception("Auto-enroll failed for payment_id=%s student_id=%s", payment.id, payment.student_id)
 
-        Invoice.objects.create(
-            student=payment.student,
-            payment=payment,
-            receipt_number=f"LKAI-{now.year}-{str(uuid.uuid4())[:8].upper()}",
-            amount=payment.amount
-        )
+        if not Invoice.objects.filter(payment=payment).exists():
+            Invoice.objects.create(
+                student=payment.student,
+                payment=payment,
+                receipt_number=f"LKAI-{now.year}-{str(uuid.uuid4())[:8].upper()}",
+                amount=payment.amount
+            )
 
         NotificationService.notify_student_payment_approved(
             student=payment.student,

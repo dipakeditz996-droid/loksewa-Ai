@@ -4,11 +4,12 @@ import React, { useState, useEffect, use } from "react";
 import {
   User as UserIcon, Mail, Phone, Shield, ShieldCheck, Calendar, Loader2,
   AlertCircle, GraduationCap, BookOpen, Target, Trophy, CreditCard,
-  ShoppingBag, MapPin, Globe, Clock,
+  ShoppingBag, MapPin, Globe, Clock, X, PlusCircle, Check
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { apiClient } from "@/lib/api/client";
+import { subscriptionsApi, EffectiveEntitlements } from "@/lib/api/subscriptions";
 
 interface UserDetail {
   id: number;
@@ -108,6 +109,26 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [studentEntitlements, setStudentEntitlements] = useState<EffectiveEntitlements | null>(null);
+  const [entitlementsLoading, setEntitlementsLoading] = useState(false);
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [adjustFeature, setAdjustFeature] = useState("MODEL");
+  const [adjustAmount, setAdjustAmount] = useState("5");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [isSubmittingAdjust, setIsSubmittingAdjust] = useState(false);
+
+  const fetchEntitlements = async () => {
+    setEntitlementsLoading(true);
+    try {
+      const res = await subscriptionsApi.getAdminStudentUsage(Number(resolvedParams.id));
+      setStudentEntitlements(res);
+    } catch (err) {
+      console.error("Failed to load student entitlements:", err);
+    } finally {
+      setEntitlementsLoading(false);
+    }
+  };
+
   useEffect(() => {
     const fetchUser = async () => {
       setIsLoading(true);
@@ -115,6 +136,9 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
       try {
         const data = await apiClient<UserDetail>(`/admin/users/${resolvedParams.id}/`);
         setUser(data);
+        if (data.role === "student") {
+          fetchEntitlements();
+        }
       } catch (err: any) {
         setError(err.data?.error || err.message || "Failed to load user.");
       } finally {
@@ -123,6 +147,36 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
     };
     fetchUser();
   }, [resolvedParams.id]);
+
+  const handleAdjustSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustReason.trim()) {
+      alert("Please provide an audit reason for this quota adjustment.");
+      return;
+    }
+    const amt = parseInt(adjustAmount);
+    if (isNaN(amt) || amt === 0) {
+      alert("Please provide a non-zero adjustment amount.");
+      return;
+    }
+
+    setIsSubmittingAdjust(true);
+    try {
+      await subscriptionsApi.adminAdjustQuota(
+        Number(resolvedParams.id),
+        adjustFeature,
+        amt,
+        adjustReason.trim()
+      );
+      setIsAdjustModalOpen(false);
+      setAdjustReason("");
+      fetchEntitlements();
+    } catch (err: any) {
+      alert(err.message || "Failed to adjust quota.");
+    } finally {
+      setIsSubmittingAdjust(false);
+    }
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -240,68 +294,191 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
 
-              {/* Package Access */}
-              <SectionCard title={`Package Access ${user.subscriptions && user.subscriptions.length > 1 ? `(${user.subscriptions.length} Packages)` : ""}`}>
-                {((user.subscriptions && user.subscriptions.length > 0) || user.subscription) ? (
-                  <div className="space-y-4">
-                    {(user.subscriptions && user.subscriptions.length > 0 ? user.subscriptions : [user.subscription!]).map((sub, idx) => (
-                      <div key={sub.id || idx} className="p-4 rounded-lg bg-slate-50/70 border border-slate-200/80 space-y-3">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                          <InfoRow
-                            icon={CreditCard}
-                            label="Package"
-                            value={
-                              <span className="flex items-center gap-2">
-                                <span className="font-bold text-[#0B2545]">{sub.planName}</span>
-                                {sub.packageType && (
-                                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                                    {sub.packageType}
-                                  </span>
-                                )}
-                              </span>
-                            }
-                          />
-                          <InfoRow
-                            icon={ShieldCheck}
-                            label="Status"
-                            value={
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                                sub.isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
-                              }`}>
-                                {sub.isActive ? "Active" : sub.status}
-                              </span>
-                            }
-                          />
-                          <InfoRow
-                            icon={Shield}
-                            label="Access Source"
-                            value={
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                                sub.source === "ADMIN_GRANT"
-                                  ? "bg-purple-100 text-purple-800 border border-purple-200"
-                                  : "bg-blue-100 text-blue-800"
-                              }`}>
-                                {sub.accessSource || (sub.source === "ADMIN_GRANT" ? "Admin Granted" : "Student Payment")}
-                              </span>
-                            }
-                          />
-                          <InfoRow icon={Calendar} label="Expires" value={new Date(sub.expiryDate).toLocaleDateString()} />
-                          <InfoRow icon={Calendar} label="Started" value={new Date(sub.startDate).toLocaleDateString()} />
-                          {sub.grantedBy && (
-                            <InfoRow icon={UserIcon} label="Granted By" value={`@${sub.grantedBy}`} />
+              {/* Authoritative Package & Entitlements Management */}
+              <SectionCard title="Active Package, Entitlements & Live Quotas">
+                {entitlementsLoading ? (
+                  <div className="py-6 flex justify-center items-center gap-2 text-xs text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading live entitlements & quotas...
+                  </div>
+                ) : studentEntitlements?.has_active_package ? (
+                  <div className="space-y-5">
+                    {/* Package Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-200 gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-[#0B2545] text-base">
+                            {studentEntitlements.plan?.name}
+                          </span>
+                          {studentEntitlements.plan?.badge && studentEntitlements.plan.badge !== "NONE" && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#D4A72C]/20 text-[#D4A72C]">
+                              {studentEntitlements.plan.badge.replace("_", " ")}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase">
+                            {studentEntitlements.subscription?.status || "Active"}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                          <span>
+                            Validity: {studentEntitlements.subscription?.has_expiry 
+                              ? `Expires ${studentEntitlements.subscription.expiry_date ? new Date(studentEntitlements.subscription.expiry_date).toLocaleDateString() : '—'}` 
+                              : "Lifetime Quota (No Expiry)"}
+                          </span>
+                          {studentEntitlements.subscription?.reset_frequency && studentEntitlements.subscription.reset_frequency !== "NEVER" && (
+                            <span>Resets: {studentEntitlements.subscription.reset_frequency.toLowerCase()}</span>
                           )}
                         </div>
-                        {sub.adminGrantReason && (
-                          <div className="pt-2 border-t border-slate-200/70 text-xs">
-                            <span className="font-semibold text-slate-500">Grant Note: </span>
-                            <span className="text-slate-700 italic">"{sub.adminGrantReason}"</span>
-                          </div>
-                        )}
                       </div>
-                    ))}
+
+                      <Button
+                        size="sm"
+                        onClick={() => setIsAdjustModalOpen(true)}
+                        className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs shadow-sm h-9"
+                      >
+                        Adjust Quota / Grant Attempts
+                      </Button>
+                    </div>
+
+                    {/* Quota Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {/* Model Mock Exams */}
+                      <div className="p-3 rounded-lg bg-white border border-slate-200">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Model Exams</span>
+                        <div className="mt-1">
+                          {studentEntitlements.exams?.MODEL?.is_unlimited ? (
+                            <span className="text-sm font-bold text-emerald-600">Unlimited</span>
+                          ) : (
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-base font-extrabold text-[#0B2545]">
+                                {studentEntitlements.exams?.MODEL?.remaining ?? 0}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                / {studentEntitlements.exams?.MODEL?.total_allowed ?? 0}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Topicwise Tests */}
+                      <div className="p-3 rounded-lg bg-white border border-slate-200">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Topicwise Tests</span>
+                        <div className="mt-1">
+                          {studentEntitlements.exams?.TOPICWISE?.is_unlimited ? (
+                            <span className="text-sm font-bold text-emerald-600">Unlimited</span>
+                          ) : (
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-base font-extrabold text-[#0B2545]">
+                                {studentEntitlements.exams?.TOPICWISE?.remaining ?? 0}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                / {studentEntitlements.exams?.TOPICWISE?.total_allowed ?? 0}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* AI Tutor Credits */}
+                      <div className="p-3 rounded-lg bg-white border border-slate-200">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">AI Credits</span>
+                        <div className="mt-1">
+                          {studentEntitlements.ai_tutor?.is_unlimited ? (
+                            <span className="text-sm font-bold text-purple-600">Unlimited</span>
+                          ) : (
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-base font-extrabold text-[#0B2545]">
+                                {(studentEntitlements.ai_tutor?.remaining_credits ?? 0).toLocaleString()}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                / {(studentEntitlements.ai_tutor?.total_credits ?? 0).toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Practice Questions */}
+                      <div className="p-3 rounded-lg bg-white border border-slate-200">
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">Practice Bank</span>
+                        <div className="mt-1">
+                          {studentEntitlements.practice?.is_unlimited ? (
+                            <span className="text-sm font-bold text-emerald-600">Unlimited</span>
+                          ) : (
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-base font-extrabold text-[#0B2545]">
+                                {studentEntitlements.practice?.remaining ?? 0}
+                              </span>
+                              <span className="text-xs text-slate-400">
+                                / {studentEntitlements.practice?.total_allowed ?? 0}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recent Quota Ledger */}
+                    <div className="pt-2">
+                      <h4 className="text-xs font-bold text-[#0B2545] uppercase tracking-wider mb-2">
+                        Audit & Quota Usage Ledger
+                      </h4>
+                      {studentEntitlements.usage_history && studentEntitlements.usage_history.length > 0 ? (
+                        <div className="border border-slate-200 rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+                          <table className="w-full text-xs text-left">
+                            <thead className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600">
+                              <tr>
+                                <th className="p-2.5">Action</th>
+                                <th className="p-2.5">Feature</th>
+                                <th className="p-2.5 text-right">Amount</th>
+                                <th className="p-2.5">Reason / Admin</th>
+                                <th className="p-2.5 text-right">Date</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {studentEntitlements.usage_history.map((entry: any) => (
+                                <tr key={entry.id} className="hover:bg-slate-50/50">
+                                  <td className="p-2.5">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                      entry.event_type === "GRANT" || entry.event_type === "ADMIN_ADJUST" ? "bg-emerald-100 text-emerald-800" :
+                                      entry.event_type === "CONSUME" ? "bg-amber-100 text-amber-800" :
+                                      "bg-slate-100 text-slate-700"
+                                    }`}>
+                                      {entry.event_type}
+                                    </span>
+                                  </td>
+                                  <td className="p-2.5 font-medium">{entry.feature}</td>
+                                  <td className={`p-2.5 text-right font-bold ${entry.amount > 0 ? "text-emerald-600" : "text-slate-800"}`}>
+                                    {entry.amount > 0 ? `+${entry.amount}` : entry.amount}
+                                  </td>
+                                  <td className="p-2.5 text-slate-600 max-w-xs truncate">{entry.reason || "—"}</td>
+                                  <td className="p-2.5 text-right text-slate-400">
+                                    {new Date(entry.created_at).toLocaleDateString()}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">No usage ledger entries recorded yet.</p>
+                      )}
+                    </div>
+
                   </div>
                 ) : (
-                  <p className="text-sm text-slate-500">No active package or subscription.</p>
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <p className="text-xs text-slate-500">
+                      Student does not currently have an active entitlement package.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsAdjustModalOpen(true)}
+                      className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs shadow-sm h-8"
+                    >
+                      Grant Quota / Attempts
+                    </Button>
+                  </div>
                 )}
               </SectionCard>
 
@@ -358,6 +535,96 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
           )}
         </div>
       ) : null}
+
+      {/* Quota Adjustment Modal */}
+      {isAdjustModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-[#0B2545]">Adjust Student Quota</h3>
+                <p className="text-xs text-slate-500">Grant or modify attempts with auditable reason</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAdjustModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdjustSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Target Entitlement / Feature
+                </label>
+                <select
+                  value={adjustFeature}
+                  onChange={(e) => setAdjustFeature(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
+                >
+                  <option value="MODEL">Model Mock Exam Attempts</option>
+                  <option value="TOPICWISE">Topicwise Test Attempts</option>
+                  <option value="PAST_QUESTION">Past Question Paper Attempts</option>
+                  <option value="LIVE">Live Exam Attempts</option>
+                  <option value="AI_TUTOR">AI Tutor Credits</option>
+                  <option value="PRACTICE">Practice Question Allowance</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Adjustment Amount (+ to add, - to deduct)
+                </label>
+                <input
+                  type="number"
+                  value={adjustAmount}
+                  onChange={(e) => setAdjustAmount(e.target.value)}
+                  placeholder="e.g. 5 or 1000"
+                  className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
+                  required
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Positive values grant additional quota. Negative values deduct quota.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Audit Reason (Required)
+                </label>
+                <textarea
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  placeholder="e.g. Granted bonus mock attempts per academic support ticket #412"
+                  rows={3}
+                  className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#D4A72C]"
+                  required
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAdjustModalOpen(false)}
+                  disabled={isSubmittingAdjust}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmittingAdjust}
+                  className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]/90 font-bold"
+                >
+                  {isSubmittingAdjust ? "Applying..." : "Save Adjustment"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { adminSubjectiveSetsApi, SubjectiveQuestionSet, SubjectiveSetFilterParams } from '@/lib/api/admin-subjective-sets';
+import { adminQuestionApi } from '@/lib/api/admin-questions';
 import { adminSyllabusApi, AdminExamCategory } from '@/lib/api/admin-syllabus';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
 import Link from 'next/link';
 import { 
   Plus, Search, RefreshCw, FileText, Download, Eye, Edit2, 
-  Archive, CheckCircle2, XCircle, Trash2, ExternalLink, PlusCircle
+  Archive, CheckCircle2, XCircle, Trash2, ExternalLink, PlusCircle, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -291,16 +292,54 @@ export default function SubjectiveQuestionBankPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Subjective Question Bank</h1>
           <p className="text-gray-500 mt-1">
-            Manage complete subjective question paper sets stored as PDF documents.
+            Manage subjective theory &amp; essay questions, model answers, and complete question paper sets.
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 flex-shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              try {
+                await adminQuestionApi.downloadTemplate('subjective');
+              } catch (e: any) {
+                toast.error(e?.message || 'Failed to download subjective template');
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs text-slate-700 font-semibold border-slate-300 hover:bg-slate-50"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download Excel Template
+          </Button>
+
+          <Link href="/admin-dashboard/academic/questions/import?type=subjective">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex items-center gap-1.5 text-xs text-[#0B2545] font-semibold border-slate-300 hover:bg-slate-50"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Import Excel Questions
+            </Button>
+          </Link>
+
+          <Link href="/admin-dashboard/academic/questions/new">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex items-center gap-1.5 text-xs text-[#0B2545] font-semibold border-slate-300 hover:bg-slate-50"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              Add Question
+            </Button>
+          </Link>
+
           <Button
             onClick={openUploadModal}
-            className="bg-[#0B2545] hover:bg-[#163E6C] text-white flex items-center gap-2 shadow-sm font-medium"
+            className="bg-[#0B2545] hover:bg-[#163E6C] text-white flex items-center gap-1.5 text-xs shadow-sm font-semibold"
           >
-            <Plus className="w-4 h-4" />
-            Upload Question Paper
+            <Plus className="w-3.5 h-3.5" />
+            Upload PDF Paper Set
           </Button>
         </div>
       </div>

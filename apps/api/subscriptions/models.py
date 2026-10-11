@@ -35,15 +35,20 @@ class SubscriptionPlan(models.Model):
     )
 
     name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=255, blank=True, null=True, unique=True)
     description = models.TextField(blank=True)
-    duration = models.IntegerField()
-    duration_unit = models.CharField(max_length=20, choices=DURATION_UNIT_CHOICES, default='DAYS')
+    
+    # Validity & Expiry: optional rather than mandatory day-based expiry
+    has_expiry = models.BooleanField(default=True, help_text="If False, package is quota-based or lifetime without mandatory day-based expiration.")
+    duration = models.IntegerField(null=True, blank=True, default=30)
+    duration_unit = models.CharField(max_length=20, choices=DURATION_UNIT_CHOICES, default='DAYS', null=True, blank=True)
 
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     discount = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, help_text="Discount percentage")
 
     badge = models.CharField(max_length=20, choices=BADGE_CHOICES, default='NONE')
+    display_badge = models.CharField(max_length=50, blank=True, default='')
 
     # Feature access configuration
     features = models.JSONField(default=list, blank=True, help_text="List of string feature keys this plan unlocks")
@@ -58,6 +63,17 @@ class SubscriptionPlan(models.Model):
     )
 
     package_type = models.CharField(max_length=20, choices=PACKAGE_TYPE_CHOICES, default='SINGLE', help_text="Type of package dictating the access rules.")
+    course_access_type = models.CharField(
+        max_length=20,
+        choices=(
+            ('NONE', 'No Course Access'),
+            ('SELECTED', 'Selected Courses'),
+            ('BUNDLE', 'Course Bundle'),
+            ('ALL_ACCESS', 'All Access'),
+        ),
+        default='SELECTED',
+        help_text="Course access entitlement rule"
+    )
     
     eligible_courses = models.ManyToManyField(
         'courses.Course', 
@@ -70,7 +86,58 @@ class SubscriptionPlan(models.Model):
     allowed_preparation_count = models.IntegerField(default=1, help_text="Number of preparations allowed for this plan (used for MULTI packages)")
     is_flexible = models.BooleanField(default=False, help_text="Deprecated: Use package_type='MULTI'. If true, the student can pick up to `allowed_preparation_count` courses.")
 
+    # Examination Quotas & Free Mock Tests
+    # Format: {'past_year': {'enabled': True, 'attempts': 10}, 'model': {'enabled': True, 'attempts': 5}, 'live': {'enabled': True, 'attempts': 2}, 'topicwise': {'enabled': True, 'attempts': -1}} (-1 = unlimited)
+    exam_quotas = models.JSONField(
+        default=dict, blank=True,
+        help_text="Configured attempts per category. -1 represents Unlimited."
+    )
+    free_mock_exams = models.ManyToManyField(
+        'exams.Examination',
+        blank=True,
+        related_name='free_for_plans',
+        help_text="Specific Mock Exams that are free for subscribers of this package."
+    )
+    free_mock_attempts = models.IntegerField(default=0, help_text="Free mock exam attempts allowance (-1 for unlimited).")
+
+    # Notes & Study Materials Access
+    notes_access_type = models.CharField(
+        max_length=20,
+        choices=(
+            ('NONE', 'No Notes Access'),
+            ('COURSE_NOTES', 'Included Course Notes'),
+            ('ALL', 'All Eligible Notes'),
+        ),
+        default='COURSE_NOTES'
+    )
+    can_download_notes = models.BooleanField(default=False)
+
+    # Practice Allowance
+    practice_enabled = models.BooleanField(default=True)
+    practice_question_limit = models.IntegerField(default=-1, help_text="Practice questions quota (-1 for unlimited).")
+
+    # AI Tutor
+    ai_tutor_enabled = models.BooleanField(default=True)
+    ai_credits = models.IntegerField(default=0, help_text="AI Tutor tokens/credits allowance (-1 for unlimited).")
+    ai_daily_limit = models.IntegerField(default=0, help_text="Daily AI limit (0 for unlimited).")
+    ai_monthly_limit = models.IntegerField(default=0, help_text="Monthly AI limit (0 for unlimited).")
+
+    # Quota Resets & Lifecycle
+    reset_frequency = models.CharField(
+        max_length=20,
+        choices=(
+            ('NEVER', 'Lifetime / Never'),
+            ('DAILY', 'Daily'),
+            ('WEEKLY', 'Weekly'),
+            ('MONTHLY', 'Monthly'),
+        ),
+        default='NEVER'
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
+    is_published = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    terms = models.TextField(blank=True, default='')
     display_order = models.IntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -101,8 +168,8 @@ class Subscription(models.Model):
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='granted_subscriptions'
     )
-    start_date = models.DateTimeField()
-    expiry_date = models.DateTimeField()
+    start_date = models.DateTimeField(default=timezone.now)
+    expiry_date = models.DateTimeField(null=True, blank=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -111,7 +178,89 @@ class Subscription(models.Model):
         
     @property
     def is_active(self):
-        return self.status == 'ACTIVE' and self.expiry_date > timezone.now()
+        if self.status != 'ACTIVE':
+            return False
+        if self.expiry_date:
+            return self.expiry_date > timezone.now()
+        # Quota-only / lifetime packages remain active until explicitly cancelled or exhausted
+        return True
+
+    @property
+    def has_expiry(self):
+        return self.expiry_date is not None
+
+
+class StudentEntitlement(models.Model):
+    """
+    Authoritative balance and granted quota record per student and feature.
+    Updated atomically using transactions and F() expressions.
+    """
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='entitlements')
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.SET_NULL, null=True, blank=True, related_name='entitlements'
+    )
+    feature = models.CharField(max_length=64, db_index=True)
+    total_allowed = models.IntegerField(default=-1, help_text="-1 indicates Unlimited allowance.")
+    consumed = models.IntegerField(default=0)
+    reserved = models.IntegerField(default=0)
+    reset_frequency = models.CharField(max_length=20, default='NEVER')
+    last_reset_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('student', 'feature')
+
+    @property
+    def is_unlimited(self):
+        return self.total_allowed == -1
+
+    @property
+    def remaining(self):
+        if self.is_unlimited:
+            return -1
+        return max(0, self.total_allowed - (self.consumed + self.reserved))
+
+    def __str__(self):
+        rem = 'Unlimited' if self.is_unlimited else f"{self.remaining} left"
+        return f"{self.student.username} -> {self.feature} ({rem})"
+
+
+class UsageLedger(models.Model):
+    """
+    Append-only auditable ledger of all quota allocations, reservations,
+    settlements, releases, and admin adjustments.
+    """
+    EVENT_CHOICES = (
+        ('GRANT', 'Initial / Package Grant'),
+        ('RESERVE', 'Attempt Reservation'),
+        ('CONSUME', 'Attempt / Feature Consumption'),
+        ('RELEASE', 'Reservation Release'),
+        ('RESET', 'Quota Reset'),
+        ('ADMIN_ADJUST', 'Admin Quota Adjustment'),
+        ('REVERSAL', 'Reversal'),
+    )
+
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='usage_ledger_entries')
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.SET_NULL, null=True, blank=True, related_name='usage_entries'
+    )
+    feature = models.CharField(max_length=64, db_index=True)
+    event_type = models.CharField(max_length=32, choices=EVENT_CHOICES)
+    amount = models.IntegerField(default=0)
+    reference_id = models.CharField(max_length=255, blank=True, db_index=True)
+    idempotency_key = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    reason = models.TextField(blank=True)
+    admin_user = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='admin_quota_adjustments'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.created_at}] {self.student.username} {self.event_type} {self.amount} ({self.feature})"
 
 class SubscriptionPayment(models.Model):
     STATUS_CHOICES = (

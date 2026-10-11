@@ -11,6 +11,7 @@ CSV_COLUMNS = [
 ROW_FIELDS = [
     'sn', 'question', 'marks', 'option_a', 'option_b', 'option_c', 'option_d',
     'correct_answer', 'model_answer', 'explanation', 'hint',
+    'course', 'position', 'subject', 'chapter', 'topic', 'difficulty', 'tags',
 ]
 
 EXCEL_HEADERS_OBJECTIVE = [
@@ -18,7 +19,10 @@ EXCEL_HEADERS_OBJECTIVE = [
     'Correct Answer', 'Explanation', 'Hint',
 ]
 EXCEL_HEADERS_TRUE_FALSE = ['SN', 'Questions', 'Mark', 'Correct Answer', 'Explanation', 'Hint']
-EXCEL_HEADERS_SUBJECTIVE = ['SN', 'Questions', 'Mark', 'Model Answer', 'Explanation', 'Hint']
+EXCEL_HEADERS_SUBJECTIVE = [
+    'SN', 'Questions', 'Mark', 'Course', 'Position', 'Subject', 'Chapter', 'Topic',
+    'Model Answer', 'Difficulty', 'Tags', 'Explanation', 'Hint',
+]
 
 OBJECTIVE_TYPES = ('mcq', 'true_false')
 SUBJECTIVE_TYPES = ('subjective', 'short_answer', 'long_answer')
@@ -26,7 +30,7 @@ ALL_TYPES = OBJECTIVE_TYPES + SUBJECTIVE_TYPES
 
 EXCEL_HEADER_MAP = {
     'sn': 'sn', 'questions': 'question', 'question': 'question',
-    'mark': 'marks', 'marks': 'marks',
+    'mark': 'marks', 'marks': 'marks', 'maximum marks': 'marks', 'max marks': 'marks',
     'option a': 'option_a', 'option b': 'option_b',
     'option c': 'option_c', 'option d': 'option_d',
     'options a': 'option_a', 'options b': 'option_b',
@@ -34,7 +38,15 @@ EXCEL_HEADER_MAP = {
     'correct answer': 'correct_answer',
     'model answer': 'model_answer',
     'expected answer': 'model_answer', 'model_answer': 'model_answer',
+    'reference answer': 'model_answer',
     'explanation': 'explanation', 'hint': 'hint',
+    'course': 'course',
+    'position': 'position', 'level': 'position', 'exam': 'position',
+    'subject': 'subject',
+    'chapter': 'chapter',
+    'topic': 'topic',
+    'difficulty': 'difficulty',
+    'tags': 'tags', 'tag': 'tags',
 }
 
 VALID_ANSWERS = ['A', 'B', 'C', 'D']
@@ -105,12 +117,19 @@ def _analyse_row(row, question_type, allow_blank_explanation=False, require_mcq_
         errors.append('Question is required.')
 
     marks_raw = (row.get('marks') or '').strip()
-    if marks_raw:
+    if not marks_raw and question_type in SUBJECTIVE_TYPES:
+        errors.append('Mark is required for subjective questions.')
+    elif marks_raw:
         try:
-            if float(marks_raw) <= 0:
-                errors.append('Mark must be a positive number.')
+            m = float(marks_raw)
+            if m <= 0:
+                errors.append('Mark must be a positive number greater than 0.')
         except ValueError:
             errors.append(f"Mark must be numeric (got '{marks_raw}').")
+
+    diff_raw = (row.get('difficulty') or '').strip().lower()
+    if diff_raw and diff_raw not in ('easy', 'medium', 'hard'):
+        errors.append(f"Difficulty must be one of: easy, medium, hard (got '{diff_raw}').")
 
     if question_type == 'mcq':
         option_keys = ('option_a', 'option_b', 'option_c', 'option_d')
@@ -174,26 +193,28 @@ def _missing_detail(row, question_type):
 
 
 def _existing_question_ids(norm_texts):
-    """Map lower-cased question text -> {'id': id, 'code': question_id}, in batches."""
+    """Map lower-cased question text -> {'id': id, 'code': question_id, 'topic_id': topic_id, 'topic_name': topic_name}, in batches."""
     from django.db.models.functions import Lower
     from exams.models import Question
     found = {}
     texts = sorted(set(norm_texts))
     for i in range(0, len(texts), 500):
         chunk = texts[i:i + 500]
-        for q_id, q_code, lowered in (
+        for q_id, q_code, q_topic_id, q_topic_name, lowered in (
             Question.objects.annotate(lowered=Lower('text'))
             .filter(lowered__in=chunk).order_by('id')
-            .values_list('id', 'question_id', 'lowered')
+            .values_list('id', 'question_id', 'topic_id', 'topic__name', 'lowered')
         ):
             found.setdefault(lowered, {
                 'id': q_id,
-                'code': q_code or f"Q-{q_id:06d}"
+                'code': q_code or f"Q-{q_id:06d}",
+                'topic_id': q_topic_id,
+                'topic_name': q_topic_name or '',
             })
     return found
 
 
-def _build_report(rows, question_type, allow_blank_explanation=False, require_mcq_fields=False):
+def _build_report(rows, question_type, allow_blank_explanation=False, require_mcq_fields=False, target_topic_id=None):
     """Validate every row and return (report_data, counts)."""
     report_data = []
     counts = {'total': 0, 'valid': 0, 'incomplete': 0, 'error': 0, 'duplicate': 0}
@@ -221,17 +242,30 @@ def _build_report(rows, question_type, allow_blank_explanation=False, require_mc
         norm_text = clean['question'].strip().lower()
         is_duplicate = False
         duplicate_of = None
+        topic_mismatch_error = None
         if norm_text:
             if norm_text in existing_ids:
-                is_duplicate = True
-                duplicate_of = existing_ids[norm_text]['code']
+                existing = existing_ids[norm_text]
+                existing_topic_id = existing.get('topic_id')
+                existing_topic_name = existing.get('topic_name')
+                if target_topic_id and existing_topic_id and str(existing_topic_id) != str(target_topic_id):
+                    topic_mismatch_error = (
+                        f"Question matches existing question ({existing['code']}) which belongs to another topic "
+                        f"('{existing_topic_name or 'Different Topic'}'). Topicwise test questions must belong to the selected topic."
+                    )
+                else:
+                    is_duplicate = True
+                    duplicate_of = existing['code']
             elif norm_text in seen_texts:
                 is_duplicate = True
                 duplicate_of = f"row {seen_texts[norm_text]}"
             else:
                 seen_texts[norm_text] = idx + 1
 
-        if is_duplicate:
+        if topic_mismatch_error:
+            errors.append(topic_mismatch_error)
+            status = 'error'
+        elif is_duplicate:
             errors = [f"Duplicate question (matches {duplicate_of}). It will be reused instead of imported as a new question."]
             missing = []
             status = 'duplicate'
@@ -295,12 +329,29 @@ def generate_excel_template(qtype='mcq'):
     else:
         headers = EXCEL_HEADERS_SUBJECTIVE
         title = 'Subjective Question Template'
-        example = [1, 'नेपालको संघीय संरचनाबारे संक्षिप्त चर्चा गर्नुहोस्।', 5,
-                   'नेपाल ७ प्रदेशसहितको संघीय गणतन्त्र हो...', 'अध्याय ३ हेर्नुहोस्।', '']
+        example = [
+            1,
+            'नेपालको संघीय संरचना र यसका मुख्य विशेषताहरूबारे संक्षेपमा चर्चा गर्नुहोस्।',
+            10,
+            'Civil Sub Engineer',
+            'Sub Engineer',
+            'General Studies',
+            'Constitution & Governance',
+            'Federal Structure',
+            'नेपालको संविधान २०७२ अनुसार नेपाल संघ, प्रदेश र स्थानीय गरी ३ तहको संरचनामा आधारित छ। यसका मुख्य विशेषताहरू: १. राज्यशक्तिको बाँडफाँड, २. समन्वय, सहअस्तित्व र सहकारिता, ३. तीन तहका सरकारका एकल तथा साझा अधिकारको व्यवस्था...',
+            'medium',
+            'Governance, Federalism',
+            'नेपालको संविधान भाग ५ र अनुसूचीहरू हेर्नुहोस्।',
+            'संघ, प्रदेश र स्थानीय तहको अन्तरसम्बन्ध उल्लेख गर्नुहोस्।',
+        ]
         rules = [
-            'Required: Questions, Mark, Model Answer (the reference answer evaluators mark against).',
-            'Explanation and Hint are optional.',
-            'Subjective questions have no answer options, so this template has no option columns.',
+            'Required Columns: Questions, Mark, Model Answer.',
+            'Optional Academic Columns: Course, Position, Subject, Chapter, Topic.',
+            'Academic Scope Fallback: Blank academic columns will inherit the targeting selected in the upload modal.',
+            'Optional Metadata Columns: Difficulty (easy, medium, hard), Tags (comma-separated), Explanation, Hint.',
+            'Marks: Must be a positive numeric value (e.g. 5, 10).',
+            'Model Answer: Essential reference answer for evaluators.',
+            'Subjective questions do not use option columns (Option A-D).',
         ]
 
     wb = Workbook()

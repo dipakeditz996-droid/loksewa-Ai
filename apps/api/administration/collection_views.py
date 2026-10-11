@@ -2,8 +2,10 @@ from rest_framework import viewsets, permissions, status
 from .permissions import IsAdminUser
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from exams.models import QuestionCollection, CollectionRule, Question
+from exams.models import QuestionCollection, CollectionRule, Question, ExamCategory, Exam, Subject, Chapter, Topic
+from courses.services.course_access_service import CourseAccessService
 from rest_framework import serializers
+from django.db.models import Q
 
 
 class CollectionRuleSerializer(serializers.ModelSerializer):
@@ -16,11 +18,39 @@ class QuestionCollectionSerializer(serializers.ModelSerializer):
     rule = CollectionRuleSerializer(required=False, allow_null=True)
     question_count = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
+    
+    position = serializers.PrimaryKeyRelatedField(
+        queryset=Exam.objects.all(), source='exam', required=False, allow_null=True
+    )
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=ExamCategory.objects.all(), required=False, allow_null=True
+    )
+    subject = serializers.PrimaryKeyRelatedField(
+        queryset=Subject.objects.all(), required=False, allow_null=True
+    )
+    chapter = serializers.PrimaryKeyRelatedField(
+        queryset=Chapter.objects.all(), required=False, allow_null=True
+    )
+    topic = serializers.PrimaryKeyRelatedField(
+        queryset=Topic.objects.all(), required=False, allow_null=True
+    )
+
+    category_name = serializers.CharField(source='category.name', read_only=True, default=None)
+    position_name = serializers.CharField(source='exam.name', read_only=True, default=None)
+    subject_name = serializers.CharField(source='subject.name', read_only=True, default=None)
+    chapter_name = serializers.CharField(source='chapter.title', read_only=True, default=None)
+    topic_name = serializers.CharField(source='topic.name', read_only=True, default=None)
+    
+    course_id = serializers.SerializerMethodField()
+    course_title = serializers.SerializerMethodField()
 
     class Meta:
         model = QuestionCollection
         fields = [
             'id', 'name', 'description', 'color', 'icon', 'status',
+            'category', 'position', 'subject', 'chapter', 'topic',
+            'category_name', 'position_name', 'subject_name', 'chapter_name', 'topic_name',
+            'course_id', 'course_title',
             'created_by', 'created_by_name', 'created_at', 'updated_at',
             'question_count', 'rule'
         ]
@@ -28,6 +58,18 @@ class QuestionCollectionSerializer(serializers.ModelSerializer):
 
     def get_question_count(self, obj):
         return obj.questions.count()
+
+    def get_course_id(self, obj):
+        if obj.exam_id:
+            c = CourseAccessService.get_question_course(obj)
+            return c.id if c else None
+        return None
+
+    def get_course_title(self, obj):
+        if obj.exam_id:
+            c = CourseAccessService.get_question_course(obj)
+            return c.title if c else None
+        return None
 
     def create(self, validated_data):
         rule_data = validated_data.pop('rule', None)
@@ -55,40 +97,77 @@ class QuestionCollectionSerializer(serializers.ModelSerializer):
 
 class CollectionQuestionSerializer(serializers.ModelSerializer):
     """Lightweight question serializer for listing questions in a collection."""
-    # A Question reaches its subject through topic -> chapter -> subject, and
-    # Chapter titles live on `title`, so both need resolving by hand.
     subject_name = serializers.SerializerMethodField()
     chapter_name = serializers.SerializerMethodField()
     topic_name = serializers.SerializerMethodField()
+    position_name = serializers.SerializerMethodField()
+    course_title = serializers.SerializerMethodField()
 
     def get_subject_name(self, obj):
         try:
+            if obj.subject:
+                return obj.subject.name
             return obj.topic.chapter.subject.name
         except AttributeError:
             return ''
 
     def get_chapter_name(self, obj):
         try:
+            if obj.chapter:
+                return obj.chapter.title
             return obj.topic.chapter.title
         except AttributeError:
             return ''
 
     def get_topic_name(self, obj):
         try:
-            return obj.topic.name
+            return obj.topic.name if obj.topic else ''
         except AttributeError:
             return ''
 
+    def get_position_name(self, obj):
+        try:
+            return obj.exam.name if obj.exam else ''
+        except AttributeError:
+            return ''
+
+    def get_course_title(self, obj):
+        c = CourseAccessService.get_question_course(obj)
+        return c.title if c else ''
+
     class Meta:
         model = Question
-        fields = ['id', 'question_id', 'text', 'question_type', 'difficulty',
-                  'subject_name', 'chapter_name', 'topic_name', 'status']
+        fields = ['id', 'question_id', 'text', 'question_type', 'marks', 'difficulty',
+                  'subject_name', 'chapter_name', 'topic_name', 'position_name', 'course_title', 'status']
 
 
 class QuestionCollectionViewSet(viewsets.ModelViewSet):
-    queryset = QuestionCollection.objects.all().order_by('-created_at')
+    queryset = QuestionCollection.objects.select_related(
+        'category', 'exam', 'subject', 'chapter', 'topic', 'created_by'
+    ).order_by('-created_at')
     serializer_class = QuestionCollectionSerializer
     permission_classes = [IsAdminUser]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search) | Q(description__icontains=search)
+            )
+        category_id = self.request.query_params.get('category')
+        if category_id:
+            qs = qs.filter(category_id=category_id)
+        position_id = self.request.query_params.get('position') or self.request.query_params.get('exam')
+        if position_id:
+            qs = qs.filter(exam_id=position_id)
+        subject_id = self.request.query_params.get('subject')
+        if subject_id:
+            qs = qs.filter(subject_id=subject_id)
+        chapter_id = self.request.query_params.get('chapter')
+        if chapter_id:
+            qs = qs.filter(chapter_id=chapter_id)
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -98,14 +177,14 @@ class QuestionCollectionViewSet(viewsets.ModelViewSet):
         """Return all questions in this collection."""
         collection = self.get_object()
         questions = collection.questions.select_related(
-            'topic', 'topic__chapter', 'topic__chapter__subject'
+            'subject', 'chapter', 'topic', 'exam', 'topic__chapter', 'topic__chapter__subject'
         ).all()
         serializer = CollectionQuestionSerializer(questions, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def add_questions(self, request, pk=None):
-        """Add questions to this collection. Body: { question_ids: [1,2,3] }"""
+        """Add questions to this collection with scope compatibility validation. Body: { question_ids: [1,2,3] }"""
         collection = self.get_object()
         question_ids = request.data.get('question_ids', [])
         if not question_ids:
@@ -114,6 +193,22 @@ class QuestionCollectionViewSet(viewsets.ModelViewSet):
         questions = Question.objects.filter(id__in=question_ids)
         if not questions.exists():
             return Response({'error': 'No valid questions found for the given IDs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validate scope compatibility if collection has an academic target configured
+        incompatible = []
+        for q in questions:
+            if collection.exam_id and q.exam_id and q.exam_id != collection.exam_id:
+                incompatible.append(f"{q.question_id or q.id}: Level/Position mismatch")
+            elif collection.subject_id and q.subject_id and q.subject_id != collection.subject_id:
+                incompatible.append(f"{q.question_id or q.id}: Subject mismatch")
+            elif collection.chapter_id and q.chapter_id and q.chapter_id != collection.chapter_id:
+                incompatible.append(f"{q.question_id or q.id}: Chapter mismatch")
+
+        if incompatible:
+            return Response({
+                'error': f"{len(incompatible)} question(s) are incompatible with the collection's academic scope.",
+                'details': incompatible[:5],
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         collection.questions.add(*questions)
         return Response({
@@ -124,7 +219,7 @@ class QuestionCollectionViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def remove_questions(self, request, pk=None):
-        """Remove questions from this collection. Body: { question_ids: [1,2,3] }"""
+        """Remove questions from this collection without deleting underlying questions. Body: { question_ids: [1,2,3] }"""
         collection = self.get_object()
         question_ids = request.data.get('question_ids', [])
         if not question_ids:

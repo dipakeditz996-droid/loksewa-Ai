@@ -7,7 +7,7 @@ import { adminApi, AdminTag } from '@/lib/api/admin';
 import { publicApi, PublicCourse } from '@/lib/api/public-api';
 import Link from 'next/link';
 import {
-  CheckSquare, Plus, Search, Upload,
+  CheckSquare, Plus, Search, Upload, Download,
   Edit2, Trash2, Copy, BookOpen, Layers,
   Wand2, FolderPlus, ClipboardCheck, Tag as TagIcon, ChevronRight
 } from 'lucide-react';
@@ -143,6 +143,7 @@ export default function QuestionBankPage() {
       setSelectedIds(new Set()); // clear selection on reload
     } catch (error) {
       if (requestId !== latestRequestId.current) return;
+      console.error('Failed to load questions:', error);
       toast.error('Failed to load questions');
     } finally {
       if (requestId === latestRequestId.current) setLoading(false);
@@ -277,42 +278,32 @@ export default function QuestionBankPage() {
     setSelectedIds(newSet);
   };
 
-  // Group the current (filtered/paginated) results by Collection: a question
-  // in one or more Collections is shown once under its first Collection
-  // instead of as its own row, so the list reads as "collections, then
-  // uncategorized questions" rather than a flat mix of both. Opening a
-  // collection's own page (linked below) lists every question inside it.
-  const collectionGroups: { collection: QuestionCollection; questions: AdminQuestion[] }[] = [];
-  const uncategorized: AdminQuestion[] = [];
-  {
-    const groupsById = new Map<number, AdminQuestion[]>();
-    for (const q of questions) {
-      const first = q.collections && q.collections.length > 0 ? q.collections[0] : null;
-      if (!first) {
-        uncategorized.push(q);
-        continue;
-      }
-      if (!groupsById.has(first.id)) groupsById.set(first.id, []);
-      groupsById.get(first.id)!.push(q);
+  const handleDownloadTemplate = async () => {
+    try {
+      const type = selectedType === 'subjective' ? 'subjective' : (selectedType === 'true_false' ? 'true_false' : 'mcq');
+      await adminQuestionApi.downloadTemplate(type);
+      toast.success(`Downloaded ${type.toUpperCase()} template`);
+    } catch {
+      toast.error('Failed to download template');
     }
-    for (const [collectionId, qs] of groupsById) {
-      const collection = collections.find(c => c.id === collectionId);
-      if (collection) {
-        collectionGroups.push({ collection, questions: qs });
-      } else {
-        uncategorized.push(...qs);
-      }
-    }
-  }
+  };
 
   return (
     <div className="p-5 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Objective Question Bank</h1>
-          <p className="text-gray-500 mt-1">Manage individual objective and MCQ questions across the platform.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Question Bank</h1>
+          <p className="text-gray-500 mt-1">Manage individual questions and academic scopes across the platform.</p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
+          <button
+            onClick={handleDownloadTemplate}
+            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3.5 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap"
+            title="Download Excel Template for importing questions"
+          >
+            <Download className="w-4 h-4 text-gray-500" />
+            Download Template
+          </button>
           <Link
             href="/admin-dashboard/academic/questions/import"
             className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap"
@@ -434,6 +425,7 @@ export default function QuestionBankPage() {
             <option value="">All Types</option>
             <option value="mcq">MCQ</option>
             <option value="true_false">True / False</option>
+            <option value="subjective">Subjective</option>
           </select>
           <select
             value={selectedStatus}
@@ -667,6 +659,7 @@ export default function QuestionBankPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500">
+                <th className="p-4 w-14 text-center font-semibold text-gray-500">S.N.</th>
                 <th className="p-4 w-12">
                   <input 
                     type="checkbox" 
@@ -676,7 +669,6 @@ export default function QuestionBankPage() {
                   />
                 </th>
                 <th className="p-4 font-medium">Question</th>
-                <th className="p-4 font-medium">Type</th>
                 <th className="p-4 font-medium">Course &amp; Academic Scope</th>
                 <th className="p-4 font-medium">Status</th>
                 <th className="p-4 font-medium text-right">Actions</th>
@@ -686,10 +678,10 @@ export default function QuestionBankPage() {
               {loading && questions.length === 0 ? (
                 Array.from({ length: 6 }).map((_, r) => (
                   <tr key={r} className="animate-pulse">
+                    <td className="p-4 w-14 text-center"><div className="h-4 w-6 bg-gray-200 rounded mx-auto" /></td>
                     <td className="p-4 w-12"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
                     <td className="p-4"><div className="h-4 w-72 bg-gray-200 rounded mb-1.5" /><div className="h-3 w-40 bg-gray-100 rounded" /></td>
-                    <td className="p-4"><div className="h-4 w-16 bg-gray-200 rounded" /></td>
-                    <td className="p-4"><div className="h-4 w-32 bg-gray-200 rounded" /></td>
+                    <td className="p-4"><div className="h-4 w-36 bg-gray-200 rounded mb-1" /><div className="h-3 w-28 bg-gray-100 rounded" /></td>
                     <td className="p-4"><div className="h-6 w-20 bg-gray-200 rounded-full" /></td>
                     <td className="p-4 text-right"><div className="h-8 w-8 bg-gray-200 rounded ml-auto" /></td>
                   </tr>
@@ -708,129 +700,106 @@ export default function QuestionBankPage() {
                   </td>
                 </tr>
               ) : (
-                <>
-                {collectionGroups.map(({ collection, questions: groupQuestions }) => (
-                  <tr key={`collection-${collection.id}`} className="hover:bg-indigo-50/40 transition-colors">
-                    <td className="p-4"></td>
-                    <td colSpan={5} className="p-0">
-                      <Link
-                        href={`/admin-dashboard/academic/collections/${collection.id}`}
-                        className="flex items-center justify-between gap-3 px-4 py-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-8 h-8 rounded-md flex items-center justify-center text-white text-xs font-bold shrink-0"
-                            style={{ backgroundColor: collection.color || '#0B2545' }}
-                          >
-                            {collection.name[0]?.toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                              <FolderPlus className="w-4 h-4 text-indigo-500" /> {collection.name}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {groupQuestions.length} question{groupQuestions.length === 1 ? '' : 's'} in this view
-                              {typeof collection.question_count === 'number' && collection.question_count !== groupQuestions.length
-                                ? ` • ${collection.question_count} total in collection` : ''}
-                            </p>
-                          </div>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-                {uncategorized.map((q) => (
-                  <tr key={q.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.has(q.id) ? 'bg-blue-50/50' : ''}`}>
-                    <td className="p-4">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedIds.has(q.id)}
-                        onChange={() => toggleSelect(q.id)}
-                        className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-start gap-2">
-                        <span className="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
-                          {q.question_id || `Q-${q.id.toString().padStart(6, '0')}`}
-                        </span>
-                        <div>
-                          <div className="line-clamp-2 text-sm font-medium text-gray-900 max-w-md">
-                            {q.text}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
-                            <span>{q.marks} Marks • {q.expected_time_minutes} min</span>
-                            {q.usage_count > 0 && (
-                              <span className="text-blue-600 bg-blue-50 px-1.5 rounded-full flex items-center gap-1">
-                                <Layers className="w-3 h-3" /> Used in {q.usage_count} sets
-                              </span>
-                            )}
-                            {q.collections && q.collections.length > 0 && (
-                              <span className="text-indigo-600 bg-indigo-50 px-1.5 rounded-full flex items-center gap-1">
-                                <FolderPlus className="w-3 h-3" /> {q.collections.length} Collections
-                              </span>
-                            )}
-                            {q.tag_objects && q.tag_objects.slice(0, 3).map(t => (
-                              <span
-                                key={t.id}
-                                className="px-1.5 rounded-full text-white"
-                                style={{ backgroundColor: t.color }}
-                              >
-                                {t.name}
-                              </span>
-                            ))}
-                            {q.tag_objects && q.tag_objects.length > 3 && (
-                              <span className="text-gray-500 bg-gray-100 px-1.5 rounded-full">
-                                +{q.tag_objects.length - 3}
-                              </span>
-                            )}
-                            {q.ai_status === 'pending' && (
-                              <span className="text-amber-600 bg-amber-50 px-1.5 rounded-full flex items-center gap-1">
-                                <Wand2 className="w-3 h-3" /> AI Pending
-                              </span>
-                            )}
-                            {q.ai_status === 'approved' && (
-                              <span className="text-emerald-600 bg-emerald-50 px-1.5 rounded-full flex items-center gap-1">
-                                <Wand2 className="w-3 h-3" /> AI Generated
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium ${
-                        q.question_type === 'mcq' ? 'bg-blue-50 text-blue-700' : 
-                        'bg-purple-50 text-purple-700'
-                      }`}>
-                        {q.question_type.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-xs font-semibold text-navy-800">
-                        {q.course_title ? (
-                          <span className="flex items-center gap-1">
-                            <BookOpen className="w-3 h-3 text-blue-600 shrink-0 inline" />
-                            <span className="truncate max-w-[180px]">{q.course_title}</span>
+                questions.map((q, index) => {
+                  const sn = (page - 1) * 25 + index + 1;
+                  return (
+                    <tr key={q.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.has(q.id) ? 'bg-blue-50/50' : ''}`}>
+                      <td className="p-4 w-14 text-center text-xs font-semibold text-gray-500 whitespace-nowrap">
+                        {sn}
+                      </td>
+                      <td className="p-4 w-12">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.has(q.id)}
+                          onChange={() => toggleSelect(q.id)}
+                          className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
+                        />
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-start gap-2">
+                          <span className="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
+                            {q.question_id || `Q-${q.id.toString().padStart(6, '0')}`}
                           </span>
-                        ) : (
-                          <span className="text-gray-400 italic">No Course</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-700 font-medium mt-0.5">{q.position_name || 'No Position'}</div>
-                      <div className="text-xs text-gray-500 truncate max-w-[200px] mt-0.5">
-                        {q.subject_name || 'No Subject'} {q.chapter_name ? `• ${q.chapter_name}` : ''} {q.topic_name ? `• ${q.topic_name}` : ''}
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        q.status === 'approved' || q.status === 'published' ? 'bg-green-100 text-green-700' : 
-                        q.status === 'draft' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                        {q.status}
-                      </span>
-                    </td>
+                          <div>
+                            <div className="line-clamp-2 text-sm font-medium text-gray-900 max-w-md">
+                              {q.text}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                              <span>{q.marks} Marks • {q.expected_time_minutes} min</span>
+                              {q.usage_count > 0 && (
+                                <span className="text-blue-600 bg-blue-50 px-1.5 rounded-full flex items-center gap-1">
+                                  <Layers className="w-3 h-3" /> Used in {q.usage_count} sets
+                                </span>
+                              )}
+                              {q.collections && q.collections.length > 0 && (
+                                <span className="text-indigo-600 bg-indigo-50 px-1.5 rounded-full flex items-center gap-1">
+                                  <FolderPlus className="w-3 h-3" /> {q.collections.length} Collections
+                                </span>
+                              )}
+                              {q.tag_objects && q.tag_objects.slice(0, 3).map(t => (
+                                <span
+                                  key={t.id}
+                                  className="px-1.5 rounded-full text-white"
+                                  style={{ backgroundColor: t.color }}
+                                >
+                                  {t.name}
+                                </span>
+                              ))}
+                              {q.tag_objects && q.tag_objects.length > 3 && (
+                                <span className="text-gray-500 bg-gray-100 px-1.5 rounded-full">
+                                  +{q.tag_objects.length - 3}
+                                </span>
+                              )}
+                              {q.ai_status === 'pending' && (
+                                <span className="text-amber-600 bg-amber-50 px-1.5 rounded-full flex items-center gap-1">
+                                  <Wand2 className="w-3 h-3" /> AI Pending
+                                </span>
+                              )}
+                              {q.ai_status === 'approved' && (
+                                <span className="text-emerald-600 bg-emerald-50 px-1.5 rounded-full flex items-center gap-1">
+                                  <Wand2 className="w-3 h-3" /> AI Generated
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-xs">
+                        <div className="space-y-1 min-w-[200px]">
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-semibold text-gray-500 w-16 shrink-0">Course:</span>
+                            <span className="text-gray-900 font-medium truncate max-w-[220px]" title={q.course_title || '—'}>
+                              {q.course_title || '—'}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-semibold text-gray-500 w-16 shrink-0">Position:</span>
+                            <span className="text-gray-800 truncate max-w-[220px]" title={q.position_name || '—'}>
+                              {q.position_name || '—'}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-semibold text-gray-500 w-16 shrink-0">Subject:</span>
+                            <span className="text-gray-800 truncate max-w-[220px]" title={q.subject_name || '—'}>
+                              {q.subject_name || '—'}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="font-semibold text-gray-500 w-16 shrink-0">Chapter:</span>
+                            <span className="text-gray-700 truncate max-w-[220px]" title={q.chapter_name || '—'}>
+                              {q.chapter_name || '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          q.status === 'approved' || q.status === 'published' ? 'bg-green-100 text-green-700' : 
+                          q.status === 'draft' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {q.status}
+                        </span>
+                      </td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         {q.status === 'pending_review' && (
@@ -875,10 +844,10 @@ export default function QuestionBankPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
-                </>
-              )}
-            </tbody>
+                );
+              })
+            )}
+          </tbody>
           </table>
         </div>
         {(hasMore || page > 1) && (

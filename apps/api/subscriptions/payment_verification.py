@@ -333,71 +333,95 @@ def _extract_dates(text: str) -> List[date]:
     dates = []
     seen = set()
 
-    # 1. Textual month formats: e.g. "06 OCT, 2026", "06 Oct 2026", "6 October 2026"
-    for m in re.finditer(r"\b(0?[1-9]|[12]\d|3[01])\s+([A-Za-z]{3,9}),?\s+(20\d{2})\b", text, re.IGNORECASE):
-        day_str, mon_str, year_str = m.group(1), m.group(2).lower(), m.group(3)
-        month = _MONTH_MAP.get(mon_str)
-        if month:
+    def _add_date(d: Optional[date]):
+        if d and d not in seen:
+            seen.add(d)
+            dates.append(d)
+
+    # OCR engines (such as RapidOCR/Tesseract) frequently concatenate words and digits
+    # without whitespace (e.g. "Friday,9Oct2026at10:20AM" or "Transferof Rs150.0toDipakBhandari").
+    # We construct a boundary-separated text stream in addition to raw text.
+    spaced_text = re.sub(r"([a-zA-Z])(\d)", r"\1 \2", text)
+    spaced_text = re.sub(r"(\d)([a-zA-Z])", r"\1 \2", spaced_text)
+    spaced_text = re.sub(r"([,;:])([^\s\d])", r"\1 \2", spaced_text)
+    combined_texts = [text, spaced_text] if spaced_text != text else [text]
+
+    for src in combined_texts:
+        # 1. Day Month Year: e.g. "06 OCT, 2026", "06 Oct 2026", "6 October 2026", "9Oct2026", "Friday,9Oct2026at10:20AM"
+        for m in re.finditer(
+            r"(?:^|\D)(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?[\s,.-]*([A-Za-z]{3,9})[\s,.-]*(20\d{2})(?:\D|$)",
+            src, re.IGNORECASE
+        ):
+            day_str, mon_str, year_str = m.group(1), m.group(2).lower(), m.group(3)
+            month = _MONTH_MAP.get(mon_str) or _MONTH_MAP.get(mon_str[:3])
+            if month:
+                try:
+                    _add_date(date(int(year_str), month, int(day_str)))
+                except ValueError:
+                    pass
+
+        # 2. Month Day Year: e.g. "October 06, 2026", "Oct 6 2026", "Oct92026", "October 9th, 2026"
+        for m in re.finditer(
+            r"(?:^|\D)([A-Za-z]{3,9})[\s,.-]*(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?[\s,.-]*(20\d{2})(?:\D|$)",
+            src, re.IGNORECASE
+        ):
+            mon_str, day_str, year_str = m.group(1).lower(), m.group(2), m.group(3)
+            month = _MONTH_MAP.get(mon_str) or _MONTH_MAP.get(mon_str[:3])
+            if month:
+                try:
+                    _add_date(date(int(year_str), month, int(day_str)))
+                except ValueError:
+                    pass
+
+        # 3. YYYY-Month-DD: e.g. "2026-Oct-06", "2026-October-6", "2026Oct9"
+        for m in re.finditer(
+            r"(?:^|\D)(20\d{2})[\s,.-]*([A-Za-z]{3,9})[\s,.-]*(0?[1-9]|[12]\d|3[01])(?:st|nd|rd|th)?(?:\D|$)",
+            src, re.IGNORECASE
+        ):
+            year_str, mon_str, day_str = m.group(1), m.group(2).lower(), m.group(3)
+            month = _MONTH_MAP.get(mon_str) or _MONTH_MAP.get(mon_str[:3])
+            if month:
+                try:
+                    _add_date(date(int(year_str), month, int(day_str)))
+                except ValueError:
+                    pass
+
+        # 4. YYYY-MM-DD: e.g. "2026-10-06", "2026-10-6", "2026/10/06", "2026.10.06", "2026-10-09T13:04:41"
+        for m in re.finditer(
+            r"(?:^|\D)(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])(?:\D|$)",
+            src
+        ):
             try:
-                d = date(int(year_str), month, int(day_str))
-                if d not in seen:
-                    seen.add(d)
-                    dates.append(d)
+                _add_date(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
             except ValueError:
                 pass
 
-    # 2. Textual month inverted: e.g. "October 06, 2026", "Oct 6 2026"
-    for m in re.finditer(r"\b([A-Za-z]{3,9})\s+(0?[1-9]|[12]\d|3[01]),?\s+(20\d{2})\b", text, re.IGNORECASE):
-        mon_str, day_str, year_str = m.group(1).lower(), m.group(2), m.group(3)
-        month = _MONTH_MAP.get(mon_str)
-        if month:
+        # 5. DD-MM-YYYY: e.g. "06-10-2026", "6-10-2026", "06/10/2026", "6/10/2026", "06.10.2026"
+        for m in re.finditer(
+            r"(?:^|\D)(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2})(?:\D|$)",
+            src
+        ):
             try:
-                d = date(int(year_str), month, int(day_str))
-                if d not in seen:
-                    seen.add(d)
-                    dates.append(d)
+                _add_date(date(int(m.group(3)), int(m.group(2)), int(m.group(1))))
             except ValueError:
                 pass
 
-    # 3. Hyphenated textual: e.g. "06-Oct-2026"
-    for m in re.finditer(r"\b(0?[1-9]|[12]\d|3[01])[-/]([A-Za-z]{3,9})[-/](20\d{2})\b", text, re.IGNORECASE):
-        day_str, mon_str, year_str = m.group(1), m.group(2).lower(), m.group(3)
-        month = _MONTH_MAP.get(mon_str)
-        if month:
+        # 6. MM-DD-YYYY fallback for ambiguous digital slips
+        for m in re.finditer(
+            r"(?:^|\D)(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])[-/.](20\d{2})(?:\D|$)",
+            src
+        ):
             try:
-                d = date(int(year_str), month, int(day_str))
-                if d not in seen:
-                    seen.add(d)
-                    dates.append(d)
+                _add_date(date(int(m.group(3)), int(m.group(1)), int(m.group(2))))
             except ValueError:
                 pass
-
-    # 4. YYYY-MM-DD
-    for m in re.finditer(r"\b(20\d{2})[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])\b", text):
-        try:
-            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-            if d not in seen:
-                seen.add(d)
-                dates.append(d)
-        except ValueError:
-            pass
-
-    # 5. DD-MM-YYYY
-    for m in re.finditer(r"\b(0[1-9]|[12]\d|3[01])[-/.](0[1-9]|1[0-2])[-/.](20\d{2})\b", text):
-        try:
-            d = date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
-            if d not in seen:
-                seen.add(d)
-                dates.append(d)
-        except ValueError:
-            pass
 
     return dates
 
 def _extract_times(text: str) -> List[str]:
     times = []
     seen = set()
-    # 12-hour with AM/PM: e.g. "02:32 PM", "2:32 pm"
+    # 12-hour with AM/PM: e.g. "02:32 PM", "2:32 pm", "02:32:15 PM"
     for m in re.finditer(r"\b(0?[1-9]|1[0-2]):([0-5]\d)(?::([0-5]\d))?\s*(AM|PM|am|pm)\b", text):
         raw = m.group(0).strip()
         val = raw.upper()
@@ -405,7 +429,7 @@ def _extract_times(text: str) -> List[str]:
             seen.add(val)
             times.append(raw)
 
-    # 24-hour: e.g. "14:32"
+    # 24-hour: e.g. "14:32", "14:32:00"
     for m in re.finditer(r"\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\b", text):
         raw = m.group(0).strip()
         if raw not in seen and not any(raw in t for t in times):
@@ -683,37 +707,76 @@ def _check_txn(full_text: str, detected_ids: List[str], expected: str) -> Tuple[
         return "FAIL", detected_ids[0]
     return "UNKNOWN", None
 
+def get_canonical_business_timezone():
+    """
+    Returns the canonical business timezone for LoksewaAI (Asia/Kathmandu).
+    Respects Django settings.TIME_ZONE and settings.BUSINESS_TIME_ZONE.
+    """
+    from django.conf import settings
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo  # type: ignore
+
+    tz_name = getattr(settings, 'BUSINESS_TIME_ZONE', None) or getattr(settings, 'TIME_ZONE', 'Asia/Kathmandu')
+    if not tz_name or tz_name == 'UTC':
+        tz_name = 'Asia/Kathmandu'
+
+    try:
+        return ZoneInfo(tz_name)
+    except Exception:
+        import pytz
+        return pytz.timezone(tz_name)
+
+
+def get_expected_payment_date(payment) -> date:
+    """
+    Returns the expected calendar date for payment verification using the platform's
+    configured business timezone (Asia/Kathmandu, UTC+5:45).
+    Avoids timezone-related off-by-one-day errors between UTC and Nepal around midnight.
+    """
+    from django.utils import timezone
+    biz_tz = get_canonical_business_timezone()
+
+    submitted_dt = getattr(payment, 'submitted_at', None) or getattr(payment, 'created_at', None)
+    if not submitted_dt:
+        submitted_dt = timezone.now()
+
+    if timezone.is_naive(submitted_dt):
+        submitted_dt = timezone.make_aware(submitted_dt, biz_tz)
+
+    return timezone.localtime(submitted_dt, biz_tz).date()
+
+
 def _check_date(detected_dates: List[date], expected_date: date) -> Tuple[str, Optional[str]]:
+    """
+    Compares the receipt transaction date with the expected payment submission date.
+    Rules:
+    - Compares calendar dates in the canonical business timezone (Asia/Kathmandu).
+    - Receipt time does NOT have to match submission time.
+    - If expected_date is in detected_dates, returns ('PASS', str(expected_date)).
+    - If detected_dates contains future dates relative to expected_date, returns ('FAIL', ...).
+    - If detected_dates contains only different calendar dates, returns ('FAIL', ...).
+    - If no dates detected or unreadable, returns ('UNKNOWN', None).
+    """
     if not detected_dates:
         return "UNKNOWN", None
 
-    valid_dates = []
-    future_dates = []
-    too_old_dates = []
+    # Check for same-day calendar date match
+    if expected_date in detected_dates:
+        return "PASS", str(expected_date)
 
-    for d in detected_dates:
-        days_diff = (d - expected_date).days
-        # Allow +1 day for timezone drift (Nepal UTC+5:45)
-        if days_diff > 1:
-            future_dates.append(d)
-        elif days_diff < -60:
-            too_old_dates.append(d)
-        else:
-            valid_dates.append(d)
-
-    if valid_dates:
-        if expected_date in valid_dates:
-            return "PASS", str(expected_date)
-        closest = min(valid_dates, key=lambda x: abs((x - expected_date).days))
-        return "PASS", str(closest)
-
+    future_dates = [d for d in detected_dates if d > expected_date]
     if future_dates:
         return "FAIL", f"{future_dates[0]} (future date)"
 
+    too_old_dates = [d for d in detected_dates if (d - expected_date).days < -60]
     if too_old_dates:
         return "FAIL", f"{too_old_dates[0]} (older than 60 days)"
 
-    return "UNKNOWN", None
+    # Different calendar dates (past dates or other mismatched days)
+    closest = min(detected_dates, key=lambda x: abs((x - expected_date).days))
+    return "FAIL", f"{closest} (expected {expected_date})"
 
 def _check_receiver_match(
     full_text: str,
@@ -783,32 +846,77 @@ def _check_receiver_match(
 # Duplicate Checks
 # ---------------------------------------------------------------------------
 
-def _check_duplicates(payment, image_hash: str, transaction_ids: List[str]) -> Tuple[str, List[str]]:
+def _is_resubmission_match(payment, other_payment) -> bool:
+    """
+    Determines if `other_payment` is a prior unapproved attempt for the same student
+    and plan, meaning `payment` is a legitimate resubmission of that attempt.
+
+    Rules:
+    - Never allow cross-student reuse (prevent fraudulent reuse of another user's receipt).
+    - Never allow cross-plan reuse (prevent purchasing package B using receipt from package A).
+    - Never allow reuse if prior payment was already APPROVED or subscription is active
+      (prevent claiming duplicate course access or double credit).
+    - Allow ONLY when the prior payment is for the SAME student, SAME plan, and was NOT approved
+      (e.g., REJECTED, PENDING superseded, or VERIFICATION_FAILED).
+    """
+    if not payment or not other_payment:
+        return False
+
+    # 1. Must be exact same student
+    if getattr(other_payment, "student_id", None) != getattr(payment, "student_id", None):
+        return False
+
+    # 2. Must be exact same plan
+    if getattr(other_payment, "plan_id", None) != getattr(payment, "plan_id", None):
+        return False
+
+    # 3. If prior payment was already approved or has an active subscription, duplicate reuse is forbidden!
+    if other_payment.status == "APPROVED" or getattr(other_payment, "subscription_id", None) is not None:
+        return False
+
+    # 4. Same student, same plan, and prior payment was NOT approved -> legitimate resubmission!
+    return True
+
+
+def _check_duplicates(payment, image_hash: str, transaction_ids: List[str]) -> Tuple[str, List[str], bool]:
     from .models import SubscriptionPayment
 
     warnings = []
     duplicate = "PASS"
+    resubmission_detected = False
 
     for txn_id in transaction_ids:
         if txn_id and txn_id.strip():
-            dup_txn = SubscriptionPayment.objects.exclude(id=payment.id).filter(
+            matching_txns = SubscriptionPayment.objects.exclude(id=payment.id).filter(
                 transaction_id__iexact=txn_id.strip(),
-                status__in=["APPROVED", "PENDING", "VERIFIED_CONFIDENT", "VERIFIED_UNCERTAIN"],
-            ).first()
-            if dup_txn:
-                duplicate = "FAIL"
-                warnings.append(f"Transaction ID '{txn_id}' already used in Payment #{dup_txn.id}.")
+            )
+            for dup_txn in matching_txns:
+                if _is_resubmission_match(payment, dup_txn):
+                    resubmission_detected = True
+                    logger.info(
+                        "Transaction ID '%s' in Payment #%s matches unapproved Payment #%s for the same student and plan — allowed as resubmission.",
+                        txn_id, payment.id, dup_txn.id,
+                    )
+                else:
+                    duplicate = "FAIL"
+                    warnings.append(f"Transaction ID '{txn_id}' already used in Payment #{dup_txn.id}.")
 
     if image_hash:
-        dup_img = SubscriptionPayment.objects.exclude(id=payment.id).filter(
+        matching_imgs = SubscriptionPayment.objects.exclude(id=payment.id).filter(
             verification_result__image_hash=image_hash,
-            status__in=["APPROVED", "PENDING", "VERIFIED_CONFIDENT", "VERIFIED_UNCERTAIN"],
-        ).first()
-        if dup_img:
-            duplicate = "FAIL"
-            warnings.append(f"Receipt image identical to Payment #{dup_img.id}.")
+        )
+        for dup_img in matching_imgs:
+            if _is_resubmission_match(payment, dup_img):
+                resubmission_detected = True
+                logger.info(
+                    "Receipt image in Payment #%s matches unapproved Payment #%s for the same student and plan — allowed as resubmission.",
+                    payment.id, dup_img.id,
+                )
+            else:
+                duplicate = "FAIL"
+                warnings.append(f"Receipt image identical to Payment #{dup_img.id}.")
 
-    return duplicate, warnings
+    return duplicate, warnings, resubmission_detected
 
 
 # ---------------------------------------------------------------------------
@@ -858,9 +966,9 @@ class CommonPaymentVerificationEngine:
         # 3. Transaction ID Check
         txn_status, det_txn = _check_txn(vdata.raw_ocr_text, detected_txns, payment.transaction_id)
 
-        # 4. Transaction Date Check
-        today = timezone.localtime(timezone.now()).date()
-        date_status, det_date = _check_date(detected_dates, today)
+        # 4. Transaction Date Check (Calendar date in Asia/Kathmandu)
+        expected_date = get_expected_payment_date(payment)
+        date_status, det_date = _check_date(detected_dates, expected_date)
 
         # 5. Receiver / Beneficiary Check
         payment_method = getattr(payment, "payment_method", None)
@@ -875,7 +983,7 @@ class CommonPaymentVerificationEngine:
 
         # 6. Global Duplicate Check
         all_candidate_txns = list({payment.transaction_id} | set(detected_txns))
-        duplicate_status, dup_warnings = _check_duplicates(payment, image_hash, all_candidate_txns)
+        duplicate_status, dup_warnings, is_resubmission = _check_duplicates(payment, image_hash, all_candidate_txns)
 
         provider_status = "PASS" if vdata.provider != "UNKNOWN" else "UNKNOWN"
 
@@ -932,7 +1040,7 @@ class CommonPaymentVerificationEngine:
 
             notes = "Payment sent for Admin approval: " + "; ".join(failure_reasons)
 
-        det_date_str = str(det_date) if det_date else (str(detected_dates[0]) if detected_dates else None)
+        det_date_str = str(det_date).split()[0] if det_date else (str(detected_dates[0]) if detected_dates else None)
         det_time_str = detected_times[0] if detected_times else None
 
         return {
@@ -958,6 +1066,7 @@ class CommonPaymentVerificationEngine:
             "detected_recipient_account": vdata.bank_account or vdata.merchant_account,
             "is_duplicate_transaction": duplicate_status == "FAIL",
             "is_duplicate_image": duplicate_status == "FAIL",
+            "is_resubmission": is_resubmission or bool((getattr(payment, "verification_result", None) or {}).get("is_resubmission")),
             "failure_reasons": failure_reasons,
             "notes": notes,
             "extracted_text_preview": vdata.raw_ocr_text[:800],
@@ -988,6 +1097,7 @@ class CommonPaymentVerificationEngine:
             "detected_recipient_account": vdata.bank_account or vdata.merchant_account,
             "is_duplicate_transaction": False,
             "is_duplicate_image": False,
+            "is_resubmission": False,
             "failure_reasons": failure_reasons,
             "notes": notes,
             "extracted_text_preview": vdata.raw_ocr_text[:800],
@@ -1019,7 +1129,7 @@ class PaymentProofVerificationService:
         image_hash = hashlib.sha256(image_bytes).hexdigest()
 
         # Initial duplicate check on student's submitted transaction ID
-        duplicate_status, dup_warnings = _check_duplicates(
+        duplicate_status, dup_warnings, is_init_resub = _check_duplicates(
             payment, image_hash, [payment.transaction_id]
         )
         if duplicate_status == "FAIL":

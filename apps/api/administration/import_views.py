@@ -6,9 +6,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .permissions import IsAdminUser
 from django.http import HttpResponse
-from django.db import transaction
+from django.db import transaction, models
+from django.db.models import Q
 from administration.models import CSVImport, AuditLog
 from exams.models import Question, Topic, QuestionCollection, ExamCategory, Exam, Subject, Chapter
+from courses.models import Course
 from core.models import Tag
 from ai_tutor.services import AdminAILogic
 
@@ -22,6 +24,125 @@ from exams.services.question_import_service import (
     _build_report, _recount, generate_excel_template,
 )
 
+
+
+def _resolve_row_academic_scope(row_data, default_category, default_exam, default_subject, default_chapter, default_topic, default_course):
+    errors = []
+
+    # 1. Course resolution
+    c_text = (row_data.get('course') or '').strip()
+    resolved_course = None
+    if c_text:
+        matches = list(Course.objects.filter(Q(title__iexact=c_text) | Q(slug__iexact=c_text)))
+        if not matches:
+            errors.append(f"Course '{c_text}' was not found in the database.")
+        elif len(matches) > 1:
+            errors.append(f"Ambiguous Course reference '{c_text}' (matches {len(matches)} courses).")
+        else:
+            resolved_course = matches[0]
+    else:
+        resolved_course = default_course
+
+    # 2. Position resolution
+    pos_text = (row_data.get('position') or '').strip()
+    resolved_exam = None
+    if pos_text:
+        matches = list(Exam.objects.filter(name__iexact=pos_text))
+        if not matches:
+            errors.append(f"Position/Level '{pos_text}' was not found.")
+        elif len(matches) > 1:
+            if resolved_course and resolved_course.exam_id:
+                course_matches = [m for m in matches if m.id == resolved_course.exam_id]
+                if len(course_matches) == 1:
+                    resolved_exam = course_matches[0]
+                else:
+                    errors.append(f"Ambiguous Position '{pos_text}'.")
+            else:
+                errors.append(f"Ambiguous Position '{pos_text}'.")
+        else:
+            resolved_exam = matches[0]
+    else:
+        resolved_exam = default_exam or (resolved_course.exam if resolved_course else None)
+
+    if resolved_course and resolved_exam:
+        from courses.services.course_access_service import CourseAccessService
+        c_exam_ids = CourseAccessService.get_course_exam_ids(resolved_course)
+        if resolved_exam.id not in c_exam_ids:
+            errors.append(f"Position '{resolved_exam.name}' does not belong to course '{resolved_course.title}'.")
+
+    # 3. Subject resolution
+    sub_text = (row_data.get('subject') or '').strip()
+    resolved_subject = None
+    if sub_text:
+        sub_qs = Subject.objects.filter(Q(name__iexact=sub_text) | Q(code__iexact=sub_text))
+        if resolved_exam:
+            sub_qs_filtered = sub_qs.filter(
+                Q(paper__exam_id=resolved_exam.id) | Q(paper__exam__parent_id=resolved_exam.id)
+            )
+            matches = list(sub_qs_filtered) or list(sub_qs)
+        else:
+            matches = list(sub_qs)
+        if not matches:
+            errors.append(f"Subject '{sub_text}' was not found.")
+        elif len(matches) > 1:
+            errors.append(f"Ambiguous Subject reference '{sub_text}' (matches {len(matches)} subjects).")
+        else:
+            resolved_subject = matches[0]
+    else:
+        resolved_subject = default_subject
+
+    if resolved_subject and resolved_exam:
+        sub_exam_id = resolved_subject.paper.exam_id if (resolved_subject.paper_id and resolved_subject.paper) else None
+        is_valid = (
+            sub_exam_id == resolved_exam.id or
+            (resolved_subject.paper and resolved_subject.paper.exam and resolved_subject.paper.exam.parent_id == resolved_exam.id)
+        )
+        if not is_valid:
+            errors.append(f"Subject '{resolved_subject.name}' does not belong to Position '{resolved_exam.name}'.")
+
+    # 4. Chapter resolution
+    chap_text = (row_data.get('chapter') or '').strip()
+    resolved_chapter = None
+    if chap_text:
+        chap_qs = Chapter.objects.filter(title__iexact=chap_text)
+        if resolved_subject:
+            chap_qs = chap_qs.filter(subject_id=resolved_subject.id)
+        matches = list(chap_qs)
+        if not matches:
+            errors.append(f"Chapter '{chap_text}' was not found" + (f" under subject '{resolved_subject.name}'." if resolved_subject else "."))
+        elif len(matches) > 1:
+            errors.append(f"Ambiguous Chapter reference '{chap_text}'.")
+        else:
+            resolved_chapter = matches[0]
+    else:
+        resolved_chapter = default_chapter
+
+    # 5. Topic resolution
+    top_text = (row_data.get('topic') or '').strip()
+    resolved_topic = None
+    if top_text:
+        top_qs = Topic.objects.filter(name__iexact=top_text)
+        if resolved_chapter:
+            top_qs = top_qs.filter(chapter_id=resolved_chapter.id)
+        matches = list(top_qs)
+        if not matches:
+            errors.append(f"Topic '{top_text}' was not found" + (f" under chapter '{resolved_chapter.title}'." if resolved_chapter else "."))
+        elif len(matches) > 1:
+            errors.append(f"Ambiguous Topic reference '{top_text}'.")
+        else:
+            resolved_topic = matches[0]
+    else:
+        resolved_topic = default_topic
+
+    resolved_category = default_category or (resolved_exam.category if resolved_exam and resolved_exam.category else None)
+
+    return {
+        'category_id': resolved_category.id if resolved_category else None,
+        'exam_id': resolved_exam.id if resolved_exam else None,
+        'subject_id': resolved_subject.id if resolved_subject else None,
+        'chapter_id': resolved_chapter.id if resolved_chapter else None,
+        'topic_id': resolved_topic.id if resolved_topic else None,
+    }, errors
 
 
 def _response_payload(import_record):
@@ -235,7 +356,22 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 status=400,
             )
 
-        report_data, counts = _build_report(rows, question_type, allow_blank_explanation=True)
+        report_data, counts = _build_report(
+            rows, question_type, allow_blank_explanation=True,
+            target_topic_id=topic.id if topic else None
+        )
+
+        for row in report_data:
+            resolved, academic_errors = _resolve_row_academic_scope(
+                row['data'], category, exam, subject, chapter, topic, course
+            )
+            if academic_errors:
+                row['errors'].extend(academic_errors)
+                row['status'] = 'error'
+            else:
+                row['data']['_resolved_academic'] = resolved
+
+        counts = _recount(report_data)
 
         import_record = CSVImport.objects.create(
             admin=request.user,
@@ -361,13 +497,23 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 })
                 continue
             marks_raw = (data.get('marks') or '').strip()
-            questions_to_create.append(Question(
-                category=import_record.category or (import_record.exam.category if import_record.exam else None),
-                exam=import_record.exam,
-                subject=import_record.subject or (import_record.chapter.subject if import_record.chapter else (import_record.topic.chapter.subject if import_record.topic and import_record.topic.chapter else None)),
-                chapter=import_record.chapter or (import_record.topic.chapter if import_record.topic else None),
-                topic=import_record.topic,
-                question_type=import_record.question_type or 'mcq',
+            resolved = data.get('_resolved_academic') or {}
+            row_cat_id = resolved.get('category_id') or (import_record.category_id or (import_record.exam.category_id if import_record.exam else None))
+            row_exam_id = resolved.get('exam_id') or import_record.exam_id
+            row_subj_id = resolved.get('subject_id') or import_record.subject_id
+            row_chap_id = resolved.get('chapter_id') or import_record.chapter_id
+            row_top_id = resolved.get('topic_id') or import_record.topic_id
+            row_diff = (data.get('difficulty') or '').strip().lower() or import_record.difficulty or 'medium'
+            if row_diff not in ('easy', 'medium', 'hard'):
+                row_diff = 'medium'
+
+            q_obj = Question(
+                category_id=row_cat_id,
+                exam_id=row_exam_id,
+                subject_id=row_subj_id,
+                chapter_id=row_chap_id,
+                topic_id=row_top_id,
+                question_type=import_record.question_type or ('subjective' if is_subjective else 'mcq'),
                 text=data['question'],
                 # Objective-only fields stay empty for subjective questions.
                 option_a='' if is_subjective else (data.get('option_a') or ''),
@@ -378,14 +524,15 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 model_answer=(data.get('model_answer') or '') if is_subjective else '',
                 explanation=data.get('explanation') or '',
                 hint=data.get('hint') or '',
-                marks=float(marks_raw) if marks_raw else 1,
-                difficulty=import_record.difficulty or 'medium',
-                status='approved' if (import_record.exam_id or import_record.subject_id) else 'draft',
+                marks=float(marks_raw) if marks_raw else (5.0 if is_subjective else 1.0),
+                difficulty=row_diff,
+                status='approved' if (row_exam_id or row_subj_id) else 'draft',
                 created_by=request.user,
-            ))
+            )
+            questions_to_create.append((q_obj, data.get('tags') or ''))
 
         with transaction.atomic():
-            created = Question.objects.bulk_create(questions_to_create)
+            created = Question.objects.bulk_create([q for q, _ in questions_to_create])
 
             # bulk_create skips Model.save(), so the Q-000001 style id is never
             # generated. Backfill it for the rows this import just created.
@@ -398,9 +545,17 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
                 import_record.collection.questions.add(*created)
 
             tag_list = list(import_record.tag_objects.all())
-            if created and tag_list:
-                for q in created:
-                    q.tag_objects.set(tag_list)
+            for idx_c, q in enumerate(created):
+                q_tags = list(tag_list)
+                row_tags_str = questions_to_create[idx_c][1]
+                if row_tags_str:
+                    tag_names = [t.strip() for t in row_tags_str.split(',') if t.strip()]
+                    for tname in tag_names:
+                        tag_obj, _ = Tag.objects.get_or_create(name=tname, defaults={'slug': tname.lower().replace(' ', '-')})
+                        if tag_obj not in q_tags:
+                            q_tags.append(tag_obj)
+                if q_tags:
+                    q.tag_objects.set(q_tags)
 
         import_record.status = 'imported'
         import_record.save(update_fields=['status'])
@@ -424,6 +579,17 @@ class QuestionImportViewSet(viewsets.ModelViewSet):
         existing_canonical_ids = list(dict.fromkeys(
             d['existing_id'] for d in all_skipped if 'existing_id' in d
         ))
+
+        # If this import targets a specific topic, ensure reused questions without an assigned topic inherit it
+        if import_record.topic_id and existing_canonical_ids:
+            Question.objects.filter(pk__in=existing_canonical_ids, topic__isnull=True).update(
+                topic=import_record.topic,
+                chapter=import_record.chapter or (import_record.topic.chapter if import_record.topic else None),
+                subject=import_record.subject or (import_record.topic.chapter.subject if import_record.topic and import_record.topic.chapter else None),
+                exam=import_record.exam,
+                category=import_record.category or (import_record.exam.category if import_record.exam else None),
+            )
+
         new_ids = [q.pk for q in created]
         all_ids = new_ids + existing_canonical_ids
 

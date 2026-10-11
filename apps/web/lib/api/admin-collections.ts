@@ -20,6 +20,18 @@ export interface QuestionCollection {
   updated_at?: string;
   question_count?: number;
   rule?: CollectionRule;
+  category?: number | null;
+  category_name?: string | null;
+  position?: number | null;
+  position_name?: string | null;
+  subject?: number | null;
+  subject_name?: string | null;
+  chapter?: number | null;
+  chapter_name?: string | null;
+  topic?: number | null;
+  topic_name?: string | null;
+  course_id?: number | null;
+  course_title?: string | null;
 }
 
 export interface CollectionQuestion {
@@ -27,10 +39,14 @@ export interface CollectionQuestion {
   question_id: string;
   text: string;
   question_type: string;
+  marks?: number;
   difficulty: string;
   subject_name: string;
   chapter_name: string;
+  topic_name?: string;
   status: string;
+  model_answer?: string;
+  options?: any[];
 }
 
 export const adminCollectionsApi = {

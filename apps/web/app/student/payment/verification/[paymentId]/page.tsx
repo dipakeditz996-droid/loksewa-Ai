@@ -417,13 +417,13 @@ export default function PaymentVerificationPage() {
                     </div>
 
                     {/* Rejection Reason from backend */}
-                    {(payment?.rejection_reason || payment?.verification_result?.failure_reasons?.[0]) && (
+                    {(payment?.rejection_reason || (payment?.verification_result as any)?.failure_reasons?.[0]) && (
                       <div className="bg-rose-500/10 border border-rose-500/25 rounded-2xl p-4 text-left">
                         <p className="text-[11px] font-bold text-rose-300 uppercase tracking-wider mb-1">
                           Reason:
                         </p>
                         <p className="text-xs text-rose-200 leading-relaxed">
-                          {payment?.rejection_reason || payment?.verification_result?.failure_reasons?.[0]}
+                          {payment?.rejection_reason || (payment?.verification_result as any)?.failure_reasons?.[0]}
                         </p>
                       </div>
                     )}

@@ -779,14 +779,19 @@ def _get_package_status(user):
             "submittedAt": latest_payment.submitted_at.isoformat() if latest_payment.submitted_at else None,
         }
 
+    rem_days = None
+    if active_subscription and active_subscription.expiry_date:
+        rem_days = max((active_subscription.expiry_date - timezone.now()).days, 0)
+
     result = {
         "enforcementEnabled": AdminSettings.get_settings().enforce_subscription_access,
         "hasActivePackage": active_subscription is not None or is_admin_granted,
         "isAdminGranted": is_admin_granted,
         "planName": active_subscription.plan.name if active_subscription else None,
         "status": active_subscription.status if active_subscription else None,
-        "expiryDate": active_subscription.expiry_date.isoformat() if active_subscription else None,
-        "remainingDays": max((active_subscription.expiry_date - timezone.now()).days, 0) if active_subscription else None,
+        "hasExpiry": active_subscription.has_expiry if active_subscription else False,
+        "expiryDate": active_subscription.expiry_date.isoformat() if (active_subscription and active_subscription.expiry_date) else None,
+        "remainingDays": rem_days,
         "latestPayment": latest_payment_data,
     }
     try:

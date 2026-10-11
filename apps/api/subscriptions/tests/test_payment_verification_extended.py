@@ -1,4 +1,5 @@
 import base64
+import datetime
 from datetime import date, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -10,8 +11,12 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from core.models import User
+from courses.models import Course, Enrollment, CourseApplication
+from courses.services.course_access_service import CourseAccessService
 from marketplace.models import PaymentMethod
-from subscriptions.models import SubscriptionPlan, SubscriptionPayment
+from subscriptions.models import SubscriptionPlan, SubscriptionPayment, Subscription, Invoice
+from subscriptions.tasks import verify_payment_proof
+from subscriptions.services import approve_payment_logic
 from subscriptions.payment_verification import (
     PaymentProofVerificationService,
     _extract_amounts,
@@ -21,6 +26,9 @@ from subscriptions.payment_verification import (
     _extract_recipient,
     _detect_provider,
     _check_payment_status,
+    _check_date,
+    get_canonical_business_timezone,
+    get_expected_payment_date,
 )
 
 def _create_test_image_bytes(text="test") -> bytes:
@@ -45,12 +53,18 @@ class PaymentVerificationExtendedTests(APITestCase):
         )
         self.read_patch.start()
         self.student = User.objects.create_user(username="test_student", password="pw", role="student")
+        self.course = Course.objects.create(
+            title="Loksewa Test Course",
+            slug="loksewa-test-course",
+            status="published",
+        )
         self.plan = SubscriptionPlan.objects.create(
             name="Loksewa Test Package",
             duration=30,
             duration_unit="DAYS",
             price=Decimal("150.00"),
             status="ACTIVE",
+            course=self.course,
         )
         self.esewa_method = PaymentMethod.objects.create(
             method_type="ESEWA",
@@ -828,5 +842,515 @@ Value Date: {today}
         self.client.force_authenticate(user=other_student)
         response = self.client.get(f"/api/subscriptions/payments/{payment.id}/status/")
         self.assertEqual(response.status_code, 404)
+
+    # =========================================================================
+    # 12 Required Same-Day Verification & Access Activation Tests
+    # =========================================================================
+
+    def test_01_same_date_and_same_time(self):
+        """1. Same date and same time: Auto-verifies successfully."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+        time_str = "02:32 PM"
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} {time_str}
+Transaction Code
+TXN-SAME-DT-TM
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-SAME-DT-TM")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["date_matches"])
+        self.assertTrue(res["amount_matches"])
+        self.assertTrue(res["transaction_id_matches"])
+        self.assertTrue(res["receiver_matches"])
+        self.assertEqual(res["detected_time"], "02:32 PM")
+
+    def test_02_same_date_but_different_receipt_and_submission_times(self):
+        """2. Same date but different receipt/submission times: Still auto-verifies.
+        Receipt time mismatch must NEVER prevent same-day auto-verification."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+        receipt_time = "09:15 AM"
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} {receipt_time}
+Transaction Code
+TXN-DIFF-TIME
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-DIFF-TIME")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["date_matches"])
+        self.assertEqual(res["detected_time"], "09:15 AM")
+        self.assertEqual(res["detected_date"], str(now_nepal.date()))
+
+    def test_03_same_date_with_ocr_time_incorrectly_extracted(self):
+        """3. Same date with OCR time incorrectly extracted/corrupted: Still auto-verifies.
+        An OCR misreading of time must not fail same-day date matching."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+Date: {today_str}
+Time: O2:32XX
+Transaction Code: TXN-BAD-TIME
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-BAD-TIME")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["date_matches"])
+
+    def test_04_different_calendar_dates(self):
+        """4. Different calendar dates: Routed to Admin Review, date does not match."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        old_date_str = (now_nepal.date() - timedelta(days=5)).strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{old_date_str} 02:32 PM
+Transaction Code: TXN-DIFF-CAL-DATE
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-DIFF-CAL-DATE")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["date_matches"])
+        self.assertTrue(any("Receipt date issue" in r for r in res["failure_reasons"]))
+
+    def test_05_timezone_conversion_around_midnight_in_nepal(self):
+        """5. Timezone conversion around midnight in Nepal:
+        Payment submitted at 00:15 AM on Oct 9 in Nepal is 18:30 on Oct 8 in UTC.
+        With canonical Asia/Kathmandu timezone, expected_date is 2026-10-09, matching receipt."""
+        payment = self._create_payment(amount="150.00", txn="TXN-MIDNIGHT-NEPAL")
+        midnight_submitted_utc = datetime.datetime(2026, 10, 8, 18, 30, 0, tzinfo=datetime.timezone.utc)
+        payment.submitted_at = midnight_submitted_utc
+        payment.save(update_fields=["submitted_at"])
+
+        ocr_sample = """
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+09 Oct, 2026 12:10 AM
+Transaction Code: TXN-MIDNIGHT-NEPAL
+"""
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["date_matches"])
+        self.assertEqual(res["detected_date"], "2026-10-09")
+
+    def test_06_missing_or_unreadable_receipt_date(self):
+        """6. Missing or unreadable receipt date: Routed to Admin Review."""
+        ocr_sample = """
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+Transaction Code: TXN-NO-DATE
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-NO-DATE")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertFalse(res["date_matches"])
+        self.assertTrue(any("Valid transaction date not detected" in r for r in res["failure_reasons"]))
+
+    def test_07_correct_date_but_wrong_amount(self):
+        """7. Correct date but wrong amount: Kept in Admin Review."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 500.00
+Fund Transferred to Dipak Bhandari
+{today_str} 02:32 PM
+Transaction Code: TXN-WRONG-AMT
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-WRONG-AMT")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertTrue(res["date_matches"])
+        self.assertFalse(res["amount_matches"])
+        self.assertTrue(any("Amount mismatch" in r for r in res["failure_reasons"]))
+
+    def test_08_correct_date_but_wrong_receiver(self):
+        """8. Correct date but wrong receiver: Kept in Admin Review."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Unknown Merchant
+{today_str} 02:32 PM
+Transaction Code: TXN-WRONG-RCV
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-WRONG-RCV")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "NEEDS_ADMIN_REVIEW")
+        self.assertTrue(res["date_matches"])
+        self.assertFalse(res["receiver_matches"])
+        self.assertTrue(any("Receiver" in r for r in res["failure_reasons"]))
+
+    def test_09_duplicate_transaction_reference(self):
+        """9. Duplicate transaction reference: Fails duplicate checks."""
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="TXN-DUP-REF",
+            screenshot=SimpleUploadedFile("orig.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 02:32 PM
+Transaction Code: TXN-DUP-REF
+"""
+        new_payment = self._create_payment(amount="150.00", txn="TXN-DUP-REF")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(new_payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+
+    def test_10_valid_payment_activates_access_exactly_once(self):
+        """10. Valid payment activates access exactly once via CourseAccessService."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 02:32 PM
+Transaction Code: TXN-ACTIVATE-ONCE
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-ACTIVATE-ONCE")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            task_res = verify_payment_proof(payment.id)
+
+        self.assertEqual(task_res["status"], "verified")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "APPROVED")
+        self.assertEqual(payment.verification_status, "VERIFIED_CONFIDENT")
+        self.assertIsNotNone(payment.subscription)
+        self.assertTrue(CourseAccessService.has_course_access(self.student, self.course))
+
+        # Idempotency check: Calling approve_payment_logic again does not create duplicate subscriptions
+        sub = approve_payment_logic(payment)
+        self.assertEqual(sub.id, payment.subscription.id)
+        self.assertEqual(Subscription.objects.filter(student=self.student, status="ACTIVE").count(), 1)
+        self.assertEqual(Invoice.objects.filter(payment=payment).count(), 1)
+
+    def test_11_uncertain_payment_remains_in_admin_review(self):
+        """11. Uncertain payment remains in Admin Review without activating course access."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        old_date_str = (now_nepal.date() - timedelta(days=10)).strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{old_date_str} 02:32 PM
+Transaction Code: TXN-UNCERTAIN-REVIEW
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-UNCERTAIN-REVIEW")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            task_res = verify_payment_proof(payment.id)
+
+        self.assertEqual(task_res["status"], "manual_review")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, "PENDING")
+        self.assertEqual(payment.verification_status, "VERIFIED_UNCERTAIN")
+        self.assertIsNone(payment.subscription)
+        self.assertFalse(CourseAccessService.has_course_access(self.student, self.course))
+
+    def test_12_retrying_background_verification_is_idempotent(self):
+        """12. Retrying background verification on an already approved payment is idempotent."""
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 02:32 PM
+Transaction Code: TXN-RETRY-IDEMPOTENT
+"""
+        payment = self._create_payment(amount="150.00", txn="TXN-RETRY-IDEMPOTENT")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            first_run = verify_payment_proof(payment.id)
+            self.assertEqual(first_run["status"], "verified")
+
+        second_run = verify_payment_proof(payment.id)
+        self.assertEqual(second_run["status"], "skipped")
+        self.assertEqual(Subscription.objects.filter(student=self.student, status="ACTIVE").count(), 1)
+        self.assertEqual(Invoice.objects.filter(payment=payment).count(), 1)
+
+    def test_khalti_unspaced_ocr_date_auto_verified(self):
+        """Khalti layout where RapidOCR produces boundary-compressed text like 'Friday,9Oct2026at10:20AM' auto-verifies."""
+        self.khalti_method.account_name = "Dipak Bhandari"
+        self.khalti_method.account_number = "9765176703"
+        self.khalti_method.save()
+        payment = self._create_payment(
+            amount="150.00",
+            txn="WrfoVCKLnq2PigLQkfC79c",
+            method=self.khalti_method,
+        )
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_day = now_nepal.day
+        today_mon = now_nepal.strftime("%b")
+        today_year = now_nepal.year
+
+        ocr_sample = f"""
+10:21
+45
+FundSent
+Transferof Rs150.0toDipakBhandari
+（9765176703)
+TransactionID:WrfovcKL-nq2Pig-LQkfc79c
+Friday,{today_day}{today_mon}{today_year}at10:20AM
+Success
+DOWNLOADRECEIPT
+REPORTISSUE
+SAVE
+SHARE
+RE-PAY
+PAYMENT
+TRANSACTION
+Amount
+Balance
+Rs.150
+Rs.4,229.96
+Type
+Transfer
+To
+TransactionSource
+Dipak Bhandari (9765176703)
+Mobile
+Purpose
+Remarks
+Personal Use
+Web
+"""
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "rapidocr")):
+            res = PaymentProofVerificationService().verify(payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["date_matches"])
+        self.assertEqual(res["detected_date"], str(now_nepal.date()))
+        self.assertEqual(res["detected_amount"], "150.0")
+        self.assertTrue(res["receiver_matches"])
+        self.assertTrue(res["transaction_id_matches"])
+
+    # -------------------------------------------------------------------------
+    # Duplicate Transaction Resubmission Tests
+    # -------------------------------------------------------------------------
+
+    def test_duplicate_txn_allowed_for_resubmission_of_rejected_payment(self):
+        """A resubmitted payment with same txn ID after rejection auto-verifies and is not flagged duplicate."""
+        # Prior rejected payment for same student and plan
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="TXN-RESUBMIT-1",
+            screenshot=SimpleUploadedFile("rej.png", _create_test_image_bytes(), content_type="image/png"),
+            status="REJECTED",
+            rejection_reason="Blurry screenshot. Please resubmit.",
+        )
+
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 10:20 AM
+Transaction Code: TXN-RESUBMIT-1
+"""
+        new_payment = self._create_payment(amount="150.00", txn="TXN-RESUBMIT-1")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(new_payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertFalse(res["is_duplicate_transaction"])
+        self.assertFalse(res["is_duplicate_image"])
+
+    def test_duplicate_txn_allowed_for_resubmission_of_pending_payment(self):
+        """A resubmission superseding an unapproved pending payment for the same student & plan is allowed."""
+        # Prior pending payment for same student and plan
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="TXN-RESUBMIT-PENDING",
+            screenshot=SimpleUploadedFile("pend.png", _create_test_image_bytes(), content_type="image/png"),
+            status="PENDING",
+            verification_status="VERIFIED_UNCERTAIN",
+        )
+
+        nepal_tz = get_canonical_business_timezone()
+        now_nepal = timezone.localtime(timezone.now(), nepal_tz)
+        today_str = now_nepal.date().strftime("%d %b, %Y").upper()
+
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 10:20 AM
+Transaction Code: TXN-RESUBMIT-PENDING
+"""
+        new_payment = self._create_payment(amount="150.00", txn="TXN-RESUBMIT-PENDING")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(new_payment)
+
+        self.assertEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertFalse(res["is_duplicate_transaction"])
+
+    def test_duplicate_txn_blocked_for_different_student(self):
+        """Reusing transaction code from a different student is flagged duplicate and rejected."""
+        other_student = User.objects.create_user(username="other_stud_dup", password="pw", role="student")
+        SubscriptionPayment.objects.create(
+            student=other_student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="TXN-OTHER-USER",
+            screenshot=SimpleUploadedFile("other.png", _create_test_image_bytes(), content_type="image/png"),
+            status="PENDING",
+        )
+
+        nepal_tz = get_canonical_business_timezone()
+        today_str = timezone.localtime(timezone.now(), nepal_tz).date().strftime("%d %b, %Y").upper()
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 10:20 AM
+Transaction Code: TXN-OTHER-USER
+"""
+        new_payment = self._create_payment(amount="150.00", txn="TXN-OTHER-USER")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(new_payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+        self.assertTrue(any("already used in Payment" in r for r in res["failure_reasons"]))
+
+    def test_duplicate_txn_blocked_for_different_plan(self):
+        """Reusing transaction code for a different plan by the same student is flagged duplicate."""
+        plan2 = SubscriptionPlan.objects.create(
+            name="Plan 2 Special",
+            price=Decimal("150.00"),
+            duration=30,
+            duration_unit="DAYS",
+            package_type="SINGLE",
+            status="ACTIVE",
+        )
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=plan2,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="TXN-CROSS-PLAN",
+            screenshot=SimpleUploadedFile("plan2.png", _create_test_image_bytes(), content_type="image/png"),
+            status="REJECTED",
+        )
+
+        nepal_tz = get_canonical_business_timezone()
+        today_str = timezone.localtime(timezone.now(), nepal_tz).date().strftime("%d %b, %Y").upper()
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 10:20 AM
+Transaction Code: TXN-CROSS-PLAN
+"""
+        new_payment = self._create_payment(amount="150.00", txn="TXN-CROSS-PLAN")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(new_payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+        self.assertTrue(any("already used in Payment" in r for r in res["failure_reasons"]))
+
+    def test_duplicate_txn_blocked_for_already_approved_payment(self):
+        """Reusing transaction code from an already APPROVED payment is flagged duplicate."""
+        SubscriptionPayment.objects.create(
+            student=self.student,
+            plan=self.plan,
+            payment_method=self.esewa_method,
+            amount=Decimal("150.00"),
+            transaction_id="TXN-ALREADY-APPROVED",
+            screenshot=SimpleUploadedFile("appr.png", _create_test_image_bytes(), content_type="image/png"),
+            status="APPROVED",
+        )
+
+        nepal_tz = get_canonical_business_timezone()
+        today_str = timezone.localtime(timezone.now(), nepal_tz).date().strftime("%d %b, %Y").upper()
+        ocr_sample = f"""
+Payment Successful!
+NPR 150.00
+Fund Transferred to Dipak Bhandari
+{today_str} 10:20 AM
+Transaction Code: TXN-ALREADY-APPROVED
+"""
+        new_payment = self._create_payment(amount="150.00", txn="TXN-ALREADY-APPROVED")
+        with patch("subscriptions.payment_verification._run_ocr", return_value=(ocr_sample, "mock_ocr")):
+            res = PaymentProofVerificationService().verify(new_payment)
+
+        self.assertNotEqual(res["outcome"], "AUTO_VERIFIED")
+        self.assertTrue(res["is_duplicate_transaction"])
+        self.assertTrue(any("already used in Payment" in r for r in res["failure_reasons"]))
 
 

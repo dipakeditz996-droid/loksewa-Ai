@@ -353,7 +353,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+# Platform business timezone: Asia/Kathmandu (Nepal UTC+5:45)
+TIME_ZONE = 'Asia/Kathmandu'
+BUSINESS_TIME_ZONE = 'Asia/Kathmandu'
 
 USE_I18N = True
 
@@ -575,16 +577,16 @@ if not DEBUG:
 # Falling back to localhost keeps `manage.py` commands (which don't touch
 # Celery at all) working with nothing configured - only actually running a
 # worker/beat process requires a real broker to be reachable.
-CELERY_BROKER_URL = (
-    os.environ.get('CELERY_BROKER_URL')
-    or os.environ.get('REDIS_URL')
-    or 'redis://localhost:6379/0'
-)
+_raw_broker = os.environ.get('CELERY_BROKER_URL') or os.environ.get('REDIS_URL') or ''
+if any(marker in _raw_broker for marker in ('YOUR_UPSTASH_ENDPOINT', '[YOUR_', '<YOUR_', 'default:[YOUR_PASSWORD]')):
+    _raw_broker = ''
+CELERY_BROKER_URL = _raw_broker or 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
-# Keep failed jobs' tracebacks in results for a day, not forever.
 CELERY_RESULT_EXPIRES = 60 * 60 * 24
+CELERY_TASK_ALWAYS_EAGER = os.environ.get('CELERY_ALWAYS_EAGER', 'false').lower() in ('1', 'true', 'yes')
+CELERY_TASK_EAGER_PROPAGATES = True
 
 # --- CLOUDFLARE R2 OFF-SITE DATABASE BACKUP CONFIGURATION ---
 R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID', '')

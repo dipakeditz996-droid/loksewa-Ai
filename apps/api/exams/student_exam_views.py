@@ -401,6 +401,19 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                         status=status.HTTP_403_FORBIDDEN,
                     )
 
+            from subscriptions.entitlements import EntitlementService
+            allowed, reason, quota_info = EntitlementService.check_and_reserve_exam_attempt(user, examination)
+            if not allowed:
+                return Response(
+                    {
+                        'detail': reason,
+                        'feature': quota_info.get('feature'),
+                        'remaining': quota_info.get('remaining', 0),
+                        'upgrade_url': quota_info.get('upgrade_url', '/student/plans'),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
             attempt = ExaminationAttempt.objects.create(
                 examination=examination,
                 student=user,
@@ -1236,7 +1249,9 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             submission.answer_pdf = content_file
             submission.page_count = page_count
             submission.file_size_bytes = total_bytes
-            submission.status = 'submitted'
+            submission.status = 'processing'
+            submission.ocr_status = 'processing'
+            submission.evaluation_status = 'ocr_processing'
             submission.save()
 
             now = timezone.now()
@@ -1254,24 +1269,20 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
                 import logging
                 logging.getLogger(__name__).warning("Failed to send admin subjective submission notification: %s", notif_err)
 
-            # Trigger background AI auto-marking
-            try:
-                from .tasks import process_subjective_submission_task
-                process_subjective_submission_task.delay(submission.id)
-            except Exception:
-                try:
-                    from .subjective_auto_marking_service import SubjectiveAutoMarkingService
-                    SubjectiveAutoMarkingService().evaluate_submission(submission)
-                except Exception as eval_err:
-                    import logging
-                    logging.getLogger(__name__).warning("Fallback auto-marking failed: %s", eval_err)
+            # Trigger background OCR and rule-based evaluation reliably
+            from .tasks import dispatch_subjective_submission_processing
+            task_id = dispatch_subjective_submission_processing(submission.id)
 
             return Response({
                 'detail': 'Answer sheet uploaded and submitted successfully.',
                 'submission_id': submission.id,
+                'task_id': task_id,
                 'page_count': page_count,
                 'file_size_bytes': total_bytes,
                 'attempt_status': attempt.status,
+                'submission_status': submission.status,
+                'ocr_status': submission.ocr_status,
+                'evaluation_status': submission.evaluation_status,
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -1365,7 +1376,7 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='checking-status')
     def checking_status(self, request, pk=None):
         """
-        Check the status of the manual checking request for this attempt's subjective submission.
+        Check the status of the subjective submission, OCR progress, and manual checking request.
         """
         attempt = self.get_object()
         if not hasattr(attempt, 'subjective_submission'):
@@ -1373,15 +1384,53 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
                 'has_submission': False,
                 'checking_request': None,
                 'status': 'no_submission',
+                'submission_status': None,
+                'ocr_status': 'not_started',
+                'evaluation_status': 'pending',
+                'is_published': False,
+                'stage': 'no_submission',
+                'stage_label': 'No Answer Sheet Submitted',
             })
 
         submission = attempt.subjective_submission
         latest_req = submission.latest_checking_request
         from .serializers import SubjectiveCheckingRequestSerializer
+
+        # Determine user-friendly processing stage
+        if submission.is_published:
+            stage = 'published'
+            stage_label = 'Result Published'
+        elif submission.status == 'processing_failed' or submission.ocr_status == 'failed':
+            stage = 'failed'
+            stage_label = 'Processing Failed'
+        elif submission.status == 'upload_pending':
+            stage = 'uploading'
+            stage_label = 'Uploading Answer Sheet'
+        elif submission.evaluation_status == 'ocr_processing' or submission.ocr_status == 'processing':
+            stage = 'extracting'
+            stage_label = 'Extracting Handwriting (OCR)'
+        elif submission.evaluation_status == 'ai_evaluating':
+            stage = 'evaluating'
+            stage_label = 'Evaluating Answers'
+        elif submission.evaluation_status in ('needs_review', 'ai_evaluated', 'admin_confirmed') or submission.status in ('under_review', 'evaluated'):
+            stage = 'awaiting_review'
+            stage_label = 'Awaiting Admin Review & Publication'
+        else:
+            stage = 'queued'
+            stage_label = 'Queued for Evaluation'
+
         return Response({
             'has_submission': bool(submission.answer_pdf),
+            'submission_id': submission.id,
             'submission_status': submission.status,
+            'ocr_status': submission.ocr_status,
+            'evaluation_status': submission.evaluation_status,
+            'ocr_error': submission.ocr_error or '',
             'is_published': submission.is_published,
+            'page_count': submission.page_count,
+            'quality_gate_passed': submission.quality_gate_passed,
+            'stage': stage,
+            'stage_label': stage_label,
             'checking_request': SubjectiveCheckingRequestSerializer(latest_req).data if latest_req else None,
         })
 

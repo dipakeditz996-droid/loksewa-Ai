@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Save, Loader2, AlertTriangle, BookOpen } from 'lucide-react';
 import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
+import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
 import { toast } from 'react-hot-toast';
 
 const ICON_OPTIONS = ['Folder', 'BookOpen', 'Brain', 'Star', 'Target', 'Zap', 'Award', 'Layers', 'Grid', 'List'];
@@ -35,6 +36,14 @@ export default function CollectionForm({ collection, onSaved }: CollectionFormPr
   const [color, setColor] = useState(collection?.color ?? '#0B2545');
   const [icon, setIcon] = useState(collection?.icon ?? 'Folder');
   const [collectionStatus, setCollectionStatus] = useState<'active' | 'inactive'>(collection?.status ?? 'active');
+
+  // Academic Scope
+  const [category, setCategory] = useState<string>(collection?.category ? String(collection.category) : '');
+  const [position, setPosition] = useState<string>(collection?.position ? String(collection.position) : '');
+  const [subject, setSubject] = useState<string>(collection?.subject ? String(collection.subject) : '');
+  const [chapter, setChapter] = useState<string>(collection?.chapter ? String(collection.chapter) : '');
+  const [topic, setTopic] = useState<string>(collection?.topic ? String(collection.topic) : '');
+
   // Auto rules
   const [keywords, setKeywords] = useState<string[]>(collection?.rule?.keywords ?? []);
   const [keywordInput, setKeywordInput] = useState('');
@@ -75,6 +84,11 @@ export default function CollectionForm({ collection, onSaved }: CollectionFormPr
     color,
     icon,
     status: collectionStatus,
+    category: category ? Number(category) : null,
+    position: position ? Number(position) : null,
+    subject: subject ? Number(subject) : null,
+    chapter: chapter ? Number(chapter) : null,
+    topic: topic ? Number(topic) : null,
     rule: {
       keywords,
       apply_to_new: applyToNew,
@@ -199,6 +213,51 @@ export default function CollectionForm({ collection, onSaved }: CollectionFormPr
               <option value="inactive">Inactive</option>
             </select>
           </div>
+        </div>
+
+        {/* Academic Scope */}
+        <div className="p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-indigo-600" />
+              Academic Scope (Optional)
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Target this collection to a specific Category, Position, Subject, or Chapter to enforce question compatibility for Topicwise Exams.
+            </p>
+          </div>
+          <AcademicDependentSelect
+            category={category}
+            position={position}
+            subject={subject}
+            chapter={chapter}
+            topic={topic}
+            onChange={(field, val) => {
+              if (field === 'category') {
+                setCategory(val || '');
+                setPosition('');
+                setSubject('');
+                setChapter('');
+                setTopic('');
+              } else if (field === 'position' || field === 'exam') {
+                setPosition(val || '');
+                setSubject('');
+                setChapter('');
+                setTopic('');
+              } else if (field === 'subject') {
+                setSubject(val || '');
+                setChapter('');
+                setTopic('');
+              } else if (field === 'chapter') {
+                setChapter(val || '');
+                setTopic('');
+              } else if (field === 'topic') {
+                setTopic(val || '');
+              }
+            }}
+            maxLevel="topic"
+            layout="grid"
+          />
         </div>
 
         {/* Appearance */}

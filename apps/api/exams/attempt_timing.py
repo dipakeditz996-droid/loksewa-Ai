@@ -233,6 +233,12 @@ def finalize_attempt(attempt, auto=False):
         pass
 
     try:
+        from subscriptions.entitlements import EntitlementService
+        EntitlementService.consume_exam_attempt(attempt)
+    except Exception:
+        pass
+
+    try:
         from gamification.services import record_study_activity
         record_study_activity(attempt.student)
     except Exception:

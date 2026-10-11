@@ -162,11 +162,15 @@ export const adminQuestionApi = {
       existing_question_ids?: number[];
       all_question_ids?: number[];
     }>(`/admin/questions/import/${importId}/commit/`, { method: 'POST' }),
-  /** Objective question template */
-  downloadTemplate: async (type: 'mcq' | 'true_false' = 'mcq') =>
+  /** Objective and Subjective question template */
+  downloadTemplate: async (type: 'mcq' | 'true_false' | 'subjective' = 'mcq') =>
     downloadFile(
       `/admin/questions/import/template/?type=${type}`,
-      type === 'true_false' ? 'True-False Question Template.xlsx' : 'Objective Question Template.xlsx',
+      type === 'subjective'
+        ? 'Subjective Question Template.xlsx'
+        : type === 'true_false'
+        ? 'True-False Question Template.xlsx'
+        : 'Objective Question Template.xlsx',
     ),
   downloadErrorReport: async (importId: number | string) =>
     downloadFile(`/admin/questions/import/${importId}/error-report/`, `import_${importId}_errors.xlsx`),

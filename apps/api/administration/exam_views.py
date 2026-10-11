@@ -551,14 +551,22 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
                     pass
         elif assigned < 1:
             errors.append("Add at least one question before publishing.")
-        if exam.exam_type == 'subject' and exam.topic_id:
-            valid_assigned = exam.examination_questions.filter(
-                question__topic_id=exam.topic_id,
-                question__status='approved',
-                question__question_type__in=('mcq', 'true_false'),
-            ).count()
-            if valid_assigned != assigned:
-                errors.append("Every Topicwise Test question must be approved, objective, and belong to the selected topic.")
+        if exam.exam_type == 'subject':
+            if exam.topic_id:
+                valid_assigned = exam.examination_questions.filter(
+                    question__topic_id=exam.topic_id,
+                    question__status='approved',
+                    question__question_type__in=('mcq', 'true_false'),
+                ).count()
+                if valid_assigned != assigned:
+                    errors.append("Every Topicwise Test question must be approved, objective, and belong to the selected topic.")
+            else:
+                valid_assigned = exam.examination_questions.filter(
+                    question__status='approved',
+                    question__question_type__in=('mcq', 'true_false'),
+                ).count()
+                if valid_assigned != assigned:
+                    errors.append("Every Topicwise Test question must be approved and objective.")
             if exam.total_questions != assigned:
                 errors.append("The Topicwise Test question count must match its assigned questions.")
             if not exam.course_id:
@@ -826,15 +834,21 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             final_file = file
             final_file.seek(0)
             final_size = file.size
-        # 2. Handle image formats (JPG, PNG, WEBP) by converting to standardized PDF
-        elif any(file_name_lower.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp')) or (file.content_type and file.content_type.startswith('image/')):
+        # 2. Handle image formats (JPG, PNG, WEBP, etc.) by converting to standardized PDF
+        elif any(file_name_lower.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff', '.jfif', '.heic', '.avif')) or (file.content_type and file.content_type.startswith('image/')):
             try:
                 img = Image.open(file)
                 try:
                     img = ImageOps.exif_transpose(img)
                 except Exception:
                     pass
-                if img.mode != 'RGB':
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    background.paste(img, mask=img.split()[-1] if 'A' in img.getbands() else None)
+                    img = background
+                elif img.mode != 'RGB':
                     img = img.convert('RGB')
                 pdf_buffer = io.BytesIO()
                 img.save(pdf_buffer, format='PDF', quality=85, resolution=150.0)
@@ -846,7 +860,7 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             except Exception as e:
                 return Response({'detail': f'Failed to process question paper image: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            return Response({'detail': 'Only PDF documents and image files (JPG, PNG, WEBP) are accepted for the question paper.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': 'Only PDF documents and image files (JPG, PNG, WEBP, etc.) are accepted for the question paper.'}, status=status.HTTP_400_BAD_REQUEST)
 
         exam.question_paper_pdf = final_file
         exam.question_paper_page_count = page_count
@@ -881,6 +895,115 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             return FileResponse(exam.question_paper_pdf.open('rb'), content_type='application/pdf')
         except Exception as e:
             return Response({'detail': f'Could not open question paper: {e}'}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'], url_path='parse-question-paper')
+    def parse_question_paper(self, request, pk=None):
+        from exams.ocr_service import SubjectiveOCRService
+        from exams.subjective_question_paper_parser import QuestionPaperParser
+
+        exam = self.get_object()
+        if not exam.question_paper_pdf:
+            return Response({'detail': 'No question paper uploaded for this exam.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        exam.question_paper_pdf.open('rb')
+        try:
+            text = SubjectiveOCRService.extract_text_from_pdf(exam.question_paper_pdf)
+        except Exception as e:
+            return Response({'detail': f'Error extracting text from question paper: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        finally:
+            exam.question_paper_pdf.close()
+
+        if not text.strip():
+            return Response({'detail': 'Could not extract text from question paper. Please ensure document is legible.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        parser = QuestionPaperParser()
+        parsed_data = parser.parse_question_paper(text)
+
+        auto_sync = request.data.get('sync', False) or request.query_params.get('sync') == 'true'
+        if auto_sync and parsed_data['questions']:
+            from exams.models import Question, ExaminationQuestion
+            from django.db import transaction
+
+            with transaction.atomic():
+                exam.examination_questions.all().delete()
+                created_eqs = []
+                for q_dict in parsed_data['questions']:
+                    q_num = q_dict['question_number']
+                    q_marks = q_dict['max_marks']
+                    q_text = q_dict['question_text'] or f"Question {q_num}"
+                    order = q_dict['order']
+
+                    q_obj = Question.objects.create(
+                        question_type='subjective',
+                        text=q_text,
+                        marks=q_marks,
+                        status='approved',
+                        created_by=request.user if request.user.is_authenticated else None,
+                    )
+                    eq_obj = ExaminationQuestion.objects.create(
+                        examination=exam,
+                        question=q_obj,
+                        order=order,
+                        marks=q_marks,
+                        question_number=q_num,
+                    )
+                    created_eqs.append(eq_obj)
+
+                exam.total_questions = len(created_eqs)
+                exam.total_marks = sum(eq.marks for eq in created_eqs)
+                exam.save(update_fields=['total_questions', 'total_marks', 'updated_at'])
+
+            parsed_data['synced'] = True
+
+        return Response(parsed_data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='confirm-questions')
+    def confirm_question_paper_questions(self, request, pk=None):
+        from exams.models import Question, ExaminationQuestion
+        from django.db import transaction
+
+        exam = self.get_object()
+        questions_payload = request.data.get('questions') or []
+        if not isinstance(questions_payload, list) or not questions_payload:
+            return Response({'detail': 'A list of questions is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            exam.examination_questions.all().delete()
+            created_eqs = []
+            for idx, q_dict in enumerate(questions_payload, start=1):
+                q_num = str(q_dict.get('question_number') or f"Q{idx}")
+                try:
+                    q_marks = float(q_dict.get('marks') or q_dict.get('max_marks') or 10.0)
+                except (ValueError, TypeError):
+                    q_marks = 10.0
+                q_text = str(q_dict.get('text') or q_dict.get('question_text') or f"Question {q_num}").strip()
+                order = int(q_dict.get('order') or idx)
+
+                q_obj = Question.objects.create(
+                    question_type='subjective',
+                    text=q_text,
+                    marks=q_marks,
+                    status='approved',
+                    created_by=request.user if request.user.is_authenticated else None,
+                )
+                eq_obj = ExaminationQuestion.objects.create(
+                    examination=exam,
+                    question=q_obj,
+                    order=order,
+                    marks=q_marks,
+                    question_number=q_num,
+                )
+                created_eqs.append(eq_obj)
+
+            exam.total_questions = len(created_eqs)
+            exam.total_marks = sum(eq.marks for eq in created_eqs)
+            exam.save(update_fields=['total_questions', 'total_marks', 'updated_at'])
+
+        return Response({
+            'detail': f'Confirmed {len(created_eqs)} questions successfully.',
+            'total_questions': exam.total_questions,
+            'total_marks': exam.total_marks,
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='expert-solution')
     def upload_expert_solution(self, request, pk=None):
@@ -1023,34 +1146,75 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             return Response({'detail': 'Please upload an Expert Solution PDF first.'}, status=status.HTTP_400_BAD_REQUEST)
         service = SubjectiveExpertSolutionService()
         result = service.process_expert_solution_pdf(exam)
+        result['questions_detected'] = result.get('questions_detected') or result.get('total_questions_processed', 0)
+        result['rubrics_generated'] = True
+        result['version'] = exam.expert_solution_version
+        if 'questions' in result and 'rubrics' not in result:
+            result['rubrics'] = result['questions']
         return Response(result, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='rubrics')
     def get_rubrics(self, request, pk=None):
+        from exams.subjective_expert_service import SubjectiveExpertSolutionService
         exam = self.get_object()
         eq_qs = exam.examination_questions.select_related('question').order_by('order', 'id')
         data = []
+        service = None
+
         for eq in eq_qs:
+            rubric = eq.rubric or []
+            if not rubric:
+                if not service:
+                    service = SubjectiveExpertSolutionService()
+                rubric = service.generate_rubric_for_question(
+                    question_text=eq.question.text,
+                    solution_text=eq.model_solution or eq.question.model_answer or "Comprehensive standard solution.",
+                    max_marks=float(eq.marks),
+                    evaluation_type=eq.evaluation_type or 'descriptive'
+                )
+                eq.rubric = rubric
+                eq.save(update_fields=['rubric'])
+
+            clean_rubric = []
+            for c_idx, c in enumerate(rubric):
+                crit_desc = str(c.get('criterion') or c.get('description') or f"Criterion {c_idx+1}").strip()
+                clean_c = dict(c)
+                clean_c['criterion'] = crit_desc
+                clean_c['description'] = crit_desc
+                try:
+                    clean_c['max_marks'] = float(c.get('max_marks', 0))
+                except (ValueError, TypeError):
+                    clean_c['max_marks'] = 1.0
+                clean_rubric.append(clean_c)
+
             data.append({
                 'examination_question_id': eq.id,
+                'id': eq.id,
                 'question_id': eq.question_id,
                 'question_text': eq.question.text,
                 'order': eq.order,
-                'question_number': eq.display_number,
+                'question_number': eq.order,
+                'display_number': eq.display_number or f"Q{eq.order}",
+                'marks': eq.marks,
                 'max_marks': eq.marks,
                 'evaluation_type': eq.evaluation_type,
-                'model_solution': eq.model_solution,
-                'rubric': eq.rubric or [],
-                'rubric_approved': eq.rubric_approved,
-                'rubric_version': eq.rubric_version,
+                'model_solution': eq.model_solution or '',
+                'rubric': clean_rubric,
+                'rubric_approved': bool(eq.rubric_approved),
+                'rubric_version': eq.rubric_version or 1,
             })
+
         return Response({
             'examination_id': exam.id,
+            'exam_id': exam.id,
             'title': exam.title,
-            'expert_solution_rubric_generated': exam.expert_solution_rubric_generated,
-            'expert_solution_version': exam.expert_solution_version,
+            'exam_title': exam.title,
+            'is_expert_solution_published': bool(exam.is_expert_solution_published),
+            'expert_solution_rubric_generated': bool(exam.expert_solution_rubric_generated),
+            'expert_solution_version': exam.expert_solution_version or 1,
             'has_expert_solution_pdf': bool(exam.expert_solution_pdf),
             'questions': data,
+            'rubrics': data,
         })
 
     @action(detail=True, methods=['post'], url_path='update-rubrics')
@@ -1061,14 +1225,17 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         if not isinstance(questions_payload, list):
             return Response({'detail': 'rubrics must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        eq_map = {eq.id: eq for eq in exam.examination_questions.all()}
+        eq_by_id = {eq.id: eq for eq in exam.examination_questions.all()}
+        eq_by_qid = {eq.question_id: eq for eq in exam.examination_questions.all()}
         validated_updates = []
 
         for item in questions_payload:
-            eq_id = item.get('examination_question_id') or item.get('question_id') or item.get('id')
-            if eq_id not in eq_map:
+            eq_id = item.get('examination_question_id') or item.get('id')
+            q_id = item.get('question_id')
+            eq = eq_by_id.get(eq_id) or eq_by_qid.get(q_id) or eq_by_id.get(q_id)
+            if not eq:
                 continue
-            eq = eq_map[eq_id]
+
             rubric = item.get('rubric', [])
             if not isinstance(rubric, list):
                 return Response({'detail': f'Rubric for {eq.display_number} must be a list.'}, status=status.HTTP_400_BAD_REQUEST)

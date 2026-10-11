@@ -145,17 +145,22 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             for e in enrollments
         ]
 
+    has_expiry = serializers.BooleanField(read_only=True)
+
     def get_remaining_days(self, obj):
-        """Derived from expiry_date, never stored - stays correct without a
-        background job having to decrement anything."""
+        """Derived from expiry_date when present."""
         if obj.status != 'ACTIVE':
             return 0
+        if not obj.expiry_date:
+            return None
         delta = obj.expiry_date - timezone.now()
         return max(delta.days, 0)
 
     def get_computed_status(self, obj):
         if obj.status != 'ACTIVE':
             return obj.status
+        if not obj.expiry_date:
+            return 'ACTIVE'
         if obj.expiry_date <= timezone.now():
             return 'EXPIRED'
         if (obj.expiry_date - timezone.now()).days <= EXPIRING_SOON_THRESHOLD_DAYS:
@@ -205,3 +210,23 @@ class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invoice
         fields = '__all__'
+
+
+class StudentEntitlementSerializer(serializers.ModelSerializer):
+    remaining = serializers.IntegerField(read_only=True)
+    is_unlimited = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        from .models import StudentEntitlement
+        model = StudentEntitlement
+        fields = '__all__'
+
+
+class UsageLedgerSerializer(serializers.ModelSerializer):
+    admin_name = serializers.CharField(source='admin_user.get_full_name', read_only=True, default=None)
+
+    class Meta:
+        from .models import UsageLedger
+        model = UsageLedger
+        fields = '__all__'
+

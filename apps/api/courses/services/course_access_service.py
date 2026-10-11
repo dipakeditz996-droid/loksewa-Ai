@@ -80,7 +80,10 @@ class CourseAccessService:
         from courses.models import CourseApplication
 
         active_subs = (
-            Subscription.objects.filter(student=user, status='ACTIVE', expiry_date__gt=now)
+            Subscription.objects.filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
+                student=user, status='ACTIVE'
+            )
             .select_related('plan')
             .prefetch_related('plan__eligible_courses')
         )

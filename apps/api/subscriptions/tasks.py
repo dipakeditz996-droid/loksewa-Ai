@@ -92,7 +92,7 @@ def verify_payment_proof(payment_id):
     ).update(
         verification_status=(
             'VERIFIED_CONFIDENT'
-            if result.get('outcome') == 'AUTO_VERIFIED'
+            if result.get('outcome') in ('AUTO_VERIFIED', 'confident_match')
             else 'VERIFIED_UNCERTAIN'
         ),
         verification_result=result,
@@ -101,7 +101,7 @@ def verify_payment_proof(payment_id):
     if not updated:
         return {'status': 'skipped'}
 
-    if result.get('outcome') == 'AUTO_VERIFIED':
+    if result.get('outcome') in ('AUTO_VERIFIED', 'confident_match'):
         from .services import approve_payment_logic
         # Refresh from DB so approve_payment_logic sees the updated verification_status
         # (VERIFIED_CONFIDENT) and doesn't overwrite it via update_fields.

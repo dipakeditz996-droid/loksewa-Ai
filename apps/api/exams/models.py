@@ -289,6 +289,11 @@ class QuestionCollection(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     questions = models.ManyToManyField(Question, related_name='collections', blank=True)
+    category = models.ForeignKey('exams.ExamCategory', on_delete=models.SET_NULL, null=True, blank=True, related_name='question_collections', help_text="Academic Category")
+    exam = models.ForeignKey('exams.Exam', on_delete=models.SET_NULL, null=True, blank=True, related_name='question_collections', help_text="Level / Position")
+    subject = models.ForeignKey('exams.Subject', on_delete=models.SET_NULL, null=True, blank=True, related_name='question_collections')
+    chapter = models.ForeignKey('exams.Chapter', on_delete=models.SET_NULL, null=True, blank=True, related_name='question_collections')
+    topic = models.ForeignKey('exams.Topic', on_delete=models.SET_NULL, null=True, blank=True, related_name='question_collections')
 
     def __str__(self):
         return self.name
@@ -692,6 +697,7 @@ class Examination(models.Model):
     
     # Attempt Settings
     max_attempts = models.IntegerField(default=1, help_text="0 for Unlimited")
+    is_free = models.BooleanField(default=False, help_text="True if this examination is free for all students / free package tier")
     allow_resume = models.BooleanField(default=True)
     auto_submit = models.BooleanField(default=True)
     

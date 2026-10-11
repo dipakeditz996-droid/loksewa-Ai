@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { adminQuestionApi, ImportReport, ImportRow } from '@/lib/api/admin-questions';
 import { adminCollectionsApi, QuestionCollection } from '@/lib/api/admin-collections';
 import { adminApi, AdminTag } from '@/lib/api/admin';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
 import Link from 'next/link';
-import { ArrowLeft, UploadCloud, AlertCircle, CheckCircle, FileText, ChevronRight, Sparkles, Download } from 'lucide-react';
+import { ArrowLeft, UploadCloud, AlertCircle, CheckCircle, FileText, ChevronRight, Sparkles, Download, Layers } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { ButtonSpinner } from '@/components/ui/loading-states';
 
@@ -14,6 +15,7 @@ const MISSING_LABELS: Record<string, string> = {
   options: 'Options A–D',
   correct_answer: 'Correct answer',
   explanation: 'Explanation',
+  model_answer: 'Model answer',
 };
 
 interface Column {
@@ -40,13 +42,42 @@ const OBJECTIVE_NOTES = [
   'Leave Explanation or Hint blank and the AI can fill Explanation in on the next step.',
 ];
 
+const SUBJECTIVE_COLUMNS: Column[] = [
+  { header: 'SN', key: 'sn', required: false },
+  { header: 'Questions', key: 'question', required: true },
+  { header: 'Mark', key: 'marks', required: true },
+  { header: 'Model Answer', key: 'model_answer', required: true },
+  { header: 'Course', key: 'course', required: false },
+  { header: 'Position', key: 'position', required: false },
+  { header: 'Subject', key: 'subject', required: false },
+  { header: 'Chapter', key: 'chapter', required: false },
+  { header: 'Topic', key: 'topic', required: false },
+  { header: 'Difficulty', key: 'difficulty', required: false },
+  { header: 'Tags', key: 'tags', required: false },
+  { header: 'Explanation', key: 'explanation', required: false },
+  { header: 'Hint', key: 'hint', required: false },
+];
+
+const SUBJECTIVE_NOTES = [
+  'Model Answer: Outline the model solution or rubric points used to evaluate candidate answers.',
+  'Marks: Must be a positive number (default 5 or 10). Evaluators score submissions against this maximum.',
+  'Academic Hierarchy: Can be specified per row in the spreadsheet or selected globally above.',
+];
+
 export default function ImportQuestionsPage() {
+  const searchParams = useSearchParams();
+  const initialType = searchParams?.get('type') === 'subjective' ? 'subjective' : 'mcq';
+  const [importType, setImportType] = useState<'mcq' | 'subjective'>(initialType);
+
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [report, setReport] = useState<ImportReport | null>(null);
   const [importedCount, setImportedCount] = useState(0);
   const [skippedDuplicates, setSkippedDuplicates] = useState(0);
+
+  const activeColumns = importType === 'subjective' ? SUBJECTIVE_COLUMNS : OBJECTIVE_COLUMNS;
+  const activeNotes = importType === 'subjective' ? SUBJECTIVE_NOTES : OBJECTIVE_NOTES;
 
   // Syllabus placement: Category and Position/Level required, Subject/Chapter/Topic optional
   const [category, setCategory] = useState<number | undefined>();
@@ -90,7 +121,7 @@ export default function ImportQuestionsPage() {
 
   const downloadTemplate = async () => {
     try {
-      await adminQuestionApi.downloadTemplate('mcq');
+      await adminQuestionApi.downloadTemplate(importType);
     } catch (error: any) {
       toast.error(error.message || 'Failed to download template');
     }
@@ -111,6 +142,7 @@ export default function ImportQuestionsPage() {
         subject,
         chapter,
         topic,
+        question_type: importType,
         collection_id: collectionId,
         tag_ids: selectedTagIds,
       });
@@ -184,9 +216,11 @@ export default function ImportQuestionsPage() {
           <ArrowLeft className="w-5 h-5 text-gray-500" />
         </Link>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Import Objective Questions</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Import {importType === 'subjective' ? 'Subjective' : 'Objective'} Questions
+          </h1>
           <p className="text-gray-500 mt-1">
-            Choose where the questions belong, then upload an Excel (.xlsx) or CSV file of objective question content.
+            Choose where the questions belong, then upload an Excel (.xlsx) or CSV file of {importType === 'subjective' ? 'subjective theory/essay' : 'objective'} question content.
           </p>
         </div>
       </div>
@@ -215,6 +249,32 @@ export default function ImportQuestionsPage() {
       {/* Step 1: choose destination, then upload */}
       {step === 1 && (
         <div className="space-y-6">
+          {/* Question Type Switcher */}
+          <div className="bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm flex items-center gap-1.5 max-w-md">
+            <button
+              type="button"
+              onClick={() => setImportType('mcq')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                importType === 'mcq'
+                  ? 'bg-[#0B2545] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              Objective (MCQ) Import
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportType('subjective')}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                importType === 'subjective'
+                  ? 'bg-[#0B2545] text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              Subjective (Theory/Essay) Import
+            </button>
+          </div>
+
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Where do these questions belong?</h2>
             <p className="text-sm text-gray-500 mb-6">
@@ -282,7 +342,7 @@ export default function ImportQuestionsPage() {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-1">Upload File</h2>
               <div className="flex flex-wrap justify-center gap-1.5 mb-3" data-testid="import-columns">
-                {OBJECTIVE_COLUMNS.map((c) => (
+                {activeColumns.map((c) => (
                   <span
                     key={c.header}
                     className={`text-xs px-2 py-1 rounded border ${c.required ? 'bg-blue-50 border-blue-200 text-blue-800 font-semibold' : 'bg-gray-50 border-gray-200 text-gray-600'}`}
@@ -294,7 +354,7 @@ export default function ImportQuestionsPage() {
               <p className="text-gray-500 text-center mb-2 text-sm">
                 Columns marked * are required. SN is only the row number shown in the review — it is not the question&apos;s ID.
               </p>
-              {OBJECTIVE_NOTES.map((n) => (
+              {activeNotes.map((n) => (
                 <p key={n} className="text-gray-500 text-center mb-2 text-sm">{n}</p>
               ))}
 
@@ -302,7 +362,7 @@ export default function ImportQuestionsPage() {
                 onClick={downloadTemplate}
                 className="text-[#0B2545] font-medium hover:underline flex items-center gap-2 mt-4 mb-8"
               >
-                <FileText className="w-4 h-4" /> Download Objective Question Template.xlsx
+                <FileText className="w-4 h-4" /> Download {importType === 'subjective' ? 'Subjective' : 'Objective'} Question Template.xlsx
               </button>
 
               <div className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 hover:bg-gray-50 transition-colors text-center relative">
@@ -402,7 +462,9 @@ export default function ImportQuestionsPage() {
 
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-              <h3 className="font-bold text-gray-900">Preview — Objective Questions</h3>
+              <h3 className="font-bold text-gray-900">
+                Preview — {importType === 'subjective' ? 'Subjective' : 'Objective'} Questions
+              </h3>
               <p className="text-sm text-gray-500">{report.total_rows} row{report.total_rows === 1 ? '' : 's'}</p>
             </div>
             <div className="overflow-x-auto max-h-[360px] overflow-y-auto">
@@ -411,7 +473,7 @@ export default function ImportQuestionsPage() {
                   <tr>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Row</th>
                     <th className="px-3 py-2 text-left font-semibold text-gray-600">Status</th>
-                    {OBJECTIVE_COLUMNS.filter((c) => c.key !== 'sn').map((c) => (
+                    {activeColumns.filter((c) => c.key !== 'sn').map((c) => (
                       <th key={c.key} className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap">{c.header}</th>
                     ))}
                   </tr>
@@ -429,7 +491,7 @@ export default function ImportQuestionsPage() {
                           {row.status === 'valid' ? 'Ready' : row.status === 'incomplete' ? 'Needs info' : row.status === 'duplicate' ? 'Duplicate' : 'Error'}
                         </span>
                       </td>
-                      {OBJECTIVE_COLUMNS.filter((c) => c.key !== 'sn').map((c) => (
+                      {activeColumns.filter((c) => c.key !== 'sn').map((c) => (
                         <td key={c.key} className="px-3 py-2 max-w-[260px] truncate text-gray-800" title={row.data[c.key] || ''}>
                           {row.data[c.key] || <span className="text-gray-300">—</span>}
                         </td>

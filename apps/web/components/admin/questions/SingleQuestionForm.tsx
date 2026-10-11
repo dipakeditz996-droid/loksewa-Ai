@@ -35,10 +35,13 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
   const [loading, setLoading] = useState(false);
   
   // Form State
-  const qType = 'mcq';
+  const [questionType, setQuestionType] = useState<'mcq' | 'subjective'>(
+    initialData?.question_type === 'subjective' ? 'subjective' : 'mcq'
+  );
+  const [modelAnswer, setModelAnswer] = useState(initialData?.model_answer || '');
   const [status, setStatus] = useState<'draft' | 'pending_review' | 'approved' | 'rejected'>(initialData?.status || 'draft');
   const [text, setText] = useState(initialData?.text || '');
-  const [marks, setMarks] = useState(initialData?.marks || 1);
+  const [marks, setMarks] = useState(initialData?.marks || (initialData?.question_type === 'subjective' ? 5 : 1));
   const [negativeMarks, setNegativeMarks] = useState(initialData?.negative_marks || 0);
   const [expectedTime, setExpectedTime] = useState(initialData?.expected_time_minutes || 1);
   const [explanation, setExplanation] = useState(initialData?.explanation || '');
@@ -172,15 +175,27 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
       return;
     }
 
-    if (!aiGenerate && (!correctOption || !options.A || !options.B || !options.C || !options.D)) {
-      toast.error('MCQ requires all 4 options (A, B, C, D) and a correct option selected.');
+    if (Number(marks) <= 0) {
+      toast.error('Question marks must be greater than zero.');
       return;
+    }
+
+    if (questionType === 'subjective') {
+      if (!modelAnswer.trim()) {
+        toast.error('Model answer / evaluation criteria is required for subjective questions.');
+        return;
+      }
+    } else {
+      if (!aiGenerate && (!correctOption || !options.A || !options.B || !options.C || !options.D)) {
+        toast.error('MCQ requires all 4 options (A, B, C, D) and a correct option selected.');
+        return;
+      }
     }
 
     setLoading(true);
     try {
       const payload: Partial<AdminQuestion> = {
-        question_type: 'mcq',
+        question_type: questionType,
         status,
         course: selCourse ? Number(selCourse) : undefined,
         category: Number(selCategory),
@@ -190,7 +205,7 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         topic: selTopic ? Number(selTopic) : null,
         text,
         marks: Number(marks),
-        negative_marks: Number(negativeMarks),
+        negative_marks: questionType === 'subjective' ? 0 : Number(negativeMarks),
         expected_time_minutes: Number(expectedTime),
         explanation,
         hint,
@@ -198,7 +213,9 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         tag_ids: selectedTagIds,
       };
 
-      if (!aiGenerate) {
+      if (questionType === 'subjective') {
+        payload.model_answer = modelAnswer;
+      } else if (!aiGenerate) {
         payload.option_a = options.A;
         payload.option_b = options.B;
         payload.option_c = options.C;
@@ -238,7 +255,28 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
           Configuration
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Question Type</label>
+            <select
+              value={questionType}
+              onChange={(e) => {
+                const nextType = e.target.value as 'mcq' | 'subjective';
+                setQuestionType(nextType);
+                if (nextType === 'subjective') {
+                  if (marks === 1) setMarks(5);
+                  setNegativeMarks(0);
+                } else {
+                  if (marks === 5) setMarks(1);
+                  setNegativeMarks(0.2);
+                }
+              }}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 bg-white font-medium"
+            >
+              <option value="mcq">Objective (MCQ)</option>
+              <option value="subjective">Subjective (Theory/Essay)</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
             <select value={status} onChange={(e: any) => setStatus(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2">
@@ -250,15 +288,24 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Marks</label>
-            <input type="number" step="0.5" value={marks} onChange={e => setMarks(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2" required />
+            <input type="number" step="0.5" min="0.5" value={marks} onChange={e => setMarks(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2" required />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Negative Marks</label>
-            <input type="number" step="0.1" value={negativeMarks} onChange={e => setNegativeMarks(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2" required />
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={negativeMarks}
+              onChange={e => setNegativeMarks(Number(e.target.value))}
+              disabled={questionType === 'subjective'}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 disabled:bg-gray-100 disabled:text-gray-400"
+              required
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Expected Time (min)</label>
-            <input type="number" value={expectedTime} onChange={e => setExpectedTime(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2" required />
+            <input type="number" min="1" value={expectedTime} onChange={e => setExpectedTime(Number(e.target.value))} className="w-full border border-gray-200 rounded-lg px-3 py-2" required />
           </div>
         </div>
 
@@ -377,44 +424,68 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
         />
       </div>
 
-      {/* Options */}
+      {/* Options or Model Answer */}
+      {questionType === 'subjective' ? (
+        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[#0B2545]">Model Answer &amp; Evaluation Reference *</h2>
+            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded font-medium">
+              Used by Evaluators &amp; AI
+            </span>
+          </div>
+          <p className="text-xs text-gray-500">
+            Provide the comprehensive model solution, key points, and scoring criteria. This reference is used by human examiners and AI to grade candidate submissions.
+          </p>
+          <textarea
+            value={modelAnswer}
+            onChange={(e) => setModelAnswer(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 min-h-[140px] text-sm"
+            placeholder="Outline standard answer points, legal/statutory references, steps, and expected scoring breakdown..."
+            required
+          />
+        </div>
+      ) : (
+        <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Options</h2>
+            <label className="flex items-center gap-2 cursor-pointer bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200">
+              <input 
+                type="checkbox" 
+                checked={aiGenerate}
+                onChange={(e) => setAiGenerate(e.target.checked)}
+                className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+              />
+              <span className="text-sm font-medium flex items-center gap-1"><Wand2 className="w-3.5 h-3.5" /> Auto-generate Options with AI</span>
+            </label>
+          </div>
+          <div className="space-y-4">
+            {(['A', 'B', 'C', 'D'] as const).map(opt => (
+              <div key={opt} className="flex items-center gap-4">
+                <input 
+                  type="radio" 
+                  name="correct" 
+                  checked={correctOption === opt}
+                  onChange={() => setCorrectOption(opt)}
+                  disabled={aiGenerate}
+                  className="w-5 h-5 text-[#0B2545] border-gray-300 focus:ring-[#0B2545] disabled:opacity-50"
+                />
+                <span className="font-bold text-gray-700 w-6">{opt}.</span>
+                <input 
+                  type="text" 
+                  value={options[opt]}
+                  onChange={e => setOptions({...options, [opt]: e.target.value})}
+                  disabled={aiGenerate}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2 disabled:opacity-50 disabled:bg-gray-50"
+                  placeholder={aiGenerate ? `AI will generate Option ${opt}` : `Option ${opt}`}
+                  required={!aiGenerate}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Options</h2>
-          <label className="flex items-center gap-2 cursor-pointer bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg border border-amber-200">
-            <input 
-              type="checkbox" 
-              checked={aiGenerate}
-              onChange={(e) => setAiGenerate(e.target.checked)}
-              className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-            />
-            <span className="text-sm font-medium flex items-center gap-1"><Wand2 className="w-3.5 h-3.5" /> Auto-generate Options with AI</span>
-          </label>
-        </div>
-        <div className="space-y-4">
-          {(['A', 'B', 'C', 'D'] as const).map(opt => (
-            <div key={opt} className="flex items-center gap-4">
-              <input 
-                type="radio" 
-                name="correct" 
-                checked={correctOption === opt}
-                onChange={() => setCorrectOption(opt)}
-                disabled={aiGenerate}
-                className="w-5 h-5 text-[#0B2545] border-gray-300 focus:ring-[#0B2545] disabled:opacity-50"
-              />
-              <span className="font-bold text-gray-700 w-6">{opt}.</span>
-              <input 
-                type="text" 
-                value={options[opt]}
-                onChange={e => setOptions({...options, [opt]: e.target.value})}
-                disabled={aiGenerate}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 disabled:opacity-50 disabled:bg-gray-50"
-                placeholder={aiGenerate ? `AI will generate Option ${opt}` : `Option ${opt}`}
-                required={!aiGenerate}
-              />
-            </div>
-          ))}
-        </div>
 
         <div className="mt-6">
           <h2 className="text-lg font-semibold mb-2">Explanation (Optional)</h2>

@@ -3,7 +3,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .permissions import IsAdminUser
-from django.db.models import Count, F
+from django.db.models import Count, F, Q
 from exams.models import Question
 from rest_framework.pagination import PageNumberPagination
 from .question_serializers import AdminQuestionSerializer
@@ -101,13 +101,17 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
             from courses.services.course_access_service import CourseAccessService
             c_obj = Course.objects.filter(id=course_param).first()
             if c_obj:
-                c_exam_ids = list(CourseAccessService.get_course_exam_ids(c_obj))
+                c_exam_ids = set(CourseAccessService.get_course_exam_ids(c_obj))
+                if getattr(c_obj, 'exam_id', None):
+                    c_exam_ids.add(c_obj.exam_id)
                 qs = qs.filter(
                     Q(exam_id__in=c_exam_ids) |
                     Q(subject__paper__exam_id__in=c_exam_ids) |
                     Q(chapter__subject__paper__exam_id__in=c_exam_ids) |
                     Q(topic__chapter__subject__paper__exam_id__in=c_exam_ids)
                 )
+            else:
+                qs = qs.none()
 
         return qs
 

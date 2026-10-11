@@ -544,11 +544,11 @@ export function SubjectiveExamAttemptView({
                     <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
                     <span>Important: Answer Numbering Instructions</span>
                   </div>
+                  <div className="bg-amber-950/60 border border-amber-500/50 rounded-lg p-3 text-amber-200 font-semibold text-xs sm:text-sm">
+                    “Write each answer with its correct question number, such as Q1, Q2, Q3(a), and Q3(b). Continue answers across pages in order. Unclear numbering or handwriting may require manual review.”
+                  </div>
                   <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-                    Please clearly write the correct question number before every answer, for example, <strong className="text-white">Q.No. 1</strong>, <strong className="text-white">Q.No. 2</strong> and <strong className="text-white">Q.No. 3</strong>. Keep each answer identifiable and separate from the next answer. If a question has subparts, clearly label them as <strong className="text-white">Q.No. 1(a)</strong>, <strong className="text-white">Q.No. 1(b)</strong>, etc. If an answer continues on another page, clearly indicate that it continues the previous question.
-                  </p>
-                  <p className="text-xs text-amber-200/90 leading-relaxed font-medium">
-                    The system uses these question numbers to match your answers with the correct questions and Expert Solutions. Missing or unclear numbering may require manual evaluation.
+                    Please clearly write the correct question number before every answer, for example, <strong className="text-white">Q1</strong>, <strong className="text-white">Q2</strong>, <strong className="text-white">Q3(a)</strong>, and <strong className="text-white">Q3(b)</strong>. Keep each answer identifiable and separate from the next answer. If an answer continues across pages, write the questions in sequential order.
                   </p>
                   <div className="pt-2 border-t border-amber-500/20 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] sm:text-xs text-slate-300">
                     <div className="flex items-center gap-1.5">

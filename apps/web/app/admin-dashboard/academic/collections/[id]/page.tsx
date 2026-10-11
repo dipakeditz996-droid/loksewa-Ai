@@ -13,29 +13,43 @@ import { toast } from 'react-hot-toast';
 
 // ---- Mini Add Questions Modal ----
 interface AddQuestionsModalProps {
-  collectionId: number;
+  collection: QuestionCollection;
   onDone: () => void;
   onClose: () => void;
 }
 
-function AddQuestionsModal({ collectionId, onDone, onClose }: AddQuestionsModalProps) {
+function AddQuestionsModal({ collection, onDone, onClose }: AddQuestionsModalProps) {
   const [questions, setQuestions] = useState<any[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     adminQuestionApi
-      .getQuestions({ page_size: 200 })
+      .getQuestions({ page_size: 500 })
       .then(d => setQuestions(Array.isArray(d) ? d : (d.results || [])))
       .catch(() => toast.error('Failed to load questions'))
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = questions.filter(q =>
-    !search || q.text?.toLowerCase().includes(search.toLowerCase()) || q.question_id?.includes(search)
+  // Distinct subjects for filter dropdown
+  const uniqueSubjects = Array.from(
+    new Set(questions.map(q => q.subject_name).filter(Boolean))
   );
+
+  const filtered = questions.filter(q => {
+    if (search && !q.text?.toLowerCase().includes(search.toLowerCase()) && !q.question_id?.toLowerCase().includes(search.toLowerCase())) {
+      return false;
+    }
+    if (typeFilter && q.question_type !== typeFilter) return false;
+    if (statusFilter && q.status !== statusFilter) return false;
+    if (subjectFilter && q.subject_name !== subjectFilter) return false;
+    return true;
+  });
 
   const toggle = (id: number) => {
     const next = new Set(selected);
@@ -43,15 +57,46 @@ function AddQuestionsModal({ collectionId, onDone, onClose }: AddQuestionsModalP
     setSelected(next);
   };
 
+  const selectAllFiltered = () => {
+    const next = new Set(selected);
+    filtered.forEach(q => next.add(q.id));
+    setSelected(next);
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+  };
+
+  // Check if a question is compatible with the collection's academic scope
+  const isQuestionCompatible = (q: any) => {
+    if (collection.subject && q.subject_id && q.subject_id !== collection.subject) return false;
+    if (collection.position && q.position_id && q.position_id !== collection.position) return false;
+    if (collection.chapter && q.chapter_id && q.chapter_id !== collection.chapter) return false;
+    return true;
+  };
+
   const handleAdd = async () => {
     if (selected.size === 0) return;
+    
+    // Check if any selected question has academic mismatch
+    const incompatibleSelected = Array.from(selected)
+      .map(id => questions.find(q => q.id === id))
+      .filter(q => q && !isQuestionCompatible(q));
+
+    if (incompatibleSelected.length > 0) {
+      const confirmAdd = window.confirm(
+        `${incompatibleSelected.length} question(s) differ from this collection's academic scope (${collection.subject_name || collection.position_name || 'Scope'}). Do you still want to proceed?`
+      );
+      if (!confirmAdd) return;
+    }
+
     setSaving(true);
     try {
-      await adminCollectionsApi.addQuestions(collectionId, Array.from(selected));
-      toast.success(`${selected.size} question(s) added to collection!`);
+      const res = await adminCollectionsApi.addQuestions(collection.id, Array.from(selected));
+      toast.success(`${res.added ?? selected.size} question(s) added to collection!`);
       onDone();
-    } catch {
-      toast.error('Failed to add questions. Please try again.');
+    } catch (err: any) {
+      toast.error(err?.data?.error || err.message || 'Failed to add questions.');
     } finally {
       setSaving(false);
     }
@@ -59,53 +104,141 @@ function AddQuestionsModal({ collectionId, onDone, onClose }: AddQuestionsModalP
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="p-5 border-b flex justify-between items-center">
+        <div className="p-5 border-b flex justify-between items-center bg-gray-50/50 rounded-t-2xl">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Add Questions to Collection</h2>
-            <p className="text-sm text-gray-500">{selected.size} selected</p>
+            <h2 className="text-lg font-bold text-gray-900">Add Questions to "{collection.name}"</h2>
+            <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+              <span>{selected.size} selected</span>
+              {collection.subject_name && (
+                <span>• Scope: <strong>{collection.subject_name}</strong></span>
+              )}
+              {collection.position_name && (
+                <span>({collection.position_name})</span>
+              )}
+            </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        {/* Search */}
-        <div className="p-4 border-b">
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search questions..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0B2545]"
-            />
+        {/* Filters */}
+        <div className="p-4 border-b space-y-3 bg-white">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by question text or ID (e.g. Q-000001)..."
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-[#0B2545]"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#0B2545]"
+            >
+              <option value="">All Question Types</option>
+              <option value="mcq">MCQ</option>
+              <option value="true_false">True / False</option>
+              <option value="subjective">Subjective</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#0B2545]"
+            >
+              <option value="">All Statuses</option>
+              <option value="approved">Approved</option>
+              <option value="draft">Draft</option>
+              <option value="pending_review">Pending Review</option>
+            </select>
+            {uniqueSubjects.length > 0 && (
+              <select
+                value={subjectFilter}
+                onChange={e => setSubjectFilter(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[#0B2545] max-w-[180px]"
+              >
+                <option value="">All Subjects</option>
+                {uniqueSubjects.map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+            <span>Showing {filtered.length} of {questions.length} questions</span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={selectAllFiltered}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Select All Filtered ({filtered.length})
+              </button>
+              {selected.size > 0 && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Clear Selection
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Question List */}
         <div className="flex-1 overflow-y-auto divide-y">
           {loading ? (
-            <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></div>
+            <div className="p-12 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-gray-400" /></div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">No questions found.</div>
+            <div className="p-12 text-center text-gray-400">No questions found matching your criteria.</div>
           ) : (
-            filtered.map((q: any) => (
-              <label key={q.id} className="flex items-start gap-3 p-3 hover:bg-gray-50 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selected.has(q.id)}
-                  onChange={() => toggle(q.id)}
-                  className="mt-0.5 w-4 h-4 rounded text-[#0B2545]"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 line-clamp-2">{q.text}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{q.question_id} · {q.question_type} · {q.difficulty}</p>
-                </div>
-              </label>
-            ))
+            filtered.map((q: any) => {
+              const compatible = isQuestionCompatible(q);
+              return (
+                <label key={q.id} className={`flex items-start gap-3 p-3.5 hover:bg-gray-50 cursor-pointer transition-colors ${selected.has(q.id) ? 'bg-blue-50/40' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={selected.has(q.id)}
+                    onChange={() => toggle(q.id)}
+                    className="mt-1 w-4 h-4 rounded text-[#0B2545]"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                        {q.question_id || `Q-${q.id.toString().padStart(6, '0')}`}
+                      </span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                        q.question_type === 'mcq' ? 'bg-blue-50 text-blue-700' : 
+                        q.question_type === 'subjective' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {q.question_type.toUpperCase()}
+                      </span>
+                      <span className="text-xs text-gray-500">{q.marks || 1} Marks</span>
+                      {!compatible && (
+                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.2 rounded font-medium">
+                          Scope Differs
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 mt-1 line-clamp-2">{q.text}</p>
+                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                      <span><strong>Course:</strong> {q.course_title || '—'}</span>
+                      <span>• <strong>Subject:</strong> {q.subject_name || '—'}</span>
+                      {q.chapter_name && <span>• <strong>Chapter:</strong> {q.chapter_name}</span>}
+                    </div>
+                  </div>
+                </label>
+              );
+            })
           )}
         </div>
 
@@ -117,7 +250,7 @@ function AddQuestionsModal({ collectionId, onDone, onClose }: AddQuestionsModalP
           <button
             onClick={handleAdd}
             disabled={selected.size === 0 || saving}
-            className="px-5 py-2 bg-[#0B2545] hover:bg-[#163E6C] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-5 py-2 bg-[#0B2545] hover:bg-[#163E6C] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 shadow-sm"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {saving ? 'Adding...' : `Add ${selected.size > 0 ? selected.size : ''} Questions`}
@@ -279,7 +412,7 @@ export default function CollectionDetailPage() {
       {/* Modals */}
       {showAddModal && (
         <AddQuestionsModal
-          collectionId={collectionId}
+          collection={collection}
           onDone={() => { setShowAddModal(false); load(); }}
           onClose={() => setShowAddModal(false)}
         />

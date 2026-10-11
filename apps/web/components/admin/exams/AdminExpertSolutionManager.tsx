@@ -69,8 +69,9 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
   const handleProcessSolution = async () => {
     setIsProcessing(true);
     try {
-      const res = await adminExamApi.processExpertSolution(exam.id, { generate_rubrics: true });
-      toast.success(`Processed! Detected ${res.questions_detected} questions and generated rubrics.`);
+      const res: any = await adminExamApi.processExpertSolution(exam.id, { generate_rubrics: true });
+      const detected = res.questions_detected ?? res.total_questions_processed ?? 0;
+      toast.success(`Processed! Detected ${detected} questions and generated rubrics.`);
       if (onUpdated) onUpdated();
       // Automatically load the generated rubrics for review
       await handleOpenRubrics();
@@ -85,9 +86,27 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
     setIsLoadingRubrics(true);
     setShowRubricsModal(true);
     try {
-      const res = await adminExamApi.getRubrics(exam.id);
-      setRubrics(res.rubrics || []);
-      if (res.rubrics && res.rubrics.length > 0) {
+      const res: any = await adminExamApi.getRubrics(exam.id);
+      const rawList = res.rubrics || res.questions || [];
+      const normalizedList: QuestionRubricData[] = rawList.map((q: any) => ({
+        ...q,
+        examination_question_id: q.examination_question_id || q.id,
+        marks: Number(q.marks ?? q.max_marks ?? 0),
+        max_marks: Number(q.max_marks ?? q.marks ?? 0),
+        display_number: q.display_number || (q.question_number ? `Q${q.question_number}` : `Q${q.order || 1}`),
+        question_number: q.question_number || q.order || 1,
+        rubric: (q.rubric || []).map((c: any) => {
+          const text = c.criterion || c.description || "Criterion";
+          return {
+            ...c,
+            criterion: text,
+            description: text,
+            max_marks: Number(c.max_marks || 0),
+          };
+        }),
+      }));
+      setRubrics(normalizedList);
+      if (normalizedList.length > 0) {
         setActiveQuestionIdx(0);
       }
     } catch (err: any) {
@@ -100,7 +119,7 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
   const handleUpdateCriterion = (
     qIdx: number,
     cIdx: number,
-    field: keyof RubricCriterion,
+    field: keyof RubricCriterion | "description",
     value: any
   ) => {
     setRubrics((prev) => {
@@ -110,7 +129,10 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
       const crits = [...(q.rubric || [])];
       const targetCrit = crits[cIdx];
       if (!targetCrit) return prev;
-      crits[cIdx] = { ...targetCrit, [field]: value };
+      const nextCrit: any = { ...targetCrit, [field]: value };
+      if (field === "criterion") nextCrit.description = value;
+      if (field === "description") nextCrit.criterion = value;
+      crits[cIdx] = nextCrit;
       updated[qIdx] = { ...q, rubric: crits };
       return updated;
     });
@@ -125,6 +147,7 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
         ...(q.rubric || []),
         {
           criterion: "New criterion",
+          description: "New criterion",
           max_marks: 1.0,
           expected_concepts: [],
         },
@@ -153,6 +176,7 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
     setIsSavingRubrics(true);
     try {
       const payload = rubrics.map((r) => ({
+        examination_question_id: (r as any).examination_question_id || (r as any).id,
         question_id: r.question_id,
         rubric: r.rubric,
         model_solution: r.model_solution,
@@ -426,13 +450,27 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
                   Review and approve question-wise partial marks breakdown. The sum of criteria marks must match each question&apos;s maximum marks.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowRubricsModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {hasPdf && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleProcessSolution}
+                    disabled={isProcessing}
+                    className="text-xs h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 gap-1.5"
+                  >
+                    {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    {isProcessing ? "Re-extracting..." : "Re-extract from PDF"}
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowRubricsModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Body */}
@@ -443,12 +481,37 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
                   <p className="text-xs text-slate-500 font-medium">Loading question rubrics...</p>
                 </div>
               ) : rubrics.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-2">
+                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-3">
                   <AlertCircle className="w-10 h-10 text-amber-500 mx-auto" />
                   <h4 className="text-sm font-semibold text-slate-800">No Rubrics Configured</h4>
                   <p className="text-xs text-slate-500 max-w-sm">
-                    Click &apos;Extract &amp; Generate Rubric&apos; to automatically extract question solutions from the Expert Solution PDF.
+                    {hasPdf
+                      ? "Click 'Extract & Generate Rubrics' to automatically parse questions and solutions from the Expert Solution PDF."
+                      : "Please upload an Expert Solution PDF to automatically extract rubrics, or configure questions for this exam."}
                   </p>
+                  {hasPdf ? (
+                    <Button
+                      size="sm"
+                      onClick={handleProcessSolution}
+                      disabled={isProcessing}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold gap-1.5 shadow-sm mt-2"
+                    >
+                      {isProcessing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      {isProcessing ? "Processing Solution PDF..." : "Extract & Generate Rubrics Now"}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setShowRubricsModal(false);
+                        fileInputRef.current?.click();
+                      }}
+                      className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white text-xs font-semibold gap-1.5 shadow-sm mt-2"
+                    >
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      Upload Expert Solution PDF
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <>
@@ -581,7 +644,7 @@ export function AdminExpertSolutionManager({ exam, onUpdated }: AdminExpertSolut
                                 <div className="flex-1">
                                   <input
                                     type="text"
-                                    value={c.criterion}
+                                    value={c.criterion || (c as any).description || ""}
                                     onChange={(e) =>
                                       handleUpdateCriterion(activeQuestionIdx, cIdx, "criterion", e.target.value)
                                     }

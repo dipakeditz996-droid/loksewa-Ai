@@ -74,6 +74,18 @@ class SendMessageView(APIView):
         except Conversation.DoesNotExist:
             return Response({"error": "Conversation not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        from subscriptions.entitlements import EntitlementService
+        ai_allowed, ai_reason, ai_info = EntitlementService.check_ai_allowance(request.user)
+        if not ai_allowed:
+            return Response(
+                {
+                    "error": ai_reason,
+                    "remaining": ai_info.get("remaining", 0),
+                    "upgrade_url": ai_info.get("upgrade_url", "/student/plans")
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
         # Usage limiting (admin-configurable via AdminSettings.ai_tutor_daily_message_limit)
         today = datetime.date.today()
         usage, created = TutorUsage.objects.get_or_create(student=request.user, date=today)
@@ -102,11 +114,19 @@ class SendMessageView(APIView):
             content=response_text
         )
 
+        tokens_consumed = max(1, getattr(ai_service, 'last_token_count', 1))
         # Update usage and conversation timestamp
         usage.request_count += 1
-        usage.token_usage += ai_service.last_token_count
+        usage.token_usage += tokens_consumed
         usage.save()
         conversation.save() # Triggers updated_at
+
+        # Record in central entitlement ledger
+        EntitlementService.consume_ai_credits(
+            user=request.user,
+            tokens_used=tokens_consumed,
+            conversation_id=conversation.id
+        )
 
         return Response({
             "user_message": MessageSerializer(user_msg).data,

@@ -18,18 +18,23 @@ def has_admin_granted_access(user):
 
 
 def get_active_subscription(user):
-    """Returns the student's current active, non-expired Subscription, or
-    None. 'Active' means status=='ACTIVE' AND expiry_date is in the future -
-    matching Subscription.is_active exactly, but as a queryset so callers
-    that need the object (not just a bool) don't have to iterate."""
+    """Returns the student's current active Subscription, or None.
+    'Active' means status=='ACTIVE' AND (expiry_date is NULL or expiry_date > now) -
+    matching Subscription.is_active exactly."""
+    if not user or not user.is_authenticated:
+        return None
     from .models import Subscription
+    from django.db.models import Q, F
 
+    now = timezone.now()
     return (
         Subscription.objects.filter(
-            student=user, status='ACTIVE', expiry_date__gt=timezone.now()
+            Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
+            student=user,
+            status='ACTIVE',
         )
         .select_related('plan')
-        .order_by('-expiry_date')
+        .order_by(F('expiry_date').desc(nulls_first=True))
         .first()
     )
 

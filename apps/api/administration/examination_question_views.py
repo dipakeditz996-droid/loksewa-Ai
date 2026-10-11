@@ -231,11 +231,26 @@ class ExaminationQuestionMixin:
         approved_qs = Question.objects.filter(
             id__in=ids, status=QuestionSelectionService.APPROVED_STATUS
         )
-        if examination.exam_type == 'subject' and examination.topic_id:
-            approved_qs = approved_qs.filter(
-                topic_id=examination.topic_id,
-                question_type__in=Question.OBJECTIVE_TYPES,
-            )
+        if examination.exam_type == 'subject':
+            if examination.topic_id:
+                approved_qs = approved_qs.filter(
+                    topic_id=examination.topic_id,
+                    question_type__in=Question.OBJECTIVE_TYPES,
+                )
+            elif examination.chapter_id:
+                approved_qs = approved_qs.filter(
+                    Q(chapter_id=examination.chapter_id) | Q(topic__chapter_id=examination.chapter_id),
+                    question_type__in=Question.OBJECTIVE_TYPES,
+                )
+            elif examination.subject_id:
+                approved_qs = approved_qs.filter(
+                    Q(subject_id=examination.subject_id) | Q(chapter__subject_id=examination.subject_id) | Q(topic__chapter__subject_id=examination.subject_id),
+                    question_type__in=Question.OBJECTIVE_TYPES,
+                )
+            else:
+                approved_qs = approved_qs.filter(
+                    question_type__in=Question.OBJECTIVE_TYPES,
+                )
         approved = list(approved_qs)
         approved_by_id = {q.id: q for q in approved}
 

@@ -160,6 +160,18 @@ export interface StudentExamAttempt {
   published_at?: string | null;
   extracted_text?: string;
   checking_request_status?: string | null;
+  subjective_submission?: {
+    id: number;
+    status: string;
+    page_count?: number;
+    file_size_bytes?: number;
+    has_answer_pdf?: boolean;
+    evaluator_feedback?: string;
+    is_published?: boolean;
+    checking_request?: any;
+    question_scores?: any[];
+    [key: string]: any;
+  } | null;
 }
 
 export interface StudentExamResult extends StudentExamAttempt {
@@ -372,7 +384,32 @@ export const studentExamsApi = {
   },
   
   getResult: async (attemptId: number) => {
-    return await apiClient<StudentExamResult>(`/student/exam-attempts/${attemptId}/result/`);
+    try {
+      return await apiClient<StudentExamResult>(`/student/exam-attempts/${attemptId}/result/`);
+    } catch (err: any) {
+      if (err?.status === 403) {
+        // Result is not yet published or pending evaluation (e.g. subjective answers being evaluated).
+        // Fetch the attempt details so the student can track their submission status,
+        // view the expert solution, see their submitted answer sheet, or request checking.
+        try {
+          const attempt = await apiClient<any>(`/student/exam-attempts/${attemptId}/`);
+          return {
+            ...attempt,
+            is_published: false,
+            needs_evaluation: true,
+            score: null,
+            percentage: null,
+            passed: null,
+            pending_message: err?.data?.detail || "Your answers are currently being evaluated. Results will be published once evaluation is complete.",
+            answers: attempt.answers || [],
+            has_submitted_answer_pdf: Boolean(attempt.has_answer_pdf || attempt.subjective_submission?.has_answer_pdf),
+          } as StudentExamResult;
+        } catch {
+          // If fetching attempt also fails, rethrow original error
+        }
+      }
+      throw err;
+    }
   },
 
   // Subjective Examination methods
@@ -425,8 +462,16 @@ export const studentExamsApi = {
   getCheckingStatus: async (attemptId: number) => {
     return await apiClient<{
       has_submission: boolean;
+      submission_id?: number;
       submission_status?: string;
+      ocr_status?: 'not_started' | 'processing' | 'completed' | 'failed';
+      evaluation_status?: string;
+      ocr_error?: string;
       is_published?: boolean;
+      page_count?: number;
+      quality_gate_passed?: boolean;
+      stage?: string;
+      stage_label?: string;
       checking_request: {
         id: number;
         status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'rejected';

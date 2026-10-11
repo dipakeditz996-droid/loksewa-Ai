@@ -344,3 +344,270 @@ class ExamImportWorkflowTests(APITestCase):
         )
         self.assertEqual(upload_res.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('closed', upload_res.data['detail'].lower())
+
+    def test_05_topicwise_test_excel_import_and_persistence(self):
+        """
+        Topicwise Test Excel Import:
+        - Admin uploads standard Objective Excel template targeting a specific topic.
+        - Questions are added to the Master Question Bank with the correct topic.
+        - Topicwise Examination (exam_type='subject', objective_category='topicwise') is created.
+        - Questions attach to the exam via ExaminationQuestion preserving order and metadata.
+        """
+        self.client.force_authenticate(user=self.admin)
+        initial_q_count = Question.objects.count()
+
+        rows = [
+            [1, 'What is the highest mountain peak in Nepal?', 2, 'K2', 'Everest', 'Makalu', 'Cho Oyu', 'B', 'Everest is 8848.86m', 'Peak 15'],
+            [2, 'Which river is known as the sorrow of Bihar?', 1, 'Koshi', 'Bagmati', 'Gandaki', 'Karnali', 'A', 'Koshi causes floods in Bihar', 'Saptakoshi'],
+        ]
+        upload_res = self.client.post('/api/admin/questions/import/upload/', {
+            'file': make_xlsx(rows),
+            'category': self.category.id,
+            'position': self.exam.id,
+            'subject': self.subject.id,
+            'chapter': self.chapter.id,
+            'topic': self.topic.id,
+            'question_type': 'mcq',
+            'difficulty': 'medium',
+        }, format='multipart')
+        self.assertEqual(upload_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(upload_res.data['valid_rows'], 2)
+        import_id = upload_res.data['import_id']
+
+        commit_res = self.client.post(f"/api/admin/questions/import/{import_id}/commit/")
+        self.assertEqual(commit_res.status_code, status.HTTP_200_OK)
+        new_q_ids = commit_res.data['question_ids']
+        self.assertEqual(len(new_q_ids), 2)
+        self.assertEqual(Question.objects.count(), initial_q_count + 2)
+
+        # Create Topicwise Test Exam
+        exam_res = self.client.post('/api/admin/exams/', {
+            'title': 'Mountains and Rivers Topicwise Test 01',
+            'exam_type': 'subject',
+            'objective_category': 'topicwise',
+            'category': self.category.id,
+            'exam': self.exam.id,
+            'course': self.course.id,
+            'subject': self.subject.id,
+            'topic': self.topic.id,
+            'time_limit': 30,
+            'marks_per_question': 1,
+        }, format='json')
+        self.assertEqual(exam_res.status_code, status.HTTP_201_CREATED)
+        exam_id = exam_res.data['id']
+        self.assertEqual(exam_res.data['exam_type'], 'subject')
+        self.assertEqual(exam_res.data['objective_category'], 'topicwise')
+        self.assertEqual(exam_res.data['topic'], self.topic.id)
+
+        # Attach questions
+        attach_res = self.client.post(f"/api/admin/exams/{exam_id}/add-questions/", {
+            'question_ids': new_q_ids
+        }, format='json')
+        self.assertEqual(attach_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(attach_res.data['added_count'], 2)
+
+        # Verify ExaminationQuestion relationships and properties
+        exam = Examination.objects.get(id=exam_id)
+        self.assertEqual(exam.examination_questions.count(), 2)
+        eqs = list(exam.examination_questions.order_by('order'))
+        self.assertEqual(eqs[0].order, 1)
+        self.assertEqual(eqs[0].question_id, new_q_ids[0])
+        self.assertEqual(eqs[0].marks, 2.0) # Preserved from Excel mark column
+        self.assertEqual(eqs[1].order, 2)
+        self.assertEqual(eqs[1].question_id, new_q_ids[1])
+        self.assertEqual(eqs[1].marks, 1.0)
+
+        for eq in eqs:
+            self.assertEqual(eq.question.topic, self.topic)
+            self.assertEqual(eq.question.status, 'approved')
+
+    def test_06_topicwise_test_rejects_incompatible_topic_questions(self):
+        """
+        Topicwise Validation:
+        - When an uploaded question matches an existing question in the Question Bank
+          that belongs to a DIFFERENT topic, it is rejected with a row-specific error.
+        - Questions belonging to the same topic are permitted as duplicates for reuse.
+        """
+        self.client.force_authenticate(user=self.admin)
+        other_topic = Topic.objects.create(chapter=self.chapter, name='Lakes and Glaciers')
+
+        # Existing question under other_topic
+        Question.objects.create(
+            topic=other_topic,
+            question_type='mcq',
+            text='What is the deepest lake in Nepal?',
+            option_a='Rara',
+            option_b='Shey Phoksundo',
+            option_c='Tilicho',
+            option_d='Phewa',
+            correct_option='B',
+            status='approved',
+        )
+
+        # Existing question under self.topic
+        Question.objects.create(
+            topic=self.topic,
+            question_type='mcq',
+            text='Which river originates from Dudh Kunda?',
+            option_a='Solu Khola',
+            option_b='Dudh Koshi',
+            option_c='Bhotekoshi',
+            option_d='Likhu',
+            correct_option='B',
+            status='approved',
+        )
+
+        rows = [
+            [1, 'What is the deepest lake in Nepal?', 1, 'Rara', 'Shey Phoksundo', 'Tilicho', 'Phewa', 'B', '', ''],
+            [2, 'Which river originates from Dudh Kunda?', 1, 'Solu Khola', 'Dudh Koshi', 'Bhotekoshi', 'Likhu', 'B', '', ''],
+            [3, 'What is the length of Karnali river?', 1, '507 km', '508 km', '509 km', '510 km', 'A', '', ''],
+        ]
+        upload_res = self.client.post('/api/admin/questions/import/upload/', {
+            'file': make_xlsx(rows),
+            'topic': self.topic.id,
+            'question_type': 'mcq',
+            'difficulty': 'medium',
+        }, format='multipart')
+        self.assertEqual(upload_res.status_code, status.HTTP_200_OK)
+        data = upload_res.data
+        # Row 1 (belongs to other_topic) -> error
+        self.assertEqual(data['error_rows'], 1)
+        # Row 2 (belongs to same topic) -> duplicate (for reuse)
+        self.assertEqual(data['duplicate_rows'], 1)
+        # Row 3 (new) -> valid
+        self.assertEqual(data['valid_rows'], 1)
+
+        row_1 = data['report_data'][0]
+        self.assertEqual(row_1['status'], 'error')
+        self.assertTrue(any('belongs to another topic' in e for e in row_1['errors']))
+
+    def test_07_topicwise_validation_missing_and_invalid_fields(self):
+        """
+        Validates that missing required fields and invalid answers produce row-specific errors.
+        """
+        self.client.force_authenticate(user=self.admin)
+        rows = [
+            [1, '', 1, 'A', 'B', 'C', 'D', 'A', '', ''], # Missing question text
+            [2, 'Valid question text?', 1, 'A', 'B', 'C', 'D', 'Z', '', ''], # Invalid answer Z
+            [3, 'Negative mark question?', -5, 'A', 'B', 'C', 'D', 'A', '', ''], # Invalid negative mark
+        ]
+        upload_res = self.client.post('/api/admin/questions/import/upload/', {
+            'file': make_xlsx(rows),
+            'topic': self.topic.id,
+            'question_type': 'mcq',
+            'difficulty': 'medium',
+        }, format='multipart')
+        self.assertEqual(upload_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(upload_res.data['error_rows'], 3)
+        self.assertEqual(upload_res.data['valid_rows'], 0)
+
+    def test_08_topicwise_test_excel_import_with_optional_topic_omitted(self):
+        """
+        Validates that Topic is completely optional for Topicwise Test:
+        - Excel import without topic parameter succeeds.
+        - Examination created with topic=None succeeds.
+        - Questions attach to the Topicwise examination.
+        - Exam passes publish validation.
+        """
+        self.client.force_authenticate(user=self.admin)
+        rows = [
+            [1, 'General constitutional question 1?', 1, 'Opt A', 'Opt B', 'Opt C', 'Opt D', 'A', 'Expl', 'Hint'],
+            [2, 'General constitutional question 2?', 1, 'Opt A', 'Opt B', 'Opt C', 'Opt D', 'B', 'Expl', 'Hint'],
+        ]
+        upload_res = self.client.post('/api/admin/questions/import/upload/', {
+            'file': make_xlsx(rows),
+            'category': self.category.id,
+            'position': self.exam.id,
+            'subject': self.subject.id,
+            'chapter': self.chapter.id,
+            # topic omitted
+            'question_type': 'mcq',
+            'difficulty': 'medium',
+        }, format='multipart')
+        self.assertEqual(upload_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(upload_res.data['valid_rows'], 2)
+        import_id = upload_res.data['import_id']
+
+        commit_res = self.client.post(f"/api/admin/questions/import/{import_id}/commit/")
+        self.assertEqual(commit_res.status_code, status.HTTP_200_OK)
+        q_ids = commit_res.data['question_ids']
+
+        # Create Topicwise Test with topic=None
+        exam_res = self.client.post('/api/admin/exams/', {
+            'title': 'General Topicwise Test (No Topic Specified)',
+            'exam_type': 'subject',
+            'objective_category': 'topicwise',
+            'category': self.category.id,
+            'exam': self.exam.id,
+            'course': self.course.id,
+            'subject': self.subject.id,
+            'topic': None,
+            'time_limit': 45,
+            'marks_per_question': 1,
+        }, format='json')
+        self.assertEqual(exam_res.status_code, status.HTTP_201_CREATED)
+        exam_id = exam_res.data['id']
+        self.assertIsNone(exam_res.data['topic'])
+
+        # Attach questions
+        attach_res = self.client.post(f"/api/admin/exams/{exam_id}/add-questions/", {
+            'question_ids': q_ids
+        }, format='json')
+        self.assertEqual(attach_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(attach_res.data['added_count'], 2)
+
+        # Publish exam
+        publish_res = self.client.post(f"/api/admin/exams/{exam_id}/publish/")
+        self.assertEqual(publish_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(publish_res.data['status'], 'published')
+
+    def test_09_subjective_exam_photo_image_question_paper_upload(self):
+        """
+        Validates that Admin can upload a photo / image (PNG, JPG) as the subjective question paper:
+        - Image is accepted and converted to standardized PDF.
+        - Page count is set to 1.
+        - Examination question_paper_pdf stores the file.
+        - Student can retrieve the question paper.
+        """
+        import io
+        from PIL import Image
+
+        self.client.force_authenticate(user=self.admin)
+
+        # Create Subjective Exam
+        exam_res = self.client.post('/api/admin/exams/', {
+            'title': 'Subjective Exam with Photo Question Paper',
+            'exam_type': 'subjective',
+            'category': self.category.id,
+            'exam': self.exam.id,
+            'time_limit': 90,
+            'upload_deadline_minutes': 25,
+            'status': 'draft',
+        }, format='json')
+        self.assertEqual(exam_res.status_code, status.HTTP_201_CREATED)
+        exam_id = exam_res.data['id']
+
+        # Create dummy PNG image (photo of question paper)
+        img = Image.new('RGB', (800, 1000), color=(255, 255, 255))
+        img_buffer = io.BytesIO()
+        img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        img_file = SimpleUploadedFile("question_paper_photo.png", img_buffer.getvalue(), content_type="image/png")
+
+        # Upload image file to question-paper endpoint
+        upload_res = self.client.post(
+            f"/api/admin/exams/{exam_id}/question-paper/",
+            {'file': img_file},
+            format='multipart'
+        )
+        self.assertEqual(upload_res.status_code, status.HTTP_200_OK)
+        self.assertEqual(upload_res.data['page_count'], 1)
+        self.assertIn('.pdf', upload_res.data['filename'])
+
+        # Verify Examination model
+        exam = Examination.objects.get(id=exam_id)
+        self.assertTrue(bool(exam.question_paper_pdf))
+        self.assertEqual(exam.question_paper_page_count, 1)
+        self.assertGreater(exam.question_paper_file_size, 0)
+
+

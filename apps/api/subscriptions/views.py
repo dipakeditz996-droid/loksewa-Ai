@@ -68,13 +68,28 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
             ).count(),
         }
 
+        has_history = any(dependencies.values())
+        if not has_history:
+            plan_name = plan.name
+            plan.delete()
+            return Response({
+                'deleted': True,
+                'archived': False,
+                'message': f"Package '{plan_name}' deleted permanently.",
+                'dependencies': dependencies,
+            }, status=status.HTTP_200_OK)
+
+        plan.status = 'ARCHIVED'
+        plan.is_published = False
+        plan.save(update_fields=['status', 'is_published'])
+
         from administration.safe_delete_service import SafeDeleteService
-        trash_item = SafeDeleteService.soft_delete(plan, request.user, reason="Deleted by Admin")
+        trash_item = SafeDeleteService.soft_delete(plan, request.user, reason="Archived by Admin")
         return Response({
             'deleted': False,
             'archived': True,
-            'message': f"Package '{trash_item.title}' has been moved to Trash.",
-            'trash_item_id': trash_item.id,
+            'message': f"Package '{plan.name}' has historical dependencies and was safely archived.",
+            'trash_item_id': trash_item.id if trash_item else None,
             'dependencies': dependencies,
         }, status=status.HTTP_200_OK)
 
@@ -200,12 +215,150 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
             "plans": serializer.data,
         })
 
+    @action(detail=True, methods=['post'], url_path='duplicate', permission_classes=[IsAdminUser])
+    def duplicate(self, request, pk=None):
+        plan = self.get_object()
+        new_name = f"{plan.name} (Copy)"
+        new_plan = SubscriptionPlan.objects.create(
+            name=new_name,
+            description=plan.description,
+            has_expiry=plan.has_expiry,
+            duration=plan.duration,
+            duration_unit=plan.duration_unit,
+            price=plan.price,
+            original_price=plan.original_price,
+            discount=plan.discount,
+            badge=plan.badge,
+            display_badge=plan.display_badge,
+            features=plan.features,
+            course=plan.course,
+            package_type=plan.package_type,
+            course_access_type=plan.course_access_type,
+            allowed_preparation_count=plan.allowed_preparation_count,
+            exam_quotas=plan.exam_quotas,
+            free_mock_attempts=plan.free_mock_attempts,
+            notes_access_type=plan.notes_access_type,
+            can_download_notes=plan.can_download_notes,
+            practice_enabled=plan.practice_enabled,
+            practice_question_limit=plan.practice_question_limit,
+            ai_tutor_enabled=plan.ai_tutor_enabled,
+            ai_credits=plan.ai_credits,
+            ai_daily_limit=plan.ai_daily_limit,
+            ai_monthly_limit=plan.ai_monthly_limit,
+            reset_frequency=plan.reset_frequency,
+            status='INACTIVE',
+            is_published=False,
+            is_featured=False,
+            terms=plan.terms,
+            display_order=plan.display_order + 1,
+        )
+        new_plan.eligible_courses.set(plan.eligible_courses.all())
+        new_plan.free_mock_exams.set(plan.free_mock_exams.all())
+        serializer = self.get_serializer(new_plan)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='toggle-status', permission_classes=[IsAdminUser])
+    def toggle_status(self, request, pk=None):
+        plan = self.get_object()
+        new_status = request.data.get('status')
+        if new_status in ['ACTIVE', 'INACTIVE', 'ARCHIVED']:
+            plan.status = new_status
+            plan.is_published = (new_status == 'ACTIVE')
+            plan.save(update_fields=['status', 'is_published'])
+            return Response({'status': plan.status, 'is_published': plan.is_published})
+        plan.status = 'INACTIVE' if plan.status == 'ACTIVE' else 'ACTIVE'
+        plan.is_published = (plan.status == 'ACTIVE')
+        plan.save(update_fields=['status', 'is_published'])
+        return Response({'status': plan.status, 'is_published': plan.is_published})
+
+    @action(detail=True, methods=['get'], url_path='subscribers', permission_classes=[IsAdminUser])
+    def subscribers(self, request, pk=None):
+        plan = self.get_object()
+        subs = Subscription.objects.filter(plan=plan).select_related('student', 'granted_by').order_by('-created_at')
+        data = []
+        for s in subs:
+            data.append({
+                "id": s.id,
+                "student_id": s.student.id,
+                "student_name": s.student.get_full_name() or s.student.username,
+                "student_email": s.student.email,
+                "status": s.status,
+                "source": s.source,
+                "has_expiry": s.has_expiry,
+                "start_date": s.start_date.isoformat() if s.start_date else None,
+                "expiry_date": s.expiry_date.isoformat() if s.expiry_date else None,
+                "created_at": s.created_at.isoformat(),
+                "granted_by": s.granted_by.username if s.granted_by else None,
+                "admin_grant_reason": s.admin_grant_reason,
+            })
+        return Response(data)
+
+    @action(detail=True, methods=['get'], url_path='usage-stats', permission_classes=[IsAdminUser])
+    def usage_stats(self, request, pk=None):
+        from .models import UsageLedger
+        plan = self.get_object()
+        active_subs_count = Subscription.objects.filter(plan=plan, status='ACTIVE').count()
+        total_purchases = SubscriptionPayment.objects.filter(plan=plan, status='APPROVED').count()
+        pending_purchases = SubscriptionPayment.objects.filter(plan=plan, status='PENDING').count()
+        
+        sub_ids = Subscription.objects.filter(plan=plan).values_list('id', flat=True)
+        exam_attempts_consumed = UsageLedger.objects.filter(subscription_id__in=sub_ids, feature__startswith='exam:', event_type='CONSUME').count()
+        ai_tokens_consumed = sum(UsageLedger.objects.filter(subscription_id__in=sub_ids, feature='ai_credits', event_type='CONSUME').values_list('amount', flat=True))
+
+        return Response({
+            "active_subscribers": active_subs_count,
+            "total_approved_purchases": total_purchases,
+            "pending_purchases": pending_purchases,
+            "total_exam_attempts_consumed": exam_attempts_consumed,
+            "total_ai_credits_consumed": ai_tokens_consumed,
+        })
+
 class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         return Subscription.objects.filter(student=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['get'], url_path='my-entitlements')
+    def my_entitlements(self, request):
+        from .entitlements import EntitlementService
+        data = EntitlementService.get_effective_entitlements(request.user)
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='admin-student-usage', permission_classes=[IsAdminUser])
+    def admin_student_usage(self, request):
+        student_id = request.query_params.get('student_id')
+        if not student_id:
+            return Response({'error': 'student_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from core.models import User
+        student = User.objects.filter(id=student_id).first()
+        if not student:
+            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+        from .entitlements import EntitlementService
+        data = EntitlementService.get_effective_entitlements(student)
+        return Response(data)
+
+    @action(detail=False, methods=['post'], url_path='admin-adjust-quota', permission_classes=[IsAdminUser])
+    def admin_adjust_quota(self, request):
+        student_id = request.data.get('student_id')
+        feature = request.data.get('feature')
+        delta = request.data.get('delta', 0)
+        reason = request.data.get('reason', '')
+        if not student_id or not feature:
+            return Response({'error': 'student_id and feature are required'}, status=status.HTTP_400_BAD_REQUEST)
+        from core.models import User
+        student = User.objects.filter(id=student_id).first()
+        if not student:
+            return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+        from .entitlements import EntitlementService
+        ent = EntitlementService.admin_adjust_quota(student, feature, int(delta), request.user, reason)
+        return Response({
+            'feature': ent.feature,
+            'total_allowed': ent.total_allowed,
+            'remaining': ent.remaining,
+            'consumed': ent.consumed,
+        })
 
 class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     serializer_class = SubscriptionPaymentSerializer
@@ -223,14 +376,24 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         if plan.status != 'ACTIVE':
             raise ValidationError({'plan': 'This package is no longer available for purchase.'})
 
-        # Prevent duplicate pending payment for the same plan
+        is_resubmission = (
+            str(self.request.data.get('is_resubmission', '')).lower() in ('true', '1')
+            or str(self.request.data.get('resubmit', '')).lower() in ('true', '1')
+        )
+
+        # Prevent duplicate pending payment for the same plan unless explicitly resubmitting
         existing_pending = SubscriptionPayment.objects.filter(
             student=self.request.user,
             plan=plan,
             status='PENDING'
         ).first()
         if existing_pending:
-            raise ValidationError({"detail": "You already have a pending payment under review for this package."})
+            if is_resubmission:
+                existing_pending.status = 'REJECTED'
+                existing_pending.rejection_reason = 'Superseded by payment resubmission.'
+                existing_pending.save(update_fields=['status', 'rejection_reason'])
+            else:
+                raise ValidationError({"detail": "You already have a pending payment under review for this package."})
 
         # Parse course_ids safely from FormData or JSON
         course_ids = self.request.data.getlist('course_ids') if hasattr(self.request.data, 'getlist') else self.request.data.get('course_ids', [])
@@ -256,7 +419,13 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
 
         payment = serializer.save(student=self.request.user, amount=plan.price)
         payment.verification_status = 'VERIFICATION_IN_PROGRESS'
-        payment.save(update_fields=['verification_status'])
+        if is_resubmission:
+            current_vr = payment.verification_result or {}
+            current_vr['is_resubmission'] = True
+            payment.verification_result = current_vr
+            payment.save(update_fields=['verification_status', 'verification_result'])
+        else:
+            payment.save(update_fields=['verification_status'])
 
         from courses.models import Course, CourseApplication
         from .models import SubscriptionCourseSelection
@@ -351,6 +520,55 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
         payment = self.get_object()
         serializer = self.get_serializer(payment)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def resubmit(self, request, pk=None):
+        """Allow a student (or admin) to resubmit payment proof for a REJECTED or PENDING payment."""
+        payment = self.get_object()
+        if payment.student != request.user and request.user.role not in ('admin', 'super-admin'):
+            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        if payment.status == 'APPROVED':
+            return Response({'detail': 'Approved payments cannot be resubmitted.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        screenshot = request.FILES.get('screenshot')
+        txn_id = request.data.get('transaction_id')
+        if not screenshot and not txn_id:
+            return Response({'detail': 'An updated screenshot or transaction ID is required to resubmit.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if screenshot:
+            payment.screenshot = screenshot
+        if txn_id and txn_id.strip():
+            payment.transaction_id = txn_id.strip()
+
+        payment.status = 'PENDING'
+        payment.verification_status = 'VERIFICATION_IN_PROGRESS'
+        payment.rejection_reason = ''
+        payment.verified_at = None
+        payment.verified_by = None
+        current_res = payment.verification_result or {}
+        current_res['is_resubmission'] = True
+        payment.verification_result = current_res
+        payment.save()
+
+        from core.notification_service import NotificationService
+        NotificationService.notify_student_payment_submitted(
+            student=request.user,
+            title_ref=payment.plan.name,
+            amount=payment.amount,
+            action_url='/student/purchases',
+        )
+        NotificationService.notify_admins(
+            notif_type='payment',
+            title='Subscription Payment Resubmitted',
+            message=f"{request.user.get_full_name() or request.user.username} resubmitted payment proof for '{payment.plan.name}'.",
+            action_url='/admin-dashboard/applications',
+        )
+
+        from functools import partial
+        from .tasks import enqueue_payment_verification
+        transaction.on_commit(partial(enqueue_payment_verification, payment.id))
+
+        return Response(self.get_serializer(payment).data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
     def approve(self, request, pk=None):

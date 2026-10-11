@@ -18,6 +18,18 @@ import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { ReportQuestionModal } from "@/components/student/exams/ReportQuestionModal";
 
+function parseStringList(val: unknown): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(String).filter(Boolean);
+  if (typeof val === "string") {
+    return val
+      .split(/\r?\n/)
+      .map((s) => s.trim().replace(/^[•\-\*✓△]\s*/, ""))
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export default function ExamResultPage() {
   const params = useParams();
   const attemptId = Number(params.attemptId);
@@ -30,11 +42,31 @@ export default function ExamResultPage() {
   const [reportQuestionText, setReportQuestionText] = useState<string>('');
   const [downloadingExpertPdf, setDownloadingExpertPdf] = useState(false);
 
-  const { data: result, isLoading: isLoadingResult, error } = useQuery({
+  const { data: rawResult, isLoading: isLoadingResult, error } = useQuery({
     queryKey: ['student-attempt-result', attemptId],
     queryFn: () => studentExamsApi.getResult(attemptId),
     refetchOnWindowFocus: false,
+    retry: false,
   });
+
+  const { data: fallbackAttempt, isLoading: isLoadingFallback } = useQuery({
+    queryKey: ['student-attempt-fallback', attemptId],
+    queryFn: () => studentExamsApi.getAttempt(attemptId),
+    enabled: Boolean(error && !rawResult),
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+
+  const result: any = rawResult || (fallbackAttempt ? {
+    ...fallbackAttempt,
+    is_published: false,
+    needs_evaluation: true,
+    score: null,
+    percentage: null,
+    passed: null,
+    answers: fallbackAttempt.answers || [],
+    has_submitted_answer_pdf: Boolean(fallbackAttempt.has_answer_pdf || fallbackAttempt.subjective_submission?.has_answer_pdf),
+  } : null);
 
   const { data: questions, isLoading: isLoadingQuestions } = useQuery({
     queryKey: ['student-attempt-questions', attemptId],
@@ -54,6 +86,17 @@ export default function ExamResultPage() {
     queryFn: () => studentExamsApi.getCheckingStatus(attemptId),
     enabled: Boolean(isSubjective),
     refetchOnWindowFocus: true,
+    refetchInterval: (query) => {
+      const data = query.state.data as any;
+      if (!data) return 3000;
+      if (['extracting', 'evaluating', 'uploading', 'queued'].includes(data.stage)) {
+        return 3000;
+      }
+      if (['ocr_processing', 'ai_evaluating', 'processing'].includes(data.evaluation_status) || data.ocr_status === 'processing') {
+        return 3000;
+      }
+      return false;
+    },
   });
 
   const { data: expertSolutionInfo, isLoading: isLoadingExpertInfo } = useQuery({
@@ -89,7 +132,7 @@ export default function ExamResultPage() {
     }
   };
 
-  if (isLoadingResult || isLoadingQuestions) {
+  if ((isLoadingResult || isLoadingQuestions) && !result) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4 text-muted-foreground">
@@ -100,16 +143,22 @@ export default function ExamResultPage() {
     );
   }
 
-  if (error || !result) {
+  if (error && !result && !isLoadingFallback) {
+    const errorMsg = (error as any)?.data?.detail || (error as any)?.message || "This exam's result is either pending or not accessible yet.";
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center space-y-4 max-w-md">
           <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto" />
           <h2 className="text-xl font-bold">Result Not Available</h2>
-          <p className="text-muted-foreground">This exam's result is either pending or not accessible yet.</p>
-          <Button onClick={() => router.push('/student/exams')}>
-            Back to Exams
-          </Button>
+          <p className="text-muted-foreground">{errorMsg}</p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Button variant="outline" onClick={() => window.location.reload()} className="gap-2">
+              <RefreshCw className="w-4 h-4" /> Refresh
+            </Button>
+            <Button onClick={() => router.push('/student/exams')}>
+              Back to Exams
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -458,15 +507,52 @@ export default function ExamResultPage() {
           {!isPublished ? (
             <Card className="border-border/60 shadow-sm bg-muted/10">
               <CardHeader className="text-center pb-4">
-                <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-muted/30 border">
-                  <Clock className="h-8 w-8 text-muted-foreground" />
-                </div>
+                {checkingStatusData?.stage === 'failed' ? (
+                  <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-rose-500/10 border border-rose-500/20 text-rose-600">
+                    <AlertTriangle className="h-8 w-8" />
+                  </div>
+                ) : ['extracting', 'evaluating'].includes(checkingStatusData?.stage || '') ? (
+                  <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 animate-pulse">
+                    <RefreshCw className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : (
+                  <div className="mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600">
+                    <CheckCircle className="h-8 w-8" />
+                  </div>
+                )}
+
                 <CardTitle className="text-2xl font-bold">
-                  Answer Sheet Submitted
+                  {checkingStatusData?.stage === 'failed'
+                    ? "Processing Error"
+                    : checkingStatusData?.stage === 'extracting'
+                    ? "Extracting Handwriting via OCR..."
+                    : checkingStatusData?.stage === 'evaluating'
+                    ? "Evaluating Answers & Rubrics..."
+                    : "Answer Sheet Safely Submitted"}
                 </CardTitle>
+
                 <CardDescription className="text-base mt-2 max-w-lg mx-auto">
-                  Your handwritten answer sheet is safely recorded. If you requested manual checking and it is accepted, your question-by-question marks and evaluator feedback will appear here once published.
+                  {checkingStatusData?.stage === 'failed' ? (
+                    checkingStatusData.ocr_error || "Could not complete automated OCR extraction. Our examination team has been notified to review your document."
+                  ) : checkingStatusData?.stage === 'extracting' ? (
+                    "Our OCR engine is currently scanning and transcribing your submitted handwritten pages. This page will automatically update."
+                  ) : checkingStatusData?.stage === 'evaluating' ? (
+                    "Analyzing your answers, matching question boundaries, and scoring against approved Expert Solution rubrics..."
+                  ) : (
+                    "Your answer sheet has been successfully processed and evaluated. Provisional scores are recorded and awaiting final examiner confirmation before publication."
+                  )}
                 </CardDescription>
+
+                {Boolean(checkingStatusData?.page_count && checkingStatusData.page_count > 0) && (
+                  <div className="flex items-center justify-center gap-2 pt-2">
+                    <Badge variant="outline" className="text-xs">
+                      {checkingStatusData?.page_count} Pages Submitted
+                    </Badge>
+                    <Badge variant="secondary" className="text-xs">
+                      {checkingStatusData?.stage_label || "Awaiting Review"}
+                    </Badge>
+                  </div>
+                )}
               </CardHeader>
               <CardFooter className="flex justify-center gap-3 pt-2">
                 <Button onClick={handleViewAnswerSheet} variant="outline" className="gap-2 text-xs font-semibold">
@@ -591,43 +677,50 @@ export default function ExamResultPage() {
                             </div>
                           )}
 
-                          {/* Strengths */}
-                          {qs.strengths && qs.strengths.length > 0 && (
-                            <div className="space-y-1">
-                              <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide flex items-center gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> What You Did Well:
-                              </span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {qs.strengths.map((str: string, sIdx: number) => (
-                                  <span
-                                    key={sIdx}
-                                    className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-500/20"
-                                  >
-                                    {str}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Improvements */}
-                          {qs.improvements && qs.improvements.length > 0 && (
-                            <div className="space-y-1">
-                              <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide flex items-center gap-1">
-                                <Info className="w-3.5 h-3.5" /> Suggested Improvements:
-                              </span>
-                              <div className="flex flex-wrap gap-1.5">
-                                {qs.improvements.map((imp: string, iIdx: number) => (
-                                  <span
-                                    key={iIdx}
-                                    className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs border border-amber-500/20"
-                                  >
-                                    {imp}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          {/* Strengths & Improvements */}
+                          {(() => {
+                            const strList = parseStringList(qs.strengths);
+                            const impList = parseStringList(qs.improvements);
+                            if (strList.length === 0 && impList.length === 0) return null;
+                            return (
+                              <>
+                                {strList.length > 0 && (
+                                  <div className="space-y-1">
+                                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide flex items-center gap-1">
+                                      <CheckCircle2 className="w-3.5 h-3.5" /> What You Did Well:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {strList.map((str: string, sIdx: number) => (
+                                        <span
+                                          key={sIdx}
+                                          className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-xs border border-emerald-500/20"
+                                        >
+                                          {str}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {impList.length > 0 && (
+                                  <div className="space-y-1">
+                                    <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wide flex items-center gap-1">
+                                      <Info className="w-3.5 h-3.5" /> Suggested Improvements:
+                                    </span>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {impList.map((imp: string, iIdx: number) => (
+                                        <span
+                                          key={iIdx}
+                                          className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs border border-amber-500/20"
+                                        >
+                                          {imp}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
 
                           {/* General feedback remark */}
                           {qs.feedback && (

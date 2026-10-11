@@ -6,9 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft, ChevronRight, FileText, Target, LayoutList, Settings,
   Check, Loader2, AlertCircle, Save, Rocket, UploadCloud, FileCheck,
-  Trash2, Eye, Download, FileUp, Sparkles, HelpCircle,
+  Trash2, Eye, Download, FileUp, Sparkles, HelpCircle, FileSpreadsheet, FolderOpen,
 } from "lucide-react";
 import { QuestionSelectionWorkspace } from "@/components/admin/exams/QuestionSelectionWorkspace";
+import { ExamExcelQuestionImport } from "@/components/admin/exams/ExamExcelQuestionImport";
+import { ExamCollectionQuestionPicker } from "@/components/admin/exams/ExamCollectionQuestionPicker";
 import { adminExamApi, AdminCourseOption, Examination, ExaminationType, ObjectiveCategory } from "@/lib/api/admin-exams";
 import { adminSyllabusApi } from "@/lib/api/admin-syllabus";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -97,6 +99,9 @@ export default function CreateExamPage() {
       : "objective";
 
   const [majorType, setMajorType] = useState<MajorExamType>(initialMajorType);
+  const [questionSourceMode, setQuestionSourceMode] = useState<"excel" | "bank" | "collection">(
+    initialMajorType === "topicwise" ? "excel" : "bank"
+  );
   const [step, setStep] = useState(1);
   const [examId, setExamId] = useState<number | null>(draftParam ? Number(draftParam) : null);
   const [saving, setSaving] = useState(false);
@@ -419,8 +424,10 @@ export default function CreateExamPage() {
   const handleQuestionPaperFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("Please upload a valid PDF file.");
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isImage = file.type.startsWith("image/") || /\.(jpe?g|png|webp|bmp|tiff?)$/i.test(file.name);
+    if (!isPdf && !isImage) {
+      toast.error("Please upload a valid PDF or Image file (JPG, PNG, WEBP).");
       return;
     }
     let targetExamId = examId;
@@ -435,7 +442,7 @@ export default function CreateExamPage() {
       setHasQuestionPaper(true);
       setQuestionPaperPageCount(res.page_count);
       setQuestionPaperFileSize(res.file_size);
-      toast.success("Question Paper PDF uploaded successfully!");
+      toast.success("Question Paper uploaded successfully!");
     } catch (err: any) {
       const msg = err?.data?.error || err?.data?.detail || "Failed to upload question paper.";
       toast.error(msg);
@@ -662,7 +669,7 @@ export default function CreateExamPage() {
             { id: 2, title: "Academic Targeting", icon: Target },
             {
               id: 3,
-              title: majorType === "subjective" ? "Question Paper (PDF)" : "Question Selection",
+              title: majorType === "subjective" ? "Question Paper (PDF / Image)" : "Question Selection",
               icon: majorType === "subjective" ? FileUp : LayoutList,
             },
             { id: 4, title: "Configuration", icon: Settings },
@@ -770,6 +777,7 @@ export default function CreateExamPage() {
                       if (item.id === "topicwise") {
                         setExamType("subject");
                         setObjectiveCategory("");
+                        setQuestionSourceMode("excel");
                       } else if (item.id === "subjective") {
                         setExamType("subjective");
                         if (!objectiveCategory) {
@@ -1029,6 +1037,30 @@ export default function CreateExamPage() {
                 </select>
               </div>
             )}
+            {majorType !== "subjective" && (
+              <div>
+                <label className={label}>Topic (Optional)</label>
+                <select
+                  value={topicId ?? ""}
+                  onChange={(event) => setTopicId(event.target.value ? Number(event.target.value) : undefined)}
+                  disabled={!chapterId || academicLoading.topics}
+                  className={`${field} disabled:bg-slate-50`}
+                >
+                  <option value="">
+                    {!chapterId
+                      ? "Select chapter first"
+                      : academicLoading.topics
+                      ? "Loading topics..."
+                      : "All topics (Optional)"}
+                  </option>
+                  {topics.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1042,15 +1074,15 @@ export default function CreateExamPage() {
                 <div>
                   <h2 className="text-lg font-bold text-[#0B2545] flex items-center gap-2">
                     <FileText className="w-5 h-5 text-indigo-600" />
-                    Subjective Question Paper (PDF)
+                    Subjective Question Paper (PDF / Image)
                   </h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Upload the official Loksewa PSC question paper PDF that students will read during their exam.
+                    Upload the official Loksewa PSC question paper (PDF or Image: JPG, PNG, WEBP) that students will read during their exam.
                   </p>
                 </div>
                 {hasQuestionPaper && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <FileCheck className="w-3.5 h-3.5" /> PDF Attached ({questionPaperPageCount} {questionPaperPageCount === 1 ? "page" : "pages"})
+                    <FileCheck className="w-3.5 h-3.5" /> Paper Attached ({questionPaperPageCount} {questionPaperPageCount === 1 ? "page" : "pages"})
                   </span>
                 )}
               </div>
@@ -1059,7 +1091,7 @@ export default function CreateExamPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf,.pdf"
+                accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
                 className="hidden"
                 onChange={handleQuestionPaperFileChange}
               />
@@ -1072,7 +1104,7 @@ export default function CreateExamPage() {
                         <FileCheck className="w-6 h-6 text-emerald-600" />
                       </div>
                       <div>
-                        <h4 className="font-semibold text-slate-900">Official Question Paper PDF</h4>
+                        <h4 className="font-semibold text-slate-900">Official Question Paper</h4>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
                           <span className="bg-white/80 px-2 py-0.5 rounded border border-slate-200 font-medium text-slate-700">
                             {questionPaperPageCount} {questionPaperPageCount === 1 ? "Page" : "Pages"}
@@ -1092,7 +1124,7 @@ export default function CreateExamPage() {
                         onClick={handleViewQuestionPaper}
                         className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium shadow-sm flex items-center gap-1.5 transition-colors"
                       >
-                        <Eye className="w-4 h-4 text-slate-500" /> Preview PDF
+                        <Eye className="w-4 h-4 text-slate-500" /> Preview Paper
                       </button>
                       <button
                         type="button"
@@ -1134,10 +1166,10 @@ export default function CreateExamPage() {
                     )}
                   </div>
                   <h4 className="font-semibold text-slate-800 text-base">
-                    {uploadingPdf ? "Uploading and processing question paper..." : "Attach Official Question Paper PDF"}
+                    {uploadingPdf ? "Uploading and processing question paper..." : "Attach Official Question Paper (PDF or Image)"}
                   </h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                    Upload an Adobe PDF document or select an existing paper from the Subjective Question Bank.
+                    Upload an Adobe PDF document or a photo/image (JPG, PNG, WEBP), or select an existing paper from the Subjective Question Bank.
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-3 mt-4">
                     <button
@@ -1146,7 +1178,7 @@ export default function CreateExamPage() {
                       onClick={() => fileInputRef.current?.click()}
                       className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 shadow-sm hover:border-indigo-300 transition-colors"
                     >
-                      Upload New PDF
+                      Upload PDF / Image
                     </button>
                     <span className="text-xs text-slate-400 font-semibold uppercase">Or</span>
                     <button
@@ -1174,9 +1206,23 @@ export default function CreateExamPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div>
-                  <label className={label}>Upload Deadline Window (minutes) *</label>
+                  <label className={label}>Exam Writing Duration (minutes) *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={600}
+                    value={timeLimit}
+                    onChange={(e) => setTimeLimit(Math.max(1, Number(e.target.value) || 60))}
+                    className={field}
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Total writing time allocated for students before the upload window starts.
+                  </p>
+                </div>
+                <div>
+                  <label className={label}>Upload Window (minutes) *</label>
                   <input
                     type="number"
                     min={1}
@@ -1257,14 +1303,131 @@ export default function CreateExamPage() {
             </div>
           </div>
         ) : examId ? (
-          <QuestionSelectionWorkspace
-            examinationId={examId}
-            defaultSubjectId={subjectId ?? null}
-            defaultChapterId={chapterId ?? null}
-            defaultTopicId={topicId ?? null}
-            defaultCollectionId={defaultCollectionId}
-            onSelectionChange={handleSelectionChange}
-          />
+          <div className="space-y-4">
+            {/* Mode Switcher Tabs */}
+            <div className="bg-white border border-slate-200 rounded-xl p-1.5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQuestionSourceMode("excel")}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                    questionSourceMode === "excel"
+                      ? "bg-[#0B2545] text-white shadow-sm"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Import from Excel
+                  {majorType === "topicwise" && (
+                    <span className="text-[10px] bg-blue-500/30 text-white px-1.5 py-0.5 rounded font-normal">
+                      Excel
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuestionSourceMode("collection")}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                    questionSourceMode === "collection"
+                      ? "bg-[#0B2545] text-white shadow-sm"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  Select from Question Collection
+                  {majorType === "topicwise" && (
+                    <span className="text-[10px] bg-emerald-500/30 text-white px-1.5 py-0.5 rounded font-normal">
+                      Reusable
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuestionSourceMode("bank")}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                    questionSourceMode === "bank"
+                      ? "bg-[#0B2545] text-white shadow-sm"
+                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                  }`}
+                >
+                  <LayoutList className="w-4 h-4" />
+                  Select from Question Bank
+                </button>
+              </div>
+
+              {selection.count > 0 && (
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg">
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>
+                    <strong>{selection.count}</strong> question(s) attached
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {questionSourceMode === "excel" ? (
+              <ExamExcelQuestionImport
+                examinationId={examId}
+                examTitle={title}
+                examType={examType}
+                categoryId={categoryId}
+                positionId={positionId}
+                subjectId={subjectId}
+                chapterId={chapterId}
+                topicId={topicId}
+                categoryName={categories.find((c) => c.id === categoryId)?.name}
+                positionName={positions.find((p) => p.id === positionId)?.name}
+                subjectName={subjects.find((s) => s.id === subjectId)?.name}
+                chapterName={
+                  chapters.find((c) => c.id === chapterId)?.title ||
+                  chapters.find((c) => c.id === chapterId)?.name
+                }
+                topicName={topics.find((t) => t.id === topicId)?.name}
+                onQuestionsAttached={(count) => {
+                  setSelection((prev) => ({
+                    count: count,
+                    marks: prev.marks || count * marksPerQuestion,
+                  }));
+                }}
+                onSwitchToBank={() => setQuestionSourceMode("bank")}
+              />
+            ) : questionSourceMode === "collection" ? (
+              <ExamCollectionQuestionPicker
+                examinationId={examId}
+                examTitle={title}
+                examType={examType}
+                categoryId={categoryId}
+                positionId={positionId}
+                subjectId={subjectId}
+                chapterId={chapterId}
+                topicId={topicId}
+                categoryName={categories.find((c) => c.id === categoryId)?.name}
+                positionName={positions.find((p) => p.id === positionId)?.name}
+                subjectName={subjects.find((s) => s.id === subjectId)?.name}
+                chapterName={
+                  chapters.find((c) => c.id === chapterId)?.title ||
+                  chapters.find((c) => c.id === chapterId)?.name
+                }
+                topicName={topics.find((t) => t.id === topicId)?.name}
+                onQuestionsAttached={(count) => {
+                  setSelection((prev) => ({
+                    count: prev.count + count,
+                    marks: prev.marks + count * marksPerQuestion,
+                  }));
+                }}
+                onSwitchToBank={() => setQuestionSourceMode("bank")}
+              />
+            ) : (
+              <QuestionSelectionWorkspace
+                examinationId={examId}
+                defaultSubjectId={subjectId ?? null}
+                defaultChapterId={chapterId ?? null}
+                defaultTopicId={topicId ?? null}
+                defaultCollectionId={defaultCollectionId}
+                onSelectionChange={handleSelectionChange}
+              />
+            )}
+          </div>
         ) : (
           <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
             <p className="font-semibold text-slate-700">Save the draft first.</p>

@@ -206,10 +206,14 @@ export interface RubricCriterion {
 }
 
 export interface QuestionRubricData {
+  examination_question_id?: number;
+  id?: number;
   question_id: number;
   question_number: number;
   display_number?: string;
+  question_text?: string;
   marks: number;
+  max_marks?: number;
   evaluation_type?: 'descriptive' | 'numerical' | 'diagram' | 'mcq' | string;
   model_solution?: string;
   rubric: RubricCriterion[];
@@ -218,10 +222,16 @@ export interface QuestionRubricData {
 }
 
 export interface ExamRubricsResponse {
-  exam_id: number;
-  exam_title: string;
-  is_expert_solution_published: boolean;
+  exam_id?: number;
+  examination_id?: number;
+  exam_title?: string;
+  title?: string;
+  is_expert_solution_published?: boolean;
+  expert_solution_rubric_generated?: boolean;
+  expert_solution_version?: number;
+  has_expert_solution_pdf?: boolean;
   rubrics: QuestionRubricData[];
+  questions?: QuestionRubricData[];
 }
 
 export interface SubjectiveQuestionScore {
@@ -755,7 +765,8 @@ export const adminExamApi = {
 
   getExamSubmissions: async (examId: number, status?: string) => {
     const query = status ? `?status=${status}` : '';
-    return apiClient<AdminSubjectiveSubmission[]>(`/admin/exams/${examId}/submissions/${query}`);
+    const res = await apiClient<any>(`/admin/exams/${examId}/submissions/${query}`);
+    return (Array.isArray(res) ? res : (res?.results || [])) as AdminSubjectiveSubmission[];
   },
 
   getAllSubjectiveSubmissions: async (params?: {
@@ -768,7 +779,8 @@ export const adminExamApi = {
     date_to?: string;
   }) => {
     const qs = buildQueryString(params);
-    return apiClient<AdminSubjectiveSubmission[]>(`/admin/subjective-submissions/${qs}`);
+    const res = await apiClient<any>(`/admin/subjective-submissions/${qs}`);
+    return (Array.isArray(res) ? res : (res?.results || [])) as AdminSubjectiveSubmission[];
   },
 
   getSubjectiveSubmission: async (id: number) => {

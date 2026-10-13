@@ -77,4 +77,5 @@ scratch/
 audit_*.py
 scratch_*.py
 *.pre_recovery_backup*
+*.zip
 

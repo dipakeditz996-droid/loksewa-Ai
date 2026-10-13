@@ -546,6 +546,12 @@ class CourseAccessService:
         if getattr(question, 'exam_id', None):
             return question.exam_id
 
+        # 5. Associated Examination
+        if hasattr(question, 'examinations_set'):
+            ex = question.examinations_set.filter(exam_id__isnull=False).first()
+            if ex and ex.exam_id:
+                return ex.exam_id
+
         return None
 
     @classmethod
@@ -554,6 +560,12 @@ class CourseAccessService:
         Returns the primary published Course instance for this question, or None.
         Determined through the authoritative hierarchy: Question -> Exam -> Course.
         """
+        # Direct course on associated Examination
+        if hasattr(question, 'examinations_set'):
+            ex = question.examinations_set.filter(course__isnull=False).select_related('course').first()
+            if ex and ex.course:
+                return ex.course
+
         exam_id = cls.resolve_question_exam_id(question)
         if not exam_id:
             return None
@@ -564,6 +576,11 @@ class CourseAccessService:
         course = Course.objects.filter(exam_id=exam_id, status='published').first()
         if course:
             return course
+
+        # Also fallback to any active course matching exam_id if none published yet
+        course_any = Course.objects.filter(exam_id=exam_id).exclude(status='archived').first()
+        if course_any:
+            return course_any
 
         # Check if exam_id is a child/descendant of any published course's exam
         published_courses = Course.objects.filter(status='published', exam_id__isnull=False)

@@ -7,6 +7,15 @@ const nextConfig = {
   // clean (0 errors), so a real type error introduced later fails the
   // build loudly instead of shipping silently, same as it always should
   // have.
+  output: 'standalone',
+  outputFileTracingRoot: process.cwd() + '/../..',
+
+  outputFileTracingIncludes: {
+    '/*': [
+      '../../node_modules/.pnpm/require-in-the-middle@*/node_modules/require-in-the-middle/**/*',
+      '../../node_modules/.pnpm/@opentelemetry+instrumentation@*/node_modules/@opentelemetry/instrumentation/**/*',
+    ],
+  },
   images: {
     remotePatterns: [
       {

@@ -30,11 +30,16 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     # (both M2M) are joined into search/filter - without it, a question that
     # matches on two tags would otherwise appear twice in the list.
     queryset = Question.objects.select_related(
+        'exam', 'category', 'exam__category',
         'subject', 'chapter', 'topic',
         'chapter__subject', 'topic__chapter', 'topic__chapter__subject',
         'topic__chapter__subject__paper', 'topic__chapter__subject__paper__exam',
         'topic__chapter__subject__paper__exam__category',
-    ).prefetch_related('collections', 'tag_objects').annotate(
+    ).prefetch_related(
+        'collections', 'tag_objects',
+        'examinations_set', 'examinations_set__course', 'examinations_set__exam',
+        'examinations_set__category', 'examinations_set__subject',
+    ).annotate(
         question_sets_count=Count('question_sets', distinct=True),
         examinations_count=Count('examinations_set', distinct=True),
     ).annotate(
@@ -108,8 +113,10 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
                     Q(exam_id__in=c_exam_ids) |
                     Q(subject__paper__exam_id__in=c_exam_ids) |
                     Q(chapter__subject__paper__exam_id__in=c_exam_ids) |
-                    Q(topic__chapter__subject__paper__exam_id__in=c_exam_ids)
-                )
+                    Q(topic__chapter__subject__paper__exam_id__in=c_exam_ids) |
+                    Q(examinations_set__course_id=c_obj.id) |
+                    Q(examinations_set__exam_id__in=c_exam_ids)
+                ).distinct()
             else:
                 qs = qs.none()
 

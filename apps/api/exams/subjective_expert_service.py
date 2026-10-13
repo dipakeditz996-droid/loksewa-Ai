@@ -129,6 +129,10 @@ class SubjectiveExpertSolutionService:
             from exams.models import Question, ExaminationQuestion
             for idx, (q_key, sol_text) in enumerate(question_blocks.items(), start=1):
                 canonical_q = Question.objects.create(
+                    category=examination.category,
+                    exam=examination.exam,
+                    subject=examination.subject,
+                    topic=examination.topic,
                     question_type='subjective',
                     text=f"Question {idx}",
                     marks=10,

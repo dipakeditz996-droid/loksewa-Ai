@@ -29,11 +29,23 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
 
     def get_course_id(self, obj):
         course = CourseAccessService.get_question_course(obj)
-        return course.id if course else None
+        if course:
+            return course.id
+        if hasattr(obj, 'examinations_set'):
+            ex = obj.examinations_set.filter(course__isnull=False).select_related('course').first()
+            if ex and ex.course:
+                return ex.course.id
+        return None
 
     def get_course_title(self, obj):
         course = CourseAccessService.get_question_course(obj)
-        return course.title if course else None
+        if course:
+            return course.title
+        if hasattr(obj, 'examinations_set'):
+            ex = obj.examinations_set.filter(course__isnull=False).select_related('course').first()
+            if ex and ex.course:
+                return ex.course.title
+        return None
 
     collections = serializers.SerializerMethodField()
     collection_ids = serializers.PrimaryKeyRelatedField(
@@ -85,6 +97,10 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
                 return obj.chapter.title or obj.chapter.name
             if obj.topic and obj.topic.chapter:
                 return obj.topic.chapter.title or obj.topic.chapter.name
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(chapter__isnull=False).select_related('chapter').first()
+                if ex and getattr(ex, 'chapter', None):
+                    return ex.chapter.title or ex.chapter.name
             return None
         except:
             return None
@@ -97,6 +113,10 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
                 return obj.chapter.subject.name
             if obj.topic and obj.topic.chapter and obj.topic.chapter.subject:
                 return obj.topic.chapter.subject.name
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(subject__isnull=False).select_related('subject').first()
+                if ex and ex.subject:
+                    return ex.subject.name
             return None
         except:
             return None
@@ -112,6 +132,10 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             )
             if subject and subject.paper_id and subject.paper:
                 return subject.paper.exam
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(exam__isnull=False).select_related('exam').first()
+                if ex and ex.exam:
+                    return ex.exam
             return None
         except Exception:
             return None
@@ -121,7 +145,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             if getattr(obj, 'exam_id', None) and obj.exam:
                 return obj.exam.name
             exam = self._question_exam(obj)
-            return exam.name if exam else None
+            if exam:
+                return exam.name
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(exam__isnull=False).select_related('exam').first()
+                if ex and ex.exam:
+                    return ex.exam.name
+            return None
         except:
             return None
 
@@ -132,7 +162,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             if getattr(obj, 'exam_id', None) and obj.exam and obj.exam.category:
                 return obj.exam.category.name
             exam = self._question_exam(obj)
-            return exam.category.name if exam and exam.category_id else None
+            if exam and exam.category_id and exam.category:
+                return exam.category.name
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(category__isnull=False).select_related('category').first()
+                if ex and ex.category:
+                    return ex.category.name
+            return None
         except:
             return None
 
@@ -140,7 +176,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
         try:
             if obj.chapter_id:
                 return obj.chapter_id
-            return obj.topic.chapter_id if obj.topic and obj.topic.chapter_id else None
+            if obj.topic and obj.topic.chapter_id:
+                return obj.topic.chapter_id
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(chapter__isnull=False).first()
+                if ex and getattr(ex, 'chapter_id', None):
+                    return ex.chapter_id
+            return None
         except:
             return None
             
@@ -150,7 +192,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
                 return obj.subject_id
             if obj.chapter and obj.chapter.subject_id:
                 return obj.chapter.subject_id
-            return obj.topic.chapter.subject_id if obj.topic and obj.topic.chapter and obj.topic.chapter.subject_id else None
+            if obj.topic and obj.topic.chapter and obj.topic.chapter.subject_id:
+                return obj.topic.chapter.subject_id
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(subject__isnull=False).first()
+                if ex and ex.subject_id:
+                    return ex.subject_id
+            return None
         except:
             return None
             
@@ -159,7 +207,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             if getattr(obj, 'exam_id', None):
                 return obj.exam_id
             exam = self._question_exam(obj)
-            return exam.id if exam else None
+            if exam:
+                return exam.id
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(exam__isnull=False).first()
+                if ex and ex.exam_id:
+                    return ex.exam_id
+            return None
         except:
             return None
             
@@ -170,7 +224,13 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
             if getattr(obj, 'exam_id', None) and obj.exam and obj.exam.category_id:
                 return obj.exam.category_id
             exam = self._question_exam(obj)
-            return exam.category_id if exam and exam.category_id else None
+            if exam and exam.category_id:
+                return exam.category_id
+            if hasattr(obj, 'examinations_set'):
+                ex = obj.examinations_set.filter(category__isnull=False).first()
+                if ex and ex.category_id:
+                    return ex.category_id
+            return None
         except:
             return None
     

@@ -765,28 +765,35 @@ export default function QuestionBankPage() {
                         </div>
                       </td>
                       <td className="p-4 text-xs">
-                        <div className="space-y-1 min-w-[200px]">
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-semibold text-gray-500 w-16 shrink-0">Course:</span>
-                            <span className="text-gray-900 font-medium truncate max-w-[220px]" title={q.course_title || '—'}>
-                              {q.course_title || '—'}
-                            </span>
-                          </div>
+                        <div className="space-y-1.5 min-w-[210px]">
+                          {q.course_title ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold text-gray-500 w-16 shrink-0">Course:</span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200/60 truncate max-w-[210px]" title={q.course_title}>
+                                {q.course_title}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-semibold text-gray-500 w-16 shrink-0">Course:</span>
+                              <span className="text-gray-400 italic">Unassigned</span>
+                            </div>
+                          )}
                           <div className="flex items-baseline gap-1.5">
                             <span className="font-semibold text-gray-500 w-16 shrink-0">Position:</span>
-                            <span className="text-gray-800 truncate max-w-[220px]" title={q.position_name || '—'}>
+                            <span className={q.position_name ? "text-gray-900 font-medium truncate max-w-[210px]" : "text-gray-400"} title={q.position_name || '—'}>
                               {q.position_name || '—'}
                             </span>
                           </div>
                           <div className="flex items-baseline gap-1.5">
                             <span className="font-semibold text-gray-500 w-16 shrink-0">Subject:</span>
-                            <span className="text-gray-800 truncate max-w-[220px]" title={q.subject_name || '—'}>
+                            <span className={q.subject_name ? "text-gray-800 font-medium truncate max-w-[210px]" : "text-gray-400"} title={q.subject_name || '—'}>
                               {q.subject_name || '—'}
                             </span>
                           </div>
                           <div className="flex items-baseline gap-1.5">
                             <span className="font-semibold text-gray-500 w-16 shrink-0">Chapter:</span>
-                            <span className="text-gray-700 truncate max-w-[220px]" title={q.chapter_name || '—'}>
+                            <span className={q.chapter_name ? "text-gray-700 truncate max-w-[210px]" : "text-gray-400"} title={q.chapter_name || '—'}>
                               {q.chapter_name || '—'}
                             </span>
                           </div>

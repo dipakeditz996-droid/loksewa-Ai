@@ -1,0 +1,4 @@
+---
+deployment:
+  tasks:
+    - /bin/echo "Loksewa AI deployment started"

@@ -86,37 +86,6 @@ export default function SyllabusNotesPortal({
   // PDF Viewer Modal state
   const [viewingMaterial, setViewingMaterial] = useState<StudyMaterial | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let active = true;
-    let createdUrl: string | null = null;
-    const materialId = viewingMaterial?.id;
-    const targetFile = viewingMaterial?.file_url || viewingMaterial?.file;
-
-    if (materialId && targetFile) {
-      notesApi.getMaterialBlobUrl(materialId)
-        .then(url => {
-          if (active) {
-            createdUrl = url;
-            setPdfBlobUrl(url);
-          } else {
-            URL.revokeObjectURL(url);
-          }
-        })
-        .catch(err => {
-          console.warn('Could not load protected PDF blob, using direct URL:', err);
-        });
-    } else {
-      setPdfBlobUrl(null);
-    }
-
-    return () => {
-      active = false;
-      if (createdUrl) {
-        URL.revokeObjectURL(createdUrl);
-      }
-    };
-  }, [viewingMaterial?.id]);
 
   const handlePrepChange = (prepId: number) => {
     // Just switches the query key - React Query serves cached data
@@ -705,37 +674,6 @@ export default function SyllabusNotesPortal({
 
               {/* Header Actions */}
               <div className="flex items-center gap-1.5 shrink-0 z-10">
-                {(viewingMaterial.file_url || viewingMaterial.file) && viewingMaterial.is_downloadable !== false && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await notesApi.downloadMaterial(viewingMaterial.id, `${viewingMaterial.slug || 'note'}.pdf`);
-                        toast.success('Download started');
-                      } catch (err: unknown) {
-                        const errorObj = err as { data?: { detail?: string }; message?: string };
-                        toast.error(errorObj?.data?.detail || errorObj?.message || 'Download not authorized or unavailable.');
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Download</span>
-                  </button>
-                )}
-
-                {pdfBlobUrl && viewingMaterial.is_downloadable !== false && (
-                  <a
-                    href={pdfBlobUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors"
-                    title="Open in new tab"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                )}
-
                 <button
                   onClick={() => setIsMaximized(!isMaximized)}
                   className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors"
@@ -761,10 +699,21 @@ export default function SyllabusNotesPortal({
             <div className="flex-1 bg-slate-900 relative overflow-hidden flex flex-col">
               {viewingMaterial.file || viewingMaterial.file_url ? (
                 <FirstPartyPdfViewer
-                  url={pdfBlobUrl || viewingMaterial.file || viewingMaterial.file_url}
+                  url={viewingMaterial.file || viewingMaterial.file_url}
                   title={viewingMaterial.title}
                   allowDownload={viewingMaterial.is_downloadable !== false}
-                  onDownload={() => notesApi.downloadMaterial(viewingMaterial.id, `${viewingMaterial.title}.pdf`)}
+                  onDownload={async () => {
+                    try {
+                      await notesApi.downloadMaterial(
+                        viewingMaterial.id,
+                        `${viewingMaterial.slug || viewingMaterial.title}.pdf`
+                      );
+                      toast.success('Download started');
+                    } catch (err: unknown) {
+                      const errorObj = err as { data?: { detail?: string }; message?: string };
+                      toast.error(errorObj?.data?.detail || errorObj?.message || 'Download not authorized or unavailable.');
+                    }
+                  }}
                 />
               ) : viewingMaterial.content ? (
                 <div className="p-6 overflow-y-auto max-w-4xl mx-auto prose prose-slate dark:prose-invert">

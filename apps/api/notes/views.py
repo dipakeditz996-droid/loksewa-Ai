@@ -183,6 +183,8 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 filename=f"{material.slug or 'material'}.pdf"
             )
             response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            if is_inline:
+                response['Cache-Control'] = 'private, max-age=86400'
             return response
         except Exception as e:
             return Response({"detail": f"Could not read file: {e}"}, status=status.HTTP_404_NOT_FOUND)

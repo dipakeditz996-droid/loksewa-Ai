@@ -186,6 +186,7 @@ export function FirstPartyPdfViewer({
   }, [url, loadPdfJs]);
 
   const renderTasksRef = useRef<Map<number, any>>(new Map());
+  const renderedPagesRef = useRef<Set<number>>(new Set());
 
   // 3. Render individual page onto its canvas
   const renderPage = useCallback(
@@ -193,15 +194,14 @@ export function FirstPartyPdfViewer({
       if (!pdfDoc) return;
       const pageNumber = pageIndex + 1;
 
-      // Cancel any ongoing render task for this specific page
-      const existingTask = renderTasksRef.current.get(pageNumber);
-      if (existingTask) {
-        try {
-          existingTask.cancel();
-        } catch {
-          // ignore cancellation errors
-        }
-        renderTasksRef.current.delete(pageNumber);
+      // Skip if already rendered for the current zoom/rotation
+      if (renderedPagesRef.current.has(pageNumber)) {
+        return;
+      }
+
+      // If a render task is already in-flight for this page, let it finish
+      if (renderTasksRef.current.has(pageNumber)) {
+        return;
       }
 
       try {
@@ -248,8 +248,10 @@ export function FirstPartyPdfViewer({
 
         await renderTask.promise;
         renderTasksRef.current.delete(pageNumber);
+        renderedPagesRef.current.add(pageNumber);
         setRenderedPages((prev) => new Set(prev).add(pageNumber));
       } catch (err: any) {
+        renderTasksRef.current.delete(pageNumber);
         if (err?.name !== "RenderingCancelledException") {
           console.error(`Error rendering page ${pageNumber}:`, err);
         }
@@ -258,15 +260,56 @@ export function FirstPartyPdfViewer({
     [pdfDoc, scale, rotation, isFitWidth]
   );
 
-  // 4. Render all pages when document, scale, or rotation changes
+  // 4. Lazy progressive rendering using IntersectionObserver
   useEffect(() => {
-    if (!pdfDoc || numPages === 0) return;
+    if (!pdfDoc || numPages === 0 || !scrollAreaRef.current) return;
 
-    pageRefs.current.forEach((pageDiv, idx) => {
-      if (pageDiv) {
-        renderPage(idx, pageDiv);
+    // Reset rendered pages tracking when scale or rotation changes
+    renderTasksRef.current.forEach((task) => {
+      try {
+        task.cancel();
+      } catch {
+        // ignore
       }
     });
+    renderTasksRef.current.clear();
+    renderedPagesRef.current.clear();
+    setRenderedPages(new Set());
+
+    // Immediately render Page 1 without waiting for observer
+    if (pageRefs.current[0]) {
+      renderPage(0, pageRefs.current[0]);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const pageDiv = entry.target as HTMLDivElement;
+            const pageNumAttr = pageDiv.getAttribute("data-page-number");
+            if (pageNumAttr) {
+              const pageIdx = parseInt(pageNumAttr, 10) - 1;
+              if (pageIdx >= 0) {
+                renderPage(pageIdx, pageDiv);
+              }
+            }
+          }
+        });
+      },
+      {
+        root: scrollAreaRef.current,
+        rootMargin: "500px 0px", // pre-render when within 500px of viewport
+        threshold: 0.01,
+      }
+    );
+
+    pageRefs.current.forEach((pageDiv) => {
+      if (pageDiv) observer.observe(pageDiv);
+    });
+
+    return () => {
+      observer.disconnect();
+    };
   }, [pdfDoc, numPages, scale, rotation, renderPage]);
 
   // 5. Track current page on scroll

@@ -79,10 +79,22 @@ class GoogleDriveStorage(Storage):
         self._local_storage = FileSystemStorage()
 
     def _open(self, name, mode='rb'):
+        # Check local cache first for instant serving (sub-5ms)
+        if self._local_storage.exists(name):
+            try:
+                return self._local_storage.open(name, mode=mode)
+            except Exception as exc:
+                logger.warning('Failed to open "%s" from local storage cache (%s); will attempt Drive download.', name, exc)
+
         file_id = _parse_file_id(name)
         if file_id is not None:
             try:
                 data = google_drive.download_file(file_id)
+                # Cache downloaded file locally for subsequent instant hits
+                try:
+                    self._local_storage.save(name, ContentFile(data))
+                except Exception as cache_exc:
+                    logger.debug('Could not cache file "%s" to local storage: %s', name, cache_exc)
                 return ContentFile(data, name=name)
             except Exception as exc:
                 logger.warning('Google Drive download failed for "%s" (%s); attempting local storage fallback.', name, exc)

@@ -7,15 +7,23 @@ const nextConfig = {
   // clean (0 errors), so a real type error introduced later fails the
   // build loudly instead of shipping silently, same as it always should
   // have.
-  output: 'standalone',
-  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
-
-  outputFileTracingIncludes: {
-    '/*': [
-      '../../node_modules/.pnpm/require-in-the-middle@*/node_modules/require-in-the-middle/**/*',
-      '../../node_modules/.pnpm/@opentelemetry+instrumentation@*/node_modules/@opentelemetry/instrumentation/**/*',
-    ],
-  },
+  // Standalone output is needed for self-hosted container and cPanel builds,
+  // but must be disabled on Vercel (where process.env.VERCEL is set).
+  // Vercel natively manages serverless packaging; combining output: 'standalone'
+  // with Vercel's build adapter causes a known Next.js 16.3+ regression where
+  // onBuildComplete fails with ENOENT looking for next-server.js.nft.json.
+  ...(process.env.VERCEL
+    ? {}
+    : {
+        output: 'standalone',
+        outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
+        outputFileTracingIncludes: {
+          '/*': [
+            '../../node_modules/.pnpm/require-in-the-middle@*/node_modules/require-in-the-middle/**/*',
+            '../../node_modules/.pnpm/@opentelemetry+instrumentation@*/node_modules/@opentelemetry/instrumentation/**/*',
+          ],
+        },
+      }),
   images: {
     remotePatterns: [
       {

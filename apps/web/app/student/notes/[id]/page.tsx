@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, use } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle, Loader2, FileText } from 'lucide-react';
 import { notesApi, StudyMaterial } from '@/lib/api/notes';
 import { FirstPartyPdfViewer } from '@/components/common/FirstPartyPdfViewer';
 import { toast } from 'sonner';
@@ -225,15 +225,27 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
                   Securing and loading PDF...
                 </p>
               </div>
-            ) : pdfBlobUrl || material.file ? (
+            ) : pdfBlobUrl || material.file || material.file_url ? (
               <FirstPartyPdfViewer
-                url={pdfBlobUrl || material.file}
+                url={(pdfBlobUrl || material.file || material.file_url)!}
                 title={material.title}
                 allowDownload={material.is_downloadable !== false}
                 onDownload={handleDownload}
               />
             ) : (
-              <p className="text-muted-foreground">PDF file not found.</p>
+              <div className="flex flex-col items-center justify-center p-8 text-center text-slate-400">
+                <FileText className="w-12 h-12 text-slate-500 mb-3" />
+                <h3 className="text-lg font-semibold text-white mb-1">Document Pending Upload</h3>
+                <p className="text-sm text-slate-400 max-w-md mb-4">
+                  This study material has been scheduled, but the PDF document has not yet been uploaded. Please check back later.
+                </p>
+                <Link
+                  href="/student/notes"
+                  className="inline-flex items-center px-4 py-2 rounded-lg text-xs font-semibold bg-[#1A2E44] text-white hover:bg-[#2A4365] transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Return to Notes
+                </Link>
+              </div>
             )}
           </div>
         ) : (

@@ -316,25 +316,25 @@ export default function SyllabusNotesPortal({
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Syllabus</div>
             <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data.counts.syllabus} <span className="text-xs font-medium text-slate-400">files</span>
+              {data?.counts?.syllabus ?? 0} <span className="text-xs font-medium text-slate-400">files</span>
             </div>
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Subjective Topicwise</div>
             <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data.counts.subjective_topicwise} <span className="text-xs font-medium text-slate-400">materials</span>
+              {data?.counts?.subjective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
             </div>
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Objective Topicwise</div>
             <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data.counts.objective_topicwise} <span className="text-xs font-medium text-slate-400">materials</span>
+              {data?.counts?.objective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
             </div>
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Revision Notes</div>
             <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data.counts.revision_notes} <span className="text-xs font-medium text-slate-400">materials</span>
+              {data?.counts?.revision_notes ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
             </div>
           </div>
         </div>
@@ -356,7 +356,7 @@ export default function SyllabusNotesPortal({
               <BookOpen className="w-4 h-4" />
               <span>Syllabus</span>
               <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'syllabus' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data.counts.syllabus}
+                {data?.counts?.syllabus ?? 0}
               </Badge>
             </button>
 
@@ -372,7 +372,7 @@ export default function SyllabusNotesPortal({
               <FileText className="w-4 h-4" />
               <span>Subjective Topicwise Notes [Detailed]</span>
               <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'subjective_topicwise' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data.counts.subjective_topicwise}
+                {data?.counts?.subjective_topicwise ?? 0}
               </Badge>
             </button>
 
@@ -388,7 +388,7 @@ export default function SyllabusNotesPortal({
               <Layers className="w-4 h-4" />
               <span>Objective Topicwise Notes [Detailed]</span>
               <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'objective_topicwise' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data.counts.objective_topicwise}
+                {data?.counts?.objective_topicwise ?? 0}
               </Badge>
             </button>
 
@@ -404,7 +404,7 @@ export default function SyllabusNotesPortal({
               <Sparkles className="w-4 h-4" />
               <span>Revision Notes</span>
               <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'revision_notes' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data.counts.revision_notes}
+                {data?.counts?.revision_notes ?? 0}
               </Badge>
             </button>
           </div>
@@ -769,9 +769,9 @@ export default function SyllabusNotesPortal({
                   <div className="w-8 h-8 border-2 border-[#D4A72C] border-t-transparent rounded-full animate-spin mb-3" />
                   <p className="text-sm font-medium">Securing and loading document...</p>
                 </div>
-              ) : pdfBlobUrl ? (
+              ) : pdfBlobUrl || viewingMaterial.file || viewingMaterial.file_url ? (
                 <FirstPartyPdfViewer
-                  url={pdfBlobUrl}
+                  url={(pdfBlobUrl || viewingMaterial.file || viewingMaterial.file_url)!}
                   title={viewingMaterial.title}
                   allowDownload={viewingMaterial.is_downloadable !== false}
                   onDownload={() => notesApi.downloadMaterial(viewingMaterial.id, `${viewingMaterial.title}.pdf`)}

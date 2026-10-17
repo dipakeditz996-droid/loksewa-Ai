@@ -130,6 +130,7 @@ class StudyMaterial(models.Model):
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='beginner')
     file = models.FileField(
         upload_to='study_materials/pdfs/', blank=True, null=True,
+        max_length=500,
         validators=[validate_document_size_20mb, validate_document_extension],
     )
     external_url = models.URLField(blank=True, null=True, help_text="For videos or external resources")

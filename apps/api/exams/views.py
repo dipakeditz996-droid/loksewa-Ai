@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Exam, Subject, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress, QuestionMastery
+from .models import Exam, Subject, Chapter, Topic, Question, PracticeSession, QuestionAttempt, UserTopicProgress, QuestionMastery
 from .serializers import (
     ExamSerializer, SubjectSerializer, TopicSerializer,
     QuestionFullSerializer, SecureQuestionSerializer, PracticeSessionSerializer, PracticeSessionSummarySerializer,
@@ -402,7 +402,7 @@ def _session_stats(session):
         'correct': agg['correct'],
         'wrong': answered - agg['correct'],
         'accuracy': round(agg['correct'] * 100 / answered) if answered else 0,
-        'resume_index': agg['before_first_open'],
+        'resume_index': agg['before_first_open'] or 0,
     }
 
 
@@ -606,8 +606,13 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         topic_obj = None
         chapter_obj = None
         if topic_id and str(topic_id) != 'all':
-            topic_obj = Topic.objects.filter(pk=topic_id).first()
-            if not topic_obj:
+            if subject_id and str(subject_id) != 'all':
+                topic_obj = Topic.objects.filter(pk=topic_id, chapter__subject_id=subject_id).first()
+                if not topic_obj:
+                    chapter_obj = Chapter.objects.filter(pk=topic_id, subject_id=subject_id).first()
+            if not topic_obj and not chapter_obj:
+                topic_obj = Topic.objects.filter(pk=topic_id).first()
+            if not topic_obj and not chapter_obj:
                 chapter_obj = Chapter.objects.filter(pk=topic_id).first()
 
         # Use centralized selection service — only approved questions
@@ -831,9 +836,15 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             return Response({'detail': 'topic is required.'}, status=400)
 
         # Resolve topic or chapter (the student panel loads Chapters as Topics)
-        topic_obj = Topic.objects.filter(pk=topic_id).first()
+        topic_obj = None
         chapter_obj = None
-        if not topic_obj:
+        if subject_id and str(subject_id) != 'all':
+            topic_obj = Topic.objects.filter(pk=topic_id, chapter__subject_id=subject_id).first()
+            if not topic_obj:
+                chapter_obj = Chapter.objects.filter(pk=topic_id, subject_id=subject_id).first()
+        if not topic_obj and not chapter_obj:
+            topic_obj = Topic.objects.filter(pk=topic_id).first()
+        if not topic_obj and not chapter_obj:
             chapter_obj = Chapter.objects.filter(pk=topic_id).first()
 
         course_id = request.data.get('course')

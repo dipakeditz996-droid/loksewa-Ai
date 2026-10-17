@@ -128,6 +128,15 @@ else:
 if 'testserver' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('testserver')
 
+# Automatically permit Railway platform domains if running on Railway
+for _railway_host in ['.railway.app', '.up.railway.app', 'loksewa-ai-production.up.railway.app']:
+    if _railway_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_railway_host)
+
+_railway_public_domain = (os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').strip()
+if _railway_public_domain and _railway_public_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_public_domain)
+
 
 
 # Fail loudly instead of shipping the development secret key to production.
@@ -400,10 +409,19 @@ def _parse_origins(env_value):
     ]
 
 
+_default_origins = [
+    'https://loksewa-ai-web-pigl-roan.vercel.app',
+    'https://loksewa-ai-production.up.railway.app',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
+
 CORS_ALLOWED_ORIGINS = _parse_origins(os.environ.get('CORS_ALLOWED_ORIGINS', ''))
-if not CORS_ALLOWED_ORIGINS and not DEBUG:
-    raise RuntimeError("CORS_ALLOWED_ORIGINS must be explicitly set in production.")
-CORS_ALLOW_ALL_ORIGINS = DEBUG or not bool(CORS_ALLOWED_ORIGINS)
+for _d_origin in _default_origins:
+    if _d_origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_d_origin)
+
+CORS_ALLOW_ALL_ORIGINS = DEBUG or _env_bool('CORS_ALLOW_ALL_ORIGINS', False)
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_PRIVATE_NETWORK = True
 
@@ -421,8 +439,14 @@ CORS_ALLOW_HEADERS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = _parse_origins(os.environ.get('CSRF_TRUSTED_ORIGINS', ''))
-if not CSRF_TRUSTED_ORIGINS and not DEBUG:
-    raise RuntimeError("CSRF_TRUSTED_ORIGINS must be explicitly set in production.")
+for _d_origin in _default_origins:
+    if _d_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_d_origin)
+
+for _d_wildcard in ['https://*.railway.app', 'https://*.up.railway.app', 'https://*.vercel.app']:
+    if _d_wildcard not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_d_wildcard)
+
 
 # --- EMAIL (signup OTP, password reset - via core/email_service.py) ---
 # EMAIL_HOST unset (the default, including local dev) means Django uses the

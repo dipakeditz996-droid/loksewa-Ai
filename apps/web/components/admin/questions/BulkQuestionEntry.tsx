@@ -50,11 +50,12 @@ export function BulkQuestionEntry() {
   const [genMissingExplanations, setGenMissingExplanations] = useState(false);
 
   // Syllabus Cascading
-  const [selCategory, setSelCategory] = useState('');
-  const [selPosition, setSelPosition] = useState('');
-  const [selSubject, setSelSubject] = useState('');
-  const [selChapter, setSelChapter] = useState('');
-  const [selTopic, setSelTopic] = useState('');
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const [selCategory, setSelCategory] = useState(searchParams?.get('category') || '');
+  const [selPosition, setSelPosition] = useState(searchParams?.get('position') || searchParams?.get('exam') || '');
+  const [selSubject, setSelSubject] = useState(searchParams?.get('subject') || '');
+  const [selChapter, setSelChapter] = useState(searchParams?.get('chapter') || '');
+  const [selTopic, setSelTopic] = useState(searchParams?.get('topic') || '');
 
   const handleAcademicChange = (field: string, value: any) => {
     if (field === 'category') {

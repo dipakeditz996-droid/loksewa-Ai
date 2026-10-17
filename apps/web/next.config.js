@@ -1,4 +1,4 @@
-/* eslint-env node */
+import { fileURLToPath } from 'node:url';
 import { withSentryConfig } from '@sentry/nextjs';
 
 /** @type {import('next').NextConfig} */
@@ -8,7 +8,7 @@ const nextConfig = {
   // build loudly instead of shipping silently, same as it always should
   // have.
   output: 'standalone',
-  outputFileTracingRoot: process.cwd() + '/../..',
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
 
   outputFileTracingIncludes: {
     '/*': [

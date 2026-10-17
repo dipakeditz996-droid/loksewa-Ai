@@ -34,6 +34,10 @@ class CustomExamBuilderFilterTests(APITestCase):
             correct_option='B',
         )
 
+        from courses.models import Course, Enrollment
+        self.course = Course.objects.create(title='Section Officer Course', exam=self.exam, status='published')
+        Enrollment.objects.create(student=self.student, course=self.course, status='active')
+
         self.client.force_authenticate(user=self.student)
 
     def test_available_questions_scoped_to_exam(self):

@@ -2,10 +2,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, SlidersHorizontal, ArrowRight, Download, Eye, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2 } from "lucide-react";
+import { Search, SlidersHorizontal, ArrowRight, Download, Eye, FileText, CheckCircle2, Target, BrainCircuit, Activity, BookOpen, Loader2, Maximize2, Minimize2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { publicApi, type PublicSyllabusCategory, type PublicSyllabusExam } from "@/lib/api/public-api";
 import { downloadPublicFile } from "@/lib/api/client";
+import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
 import { toast } from "sonner";
 
 export default function SyllabusPage() {
@@ -19,6 +20,8 @@ export default function SyllabusPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedLevelId, setSelectedLevelId] = useState<number | null>(null);
   const [selectedPrepId, setSelectedPrepId] = useState<number | null>(null);
+  const [viewingPdf, setViewingPdf] = useState<{ id: number; title: string; fileUrl: string | null; externalUrl: string | null } | null>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -303,15 +306,14 @@ export default function SyllabusPage() {
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {(mat.fileUrl || mat.externalUrl) && (
-                      <a
-                        href={mat.fileUrl || mat.externalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => setViewingPdf(mat)}
                         className="p-2 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 hover:text-[#163E6B] dark:hover:text-[#D4A72C] transition-colors"
-                        title="View"
+                        title="View Syllabus PDF"
                       >
                         <Eye className="w-4 h-4" />
-                      </a>
+                      </button>
                     )}
                     <button
                       type="button"
@@ -492,6 +494,73 @@ export default function SyllabusPage() {
           </div>
         </div>
       </section>
+
+      {/* FIRST-PARTY SYLLABUS PDF VIEWER MODAL (Zero Google Drive toolbar/branding) */}
+      {viewingPdf && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-2 sm:p-4">
+          <div
+            className={`bg-slate-900 rounded-2xl shadow-2xl flex flex-col border border-slate-700 overflow-hidden transition-all duration-200 ${
+              isMaximized ? "w-full h-full rounded-none" : "w-full max-w-5xl h-[88vh]"
+            }`}
+          >
+            {/* Modal Header */}
+            <div className="relative bg-slate-950 text-white px-5 py-3.5 flex items-center justify-between border-b border-slate-800 shrink-0 gap-4">
+              <div className="min-w-0 pr-2 max-w-[60%] sm:max-w-[45%]">
+                <h2 className="text-sm sm:text-base font-bold truncate text-white" title={viewingPdf.title}>
+                  {viewingPdf.title}
+                </h2>
+                <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#C4A45C] truncate mt-0.5">
+                  <span className="truncate">{selectedExam?.name}</span>
+                  <span>•</span>
+                  <span>Official Curriculum PDF</span>
+                </div>
+              </div>
+
+              {/* Header Actions */}
+              <div className="flex items-center gap-1.5 shrink-0 z-10">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadMaterial(viewingPdf)}
+                  disabled={downloadingId === viewingPdf.id}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+
+                <button
+                  onClick={() => setIsMaximized(!isMaximized)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+                  title={isMaximized ? "Restore window" : "Maximize"}
+                >
+                  {isMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setViewingPdf(null);
+                    setIsMaximized(false);
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/80 hover:text-red-400 transition-colors"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / FirstPartyPdfViewer */}
+            <div className="flex-1 bg-slate-900 relative overflow-hidden flex flex-col">
+              <FirstPartyPdfViewer
+                url={viewingPdf.fileUrl || viewingPdf.externalUrl}
+                title={viewingPdf.title}
+                allowDownload={true}
+                onDownload={() => handleDownloadMaterial(viewingPdf)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

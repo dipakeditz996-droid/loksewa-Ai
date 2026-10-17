@@ -9,13 +9,15 @@ import Link from 'next/link';
 import {
   CheckSquare, Plus, Search, Upload, Download,
   Edit2, Trash2, Copy, BookOpen, Layers,
-  Wand2, FolderPlus, ClipboardCheck, Tag as TagIcon, ChevronRight
+  Wand2, FolderPlus, ClipboardCheck, Tag as TagIcon,
+  ChevronRight, Filter, X, Sparkles
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { InlineLoader } from '@/components/ui/loading-states';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
+import { QuestionTocSidebar } from '@/components/admin/questions/QuestionTocSidebar';
 
 export default function QuestionBankPage() {
   const [questions, setQuestions] = useState<AdminQuestion[]>([]);
@@ -44,6 +46,20 @@ export default function QuestionBankPage() {
   const [bulkMapTopicId, setBulkMapTopicId] = useState<string>('');
   const [bulkMapLoading, setBulkMapLoading] = useState(false);
 
+  // Academic Hierarchy Context Filters
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedExam, setSelectedExam] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
+  const [selectedChapter, setSelectedChapter] = useState<string>('');
+  const [selectedTopic, setSelectedTopic] = useState<string>('');
+  const [activeNodeNames, setActiveNodeNames] = useState<{
+    categoryName?: string;
+    examName?: string;
+    subjectName?: string;
+    chapterName?: string;
+    topicName?: string;
+  }>({});
+
   // Filters
   const [search, setSearch] = useState('');
   const [selectedType, setSelectedType] = useState('');
@@ -51,8 +67,6 @@ export default function QuestionBankPage() {
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
   const [selectedAiStatus, setSelectedAiStatus] = useState('');
   const [selectedCourse, setSelectedCourse] = useState<string>('');
-  // Tag filter: multi-select, matches ANY of the selected tags
-  // (tag_objects__in on the backend) - see QuestionSelectionService docs.
   const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
   
   // Pagination
@@ -69,8 +83,7 @@ export default function QuestionBankPage() {
     fetchCourses();
   }, []);
 
-  // Debounce search: wait for typing to pause before hitting the API,
-  // instead of firing a request on every keystroke.
+  // Debounce search
   const [debouncedSearch, setDebouncedSearch] = useState('');
   useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search), 350);
@@ -79,11 +92,19 @@ export default function QuestionBankPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds, selectedCourse]);
+  }, [
+    debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus,
+    selectedTagIds, selectedCourse, selectedCategory, selectedExam, selectedSubject,
+    selectedChapter, selectedTopic
+  ]);
 
   useEffect(() => {
     fetchQuestions();
-  }, [page, debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus, selectedTagIds, selectedCourse]);
+  }, [
+    page, debouncedSearch, selectedType, selectedStatus, selectedDifficulty, selectedAiStatus,
+    selectedTagIds, selectedCourse, selectedCategory, selectedExam, selectedSubject,
+    selectedChapter, selectedTopic
+  ]);
 
   const fetchStats = async () => {
     try {
@@ -134,13 +155,17 @@ export default function QuestionBankPage() {
         ai_status: selectedAiStatus || undefined,
         tag_objects__in: selectedTagIds.length > 0 ? selectedTagIds.join(',') : undefined,
         course: selectedCourse || undefined,
+        category: selectedCategory || undefined,
+        exam: selectedExam || undefined,
+        subject: selectedSubject || undefined,
+        chapter: selectedChapter || undefined,
+        topic: selectedTopic || undefined,
       });
-      // A slower earlier request must not overwrite a newer one's results.
       if (requestId !== latestRequestId.current) return;
       const results = Array.isArray(data) ? data : (data.results || []);
       setQuestions(results);
       setHasMore(!Array.isArray(data) && !!data.next);
-      setSelectedIds(new Set()); // clear selection on reload
+      setSelectedIds(new Set());
     } catch (error) {
       if (requestId !== latestRequestId.current) return;
       console.error('Failed to load questions:', error);
@@ -152,7 +177,6 @@ export default function QuestionBankPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Bypass the debounce timer on explicit submit (Enter key).
     setDebouncedSearch(search);
     setPage(1);
   };
@@ -169,7 +193,7 @@ export default function QuestionBankPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this question?')) return;
+    if (!confirm('Are you sure you want to delete this question? Historical student exam attempts will remain safe.')) return;
     try {
       await adminQuestionApi.deleteQuestion(id);
       toast.success('Question deleted');
@@ -189,8 +213,6 @@ export default function QuestionBankPage() {
     if (action === 'delete' && !confirm(`Are you sure you want to delete ${selectedIds.size} questions?`)) return;
 
     try {
-      // The backend's bulk action for "Publish" is named `approve` (it also enforces
-      // that an admin cannot approve their own question); 'publish' is not a valid action.
       const res = await adminQuestionApi.bulkAction(action === 'publish' ? 'approve' : action, Array.from(selectedIds), collectionIds, tagIds);
       if (res.error) {
         toast.error(res.error);
@@ -288,17 +310,57 @@ export default function QuestionBankPage() {
     }
   };
 
+  const buildCreateUrl = () => {
+    const params = new URLSearchParams();
+    if (selectedCategory) params.set('category', selectedCategory);
+    if (selectedExam) params.set('position', selectedExam);
+    if (selectedSubject) params.set('subject', selectedSubject);
+    if (selectedChapter) params.set('chapter', selectedChapter);
+    if (selectedTopic) params.set('topic', selectedTopic);
+    const qs = params.toString();
+    return `/admin-dashboard/academic/questions/create${qs ? `?${qs}` : ''}`;
+  };
+
+  const clearAcademicScope = () => {
+    setSelectedSubject('');
+    setSelectedChapter('');
+    setSelectedTopic('');
+    setActiveNodeNames(prev => ({
+      ...prev,
+      subjectName: undefined,
+      chapterName: undefined,
+      topicName: undefined,
+    }));
+  };
+
+  const clearEntireAcademicFilter = () => {
+    setSelectedCategory('');
+    setSelectedExam('');
+    setSelectedSubject('');
+    setSelectedChapter('');
+    setSelectedTopic('');
+    setActiveNodeNames({});
+  };
+
   return (
-    <div className="p-5 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-5 md:p-6 space-y-6 max-w-[1680px] mx-auto">
+      {/* Page Header */}
       <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Question Bank</h1>
-          <p className="text-gray-500 mt-1">Manage individual questions and academic scopes across the platform.</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-gray-900">Master Question Bank</h1>
+            <span className="text-xs bg-blue-50 text-blue-700 font-semibold px-2.5 py-0.5 rounded-full border border-blue-200/60">
+              Syllabus Integrated
+            </span>
+          </div>
+          <p className="text-gray-500 text-sm mt-1">
+            Organize, browse, and edit questions in physical textbook hierarchy: Preparation → Subject → Chapter → Topic.
+          </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <button
             onClick={handleDownloadTemplate}
-            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3.5 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap"
+            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3.5 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap shadow-sm"
             title="Download Excel Template for importing questions"
           >
             <Download className="w-4 h-4 text-gray-500" />
@@ -306,13 +368,13 @@ export default function QuestionBankPage() {
           </button>
           <Link
             href="/admin-dashboard/academic/questions/import"
-            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap"
+            className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm whitespace-nowrap shadow-sm"
           >
-            <Upload className="w-4 h-4" />
+            <Upload className="w-4 h-4 text-gray-500" />
             Import Excel
           </Link>
           <Link
-            href="/admin-dashboard/academic/questions/create"
+            href={buildCreateUrl()}
             className="bg-[#0B2545] hover:bg-[#163E6C] text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors font-medium text-sm shadow-md whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
@@ -321,163 +383,555 @@ export default function QuestionBankPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Questions</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.total}</p>
-            </div>
-            <div className="p-3 bg-navy-50 rounded-lg">
-              <Layers className="w-6 h-6 text-navy-600" />
-            </div>
+      {/* Academic Context Selector Bar */}
+      <div className="bg-white p-4 rounded-xl border border-blue-100 shadow-sm space-y-3 bg-gradient-to-r from-blue-50/30 via-white to-white">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-700 uppercase tracking-wider">
+            <BookOpen className="w-4 h-4 text-blue-700" />
+            <span>Academic Preparation Scope</span>
           </div>
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Active Questions</p>
-              <p className="text-3xl font-bold text-emerald-600 mt-1">{stats.active}</p>
-            </div>
-            <div className="p-3 bg-emerald-50 rounded-lg">
-              <CheckSquare className="w-6 h-6 text-emerald-600" />
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Inactive / Draft</p>
-              <p className="text-3xl font-bold text-gray-700 mt-1">{stats.inactive ?? (stats.total - stats.active)}</p>
-            </div>
-            <div className="p-3 bg-gray-100 rounded-lg">
-              <BookOpen className="w-6 h-6 text-gray-500" />
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">AI Pending</p>
-              <p className="text-3xl font-bold text-amber-600 mt-1">{stats.ai_pending}</p>
-            </div>
-            <div className="p-3 bg-amber-50 rounded-lg">
-              <Wand2 className="w-6 h-6 text-amber-500" />
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-      {/* Toolbar */}
-      <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <form onSubmit={handleSearch} className="relative w-full md:w-96">
-            <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search questions, options, or answers..." 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-navy-500"
-            />
-          </form>
-          {loading && questions.length > 0 && (
-            <InlineLoader text="Refreshing..." className="shrink-0 text-xs" />
+          {(selectedCategory || selectedExam || selectedSubject || selectedChapter || selectedTopic) && (
+            <button
+              onClick={clearEntireAcademicFilter}
+              className="text-xs text-red-600 hover:text-red-700 font-semibold flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              Clear Preparation Scope
+            </button>
           )}
         </div>
-        
-        <div className="flex gap-2 w-full md:w-auto items-center flex-wrap">
-          {selectedIds.size > 0 && (
-            <div className="flex items-center gap-2 mr-2 bg-navy-50 px-3 py-1.5 rounded-lg border border-navy-100 flex-wrap">
-              <span className="text-sm font-medium text-navy-800">{selectedIds.size} selected</span>
-              <div className="h-4 w-px bg-navy-200 mx-1"></div>
-              <button onClick={() => setIsBulkMapModalOpen(true)} className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1"><BookOpen className="w-3.5 h-3.5"/> Reassign Academic Scope</button>
-              <div className="h-4 w-px bg-navy-200 mx-1"></div>
-              <button onClick={() => setIsCollectionModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1"><FolderPlus className="w-3 h-3"/> Add to Collection</button>
-              <button onClick={() => setIsTagModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1 ml-1"><TagIcon className="w-3 h-3"/> Add Tags</button>
-              <button onClick={() => handleBulkAction('publish')} className="text-xs font-medium text-green-700 hover:text-green-800 ml-1">Publish</button>
-              <button onClick={() => handleBulkAction('draft')} className="text-xs font-medium text-gray-600 hover:text-gray-800 ml-1">Draft</button>
-              <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-red-600 hover:text-red-800 ml-1">Delete</button>
-            </div>
-          )}
-          <select 
-            value={selectedCourse} 
-            onChange={(e) => setSelectedCourse(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-navy-500 max-w-[180px]"
-          >
-            <option value="">All Courses</option>
-            {courses.map(c => (
-              <option key={c.id} value={String(c.id)}>{c.title}</option>
-            ))}
-          </select>
-          <select 
-            value={selectedAiStatus} 
-            onChange={(e) => setSelectedAiStatus(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-navy-500"
-          >
-            <option value="">All AI Status</option>
-            <option value="pending">Pending AI Generation</option>
-            <option value="reviewed">AI Reviewed</option>
-            <option value="approved">AI Approved</option>
-          </select>
-          <select 
-            value={selectedType} 
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-navy-500"
-          >
-            <option value="">All Types</option>
-            <option value="mcq">MCQ</option>
-            <option value="true_false">True / False</option>
-            <option value="subjective">Subjective</option>
-          </select>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-navy-500"
-          >
-            <option value="">All Statuses</option>
-            <option value="draft">Draft</option>
-            <option value="pending_review">Pending Review</option>
-            <option value="approved">Approved</option>
-            <option value="changes_requested">Changes Requested</option>
-            <option value="rejected">Rejected</option>
-            <option value="archived">Archived</option>
-          </select>
-          {tags.length > 0 && (
-            <details className="relative">
-              <summary className="list-none cursor-pointer border border-gray-200 rounded-lg px-3 py-2 text-sm flex items-center gap-1.5">
-                <TagIcon className="w-3.5 h-3.5" />
-                {selectedTagIds.length > 0 ? `${selectedTagIds.length} Tag${selectedTagIds.length > 1 ? 's' : ''}` : 'All Tags'}
-              </summary>
-              <div className="absolute right-0 mt-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-56 max-h-64 overflow-y-auto">
-                {tags.filter(t => t.is_active).map(t => (
-                  <label key={t.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedTagIds.includes(t.id)}
-                      onChange={() => {
-                        setSelectedTagIds(prev =>
-                          prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
-                        );
-                        setPage(1);
-                      }}
-                    />
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                    {t.name}
-                  </label>
-                ))}
-                {selectedTagIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedTagIds([]); setPage(1); }}
-                    className="text-xs text-gray-500 hover:text-gray-700 mt-1 px-2"
-                  >
-                    Clear
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <AcademicDependentSelect
+            category={selectedCategory}
+            position={selectedExam}
+            subject={selectedSubject}
+            chapter={selectedChapter}
+            topic={selectedTopic}
+            onChange={(field, val) => {
+              if (field === 'category') {
+                setSelectedCategory(val || '');
+                setSelectedExam('');
+                setSelectedSubject('');
+                setSelectedChapter('');
+                setSelectedTopic('');
+                setActiveNodeNames({});
+              } else if (field === 'position' || field === 'exam') {
+                setSelectedExam(val || '');
+                setSelectedSubject('');
+                setSelectedChapter('');
+                setSelectedTopic('');
+                setActiveNodeNames(prev => ({
+                  ...prev,
+                  subjectName: undefined,
+                  chapterName: undefined,
+                  topicName: undefined,
+                }));
+              }
+            }}
+            maxLevel="position"
+            requiredLevels={[]}
+            layout="grid"
+            labels={{
+              category: '1. Exam Category',
+              position: '2. Preparation / Position',
+            }}
+          />
+        </div>
+
+        {/* Active Academic Breadcrumb Trail */}
+        {(selectedCategory || selectedExam || selectedSubject || selectedChapter || selectedTopic) && (
+          <div className="pt-2 border-t border-gray-100 flex items-center gap-1.5 text-xs flex-wrap">
+            <span className="text-gray-400 font-medium mr-1">Active Scope:</span>
+            {selectedCategory && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 text-blue-900 border border-blue-200/80 font-medium">
+                Category #{selectedCategory}
+              </span>
+            )}
+            {selectedExam && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-100 text-blue-950 border border-blue-300 font-bold">
+                  Preparation #{selectedExam}
+                </span>
+              </>
+            )}
+            {selectedSubject && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-900 border border-indigo-200 font-medium">
+                  {activeNodeNames.subjectName || `Subject #${selectedSubject}`}
+                  <button onClick={() => { setSelectedSubject(''); setSelectedChapter(''); setSelectedTopic(''); }} className="hover:text-red-600">
+                    <X className="w-3 h-3" />
                   </button>
-                )}
+                </span>
+              </>
+            )}
+            {selectedChapter && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 font-medium">
+                  {activeNodeNames.chapterName || `Chapter #${selectedChapter}`}
+                  <button onClick={() => { setSelectedChapter(''); setSelectedTopic(''); }} className="hover:text-red-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              </>
+            )}
+            {selectedTopic && (
+              <>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200 font-medium">
+                  {activeNodeNames.topicName || `Topic #${selectedTopic}`}
+                  <button onClick={() => setSelectedTopic('')} className="hover:text-red-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Two Column Layout: Textbook TOC Sidebar + Questions Management Table */}
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+        {/* Left: Textbook Curriculum TOC */}
+        <div className="w-full">
+          <QuestionTocSidebar
+            categoryId={selectedCategory}
+            examId={selectedExam}
+            activeSubjectId={selectedSubject}
+            activeChapterId={selectedChapter}
+            activeTopicId={selectedTopic}
+            onSelectNode={(node) => {
+              if (node.subjectId !== undefined) setSelectedSubject(node.subjectId ? String(node.subjectId) : '');
+              if (node.chapterId !== undefined) setSelectedChapter(node.chapterId ? String(node.chapterId) : '');
+              if (node.topicId !== undefined) setSelectedTopic(node.topicId ? String(node.topicId) : '');
+              setActiveNodeNames(prev => ({
+                ...prev,
+                subjectName: node.subjectName,
+                chapterName: node.chapterName,
+                topicName: node.topicName,
+              }));
+              setPage(1);
+            }}
+            onClearFilter={clearAcademicScope}
+          />
+        </div>
+
+        {/* Right: Question Workspace */}
+        <div className="space-y-4 min-w-0">
+          {/* Stats Cards */}
+          {stats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Questions</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-0.5">{stats.total}</p>
+                </div>
+                <div className="p-2.5 bg-navy-50 rounded-lg">
+                  <Layers className="w-5 h-5 text-navy-600" />
+                </div>
               </div>
-            </details>
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Active / Approved</p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-0.5">{stats.active}</p>
+                </div>
+                <div className="p-2.5 bg-emerald-50 rounded-lg">
+                  <CheckSquare className="w-5 h-5 text-emerald-600" />
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Inactive / Draft</p>
+                  <p className="text-2xl font-bold text-gray-700 mt-0.5">{stats.inactive ?? (stats.total - stats.active)}</p>
+                </div>
+                <div className="p-2.5 bg-gray-100 rounded-lg">
+                  <BookOpen className="w-5 h-5 text-gray-500" />
+                </div>
+              </div>
+              <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">AI Pending</p>
+                  <p className="text-2xl font-bold text-amber-600 mt-0.5">{stats.ai_pending}</p>
+                </div>
+                <div className="p-2.5 bg-amber-50 rounded-lg">
+                  <Wand2 className="w-5 h-5 text-amber-500" />
+                </div>
+              </div>
+            </div>
           )}
+
+          {/* Search & Filters Toolbar */}
+          <div className="bg-white p-3.5 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-3 justify-between items-center flex-wrap">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <form onSubmit={handleSearch} className="relative w-full md:w-80">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search questions, options, or answers..." 
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-navy-500"
+                />
+              </form>
+              {loading && questions.length > 0 && (
+                <InlineLoader text="Refreshing..." className="shrink-0 text-xs" />
+              )}
+            </div>
+            
+            <div className="flex gap-2 w-full md:w-auto items-center flex-wrap">
+              {selectedIds.size > 0 && (
+                <div className="flex items-center gap-2 mr-2 bg-navy-50 px-3 py-1.5 rounded-lg border border-navy-100 flex-wrap">
+                  <span className="text-xs font-semibold text-navy-800">{selectedIds.size} selected</span>
+                  <div className="h-4 w-px bg-navy-200 mx-1"></div>
+                  <button onClick={() => setIsBulkMapModalOpen(true)} className="text-xs font-semibold text-blue-700 hover:text-blue-800 flex items-center gap-1">
+                    <BookOpen className="w-3.5 h-3.5"/> Reassign Academic Scope
+                  </button>
+                  <div className="h-4 w-px bg-navy-200 mx-1"></div>
+                  <button onClick={() => setIsCollectionModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1">
+                    <FolderPlus className="w-3 h-3"/> Collection
+                  </button>
+                  <button onClick={() => setIsTagModalOpen(true)} className="text-xs font-medium text-indigo-700 hover:text-indigo-800 flex items-center gap-1 ml-1">
+                    <TagIcon className="w-3 h-3"/> Tags
+                  </button>
+                  <button onClick={() => handleBulkAction('publish')} className="text-xs font-medium text-green-700 hover:text-green-800 ml-1">Publish</button>
+                  <button onClick={() => handleBulkAction('draft')} className="text-xs font-medium text-gray-600 hover:text-gray-800 ml-1">Draft</button>
+                  <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-red-600 hover:text-red-800 ml-1">Delete</button>
+                </div>
+              )}
+              <select 
+                value={selectedCourse} 
+                onChange={(e) => setSelectedCourse(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-navy-500 max-w-[160px]"
+              >
+                <option value="">All Courses</option>
+                {courses.map(c => (
+                  <option key={c.id} value={String(c.id)}>{c.title}</option>
+                ))}
+              </select>
+              <select 
+                value={selectedType} 
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-navy-500"
+              >
+                <option value="">All Types</option>
+                <option value="mcq">MCQ</option>
+                <option value="true_false">True / False</option>
+                <option value="subjective">Subjective</option>
+              </select>
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-navy-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="draft">Draft</option>
+                <option value="pending_review">Pending Review</option>
+                <option value="approved">Approved</option>
+                <option value="changes_requested">Changes Requested</option>
+                <option value="rejected">Rejected</option>
+                <option value="archived">Archived</option>
+              </select>
+              <select 
+                value={selectedAiStatus} 
+                onChange={(e) => setSelectedAiStatus(e.target.value)}
+                className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-navy-500"
+              >
+                <option value="">All AI Status</option>
+                <option value="pending">Pending AI</option>
+                <option value="reviewed">AI Reviewed</option>
+                <option value="approved">AI Approved</option>
+              </select>
+              {tags.length > 0 && (
+                <details className="relative">
+                  <summary className="list-none cursor-pointer border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-1.5">
+                    <TagIcon className="w-3.5 h-3.5 text-gray-500" />
+                    {selectedTagIds.length > 0 ? `${selectedTagIds.length} Tag${selectedTagIds.length > 1 ? 's' : ''}` : 'All Tags'}
+                  </summary>
+                  <div className="absolute right-0 mt-1 z-10 bg-white border border-gray-200 rounded-lg shadow-lg p-2 w-56 max-h-64 overflow-y-auto">
+                    {tags.filter(t => t.is_active).map(t => (
+                      <label key={t.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={selectedTagIds.includes(t.id)}
+                          onChange={() => {
+                            setSelectedTagIds(prev =>
+                              prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                            );
+                            setPage(1);
+                          }}
+                        />
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                        {t.name}
+                      </label>
+                    ))}
+                    {selectedTagIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedTagIds([]); setPage(1); }}
+                        className="text-[11px] text-gray-500 hover:text-gray-700 mt-1 px-2 block"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </details>
+              )}
+            </div>
+          </div>
+
+          {/* Data Table */}
+          <div className="bg-white border border-gray-100 shadow-sm rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wider">
+                    <th className="p-3 w-12 text-center font-semibold">S.N.</th>
+                    <th className="p-3 w-10">
+                      <input 
+                        type="checkbox" 
+                        checked={questions.length > 0 && selectedIds.size === questions.length}
+                        onChange={toggleSelectAll}
+                        className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
+                      />
+                    </th>
+                    <th className="p-3 font-semibold">Question Preview</th>
+                    <th className="p-3 font-semibold">Course &amp; Academic Scope</th>
+                    <th className="p-3 font-semibold">Status</th>
+                    <th className="p-3 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {loading && questions.length === 0 ? (
+                    Array.from({ length: 6 }).map((_, r) => (
+                      <tr key={r} className="animate-pulse">
+                        <td className="p-3 w-12 text-center"><div className="h-4 w-5 bg-gray-200 rounded mx-auto" /></td>
+                        <td className="p-3 w-10"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
+                        <td className="p-3"><div className="h-4 w-72 bg-gray-200 rounded mb-1.5" /><div className="h-3 w-40 bg-gray-100 rounded" /></td>
+                        <td className="p-3"><div className="h-4 w-36 bg-gray-200 rounded mb-1" /><div className="h-3 w-28 bg-gray-100 rounded" /></td>
+                        <td className="p-3"><div className="h-5 w-16 bg-gray-200 rounded-full" /></td>
+                        <td className="p-3 text-right"><div className="h-7 w-7 bg-gray-200 rounded ml-auto" /></td>
+                      </tr>
+                    ))
+                  ) : questions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-10 text-center text-gray-500">
+                        <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <BookOpen className="w-6 h-6" />
+                        </div>
+                        <p className="text-sm font-semibold text-gray-800 mb-1">
+                          {selectedTopic
+                            ? `No questions found in this topic yet.`
+                            : selectedChapter
+                            ? `No questions found in this chapter yet.`
+                            : selectedSubject
+                            ? `No questions found in this subject yet.`
+                            : `No questions found matching your criteria.`}
+                        </p>
+                        <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
+                          Questions created or imported under this academic scope will appear here instantly.
+                        </p>
+                        <div className="flex items-center justify-center gap-3">
+                          <Link
+                            href={buildCreateUrl()}
+                            className="inline-flex items-center gap-2 bg-[#0B2545] hover:bg-[#163E6C] text-white px-4 py-2 rounded-lg text-xs font-semibold transition-colors shadow-sm"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add Question Here
+                          </Link>
+                          {(selectedSubject || selectedChapter || selectedTopic) && (
+                            <button
+                              onClick={clearAcademicScope}
+                              className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3.5 py-2 rounded-lg text-xs font-medium transition-colors"
+                            >
+                              View All in Preparation
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    questions.map((q, index) => {
+                      const sn = (page - 1) * 25 + index + 1;
+                      return (
+                        <tr key={q.id} className={`hover:bg-gray-50/80 transition-colors group ${selectedIds.has(q.id) ? 'bg-blue-50/50' : ''}`}>
+                          <td className="p-3 w-12 text-center text-xs font-semibold text-gray-500 whitespace-nowrap">
+                            {sn}
+                          </td>
+                          <td className="p-3 w-10">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.has(q.id)}
+                              onChange={() => toggleSelect(q.id)}
+                              className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-start gap-2">
+                              <span className="font-mono text-[11px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap shrink-0">
+                                {q.question_id || `Q-${q.id.toString().padStart(6, '0')}`}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="line-clamp-2 text-sm font-medium text-gray-900 max-w-lg">
+                                  {q.text}
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
+                                  <span>{q.marks} Marks • {q.expected_time_minutes} min</span>
+                                  {q.usage_count > 0 && (
+                                    <span className="text-blue-600 bg-blue-50 px-1.5 rounded-full flex items-center gap-1">
+                                      <Layers className="w-3 h-3" /> In {q.usage_count} sets
+                                    </span>
+                                  )}
+                                  {q.collections && q.collections.length > 0 && (
+                                    <span className="text-indigo-600 bg-indigo-50 px-1.5 rounded-full flex items-center gap-1">
+                                      <FolderPlus className="w-3 h-3" /> {q.collections.length} Collections
+                                    </span>
+                                  )}
+                                  {q.tag_objects && q.tag_objects.slice(0, 3).map(t => (
+                                    <span
+                                      key={t.id}
+                                      className="px-1.5 rounded-full text-white font-medium"
+                                      style={{ backgroundColor: t.color }}
+                                    >
+                                      {t.name}
+                                    </span>
+                                  ))}
+                                  {q.tag_objects && q.tag_objects.length > 3 && (
+                                    <span className="text-gray-500 bg-gray-100 px-1.5 rounded-full">
+                                      +{q.tag_objects.length - 3}
+                                    </span>
+                                  )}
+                                  {q.ai_status === 'pending' && (
+                                    <span className="text-amber-600 bg-amber-50 px-1.5 rounded-full flex items-center gap-1">
+                                      <Wand2 className="w-3 h-3" /> AI Pending
+                                    </span>
+                                  )}
+                                  {q.ai_status === 'approved' && (
+                                    <span className="text-emerald-600 bg-emerald-50 px-1.5 rounded-full flex items-center gap-1">
+                                      <Wand2 className="w-3 h-3" /> AI Generated
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3 text-xs">
+                            <div className="space-y-1 min-w-[190px]">
+                              {q.course_title ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="font-semibold text-gray-400 w-14 shrink-0 text-[11px]">Course:</span>
+                                  <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200/60 truncate max-w-[190px]" title={q.course_title}>
+                                    {q.course_title}
+                                  </span>
+                                </div>
+                              ) : null}
+                              <div className="flex items-baseline gap-1">
+                                <span className="font-semibold text-gray-400 w-14 shrink-0 text-[11px]">Position:</span>
+                                <span className={q.position_name ? "text-gray-900 font-medium truncate max-w-[190px]" : "text-gray-400 italic text-[11px]"} title={q.position_name || '—'}>
+                                  {q.position_name || '—'}
+                                </span>
+                              </div>
+                              <div className="flex items-baseline gap-1">
+                                <span className="font-semibold text-gray-400 w-14 shrink-0 text-[11px]">Subject:</span>
+                                <span className={q.subject_name ? "text-gray-800 font-medium truncate max-w-[190px]" : "text-gray-400 italic text-[11px]"} title={q.subject_name || '—'}>
+                                  {q.subject_name || '—'}
+                                </span>
+                              </div>
+                              <div className="flex items-baseline gap-1">
+                                <span className="font-semibold text-gray-400 w-14 shrink-0 text-[11px]">Chapter:</span>
+                                <span className={q.chapter_name ? "text-gray-700 truncate max-w-[190px]" : "text-gray-400 italic text-[11px]"} title={q.chapter_name || '—'}>
+                                  {q.chapter_name || '—'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              q.status === 'approved' || q.status === 'published' ? 'bg-green-100 text-green-700' : 
+                              q.status === 'draft' ? 'bg-gray-100 text-gray-700' : 
+                              q.status === 'pending_review' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {q.status}
+                            </span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {q.status === 'pending_review' && (
+                                <Link 
+                                  href={`/admin-dashboard/questions/review/${q.id}`}
+                                  className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
+                                  title="Review Question"
+                                >
+                                  <ClipboardCheck className="w-4 h-4" />
+                                </Link>
+                              )}
+                              {q.ai_status === 'pending' && (
+                                <Link 
+                                  href={`/admin-dashboard/academic/questions/${q.id}/edit`}
+                                  className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded"
+                                  title="Generate AI Options"
+                                >
+                                  <Wand2 className="w-4 h-4" />
+                                </Link>
+                              )}
+                              <button 
+                                onClick={() => handleDuplicate(q.id)}
+                                className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-navy-50 rounded"
+                                title="Duplicate"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                              <Link 
+                                href={`/admin-dashboard/academic/questions/${q.id}/edit`}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                                title="Edit"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Link>
+                              <button 
+                                onClick={() => handleDelete(q.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {(hasMore || page > 1) && (
+              <div className="flex items-center justify-center gap-4 p-3.5 border-t border-gray-100">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1 || loading}
+                  className="px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-gray-500 font-medium">Page {page}</span>
+                <button
+                  onClick={() => setPage(p => p + 1)}
+                  disabled={!hasMore || loading}
+                  className="px-3 py-1.5 text-xs font-semibold text-gray-600 border border-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Collection Modal */}
       <Dialog open={isCollectionModalOpen} onOpenChange={setIsCollectionModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -525,6 +979,7 @@ export default function QuestionBankPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Tag Modal */}
       <Dialog open={isTagModalOpen} onOpenChange={setIsTagModalOpen}>
         <DialogContent>
           <DialogHeader>
@@ -565,7 +1020,7 @@ export default function QuestionBankPage() {
         </DialogContent>
       </Dialog>
 
-
+      {/* Bulk Academic Mapping Modal */}
       <Dialog open={isBulkMapModalOpen} onOpenChange={setIsBulkMapModalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -652,232 +1107,6 @@ export default function QuestionBankPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Data Table */}
-      <div className="bg-white border border-gray-100 shadow-sm rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500">
-                <th className="p-4 w-14 text-center font-semibold text-gray-500">S.N.</th>
-                <th className="p-4 w-12">
-                  <input 
-                    type="checkbox" 
-                    checked={questions.length > 0 && selectedIds.size === questions.length}
-                    onChange={toggleSelectAll}
-                    className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
-                  />
-                </th>
-                <th className="p-4 font-medium">Question</th>
-                <th className="p-4 font-medium">Course &amp; Academic Scope</th>
-                <th className="p-4 font-medium">Status</th>
-                <th className="p-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading && questions.length === 0 ? (
-                Array.from({ length: 6 }).map((_, r) => (
-                  <tr key={r} className="animate-pulse">
-                    <td className="p-4 w-14 text-center"><div className="h-4 w-6 bg-gray-200 rounded mx-auto" /></td>
-                    <td className="p-4 w-12"><div className="h-4 w-4 bg-gray-200 rounded" /></td>
-                    <td className="p-4"><div className="h-4 w-72 bg-gray-200 rounded mb-1.5" /><div className="h-3 w-40 bg-gray-100 rounded" /></td>
-                    <td className="p-4"><div className="h-4 w-36 bg-gray-200 rounded mb-1" /><div className="h-3 w-28 bg-gray-100 rounded" /></td>
-                    <td className="p-4"><div className="h-6 w-20 bg-gray-200 rounded-full" /></td>
-                    <td className="p-4 text-right"><div className="h-8 w-8 bg-gray-200 rounded ml-auto" /></td>
-                  </tr>
-                ))
-              ) : questions.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">
-                    <p className="mb-3">No questions found matching your criteria.</p>
-                    <Link
-                      href="/admin-dashboard/academic/questions/create"
-                      className="inline-flex items-center gap-2 bg-[#0B2545] hover:bg-[#163E6C] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Question
-                    </Link>
-                  </td>
-                </tr>
-              ) : (
-                questions.map((q, index) => {
-                  const sn = (page - 1) * 25 + index + 1;
-                  return (
-                    <tr key={q.id} className={`hover:bg-gray-50 transition-colors group ${selectedIds.has(q.id) ? 'bg-blue-50/50' : ''}`}>
-                      <td className="p-4 w-14 text-center text-xs font-semibold text-gray-500 whitespace-nowrap">
-                        {sn}
-                      </td>
-                      <td className="p-4 w-12">
-                        <input 
-                          type="checkbox" 
-                          checked={selectedIds.has(q.id)}
-                          onChange={() => toggleSelect(q.id)}
-                          className="rounded text-navy-600 focus:ring-navy-500 w-4 h-4"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-start gap-2">
-                          <span className="font-mono text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mt-0.5 whitespace-nowrap">
-                            {q.question_id || `Q-${q.id.toString().padStart(6, '0')}`}
-                          </span>
-                          <div>
-                            <div className="line-clamp-2 text-sm font-medium text-gray-900 max-w-md">
-                              {q.text}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1 flex items-center gap-2 flex-wrap">
-                              <span>{q.marks} Marks • {q.expected_time_minutes} min</span>
-                              {q.usage_count > 0 && (
-                                <span className="text-blue-600 bg-blue-50 px-1.5 rounded-full flex items-center gap-1">
-                                  <Layers className="w-3 h-3" /> Used in {q.usage_count} sets
-                                </span>
-                              )}
-                              {q.collections && q.collections.length > 0 && (
-                                <span className="text-indigo-600 bg-indigo-50 px-1.5 rounded-full flex items-center gap-1">
-                                  <FolderPlus className="w-3 h-3" /> {q.collections.length} Collections
-                                </span>
-                              )}
-                              {q.tag_objects && q.tag_objects.slice(0, 3).map(t => (
-                                <span
-                                  key={t.id}
-                                  className="px-1.5 rounded-full text-white"
-                                  style={{ backgroundColor: t.color }}
-                                >
-                                  {t.name}
-                                </span>
-                              ))}
-                              {q.tag_objects && q.tag_objects.length > 3 && (
-                                <span className="text-gray-500 bg-gray-100 px-1.5 rounded-full">
-                                  +{q.tag_objects.length - 3}
-                                </span>
-                              )}
-                              {q.ai_status === 'pending' && (
-                                <span className="text-amber-600 bg-amber-50 px-1.5 rounded-full flex items-center gap-1">
-                                  <Wand2 className="w-3 h-3" /> AI Pending
-                                </span>
-                              )}
-                              {q.ai_status === 'approved' && (
-                                <span className="text-emerald-600 bg-emerald-50 px-1.5 rounded-full flex items-center gap-1">
-                                  <Wand2 className="w-3 h-3" /> AI Generated
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4 text-xs">
-                        <div className="space-y-1.5 min-w-[210px]">
-                          {q.course_title ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-semibold text-gray-500 w-16 shrink-0">Course:</span>
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200/60 truncate max-w-[210px]" title={q.course_title}>
-                                {q.course_title}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="font-semibold text-gray-500 w-16 shrink-0">Course:</span>
-                              <span className="text-gray-400 italic">Unassigned</span>
-                            </div>
-                          )}
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-semibold text-gray-500 w-16 shrink-0">Position:</span>
-                            <span className={q.position_name ? "text-gray-900 font-medium truncate max-w-[210px]" : "text-gray-400"} title={q.position_name || '—'}>
-                              {q.position_name || '—'}
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-semibold text-gray-500 w-16 shrink-0">Subject:</span>
-                            <span className={q.subject_name ? "text-gray-800 font-medium truncate max-w-[210px]" : "text-gray-400"} title={q.subject_name || '—'}>
-                              {q.subject_name || '—'}
-                            </span>
-                          </div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="font-semibold text-gray-500 w-16 shrink-0">Chapter:</span>
-                            <span className={q.chapter_name ? "text-gray-700 truncate max-w-[210px]" : "text-gray-400"} title={q.chapter_name || '—'}>
-                              {q.chapter_name || '—'}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          q.status === 'approved' || q.status === 'published' ? 'bg-green-100 text-green-700' : 
-                          q.status === 'draft' ? 'bg-gray-100 text-gray-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {q.status}
-                        </span>
-                      </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {q.status === 'pending_review' && (
-                          <Link 
-                            href={`/admin-dashboard/questions/review/${q.id}`}
-                            className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded"
-                            title="Review Question"
-                          >
-                            <ClipboardCheck className="w-4 h-4" />
-                          </Link>
-                        )}
-                        {q.ai_status === 'pending' && (
-                          <Link 
-                            href={`/admin-dashboard/academic/questions/${q.id}/edit`}
-                            className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded"
-                            title="Generate AI Options"
-                          >
-                            <Wand2 className="w-4 h-4" />
-                          </Link>
-                        )}
-                        <button 
-                          onClick={() => handleDuplicate(q.id)}
-                          className="p-1.5 text-gray-400 hover:text-navy-600 hover:bg-navy-50 rounded"
-                          title="Duplicate"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
-                        <Link 
-                          href={`/admin-dashboard/academic/questions/${q.id}/edit`}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Link>
-                        <button 
-                          onClick={() => handleDelete(q.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-          </table>
-        </div>
-        {(hasMore || page > 1) && (
-          <div className="flex items-center justify-center gap-4 p-4 border-t border-gray-100">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1 || loading}
-              className="px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-gray-500">Page {page}</span>
-            <button
-              onClick={() => setPage(p => p + 1)}
-              disabled={!hasMore || loading}
-              className="px-3 py-1.5 text-sm font-medium text-gray-600 border border-gray-200 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
-            >
-              Next
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
-

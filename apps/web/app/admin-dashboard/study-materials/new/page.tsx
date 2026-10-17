@@ -8,9 +8,16 @@ import {
 } from "lucide-react";
 import { AcademicDependentSelect } from "@/components/admin/syllabus/AcademicDependentSelect";
 import {
-  adminStudyMaterialApi, MaterialAccess, MaterialDifficulty, MaterialType,
+  adminStudyMaterialApi, ContentCategory, MaterialAccess, MaterialDifficulty, MaterialType,
 } from "@/lib/api/admin-study-materials";
 import toast from "react-hot-toast";
+
+const NOTE_CATEGORIES: { value: ContentCategory; label: string; desc: string }[] = [
+  { value: "syllabus", label: "Syllabus", desc: "Official exam curriculum & structure" },
+  { value: "subjective_topicwise", label: "Subjective Topicwise Notes", desc: "In-depth theoretical concepts & descriptive answers" },
+  { value: "objective_topicwise", label: "Objective Topicwise Notes", desc: "MCQ-focused topic notes & key facts" },
+  { value: "revision_notes", label: "Revision Notes", desc: "Short notes, summaries & quick formulas" },
+];
 
 const MATERIAL_TYPES: { value: MaterialType; label: string }[] = [
   { value: "notes", label: "Notes / Article" },
@@ -40,6 +47,8 @@ export default function AddMaterialPage() {
   const [description, setDescription] = useState("");
   const [content, setContent] = useState("");
   const [externalUrl, setExternalUrl] = useState("");
+  const [contentCategory, setContentCategory] = useState<ContentCategory | "">("");
+  const [allowDownload, setAllowDownload] = useState<boolean>(false);
   const [materialType, setMaterialType] = useState<MaterialType>("notes");
   const [difficulty, setDifficulty] = useState<MaterialDifficulty>("beginner");
   const [access, setAccess] = useState<MaterialAccess>("free");
@@ -75,6 +84,7 @@ export default function AddMaterialPage() {
 
   const problems: string[] = [];
   if (!title.trim()) problems.push("Give the material a title");
+  if (!contentCategory) problems.push("Choose a note category");
   if (!exam) problems.push("Choose an exam / position");
   if (!subject) problems.push("Choose a subject");
   if (!file && !externalUrl.trim() && !content.trim()) {
@@ -94,6 +104,8 @@ export default function AddMaterialPage() {
         subject: subject!,
         chapter: chapter ?? null,
         topic: topic ?? null,
+        content_category: contentCategory as ContentCategory,
+        is_downloadable: allowDownload,
         description: description.trim(),
         content,
         material_type: materialType,
@@ -289,6 +301,27 @@ export default function AddMaterialPage() {
             </div>
             <div className="p-4 space-y-4">
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Note Category <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={contentCategory}
+                  onChange={(e) => setContentCategory(e.target.value as ContentCategory)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 font-medium"
+                >
+                  <option value="" disabled>-- Select Note Category --</option>
+                  {NOTE_CATEGORIES.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  Determines which study materials section this note appears under for students.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Material Type</label>
                 <select
                   value={materialType}
@@ -326,29 +359,57 @@ export default function AddMaterialPage() {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-slate-500" />
-              <h2 className="font-bold text-[#0B2545]">Access</h2>
+              <h2 className="font-bold text-[#0B2545]">Access & Download Permission</h2>
             </div>
-            <div className="p-4 grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setAccess("free")}
-                className={`border rounded-lg p-3 text-left transition-colors ${
-                  access === "free" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                <span className="block font-bold text-[#0B2545]">Free</span>
-                <span className="block text-xs text-slate-500 mt-0.5">Open to everyone</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAccess("premium")}
-                className={`border rounded-lg p-3 text-left transition-colors ${
-                  access === "premium" ? "border-[#D4A72C] bg-amber-50" : "border-slate-200 hover:border-slate-300"
-                }`}
-              >
-                <span className="block font-bold text-[#0B2545]">Premium</span>
-                <span className="block text-xs text-slate-500 mt-0.5">Subscribers only</span>
-              </button>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Plan Access</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAccess("free")}
+                    className={`border rounded-lg p-3 text-left transition-colors ${
+                      access === "free" ? "border-emerald-500 bg-emerald-50" : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="block font-bold text-[#0B2545]">Free</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">Open to everyone</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccess("premium")}
+                    className={`border rounded-lg p-3 text-left transition-colors ${
+                      access === "premium" ? "border-[#D4A72C] bg-amber-50" : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="block font-bold text-[#0B2545]">Premium</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">Subscribers only</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Allow Student Downloads */}
+              <div className="pt-3 border-t border-slate-100">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <label htmlFor="allow-student-downloads" className="text-sm font-bold text-[#0B2545] cursor-pointer block">
+                      Allow Student Downloads
+                    </label>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      {allowDownload
+                        ? "Enabled: Authorized students can download the note file to their device."
+                        : "Disabled: Students can view the note online, but cannot download it through the application's download functionality."}
+                    </p>
+                  </div>
+                  <input
+                    id="allow-student-downloads"
+                    type="checkbox"
+                    checked={allowDownload}
+                    onChange={(e) => setAllowDownload(e.target.checked)}
+                    className="w-4 h-4 mt-1 rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545] cursor-pointer"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

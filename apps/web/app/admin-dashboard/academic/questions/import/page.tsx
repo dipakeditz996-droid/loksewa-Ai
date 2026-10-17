@@ -79,12 +79,18 @@ export default function ImportQuestionsPage() {
   const activeColumns = importType === 'subjective' ? SUBJECTIVE_COLUMNS : OBJECTIVE_COLUMNS;
   const activeNotes = importType === 'subjective' ? SUBJECTIVE_NOTES : OBJECTIVE_NOTES;
 
+  const paramCategory = searchParams?.get('category') ? Number(searchParams.get('category')) : undefined;
+  const paramPosition = (searchParams?.get('position') || searchParams?.get('exam')) ? Number(searchParams?.get('position') || searchParams?.get('exam')) : undefined;
+  const paramSubject = searchParams?.get('subject') ? Number(searchParams.get('subject')) : undefined;
+  const paramChapter = searchParams?.get('chapter') ? Number(searchParams.get('chapter')) : undefined;
+  const paramTopic = searchParams?.get('topic') ? Number(searchParams.get('topic')) : undefined;
+
   // Syllabus placement: Category and Position/Level required, Subject/Chapter/Topic optional
-  const [category, setCategory] = useState<number | undefined>();
-  const [position, setPosition] = useState<number | undefined>();
-  const [subject, setSubject] = useState<number | undefined>();
-  const [chapter, setChapter] = useState<number | undefined>();
-  const [topic, setTopic] = useState<number | undefined>();
+  const [category, setCategory] = useState<number | undefined>(paramCategory);
+  const [position, setPosition] = useState<number | undefined>(paramPosition);
+  const [subject, setSubject] = useState<number | undefined>(paramSubject);
+  const [chapter, setChapter] = useState<number | undefined>(paramChapter);
+  const [topic, setTopic] = useState<number | undefined>(paramTopic);
 
   // Collection & Tags (Optional)
   const [collections, setCollections] = useState<QuestionCollection[]>([]);

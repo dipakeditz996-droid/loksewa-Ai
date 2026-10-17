@@ -71,14 +71,6 @@ router.register(r'student/leaderboard', LeaderboardViewSet, basename='student-le
 router.register(r'student/question-reports', StudentQuestionIssueReportViewSet, basename='student-question-report')
 
 
-# Admin Academic routes
-router.register(r'admin/academic/categories', AdminExamCategoryViewSet, basename='admin-category')
-router.register(r'admin/academic/exams', AdminExamViewSet, basename='admin-exam')
-router.register(r'admin/academic/papers', AdminPaperViewSet, basename='admin-paper')
-router.register(r'admin/academic/subjects', AdminSubjectViewSet, basename='admin-subject')
-router.register(r'admin/academic/chapters', AdminChapterViewSet, basename='admin-chapter')
-router.register(r'admin/academic/topics', AdminTopicViewSet, basename='admin-topic')
-
 # Admin Exam Schedules
 router.register(r'admin/schedules', AdminExamScheduleViewSet, basename='admin-schedules')
 

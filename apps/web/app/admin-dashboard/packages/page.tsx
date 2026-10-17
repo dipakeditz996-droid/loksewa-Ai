@@ -73,7 +73,7 @@ export interface PlatformFeatureItem {
   allowedResetPolicies: string[];
 }
 
-export const PLATFORM_FEATURES: PlatformFeatureItem[] = [
+const PLATFORM_FEATURES: PlatformFeatureItem[] = [
   // Objective Exams
   { key: "exam:objective:total", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Total Objective Exam Attempts", description: "Overall combined attempts across all objective exam categories (-1 = unlimited)", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
   { key: "exam:objective:past_year", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Past Year Objective Exams", description: "Attempts for official Loksewa past year question papers", defaultQuota: 10, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
@@ -113,7 +113,7 @@ export const PLATFORM_FEATURES: PlatformFeatureItem[] = [
   { key: "module:analytics", category: "modules", categoryLabel: "Platform Modules & Features", title: "Advanced Analytics Module", description: "Access to performance analytics, mastery radar, and weak-topic diagnostics", defaultQuota: 1, unit: "access", supportsUnlimited: false, allowedResetPolicies: ["NEVER"] },
 ];
 
-export const DEFAULT_FEATURE_LIMITS: Record<string, { enabled: boolean; quota: number; unit: string; reset_policy: string; title: string }> = Object.fromEntries(
+const DEFAULT_FEATURE_LIMITS: Record<string, { enabled: boolean; quota: number; unit: string; reset_policy: string; title: string }> = Object.fromEntries(
   PLATFORM_FEATURES.map((f) => [
     f.key,
     {

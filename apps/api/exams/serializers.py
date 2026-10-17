@@ -117,10 +117,53 @@ class ExamSerializer(serializers.ModelSerializer):
         return SubjectSerializer(subjects, many=True, context=self.context).data
 
 class QuestionFullSerializer(serializers.ModelSerializer):
+    category_name = serializers.SerializerMethodField()
+    position_name = serializers.SerializerMethodField()
+    subject_name = serializers.SerializerMethodField()
+    chapter_name = serializers.SerializerMethodField()
+    topic_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Question
         fields = '__all__'
         read_only_fields = ['created_by', 'status', 'reviewer_comment', 'reviewed_by', 'reviewed_at', 'submitted_at']
+
+    def get_topic_name(self, obj):
+        return obj.topic.name if getattr(obj, 'topic', None) else None
+
+    def get_chapter_name(self, obj):
+        if getattr(obj, 'chapter', None):
+            return obj.chapter.title
+        if getattr(obj, 'topic', None) and getattr(obj.topic, 'chapter', None):
+            return obj.topic.chapter.title
+        return None
+
+    def get_subject_name(self, obj):
+        if getattr(obj, 'subject', None):
+            return obj.subject.name
+        if getattr(obj, 'chapter', None) and getattr(obj.chapter, 'subject', None):
+            return obj.chapter.subject.name
+        if getattr(obj, 'topic', None) and getattr(obj.topic, 'chapter', None) and getattr(obj.topic.chapter, 'subject', None):
+            return obj.topic.chapter.subject.name
+        return None
+
+    def get_position_name(self, obj):
+        if getattr(obj, 'exam', None):
+            return obj.exam.name
+        if getattr(obj, 'subject', None) and getattr(obj.subject, 'paper', None) and getattr(obj.subject.paper, 'exam', None):
+            return obj.subject.paper.exam.name
+        if getattr(obj, 'chapter', None) and getattr(obj.chapter, 'subject', None) and getattr(obj.chapter.subject, 'paper', None) and getattr(obj.chapter.subject.paper, 'exam', None):
+            return obj.chapter.subject.paper.exam.name
+        return None
+
+    def get_category_name(self, obj):
+        if getattr(obj, 'category', None):
+            return obj.category.name
+        if getattr(obj, 'exam', None) and getattr(obj.exam, 'category', None):
+            return obj.exam.category.name
+        if getattr(obj, 'exam', None) and getattr(obj.exam, 'parent', None) and getattr(obj.exam.parent, 'category', None):
+            return obj.exam.parent.category.name
+        return None
 
 from .models import QuestionSet, QuestionSetQuestion
 

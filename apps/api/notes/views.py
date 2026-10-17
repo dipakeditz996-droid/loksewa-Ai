@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
+import re
 from .models import StudyMaterial, StudentMaterialProgress, StudentMaterialBookmark
 from .serializers import StudyMaterialListSerializer, StudyMaterialDetailSerializer, with_student_state
 from subscriptions.access import has_active_subscription
@@ -118,7 +119,7 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 Q(content__icontains=search)
             )
 
-        queryset = queryset.order_by('order', '-created_at', 'id')
+        queryset = queryset.order_by('order', 'created_at', 'id')
         return with_student_state(queryset, user)
 
     def get_serializer_class(self):
@@ -151,14 +152,17 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
             )
         disposition = request.query_params.get('disposition', 'attachment').lower()
         is_inline = disposition == 'inline'
-        if not material.is_downloadable and not is_inline:
+        is_privileged = CourseAccessService.is_privileged(request.user)
+        if not material.is_downloadable and not is_inline and not is_privileged:
             return Response(
                 {"detail": "Downloads are disabled for this study material."},
                 status=status.HTTP_403_FORBIDDEN
             )
-        if not is_inline and not CourseAccessService.is_privileged(request.user):
+        if not is_inline and not is_privileged:
             from subscriptions.access import get_active_subscription, has_admin_granted_access
-            if not has_admin_granted_access(request.user):
+            from core.models import AdminSettings
+            enforce_sub = AdminSettings.get_settings().enforce_subscription_access
+            if enforce_sub and material.access_type != 'free' and not has_admin_granted_access(request.user):
                 active_sub = get_active_subscription(request.user)
                 can_dl = active_sub.plan.can_download_notes if (active_sub and active_sub.plan) else False
                 if not can_dl:
@@ -237,6 +241,75 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
 
         serializer = self.get_serializer(ordered_materials, many=True)
         return Response(serializer.data)
+
+
+def extract_leading_number(title):
+    """
+    Safely extracts a leading numeric sequence number from a note title.
+    Examples:
+        '1. Engineering Surveying - Notes by Iswor Rawat' -> 1.0
+        '2. Construction Materials - Notes by Iswor Rawat' -> 2.0
+        '10. Fluid Mechanics' -> 10.0
+        'Chapter 4: Soil Mechanics' -> 4.0
+    """
+    if not title or not isinstance(title, str):
+        return None
+    trimmed = title.strip()
+
+    # 1. Prefix pattern: Chapter, Topic, Unit, Section, Part, No.
+    prefix_match = re.match(r'^(?:\[\s*)?(?:chapter|topic|unit|section|part|no\.?)\s*(\d+(?:\.\d+)?)', trimmed, re.IGNORECASE)
+    if prefix_match:
+        try:
+            return float(prefix_match.group(1))
+        except ValueError:
+            pass
+
+    # 2. Bracketed number: [1] ...
+    bracket_match = re.match(r'^\[\s*(\d+(?:\.\d+)?)\s*\]', trimmed)
+    if bracket_match:
+        try:
+            return float(bracket_match.group(1))
+        except ValueError:
+            pass
+
+    # 3. Leading standard number: 1., 1 -, 1), 1:, 10 
+    leading_match = re.match(r'^(\d+(?:\.\d+)?)', trimmed)
+    if leading_match:
+        try:
+            return float(leading_match.group(1))
+        except ValueError:
+            pass
+
+    return None
+
+
+def get_study_material_sort_key(item):
+    """
+    Numeric-aware ascending sort key for study materials (dict or model instance).
+    - Uses positive order/sequence field if present
+    - Otherwise extracts leading number from title
+    - Numerically orders numbered notes (e.g. 1, 2, 3, 10)
+    - Places numbered notes before unnumbered notes
+    - Uses stable secondary sort (alphabetical title, ID) for unnumbered notes or ties
+    """
+    if isinstance(item, dict):
+        title = item.get('title') or ''
+        order = item.get('order')
+        item_id = item.get('id') or 0
+    else:
+        title = getattr(item, 'title', '') or ''
+        order = getattr(item, 'order', None)
+        item_id = getattr(item, 'id', 0)
+
+    seq_num = None
+    if isinstance(order, (int, float)) and order > 0:
+        seq_num = float(order)
+    else:
+        seq_num = extract_leading_number(title)
+
+    if seq_num is not None:
+        return (0, seq_num, title.lower(), item_id)
+    return (1, float('inf'), title.lower(), item_id)
 
 
 
@@ -373,7 +446,7 @@ class StudentPortalSyllabusNotesView(APIView):
             exam=selected_exam, status='published'
         ).select_related(
             'subject', 'chapter', 'topic', 'course', 'exam', 'exam__parent', 'exam__category'
-        ).order_by('-created_at')
+        ).order_by('order', 'created_at', 'id')
 
         auth_course_ids = {info['course'].id for info in authorized_prep_dict.values() if info['course']}
         if req_course_id and not req_exam_id and selected_course:
@@ -389,7 +462,7 @@ class StudentPortalSyllabusNotesView(APIView):
         materials_qs = with_student_state(materials_qs, user)
 
         serializer = StudyMaterialListSerializer(materials_qs, many=True, context={'request': request})
-        all_materials = serializer.data
+        all_materials = sorted(serializer.data, key=get_study_material_sort_key)
 
         syllabus_list = []
         subj_standard = []

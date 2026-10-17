@@ -136,6 +136,7 @@ function UploadPdfModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [contentCategory, setContentCategory] = useState<ContentCategory>("syllabus");
+  const [allowDownload, setAllowDownload] = useState<boolean>(false);
   const [accessType, setAccessType] = useState<"free" | "premium">("free");
   const [status, setStatus] = useState<"published" | "draft">("published");
   const [file, setFile] = useState<File | null>(null);
@@ -153,6 +154,7 @@ function UploadPdfModal({
         description: description.trim(),
         exam: examId,
         content_category: contentCategory,
+        is_downloadable: allowDownload,
         access_type: accessType,
         status,
         file,
@@ -259,6 +261,28 @@ function UploadPdfModal({
                 <option value="published">Publish Now (Immediate access)</option>
                 <option value="draft">Save as Draft</option>
               </select>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+              <div className="flex-1">
+                <label htmlFor="syllabus-allow-downloads" className="text-xs font-bold text-[#0B2545] cursor-pointer block">
+                  Allow Student Downloads
+                </label>
+                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                  {allowDownload
+                    ? "Enabled: Authorized students can download the note file to their device."
+                    : "Disabled: Students can view the note online, but cannot download it through the application's download functionality."}
+                </p>
+              </div>
+              <input
+                id="syllabus-allow-downloads"
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => setAllowDownload(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545] cursor-pointer"
+              />
             </div>
           </div>
         </form>

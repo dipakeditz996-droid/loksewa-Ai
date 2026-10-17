@@ -26,6 +26,11 @@ export interface QuestionData {
   reviewer_comment: string;
   submitted_at: string;
   reviewed_at: string;
+  category_name?: string;
+  position_name?: string;
+  subject_name?: string;
+  chapter_name?: string;
+  topic_name?: string;
   created_at: string;
   updated_at: string;
 }

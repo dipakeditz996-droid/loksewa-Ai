@@ -2627,6 +2627,8 @@ class AdminStudyMaterialsView(APIView):
                 "externalUrl": material.external_url,
                 "estimatedReadingTime": material.estimated_reading_time,
                 "availableToAiTutor": material.available_to_ai_tutor,
+                "isDownloadable": material.is_downloadable,
+                "is_downloadable": material.is_downloadable,
                 "order": material.order,
                 "createdAt": material.created_at.isoformat(),
                 "updatedAt": material.updated_at.isoformat(),
@@ -2661,9 +2663,27 @@ class AdminStudyMaterialsView(APIView):
         except (Exam.DoesNotExist, ValueError, TypeError):
             return Response({"error": "That exam does not exist."}, status=status.HTTP_400_BAD_REQUEST)
 
-        content_category = (request.data.get('content_category') or 'subjective_topicwise').strip().lower()
-        if content_category not in dict(StudyMaterial.CONTENT_CATEGORY_CHOICES):
-            return Response({"error": f"Unsupported content_category: {content_category}"}, status=status.HTTP_400_BAD_REQUEST)
+        category_map = {
+            'syllabus': 'syllabus',
+            'subjective': 'subjective_topicwise',
+            'subjective_topicwise': 'subjective_topicwise',
+            'objective': 'objective_topicwise',
+            'objective_topicwise': 'objective_topicwise',
+            'revision': 'revision_notes',
+            'revision_notes': 'revision_notes',
+        }
+        raw_cat = (request.data.get('content_category') or '').strip().lower()
+        if not raw_cat:
+            return Response(
+                {"error": "Note category is required. Options: Syllabus, Subjective Topicwise Notes, Objective Topicwise Notes, Revision Notes."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        content_category = category_map.get(raw_cat)
+        if not content_category:
+            return Response(
+                {"error": f"Invalid note category '{raw_cat}'. Options: syllabus, subjective_topicwise, objective_topicwise, revision_notes."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         note_type = (request.data.get('note_type') or 'standard').strip().lower()
         if note_type not in dict(StudyMaterial.NOTE_TYPE_CHOICES):
@@ -2760,6 +2780,15 @@ class AdminStudyMaterialsView(APIView):
         if upload:
             material_type = 'pdf'
 
+        raw_is_dl = request.data.get('is_downloadable', request.data.get('isDownloadable'))
+        if raw_is_dl is not None:
+            if isinstance(raw_is_dl, str):
+                is_downloadable = raw_is_dl.lower() in ('true', '1', 'yes')
+            else:
+                is_downloadable = bool(raw_is_dl)
+        else:
+            is_downloadable = False
+
         material = StudyMaterial.objects.create(
             title=title,
             teacher=request.user,
@@ -2779,6 +2808,7 @@ class AdminStudyMaterialsView(APIView):
             external_url=external_url or None,
             estimated_reading_time=int(request.data.get('estimated_reading_time') or 10),
             order=order,
+            is_downloadable=is_downloadable,
         )
         if upload:
             material.file = upload
@@ -2810,6 +2840,8 @@ class AdminStudyMaterialsView(APIView):
             "topicName": topic.name if topic else None,
             "fileUrl": file_url,
             "order": material.order,
+            "isDownloadable": material.is_downloadable,
+            "is_downloadable": material.is_downloadable,
         }, status=status.HTTP_201_CREATED)
 
 
@@ -2872,6 +2904,8 @@ class AdminStudyMaterialDetailView(APIView):
             "fileName": file_name,
             "estimatedReadingTime": material.estimated_reading_time,
             "availableToAiTutor": material.available_to_ai_tutor,
+            "isDownloadable": material.is_downloadable,
+            "is_downloadable": material.is_downloadable,
             "order": material.order,
             "createdAt": material.created_at.isoformat(),
             "updatedAt": material.updated_at.isoformat(),
@@ -2890,10 +2924,29 @@ class AdminStudyMaterialDetailView(APIView):
             if field in request.data:
                 setattr(material, field, request.data[field] or '')
 
-        if 'content_category' in request.data:
-            cat = str(request.data['content_category']).strip().lower()
-            if cat in dict(StudyMaterial.CONTENT_CATEGORY_CHOICES):
-                material.content_category = cat
+        if 'is_downloadable' in request.data or 'isDownloadable' in request.data:
+            val = request.data.get('is_downloadable') if 'is_downloadable' in request.data else request.data.get('isDownloadable')
+            if isinstance(val, str):
+                material.is_downloadable = val.lower() in ('true', '1', 'yes')
+            else:
+                material.is_downloadable = bool(val)
+
+        if 'content_category' in request.data or 'contentCategory' in request.data:
+            cat_input = request.data.get('content_category') if 'content_category' in request.data else request.data.get('contentCategory')
+            if cat_input:
+                cat = str(cat_input).strip().lower()
+                category_map = {
+                    'syllabus': 'syllabus',
+                    'subjective': 'subjective_topicwise',
+                    'subjective_topicwise': 'subjective_topicwise',
+                    'objective': 'objective_topicwise',
+                    'objective_topicwise': 'objective_topicwise',
+                    'revision': 'revision_notes',
+                    'revision_notes': 'revision_notes',
+                }
+                norm_cat = category_map.get(cat)
+                if norm_cat:
+                    material.content_category = norm_cat
 
         if 'note_type' in request.data:
             nt = str(request.data['note_type']).strip().lower()
@@ -2995,6 +3048,8 @@ class AdminStudyMaterialDetailView(APIView):
             "status": material.status,
             "fileUrl": file_url,
             "order": material.order,
+            "isDownloadable": material.is_downloadable,
+            "is_downloadable": material.is_downloadable,
         })
 
     def delete(self, request, pk):
@@ -3149,12 +3204,6 @@ class AdminPreparationAcademicTreeView(APIView):
         subjects = Subject.objects.filter(
             paper__exam_id=exam_id
         ).select_related('paper').prefetch_related('chapters__topics').order_by('order', 'id')
-
-        # Fallback if subjects were created without paper association for this exam
-        if not subjects.exists():
-            subjects = Subject.objects.filter(
-                Q(paper__exam_id=exam_id) | Q(paper__isnull=True)
-            ).select_related('paper').prefetch_related('chapters__topics').order_by('order', 'id')
 
         chaps = [c for s in subjects for c in s.chapters.all()]
         tops = [t for c in chaps for t in c.topics.all()]

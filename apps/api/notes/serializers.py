@@ -38,6 +38,7 @@ class StudyMaterialListSerializer(serializers.ModelSerializer):
             'id', 'title', 'slug', 'description', 'material_type',
             'content_category', 'note_type',
             'access_type', 'status', 'is_downloadable', 'estimated_reading_time', 'updated_at', 'created_at',
+            'order',
             'exam', 'exam_name', 'parent_exam_name', 'category_name',
             'subject', 'subject_name',
             'chapter', 'chapter_name',
@@ -129,7 +130,7 @@ class AdminStudyMaterialSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description', 'content', 'exam', 'subject', 'chapter', 'topic', 'course',
             'content_category', 'note_type',
-            'material_type', 'difficulty', 'file', 'file_url', 'external_url', 'access_type', 'status',
+            'material_type', 'difficulty', 'file', 'file_url', 'external_url', 'access_type', 'status', 'is_downloadable',
             'review_note', 'estimated_reading_time', 'created_at', 'updated_at',
             'exam_name', 'parent_exam_name', 'category_name', 'subject_name', 'chapter_name', 'topic_name', 'author_name'
         ]

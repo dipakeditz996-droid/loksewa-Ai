@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, use } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle, Loader2 } from 'lucide-react';
 import { notesApi, StudyMaterial } from '@/lib/api/notes';
+import { FirstPartyPdfViewer } from '@/components/common/FirstPartyPdfViewer';
 import { toast } from 'sonner';
 
 export default function NoteDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -12,6 +13,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true);
   const [bookmarking, setBookmarking] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,6 +32,40 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
     };
     fetchMaterial();
   }, [resolvedParams.id]);
+
+  useEffect(() => {
+    let active = true;
+    let createdUrl: string | null = null;
+    if (material && material.material_type === 'pdf' && (material.file || material.file_url)) {
+      setLoadingPdf(true);
+      notesApi.getMaterialBlobUrl(material.id)
+        .then(url => {
+          if (active) {
+            createdUrl = url;
+            setPdfBlobUrl(url);
+          } else {
+            URL.revokeObjectURL(url);
+          }
+        })
+        .catch(err => {
+          console.warn('Could not load protected PDF blob, falling back to file URL:', err);
+          if (active) {
+            setPdfBlobUrl(material.file || material.file_url || null);
+          }
+        })
+        .finally(() => {
+          if (active) setLoadingPdf(false);
+        });
+    } else {
+      setPdfBlobUrl(null);
+    }
+    return () => {
+      active = false;
+      if (createdUrl) {
+        URL.revokeObjectURL(createdUrl);
+      }
+    };
+  }, [material]);
 
   // Scroll spy for progress
   useEffect(() => {
@@ -180,12 +217,20 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       {/* Content */}
       <div ref={contentRef} className="prose prose-lg dark:prose-invert max-w-none prose-blue">
         {material.material_type === 'pdf' ? (
-          <div className="w-full rounded-lg overflow-hidden border border-border dark:border-gray-800 h-[800px] flex items-center justify-center bg-muted dark:bg-gray-900">
-            {material.file ? (
-              <iframe 
-                src={`${material.file}#view=FitH`} 
-                className="w-full h-full"
+          <div className="w-full rounded-2xl overflow-hidden border border-border dark:border-gray-800 h-[800px] flex items-center justify-center bg-slate-950 shadow-xl">
+            {loadingPdf ? (
+              <div className="flex flex-col items-center justify-center p-8 text-slate-400">
+                <Loader2 className="w-8 h-8 animate-spin text-[#C4A45C] mb-3" />
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Securing and loading PDF...
+                </p>
+              </div>
+            ) : pdfBlobUrl || material.file ? (
+              <FirstPartyPdfViewer
+                url={pdfBlobUrl || material.file}
                 title={material.title}
+                allowDownload={material.is_downloadable !== false}
+                onDownload={handleDownload}
               />
             ) : (
               <p className="text-muted-foreground">PDF file not found.</p>

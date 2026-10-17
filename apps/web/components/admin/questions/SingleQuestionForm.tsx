@@ -59,14 +59,21 @@ export function SingleQuestionForm({ initialData, onSaveSuccess }: { initialData
   });
   const [correctOption, setCorrectOption] = useState<'A'|'B'|'C'|'D'|''>(initialData?.correct_option || '');
 
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const paramCategory = searchParams?.get('category') || '';
+  const paramPosition = searchParams?.get('position') || searchParams?.get('exam') || '';
+  const paramSubject = searchParams?.get('subject') || '';
+  const paramChapter = searchParams?.get('chapter') || '';
+  const paramTopic = searchParams?.get('topic') || '';
+
   // Course & Syllabus Cascading
   const [courses, setCourses] = useState<PublicCourse[]>([]);
   const [selCourse, setSelCourse] = useState(initialData?.course_id ? String(initialData.course_id) : '');
-  const [selCategory, setSelCategory] = useState(initialData?.category_id || '');
-  const [selPosition, setSelPosition] = useState(initialData?.position_id || '');
-  const [selSubject, setSelSubject] = useState(initialData?.subject_id || '');
-  const [selChapter, setSelChapter] = useState(initialData?.chapter_id || '');
-  const [selTopic, setSelTopic] = useState(initialData?.topic || '');
+  const [selCategory, setSelCategory] = useState(initialData?.category_id || paramCategory);
+  const [selPosition, setSelPosition] = useState(initialData?.position_id || paramPosition);
+  const [selSubject, setSelSubject] = useState(initialData?.subject_id || paramSubject);
+  const [selChapter, setSelChapter] = useState(initialData?.chapter_id || paramChapter);
+  const [selTopic, setSelTopic] = useState(initialData?.topic || paramTopic);
 
   useEffect(() => {
     publicApi.getCourses()

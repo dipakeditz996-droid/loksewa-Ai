@@ -49,22 +49,9 @@ class QuestionSelectionService:
     APPROVED_STATUS = "approved"
 
     def get_base_queryset(self) -> QuerySet:
-        """Returns the base queryset of all approved questions mapped to courses."""
+        """Returns the base queryset of all approved questions from the Master Question Bank."""
         from .models import Question
-        from courses.services.course_access_service import CourseAccessService
-
-        all_course_exam_ids = list(CourseAccessService.get_all_course_exam_ids())
-        qs = Question.objects.filter(status=self.APPROVED_STATUS)
-        if all_course_exam_ids:
-            qs = qs.filter(
-                Q(exam_id__in=all_course_exam_ids) |
-                Q(subject__paper__exam_id__in=all_course_exam_ids) |
-                Q(chapter__subject__paper__exam_id__in=all_course_exam_ids) |
-                Q(topic__chapter__subject__paper__exam_id__in=all_course_exam_ids)
-            )
-        else:
-            return qs.none()
-        return qs
+        return Question.objects.filter(status=self.APPROVED_STATUS)
 
     def apply_filters(
         self,
@@ -123,17 +110,22 @@ class QuestionSelectionService:
         if exam_id:
             qs = qs.filter(
                 Q(exam_id=exam_id) |
+                Q(exam__parent_id=exam_id) |
                 Q(subject__paper__exam_id=exam_id) |
+                Q(subject__paper__exam__parent_id=exam_id) |
+                Q(chapter__subject__paper__exam_id=exam_id) |
                 Q(topic__chapter__subject__paper__exam_id=exam_id)
             )
         if paper_id:
             qs = qs.filter(
                 Q(subject__paper_id=paper_id) |
+                Q(chapter__subject__paper_id=paper_id) |
                 Q(topic__chapter__subject__paper_id=paper_id)
             )
         if subject_id:
             qs = qs.filter(
                 Q(subject_id=subject_id) |
+                Q(chapter__subject_id=subject_id) |
                 Q(topic__chapter__subject_id=subject_id)
             )
         if chapter_id:
@@ -147,7 +139,9 @@ class QuestionSelectionService:
             qs = qs.filter(
                 Q(category_id=category_id) |
                 Q(exam__category_id=category_id) |
+                Q(exam__parent__category_id=category_id) |
                 Q(subject__paper__exam__category_id=category_id) |
+                Q(chapter__subject__paper__exam__category_id=category_id) |
                 Q(topic__chapter__subject__paper__exam__category_id=category_id)
             )
         if topic_ids:

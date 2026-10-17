@@ -15,6 +15,8 @@ export default function BulkUploadPage() {
   const [files, setFiles] = useState<{name: string, size: string, status: string, subject: string, type: string}[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [commonCategory, setCommonCategory] = useState<string>("subjective_topicwise");
+  const [allowDownload, setAllowDownload] = useState<boolean>(false);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -162,6 +164,20 @@ export default function BulkUploadPage() {
             
             <div className="p-4 space-y-4">
               <div className="space-y-2">
+                <Label>Common Note Category</Label>
+                <select
+                  value={commonCategory}
+                  onChange={(e) => setCommonCategory(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="syllabus">Syllabus</option>
+                  <option value="subjective_topicwise">Subjective Topicwise Notes</option>
+                  <option value="objective_topicwise">Objective Topicwise Notes</option>
+                  <option value="revision_notes">Revision Notes</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Common Subject</Label>
                 <select className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
                   <option>Do not override</option>
@@ -185,6 +201,29 @@ export default function BulkUploadPage() {
                   <option>Free</option>
                   <option>Premium</option>
                 </select>
+              </div>
+
+              {/* Allow Student Downloads */}
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="flex-1">
+                    <label htmlFor="bulk-allow-downloads" className="text-xs font-bold text-[#0B2545] cursor-pointer block">
+                      Allow Student Downloads
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      {allowDownload
+                        ? "Enabled: Authorized students can download the note files to their device."
+                        : "Disabled: Students can view notes online, but cannot download them through the application's download functionality."}
+                    </p>
+                  </div>
+                  <input
+                    id="bulk-allow-downloads"
+                    type="checkbox"
+                    checked={allowDownload}
+                    onChange={(e) => setAllowDownload(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545] cursor-pointer"
+                  />
+                </div>
               </div>
 
               <Button className="w-full bg-[#0B2545] text-white hover:bg-[#163E6C]" disabled={files.length === 0}>

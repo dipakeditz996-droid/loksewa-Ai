@@ -24,24 +24,37 @@ def get_node_dependencies(instance):
     if isinstance(instance, ExamCategory):
         counts['children'] = instance.exams.count()
         counts['notes'] = StudyMaterial.objects.filter(exam__category=instance).count()
-        counts['questions'] = Question.objects.filter(topic__chapter__subject__paper__exam__category=instance).count()
+        counts['questions'] = Question.objects.filter(
+            Q(category=instance) | Q(exam__category=instance) | Q(exam__parent__category=instance) |
+            Q(subject__paper__exam__category=instance) | Q(chapter__subject__paper__exam__category=instance) |
+            Q(topic__chapter__subject__paper__exam__category=instance)
+        ).distinct().count()
         counts['exams'] = Examination.objects.filter(category=instance).count()
     elif isinstance(instance, Exam):
         counts['children'] = instance.children.count() + instance.papers.count()
         counts['notes'] = StudyMaterial.objects.filter(exam=instance).count()
-        counts['questions'] = Question.objects.filter(topic__chapter__subject__paper__exam=instance).count()
+        counts['questions'] = Question.objects.filter(
+            Q(exam=instance) | Q(exam__parent=instance) |
+            Q(subject__paper__exam=instance) | Q(chapter__subject__paper__exam=instance) |
+            Q(topic__chapter__subject__paper__exam=instance)
+        ).distinct().count()
         counts['exams'] = Examination.objects.filter(exam=instance).count()
     elif isinstance(instance, Paper):
         counts['children'] = instance.subjects.count()
         counts['notes'] = StudyMaterial.objects.filter(subject__paper=instance).count()
-        counts['questions'] = Question.objects.filter(topic__chapter__subject__paper=instance).count()
+        counts['questions'] = Question.objects.filter(
+            Q(subject__paper=instance) | Q(chapter__subject__paper=instance) |
+            Q(topic__chapter__subject__paper=instance)
+        ).distinct().count()
         counts['exams'] = Examination.objects.filter(subject__paper=instance).count()
     elif isinstance(instance, Subject):
         counts['children'] = instance.chapters.count()
         counts['notes'] = StudyMaterial.objects.filter(
             Q(subject=instance) | Q(chapter__subject=instance) | Q(topic__chapter__subject=instance)
         ).distinct().count()
-        counts['questions'] = Question.objects.filter(topic__chapter__subject=instance).count()
+        counts['questions'] = Question.objects.filter(
+            Q(subject=instance) | Q(chapter__subject=instance) | Q(topic__chapter__subject=instance)
+        ).distinct().count()
         counts['exams'] = Examination.objects.filter(
             Q(subject=instance) | Q(questions__topic__chapter__subject=instance)
         ).distinct().count()
@@ -50,7 +63,9 @@ def get_node_dependencies(instance):
         counts['notes'] = StudyMaterial.objects.filter(
             Q(chapter=instance) | Q(topic__chapter=instance)
         ).distinct().count()
-        counts['questions'] = Question.objects.filter(topic__chapter=instance).count()
+        counts['questions'] = Question.objects.filter(
+            Q(chapter=instance) | Q(topic__chapter=instance)
+        ).distinct().count()
         counts['exams'] = Examination.objects.filter(questions__topic__chapter=instance).distinct().count()
     elif isinstance(instance, Topic):
         counts['children'] = 0
@@ -93,16 +108,47 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['patch'])
     def reorder(self, request):
         serializer = ReorderSerializer(data=request.data, many=True)
-        if serializer.is_valid():
-            objects_to_update = []
-            for item in serializer.validated_data:
-                obj = self.get_queryset().model.objects.get(id=item['id'])
-                obj.order = item['order']
-                objects_to_update.append(obj)
-            
-            self.get_queryset().model.objects.bulk_update(objects_to_update, ['order'])
-            return Response({'status': 'reordered'})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        model_cls = self.get_queryset().model
+        items_map = {item['id']: item['order'] for item in serializer.validated_data}
+        objs = list(model_cls.objects.filter(id__in=items_map.keys()))
+
+        if len(objs) != len(items_map):
+            return Response(
+                {"error": "One or more item IDs were not found for reordering."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Context boundary validation: Ensure all reordered items belong to the same parent context
+        if model_cls == Subject:
+            paper_ids = {obj.paper_id for obj in objs}
+            if len(paper_ids) > 1:
+                return Response(
+                    {"error": "Cannot reorder subjects across different papers or preparations."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        elif model_cls == Chapter:
+            subject_ids = {obj.subject_id for obj in objs}
+            if len(subject_ids) > 1:
+                return Response(
+                    {"error": "Cannot reorder chapters across different subjects."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        elif model_cls == Topic:
+            chapter_ids = {obj.chapter_id for obj in objs}
+            if len(chapter_ids) > 1:
+                return Response(
+                    {"error": "Cannot reorder topics across different chapters."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        for obj in objs:
+            obj.order = items_map[obj.id]
+
+        model_cls.objects.bulk_update(objs, ['order'])
+        return Response({'status': 'reordered', 'updated_count': len(objs)})
 
     @action(detail=True, methods=['get'])
     def dependencies(self, request, pk=None):
@@ -179,9 +225,12 @@ class SubjectViewSet(BaseSyllabusViewSet):
             queryset = queryset.filter(paper_id=paper_id)
         # A Subject belongs to an Exam through its Paper. The UI calls an Exam a
         # "Position", so allow narrowing straight to one without picking a Paper.
-        exam_id = self.request.query_params.get('exam', None)
+        exam_id = self.request.query_params.get('exam', None) or self.request.query_params.get('exam_id', None)
         if exam_id:
             queryset = queryset.filter(paper__exam_id=exam_id)
+        category_id = self.request.query_params.get('category', None) or self.request.query_params.get('category_id', None)
+        if category_id:
+            queryset = queryset.filter(paper__exam__category_id=category_id)
         return queryset
 
 class ChapterViewSet(BaseSyllabusViewSet):
@@ -189,9 +238,15 @@ class ChapterViewSet(BaseSyllabusViewSet):
     
     def get_queryset(self):
         queryset = Chapter.objects.all().order_by('order', 'id')
-        subject_id = self.request.query_params.get('subject', None)
+        subject_id = self.request.query_params.get('subject', None) or self.request.query_params.get('subject_id', None)
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
+        exam_id = self.request.query_params.get('exam', None) or self.request.query_params.get('exam_id', None)
+        if exam_id:
+            queryset = queryset.filter(subject__paper__exam_id=exam_id)
+        category_id = self.request.query_params.get('category', None) or self.request.query_params.get('category_id', None)
+        if category_id:
+            queryset = queryset.filter(subject__paper__exam__category_id=category_id)
         return queryset
 
 class TopicViewSet(BaseSyllabusViewSet):
@@ -199,9 +254,18 @@ class TopicViewSet(BaseSyllabusViewSet):
     
     def get_queryset(self):
         queryset = Topic.objects.all().order_by('order', 'id')
-        chapter_id = self.request.query_params.get('chapter', None)
+        chapter_id = self.request.query_params.get('chapter', None) or self.request.query_params.get('chapter_id', None)
         if chapter_id:
             queryset = queryset.filter(chapter_id=chapter_id)
+        subject_id = self.request.query_params.get('subject', None) or self.request.query_params.get('subject_id', None)
+        if subject_id:
+            queryset = queryset.filter(chapter__subject_id=subject_id)
+        exam_id = self.request.query_params.get('exam', None) or self.request.query_params.get('exam_id', None)
+        if exam_id:
+            queryset = queryset.filter(chapter__subject__paper__exam_id=exam_id)
+        category_id = self.request.query_params.get('category', None) or self.request.query_params.get('category_id', None)
+        if category_id:
+            queryset = queryset.filter(chapter__subject__paper__exam__category_id=category_id)
         return queryset
 
 from rest_framework.views import APIView

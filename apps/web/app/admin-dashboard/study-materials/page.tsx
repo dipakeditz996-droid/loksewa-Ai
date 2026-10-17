@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   BookOpen,
   Search,
@@ -39,6 +39,8 @@ import {
   AcademicChapter,
   AcademicTopic,
 } from "@/lib/api/admin-study-materials";
+import { sortNotesAscending } from "@/lib/utils/note-sorting";
+import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
 import {
   adminAcademicApi,
   ApiSubject,
@@ -92,7 +94,7 @@ const SECTION_CONFIG: {
   },
 ];
 
-export function AdminContentManager() {
+function AdminContentManager() {
   // Hierarchy state
   const [hierarchy, setHierarchy] = useState<CategoryHierarchyItem[]>([]);
   const [loadingHierarchy, setLoadingHierarchy] = useState(true);
@@ -242,15 +244,21 @@ export function AdminContentManager() {
     );
   }, [hierarchy]);
 
-  // 2. Load Academic Tree for selected preparation
+  // 2. Load Academic Tree for selected preparation (with race condition guard)
+  const activePrepFetchIdRef = useRef<number | null>(null);
+
   const loadAcademicTree = useCallback(
     async (prepId: number) => {
+      activePrepFetchIdRef.current = prepId;
       setLoadingAcademicTree(true);
       try {
         const data = await adminStudyMaterialApi.getAcademicTree(prepId);
+        // Ignore stale responses if the user switched to another preparation in the meantime
+        if (activePrepFetchIdRef.current !== prepId) return;
+
         setAcademicTree(data);
 
-        // Keep selectedNode synchronized if its node was reloaded
+        // Keep selectedNode synchronized only if it exists within the new preparation's tree
         setSelectedAcademicNode((prev) => {
           if (prev.type === "subject" && prev.subject) {
             const updatedSub = data.find((s) => s.id === prev.subject!.id);
@@ -273,18 +281,24 @@ export function AdminContentManager() {
           return { type: "preparation" };
         });
       } catch {
-        setAcademicTree([]);
+        if (activePrepFetchIdRef.current === prepId) {
+          setAcademicTree([]);
+        }
       } finally {
-        setLoadingAcademicTree(false);
+        if (activePrepFetchIdRef.current === prepId) {
+          setLoadingAcademicTree(false);
+        }
       }
     },
     []
   );
 
   useEffect(() => {
+    // Immediately clear previous context data so stale subjects never bleed across selections
+    setSelectedAcademicNode({ type: "preparation" });
+    setAcademicTree([]);
     if (!selectedPrepId) {
-      setAcademicTree([]);
-      setSelectedAcademicNode({ type: "preparation" });
+      activePrepFetchIdRef.current = null;
       return;
     }
     loadAcademicTree(selectedPrepId);
@@ -313,7 +327,7 @@ export function AdminContentManager() {
       }
 
       const res = await adminStudyMaterialApi.list(params);
-      setMaterials(res.materials);
+      setMaterials(sortNotesAscending(res.materials));
     } catch (err: any) {
       toast.error(err.message || "Failed to load materials");
     } finally {
@@ -1215,6 +1229,8 @@ function UploadMaterialModal({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<ContentCategory>(activeSection || "subjective_topicwise");
+  const [allowDownload, setAllowDownload] = useState<boolean>(false);
   const [selectedSubType, setSelectedSubType] = useState<NoteType>(activeSubType);
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | "">(
     initialSubjectId ?? ""
@@ -1268,7 +1284,8 @@ function UploadMaterialModal({
         description: description.trim(),
         exam: activePreparation.id,
         course: activePreparation.courseId,
-        content_category: activeSection,
+        content_category: selectedCategory,
+        is_downloadable: allowDownload,
         note_type: selectedSubType,
         subject: selectedSubjectId ? Number(selectedSubjectId) : undefined,
         chapter: selectedChapterId ? Number(selectedChapterId) : undefined,
@@ -1322,6 +1339,23 @@ function UploadMaterialModal({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+          {/* Note Category */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Note Category <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value as ContentCategory)}
+              className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium focus:outline-none"
+            >
+              <option value="syllabus">Syllabus</option>
+              <option value="subjective_topicwise">Subjective Topicwise Notes</option>
+              <option value="objective_topicwise">Objective Topicwise Notes</option>
+              <option value="revision_notes">Revision Notes</option>
+            </select>
+          </div>
+
           {/* SubType Selection */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -1528,6 +1562,29 @@ function UploadMaterialModal({
             </div>
           </div>
 
+          {/* Allow Student Downloads */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <div className="flex-1">
+                <label htmlFor="modal-allow-downloads" className="text-xs font-bold text-[#0B2545] dark:text-white cursor-pointer block">
+                  Allow Student Downloads
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                  {allowDownload
+                    ? "Enabled: Authorized students can download the note file to their device."
+                    : "Disabled: Students can view the note online, but cannot download it through the application's download functionality."}
+                </p>
+              </div>
+              <input
+                id="modal-allow-downloads"
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => setAllowDownload(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545] cursor-pointer"
+              />
+            </div>
+          </div>
+
           {/* Modal Footer */}
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={uploading}>
@@ -1575,6 +1632,8 @@ function EditMaterialModal({
 }) {
   const [title, setTitle] = useState(material.title);
   const [description, setDescription] = useState(material.description || "");
+  const [contentCategory, setContentCategory] = useState<ContentCategory>(material.contentCategory || "subjective_topicwise");
+  const [allowDownload, setAllowDownload] = useState<boolean>(material.isDownloadable ?? false);
   const [subjectId, setSubjectId] = useState<number | "">(material.subjectId || "");
   const [chapterId, setChapterId] = useState<number | "">(material.chapterId || "");
   const [topicId, setTopicId] = useState<number | "">(material.topicId || "");
@@ -1606,6 +1665,8 @@ function EditMaterialModal({
       await adminStudyMaterialApi.update(material.id, {
         title: title.trim(),
         description: description.trim(),
+        content_category: contentCategory,
+        is_downloadable: allowDownload,
         subject: subjectId ? Number(subjectId) : null,
         chapter: chapterId ? Number(chapterId) : null,
         topic: topicId ? Number(topicId) : null,
@@ -1629,6 +1690,22 @@ function EditMaterialModal({
         </h2>
 
         <form onSubmit={handleSave} className="space-y-4 text-sm">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+              Note Category <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={contentCategory}
+              onChange={(e) => setContentCategory(e.target.value as ContentCategory)}
+              className="w-full text-xs p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-medium focus:outline-none"
+            >
+              <option value="syllabus">Syllabus</option>
+              <option value="subjective_topicwise">Subjective Topicwise Notes</option>
+              <option value="objective_topicwise">Objective Topicwise Notes</option>
+              <option value="revision_notes">Revision Notes</option>
+            </select>
+          </div>
+
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
               Title
@@ -1747,6 +1824,29 @@ function EditMaterialModal({
                 <option value="draft">Draft</option>
                 <option value="archived">Archived</option>
               </select>
+            </div>
+          </div>
+
+          {/* Allow Student Downloads */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <div className="flex-1">
+                <label htmlFor="edit-modal-allow-downloads" className="text-xs font-bold text-[#0B2545] dark:text-white cursor-pointer block">
+                  Allow Student Downloads
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                  {allowDownload
+                    ? "Enabled: Authorized students can download the note file to their device."
+                    : "Disabled: Students can view the note online, but cannot download it through the application's download functionality."}
+                </p>
+              </div>
+              <input
+                id="edit-modal-allow-downloads"
+                type="checkbox"
+                checked={allowDownload}
+                onChange={(e) => setAllowDownload(e.target.checked)}
+                className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545] cursor-pointer"
+              />
             </div>
           </div>
 
@@ -1914,13 +2014,19 @@ function ViewPdfModal({
           </div>
         </div>
 
-        {/* PDF Viewer */}
-        <div className="flex-1 bg-slate-100 dark:bg-slate-950 p-2 overflow-hidden">
+        {/* First-Party PDF Viewer (Zero Google Drive toolbar/branding) */}
+        <div className="flex-1 bg-slate-950 overflow-hidden flex flex-col">
           {material.fileUrl ? (
-            <iframe
-              src={`${material.fileUrl}#view=FitH`}
-              className="w-full h-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white"
+            <FirstPartyPdfViewer
+              url={material.fileUrl}
               title={material.title}
+              allowDownload={true}
+              onDownload={() => {
+                const a = document.createElement("a");
+                a.href = material.fileUrl || "";
+                a.download = `${material.title || "material"}.pdf`;
+                a.click();
+              }}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">

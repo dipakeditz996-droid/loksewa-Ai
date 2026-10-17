@@ -660,11 +660,20 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     resolved_exam = Exam.objects.get(id=exam_id)
                 else:
                     first_question = questions[0] if questions else None
-                    resolved_exam = (
-                        first_question.topic.chapter.subject.paper.exam
-                        if first_question else
-                        Exam.objects.filter(category_id=category_id).first()
-                    )
+                    resolved_exam = None
+                    if first_question:
+                        if getattr(first_question, 'exam', None):
+                            resolved_exam = first_question.exam
+                        elif getattr(first_question, 'subject', None) and getattr(first_question.subject, 'paper', None):
+                            resolved_exam = first_question.subject.paper.exam
+                        elif getattr(first_question, 'chapter', None) and getattr(first_question.chapter, 'subject', None) and getattr(first_question.chapter.subject, 'paper', None):
+                            resolved_exam = first_question.chapter.subject.paper.exam
+                        elif getattr(first_question, 'topic', None) and getattr(first_question.topic, 'chapter', None) and getattr(first_question.topic.chapter, 'subject', None) and getattr(first_question.topic.chapter.subject, 'paper', None):
+                            resolved_exam = first_question.topic.chapter.subject.paper.exam
+
+                    if not resolved_exam:
+                        resolved_exam = Exam.objects.filter(category_id=category_id).first()
+
                     if not resolved_exam:
                         return Response({'detail': 'No exam found under this category.'}, status=status.HTTP_400_BAD_REQUEST)
 

@@ -17,9 +17,49 @@ export default function AdminReviewQueuePage() {
   const router = useRouter();
   const [questions, setQuestions] = useState<QuestionData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("pending_review");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [error, setError] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedPosition, setSelectedPosition] = useState<string>("");
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [positions, setPositions] = useState<{ id: number; name: string; category?: number }[]>([]);
+  const [subjects, setSubjects] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    import("@/lib/api/admin-syllabus").then(({ adminSyllabusApi }) => {
+      adminSyllabusApi.getCategories().then((res: any) => {
+        setCategories(Array.isArray(res) ? res : res?.results || []);
+      }).catch(console.error);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCategory) {
+      setPositions([]);
+      setSelectedPosition("");
+      return;
+    }
+    import("@/lib/api/admin-syllabus").then(({ adminSyllabusApi }) => {
+      adminSyllabusApi.getPositions(Number(selectedCategory)).then((res: any) => {
+        setPositions(Array.isArray(res) ? res : res?.results || []);
+      }).catch(console.error);
+    });
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    if (!selectedPosition) {
+      setSubjects([]);
+      setSelectedSubject("");
+      return;
+    }
+    import("@/lib/api/admin-syllabus").then(({ adminSyllabusApi }) => {
+      adminSyllabusApi.getSubjects(Number(selectedPosition)).then((res: any) => {
+        setSubjects(Array.isArray(res) ? res : res?.results || []);
+      }).catch(console.error);
+    });
+  }, [selectedPosition]);
 
   const fetchQueue = async () => {
     try {
@@ -29,6 +69,9 @@ export default function AdminReviewQueuePage() {
       if (statusFilter !== "all") {
         params.status = statusFilter;
       }
+      if (selectedCategory) params.category = selectedCategory;
+      if (selectedPosition) params.position = selectedPosition;
+      if (selectedSubject) params.subject = selectedSubject;
       
       const response = await adminQuestionsApi.getAdminReviewQueue(params);
       const data = Array.isArray(response) ? response : (response.results || []);
@@ -43,7 +86,7 @@ export default function AdminReviewQueuePage() {
 
   useEffect(() => {
     fetchQueue();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, selectedCategory, selectedPosition, selectedSubject]);
 
   const getStatusBadge = (status: string) => {
     switch(status) {
@@ -76,19 +119,56 @@ export default function AdminReviewQueuePage() {
             />
           </div>
           
-          <div className="flex items-center px-3 py-1.5 border border-border/50 rounded-md bg-background text-sm">
-            <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
-            <select 
-              className="bg-transparent border-none outline-none font-medium cursor-pointer"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              className="px-3 py-1.5 border border-border/50 rounded-md bg-background text-sm font-medium"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
             >
-              <option value="pending_review">Needs Review</option>
-              <option value="changes_requested">Changes Requested</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="all">All Submissions</option>
+              <option value="">All Categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))}
             </select>
+
+            <select
+              className="px-3 py-1.5 border border-border/50 rounded-md bg-background text-sm font-medium"
+              value={selectedPosition}
+              onChange={(e) => setSelectedPosition(e.target.value)}
+              disabled={!selectedCategory}
+            >
+              <option value="">All Positions / Levels</option>
+              {positions.map((p) => (
+                <option key={p.id} value={String(p.id)}>{p.name}</option>
+              ))}
+            </select>
+
+            <select
+              className="px-3 py-1.5 border border-border/50 rounded-md bg-background text-sm font-medium"
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              disabled={!selectedPosition}
+            >
+              <option value="">All Subjects</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={String(s.id)}>{s.name}</option>
+              ))}
+            </select>
+
+            <div className="flex items-center px-3 py-1.5 border border-border/50 rounded-md bg-background text-sm">
+              <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+              <select 
+                className="bg-transparent border-none outline-none font-medium cursor-pointer"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="pending_review">Needs Review</option>
+                <option value="changes_requested">Changes Requested</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All Submissions</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -141,8 +221,15 @@ export default function AdminReviewQueuePage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-muted-foreground">
-                      <div>{q.question_type}</div>
-                      <div className="text-xs">{q.difficulty} • {q.marks}M</div>
+                      <div className="font-medium text-foreground capitalize">{q.question_type} • {q.difficulty}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{q.marks} Mark{Number(q.marks) !== 1 ? 's' : ''}</div>
+                      {(q.position_name || q.subject_name || q.chapter_name) && (
+                        <div className="text-xs text-primary/80 mt-1 flex items-center gap-1 flex-wrap">
+                          {q.position_name && <span className="bg-primary/10 px-1.5 py-0.5 rounded text-[11px] font-medium">{q.position_name}</span>}
+                          {q.subject_name && <span className="bg-muted px-1.5 py-0.5 rounded text-[11px]">{q.subject_name}</span>}
+                          {q.chapter_name && <span className="text-[11px] text-muted-foreground">• {q.chapter_name}</span>}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-muted-foreground text-xs">
                       {q.submitted_at ? new Date(q.submitted_at).toLocaleDateString() : '-'}

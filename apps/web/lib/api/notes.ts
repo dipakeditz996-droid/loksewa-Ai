@@ -23,6 +23,9 @@ export interface StudyMaterial {
   is_bookmarked: boolean;
   progress: number;
   is_downloadable?: boolean;
+  order?: number;
+  sequence?: number;
+  created_at?: string;
   content?: string;
   file?: string;
   file_url?: string;

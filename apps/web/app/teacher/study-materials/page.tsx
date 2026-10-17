@@ -9,6 +9,7 @@ import {
   duplicateTeacherMaterial,
   StudyMaterial,
 } from "@/lib/api/teacher-materials";
+import { sortNotesAscending } from "@/lib/utils/note-sorting";
 import { PageHeader, StatCard, StatusPill } from "@/components/teacher/portal";
 import { MaterialCard } from "./components/MaterialCard";
 import { Button } from "@/components/ui/button";
@@ -39,8 +40,8 @@ export default function TeacherStudyMaterialsPage() {
     try {
       setLoading(true);
       const data = await getTeacherMaterials({ search });
-      // Depending on pagination, data could be an array or an object with results
-      setMaterials(Array.isArray(data) ? data : data.results || []);
+      const rawList = Array.isArray(data) ? data : data.results || [];
+      setMaterials(sortNotesAscending(rawList));
     } catch (error) {
       console.error("Failed to load study materials:", error);
     } finally {

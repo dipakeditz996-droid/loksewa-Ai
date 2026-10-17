@@ -93,8 +93,63 @@ export interface QuestionStats {
   with_topic?: number;
 }
 
+export interface QuestionTocCounts {
+  total: number;
+  approved: number;
+  pending: number;
+  draft: number;
+  rejected: number;
+}
+
+export interface QuestionTocTopic {
+  id: number;
+  name: string;
+  counts: QuestionTocCounts;
+}
+
+export interface QuestionTocChapter {
+  id: number;
+  title: string;
+  counts: QuestionTocCounts;
+  topics: QuestionTocTopic[];
+}
+
+export interface QuestionTocSubject {
+  id: number;
+  name: string;
+  code: string;
+  counts: QuestionTocCounts;
+  chapters: QuestionTocChapter[];
+}
+
+export interface QuestionTocResponse {
+  exam: {
+    id: number | null;
+    name: string | null;
+    parent_id: number | null;
+    parent_name: string | null;
+    category_id: number | null;
+    category_name: string | null;
+  } | null;
+  counts: QuestionTocCounts;
+  subjects: QuestionTocSubject[];
+}
+
 export const adminQuestionApi = {
-  getStats: async () => apiClient<QuestionStats>('/admin/questions/stats/'),
+  getStats: async (params: Record<string, any> = {}) => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, value.toString());
+    });
+    const qStr = queryParams.toString();
+    return apiClient<QuestionStats>(`/admin/questions/stats/${qStr ? `?${qStr}` : ''}`);
+  },
+  getToc: async (params: { exam?: number | string; category?: number | string }) => {
+    const queryParams = new URLSearchParams();
+    if (params.exam) queryParams.set('exam', String(params.exam));
+    if (params.category) queryParams.set('category', String(params.category));
+    return apiClient<QuestionTocResponse>(`/admin/questions/toc/?${queryParams.toString()}`);
+  },
   getQuestions: async (params: Record<string, any> = {}) => {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {

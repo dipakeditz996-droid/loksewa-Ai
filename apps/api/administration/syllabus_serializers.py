@@ -115,6 +115,19 @@ class SubjectSerializer(serializers.ModelSerializer):
             Q(subject=obj) | Q(questions__topic__chapter__subject=obj)
         ).distinct().count()
 
+    def validate(self, attrs):
+        paper = attrs.get('paper')
+        exam = attrs.get('exam')
+        if paper and exam and paper.exam_id != exam.id:
+            raise serializers.ValidationError({
+                "paper": f"The selected paper '{paper.name}' (Exam ID: {paper.exam_id}) does not belong to the selected exam preparation '{exam.name}' (ID: {exam.id})."
+            })
+        if not self.instance and not paper and not exam:
+            raise serializers.ValidationError({
+                "exam": "An exam preparation or paper is required to establish the academic context."
+            })
+        return attrs
+
     def create(self, validated_data):
         exam = validated_data.pop('exam', None)
         paper = validated_data.get('paper')
@@ -126,6 +139,7 @@ class SubjectSerializer(serializers.ModelSerializer):
                     name=f"{exam.name} - Paper I",
                     paper_number="1",
                     order=1,
+                    is_active=True,
                 )
             validated_data['paper'] = paper
         return super().create(validated_data)
@@ -141,6 +155,7 @@ class SubjectSerializer(serializers.ModelSerializer):
                         name=f"{exam.name} - Paper I",
                         paper_number="1",
                         order=1,
+                        is_active=True,
                     )
                 validated_data['paper'] = paper
         return super().update(instance, validated_data)
@@ -181,6 +196,24 @@ class ChapterSerializer(serializers.ModelSerializer):
 
     def get_exams_count(self, obj):
         return Examination.objects.filter(questions__topic__chapter=obj).distinct().count()
+
+    def validate(self, attrs):
+        subject = attrs.get('subject') or (self.instance.subject if self.instance else None)
+        if not self.instance and not subject:
+            raise serializers.ValidationError({"subject": "A subject is required."})
+
+        # Cross-context validation: if exam is supplied, ensure subject belongs to it
+        exam_input = self.initial_data.get('exam') or self.initial_data.get('exam_id')
+        if exam_input and subject and subject.paper:
+            try:
+                exam_input_id = int(exam_input)
+                if subject.paper.exam_id != exam_input_id:
+                    raise serializers.ValidationError({
+                        "subject": f"Subject '{subject.name}' belongs to exam preparation '{subject.paper.exam.name}' (ID: {subject.paper.exam_id}), which does not match requested exam ID {exam_input_id}."
+                    })
+            except (ValueError, TypeError):
+                pass
+        return attrs
 
     def create(self, validated_data):
         if not validated_data.get('title'):
@@ -227,6 +260,37 @@ class TopicSerializer(serializers.ModelSerializer):
 
     def get_exams_count(self, obj):
         return Examination.objects.filter(questions__topic=obj).distinct().count()
+
+    def validate(self, attrs):
+        chapter = attrs.get('chapter') or attrs.get('unit') or (self.instance.chapter if self.instance else None)
+        if not self.instance and not chapter:
+            raise serializers.ValidationError({"chapter": "A chapter is required."})
+
+        # Cross-context validation: if subject is supplied, ensure chapter belongs to it
+        subject_input = self.initial_data.get('subject') or self.initial_data.get('subject_id')
+        if subject_input and chapter:
+            try:
+                sub_id = int(subject_input)
+                if chapter.subject_id != sub_id:
+                    raise serializers.ValidationError({
+                        "chapter": f"Chapter '{chapter.title}' belongs to subject ID {chapter.subject_id}, which does not match requested subject ID {sub_id}."
+                    })
+            except (ValueError, TypeError):
+                pass
+
+        # Cross-context validation: if exam is supplied, ensure chapter belongs to it
+        exam_input = self.initial_data.get('exam') or self.initial_data.get('exam_id')
+        if exam_input and chapter and chapter.subject and chapter.subject.paper:
+            try:
+                exam_id = int(exam_input)
+                if chapter.subject.paper.exam_id != exam_id:
+                    raise serializers.ValidationError({
+                        "chapter": f"Chapter '{chapter.title}' belongs to exam preparation '{chapter.subject.paper.exam.name}', which does not match requested exam ID {exam_id}."
+                    })
+            except (ValueError, TypeError):
+                pass
+
+        return attrs
 
     def create(self, validated_data):
         unit = validated_data.pop('unit', None)

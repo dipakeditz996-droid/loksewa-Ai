@@ -101,7 +101,8 @@ class SyllabusAndNotesE2ETests(APITestCase):
         Enrollment.objects.create(student=self.student_multi, course=self.course_civil, status='active')
         Enrollment.objects.create(student=self.student_multi, course=self.course_computer, status='active')
 
-        # 5. Study Materials
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
         self.material_civil = StudyMaterial.objects.create(
             title='Civil Engineering Overview & Syllabus',
             exam=self.exam_civil,
@@ -111,10 +112,11 @@ class SyllabusAndNotesE2ETests(APITestCase):
             topic=self.topic_civil,
             content_category='syllabus',
             note_type='standard',
-            material_type='notes',
+            material_type='pdf',
             access_type='free',
             status='published',
             is_downloadable=True,
+            file=SimpleUploadedFile('civil_syllabus.pdf', b'%PDF-1.4 Civil syllabus test content', content_type='application/pdf'),
         )
         self.material_civil_detailed = StudyMaterial.objects.create(
             title='Mechanics In-Depth Topicwise Notes',
@@ -139,10 +141,11 @@ class SyllabusAndNotesE2ETests(APITestCase):
             topic=self.topic_computer,
             content_category='subjective_topicwise',
             note_type='standard',
-            material_type='notes',
+            material_type='pdf',
             access_type='free',
             status='published',
             is_downloadable=False,
+            file=SimpleUploadedFile('bst_guide.pdf', b'%PDF-1.4 Computer BST note test content', content_type='application/pdf'),
         )
 
     # =========================================================================
@@ -292,6 +295,7 @@ class SyllabusAndNotesE2ETests(APITestCase):
         # Valid creation
         res_valid = self.client.post('/api/admin/study-materials/', {
             'title': 'New Mechanics Notes',
+            'content_category': 'subjective_topicwise',
             'exam': self.exam_civil.id,
             'subject': self.subject_civil.id,
             'chapter': self.chapter_civil.id,
@@ -325,3 +329,40 @@ class SyllabusAndNotesE2ETests(APITestCase):
         trash_entry = TrashItem.objects.filter(model_name='studymaterial', object_id=str(mat_id)).first()
         self.assertIsNotNone(trash_entry)
         self.assertEqual(trash_entry.title, 'Civil Engineering Overview & Syllabus')
+
+    # =========================================================================
+    # 5. PDF ACCESS CONTROL & DOWNLOAD PERMISSION TESTS
+    # =========================================================================
+
+    def test_authorized_student_can_download_when_is_downloadable_true(self):
+        """Authorized student can download note when is_downloadable is True."""
+        self.client.force_authenticate(user=self.student_a)
+        res = self.client.get(f'/api/notes/materials/{self.material_civil.id}/download/')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res['Content-Type'], 'application/pdf')
+        self.assertIn('attachment', res['Content-Disposition'])
+
+    def test_download_disabled_material_blocks_attachment_download_with_403(self):
+        """Download-disabled material strictly rejects attachment download requests with 403 Forbidden."""
+        self.client.force_authenticate(user=self.student_b)
+        res = self.client.get(f'/api/notes/materials/{self.material_computer.id}/download/')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("Downloads are disabled", res.data.get('detail', ''))
+
+    def test_download_disabled_material_allows_inline_viewing_blob(self):
+        """Download-disabled material permits inline disposition for first-party canvas rendering."""
+        self.client.force_authenticate(user=self.student_b)
+        res = self.client.get(f'/api/notes/materials/{self.material_computer.id}/download/?disposition=inline')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res['Content-Type'], 'application/pdf')
+        self.assertIn('inline', res['Content-Disposition'])
+
+    def test_unauthorized_student_cannot_download_or_view_material(self):
+        """Unauthorized student cannot download or view notes from an unenrolled course."""
+        # Student A is enrolled in Civil, not Computer
+        self.client.force_authenticate(user=self.student_a)
+        res = self.client.get(f'/api/notes/materials/{self.material_computer.id}/download/?disposition=inline')
+        self.assertIn(res.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])
+
+        res_dl = self.client.get(f'/api/notes/materials/{self.material_computer.id}/download/')
+        self.assertIn(res_dl.status_code, [status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND])

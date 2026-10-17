@@ -24,9 +24,9 @@ const STEPS = [
   { id: 4, title: "Configuration", icon: Settings },
 ];
 
-export type MajorExamType = "topicwise" | "objective" | "subjective";
+type MajorExamType = "topicwise" | "objective" | "subjective";
 
-export const getMajorExamType = (type: ExaminationType): MajorExamType => {
+const getMajorExamType = (type: ExaminationType): MajorExamType => {
   if (type === "subject") return "topicwise";
   if (type === "subjective") return "subjective";
   return "objective";

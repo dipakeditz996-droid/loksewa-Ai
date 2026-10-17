@@ -50,22 +50,15 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     pagination_class = QuestionBankPagination
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
 
-    # Enable filtering by syllabus hierarchy, collections and tags.
+    # Enable filtering by collections, tags, difficulty, status.
+    # Academic hierarchy is filtered explicitly in get_queryset to support full textbook traversal.
     filterset_fields = {
         'question_type': ['exact'],
         'status': ['exact'],
         'ai_status': ['exact'],
         'difficulty': ['exact'],
-        'subject': ['exact'],
-        'chapter': ['exact'],
-        'topic': ['exact'],
         'collections': ['exact'],
         'tag_objects': ['exact'],
-        'topic__chapter': ['exact'],
-        'topic__chapter__subject': ['exact'],
-        'topic__chapter__subject__paper': ['exact'],
-        'topic__chapter__subject__paper__exam': ['exact'],
-        'topic__chapter__subject__paper__exam__category': ['exact'],
     }
     # Tags, Collection name, and the syllabus hierarchy are all searchable
     # alongside question text, so e.g. searching "PYQ" or "Constitution"
@@ -88,17 +81,62 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
     def get_queryset(self):
-        # Multi-tag filter: matches ANY of the selected tags, per the product
-        # convention documented on the frontend Tag filter dropdown.
-        # Implemented manually (django-filter's auto-generated `in` lookup for
-        # a ManyToMany field errors on valid CSV input - a library gotcha,
-        # not a data problem) rather than via filterset_fields.
         qs = super().get_queryset()
         raw_ids = self.request.query_params.get('tag_objects__in')
         if raw_ids:
             tag_ids = [int(v) for v in raw_ids.split(',') if v.strip().isdigit()]
             if tag_ids:
                 qs = qs.filter(tag_objects__id__in=tag_ids).distinct()
+
+        # Canonical Academic Hierarchy Filtering
+        cat_param = self.request.query_params.get('category') or self.request.query_params.get('category_id')
+        if cat_param and str(cat_param).isdigit():
+            cid = int(cat_param)
+            qs = qs.filter(
+                Q(category_id=cid) |
+                Q(exam__category_id=cid) |
+                Q(exam__parent__category_id=cid) |
+                Q(subject__paper__exam__category_id=cid) |
+                Q(chapter__subject__paper__exam__category_id=cid) |
+                Q(topic__chapter__subject__paper__exam__category_id=cid)
+            )
+
+        exam_param = (
+            self.request.query_params.get('exam')
+            or self.request.query_params.get('position')
+            or self.request.query_params.get('exam_id')
+        )
+        if exam_param and str(exam_param).isdigit():
+            eid = int(exam_param)
+            qs = qs.filter(
+                Q(exam_id=eid) |
+                Q(exam__parent_id=eid) |
+                Q(subject__paper__exam_id=eid) |
+                Q(subject__paper__exam__parent_id=eid) |
+                Q(chapter__subject__paper__exam_id=eid) |
+                Q(topic__chapter__subject__paper__exam_id=eid)
+            )
+
+        subject_param = self.request.query_params.get('subject') or self.request.query_params.get('subject_id')
+        if subject_param and str(subject_param).isdigit():
+            sid = int(subject_param)
+            qs = qs.filter(
+                Q(subject_id=sid) |
+                Q(chapter__subject_id=sid) |
+                Q(topic__chapter__subject_id=sid)
+            )
+
+        chapter_param = self.request.query_params.get('chapter') or self.request.query_params.get('chapter_id')
+        if chapter_param and str(chapter_param).isdigit():
+            chid = int(chapter_param)
+            qs = qs.filter(
+                Q(chapter_id=chid) |
+                Q(topic__chapter_id=chid)
+            )
+
+        topic_param = self.request.query_params.get('topic') or self.request.query_params.get('topic_id')
+        if topic_param and str(topic_param).isdigit():
+            qs = qs.filter(topic_id=int(topic_param))
 
         course_param = self.request.query_params.get('course')
         if course_param:
@@ -124,6 +162,156 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def toc(self, request):
+        """
+        Returns textbook-style Table of Contents for the selected preparation/exam
+        with real live database question counts per subject, chapter, and topic.
+        """
+        from exams.models import Exam, Subject, Chapter, Topic
+        exam_param = request.query_params.get('exam') or request.query_params.get('position')
+        cat_param = request.query_params.get('category')
+
+        if not exam_param and not cat_param:
+            return Response({'error': 'Please provide exam/position or category parameter.'}, status=400)
+
+        exam_ids = []
+        exam_obj = None
+        if exam_param and str(exam_param).isdigit():
+            eid = int(exam_param)
+            exam_obj = Exam.objects.filter(id=eid).select_related('parent', 'category').first()
+            if not exam_obj:
+                return Response({'error': 'Exam/Position not found'}, status=404)
+            exam_ids = [exam_obj.id] + list(exam_obj.children.values_list('id', flat=True))
+        elif cat_param and str(cat_param).isdigit():
+            exam_ids = list(Exam.objects.filter(category_id=int(cat_param)).values_list('id', flat=True))
+
+        subjects = list(
+            Subject.objects.filter(paper__exam_id__in=exam_ids, is_active=True)
+            .order_by('order', 'name')
+            .values('id', 'name', 'code', 'order')
+        )
+        subject_ids = [s['id'] for s in subjects]
+
+        chapters = list(
+            Chapter.objects.filter(subject_id__in=subject_ids, is_active=True)
+            .order_by('order', 'title')
+            .values('id', 'title', 'subject_id', 'order')
+        )
+        chapter_ids = [c['id'] for c in chapters]
+
+        topics = list(
+            Topic.objects.filter(chapter_id__in=chapter_ids, is_active=True)
+            .order_by('order', 'name')
+            .values('id', 'name', 'chapter_id', 'order')
+        )
+
+        chap_to_subj = {c['id']: c['subject_id'] for c in chapters}
+        top_to_chap = {t['id']: t['chapter_id'] for t in topics}
+
+        q_filter = (
+            Q(exam_id__in=exam_ids) |
+            Q(exam__parent_id__in=exam_ids) |
+            Q(subject__paper__exam_id__in=exam_ids) |
+            Q(subject__paper__exam__parent_id__in=exam_ids) |
+            Q(chapter__subject__paper__exam_id__in=exam_ids) |
+            Q(topic__chapter__subject__paper__exam_id__in=exam_ids)
+        )
+        counts_data = list(
+            Question.objects.filter(q_filter)
+            .values('subject_id', 'chapter_id', 'topic_id', 'status')
+            .annotate(cnt=Count('id'))
+        )
+
+        def make_counts_dict():
+            return {'total': 0, 'approved': 0, 'pending': 0, 'draft': 0, 'rejected': 0}
+
+        def add_status(c_dict, status_str, count):
+            c_dict['total'] += count
+            if status_str == 'approved':
+                c_dict['approved'] += count
+            elif status_str in ('pending', 'pending_review'):
+                c_dict['pending'] += count
+            elif status_str == 'draft':
+                c_dict['draft'] += count
+            elif status_str == 'rejected':
+                c_dict['rejected'] += count
+
+        subject_counts = {s['id']: make_counts_dict() for s in subjects}
+        chapter_counts = {c['id']: make_counts_dict() for c in chapters}
+        topic_counts = {t['id']: make_counts_dict() for t in topics}
+
+        for row in counts_data:
+            s_id = row['subject_id']
+            c_id = row['chapter_id']
+            t_id = row['topic_id']
+            st = row['status']
+            cnt = row['cnt']
+
+            # Resolve hierarchy upwards if lower level provided
+            if t_id and t_id in topic_counts:
+                add_status(topic_counts[t_id], st, cnt)
+                resolved_c_id = top_to_chap.get(t_id) or c_id
+                if resolved_c_id and resolved_c_id in chapter_counts:
+                    add_status(chapter_counts[resolved_c_id], st, cnt)
+                    resolved_s_id = chap_to_subj.get(resolved_c_id) or s_id
+                    if resolved_s_id and resolved_s_id in subject_counts:
+                        add_status(subject_counts[resolved_s_id], st, cnt)
+            elif c_id and c_id in chapter_counts:
+                add_status(chapter_counts[c_id], st, cnt)
+                resolved_s_id = chap_to_subj.get(c_id) or s_id
+                if resolved_s_id and resolved_s_id in subject_counts:
+                    add_status(subject_counts[resolved_s_id], st, cnt)
+            elif s_id and s_id in subject_counts:
+                add_status(subject_counts[s_id], st, cnt)
+
+        # Assemble hierarchical structure
+        tree = []
+        for s in subjects:
+            s_node = {
+                'id': s['id'],
+                'name': s['name'],
+                'code': s['code'],
+                'counts': subject_counts[s['id']],
+                'chapters': []
+            }
+            s_chapters = [c for c in chapters if c['subject_id'] == s['id']]
+            for c in s_chapters:
+                c_node = {
+                    'id': c['id'],
+                    'title': c['title'],
+                    'counts': chapter_counts[c['id']],
+                    'topics': []
+                }
+                c_topics = [t for t in topics if t['chapter_id'] == c['id']]
+                for t in c_topics:
+                    t_node = {
+                        'id': t['id'],
+                        'name': t['name'],
+                        'counts': topic_counts[t['id']]
+                    }
+                    c_node['topics'].append(t_node)
+                s_node['chapters'].append(c_node)
+            tree.append(s_node)
+
+        total_exam_counts = make_counts_dict()
+        for sc in subject_counts.values():
+            for k in total_exam_counts:
+                total_exam_counts[k] += sc[k]
+
+        return Response({
+            'exam': {
+                'id': exam_obj.id if exam_obj else None,
+                'name': exam_obj.name if exam_obj else None,
+                'parent_id': exam_obj.parent_id if exam_obj else None,
+                'parent_name': exam_obj.parent.name if exam_obj and exam_obj.parent else None,
+                'category_id': exam_obj.category_id if exam_obj else (exam_obj.parent.category_id if exam_obj and exam_obj.parent else None),
+                'category_name': exam_obj.category.name if exam_obj and exam_obj.category else (exam_obj.parent.category.name if exam_obj and exam_obj.parent and exam_obj.parent.category else None),
+            } if exam_obj else None,
+            'counts': total_exam_counts,
+            'subjects': tree,
+        })
 
     @action(detail=False, methods=['get'])
     def stats(self, request):

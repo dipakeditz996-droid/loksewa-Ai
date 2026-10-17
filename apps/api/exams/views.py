@@ -2286,7 +2286,54 @@ class AdminQuestionReviewViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Admin can see all questions that have been submitted at some point, or all questions
         # Prioritize pending review
-        return Question.objects.exclude(status='draft').exclude(status='archived')
+        qs = Question.objects.exclude(status='draft').exclude(status='archived')
+
+        cat_id = self.request.query_params.get('category') or self.request.query_params.get('category_id')
+        if cat_id and str(cat_id).isdigit():
+            cid = int(cat_id)
+            qs = qs.filter(
+                Q(category_id=cid) |
+                Q(exam__category_id=cid) |
+                Q(exam__parent__category_id=cid) |
+                Q(subject__paper__exam__category_id=cid) |
+                Q(chapter__subject__paper__exam__category_id=cid) |
+                Q(topic__chapter__subject__paper__exam__category_id=cid)
+            )
+
+        exam_id = self.request.query_params.get('exam') or self.request.query_params.get('position') or self.request.query_params.get('exam_id')
+        if exam_id and str(exam_id).isdigit():
+            eid = int(exam_id)
+            qs = qs.filter(
+                Q(exam_id=eid) |
+                Q(exam__parent_id=eid) |
+                Q(subject__paper__exam_id=eid) |
+                Q(subject__paper__exam__parent_id=eid) |
+                Q(chapter__subject__paper__exam_id=eid) |
+                Q(topic__chapter__subject__paper__exam_id=eid)
+            )
+
+        sub_id = self.request.query_params.get('subject') or self.request.query_params.get('subject_id')
+        if sub_id and str(sub_id).isdigit():
+            sid = int(sub_id)
+            qs = qs.filter(
+                Q(subject_id=sid) |
+                Q(chapter__subject_id=sid) |
+                Q(topic__chapter__subject_id=sid)
+            )
+
+        chap_id = self.request.query_params.get('chapter') or self.request.query_params.get('chapter_id')
+        if chap_id and str(chap_id).isdigit():
+            chid = int(chap_id)
+            qs = qs.filter(
+                Q(chapter_id=chid) |
+                Q(topic__chapter_id=chid)
+            )
+
+        top_id = self.request.query_params.get('topic') or self.request.query_params.get('topic_id')
+        if top_id and str(top_id).isdigit():
+            qs = qs.filter(topic_id=int(top_id))
+
+        return qs.order_by('-created_at').distinct()
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):

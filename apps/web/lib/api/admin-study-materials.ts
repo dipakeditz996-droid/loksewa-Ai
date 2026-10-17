@@ -172,6 +172,8 @@ export interface CreateStudyMaterialPayload {
   estimated_reading_time?: number;
   order?: number;
   file?: File | null;
+  is_downloadable?: boolean;
+  isDownloadable?: boolean;
 }
 
 function buildRequest(payload: CreateStudyMaterialPayload | Partial<CreateStudyMaterialPayload>) {

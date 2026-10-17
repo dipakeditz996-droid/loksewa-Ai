@@ -180,10 +180,10 @@ function HeroShowcase() {
       {/* Product dashboard mockup */}
       <motion.div style={{ x: tiers.near.x, y: tiers.near.y }} className="relative z-20 w-full max-w-[430px]">
         <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 30, rotate: -1 }}
-          animate={{ opacity: 1, y: 0, rotate: -1.5 }}
+          initial={reducedMotion ? false : { opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={reducedMotion ? { duration: 0 } : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          whileHover={reducedMotion ? undefined : { rotate: 0, y: -6, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }}
+          whileHover={reducedMotion ? undefined : { y: -6, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }}
           className="rounded-[22px] overflow-hidden bg-white dark:bg-[#0B1524] border border-slate-200/80 dark:border-white/[0.09] shadow-[0_48px_100px_-28px_rgba(11,37,69,0.4)] dark:shadow-[0_48px_110px_-24px_rgba(0,0,0,0.85)]"
         >
           {/* Window chrome */}

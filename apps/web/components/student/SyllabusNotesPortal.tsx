@@ -9,6 +9,8 @@ import {
   ExternalLink, X, Maximize2, Minimize2, Clock, AlertCircle, RefreshCw, Loader2
 } from "lucide-react";
 import { notesApi, StudyMaterial } from "@/lib/api/notes";
+import { sortNotesAscending } from "@/lib/utils/note-sorting";
+import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -102,8 +104,10 @@ export default function SyllabusNotesPortal({
           }
         })
         .catch(err => {
-          console.error('Failed to load protected PDF', err);
-          if (active) setPdfBlobUrl(null);
+          console.warn('Could not load protected PDF blob, falling back to file URL:', err);
+          if (active) {
+            setPdfBlobUrl(viewingMaterial.file || viewingMaterial.file_url || null);
+          }
         })
         .finally(() => {
           if (active) setLoadingPdf(false);
@@ -126,39 +130,35 @@ export default function SyllabusNotesPortal({
     setActivePrepId(prepId);
   };
 
-  // Get active materials based on section and sub-type
+  // Get active materials based on section and sub-type (sorted ascending)
   const currentSectionMaterials = useMemo(() => {
     if (!data?.sections) return [];
 
-    if (activeSection === 'syllabus') {
-      return data.sections.syllabus || [];
-    }
+    let materials: StudyMaterial[] = [];
 
-    if (activeSection === 'subjective_topicwise') {
+    if (activeSection === 'syllabus') {
+      materials = data.sections.syllabus || [];
+    } else if (activeSection === 'subjective_topicwise') {
       const std = data.sections.subjective_topicwise?.standard || [];
       const ai = data.sections.subjective_topicwise?.ai || [];
-      if (subjectiveSubtype === 'standard') return std;
-      if (subjectiveSubtype === 'ai') return ai;
-      return [...std, ...ai];
-    }
-
-    if (activeSection === 'objective_topicwise') {
+      if (subjectiveSubtype === 'standard') materials = std;
+      else if (subjectiveSubtype === 'ai') materials = ai;
+      else materials = [...std, ...ai];
+    } else if (activeSection === 'objective_topicwise') {
       const std = data.sections.objective_topicwise?.standard || [];
       const ai = data.sections.objective_topicwise?.ai || [];
-      if (objectiveSubtype === 'standard') return std;
-      if (objectiveSubtype === 'ai') return ai;
-      return [...std, ...ai];
-    }
-
-    if (activeSection === 'revision_notes') {
+      if (objectiveSubtype === 'standard') materials = std;
+      else if (objectiveSubtype === 'ai') materials = ai;
+      else materials = [...std, ...ai];
+    } else if (activeSection === 'revision_notes') {
       const subj = data.sections.revision_notes?.subjective || [];
       const obj = data.sections.revision_notes?.objective || [];
-      if (revisionSubtype === 'subjective') return subj;
-      if (revisionSubtype === 'objective') return obj;
-      return [...subj, ...obj];
+      if (revisionSubtype === 'subjective') materials = subj;
+      else if (revisionSubtype === 'objective') materials = obj;
+      else materials = [...subj, ...obj];
     }
 
-    return [];
+    return sortNotesAscending(materials);
   }, [data, activeSection, subjectiveSubtype, objectiveSubtype, revisionSubtype]);
 
   // Unique subjects for filtering
@@ -177,9 +177,9 @@ export default function SyllabusNotesPortal({
     }
   }, [availableSubjects, selectedSubject]);
 
-  // Filtered materials
+  // Filtered materials (consistently sorted ascending)
   const filteredMaterials = useMemo(() => {
-    return currentSectionMaterials.filter(m => {
+    const filtered = currentSectionMaterials.filter(m => {
       // Subject filter
       if (selectedSubject !== 'all' && m.subject_name !== selectedSubject) {
         return false;
@@ -196,6 +196,7 @@ export default function SyllabusNotesPortal({
       }
       return true;
     });
+    return sortNotesAscending(filtered);
   }, [currentSectionMaterials, selectedSubject, searchQuery]);
 
   if (loading) {
@@ -629,6 +630,10 @@ export default function SyllabusNotesPortal({
                           type="button"
                           onClick={async (e) => {
                             e.stopPropagation();
+                            if (material.is_downloadable === false) {
+                              toast.error('Download is disabled for this material.');
+                              return;
+                            }
                             try {
                               await notesApi.downloadMaterial(material.id, `${material.slug || 'note'}.pdf`);
                               toast.success('Download started');
@@ -637,8 +642,13 @@ export default function SyllabusNotesPortal({
                               toast.error(errorObj?.data?.detail || errorObj?.message || 'Download not authorized or unavailable.');
                             }
                           }}
-                          className="inline-flex items-center justify-center h-8 px-3 rounded-lg border border-border bg-card text-foreground hover:bg-muted text-xs font-semibold transition-colors"
-                          title="Download PDF"
+                          disabled={material.is_downloadable === false}
+                          className={`inline-flex items-center justify-center h-8 px-3 rounded-lg border text-xs font-semibold transition-colors ${
+                            material.is_downloadable === false
+                              ? "border-border/50 bg-muted/30 text-muted-foreground/40 cursor-not-allowed opacity-50"
+                              : "border-border bg-card text-foreground hover:bg-muted"
+                          }`}
+                          title={material.is_downloadable === false ? "Downloads disabled for this note" : "Download PDF"}
                         >
                           <Download className="w-3.5 h-3.5" />
                         </button>
@@ -700,7 +710,7 @@ export default function SyllabusNotesPortal({
 
               {/* Header Actions */}
               <div className="flex items-center gap-1.5 shrink-0 z-10">
-                {(viewingMaterial.file_url || viewingMaterial.file) && (
+                {(viewingMaterial.file_url || viewingMaterial.file) && viewingMaterial.is_downloadable !== false && (
                   <button
                     type="button"
                     onClick={async () => {
@@ -719,7 +729,7 @@ export default function SyllabusNotesPortal({
                   </button>
                 )}
 
-                {pdfBlobUrl && (
+                {pdfBlobUrl && viewingMaterial.is_downloadable !== false && (
                   <a
                     href={pdfBlobUrl}
                     target="_blank"
@@ -752,18 +762,19 @@ export default function SyllabusNotesPortal({
               </div>
             </div>
 
-            {/* Modal Body / PDF Viewer */}
-            <div className="flex-1 bg-slate-100 dark:bg-slate-950 relative overflow-hidden">
+            {/* Modal Body / First-Party PDF Viewer */}
+            <div className="flex-1 bg-slate-900 relative overflow-hidden flex flex-col">
               {loadingPdf ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
+                <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8">
                   <div className="w-8 h-8 border-2 border-[#D4A72C] border-t-transparent rounded-full animate-spin mb-3" />
                   <p className="text-sm font-medium">Securing and loading document...</p>
                 </div>
               ) : pdfBlobUrl ? (
-                <iframe
-                  src={`${pdfBlobUrl}#view=FitH`}
-                  className="w-full h-full border-0"
+                <FirstPartyPdfViewer
+                  url={pdfBlobUrl}
                   title={viewingMaterial.title}
+                  allowDownload={viewingMaterial.is_downloadable !== false}
+                  onDownload={() => notesApi.downloadMaterial(viewingMaterial.id, `${viewingMaterial.title}.pdf`)}
                 />
               ) : viewingMaterial.content ? (
                 <div className="p-6 overflow-y-auto max-w-4xl mx-auto prose prose-slate dark:prose-invert">

@@ -87,14 +87,14 @@ export default function SyllabusNotesPortal({
   const [viewingMaterial, setViewingMaterial] = useState<StudyMaterial | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [loadingPdf, setLoadingPdf] = useState(false);
-
   useEffect(() => {
     let active = true;
     let createdUrl: string | null = null;
-    if (viewingMaterial && (viewingMaterial.file_url || viewingMaterial.file)) {
-      setLoadingPdf(true);
-      notesApi.getMaterialBlobUrl(viewingMaterial.id)
+    const materialId = viewingMaterial?.id;
+    const targetFile = viewingMaterial?.file_url || viewingMaterial?.file;
+
+    if (materialId && targetFile) {
+      notesApi.getMaterialBlobUrl(materialId)
         .then(url => {
           if (active) {
             createdUrl = url;
@@ -104,24 +104,19 @@ export default function SyllabusNotesPortal({
           }
         })
         .catch(err => {
-          console.warn('Could not load protected PDF blob, falling back to file URL:', err);
-          if (active) {
-            setPdfBlobUrl(viewingMaterial.file || viewingMaterial.file_url || null);
-          }
-        })
-        .finally(() => {
-          if (active) setLoadingPdf(false);
+          console.warn('Could not load protected PDF blob, using direct URL:', err);
         });
     } else {
       setPdfBlobUrl(null);
     }
+
     return () => {
       active = false;
       if (createdUrl) {
         URL.revokeObjectURL(createdUrl);
       }
     };
-  }, [viewingMaterial]);
+  }, [viewingMaterial?.id]);
 
   const handlePrepChange = (prepId: number) => {
     // Just switches the query key - React Query serves cached data
@@ -764,14 +759,9 @@ export default function SyllabusNotesPortal({
 
             {/* Modal Body / First-Party PDF Viewer */}
             <div className="flex-1 bg-slate-900 relative overflow-hidden flex flex-col">
-              {loadingPdf ? (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8">
-                  <div className="w-8 h-8 border-2 border-[#D4A72C] border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-sm font-medium">Securing and loading document...</p>
-                </div>
-              ) : pdfBlobUrl || viewingMaterial.file || viewingMaterial.file_url ? (
+              {viewingMaterial.file || viewingMaterial.file_url ? (
                 <FirstPartyPdfViewer
-                  url={(pdfBlobUrl || viewingMaterial.file || viewingMaterial.file_url)!}
+                  url={pdfBlobUrl || viewingMaterial.file || viewingMaterial.file_url}
                   title={viewingMaterial.title}
                   allowDownload={viewingMaterial.is_downloadable !== false}
                   onDownload={() => notesApi.downloadMaterial(viewingMaterial.id, `${viewingMaterial.title}.pdf`)}

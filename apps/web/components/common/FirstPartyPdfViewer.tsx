@@ -29,8 +29,20 @@ export function normalizePdfUrl(rawUrl: string): string {
   const driveMatch = rawUrl.match(/(?:drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?.*?id=))([a-zA-Z0-9_-]+)/);
   if (driveMatch && driveMatch[1]) {
     const fileId = driveMatch[1];
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
     return `${apiBase}/media/drive/${fileId}/`;
+  }
+
+  // If URL is a relative path starting with /api or /, prepend API origin so PDF.js doesn't fetch from Next.js port
+  if (rawUrl.startsWith("/")) {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+    const origin = apiBase.replace(/\/api\/?$/, "");
+    rawUrl = `${origin}${rawUrl}`;
+  }
+
+  // Ensure download endpoints serve inline for previewing
+  if (rawUrl.includes("/download/") && !rawUrl.includes("disposition=")) {
+    rawUrl += (rawUrl.includes("?") ? "&" : "?") + "disposition=inline";
   }
 
   return rawUrl;
@@ -211,7 +223,7 @@ export function FirstPartyPdfViewer({
         let canvas = pageDiv.querySelector("canvas");
         if (!canvas) {
           canvas = document.createElement("canvas");
-          pageDiv.innerHTML = "";
+          canvas.className = "block max-w-full";
           pageDiv.appendChild(canvas);
         }
 
@@ -440,8 +452,9 @@ export function FirstPartyPdfViewer({
               data-page-number={idx + 1}
               className="relative bg-white dark:bg-slate-950 shadow-2xl rounded-sm transition-all duration-200 overflow-hidden flex items-center justify-center min-h-[300px] border border-slate-700/60"
             >
+              <canvas className="block max-w-full" />
               {!renderedPages.has(idx + 1) && (
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-800/40 text-slate-400 text-xs">
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-800/40 text-slate-400 text-xs pointer-events-none">
                   <Loader2 className="w-5 h-5 animate-spin mr-2 text-[#C4A45C]" />
                   Page {idx + 1}...
                 </div>

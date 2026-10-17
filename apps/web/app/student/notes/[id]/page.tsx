@@ -14,7 +14,6 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [bookmarking, setBookmarking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
-  const [loadingPdf, setLoadingPdf] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,8 +35,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     let active = true;
     let createdUrl: string | null = null;
-    if (material && material.material_type === 'pdf' && (material.file || material.file_url)) {
-      setLoadingPdf(true);
+    const targetFile = material?.file || material?.file_url;
+    if (material && material.material_type === 'pdf' && targetFile) {
       notesApi.getMaterialBlobUrl(material.id)
         .then(url => {
           if (active) {
@@ -48,13 +47,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
           }
         })
         .catch(err => {
-          console.warn('Could not load protected PDF blob, falling back to file URL:', err);
-          if (active) {
-            setPdfBlobUrl(material.file || material.file_url || null);
-          }
-        })
-        .finally(() => {
-          if (active) setLoadingPdf(false);
+          console.warn('Could not load protected PDF blob, using direct URL:', err);
         });
     } else {
       setPdfBlobUrl(null);
@@ -65,7 +58,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
         URL.revokeObjectURL(createdUrl);
       }
     };
-  }, [material]);
+  }, [material?.id]);
 
   // Scroll spy for progress
   useEffect(() => {
@@ -218,16 +211,9 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
       <div ref={contentRef} className="prose prose-lg dark:prose-invert max-w-none prose-blue">
         {material.material_type === 'pdf' ? (
           <div className="w-full rounded-2xl overflow-hidden border border-border dark:border-gray-800 h-[800px] flex items-center justify-center bg-slate-950 shadow-xl">
-            {loadingPdf ? (
-              <div className="flex flex-col items-center justify-center p-8 text-slate-400">
-                <Loader2 className="w-8 h-8 animate-spin text-[#C4A45C] mb-3" />
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                  Securing and loading PDF...
-                </p>
-              </div>
-            ) : pdfBlobUrl || material.file || material.file_url ? (
+            {material.file || material.file_url ? (
               <FirstPartyPdfViewer
-                url={(pdfBlobUrl || material.file || material.file_url)!}
+                url={pdfBlobUrl || material.file || material.file_url}
                 title={material.title}
                 allowDownload={material.is_downloadable !== false}
                 onDownload={handleDownload}

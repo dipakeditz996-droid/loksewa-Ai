@@ -410,6 +410,7 @@ class PracticeSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='practice_sessions')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE)
     subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True)
+    chapter = models.ForeignKey(Chapter, on_delete=models.SET_NULL, null=True, blank=True)
     topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True)
     mode = models.CharField(max_length=20, choices=MODE_CHOICES, default='flexible')
     shuffle_questions = models.BooleanField(default=False)

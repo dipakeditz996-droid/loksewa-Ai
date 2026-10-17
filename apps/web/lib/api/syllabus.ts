@@ -32,6 +32,7 @@ export interface Subject {
   progress: number;
   description: string;
   units: Unit[];
+  chapters?: Unit[];
 }
 
 export interface Exam {

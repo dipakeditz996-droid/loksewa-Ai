@@ -191,7 +191,7 @@ function CourseDetailContent() {
                         {subject.units.map((unit: any, uIdx: number) => (
                           <div key={`unit-${unit.id}`} className="space-y-3">
                             <h5 className="font-semibold text-foreground flex items-center gap-2">
-                              <span className="text-xs bg-muted/80 px-2 py-1 rounded-md text-muted-foreground">Chapter {uIdx + 1}</span>
+                              <span className="text-xs bg-muted/80 px-2 py-1 rounded-md text-muted-foreground">Topic {uIdx + 1}</span>
                               {unit.title}
                             </h5>
                             <div className="grid grid-cols-1 gap-2 pl-2 border-l-2 border-border/50 ml-4">
@@ -210,12 +210,12 @@ function CourseDetailContent() {
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                                       <Button asChild size="sm" variant="outline" className="h-8 border-border text-muted-foreground hover:text-purple-600 hover:border-purple-200">
-                                        <Link href={`/student/notes?topic=${topic.id}`}>
+                                        <Link href={`/student/syllabus`}>
                                           <FileText className="w-3.5 h-3.5 mr-1.5" /> Notes
                                         </Link>
                                       </Button>
                                       <Button asChild size="sm" variant="outline" className="h-8 border-border text-muted-foreground hover:text-orange-600 hover:border-orange-200 dark:border-orange-900/50">
-                                        <Link href={`/student/practice?topic=${topic.id}`}>
+                                        <Link href={`/student/practice/study?topic=${topic.id}`}>
                                           <Target className="w-3.5 h-3.5 mr-1.5" /> Practice
                                         </Link>
                                       </Button>
@@ -223,7 +223,24 @@ function CourseDetailContent() {
                                   </div>
                                 ))
                               ) : (
-                                <p className="text-sm text-muted-foreground pl-4 py-2 italic">No topics available in this chapter.</p>
+                                <div key={`chapter-topic-${unit.id}`} className="flex flex-col sm:flex-row sm:items-center justify-between bg-card border border-border/50 p-3 rounded-[12px] hover:border-blue-200 hover:shadow-sm transition-all gap-4">
+                                  <div className="flex items-center gap-3">
+                                    <Circle className="w-5 h-5 text-slate-300 shrink-0" />
+                                    <span className="font-medium text-primary dark:text-foreground text-sm">{unit.title}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
+                                    <Button asChild size="sm" variant="outline" className="h-8 border-border text-muted-foreground hover:text-purple-600 hover:border-purple-200">
+                                      <Link href={`/student/syllabus`}>
+                                        <FileText className="w-3.5 h-3.5 mr-1.5" /> Notes
+                                      </Link>
+                                    </Button>
+                                    <Button asChild size="sm" variant="outline" className="h-8 border-border text-muted-foreground hover:text-orange-600 hover:border-orange-200 dark:border-orange-900/50">
+                                      <Link href={`/student/practice/study?topic=${unit.id}`}>
+                                        <Target className="w-3.5 h-3.5 mr-1.5" /> Practice
+                                      </Link>
+                                    </Button>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>

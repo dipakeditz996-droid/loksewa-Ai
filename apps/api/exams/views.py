@@ -80,12 +80,24 @@ def _revision_buckets(user, course_id=None):
     )
     weak_topic_ids = [
         t['question__topic'] for t in topic_stats
-        if t['answered'] >= WEAK_TOPIC_MIN_ANSWERED and (t['correct'] * 100 / t['answered']) < WEAK_TOPIC_ACCURACY_THRESHOLD
+        if t['question__topic'] and t['answered'] >= WEAK_TOPIC_MIN_ANSWERED and (t['correct'] * 100 / t['answered']) < WEAK_TOPIC_ACCURACY_THRESHOLD
     ]
     weak_topics = (
         list(mastery.filter(question__topic_id__in=weak_topic_ids).order_by('question__topic'))
         if weak_topic_ids else []
     )
+    if not weak_topics:
+        chapter_stats = (
+            mastery.exclude(times_answered=0)
+            .values('question__chapter')
+            .annotate(answered=Sum('times_answered'), correct=Sum('times_correct'))
+        )
+        weak_chapter_ids = [
+            c['question__chapter'] for c in chapter_stats
+            if c['question__chapter'] and c['answered'] >= WEAK_TOPIC_MIN_ANSWERED and (c['correct'] * 100 / c['answered']) < WEAK_TOPIC_ACCURACY_THRESHOLD
+        ]
+        if weak_chapter_ids:
+            weak_topics = list(mastery.filter(question__chapter_id__in=weak_chapter_ids).order_by('question__chapter'))
 
     return {
         'overdue': overdue,
@@ -590,12 +602,21 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         if difficulty and difficulty != 'all':
             difficulty_distribution = {difficulty: total_questions}
 
+        # Resolve topic or chapter
+        topic_obj = None
+        chapter_obj = None
+        if topic_id and str(topic_id) != 'all':
+            topic_obj = Topic.objects.filter(pk=topic_id).first()
+            if not topic_obj:
+                chapter_obj = Chapter.objects.filter(pk=topic_id).first()
+
         # Use centralized selection service — only approved questions
         service = QuestionSelectionService()
         result = service.select(
             exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
             subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
-            topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
+            chapter_id=chapter_obj.id if chapter_obj else None,
+            topic_id=topic_obj.id if topic_obj else None,
             collection_id=collection_id if collection_id and str(collection_id) != 'all' else None,
             tag_id=tag_id if tag_id and str(tag_id) != 'all' else None,
             count=total_questions,
@@ -633,8 +654,9 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         session = PracticeSession.objects.create(
             user=request.user,
             exam_id=resolved_exam_id,
-            subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
-            topic_id=topic_id if topic_id and str(topic_id) != 'all' else None,
+            subject_id=subject_id if subject_id and str(subject_id) != 'all' else (chapter_obj.subject_id if chapter_obj else None),
+            chapter=chapter_obj,
+            topic=topic_obj,
             mode=mode,
             difficulty=difficulty if difficulty and difficulty != 'all' else None,
             total_questions=len(questions)
@@ -808,6 +830,12 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         if not topic_id:
             return Response({'detail': 'topic is required.'}, status=400)
 
+        # Resolve topic or chapter (the student panel loads Chapters as Topics)
+        topic_obj = Topic.objects.filter(pk=topic_id).first()
+        chapter_obj = None
+        if not topic_obj:
+            chapter_obj = Chapter.objects.filter(pk=topic_id).first()
+
         course_id = request.data.get('course')
         if course_id:
             from courses.access import course_access_denial
@@ -821,10 +849,15 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
         scope = _practice_exam_scope(request.user, course_id)
         if scope is not None:
             if not exam_id or str(exam_id) == 'all':
-                # No exam named: the topic itself says which exam it belongs to.
-                exam_id = Topic.objects.filter(pk=topic_id).values_list(
-                    'chapter__subject__paper__exam_id', flat=True
-                ).first()
+                # No exam named: the topic or chapter itself says which exam it belongs to.
+                if topic_obj:
+                    exam_id = Topic.objects.filter(pk=topic_obj.pk).values_list(
+                        'chapter__subject__paper__exam_id', flat=True
+                    ).first()
+                elif chapter_obj:
+                    exam_id = Chapter.objects.filter(pk=chapter_obj.pk).values_list(
+                        'subject__paper__exam_id', flat=True
+                    ).first()
                 if not exam_id:
                     return Response({'detail': 'No approved questions are available for this topic yet.'}, status=400)
             try:
@@ -838,8 +871,14 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
 
         def find_open_session():
             sessions = PracticeSession.objects.filter(
-                user=request.user, topic_id=topic_id, mode='study', completed=False
+                user=request.user, mode='study', completed=False
             )
+            if topic_obj:
+                sessions = sessions.filter(topic=topic_obj)
+            elif chapter_obj:
+                sessions = sessions.filter(chapter=chapter_obj)
+            else:
+                sessions = sessions.filter(topic_id=topic_id)
             if scope is not None:
                 sessions = sessions.filter(exam_id__in=scope)   # never resume one whose exam is no longer authorised
             return sessions.order_by('-created_at').first()
@@ -870,8 +909,9 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
                     # topic here cost ~0.7s for data that was thrown away.
                     question_ids = QuestionSelectionService().select_ids(
                         exam_id=exam_id if exam_id and str(exam_id) != 'all' else None,
-                        subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
-                        topic_id=topic_id,
+                        subject_id=subject_id if subject_id and str(subject_id) != 'all' else (chapter_obj.subject_id if chapter_obj else None),
+                        chapter_id=chapter_obj.id if chapter_obj else None,
+                        topic_id=topic_obj.id if topic_obj else None,
                         limit=None,
                         # Written-answer questions (all of Question.SUBJECTIVE_TYPES,
                         # not just 'subjective') have no options / correct_option and
@@ -893,8 +933,9 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
                     session = PracticeSession.objects.create(
                         user=request.user,
                         exam_id=resolved_exam_id,
-                        subject_id=subject_id if subject_id and str(subject_id) != 'all' else None,
-                        topic_id=topic_id,
+                        subject_id=subject_id if subject_id and str(subject_id) != 'all' else (chapter_obj.subject_id if chapter_obj else None),
+                        chapter=chapter_obj,
+                        topic=topic_obj,
                         mode='study',
                         shuffle_questions=shuffle_questions,
                         total_questions=len(question_ids),

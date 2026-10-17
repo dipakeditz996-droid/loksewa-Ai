@@ -314,31 +314,15 @@ export default function CustomExamBuilder() {
 
               {scopeMode === 'position' && chapters.length > 0 && (
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Chapter (Optional)</label>
+                  <label className="text-sm font-medium">Topic (Optional)</label>
                   <select 
                     className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                     value={selectedChapterId || ""}
                     onChange={(e) => setSelectedChapterId(e.target.value ? Number(e.target.value) : null)}
                   >
-                    <option value="">All Chapters</option>
+                    <option value="">All Topics</option>
                     {chapters.map(c => (
                       <option key={c.id} value={c.id}>{c.title}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {scopeMode === 'position' && topics.length > 0 && (
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Topic (Optional)</label>
-                  <select 
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    value={selectedTopicId || ""}
-                    onChange={(e) => setSelectedTopicId(e.target.value ? Number(e.target.value) : null)}
-                  >
-                    <option value="">All Topics</option>
-                    {topics.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
                 </div>

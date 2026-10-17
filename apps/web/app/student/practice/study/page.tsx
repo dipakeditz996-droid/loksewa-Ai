@@ -44,14 +44,20 @@ export default function TopicStudyPage() {
 
   const activeExam = useMemo(() => exams.find(e => e.id.toString() === exam), [exam, exams]);
   const activeSubject = useMemo(() => activeExam?.subjects?.find(s => s.id.toString() === subject), [activeExam, subject]);
-  const allTopics = useMemo(
-    () => (((activeSubject?.units ?? (activeSubject as any)?.chapters ?? []) as any[]).flatMap((u: any) => u.topics || [])) as any[],
-    [activeSubject]
-  );
-  const activeUnit = useMemo(
-    () => (((activeSubject?.units ?? (activeSubject as any)?.chapters ?? []) as any[])?.find((u: any) => (u.topics || []).some((t: any) => t.id.toString() === topic))) as any,
-    [activeSubject, topic]
-  );
+  const allTopics = useMemo(() => {
+    const chapters = ((activeSubject?.chapters ?? (activeSubject as any)?.units ?? []) as any[]);
+    // Load chapters instead of sub-topics, presented as "Topic" in the student panel
+    return chapters.map((c: any) => ({
+      id: c.id,
+      name: c.title || c.name,
+      title: c.title || c.name,
+      chapter_id: c.id,
+    }));
+  }, [activeSubject]);
+
+  const activeUnit = useMemo(() => {
+    return allTopics.find((t: any) => t.id.toString() === topic);
+  }, [allTopics, topic]);
 
   const handleStart = async (restart = false) => {
     if (!topic || starting) return;

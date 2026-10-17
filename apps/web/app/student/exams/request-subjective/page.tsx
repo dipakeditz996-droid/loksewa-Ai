@@ -45,7 +45,10 @@ export default function RequestSubjectiveExamPage() {
     [academicExam],
   );
   const subject = subjects.find((item) => String(item.id) === subjectId);
-  const topics = (subject?.chapters || []).flatMap((chapter) => chapter.topics || []);
+  const topics = (subject?.chapters || []).map((chapter) => ({
+    id: chapter.id,
+    name: chapter.title || chapter.name,
+  }));
   const existingRequest = submittedRequest || requests.find(
     (item) => item.request_type === "subjective_live" && item.academic_exam === Number(academicExamId),
   );

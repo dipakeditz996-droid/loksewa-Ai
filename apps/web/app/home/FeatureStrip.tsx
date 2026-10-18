@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 import { Brain, Target, BarChart2, FileText, BookOpen, Users } from "lucide-react";
 

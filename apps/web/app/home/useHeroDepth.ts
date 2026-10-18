@@ -100,21 +100,44 @@ export function useHeroDepth(): HeroDepth {
     const node = containerRef.current;
     if (!node) return;
 
-    function handleMove(e: MouseEvent) {
-      const rect = node!.getBoundingClientRect();
-      pointerX.set(((e.clientX - rect.left) / rect.width - 0.5) * 2);
-      pointerY.set(((e.clientY - rect.top) / rect.height - 0.5) * 2);
+    let cachedRect: DOMRect | null = null;
+
+    function updateRect() {
+      if (node) {
+        cachedRect = node.getBoundingClientRect();
+      }
     }
+
+    function handleEnter() {
+      updateRect();
+    }
+
+    function handleMove(e: MouseEvent) {
+      if (!cachedRect) {
+        updateRect();
+      }
+      if (!cachedRect || cachedRect.width === 0 || cachedRect.height === 0) return;
+      pointerX.set(((e.clientX - cachedRect.left) / cachedRect.width - 0.5) * 2);
+      pointerY.set(((e.clientY - cachedRect.top) / cachedRect.height - 0.5) * 2);
+    }
+
     function handleLeave() {
+      cachedRect = null;
       pointerX.set(0);
       pointerY.set(0);
     }
 
+    node.addEventListener("mouseenter", handleEnter);
     node.addEventListener("mousemove", handleMove);
     node.addEventListener("mouseleave", handleLeave);
+    window.addEventListener("resize", updateRect);
+    window.addEventListener("scroll", updateRect, { passive: true });
     return () => {
+      node.removeEventListener("mouseenter", handleEnter);
       node.removeEventListener("mousemove", handleMove);
       node.removeEventListener("mouseleave", handleLeave);
+      window.removeEventListener("resize", updateRect);
+      window.removeEventListener("scroll", updateRect);
     };
   }, [parallaxEnabled, pointerX, pointerY]);
 
@@ -148,6 +171,7 @@ export function useHeroDepth(): HeroDepth {
  */
 export function useMagneticHover(strength = 10) {
   const ref = useRef<HTMLDivElement>(null);
+  const rectRef = useRef<DOMRect | null>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
   const springX = useSpring(x, { stiffness: 200, damping: 15, mass: 0.4 });
@@ -169,11 +193,16 @@ export function useMagneticHover(strength = 10) {
 
   function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
     if (!enabled || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
+    if (!rectRef.current) {
+      rectRef.current = ref.current.getBoundingClientRect();
+    }
+    const rect = rectRef.current;
+    if (!rect || rect.width === 0 || rect.height === 0) return;
     x.set(((e.clientX - rect.left) / rect.width - 0.5) * 2 * strength);
     y.set(((e.clientY - rect.top) / rect.height - 0.5) * 2 * strength);
   }
   function handleMouseLeave() {
+    rectRef.current = null;
     x.set(0);
     y.set(0);
   }

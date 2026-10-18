@@ -1,159 +1,123 @@
-# Turborepo starter
+# LoksewaAI — Platform Monorepo
 
-This Turborepo starter is maintained by the Turborepo core team.
+LoksewaAI is a comprehensive exam preparation, syllabus exploration, and learning platform tailored for Nepalese Public Service Commission (Loksewa / PSC) and engineering licensure candidates.
 
-## Using this example
+---
 
-Run the following command:
+## 🏛️ Monorepo Architecture
 
-```sh
-npx create-turbo@latest
+The repository is organized as a pnpm Turborepo monorepo:
+
+```
+├── apps/
+│   ├── web/                     # Next.js 16 (App Router) frontend
+│   └── api/                     # Django 6.1 + Django REST Framework backend
+├── packages/
+│   ├── ui/                      # Shared design system & React components
+│   ├── types/                   # Shared TypeScript models and enums
+│   ├── utils/                   # Shared utility functions
+│   ├── eslint-config/           # Monorepo ESLint configurations
+│   └── typescript-config/       # Base tsconfig presets
+├── docs/
+│   ├── reports/                 # Historical implementation, audit, and QA reports
+│   └── roadmap/                 # Project roadmap and specification documentation
+├── scripts/
+│   └── maintenance/             # Maintenance and reference data seeding scripts
+├── railway.json                 # Backend deployment configuration
+├── vercel.json                  # Frontend Vercel deployment configuration
+└── turbo.json                   # Turborepo task pipeline configuration
 ```
 
-## What's inside?
+---
 
-This Turborepo includes the following packages/apps:
+## 🚀 Quick Start
 
-### Apps and Packages
+### Prerequisites
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+- **Node.js**: `>= 18.0.0`
+- **pnpm**: `^9.0.0`
+- **Python**: `3.11+`
+- **PostgreSQL**: Supabase or local instance
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+### Installation
 
-### Utilities
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/dipakeditz996-droid/loksewa-Ai.git
+   cd "loksewa website"
+   ```
 
-This Turborepo has some additional tools already setup for you:
+2. **Install Node.js dependencies:**
+   ```bash
+   pnpm install
+   ```
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+3. **Configure Environment:**
+   - Copy `apps/api/.env.example` to `apps/api/.env` and update secrets.
+   - Configure frontend environment variables in `apps/web/.env.local`.
 
-### Build
+---
 
-To build all apps and packages, run the following command:
+## 💻 Development
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+### Run Everything Concurrently
 
-```sh
-cd my-turborepo
-turbo build
+```bash
+pnpm dev
 ```
 
-Without global `turbo`, use your package manager:
+### Run Frontend Only
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+```bash
+pnpm --filter web dev
+```
+Accessible at [http://localhost:3000](http://localhost:3000).
+
+### Run Backend Only
+
+```bash
+cd apps/api
+# Activate virtual environment
+.\venv\Scripts\Activate.ps1   # Windows PowerShell
+# source venv/bin/activate    # Linux / macOS
+
+python manage.py runserver 8000
+```
+API accessible at [http://localhost:8000/api/](http://localhost:8000/api/).
+
+---
+
+## 🧪 Verification & Build
+
+### Type Checking & Linting
+
+```bash
+# Type check all workspaces
+pnpm check-types
+
+# Lint all workspaces
+pnpm lint
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+### Production Build
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo build --filter=docs
+```bash
+# Build Next.js web application
+pnpm --filter web build
 ```
 
-Without global `turbo`:
+### Django Backend Health Check
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
+```bash
+cd apps/api
+python manage.py check
+python manage.py makemigrations --check --dry-run
 ```
 
-### Develop
+---
 
-To develop all apps and packages, run the following command:
+## 📂 Documentation & History
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- Comprehensive system and backend audit reports are archived under [`docs/reports/`](docs/reports/).
+- Project roadmap and specification documents are located in [`docs/roadmap/`](docs/roadmap/).
+- Database maintenance utilities are preserved in [`scripts/maintenance/`](scripts/maintenance/).

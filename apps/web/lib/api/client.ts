@@ -207,9 +207,9 @@ async function executeRequest<T>(
   }
 
   const config: RequestInit = {
+    cache: 'no-store',
     ...options,
     headers,
-    cache: 'no-store',
   };
 
   let response: Response;

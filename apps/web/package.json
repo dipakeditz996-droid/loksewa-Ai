@@ -66,5 +66,10 @@
     "@types/three": "^0.185.4",
     "eslint": "^9.39.1",
     "typescript": "5.9.2"
-  }
+  },
+  "browserslist": [
+    "defaults and fully supports es6-module",
+    "> 0.5%",
+    "not dead"
+  ]
 }

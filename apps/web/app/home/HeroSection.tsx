@@ -423,9 +423,9 @@ const headlineContainer = {
   visible: { transition: { staggerChildren: 0.14, delayChildren: 0.05 } },
 };
 const headlineLine = {
-  hidden: { opacity: 0, y: 36, filter: "blur(10px)" },
+  hidden: { opacity: 1, y: 0 },
   visible: {
-    opacity: 1, y: 0, filter: "blur(0px)",
+    opacity: 1, y: 0,
     transition: { duration: 0.75, ease: [0.16, 1, 0.3, 1] as const },
   },
 };
@@ -559,17 +559,12 @@ export function HeroSection() {
             {/* Headline */}
             <Headline reducedMotion={reducedMotion} />
 
-            {/* Supporting copy */}
-            <motion.p
-              initial={reducedMotion ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reducedMotion ? { duration: 0 } : { duration: 0.6, delay: 0.45, ease: [0.16, 1, 0.3, 1] }}
-              className="text-[17px] md:text-[19px] text-slate-600 dark:text-slate-400 leading-[1.7] max-w-[520px] mb-9 font-[450]"
-            >
+            {/* Supporting copy — rendered directly as static element to eliminate LCP element render delay */}
+            <p className="text-[17px] md:text-[19px] text-slate-600 dark:text-slate-400 leading-[1.7] max-w-[520px] mb-9 font-[450]">
               An AI that learns how you study — spotting weak topics, rebuilding your
               plan daily, and putting you in front of the questions that actually move
               your rank.
-            </motion.p>
+            </p>
 
             {/* CTAs */}
             <motion.div

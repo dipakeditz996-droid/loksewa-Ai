@@ -223,9 +223,13 @@ export interface PublicTestimonial {
 
 // ── API Functions ─────────────────────────────────────────────────────────────
 
-async function safeGet<T>(endpoint: string): Promise<T | null> {
+async function safeGet<T>(endpoint: string, revalidate = 300): Promise<T | null> {
   try {
-    return await apiClient<T>(endpoint, { skipRedirect: true } as any);
+    return await apiClient<T>(endpoint, {
+      skipRedirect: true,
+      cache: "default",
+      next: { revalidate },
+    } as any);
   } catch {
     return null;
   }

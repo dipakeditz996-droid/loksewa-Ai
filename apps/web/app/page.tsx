@@ -27,6 +27,9 @@ export const metadata = {
   description: "Prepare smarter with AI-powered personalized study plans, dynamic mock exams, targeted practice, and premium notes for PSC Nepal exams.",
 };
 
+// Revalidate homepage every 5 minutes (ISR) to deliver instant edge TTFB (<100ms)
+export const revalidate = 300;
+
 export default async function Home() {
   // Fetch data concurrently for API-driven sections
   // Note: These use the publicApi adapter which gracefully catches errors and returns null

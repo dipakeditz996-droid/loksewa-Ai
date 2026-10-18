@@ -64,7 +64,7 @@ export function StudyPlanSection() {
               {/* Plan header */}
               <div className="flex items-center justify-between mb-5">
                 <div>
-                  <div className="text-[11px] font-[800] text-slate-400 uppercase tracking-widest mb-1">WEEK OF AUG 18–24</div>
+                  <div className="text-[11px] font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">WEEK OF AUG 18–24</div>
                   <div className="text-[15px] font-[800] text-slate-800 dark:text-white">Your Weekly Schedule</div>
                 </div>
                 <div className="text-[10px] font-[700] text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
@@ -89,7 +89,7 @@ export function StudyPlanSection() {
                     >
                       {/* Day label */}
                       <div className={`w-9 shrink-0 text-center text-[11px] font-[800] uppercase tracking-wide ${
-                        day.active ? "text-[#D4A72C]" : day.done ? "text-slate-400" : (s || TYPE_STYLES.practice).text
+                        day.active ? "text-[#D4A72C]" : day.done ? "text-slate-500 dark:text-slate-400" : (s || TYPE_STYLES.practice).text
                       }`}>
                         {day.day}
                       </div>
@@ -99,10 +99,10 @@ export function StudyPlanSection() {
 
                       {/* Content */}
                       <div className="flex-1">
-                        <div className={`text-[13px] font-[700] ${day.done ? "text-slate-400 line-through" : "text-slate-800 dark:text-white"}`}>
+                        <div className={`text-[13px] font-[700] ${day.done ? "text-slate-500 dark:text-slate-400 line-through" : "text-slate-800 dark:text-white"}`}>
                           {day.topic}
                         </div>
-                        <div className="text-[11px] text-slate-400 dark:text-slate-500">{day.tasks}</div>
+                        <div className="text-[11px] text-slate-600 dark:text-slate-400 font-[500]">{day.tasks}</div>
                       </div>
 
                       {/* Status */}
@@ -124,7 +124,7 @@ export function StudyPlanSection() {
               <span className="text-gradient-gold">Your path.</span>
             </h2>
 
-            <p className="text-[17px] text-slate-500 dark:text-slate-400 leading-[1.7] mb-8 max-w-[460px] font-[500]">
+            <p className="text-[17px] text-slate-600 dark:text-slate-300 leading-[1.7] mb-8 max-w-[460px] font-[500]">
               LoksewaAI builds a personalized weekly study plan tailored to your target position, syllabus coverage, and weak areas — so you always know what to prepare next.
             </p>
 

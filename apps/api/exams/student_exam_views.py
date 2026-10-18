@@ -304,23 +304,16 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        exam_request = ExaminationRequest.objects.filter(
-            student=user, examination=examination
-        ).order_by('-created_at').first()
+        if examination.requires_admin_request:
+            exam_request = ExaminationRequest.objects.filter(
+                student=user, examination=examination
+            ).order_by('-created_at').first()
 
-        if examination.requires_admin_request and exam_request and exam_request.status in ('pending', 'rejected'):
-            return Response(
-                {'detail': 'Admin approval is required before starting this examination.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        if examination.requires_admin_request and not ExaminationRequest.objects.filter(
-            student=user, examination=examination, status='approved'
-        ).exists():
-            return Response(
-                {'detail': 'Admin approval is required before starting this examination.'},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            if not exam_request or exam_request.status != 'approved':
+                return Response(
+                    {'detail': 'Admin approval is required before starting this examination.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
         now = timezone.now()
         if examination.is_scheduled_live:
@@ -1004,9 +997,107 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             serializer = StudentSecureQuestionSerializer(questions, many=True)
         return Response(serializer.data)
 
+    def _get_examination_assigned_question_ids(self, attempt):
+        examination = attempt.examination
+        if examination.question_set_id:
+            return set(examination.question_set.questions.values_list('id', flat=True))
+        from .models import ExaminationQuestion
+        return set(
+            ExaminationQuestion.objects
+            .filter(examination=examination)
+            .values_list('question_id', flat=True)
+        )
+
+    def _save_answers_payload(self, attempt, answers_payload):
+        if not answers_payload:
+            return
+        assigned_qids = self._get_examination_assigned_question_ids(attempt)
+
+        items = []
+        if isinstance(answers_payload, dict):
+            for q_key, val in answers_payload.items():
+                try:
+                    qid = int(q_key)
+                except (ValueError, TypeError):
+                    continue
+                if qid not in assigned_qids:
+                    continue
+                if isinstance(val, dict):
+                    items.append({
+                        'question_id': qid,
+                        'selected_option': val.get('selected_option'),
+                        'answer_text': val.get('answer_text', ''),
+                        'answer_text_provided': 'answer_text' in val,
+                    })
+                else:
+                    items.append({
+                        'question_id': qid,
+                        'selected_option': val,
+                        'answer_text': '',
+                        'answer_text_provided': False,
+                    })
+        elif isinstance(answers_payload, list):
+            for item in answers_payload:
+                if not isinstance(item, dict):
+                    continue
+                qid = item.get('question_id') or item.get('question')
+                try:
+                    qid = int(qid)
+                except (ValueError, TypeError):
+                    continue
+                if qid not in assigned_qids:
+                    continue
+                items.append({
+                    'question_id': qid,
+                    'selected_option': item.get('selected_option'),
+                    'answer_text': item.get('answer_text', ''),
+                    'answer_text_provided': 'answer_text' in item,
+                })
+
+        if not items:
+            return
+
+        qids_to_process = {item['question_id'] for item in items}
+        existing_answers = {
+            ans.question_id: ans
+            for ans in StudentAnswer.objects.filter(attempt=attempt, question_id__in=qids_to_process)
+        }
+
+        to_create = []
+        to_update = []
+        for item in items:
+            qid = item['question_id']
+            sel_opt = item['selected_option']
+            ans_txt = item['answer_text']
+            txt_prov = item['answer_text_provided']
+
+            if qid in existing_answers:
+                ans = existing_answers[qid]
+                changed = False
+                if ans.selected_option != sel_opt:
+                    ans.selected_option = sel_opt
+                    changed = True
+                if txt_prov and ans.answer_text != ans_txt:
+                    ans.answer_text = ans_txt
+                    changed = True
+                if changed:
+                    to_update.append(ans)
+            else:
+                to_create.append(StudentAnswer(
+                    attempt=attempt,
+                    question_id=qid,
+                    selected_option=sel_opt,
+                    answer_text=ans_txt if txt_prov else '',
+                ))
+
+        if to_create:
+            StudentAnswer.objects.bulk_create(to_create, ignore_conflicts=True)
+        if to_update:
+            StudentAnswer.objects.bulk_update(to_update, ['selected_option', 'answer_text'])
+
     @action(detail=True, methods=['post'])
     def answer(self, request, pk=None):
-        """Save or update an answer for a specific question."""
+        """Save or update an answer for a specific question (or a batch of answers)."""
         attempt = self.get_object()
 
         if attempt.status != 'in-progress':
@@ -1018,14 +1109,14 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             return Response({'detail': detail, 'status': attempt.status},
                             status=status.HTTP_400_BAD_REQUEST)
 
+        # Support batch answer payload: {"answers": [...]} or {"answers": {...}}
+        batch_answers = request.data.get('answers')
+        if batch_answers:
+            self._save_answers_payload(attempt, batch_answers)
+            return Response({'status': 'saved', 'batch': True})
+
         question_id = request.data.get('question') or request.data.get('question_id')
         selected_option = request.data.get('selected_option')
-        # Descriptive answer for short_answer/long_answer/subjective questions.
-        # 'answer_text' not present in the payload at all (vs explicitly "")
-        # distinguishes "this request didn't touch the text answer" from "the
-        # student cleared it" - relevant since MCQ saves only ever send
-        # selected_option and must never blank out a text answer that isn't
-        # part of this request.
         answer_text_provided = 'answer_text' in request.data
         answer_text = request.data.get('answer_text', '')
 
@@ -1033,19 +1124,12 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Question ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            question = Question.objects.get(pk=question_id)
-        except Question.DoesNotExist:
-            return Response({'detail': 'Question not found.'}, status=status.HTTP_404_NOT_FOUND)
+            question_id = int(question_id)
+        except (ValueError, TypeError):
+            return Response({'detail': 'Invalid Question ID.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Ensure the question actually belongs to this examination
-        is_valid_q = False
-        if attempt.examination.question_set_id and attempt.examination.question_set:
-            is_valid_q = attempt.examination.question_set.questions.filter(pk=question.pk).exists()
-        else:
-            from .models import ExaminationQuestion
-            is_valid_q = ExaminationQuestion.objects.filter(examination=attempt.examination, question=question).exists()
-
-        if not is_valid_q:
+        assigned_qids = self._get_examination_assigned_question_ids(attempt)
+        if question_id not in assigned_qids:
             return Response({'detail': 'Question does not belong to this examination.'}, status=status.HTTP_400_BAD_REQUEST)
 
         defaults = {'selected_option': selected_option}
@@ -1054,15 +1138,20 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
 
         student_answer, created = StudentAnswer.objects.get_or_create(
             attempt=attempt,
-            question=question,
+            question_id=question_id,
             defaults=defaults,
         )
 
         if not created:
-            student_answer.selected_option = selected_option
-            if answer_text_provided:
+            update_fields = []
+            if student_answer.selected_option != selected_option:
+                student_answer.selected_option = selected_option
+                update_fields.append('selected_option')
+            if answer_text_provided and student_answer.answer_text != answer_text:
                 student_answer.answer_text = answer_text
-            student_answer.save()
+                update_fields.append('answer_text')
+            if update_fields:
+                student_answer.save(update_fields=update_fields)
 
         return Response({'status': 'saved'})
 
@@ -1070,32 +1159,42 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """
         Submit the exam attempt and calculate the score.
-
-        Scoring lives in attempt_timing.finalize_attempt so that a manual
-        submit and an automatic expiry cannot drift apart, and so a second tab
-        pressing Submit is a harmless no-op instead of an error.
+        Idempotent: if already submitted, returns HTTP 200 OK.
+        Saves any final/un-autosaved answers provided in request body.
+        Thread and concurrency safe: wrapped in an atomic database transaction
+        with row-level lock on the ExaminationAttempt.
         """
         attempt = self.get_object()
 
-        if attempt.status != 'in-progress':
-            # get_object() may have just auto-submitted an expired attempt;
-            # from the student's point of view that is a success.
-            if attempt.submitted_at:
+        with transaction.atomic():
+            locked_attempt = (
+                ExaminationAttempt.objects
+                .select_for_update()
+                .select_related('examination', 'examination__course', 'examination__category')
+                .get(pk=attempt.pk)
+            )
+
+            if locked_attempt.status != 'in-progress':
                 return Response({
-                    'detail': 'Exam submitted.',
-                    'attempt_id': attempt.id,
-                    'auto_submitted': True,
-                })
-            return Response({'detail': 'Exam already submitted.'},
-                            status=status.HTTP_400_BAD_REQUEST)
+                    'detail': 'Exam already submitted.',
+                    'attempt_id': locked_attempt.id,
+                    'already_submitted': True,
+                    'auto_submitted': bool(locked_attempt.submitted_at and attempt_is_expired(locked_attempt)),
+                }, status=status.HTTP_200_OK)
 
-        finalize_attempt(attempt)
+            # Save any in-memory answers included in the submit payload before finalizing
+            answers_payload = request.data.get('answers') if isinstance(request.data, dict) else None
+            if answers_payload:
+                self._save_answers_payload(locked_attempt, answers_payload)
 
-        return Response({
-            'detail': 'Exam submitted successfully.',
-            'attempt_id': attempt.id,
-            'auto_submitted': False,
-        })
+            finalize_attempt(locked_attempt)
+
+            return Response({
+                'detail': 'Exam submitted successfully.',
+                'attempt_id': locked_attempt.id,
+                'already_submitted': False,
+                'auto_submitted': False,
+            }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'])
     def result(self, request, pk=None):

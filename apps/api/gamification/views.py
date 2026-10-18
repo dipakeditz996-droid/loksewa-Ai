@@ -4,13 +4,17 @@ from administration.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 from rest_framework import viewsets
-from django.db.models import Sum
+from django.db.models import Sum, Count, Q
+from django.core.cache import cache
 from django.utils import timezone
 import hashlib
 
 from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction, Motivation
 from .serializers import GamificationProfileSerializer, ReferralSettingSerializer, ReferralSerializer, XPTransactionSerializer, MotivationSerializer
 from .services import get_or_create_profile, award_xp
+
+REFERRAL_CACHE_TTL = 60
+MOTIVATION_CACHE_TTL = 86400  # 24 hours
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -27,22 +31,35 @@ def validate_referral_code(request):
 def student_referral_dashboard(request):
     if not _gamification_enabled():
         raise PermissionDenied("Gamification is currently disabled by the administrator.")
+
+    cache_key = f'student_referral_dash:{request.user.id}'
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return Response(cached_data)
+
     profile = get_or_create_profile(request.user)
-    referrals = Referral.objects.filter(referrer=request.user)
     settings = ReferralSetting.get_settings()
     
-    total_referrals = referrals.count()
-    successful_referrals = referrals.filter(status='rewarded').count()
-    pending_referrals = referrals.filter(status='pending').count()
+    # Consolidate referral counts into a single aggregation query
+    ref_counts = Referral.objects.filter(referrer=request.user).aggregate(
+        total=Count('id'),
+        successful=Count('id', filter=Q(status='rewarded')),
+        pending=Count('id', filter=Q(status='pending')),
+    )
+    total_referrals = ref_counts['total'] or 0
+    successful_referrals = ref_counts['successful'] or 0
+    pending_referrals = ref_counts['pending'] or 0
     
     # Calculate XP earned from referrals
-    referral_xp = XPTransaction.objects.filter(user=request.user, reason__startswith='Referral Reward').aggregate(Sum('amount'))['amount__sum'] or 0
+    referral_xp = XPTransaction.objects.filter(
+        user=request.user, 
+        reason__startswith='Referral Reward'
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
     
     # 1. Rank (Real DB Calculation)
     rank = GamificationProfile.objects.filter(xp__gt=profile.xp).count() + 1
     
     # 2. 7-Day Streak Array Calculation - one query for the whole window
-    # instead of one .exists() per day (was 7 identical-shaped queries).
     from datetime import timedelta
     today = timezone.now().date()
     window_start = today - timedelta(days=6)
@@ -55,29 +72,16 @@ def student_referral_dashboard(request):
     )
     streak_days = [(today - timedelta(days=6 - i)) in active_dates for i in range(7)]
         
-    # 3. Games stats
+    # 3. Games stats: Unused by student referral & dashboard UI.
+    # We remove expensive queries across GameProfile, matches_as_p1/p2, and GameAnswer,
+    # while preserving 100% field contract compatibility with zero defaults.
     games_played = 0
     games_won = 0
     best_score = 0
     accuracy = 0
     questions_answered = 0
-    
-    try:
-        from games.models import GameProfile, GameAnswer
-        game_profile = GameProfile.objects.filter(user=request.user).first()
-        if game_profile:
-            games_won = game_profile.total_1v1_wins
-            best_score = game_profile.best_survival_score
         
-        games_played = request.user.matches_as_p1.count() + request.user.matches_as_p2.count()
-        total_ans = GameAnswer.objects.filter(player=request.user).count()
-        correct_ans = GameAnswer.objects.filter(player=request.user, is_correct=True).count()
-        accuracy = int((correct_ans / total_ans) * 100) if total_ans > 0 else 0
-        questions_answered = total_ans
-    except Exception:
-        pass
-        
-    return Response({
+    data = {
         'profile': GamificationProfileSerializer(profile).data,
         'stats': {
             'total_referrals': total_referrals,
@@ -94,14 +98,23 @@ def student_referral_dashboard(request):
             'questions_answered': questions_answered,
         },
         'settings': ReferralSettingSerializer(settings).data
-    })
+    }
+    cache.set(cache_key, data, REFERRAL_CACHE_TTL)
+    return Response(data)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def student_referral_history(request):
-    referrals = Referral.objects.filter(referrer=request.user).order_by('-created_at')
+    cache_key = f'student_referral_history:{request.user.id}'
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return Response(cached_data)
+
+    referrals = Referral.objects.filter(referrer=request.user).order_by('-created_at')[:20]
     serializer = ReferralSerializer(referrals, many=True)
-    return Response(serializer.data)
+    data = serializer.data
+    cache.set(cache_key, data, REFERRAL_CACHE_TTL)
+    return Response(data)
 
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAdminUser])
@@ -162,11 +175,18 @@ def admin_manual_approve(request, pk):
 @permission_classes([IsAuthenticated])
 def daily_motivation(request):
     today = timezone.now().date()
+    cache_key = f"daily_motivation:{today.isoformat()}:{request.user.id}"
+    cached_data = cache.get(cache_key)
+    if cached_data is not None:
+        return Response(cached_data)
+
     # Find all active motivations
     motivations = list(Motivation.objects.filter(is_active=True).order_by('id'))
     
     if not motivations:
-        return Response({'message': 'Small progress every day becomes a big result.', 'language': 'en', 'category': 'General'})
+        fallback = {'message': 'Small progress every day becomes a big result.', 'language': 'en', 'category': 'General'}
+        cache.set(cache_key, fallback, MOTIVATION_CACHE_TTL)
+        return Response(fallback)
     
     # Hash date and user ID to consistently pick one for today
     seed_str = f"{today.isoformat()}-{request.user.id}"
@@ -175,7 +195,9 @@ def daily_motivation(request):
     index = seed % len(motivations)
     selected_motivation = motivations[index]
     
-    return Response(MotivationSerializer(selected_motivation).data)
+    data = MotivationSerializer(selected_motivation).data
+    cache.set(cache_key, data, MOTIVATION_CACHE_TTL)
+    return Response(data)
 
 class MotivationAdminViewSet(viewsets.ModelViewSet):
     queryset = Motivation.objects.all().order_by('-created_at')

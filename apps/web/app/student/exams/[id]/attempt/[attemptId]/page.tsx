@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, Clock, AlertTriangle, LayoutGrid, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, AlertTriangle, LayoutGrid, Loader2, Check, CloudOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { studentExamsApi, isSubjectiveQuestionType } from "@/lib/api/student-exams";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,28 +20,20 @@ export default function ExamAttemptPage() {
   const queryClient = useQueryClient();
   const { beginExamFocus, endExamFocus } = useFocusMode();
 
-  // Next.js 15 passes route params as a Promise to Server Components; in a
-  // Client Component the useParams() hook is the resolved-synchronously
-  // equivalent, and it was already imported here but unused - the previous
-  // `{ params }` prop destructuring instead read a Promise object as if it
-  // were {id, attemptId}, so Number(params.attemptId) was always NaN and
-  // every fetch on this page 404'd, showing "Exam Already Submitted" for
-  // every attempt regardless of its real status.
   const params = useParams<{ id: string; attemptId: string }>();
   const attemptId = Number(params.attemptId);
   const examId = Number(params.id);
 
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
-  // Subjective (descriptive) answers, keyed the same way as `answers` but
-  // kept separate since they save via a different endpoint payload
-  // (answer_text, not selected_option) and never share a question index.
   const [textAnswers, setTextAnswers] = useState<Record<number, string>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<number, boolean>>({});
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isSubmitDialogOpen, setIsSubmitDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastAnswerSeqRef = useRef<Record<number, number>>({});
 
   // Fetch attempt details (which gives started_at and status)
   const { data: attempt, isLoading: isLoadingAttempt } = useQuery({
@@ -64,38 +56,55 @@ export default function ExamAttemptPage() {
     refetchOnWindowFocus: false,
   });
 
-  const saveAnswerMutation = useMutation({
-    mutationFn: (data: { questionId: number, selectedOption: string }) =>
-      studentExamsApi.saveAnswer(attemptId, data.questionId, data.selectedOption),
-    onError: () => {
-      toast.error("Failed to save answer. Retrying...");
-    }
-  });
+  const executeSubmit = useCallback(async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-  const saveTextAnswerMutation = useMutation({
-    mutationFn: (data: { questionId: number, answerText: string }) =>
-      studentExamsApi.saveAnswerText(attemptId, data.questionId, data.answerText),
-    onError: () => {
-      toast.error("Failed to save answer. Retrying...");
+    // Build complete array of current in-memory answers to send in submit payload
+    const payloadAnswers: Array<{ question_id: number; selected_option?: string | null; answer_text?: string }> = [];
+    if (questions) {
+      questions.forEach((q: any, idx: number) => {
+        const sel = answers[idx] ?? null;
+        const txt = textAnswers[idx] ?? '';
+        if (sel !== null || (txt && txt.trim().length > 0)) {
+          payloadAnswers.push({
+            question_id: q.id,
+            selected_option: sel,
+            answer_text: txt,
+          });
+        }
+      });
     }
-  });
 
-  const submitMutation = useMutation({
-    mutationFn: () => studentExamsApi.submitAttempt(attemptId),
-    onSuccess: () => {
-      toast.success("Exam submitted successfully!");
-      // The dashboard's stats (XP, streak, accuracy) and leaderboard both
-      // just changed server-side - without this, either would keep showing
-      // pre-submission numbers for up to their staleTime on next visit.
+    try {
+      const res = await studentExamsApi.submitAttempt(attemptId, { answers: payloadAnswers });
+      toast.success(res?.already_submitted ? "Exam submission confirmed!" : "Exam submitted successfully!");
       queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["analytics-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["student-exam", examId] });
       router.replace(`/student/exams/${examId}/result/${attemptId}`);
-    },
-    onError: () => {
+    } catch (err: any) {
+      console.warn("Submit attempt initial request failed, verifying attempt state:", err);
+      // Attempt verification: check if server committed the submission despite network drop
+      try {
+        const state = await studentExamsApi.getAttemptState(attemptId);
+        if (state && state.status && state.status !== 'in-progress') {
+          toast.success("Exam submission confirmed!");
+          queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
+          queryClient.invalidateQueries({ queryKey: ["analytics-overview"] });
+          router.replace(`/student/exams/${examId}/result/${attemptId}`);
+          return;
+        }
+      } catch (checkErr) {
+        console.warn("Attempt status check failed:", checkErr);
+      }
+
       setIsSubmitting(false);
-      toast.error("Failed to submit exam. Please try again.");
+      const msg = err?.data?.detail || err?.message || "Failed to submit exam. Please try again.";
+      toast.error(msg);
     }
-  });
+  }, [isSubmitting, questions, answers, textAnswers, attemptId, examId, queryClient, router]);
 
   // Initialize state from attempt data
   useEffect(() => {
@@ -135,9 +144,8 @@ export default function ExamAttemptPage() {
         setTimeLeft(remaining);
         
         if (remaining === 0 && !isSubmitting) {
-          setIsSubmitting(true);
           toast("Time is up! Submitting exam...", { icon: '⏳' });
-          submitMutation.mutate();
+          executeSubmit();
         }
       };
       
@@ -145,7 +153,7 @@ export default function ExamAttemptPage() {
       const interval = setInterval(updateTimer, 1000);
       return () => clearInterval(interval);
     }
-  }, [attempt, exam, isSubmitting, submitMutation]);
+  }, [attempt, exam, isSubmitting, executeSubmit]);
 
   // Activate Focus Mode / DND during exam
   useEffect(() => {
@@ -226,22 +234,48 @@ export default function ExamAttemptPage() {
   };
 
   const handleSelectOption = (optionLetter: string) => {
-    setAnswers({ ...answers, [currentIdx]: optionLetter });
+    const qid = question.id;
+    const seq = (lastAnswerSeqRef.current[qid] || 0) + 1;
+    lastAnswerSeqRef.current[qid] = seq;
 
-    // Autosave with debounce
+    setAnswers(prev => ({ ...prev, [currentIdx]: optionLetter }));
+    setSaveStatus("saving");
+
+    // Autosave with debounce and sequence tracking
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      saveAnswerMutation.mutate({ questionId: question.id, selectedOption: optionLetter });
-    }, 500);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await studentExamsApi.saveAnswer(attemptId, qid, optionLetter);
+        if (lastAnswerSeqRef.current[qid] === seq) {
+          setSaveStatus("saved");
+        }
+      } catch (err) {
+        console.warn("Autosave answer transient error:", err);
+        setSaveStatus("error");
+      }
+    }, 400);
   };
 
   const handleTextAnswerChange = (text: string) => {
-    setTextAnswers({ ...textAnswers, [currentIdx]: text });
+    const qid = question.id;
+    const seq = (lastAnswerSeqRef.current[qid] || 0) + 1;
+    lastAnswerSeqRef.current[qid] = seq;
+
+    setTextAnswers(prev => ({ ...prev, [currentIdx]: text }));
+    setSaveStatus("saving");
 
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
-      saveTextAnswerMutation.mutate({ questionId: question.id, answerText: text });
-    }, 800);
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        await studentExamsApi.saveAnswerText(attemptId, qid, text);
+        if (lastAnswerSeqRef.current[qid] === seq) {
+          setSaveStatus("saved");
+        }
+      } catch (err) {
+        console.warn("Autosave text transient error:", err);
+        setSaveStatus("error");
+      }
+    }, 600);
   };
 
   const toggleReviewMark = () => {
@@ -249,8 +283,8 @@ export default function ExamAttemptPage() {
   };
 
   const handleSubmit = () => {
-    setIsSubmitting(true);
-    submitMutation.mutate();
+    setIsSubmitDialogOpen(false);
+    executeSubmit();
   };
 
   const isAnsweredAt = (idx: number) =>
@@ -268,9 +302,19 @@ export default function ExamAttemptPage() {
             <h1 className="font-bold text-lg hidden sm:block">{exam?.title}</h1>
             <h1 className="font-bold text-base sm:hidden">Exam</h1>
           </div>
-          {(saveAnswerMutation.isPending || saveTextAnswerMutation.isPending) && (
+          {saveStatus === "saving" && (
             <span className="text-xs text-muted-foreground flex items-center gap-1.5 animate-pulse" role="status">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" /> Saving...
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium" role="status">
+              <Check className="h-3.5 w-3.5" aria-hidden="true" /> Saved
+            </span>
+          )}
+          {saveStatus === "error" && (
+            <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 font-medium" role="status" title="Answers are stored in memory and will sync automatically on submission">
+              <CloudOff className="h-3.5 w-3.5" aria-hidden="true" /> Pending Sync
             </span>
           )}
         </div>

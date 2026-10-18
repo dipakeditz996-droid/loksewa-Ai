@@ -74,7 +74,7 @@ export function AIPreparationSection() {
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
-                <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">AI DASHBOARD</div>
+                <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300 mb-1">AI DASHBOARD</div>
                 <div className="text-[16px] font-[800] text-slate-800 dark:text-white">Preparation Analysis</div>
               </div>
               <div className="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-3 py-1.5 rounded-full">
@@ -118,7 +118,7 @@ export function AIPreparationSection() {
             <div className="mb-5">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-                <span className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500">Weak Areas — AI Action Required</span>
+                <span className="text-[11px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">Weak Areas — AI Action Required</span>
               </div>
               <div className="space-y-2.5">
                 {WEAK_TOPICS.map((t) => (
@@ -144,7 +144,7 @@ export function AIPreparationSection() {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500">Strong Areas</span>
+                <span className="text-[11px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">Strong Areas</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {STRONG_TOPICS.map((t) => (

@@ -821,19 +821,20 @@ def _get_package_status(user):
     if not active_subscription and not is_admin_granted and user.is_active and getattr(user, 'role', None) == 'student':
         from subscriptions.entitlements import EntitlementService
         active_subscription = EntitlementService.ensure_free_plan_entitlement(user)
-    latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
     latest_payment_data = None
-    if latest_payment and not active_subscription:
-        # Only surface the latest payment while there's no active package
-        # to explain - once a package is active, pending/rejected history
-        # from before it belongs on the purchases/history page, not here.
-        latest_payment_data = {
-            "status": latest_payment.status,
-            "rejectionReason": latest_payment.rejection_reason or None,
-            "planName": latest_payment.plan.name,
-            "amount": str(latest_payment.amount),
-            "submittedAt": latest_payment.submitted_at.isoformat() if latest_payment.submitted_at else None,
-        }
+    if not active_subscription:
+        latest_payment = SubscriptionPayment.objects.filter(student=user).select_related('plan').order_by('-submitted_at').first()
+        if latest_payment:
+            # Only surface the latest payment while there's no active package
+            # to explain - once a package is active, pending/rejected history
+            # from before it belongs on the purchases/history page, not here.
+            latest_payment_data = {
+                "status": latest_payment.status,
+                "rejectionReason": latest_payment.rejection_reason or None,
+                "planName": latest_payment.plan.name,
+                "amount": str(latest_payment.amount),
+                "submittedAt": latest_payment.submitted_at.isoformat() if latest_payment.submitted_at else None,
+            }
 
     rem_days = None
     if active_subscription and active_subscription.expiry_date and active_subscription.expiry_date.year >= 2000:

@@ -126,11 +126,6 @@ export default function ExamDetailsPage() {
 
   const { requestStart, gate } = useCalmDownGate(handleStartExam);
 
-  const handleConfirmStart = () => {
-    setIsConfirmDialogOpen(false);
-    requestStart();
-  };
-
   if (isLoading) {
     return (
       <div className="flex h-[50vh] items-center justify-center">
@@ -391,32 +386,21 @@ export default function ExamDetailsPage() {
                 {exam.start_blocked_reason || 'Not available'}
               </Button>
             ) : (
-              <Dialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button disabled={isStarting} className="w-full sm:w-auto gap-2 bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#133E6D] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
+              <Button
+                disabled={isStarting || startExamMutation.isPending}
+                onClick={requestStart}
+                className="w-full sm:w-auto gap-2 bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#133E6D] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold"
+              >
+                {isStarting || startExamMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Starting Exam...
+                  </>
+                ) : (
+                  <>
                     <Play className="h-4 w-4" /> Start Exam
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Ready to begin?</DialogTitle>
-                    <DialogDescription>
-                      You are about to start <strong>{exam.title}</strong>. 
-                      The timer of {exam.time_limit} minutes will start immediately.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md my-2 flex items-start gap-2">
-                    <ShieldAlert className="h-4 w-4 mt-0.5 shrink-0" />
-                    <p>Ensure you have a stable internet connection. Do not close the browser during the exam.</p>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsConfirmDialogOpen(false)} disabled={isStarting}>Cancel</Button>
-                    <Button onClick={handleConfirmStart} disabled={isStarting} className="bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#133E6D] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">
-                      {isStarting ? "Starting..." : "Yes, Start Now"}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  </>
+                )}
+              </Button>
             )}
           </div>
         </CardFooter>

@@ -17,7 +17,7 @@ function LeaderboardCard() {
     <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_80px_rgba(0,0,0,0.6)] h-full flex flex-col">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">This Week</div>
+          <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300 mb-1">This Week</div>
           <div className="text-[16px] font-[800] text-slate-800 dark:text-white">Top Performers</div>
         </div>
         <div className="w-9 h-9 rounded-full bg-[#D4A72C]/10 flex items-center justify-center">
@@ -38,7 +38,7 @@ function LeaderboardCard() {
               <div className="text-[11px] font-[700] text-[#D4A72C]">{p.score}</div>
             </div>
             <div className={`w-full ${p.height} rounded-t-[10px] bg-gradient-to-t from-slate-100 to-slate-50 dark:from-white/[0.06] dark:to-white/[0.02] border border-b-0 border-slate-200 dark:border-white/[0.08] flex items-start justify-center pt-2`}>
-              <span className="text-[13px] font-[900] text-slate-400 dark:text-slate-500">#{p.rank}</span>
+              <span className="text-[13px] font-[900] text-slate-700 dark:text-slate-300">#{p.rank}</span>
             </div>
           </div>
         ))}
@@ -50,7 +50,7 @@ function LeaderboardCard() {
           <Award className="w-4 h-4 text-[#D4A72C]" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-500 dark:text-slate-400">Your Rank</div>
+          <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400">Your Rank</div>
           <div className="text-[15px] font-[900] text-slate-800 dark:text-white">#27 <span className="text-[11px] font-[700] text-[#D4A72C] ml-1">Top 3%</span></div>
         </div>
         <div className="flex items-center gap-1 text-[11px] font-[700] text-emerald-500 shrink-0">
@@ -77,7 +77,7 @@ function StreakCard() {
     <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.06)] dark:shadow-[0_20px_80px_rgba(0,0,0,0.6)] h-full flex flex-col">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-1">Consistency</div>
+          <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300 mb-1">Consistency</div>
           <div className="text-[16px] font-[800] text-slate-800 dark:text-white">Your Study Streak</div>
         </div>
         <div className="w-9 h-9 rounded-full bg-orange-500/10 flex items-center justify-center">
@@ -92,7 +92,7 @@ function StreakCard() {
           <span className="text-[26px] relative">🔥</span>
         </div>
         <div>
-          <div className="text-[32px] font-[900] text-slate-800 dark:text-white leading-none mb-1">7 <span className="text-[15px] font-[700] text-slate-400">day streak</span></div>
+          <div className="text-[32px] font-[900] text-slate-800 dark:text-white leading-none mb-1">7 <span className="text-[15px] font-[700] text-slate-600 dark:text-slate-400">day streak</span></div>
           <div className="text-[12.5px] font-[700] text-orange-500">Keep going — don&apos;t break the chain!</div>
         </div>
       </div>
@@ -101,7 +101,7 @@ function StreakCard() {
       <div className="flex items-center justify-between gap-1.5 mb-8">
         {WEEK.map((d) => (
           <div key={d.day} className="flex flex-col items-center gap-1.5 flex-1">
-            <span className="text-[9px] font-[700] text-slate-400 dark:text-slate-500 tracking-wide">{d.day[0]}</span>
+            <span className="text-[9px] font-[700] text-slate-700 dark:text-slate-300 tracking-wide">{d.day[0]}</span>
             <div
               className={`w-full aspect-square max-w-[34px] rounded-[10px] flex items-center justify-center text-[13px] border ${
                 d.today
@@ -120,11 +120,11 @@ function StreakCard() {
       {/* Supporting stats */}
       <div className="grid grid-cols-2 gap-3 mt-auto pt-5 border-t border-slate-100 dark:border-white/[0.05]">
         <div>
-          <div className="text-[10px] font-[700] text-slate-400 uppercase tracking-widest mb-1">Longest Streak</div>
+          <div className="text-[10px] font-[700] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Longest Streak</div>
           <div className="text-[16px] font-[900] text-slate-800 dark:text-white">21 days</div>
         </div>
         <div>
-          <div className="text-[10px] font-[700] text-slate-400 uppercase tracking-widest mb-1">This Month</div>
+          <div className="text-[10px] font-[700] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">This Month</div>
           <div className="text-[16px] font-[900] text-emerald-500">89% consistent</div>
         </div>
       </div>
@@ -137,19 +137,19 @@ export function LeaderboardStreakSection() {
     <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[550px] h-[550px] bg-orange-500/[0.03] dark:bg-orange-500/[0.05] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[550px] h-[550px] bg-orange-500/[0.03] dark:orange-500/[0.05] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8">
 
         <div className="text-center mb-14">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#163E6B]/50 mb-5">
             <Trophy className="w-3.5 h-3.5 text-[#D4A72C]" />
-            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-500 dark:text-[#4B8BE0]">Community &amp; Motivation</span>
+            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-600 dark:text-[#4B8BE0]">Community &amp; Motivation</span>
           </div>
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
             See your rank. <span className="text-gradient-gold">Keep your streak.</span>
           </h2>
-          <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[540px] mx-auto font-[500]">
+          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[540px] mx-auto font-[500]">
             Real competition against thousands of aspirants, and the daily habit that gets you to exam day ready.
           </p>
         </div>

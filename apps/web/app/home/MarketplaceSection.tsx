@@ -32,7 +32,7 @@ export function MarketplaceSection({ products }: Props) {
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
             Physical Books &amp; <span className="text-gradient-blue-violet">Study Materials.</span>
           </h2>
-          <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
+          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Browse platform-verified physical preparation books, practice question sets, and student-to-student used listings.
           </p>
         </div>
@@ -41,7 +41,7 @@ export function MarketplaceSection({ products }: Props) {
           <div className="text-center py-12 px-4 bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] max-w-xl mx-auto mb-10">
             <ShoppingBag className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-50" />
             <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-1">No Books Listed Right Now</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
               New physical books and student used-book listings are verified and published regularly.
             </p>
             <Link href="/marketplace">
@@ -84,14 +84,14 @@ export function MarketplaceSection({ products }: Props) {
                     {p.title}
                   </h3>
 
-                  <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-[1.5] mb-5 flex-1">
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.5] mb-5 flex-1">
                     {p.description}
                   </p>
 
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-white/[0.04] mt-auto">
                     <div>
                           {p.discount_price && Number(p.discount_price) < Number(p.price) && (
-                            <span className="text-[11px] text-slate-400 line-through mr-2">Rs. {p.price}</span>
+                            <span className="text-[11px] text-slate-500 dark:text-slate-400 line-through mr-2">Rs. {p.price}</span>
                           )}
                           <span className="text-[18px] font-[900] text-slate-800 dark:text-white">Rs. {p.final_price}</span>
                     </div>

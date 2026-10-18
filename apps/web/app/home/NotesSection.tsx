@@ -112,12 +112,12 @@ export function NotesSection({ notes }: Props) {
                   <h3 className="text-[15px] font-[800] text-slate-900 dark:text-white mb-1.5 truncate group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                     {note.title}
                   </h3>
-                  <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-[1.5] mb-3 line-clamp-2">
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.5] mb-3 line-clamp-2">
                     {note.description}
                   </p>
                   
                   {/* Meta */}
-                  <div className="flex items-center gap-4 text-[11px] font-[600] text-slate-400 dark:text-slate-500 capitalize">
+                  <div className="flex items-center gap-4 text-[11px] font-[600] text-slate-600 dark:text-slate-400 capitalize">
                     <div className="flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> {note.material_type.replace(/_/g, " ")}</div>
                     <div className="flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> {note.difficulty}</div>
                     <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> {note.estimated_reading_time} min</div>

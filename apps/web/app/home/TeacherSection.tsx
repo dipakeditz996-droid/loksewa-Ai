@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { GraduationCap, ArrowRight, BookOpen, Users, DollarSign, ChevronRight, BarChart2 } from "lucide-react";
+import { GraduationCap, ArrowRight, BookOpen, Users, DollarSign, BarChart2 } from "lucide-react";
 
 export function TeacherSection() {
   return (
@@ -34,7 +34,7 @@ export function TeacherSection() {
                 Are you a <span className="text-gradient-gold">Loksewa expert?</span>
               </h2>
               
-              <p className="text-[17px] text-slate-500 dark:text-slate-400 leading-[1.7] mb-8 font-[500] max-w-[480px]">
+              <p className="text-[17px] text-slate-600 dark:text-slate-300 leading-[1.7] mb-8 font-[500] max-w-[480px]">
                 Join Nepal&apos;s most advanced EdTech platform. Create courses, write study materials, build mock exams, and monetize your expertise directly on LoksewaAI.
               </p>
               
@@ -88,7 +88,7 @@ export function TeacherSection() {
                   ].map((s) => (
                     <div key={s.label} className="bg-slate-50 dark:bg-white/[0.03] rounded-[12px] p-3.5 flex items-center justify-between border border-transparent dark:border-white/[0.02]">
                       <div>
-                        <div className="text-[11px] font-[700] text-slate-500 uppercase tracking-widest mb-0.5">{s.label}</div>
+                        <div className="text-[11px] font-[700] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-0.5">{s.label}</div>
                         <div className="text-[13px] font-[600] text-emerald-600 dark:text-emerald-400">{s.trend}</div>
                       </div>
                       <div className="text-[18px] font-[800] text-slate-800 dark:text-white">{s.value}</div>

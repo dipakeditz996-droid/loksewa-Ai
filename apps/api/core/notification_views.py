@@ -62,13 +62,21 @@ class NotificationUnreadCountView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        from django.core.cache import cache
+        cache_key = f'unread_notifications:{request.user.id}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
         unread_count = Notification.objects.filter(recipient=request.user, is_read=False).count()
         latest = Notification.objects.filter(recipient=request.user).order_by('-created_at')[:5]
         serializer = NotificationSerializer(latest, many=True)
-        return Response({
+        data = {
             'unread_count': unread_count,
             'latest': serializer.data
-        })
+        }
+        cache.set(cache_key, data, 30)
+        return Response(data)
 
 
 class NotificationReadView(APIView):
@@ -90,10 +98,12 @@ class NotificationMarkAllReadView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
+        from django.core.cache import cache
         Notification.objects.filter(recipient=request.user, is_read=False).update(
             is_read=True, 
             read_at=timezone.now()
         )
+        cache.delete(f'unread_notifications:{request.user.id}')
         return Response(status=status.HTTP_200_OK)
 
 

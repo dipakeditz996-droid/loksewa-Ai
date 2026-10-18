@@ -23,12 +23,16 @@ class EntitlementService:
     """The authoritative engine for package entitlement and quota enforcement."""
 
     @classmethod
-    def get_active_subscription(cls, user: User) -> Optional[Subscription]:
+    def get_active_subscription(cls, user: User, force_refresh: bool = False) -> Optional[Subscription]:
         """Returns the student's active Subscription, supporting both optional
         duration-based expiry and quota-based / lifetime subscriptions.
         Active PAID subscriptions strictly take priority over Free subscriptions."""
         if not user or not user.is_authenticated:
             return None
+
+        if not force_refresh and hasattr(user, '_cached_active_subscription'):
+            cached = getattr(user, '_cached_active_subscription')
+            return None if cached == '__none__' else cached
 
         now = timezone.now()
         # 1. First look for active PAID subscriptions (plan__price > 0)
@@ -44,6 +48,7 @@ class EntitlementService:
         )
         first_paid = paid_subs.first()
         if first_paid:
+            setattr(user, '_cached_active_subscription', first_paid)
             return first_paid
 
         # 2. If no active paid subscription, look for active FREE subscriptions
@@ -56,7 +61,9 @@ class EntitlementService:
             .select_related('plan')
             .order_by('-created_at')
         )
-        return free_subs.first()
+        res = free_subs.first()
+        setattr(user, '_cached_active_subscription', res or '__none__')
+        return res
 
     @classmethod
     def get_default_free_plan(cls) -> Optional[SubscriptionPlan]:
@@ -692,6 +699,12 @@ class EntitlementService:
         """
         if CourseAccessService.is_privileged(user) or getattr(examination, 'is_free', False):
             return True, "Exempt from quota consumption.", {}
+
+        # If examination requires admin approval and student has an approved request, permit start
+        if getattr(examination, 'requires_admin_request', False):
+            from exams.models import ExaminationRequest
+            if ExaminationRequest.objects.filter(student=user, examination=examination, status='approved').exists():
+                return True, "Approved by admin for this examination.", {}
 
         active_sub = cls.get_active_subscription(user)
         plan = active_sub.plan if active_sub else None

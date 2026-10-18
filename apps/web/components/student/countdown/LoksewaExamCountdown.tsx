@@ -136,7 +136,7 @@ export function LoksewaExamCountdown({
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-foreground">Next Official Loksewa Exam</h4>
+              <h2 className="text-sm font-bold text-foreground">Next Official Loksewa Exam</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {data?.message || "No exam schedule configured for this course yet."}
               </p>
@@ -161,9 +161,9 @@ export function LoksewaExamCountdown({
               <Sparkles className="w-3 h-3" /> Official Loksewa Countdown
             </div>
 
-            <h3 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">
+            <h2 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">
               {schedule.title}
-            </h3>
+            </h2>
 
             <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-slate-300 font-medium">
               <span className="flex items-center gap-1">

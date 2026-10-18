@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {
   BookOpen, Mail,
-  ShieldCheck, BadgeCheck, Cpu, TrendingUp, ArrowRight, MapPin, Phone,
+  ShieldCheck, BadgeCheck, Cpu, TrendingUp, ArrowRight,
   Globe, MessageCircle, Share2, Users
 } from "lucide-react";
 
@@ -124,7 +124,7 @@ export function Footer() {
 
             {/* Platform links */}
             <div>
-              <h4 className="text-[12px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Platform</h4>
+              <h3 className="text-[12px] font-[800] uppercase tracking-widest text-slate-800 dark:text-slate-300 mb-4">Platform</h3>
               <ul className="space-y-2.5">
                 {platformLinks.map((link) => (
                   <li key={link.name}>
@@ -141,7 +141,7 @@ export function Footer() {
 
             {/* Resources */}
             <div>
-              <h4 className="text-[12px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Resources</h4>
+              <h3 className="text-[12px] font-[800] uppercase tracking-widest text-slate-800 dark:text-slate-300 mb-4">Resources</h3>
               <ul className="space-y-2.5">
                 {resourceLinks.map((link) => (
                   <li key={link.name}>
@@ -158,7 +158,7 @@ export function Footer() {
 
             {/* Account */}
             <div>
-              <h4 className="text-[12px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Account</h4>
+              <h3 className="text-[12px] font-[800] uppercase tracking-widest text-slate-800 dark:text-slate-300 mb-4">Account</h3>
               <ul className="space-y-2.5">
                 {accountLinks.map((link) => (
                   <li key={link.name}>
@@ -175,7 +175,7 @@ export function Footer() {
 
             {/* Company */}
             <div>
-              <h4 className="text-[12px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-4">Company</h4>
+              <h3 className="text-[12px] font-[800] uppercase tracking-widest text-slate-800 dark:text-slate-300 mb-4">Company</h3>
               <ul className="space-y-2.5">
                 {companyLinks.map((link) => (
                   <li key={link.name}>
@@ -198,7 +198,7 @@ export function Footer() {
           <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
               {trustBadges.map(({ icon: Icon, label }) => (
-                <div key={label} className="flex items-center gap-2 text-[12px] font-[600] text-slate-500 dark:text-slate-500">
+                <div key={label} className="flex items-center gap-2 text-[12px] font-[600] text-slate-700 dark:text-slate-300">
                   <Icon className="w-3.5 h-3.5 text-[#D4A72C]" />
                   {label}
                 </div>
@@ -210,13 +210,13 @@ export function Footer() {
         {/* ── Bottom bar ───────────────────────── */}
         <div className="border-t border-slate-200 dark:border-white/[0.05]">
           <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[12.5px] text-slate-400 dark:text-slate-600">
+            <p className="text-[12.5px] text-slate-600 dark:text-slate-400">
               © 2026 LoksewaAI. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
-              <Link href="/privacy" className="text-[12.5px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-colors">Privacy</Link>
-              <Link href="/terms" className="text-[12.5px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-colors">Terms</Link>
-              <Link href="/refund" className="text-[12.5px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-colors">Refund</Link>
+              <Link href="/privacy" className="text-[12.5px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Privacy</Link>
+              <Link href="/terms" className="text-[12.5px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Terms</Link>
+              <Link href="/refund" className="text-[12.5px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Refund</Link>
             </div>
           </div>
         </div>

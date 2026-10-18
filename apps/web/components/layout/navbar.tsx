@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   BookOpen, Menu, X, Moon, Sun, ArrowRight,
-  Home, Target, FileText, Sparkles, ShoppingBag, Loader2,
+  Home, Sparkles, ShoppingBag, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
@@ -162,7 +162,7 @@ export function Navbar() {
               {mounted && (
                 <button
                   onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
                   aria-label="Toggle theme"
                 >
                   {theme === "dark"
@@ -307,14 +307,14 @@ export function Navbar() {
                 ) : (
                   <Icon
                     className={`w-[21px] h-[21px] transition-colors ${
-                      isActive ? "text-[#C29322] dark:text-[#F0C95A]" : "text-slate-400 dark:text-slate-500"
+                      isActive ? "text-[#C29322] dark:text-[#F0C95A]" : "text-slate-600 dark:text-slate-400"
                     }`}
                     strokeWidth={isActive ? 2.4 : 2}
                   />
                 )}
                 <span
                   className={`text-[10px] font-[700] transition-colors ${
-                    isActive || isPending ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
+                    isActive || isPending ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
                   }`}
                 >
                   {tab.label}
@@ -340,11 +340,11 @@ export function Navbar() {
             {isMobileMenuOpen ? (
               <X className="w-[21px] h-[21px] text-[#C29322] dark:text-[#F0C95A]" strokeWidth={2.4} />
             ) : (
-              <Menu className="w-[21px] h-[21px] text-slate-400 dark:text-slate-500" strokeWidth={2} />
+              <Menu className="w-[21px] h-[21px] text-slate-600 dark:text-slate-400" strokeWidth={2} />
             )}
             <span
               className={`text-[10px] font-[700] transition-colors ${
-                isMobileMenuOpen ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"
+                isMobileMenuOpen ? "text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-400"
               }`}
             >
               Menu

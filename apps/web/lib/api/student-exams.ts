@@ -377,10 +377,17 @@ export const studentExamsApi = {
     });
   },
   
-  submitAttempt: async (attemptId: number) => {
-    return await apiClient(`/student/exam-attempts/${attemptId}/submit/`, {
-      method: 'POST'
-    });
+  submitAttempt: async (
+    attemptId: number,
+    payload?: { answers?: Array<{ question_id: number; selected_option?: string | null; answer_text?: string }> }
+  ) => {
+    return await apiClient<{ detail: string; attempt_id: number; already_submitted?: boolean }>(
+      `/student/exam-attempts/${attemptId}/submit/`,
+      {
+        method: 'POST',
+        ...(payload ? { body: JSON.stringify(payload) } : {}),
+      }
+    );
   },
   
   getResult: async (attemptId: number) => {

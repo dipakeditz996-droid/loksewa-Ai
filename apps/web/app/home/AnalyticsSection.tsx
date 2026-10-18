@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BarChart2, TrendingUp, ChevronRight, Activity, Calendar, Award } from "lucide-react";
+import { ArrowRight, TrendingUp, Calendar, Award } from "lucide-react";
 
 export function AnalyticsSection() {
   return (

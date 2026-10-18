@@ -25,7 +25,7 @@ export function MockExamSection() {
             Experience the real exam{" "}
             <span className="text-gradient-gold">before the real exam.</span>
           </h2>
-          <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
+          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Full-length timed mock exams replicating the exact Loksewa exam environment.
           </p>
         </div>
@@ -51,7 +51,7 @@ export function MockExamSection() {
             {/* Progress bar */}
             <div className="px-6 pt-4 pb-2">
               <div className="flex justify-between items-center mb-2">
-                <span className="text-[13px] font-[600] text-slate-500 dark:text-slate-400">Question <span className="text-slate-800 dark:text-white font-[700]">34</span> of 100</span>
+                <span className="text-[13px] font-[600] text-slate-600 dark:text-slate-300">Question <span className="text-slate-800 dark:text-white font-[700]">34</span> of 100</span>
                 <span className="text-[12px] font-[700] text-emerald-600 dark:text-emerald-400">34% Complete</span>
               </div>
               <div className="w-full h-2 bg-slate-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
@@ -79,7 +79,7 @@ export function MockExamSection() {
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[11px] font-[800] shrink-0 ${
                       i === SELECTED
                         ? "border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/10"
-                        : "border-slate-300 dark:border-slate-600 text-slate-500"
+                        : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300"
                     }`}>
                       {String.fromCharCode(65 + i)}
                     </div>
@@ -92,7 +92,7 @@ export function MockExamSection() {
 
               {/* Action bar */}
               <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100 dark:border-white/[0.04]">
-                <button className="flex items-center gap-2 text-[13px] font-[600] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors">
+                <button className="flex items-center gap-2 text-[13px] font-[600] text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-white transition-colors">
                   <BookmarkPlus className="w-4 h-4" />
                   Mark for Review
                 </button>
@@ -111,7 +111,7 @@ export function MockExamSection() {
           {/* Side analytics */}
           <div className="flex flex-col gap-4">
             <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[20px] p-5 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_50px_rgba(0,0,0,0.5)]">
-              <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-400 mb-4">Live Analytics</div>
+              <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-4">Live Analytics</div>
               {[
                 { label: "Accuracy", value: "78%", icon: Target, color: "text-emerald-500" },
                 { label: "Avg. Speed", value: "62s / Q", icon: Clock, color: "text-blue-500" },
@@ -121,7 +121,7 @@ export function MockExamSection() {
                 <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 dark:border-white/[0.04] last:border-0">
                   <div className="flex items-center gap-2">
                     <Icon className={`w-3.5 h-3.5 ${color}`} />
-                    <span className="text-[12.5px] text-slate-500 dark:text-slate-400">{label}</span>
+                    <span className="text-[12.5px] text-slate-600 dark:text-slate-300">{label}</span>
                   </div>
                   <span className={`text-[13px] font-[800] ${color}`}>{value}</span>
                 </div>
@@ -130,7 +130,7 @@ export function MockExamSection() {
 
             {/* Question navigator mini */}
             <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[20px] p-5">
-              <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-400 mb-3">Questions</div>
+              <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-3">Questions</div>
               <div className="grid grid-cols-7 gap-1.5 mb-3">
                 {Array.from({ length: 21 }, (_, i) => (
                   <div
@@ -140,14 +140,14 @@ export function MockExamSection() {
                         ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
                         : i === Math.floor(33 / 5)
                         ? "bg-blue-500 text-white"
-                        : "bg-slate-100 dark:bg-white/[0.05] text-slate-400"
+                        : "bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-slate-400"
                     }`}
                   >
                     {i + 1}
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between text-[10px] font-[600] text-slate-400">
+              <div className="flex justify-between text-[10px] font-[600] text-slate-600 dark:text-slate-400">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />Answered</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-200 dark:bg-white/10 inline-block" />Skipped</span>
               </div>

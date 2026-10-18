@@ -1,10 +1,8 @@
-"use client";
-
 import React from "react";
 import { Star, CheckCircle } from "lucide-react";
 import { PublicTestimonial, PublicStats } from "@/lib/api/public-api";
 import { RetryImage } from "@/components/ui/retry-image";
-import { WriteReviewDialog } from "@/components/home/WriteReviewDialog";
+import { WriteReviewTrigger } from "@/components/home/WriteReviewTrigger";
 
 // Fallback only for when /public/stats/ can't be reached (outage) — the real
 // endpoint always returns real, floor-guaranteed counts, never these.
@@ -54,17 +52,17 @@ export function SocialProofSection({ testimonials, stats }: Props) {
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#163E6B]/50 mb-5">
             <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-500 dark:text-[#4B8BE0]">Trusted by Aspirants</span>
+            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-[#4B8BE0]">Trusted by Aspirants</span>
           </div>
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
             Built for serious{" "}
             <span className="text-gradient-gold">Loksewa preparation.</span>
           </h2>
-          <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
+          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Thousands of aspirants trust LoksewaAI to prepare smarter, practice better, and perform with confidence.
           </p>
           <div className="mt-6">
-            <WriteReviewDialog />
+            <WriteReviewTrigger />
           </div>
         </div>
 
@@ -81,8 +79,8 @@ export function SocialProofSection({ testimonials, stats }: Props) {
               }`}>
                 {m.value}
               </div>
-              <div className="text-[13px] font-[700] text-slate-700 dark:text-slate-200 mb-1">{m.label}</div>
-              <div className="text-[11.5px] text-slate-400 dark:text-slate-500">{m.description}</div>
+              <div className="text-[13px] font-[700] text-slate-800 dark:text-slate-200 mb-1">{m.label}</div>
+              <div className="text-[11.5px] text-slate-600 dark:text-slate-400 font-[500]">{m.description}</div>
             </div>
           ))}
         </div>

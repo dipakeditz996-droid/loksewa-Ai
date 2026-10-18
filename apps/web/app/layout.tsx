@@ -8,6 +8,8 @@ import { FocusModeProvider } from "@/contexts/FocusModeContext";
 import { PublicSiteShell } from "@/components/layout/PublicSiteShell";
 import Providers from "./providers";
 
+import { preconnect, prefetchDNS } from "react-dom";
+
 // Lazy-load DND modal to keep it out of the critical root bundle on public routes
 const OsDndGuideModal = dynamic(
   () => import("@/components/student/focus/OsDndGuideModal").then((m) => m.OsDndGuideModal)
@@ -17,11 +19,16 @@ const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
   ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
   : "https://loksewa-ai-production.up.railway.app";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["600", "700", "800"],
   variable: "--font-jakarta",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -35,12 +42,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Hoist preconnect and dns-prefetch directly into document head without manual <head> JSX tag
+  preconnect(API_ORIGIN, { crossOrigin: "anonymous" });
+  prefetchDNS(API_ORIGIN);
+
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href={API_ORIGIN} crossOrigin="anonymous" />
-        <link rel="dns-prefetch" href={API_ORIGIN} />
-      </head>
       <body
         suppressHydrationWarning
         className={`${inter.variable} ${jakarta.variable} font-sans antialiased bg-background text-foreground min-h-screen flex flex-col`}

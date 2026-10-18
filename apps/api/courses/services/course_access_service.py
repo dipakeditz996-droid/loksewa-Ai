@@ -92,7 +92,7 @@ class CourseAccessService:
                 Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
                 student=user, status='ACTIVE'
             )
-            .select_related('plan')
+            .select_related('plan', 'plan__course')
             .prefetch_related('plan__eligible_courses')
         )
 
@@ -117,10 +117,11 @@ class CourseAccessService:
             except Exception:
                 sub_payment = None
 
+            eligible_published = [c for c in plan.eligible_courses.all() if c.status == 'published']
+
             if pkg_type == 'BUNDLE':
                 # Bundle grants all configured eligible published courses
-                bundle_courses = plan.eligible_courses.filter(status='published').values_list('id', flat=True)
-                accessible_course_ids.update(bundle_courses)
+                accessible_course_ids.update(c.id for c in eligible_published)
 
             elif pkg_type == 'MULTI':
                 # Multi grants courses recorded in course selections or approved applications
@@ -144,10 +145,8 @@ class CourseAccessService:
                 # Single preparation package
                 if plan.course_id and plan.course and plan.course.status == 'published':
                     accessible_course_ids.add(plan.course_id)
-                elif plan.eligible_courses.count() == 1:
-                    first_course = plan.eligible_courses.first()
-                    if first_course and first_course.status == 'published':
-                        accessible_course_ids.add(first_course.id)
+                elif len(eligible_published) == 1:
+                    accessible_course_ids.add(eligible_published[0].id)
 
                 # Check if course was explicitly selected on payment or subscription
                 selection_q = Q(subscription=sub)
@@ -485,14 +484,23 @@ class CourseAccessService:
             return False
 
         auth_courses = cls.get_accessible_courses(user)
-        if not auth_courses.exists():
-            # Students without any course enrollment can access platform-wide exams
-            # (course_id is None). The exam may still have an exam_id for academic
-            # hierarchy purposes — that does NOT require enrollment.
-            return bool(examination.status in ('published', 'live') and examination.course_id is None)
+        cached_ids = getattr(user, '_accessible_course_ids_cache', None)
+        if cached_ids == '__all__':
+            return True
+        if cached_ids is not None:
+            if not cached_ids:
+                return bool(examination.status in ('published', 'live') and examination.course_id is None)
+            if examination.course_id:
+                return examination.course_id in cached_ids
+        else:
+            if not auth_courses.exists():
+                # Students without any course enrollment can access platform-wide exams
+                # (course_id is None). The exam may still have an exam_id for academic
+                # hierarchy purposes — that does NOT require enrollment.
+                return bool(examination.status in ('published', 'live') and examination.course_id is None)
 
-        if examination.course_id:
-            return auth_courses.filter(id=examination.course_id).exists()
+            if examination.course_id:
+                return auth_courses.filter(id=examination.course_id).exists()
 
         if examination.exam_id:
             scope = cls.get_accessible_exam_ids(user)

@@ -215,7 +215,8 @@ def finalize_attempt(attempt, auto=False):
     now = timezone.now()
     attempt.score = score
     attempt.percentage = percentage
-    attempt.passed = score >= examination.passing_marks
+    passing_threshold = examination.passing_marks if examination.passing_marks is not None else 0
+    attempt.passed = score >= passing_threshold
     attempt.submitted_at = attempt_expires_at(attempt) if auto else now
     attempt.status = 'submitted'
 
@@ -229,20 +230,23 @@ def finalize_attempt(attempt, auto=False):
     try:
         from core.views import invalidate_student_dashboard
         invalidate_student_dashboard(attempt.student_id)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Error invalidating dashboard on exam submit: %s", e)
 
     try:
         from subscriptions.entitlements import EntitlementService
         EntitlementService.consume_exam_attempt(attempt)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Error consuming exam entitlement on submit: %s", e)
 
     try:
         from gamification.services import record_study_activity
         record_study_activity(attempt.student)
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Error recording study activity on submit: %s", e)
 
     # Award XP for examination attempt completion
     try:
@@ -250,8 +254,9 @@ def finalize_attempt(attempt, auto=False):
         # Base XP for completion + XP based on score percentage
         xp_to_award = 10 + int(attempt.percentage / 10)
         award_xp(attempt.student, xp_to_award, f"Examination Attempt Completed: {attempt.examination.title}")
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Error awarding XP on submit: %s", e)
 
     # For objective exams, result is published immediately.
     # For subjective exams, result publishing is gated until manual evaluation is completed and published.

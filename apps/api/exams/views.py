@@ -1555,8 +1555,9 @@ class DashboardView(APIView):
     def get(self, request):
         user = request.user
         
+        course_id_param = request.query_params.get('course_id') or ''
         from django.core.cache import cache
-        cache_key = f'student_dashboard:{user.id}'
+        cache_key = f'student_dashboard:{user.id}:{course_id_param}'
         try:
             cached = cache.get(cache_key)
             if cached is not None:

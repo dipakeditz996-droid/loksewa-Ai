@@ -817,7 +817,7 @@ class Examination(models.Model):
 
     @property
     def is_scheduled_live(self):
-        return self.objective_category == 'live'
+        return self.objective_category == 'live' or bool(self.start_time)
 
     @property
     def starts_anytime_after_approval(self):

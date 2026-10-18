@@ -1,7 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Check, X, ArrowRight, Sparkles } from "lucide-react";
+import { Check, X, Sparkles } from "lucide-react";
 import { PublicPackage } from "@/lib/api/public-api";
 
 // ── Curated static packages (backend-configurable via /packages/public/) ──
@@ -106,7 +106,7 @@ export function PricingSection({ packages }: Props) {
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
             Invest in your <span className="text-gradient-gold">future.</span>
           </h2>
-          <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
+          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Choose the plan that fits your preparation journey. Cancel anytime.
           </p>
         </div>
@@ -130,14 +130,14 @@ export function PricingSection({ packages }: Props) {
 
               <div className="p-8">
                 <h3 className="text-[20px] font-[800] text-slate-900 dark:text-white mb-2">{pkg.name}</h3>
-                <p className="text-[13px] text-slate-500 dark:text-slate-400 h-[40px]">{pkg.description}</p>
+                <p className="text-[13px] text-slate-600 dark:text-slate-300 h-[40px]">{pkg.description}</p>
                 
                 <div className="my-6">
                   <div className="flex items-end gap-1 mb-1">
-                    <span className="text-[20px] font-[700] text-slate-500 dark:text-slate-400 pb-1">Rs.</span>
+                    <span className="text-[20px] font-[700] text-slate-600 dark:text-slate-300 pb-1">Rs.</span>
                     <span className="text-[44px] font-[900] text-slate-900 dark:text-white leading-none tracking-tight">{pkg.price}</span>
                   </div>
-                  <div className="text-[13px] font-[600] text-slate-500 dark:text-slate-400">{pkg.duration_label}</div>
+                  <div className="text-[13px] font-[600] text-slate-600 dark:text-slate-300">{pkg.duration_label}</div>
                 </div>
 
                 <Link href="/register">
@@ -167,17 +167,17 @@ export function PricingSection({ packages }: Props) {
                   {/* For Basic plan, show missing features */}
                   {!pkg.is_popular && pkg.price === "0" && (
                     <>
-                      <div className="flex items-start gap-3 opacity-50">
+                      <div className="flex items-start gap-3 opacity-60">
                         <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-slate-100 dark:bg-white/5">
-                          <X className="w-3 h-3 text-slate-400" />
+                          <X className="w-3 h-3 text-slate-500" />
                         </div>
-                        <span className="text-[14px] text-slate-400">Advanced AI Analytics</span>
+                        <span className="text-[14px] text-slate-500 dark:text-slate-400">Advanced AI Analytics</span>
                       </div>
-                      <div className="flex items-start gap-3 opacity-50">
+                      <div className="flex items-start gap-3 opacity-60">
                         <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-slate-100 dark:bg-white/5">
-                          <X className="w-3 h-3 text-slate-400" />
+                          <X className="w-3 h-3 text-slate-500" />
                         </div>
-                        <span className="text-[14px] text-slate-400">Premium Study Materials</span>
+                        <span className="text-[14px] text-slate-500 dark:text-slate-400">Premium Study Materials</span>
                       </div>
                     </>
                   )}

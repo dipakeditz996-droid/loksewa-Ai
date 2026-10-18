@@ -58,6 +58,19 @@ class Enrollment(models.Model):
     def __str__(self):
         return f"{self.student.username} -> {self.course.title}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.student_id:
+            from .access import invalidate_student_course_context
+            invalidate_student_course_context(self.student_id)
+
+    def delete(self, *args, **kwargs):
+        student_id = self.student_id
+        super().delete(*args, **kwargs)
+        if student_id:
+            from .access import invalidate_student_course_context
+            invalidate_student_course_context(student_id)
+
 
 class CourseApplication(models.Model):
     """

@@ -88,6 +88,7 @@ urlpatterns = [
     # Student Schedule & Countdown endpoints
     path('schedules/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next'),
     path('student/exam-schedule/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next-alt'),
+    path('student/mock-exams/upcoming/', StudentUpcomingMockExamView.as_view(), name='student-mock-exams-upcoming'),
     path('student/calm-session-log/', CalmSessionLogView.as_view(), name='student-calm-session-log'),
     # Canonical Evaluation Request paths
     path('attempts/<int:pk>/evaluation-request/', StudentExaminationAttemptViewSet.as_view({'post': 'request_checking'}), name='exam-attempt-evaluation-request'),

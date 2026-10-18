@@ -101,7 +101,7 @@ function ScoreGauge({ value, reducedMotion }: { value: number; reducedMotion: bo
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-[24px] font-[900] text-slate-900 dark:text-white leading-none tracking-tight">
-          {value}<span className="text-[12px] text-slate-400 dark:text-slate-500 font-[700]">%</span>
+          {value}<span className="text-[12px] text-slate-500 dark:text-slate-400 font-[700]">%</span>
         </span>
         <span className="text-[8.5px] font-[800] text-[#C29322] dark:text-[#F0C95A] uppercase tracking-widest mt-1.5">Excellent</span>
       </div>
@@ -122,7 +122,7 @@ function RankCard({ offset, reducedMotion }: { offset: TierOffset; reducedMotion
         <div className="w-9 h-9 rounded-full bg-[#D4A72C]/12 dark:bg-[#D4A72C]/15 flex items-center justify-center mb-2">
           <Award className="w-4.5 h-4.5 text-[#C29322] dark:text-[#F0C95A]" />
         </div>
-        <div className="text-[8.5px] font-[800] text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Current Rank</div>
+        <div className="text-[8.5px] font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Current Rank</div>
         <div className="text-[24px] font-[900] text-slate-900 dark:text-white leading-none mb-1">#27</div>
         <div className="text-[10.5px] font-[700] text-[#C29322] dark:text-[#F0C95A]">Top 3%</div>
       </div>
@@ -191,14 +191,14 @@ function HeroShowcase() {
             <span className="w-2.5 h-2.5 rounded-full bg-red-300 dark:bg-red-400/60" />
             <span className="w-2.5 h-2.5 rounded-full bg-amber-300 dark:bg-amber-400/60" />
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
-            <span className="mx-auto text-[10.5px] font-[600] text-slate-400 dark:text-slate-500 tracking-wide">
+            <span className="mx-auto text-[10.5px] font-[600] text-slate-600 dark:text-slate-400 tracking-wide">
               app.loksewaai.com/dashboard
             </span>
           </div>
 
           <div className="p-5">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500">
+              <span className="text-[10px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
                 AI Preparation Score
               </span>
               <span className="flex items-center gap-1 text-[10.5px] font-[700] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 rounded-full">
@@ -230,7 +230,7 @@ function HeroShowcase() {
 
             <div className="pt-4 border-t border-slate-100 dark:border-white/[0.06]">
               <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[10px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                <span className="text-[10px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
                   Accuracy This Week
                 </span>
                 <span className="text-[15px] font-[900] text-slate-900 dark:text-white">94%</span>
@@ -281,14 +281,14 @@ function MobileHeroShowcase({ reducedMotion }: { reducedMotion: boolean }) {
           <span className="w-2 h-2 rounded-full bg-red-300 dark:bg-red-400/60" />
           <span className="w-2 h-2 rounded-full bg-amber-300 dark:bg-amber-400/60" />
           <span className="w-2 h-2 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
-          <span className="mx-auto text-[10px] font-[600] text-slate-400 dark:text-slate-500">
+          <span className="mx-auto text-[10px] font-[600] text-slate-600 dark:text-slate-400">
             app.loksewaai.com
           </span>
         </div>
 
         <div className="p-4">
           <div className="flex items-center justify-between mb-3.5">
-            <span className="text-[9.5px] font-[800] uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            <span className="text-[9.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
               AI Preparation Score
             </span>
             <span className="flex items-center gap-1 text-[10px] font-[700] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 rounded-full">
@@ -458,7 +458,7 @@ function Headline({ reducedMotion }: { reducedMotion: boolean }) {
       <motion.span variants={reducedMotion ? undefined : headlineLine} className="block">
         Your Loksewa
       </motion.span>
-      <motion.span variants={reducedMotion ? undefined : headlineLine} className="block text-slate-400 dark:text-slate-500">
+      <motion.span variants={reducedMotion ? undefined : headlineLine} className="block text-slate-600 dark:text-slate-400">
         preparation,
       </motion.span>
       <motion.span variants={reducedMotion ? undefined : headlineLine} className="relative block w-fit">
@@ -592,7 +592,7 @@ export function HeroSection() {
               transition={reducedMotion ? { duration: 0 } : { duration: 0.6, delay: 0.7 }}
               className="flex flex-wrap items-center gap-2 mt-7"
             >
-              <span className="text-[11px] font-[700] uppercase tracking-widest text-slate-400 dark:text-slate-500 mr-1">
+              <span className="text-[11px] font-[700] uppercase tracking-widest text-slate-700 dark:text-slate-300 mr-1">
                 Prepare for
               </span>
               {EXAM_CHIPS.map((chip) => (

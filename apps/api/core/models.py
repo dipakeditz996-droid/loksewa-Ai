@@ -186,6 +186,19 @@ class Notification(models.Model):
     def __str__(self):
         return f"{self.recipient.username} - {self.title}"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.recipient_id:
+            from django.core.cache import cache
+            cache.delete(f'unread_notifications:{self.recipient_id}')
+
+    def delete(self, *args, **kwargs):
+        recipient_id = self.recipient_id
+        super().delete(*args, **kwargs)
+        if recipient_id:
+            from django.core.cache import cache
+            cache.delete(f'unread_notifications:{recipient_id}')
+
 
 class StudentFeedback(models.Model):
     """Personal performance feedback an admin sends to one student, e.g. from

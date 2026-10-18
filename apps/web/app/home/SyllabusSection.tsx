@@ -84,11 +84,11 @@ export function SyllabusSection() {
           <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_50px_rgba(0,0,0,0.5)]">
 
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-[11px] font-[600] text-slate-400 mb-5">
+            <div className="flex items-center gap-1.5 text-[11px] font-[600] text-slate-600 dark:text-slate-400 mb-5">
               {["Exam", "Paper", "Subject", "Chapter", "Topic"].map((item, i, arr) => (
                 <React.Fragment key={item}>
-                  <span className={i === 0 ? "text-[#D4A72C]" : i === arr.length - 1 ? "text-slate-600 dark:text-slate-300" : ""}>{item}</span>
-                  {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-300 dark:text-slate-600" />}
+                  <span className={i === 0 ? "text-[#D4A72C]" : i === arr.length - 1 ? "text-slate-700 dark:text-slate-200" : ""}>{item}</span>
+                  {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />}
                 </React.Fragment>
               ))}
             </div>
@@ -100,7 +100,7 @@ export function SyllabusSection() {
               </div>
               <div>
                 <div className="text-[15px] font-[800] text-slate-800 dark:text-white">{data?.exam}</div>
-                <div className="text-[11px] text-slate-400">Loksewa Aayog — PSC Nepal</div>
+                <div className="text-[11px] text-slate-600 dark:text-slate-400 font-[500]">Loksewa Aayog — PSC Nepal</div>
               </div>
             </div>
 
@@ -144,7 +144,7 @@ export function SyllabusSection() {
                       {/* Chapters */}
                       <div className="flex flex-wrap gap-1.5">
                         {subject.chapters.map((ch) => (
-                          <span key={ch} className="text-[10px] font-[600] text-slate-500 dark:text-slate-400 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] px-2 py-0.5 rounded-full">
+                          <span key={ch} className="text-[10px] font-[600] text-slate-700 dark:text-slate-300 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] px-2 py-0.5 rounded-full">
                             {ch}
                           </span>
                         ))}
@@ -160,7 +160,7 @@ export function SyllabusSection() {
           <div className="flex flex-col gap-5">
             {/* Hierarchy explanation */}
             <div className="bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6">
-              <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-400 mb-4">Loksewa Academic Hierarchy</div>
+              <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-4">Loksewa Academic Hierarchy</div>
               <div className="space-y-3">
                 {[
                   { level: "Exam", desc: "Section Officer, Kharidar, Nayab Subba...", color: "bg-[#D4A72C]" },
@@ -176,7 +176,7 @@ export function SyllabusSection() {
                     </div>
                     <div>
                       <div className="text-[13px] font-[700] text-slate-800 dark:text-white">{item.level}</div>
-                      <div className="text-[11.5px] text-slate-400 dark:text-slate-500">{item.desc}</div>
+                      <div className="text-[11.5px] text-slate-600 dark:text-slate-300 font-[500]">{item.desc}</div>
                     </div>
                   </div>
                 ))}
@@ -193,7 +193,7 @@ export function SyllabusSection() {
               ].map((s) => (
                 <div key={s.label} className="bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[16px] p-4 text-center">
                   <div className={`text-[28px] font-[900] ${s.color} mb-1`}>{s.value}</div>
-                  <div className="text-[11px] font-[600] text-slate-500 dark:text-slate-400">{s.label}</div>
+                  <div className="text-[11px] font-[600] text-slate-600 dark:text-slate-400">{s.label}</div>
                 </div>
               ))}
             </div>

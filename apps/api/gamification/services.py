@@ -2,6 +2,13 @@ from django.db import transaction
 from django.utils import timezone
 from .models import GamificationProfile, ReferralSetting, Referral, XPTransaction, ReferralMilestone
 
+def invalidate_student_referral_cache(user_id):
+    if not user_id:
+        return
+    from django.core.cache import cache
+    cache.delete(f'student_referral_dash:{user_id}')
+    cache.delete(f'student_referral_history:{user_id}')
+
 def get_or_create_profile(user):
     profile, created = GamificationProfile.objects.get_or_create(user=user)
     return profile
@@ -30,6 +37,8 @@ def award_xp(user, amount, reason):
 
     profile.save()
 
+    invalidate_student_referral_cache(user.id)
+
     if profile.level > old_level:
         from core.notification_service import NotificationService
         new_level = profile.level
@@ -41,6 +50,7 @@ def award_coins(user, amount):
     profile = get_or_create_profile(user)
     profile.coins += amount
     profile.save()
+    invalidate_student_referral_cache(user.id)
 
 def process_referral_action(user, action_type):
     """
@@ -127,6 +137,7 @@ def register_referral(new_user, referral_code):
             referred_user=new_user,
             status='pending'
         )
+        invalidate_student_referral_cache(referrer.id)
         
         # If the qualification action is 'signup', process it immediately
         if settings.qualification_action == 'signup':

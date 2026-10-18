@@ -1,7 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, Target, Clock, BarChart2, Sparkles, Shuffle, BookOpen, Zap } from "lucide-react";
+import { ArrowRight, Target, BarChart2, Sparkles, Shuffle, BookOpen, Zap } from "lucide-react";
 
 const PRACTICE_TYPES = [
   {
@@ -100,7 +99,7 @@ export function PracticeSection() {
             Practice with{" "}
             <span className="text-gradient-blue-violet">purpose.</span>
           </h2>
-          <p className="text-[17px] text-slate-500 dark:text-slate-400 max-w-[520px] mx-auto font-[500]">
+          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Five modes of intelligent practice — from daily habits to AI-powered targeted sessions.
           </p>
         </div>
@@ -127,7 +126,7 @@ export function PracticeSection() {
                   {/* Text */}
                   <div>
                     <h3 className="text-[16px] font-[800] text-slate-800 dark:text-white mb-1.5">{p.title}</h3>
-                    <p className="text-[13px] text-slate-500 dark:text-slate-400 leading-[1.6]">{p.description}</p>
+                    <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-[1.6]">{p.description}</p>
                   </div>
 
                   {/* Stats */}
@@ -139,7 +138,7 @@ export function PracticeSection() {
                       { label: "Accuracy", value: p.accuracy },
                     ].map((s) => (
                       <div key={s.label} className="bg-slate-50 dark:bg-white/[0.03] rounded-[10px] px-2.5 py-2">
-                        <div className="text-[9.5px] font-[700] uppercase tracking-wide text-slate-400 mb-0.5">{s.label}</div>
+                        <div className="text-[9.5px] font-[700] uppercase tracking-wide text-slate-600 dark:text-slate-400 mb-0.5">{s.label}</div>
                         <div className="text-[12px] font-[700] text-slate-700 dark:text-slate-200">{s.value}</div>
                       </div>
                     ))}
@@ -174,7 +173,7 @@ export function PracticeSection() {
                         </span>
                       )}
                     </div>
-                    <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-[1.5]">{p.description}</p>
+                    <p className="text-[12px] text-slate-600 dark:text-slate-300 leading-[1.5]">{p.description}</p>
                   </div>
                   <ArrowRight className={`w-4 h-4 ${p.color} shrink-0 group-hover:translate-x-1 transition-transform`} />
                 </div>
@@ -190,7 +189,7 @@ export function PracticeSection() {
               </div>
               <div className="flex-1">
                 <div className="text-[14px] font-[800] text-white mb-1">View All Practice</div>
-                <div className="text-[12px] text-slate-400">1,000+ practice sets</div>
+                <div className="text-[12px] text-slate-300">1,000+ practice sets</div>
               </div>
               <ArrowRight className="w-4 h-4 text-[#D4A72C] shrink-0" />
             </div>

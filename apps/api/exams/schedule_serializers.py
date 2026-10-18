@@ -90,6 +90,17 @@ class StudentUpcomingMockExamSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         return getattr(request, 'user', None)
 
+    def _student_attempts(self, obj):
+        user = self._user()
+        if not user or not user.is_authenticated:
+            return []
+        cache_attr = f'_cached_attempts_{obj.id}'
+        if hasattr(self, cache_attr):
+            return getattr(self, cache_attr)
+        attempts = list(obj.attempts.filter(student=user).only('id', 'status', 'examination_id', 'student_id'))
+        setattr(self, cache_attr, attempts)
+        return attempts
+
     def get_server_time(self, obj):
         return timezone.now().isoformat()
 
@@ -97,7 +108,8 @@ class StudentUpcomingMockExamSerializer(serializers.ModelSerializer):
         user = self._user()
         if not user or not user.is_authenticated:
             return False
-        return obj.attempts.filter(student=user).exclude(status='in-progress').exists()
+        attempts = self._student_attempts(obj)
+        return any(a.status != 'in-progress' for a in attempts)
 
     def get_can_start(self, obj):
         user = self._user()
@@ -107,9 +119,8 @@ class StudentUpcomingMockExamSerializer(serializers.ModelSerializer):
         if (
             not obj.is_scheduled_live
             or not obj.start_time
-            or not obj.end_time
             or now < obj.start_time
-            or now > obj.end_time
+            or (obj.end_time and now > obj.end_time)
         ):
             return False
         if self.get_has_attempted(obj):
@@ -120,5 +131,6 @@ class StudentUpcomingMockExamSerializer(serializers.ModelSerializer):
         user = self._user()
         if not user or not user.is_authenticated:
             return None
-        active = obj.attempts.filter(student=user, status='in-progress').first()
+        attempts = self._student_attempts(obj)
+        active = next((a for a in attempts if a.status == 'in-progress'), None)
         return active.id if active else None

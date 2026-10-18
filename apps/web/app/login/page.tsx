@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { BookOpen, Eye, EyeOff, User, Lock, Trophy, BarChart2, ArrowRight, ArrowLeft } from "lucide-react";
+import { BookOpen, Eye, EyeOff, User, Lock, Trophy, BarChart2, ArrowRight, ArrowLeft, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import bgImage from "../../media/login.png";
@@ -26,6 +26,17 @@ function LoginContent() {
   const { user, loading: authLoading, signIn } = useAuth();
   const redirectedRef = React.useRef(false);
   const loginCardRef = useRef<HTMLDivElement>(null);
+
+  const [sessionRevokedNotice, setSessionRevokedNotice] = useState(false);
+
+  // Check if user was signed out due to a single-session replacement on another device
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("session_revoked") === "true") {
+      setSessionRevokedNotice(true);
+    }
+  }, []);
 
   // On mobile the brand/hero copy stacks above the login form, so jump
   // straight to the form instead of making the student scroll past it.
@@ -260,6 +271,18 @@ function LoginContent() {
                   </>
                 )}
               </div>
+
+              {sessionRevokedNotice && (
+                <div className="mb-6 p-4 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-sm flex items-start gap-3 shadow-lg">
+                  <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-white">Signed Out</p>
+                    <p className="text-amber-200/90 text-xs mt-0.5 leading-relaxed">
+                      Your account was signed in on another device. Please log in again to continue.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {error && (
                 <div className="mb-6 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">

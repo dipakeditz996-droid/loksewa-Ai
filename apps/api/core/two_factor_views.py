@@ -134,9 +134,19 @@ class TwoFactorLoginView(APIView):
             return Response({'error': 'Invalid or expired code.'}, status=status.HTTP_400_BAD_REQUEST)
 
         record_successful_login(user)
+
+        from .session_service import should_enforce_single_session, establish_active_session
+        if should_enforce_single_session(user):
+            session_key = establish_active_session(user)
+        else:
+            session_key = getattr(user, 'jwt_session_key', None)
+
         refresh = RefreshToken.for_user(user)
+        if session_key:
+            refresh['session_key'] = session_key
+
         return Response({
-            'access': _access_token_for(user),
+            'access': _access_token_for(user, session_key=session_key),
             'refresh': str(refresh),
             'user': {
                 'id': user.id,

@@ -211,10 +211,19 @@ class TeacherChangePasswordView(IsTeacher, APIView):
                 pass  # Already invalid or blacklisted
 
         # Issue new tokens so the user stays logged in
+        from .session_service import should_enforce_single_session, establish_active_session
+        if should_enforce_single_session(user):
+            session_key = establish_active_session(user)
+        else:
+            session_key = getattr(user, 'jwt_session_key', None)
+
         new_refresh = RefreshToken.for_user(user)
+        if session_key:
+            new_refresh['session_key'] = session_key
+
         return Response({
             'detail': 'Password updated successfully.',
-            'access': _access_token_for(user),
+            'access': _access_token_for(user, session_key=session_key),
             'refresh': str(new_refresh),
         }, status=status.HTTP_200_OK)
 

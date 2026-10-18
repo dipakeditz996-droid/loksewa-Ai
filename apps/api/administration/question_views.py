@@ -31,8 +31,9 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
     # matches on two tags would otherwise appear twice in the list.
     queryset = Question.objects.select_related(
         'exam', 'category', 'exam__category',
-        'subject', 'chapter', 'topic',
-        'chapter__subject', 'topic__chapter', 'topic__chapter__subject',
+        'subject', 'subject__paper', 'subject__paper__exam', 'subject__paper__exam__category',
+        'chapter', 'chapter__subject', 'chapter__subject__paper', 'chapter__subject__paper__exam',
+        'topic', 'topic__chapter', 'topic__chapter__subject',
         'topic__chapter__subject__paper', 'topic__chapter__subject__paper__exam',
         'topic__chapter__subject__paper__exam__category',
     ).prefetch_related(
@@ -72,6 +73,25 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        permanent = request.query_params.get('permanent') == 'true' or (isinstance(request.data, dict) and request.data.get('permanent') is True)
+        if permanent:
+            if instance.usage_count > 0:
+                return Response({
+                    "error": f"Cannot permanently delete Question {instance.question_id} because it is referenced in an active exam or test."
+                }, status=status.HTTP_400_BAD_REQUEST)
+            from administration.models import TrashItem, AuditLog
+            TrashItem.objects.filter(app_label='exams', model_name='question', object_id=str(instance.id)).delete()
+            q_code = instance.question_id
+            instance.delete()
+            AuditLog.objects.create(
+                actor=request.user, action='PERMANENT_DELETE', entity_type='Question', entity_id=str(instance.id),
+                details={"question_id": q_code}
+            )
+            return Response({
+                'success': True,
+                'message': f"Question {q_code} has been permanently deleted from the database.",
+            }, status=status.HTTP_200_OK)
+
         reason = request.data.get('reason', '') if isinstance(request.data, dict) else ''
         trash_item = SafeDeleteService.soft_delete(instance, request.user, reason=reason)
         return Response({
@@ -398,16 +418,37 @@ class AdminQuestionViewSet(viewsets.ModelViewSet):
 
         from administration.models import AuditLog
 
-        if action_type == 'delete':
+        if action_type in ['delete', 'permanent_delete']:
             # Check usage before bulk delete
             for q in questions:
                 if q.usage_count > 0:
                     return Response({"error": f"Cannot delete Question {q.question_id} because it is referenced in an exam or set."}, status=400)
-            questions.delete()
-            AuditLog.objects.create(
-                actor=request.user, action='BULK_DELETE', entity_type='Question', entity_id=None,
-                details={"ids": ids, "count": count}
-            )
+
+            if action_type == 'permanent_delete':
+                from administration.models import TrashItem
+                # Remove any existing TrashItem records for these questions
+                TrashItem.objects.filter(
+                    app_label='exams',
+                    model_name='question',
+                    object_id__in=[str(qid) for qid in ids]
+                ).delete()
+                # Permanently delete the questions
+                questions.delete()
+                AuditLog.objects.create(
+                    actor=request.user, action='BULK_PERMANENT_DELETE', entity_type='Question', entity_id=None,
+                    details={"ids": ids, "count": count}
+                )
+                return Response({"message": f"Successfully permanently deleted {count} questions.", "count": count})
+            else:
+                soft_deleted_count = 0
+                for q in questions:
+                    SafeDeleteService.soft_delete(q, request.user, reason="Bulk deleted by Admin")
+                    soft_deleted_count += 1
+                AuditLog.objects.create(
+                    actor=request.user, action='BULK_SOFT_DELETE', entity_type='Question', entity_id=None,
+                    details={"ids": ids, "count": soft_deleted_count}
+                )
+                return Response({"message": f"Successfully moved {soft_deleted_count} questions to Trash.", "count": soft_deleted_count})
         elif action_type in ['approve', 'draft', 'archive']:
             if action_type == 'approve':
                 for q in questions:

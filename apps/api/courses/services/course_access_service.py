@@ -560,27 +560,33 @@ class CourseAccessService:
         Returns the primary published Course instance for this question, or None.
         Determined through the authoritative hierarchy: Question -> Exam -> Course.
         """
-        # Direct course on associated Examination
+        # Direct course on associated Examination (use prefetched in-memory records)
         if hasattr(question, 'examinations_set'):
-            ex = question.examinations_set.filter(course__isnull=False).select_related('course').first()
-            if ex and ex.course:
-                return ex.course
+            for ex in question.examinations_set.all():
+                if getattr(ex, 'course', None):
+                    return ex.course
 
         exam_id = cls.resolve_question_exam_id(question)
         if not exam_id:
             return None
 
+        from django.core.cache import cache
         from courses.models import Course
+
+        cache_key = f'course_by_exam_id:{exam_id}'
+        cached_course = cache.get(cache_key)
+        if cached_course is not None:
+            return None if cached_course == '__NONE__' else cached_course
 
         # Fast direct match on course.exam_id
         course = Course.objects.filter(exam_id=exam_id, status='published').first()
+        if not course:
+            # Also fallback to any active course matching exam_id if none published yet
+            course = Course.objects.filter(exam_id=exam_id).exclude(status='archived').first()
+
+        cache.set(cache_key, course or '__NONE__', 60)
         if course:
             return course
-
-        # Also fallback to any active course matching exam_id if none published yet
-        course_any = Course.objects.filter(exam_id=exam_id).exclude(status='archived').first()
-        if course_any:
-            return course_any
 
         # Check if exam_id is a child/descendant of any published course's exam
         published_courses = Course.objects.filter(status='published', exam_id__isnull=False)

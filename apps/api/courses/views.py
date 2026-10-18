@@ -204,51 +204,82 @@ class PublicCourseListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        from django.db.models import Q
+        from django.db.models import Q, Prefetch
+        from subscriptions.models import SubscriptionPlan
+        from exams.models import Subject, Exam
 
-        # Return both published (open) AND coming_soon courses so the UI can
-        # display the Coming Soon badge without enabling purchase.
-        courses = Course.objects.filter(
+        active_plans_prefetch = Prefetch(
+            'subscription_plans',
+            queryset=SubscriptionPlan.objects.filter(status='ACTIVE').order_by('price'),
+            to_attr='active_plans'
+        )
+
+        courses_qs = Course.objects.filter(
             status__in=['published', 'coming_soon'],
-        ).select_related('exam', 'exam__parent', 'exam__category').annotate(
+        ).select_related('exam', 'exam__parent', 'exam__category').prefetch_related(
+            active_plans_prefetch
+        ).annotate(
             enrolled_count=Count('enrollments', filter=Q(enrollments__status='active'))
         ).order_by('-featured', 'title')
 
         # Optional filter: ?exam=<id> scopes to courses for a specific Exam node.
         exam_id = request.query_params.get('exam')
         if exam_id:
-            courses = courses.filter(exam_id=exam_id)
+            courses_qs = courses_qs.filter(exam_id=exam_id)
 
         # Optional filter: ?status=published|coming_soon restricts to one status.
         status_filter = request.query_params.get('status')
         if status_filter in ('published', 'coming_soon'):
-            courses = courses.filter(status=status_filter)
+            courses_qs = courses_qs.filter(status=status_filter)
+
+        courses = list(courses_qs)
+        exam_ids = [c.exam_id for c in courses if c.exam_id]
+
+        subject_counts = {}
+        legacy_counts = {}
+        if exam_ids:
+            try:
+                subject_counts = dict(
+                    Subject.objects.filter(paper__exam_id__in=exam_ids)
+                    .values('paper__exam_id')
+                    .annotate(cnt=Count('id', distinct=True))
+                    .values_list('paper__exam_id', 'cnt')
+                )
+                legacy_counts = dict(
+                    Exam.objects.filter(id__in=exam_ids)
+                    .annotate(cnt=Count('legacy_subjects'))
+                    .values_list('id', 'cnt')
+                )
+            except Exception:
+                pass
 
         data = []
         for c in courses:
-            # Count subjects in the linked exam
             subject_count = 0
-            if c.exam:
-                try:
-                    from exams.models import Subject
-                    subject_count = Subject.objects.filter(
-                        paper__exam=c.exam
-                    ).distinct().count()
-                    if subject_count == 0:
-                        subject_count = c.exam.legacy_subjects.count()
-                except Exception:
-                    pass
+            if c.exam_id:
+                subject_count = subject_counts.get(c.exam_id) or legacy_counts.get(c.exam_id, 0)
 
             is_coming_soon = (c.status == 'coming_soon')
 
             # Only active/published courses surface their plans.
             # Coming-soon courses must never surface a purchaseable plan.
-            plans = [] if is_coming_soon else list(
-                c.subscription_plans.filter(status='ACTIVE').values(
-                    'id', 'name', 'price', 'original_price', 'discount',
-                    'duration', 'duration_unit', 'badge', 'features'
-                ).order_by('price')
-            )
+            if is_coming_soon:
+                plans = []
+            else:
+                plans = [
+                    {
+                        'id': p.id,
+                        'name': p.name,
+                        'price': p.price,
+                        'original_price': p.original_price,
+                        'discount': p.discount,
+                        'duration': p.duration,
+                        'duration_unit': p.duration_unit,
+                        'badge': p.badge,
+                        'features': p.features,
+                    }
+                    for p in getattr(c, 'active_plans', [])
+                ]
 
             thumbnail_url = None
             if c.thumbnail:
@@ -304,6 +335,8 @@ class ProgressiveHierarchyAPIView(APIView):
     def get(self, request):
         from exams.models import ExamCategory, Exam
         from courses.models import Course
+        from django.db.models import Prefetch
+        from subscriptions.models import SubscriptionPlan
 
         # Keep this data-driven: category primary keys are database-specific and
         # may differ between environments (for example, after imports/seeding).
@@ -315,15 +348,21 @@ class ProgressiveHierarchyAPIView(APIView):
 
         # Include published AND coming_soon courses in the tree.
         # Archived / draft courses are excluded.
+        active_plans_prefetch = Prefetch(
+            'subscription_plans',
+            queryset=SubscriptionPlan.objects.filter(status='ACTIVE'),
+            to_attr='active_plans'
+        )
         all_courses = list(Course.objects.filter(
             status__in=['published', 'coming_soon']
-        ).select_related('exam'))
+        ).select_related('exam').prefetch_related(active_plans_prefetch))
 
         # Index courses by exam_id
         courses_by_exam = {}
         for c in all_courses:
             if c.exam_id:
                 is_cs = (c.status == 'coming_soon')
+                active_plans = getattr(c, 'active_plans', [])
                 courses_by_exam.setdefault(c.exam_id, []).append({
                     'id': c.id,
                     'title': c.title,
@@ -333,7 +372,7 @@ class ProgressiveHierarchyAPIView(APIView):
                     'status': c.status,
                     'is_coming_soon': is_cs,
                     # Never expose plans for coming_soon courses
-                    'has_plans': (not is_cs) and c.subscription_plans.filter(status='ACTIVE').exists(),
+                    'has_plans': (not is_cs) and (len(active_plans) > 0),
                 })
 
         # Build parent→children index

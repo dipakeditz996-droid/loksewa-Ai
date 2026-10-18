@@ -39,6 +39,10 @@ class User(AbstractUser):
     totp_secret = models.CharField(max_length=32, blank=True, null=True)
     is_2fa_enabled = models.BooleanField(default=False)
 
+    # Single active login session tracking: stores the current active session key.
+    # Every new login rotates this key atomically, immediately invalidating old sessions.
+    jwt_session_key = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+
     def __str__(self):
         return f"{self.username} ({self.role})"
 
@@ -387,7 +391,7 @@ class AdminSettings(models.Model):
         """Get or create the singleton settings object with fast caching."""
         try:
             cached = cache.get(cls.SETTINGS_CACHE_KEY)
-            if cached is not None and cls.objects.filter(pk=cached.pk).exists():
+            if cached is not None:
                 return cached
         except Exception:
             pass

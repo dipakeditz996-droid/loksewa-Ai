@@ -18,9 +18,10 @@ class SocialAuthTests(TestCase):
             'last_name': 'User'
         }
         
-        user = SocialAuthService.get_or_create_social_user('google', provider_data)
+        user, is_new_user = SocialAuthService.get_or_create_social_user('google', provider_data)
         
         self.assertIsNotNone(user)
+        self.assertTrue(is_new_user)
         self.assertEqual(user.email, 'newuser@example.com')
         self.assertEqual(user.first_name, 'New')
         self.assertEqual(user.role, 'student')
@@ -44,9 +45,10 @@ class SocialAuthTests(TestCase):
             'last_name': 'User'
         }
         
-        user = SocialAuthService.get_or_create_social_user('facebook', provider_data)
+        user, is_new_user = SocialAuthService.get_or_create_social_user('facebook', provider_data)
         
         # Should return the exact same user instance
+        self.assertFalse(is_new_user)
         self.assertEqual(user.id, existing_user.id)
         
         # A new social account should be linked to it
@@ -67,8 +69,9 @@ class SocialAuthTests(TestCase):
             'last_name': 'User'
         }
         
-        returned_user = SocialAuthService.get_or_create_social_user('apple', provider_data)
+        returned_user, is_new_user = SocialAuthService.get_or_create_social_user('apple', provider_data)
         
+        self.assertFalse(is_new_user)
         self.assertEqual(returned_user.id, user.id)
         # Should not create duplicate social account
         self.assertEqual(SocialAccount.objects.filter(provider='apple').count(), 1)

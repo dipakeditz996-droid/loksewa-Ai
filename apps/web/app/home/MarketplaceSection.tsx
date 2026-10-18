@@ -3,8 +3,11 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ShoppingBag, Download, PlayCircle, Lock } from "lucide-react";
+import { ArrowRight, ShoppingBag, Lock } from "lucide-react";
 import { PublicProduct } from "@/lib/api/public-api";
+
+import Image from "next/image";
+import { buildMediaUrl } from "@/lib/api/client";
 
 interface Props {
   products?: PublicProduct[] | null;
@@ -58,8 +61,14 @@ export function MarketplaceSection({ products }: Props) {
                 {/* Image placeholder (gradient) */}
                 <div className={`h-[140px] relative ${p.image || "bg-gradient-to-br from-violet-500 to-blue-600"} p-4 flex flex-col justify-between overflow-hidden`}>
                   {p.cover_image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.cover_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <Image
+                      src={buildMediaUrl(p.cover_image)}
+                      alt={p.title || "Book cover"}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      unoptimized
+                    />
                   )}
                   <div className="relative flex justify-between items-start">
                     <span className="text-[10px] font-[800] uppercase tracking-wide bg-white/20 text-white backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1.5">

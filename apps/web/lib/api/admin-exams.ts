@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, fetchBlob } from './client';
 
 export interface EligibilityRule {
   id: number;
@@ -656,12 +656,7 @@ export const adminExamApi = {
   },
 
   getQuestionPaperBlob: async (id: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/exams/${id}/question-paper/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to load question paper PDF');
-    return await res.blob();
+    return await fetchBlob(`/admin/exams/${id}/question-paper/`);
   },
 
   uploadExpertSolutionPdf: async (id: number, file: File, publish?: boolean) => {
@@ -710,12 +705,7 @@ export const adminExamApi = {
   },
 
   getExpertSolutionBlob: async (id: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/exams/${id}/expert-solution/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to load expert solution PDF');
-    return await res.blob();
+    return await fetchBlob(`/admin/exams/${id}/expert-solution/`);
   },
 
   assignSubjectiveSet: async (id: number, questionSetId: number) => {
@@ -840,12 +830,7 @@ export const adminExamApi = {
   },
 
   getAnswerSheetBlob: async (submissionId: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/subjective-submissions/${submissionId}/answer-sheet/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to load answer sheet PDF');
-    return await res.blob();
+    return await fetchBlob(`/admin/subjective-submissions/${submissionId}/answer-sheet/`);
   },
 
   // Checking requests
@@ -893,12 +878,7 @@ export const adminExamApi = {
   },
 
   getSubjectiveCheckingRequestAnswerSheetBlob: async (id: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/admin/subjective-checking-requests/${id}/answer-sheet/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to load answer sheet PDF');
-    return await res.blob();
+    return await fetchBlob(`/admin/subjective-checking-requests/${id}/answer-sheet/`);
   },
 };
 

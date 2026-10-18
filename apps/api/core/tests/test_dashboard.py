@@ -11,6 +11,8 @@ User = get_user_model()
 
 class StudentDashboardTests(APITestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
         # Create a user
         self.user = User.objects.create_user(
             username='teststudent', 
@@ -19,7 +21,7 @@ class StudentDashboardTests(APITestCase):
             last_name='Student',
             role='student'
         )
-        
+
         # Create a course and exam
         from exams.models import ExamCategory, Exam as PositionExam
         
@@ -36,6 +38,11 @@ class StudentDashboardTests(APITestCase):
         
         # URL for dashboard
         self.url = '/api/dashboard/'
+
+    def tearDown(self):
+        super().tearDown()
+        from django.core.cache import cache
+        cache.clear()
 
     def test_anonymous_user_rejected(self):
         """Ensure unauthenticated users get 401 Unauthorized"""

@@ -23,7 +23,7 @@ from core.models import User
 parser = argparse.ArgumentParser()
 parser.add_argument('--username', required=True)
 parser.add_argument('--email', required=True)
-parser.add_argument('--role', default='super-admin', choices=['admin', 'super-admin'])
+parser.add_argument('--role', default='admin', choices=['admin', 'super-admin'])
 parser.add_argument('--disable-2fa', action='store_true')
 parser.add_argument('--unlock', action='store_true')
 args = parser.parse_args()
@@ -32,13 +32,13 @@ password = os.environ.get('ADMIN_PASSWORD') or getpass.getpass('Admin password: 
 
 user, created = User.objects.get_or_create(
     username=args.username,
-    defaults={'email': args.email, 'role': args.role, 'is_staff': True, 'is_active': True},
+    defaults={'email': args.email, 'role': args.role, 'is_staff': True, 'is_superuser': True, 'is_active': True},
 )
 if not created:
     user.email = args.email
     user.role = args.role
     user.is_active = True
-if args.role == 'super-admin':
+if args.role in ('admin', 'super-admin'):
     user.is_staff = True
     user.is_superuser = True
 if args.disable_2fa:

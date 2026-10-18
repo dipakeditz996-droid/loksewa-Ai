@@ -371,8 +371,8 @@ class BackupService:
         - Automatically creates an off-site pre-restore safety snapshot before touching live tables.
         - Runs post-restore integrity checks and records full audit logs.
         """
-        if not user or not user.is_authenticated or user.role != 'super-admin':
-            raise ValidationError("Restoring a database backup requires Super Admin authorization.")
+        if not user or not user.is_authenticated or user.role not in ('admin', 'super-admin'):
+            raise ValidationError("Restoring a database backup requires Admin authorization.")
 
         if confirmation_text.strip() != 'RESTORE DATABASE':
             raise ValidationError("Confirmation text must exactly match 'RESTORE DATABASE'.")
@@ -536,8 +536,8 @@ class BackupService:
         """
         Toggles protected status to shield important snapshots from retention cleanup.
         """
-        if not user or not user.is_authenticated or user.role != 'super-admin':
-            raise ValidationError("Modifying backup protection requires Super Admin authorization.")
+        if not user or not user.is_authenticated or user.role not in ('admin', 'super-admin'):
+            raise ValidationError("Modifying backup protection requires Admin authorization.")
 
         backup.is_protected = not backup.is_protected
         backup.save(update_fields=['is_protected'])
@@ -562,8 +562,8 @@ class BackupService:
         """
         Safely deletes a backup from Cloudflare R2, local filesystem, and metadata. Requires Super Admin.
         """
-        if not user or not user.is_authenticated or user.role != 'super-admin':
-            raise ValidationError("Deleting backup archives requires Super Admin authorization.")
+        if not user or not user.is_authenticated or user.role not in ('admin', 'super-admin'):
+            raise ValidationError("Deleting backup archives requires Admin authorization.")
 
         # Delete remote R2 object
         if backup.storage_key and R2StorageService.is_configured():

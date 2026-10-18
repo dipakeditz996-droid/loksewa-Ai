@@ -150,17 +150,17 @@ class DataSafetySystemTests(APITestCase):
         trash_item = TrashItem.objects.get(object_id=str(question.id), model_name='question')
         self.assertFalse(trash_item.is_protected)
 
-        # Normal admin attempting permanent delete must be rejected
-        admin_perm_resp = self.client.post(
+        # Student attempting permanent delete must be rejected
+        self.client.force_authenticate(user=self.student)
+        student_perm_resp = self.client.post(
             f'/api/admin/data-safety/trash/{trash_item.id}/permanent-delete/',
             {'confirmation': 'DELETE PERMANENTLY'},
             format='json'
         )
-        self.assertEqual(admin_perm_resp.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('super admin', admin_perm_resp.data.get('error', '').lower())
+        self.assertEqual(student_perm_resp.status_code, status.HTTP_403_FORBIDDEN)
 
-        # Super admin with incorrect confirmation is rejected
-        self.client.force_authenticate(user=self.super_admin)
+        # Admin with incorrect confirmation is rejected
+        self.client.force_authenticate(user=self.admin)
         bad_confirm_resp = self.client.post(
             f'/api/admin/data-safety/trash/{trash_item.id}/permanent-delete/',
             {'confirmation': 'delete'},
@@ -169,7 +169,7 @@ class DataSafetySystemTests(APITestCase):
         self.assertEqual(bad_confirm_resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('confirmation', bad_confirm_resp.data.get('error', '').lower())
 
-        # Super admin with exact confirmation 'DELETE PERMANENTLY' succeeds
+        # Admin with exact confirmation 'DELETE PERMANENTLY' succeeds
         good_perm_resp = self.client.post(
             f'/api/admin/data-safety/trash/{trash_item.id}/permanent-delete/',
             {'confirmation': 'DELETE PERMANENTLY'},
@@ -233,23 +233,24 @@ class DataSafetySystemTests(APITestCase):
         backup = BackupService.create_backup(backup_type='manual', user=self.admin, custom_name='Test Shield Backup')
         self.assertFalse(backup.is_protected)
 
-        # Standard admin cannot toggle protection
-        resp_admin = self.client.post(f'/api/admin/data-safety/backups/{backup.id}/toggle-protect/')
-        self.assertEqual(resp_admin.status_code, status.HTTP_403_FORBIDDEN)
+        # Student cannot toggle protection
+        self.client.force_authenticate(user=self.student)
+        resp_student = self.client.post(f'/api/admin/data-safety/backups/{backup.id}/toggle-protect/')
+        self.assertEqual(resp_student.status_code, status.HTTP_403_FORBIDDEN)
 
-        # Super admin can toggle protection
-        self.client.force_authenticate(user=self.super_admin)
-        resp_super = self.client.post(f'/api/admin/data-safety/backups/{backup.id}/toggle-protect/')
-        self.assertEqual(resp_super.status_code, status.HTTP_200_OK)
-        self.assertTrue(resp_super.data['is_protected'])
+        # Admin can toggle protection
+        self.client.force_authenticate(user=self.admin)
+        resp_admin = self.client.post(f'/api/admin/data-safety/backups/{backup.id}/toggle-protect/')
+        self.assertEqual(resp_admin.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp_admin.data['is_protected'])
 
         backup.refresh_from_db()
         self.assertTrue(backup.is_protected)
 
         # Toggle back
-        resp_super_off = self.client.post(f'/api/admin/data-safety/backups/{backup.id}/toggle-protect/')
-        self.assertEqual(resp_super_off.status_code, status.HTTP_200_OK)
-        self.assertFalse(resp_super_off.data['is_protected'])
+        resp_admin_off = self.client.post(f'/api/admin/data-safety/backups/{backup.id}/toggle-protect/')
+        self.assertEqual(resp_admin_off.status_code, status.HTTP_200_OK)
+        self.assertFalse(resp_admin_off.data['is_protected'])
 
         # Cleanup file
         if os.path.exists(backup.file_path):

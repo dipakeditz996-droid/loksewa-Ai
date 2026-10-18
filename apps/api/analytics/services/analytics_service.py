@@ -107,44 +107,49 @@ class AnalyticsService:
             from courses.access import authorized_courses, get_student_course_context
             from courses.models import Course
 
-            auth_courses = authorized_courses(user)
-            course = None
+            target_course_id = None
+            target_exam_id = None
+            course_name = None
+            course_slug = None
 
             if course_id:
                 try:
+                    auth_courses = authorized_courses(user)
                     course = auth_courses.filter(id=int(course_id)).select_related('exam').first()
+                    if course:
+                        target_course_id = course.id
+                        target_exam_id = course.exam_id
+                        course_name = course.title
+                        course_slug = course.slug
                 except (ValueError, TypeError):
-                    course = None
+                    pass
             else:
                 ctx = get_student_course_context(user)
                 active_c = ctx.get('active_course')
                 if active_c:
-                    course = auth_courses.filter(id=active_c['id']).select_related('exam').first()
+                    target_course_id = active_c['id']
+                    target_exam_id = active_c.get('exam_id')
+                    course_name = active_c.get('title')
+                    course_slug = active_c.get('slug')
 
-            if course:
+            if target_course_id and course_name:
                 active_course = {
-                    "name": course.title,
-                    "id": course.id,
-                    "slug": course.slug,
+                    "name": course_name,
+                    "id": target_course_id,
+                    "slug": course_slug,
                 }
 
                 # ── Real journey progress scoped to this course's syllabus topics ──
-                if course.exam:
+                if target_exam_id:
                     try:
                         from exams.models import Topic
-                        course_topic_ids = list(Topic.objects.filter(
-                            chapter__subject__paper__exam=course.exam
-                        ).values_list('id', flat=True))
+                        topic_q = Q(chapter__subject__paper__exam_id=target_exam_id) | Q(chapter__subject__exam_id=target_exam_id)
+                        topic_scope = Topic.objects.filter(topic_q)
+                        total_topics = topic_scope.count()
 
-                        if not course_topic_ids:
-                            course_topic_ids = list(Topic.objects.filter(
-                                chapter__subject__exam=course.exam
-                            ).values_list('id', flat=True))
-
-                        total_topics = len(course_topic_ids)
                         if total_topics > 0:
                             completed_topics = UserTopicProgress.objects.filter(
-                                user=user, topic_id__in=course_topic_ids, status='completed'
+                                user=user, topic__in=topic_scope, status='completed'
                             ).count()
                             journey_progress = min(100, round((completed_topics / total_topics) * 100, 1))
                         else:
@@ -152,12 +157,10 @@ class AnalyticsService:
                     except Exception:
                         journey_progress = 0
 
-                # Calculate Total Available Exams for this course
-                from exams.models import Examination
-                exam_q = Q(course=course)
-                if course.exam_id:
-                    exam_q |= Q(course__isnull=True, exam_id=course.exam_id)
-                total_available_exams = Examination.objects.filter(status='published').filter(exam_q).count()
+                    # Calculate Total Available Exams for this course
+                    from exams.models import Examination
+                    exam_q = Q(course_id=target_course_id) | Q(course__isnull=True, exam_id=target_exam_id)
+                    total_available_exams = Examination.objects.filter(status='published').filter(exam_q).count()
 
         except Exception:
             pass

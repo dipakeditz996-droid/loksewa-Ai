@@ -217,7 +217,7 @@ export default function UserDetailPage({ params }: { params: Promise<{ id: strin
                   user.role === 'admin' || user.role === 'super-admin' ? 'bg-blue-100 text-blue-700' :
                   'bg-slate-100 text-slate-700'
                 }`}>
-                  {user.role}
+                  {user.role === 'super-admin' ? 'admin' : user.role}
                 </span>
                 <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                   user.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'

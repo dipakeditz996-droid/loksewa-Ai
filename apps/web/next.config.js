@@ -24,6 +24,9 @@ const nextConfig = {
           ],
         },
       }),
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'date-fns', 'framer-motion', 'recharts'],
+  },
   images: {
     remotePatterns: [
       {

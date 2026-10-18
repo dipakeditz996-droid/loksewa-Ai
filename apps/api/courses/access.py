@@ -153,18 +153,15 @@ def get_student_course_context(user):
     schedule_message = None
     if active_course_obj and active_course_obj.exam_id:
         today = timezone.now().date()
+        exam_ids = [active_course_obj.exam_id]
+        if active_course_obj.exam and active_course_obj.exam.parent_id:
+            exam_ids.append(active_course_obj.exam.parent_id)
+
         schedule = ExamSchedule.objects.filter(
-            exam_id=active_course_obj.exam_id,
+            exam_id__in=exam_ids,
             is_published=True,
             exam_date__gte=today
         ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time').first()
-
-        if not schedule and active_course_obj.exam and active_course_obj.exam.parent_id:
-            schedule = ExamSchedule.objects.filter(
-                exam_id=active_course_obj.exam.parent_id,
-                is_published=True,
-                exam_date__gte=today
-            ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time').first()
 
         if schedule:
             exam_schedule_data = StudentExamScheduleSerializer(schedule).data

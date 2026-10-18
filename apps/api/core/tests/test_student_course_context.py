@@ -16,6 +16,8 @@ User = get_user_model()
 
 class StudentCourseContextAndSecurityTests(TestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
         self.client = APIClient()
 
         # Create Category and Exams
@@ -112,6 +114,11 @@ class StudentCourseContextAndSecurityTests(TestCase):
             time_limit=60,
             created_by=self.student_b
         )
+
+    def tearDown(self):
+        super().tearDown()
+        from django.core.cache import cache
+        cache.clear()
 
     def test_canonical_course_context_single_course(self):
         """Student A with only Civil enrolled automatically has Civil as active course."""

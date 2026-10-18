@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { marketplaceApi, Product } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +51,6 @@ export default function MarketplacePage() {
     return () => clearTimeout(timer);
   }, [search, selectedCategory]);
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -151,7 +151,7 @@ export default function MarketplacePage() {
               <div className="aspect-video w-full bg-muted relative">
                 {product.cover_image ? (
                   <Image 
-                    src={product.cover_image.startsWith('http') ? product.cover_image : `${baseUrl}${product.cover_image.startsWith('/') ? '' : '/'}${product.cover_image}`} 
+                    src={buildMediaUrl(product.cover_image)} 
                     alt={product.title}
                     fill
                     className="object-cover"

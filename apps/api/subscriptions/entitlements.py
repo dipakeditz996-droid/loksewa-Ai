@@ -210,6 +210,15 @@ class EntitlementService:
                 "usage_history": [],
             }
 
+        cache_key = f'student_entitlements:{user.id}'
+        try:
+            from django.core.cache import cache
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached
+        except Exception:
+            pass
+
         is_admin_granted = has_admin_granted_access(user)
         active_sub = cls.get_active_subscription(user)
         if not active_sub and not is_admin_granted and user.is_active and getattr(user, 'role', None) == 'student':
@@ -488,7 +497,7 @@ class EntitlementService:
             .values('id', 'feature', 'event_type', 'amount', 'reference_id', 'reason', 'created_at')[:10]
         )
 
-        return {
+        result = {
             "has_active_package": active_sub is not None or is_admin_granted,
             "is_admin_granted": is_admin_granted,
             "subscription": sub_data,
@@ -504,6 +513,24 @@ class EntitlementService:
             "modules": modules_status,
             "usage_history": recent_ledger,
         }
+
+        try:
+            from django.core.cache import cache
+            cache.set(cache_key, result, 30)
+        except Exception:
+            pass
+
+        return result
+
+    @classmethod
+    def invalidate_user_entitlements_cache(cls, user_id):
+        if not user_id:
+            return
+        try:
+            from django.core.cache import cache
+            cache.delete(f'student_entitlements:{user_id}')
+        except Exception:
+            pass
 
     # =========================================================================
     # EXAM ACCESS & QUOTA OPERATIONS
@@ -1450,6 +1477,10 @@ class EntitlementService:
         Checks whether student has access to an optional platform module.
         """
         if CourseAccessService.is_privileged(user):
+            return True
+        if not AdminSettings.is_subscription_enforced():
+            return True
+        if has_admin_granted_access(user):
             return True
         active_sub = cls.get_active_subscription(user)
         if not active_sub or not active_sub.plan:

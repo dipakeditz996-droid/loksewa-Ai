@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useCallback } from "react";
+import React, { createContext, useContext, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { User, authApi } from "../lib/api/auth";
 import { getAuthToken } from "../lib/api/client";
@@ -61,6 +61,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refreshUser = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: CURRENT_USER_QUERY_KEY });
+  }, [queryClient]);
+
+  // Revalidate session validity when student returns to this browser tab
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleFocusOrVisibility = () => {
+      if (document.visibilityState === "visible" && getAuthToken()) {
+        queryClient.invalidateQueries({ queryKey: CURRENT_USER_QUERY_KEY });
+      }
+    };
+    window.addEventListener("visibilitychange", handleFocusOrVisibility);
+    window.addEventListener("focus", handleFocusOrVisibility);
+    return () => {
+      window.removeEventListener("visibilitychange", handleFocusOrVisibility);
+      window.removeEventListener("focus", handleFocusOrVisibility);
+    };
   }, [queryClient]);
 
 

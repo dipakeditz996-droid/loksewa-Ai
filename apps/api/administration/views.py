@@ -432,7 +432,10 @@ class AdminUsersView(APIView):
 
         qs = User.objects.all().order_by('-date_joined')
         if role:
-            qs = qs.filter(role=role)
+            if role == 'admin':
+                qs = qs.filter(role__in=['admin', 'super-admin'])
+            else:
+                qs = qs.filter(role=role)
         if search:
             qs = qs.filter(
                 Q(username__icontains=search) |
@@ -1089,8 +1092,6 @@ class AdminUserDetailView(APIView):
         if user.id == request.user.id:
             return Response({'error': 'You cannot delete your own account.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if user.role == 'super-admin' and request.user.role != 'super-admin':
-            return Response({'error': 'Only a super-admin can delete a super-admin account.'}, status=status.HTTP_403_FORBIDDEN)
 
         username, email, role = user.username, user.email, user.role
         user.delete()
@@ -1181,18 +1182,10 @@ class AdminRolesView(APIView):
         # System roles and their usage
         roles_data = [
             {
-                "id": "super-admin",
-                "name": "Super Administrator",
-                "description": "Full platform access with all permissions",
-                "users": User.objects.filter(role='super-admin').count(),
-                "color": "red",
-                "type": "system"
-            },
-            {
                 "id": "admin",
                 "name": "Administrator",
-                "description": "Can manage users, content, and settings",
-                "users": User.objects.filter(role='admin').count(),
+                "description": "Full platform access with all permissions and system management",
+                "users": User.objects.filter(role__in=['admin', 'super-admin']).count(),
                 "color": "blue",
                 "type": "system"
             },
@@ -4541,90 +4534,63 @@ class AdminPermissionsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        # Define permission structure for each role
+        admin_permissions = [
+            # Users Management
+            {'id': 'users_create', 'name': 'Create User', 'category': 'Users Management', 'description': 'Create new users'},
+            {'id': 'users_edit', 'name': 'Edit User', 'category': 'Users Management', 'description': 'Edit user information'},
+            {'id': 'users_delete', 'name': 'Delete User', 'category': 'Users Management', 'description': 'Delete user accounts'},
+            {'id': 'users_view', 'name': 'View Users', 'category': 'Users Management', 'description': 'View all users'},
+            {'id': 'users_export', 'name': 'Export Users', 'category': 'Users Management', 'description': 'Export user data'},
+            # Academic Management
+            {'id': 'academic_create_exam', 'name': 'Create Exam', 'category': 'Academic Management', 'description': 'Create new exams'},
+            {'id': 'academic_edit_exam', 'name': 'Edit Exam', 'category': 'Academic Management', 'description': 'Edit exam details'},
+            {'id': 'academic_publish_exam', 'name': 'Publish Exam', 'category': 'Academic Management', 'description': 'Publish exams for students'},
+            {'id': 'academic_delete_exam', 'name': 'Delete Exam', 'category': 'Academic Management', 'description': 'Delete exams'},
+            {'id': 'academic_manage_questions', 'name': 'Manage Questions', 'category': 'Academic Management', 'description': 'Create, edit, delete questions'},
+            # Evaluations
+            {'id': 'eval_view', 'name': 'View Evaluations', 'category': 'Evaluations', 'description': 'View all evaluations'},
+            {'id': 'eval_assign', 'name': 'Assign Evaluator', 'category': 'Evaluations', 'description': 'Assign evaluators to submissions'},
+            {'id': 'eval_approve', 'name': 'Approve Evaluation', 'category': 'Evaluations', 'description': 'Approve evaluation results'},
+            {'id': 'eval_reject', 'name': 'Reject Evaluation', 'category': 'Evaluations', 'description': 'Reject evaluation results'},
+            # Marketplace
+            {'id': 'market_view_products', 'name': 'View Products', 'category': 'Marketplace', 'description': 'View all marketplace products'},
+            {'id': 'market_approve_product', 'name': 'Approve Product', 'category': 'Marketplace', 'description': 'Approve products for listing'},
+            {'id': 'market_remove_product', 'name': 'Remove Product', 'category': 'Marketplace', 'description': 'Remove products from marketplace'},
+            {'id': 'market_view_orders', 'name': 'View Orders', 'category': 'Marketplace', 'description': 'View all orders'},
+            {'id': 'market_process_payment', 'name': 'Process Payment', 'category': 'Marketplace', 'description': 'Process payments and refunds'},
+            # Analytics
+            {'id': 'analytics_view', 'name': 'View Analytics', 'category': 'Analytics', 'description': 'View platform analytics'},
+            {'id': 'analytics_export', 'name': 'Export Reports', 'category': 'Analytics', 'description': 'Export analytics reports'},
+            {'id': 'analytics_audit_logs', 'name': 'View Audit Logs', 'category': 'Analytics', 'description': 'View system audit logs'},
+            # Settings
+            {'id': 'settings_view', 'name': 'View Settings', 'category': 'Settings', 'description': 'View system settings'},
+            {'id': 'settings_modify', 'name': 'Modify Settings', 'category': 'Settings', 'description': 'Modify system settings'},
+            {'id': 'settings_manage_notif', 'name': 'Manage Notifications', 'category': 'Settings', 'description': 'Manage system notifications'},
+            # Administrators
+            {'id': 'admin_create', 'name': 'Create Admin', 'category': 'Administrators', 'description': 'Create new admin users'},
+            {'id': 'admin_edit', 'name': 'Edit Admin', 'category': 'Administrators', 'description': 'Edit admin information'},
+            {'id': 'admin_delete', 'name': 'Delete Admin', 'category': 'Administrators', 'description': 'Delete admin accounts'},
+            {'id': 'admin_assign_roles', 'name': 'Assign Roles', 'category': 'Administrators', 'description': 'Assign roles to users'},
+            # Support
+            {'id': 'support_view_tickets', 'name': 'View Tickets', 'category': 'Support', 'description': 'View support tickets'},
+            {'id': 'support_assign_ticket', 'name': 'Assign Ticket', 'category': 'Support', 'description': 'Assign tickets to staff'},
+            {'id': 'support_close_ticket', 'name': 'Close Ticket', 'category': 'Support', 'description': 'Close support tickets'},
+            {'id': 'support_respond', 'name': 'Respond to Ticket', 'category': 'Support', 'description': 'Respond to ticket messages'},
+        ]
+
+        admin_role_def = {
+            'id': 'admin',
+            'name': 'Administrator',
+            'description': 'Full platform access with all permissions and system management',
+            'isCustom': False,
+            'permissionCount': len(admin_permissions),
+            'permissions': admin_permissions,
+        }
+
+        # Define permission structure for each role (admin and super-admin are equivalent)
         permissions_structure = {
-            'super-admin': {
-                'id': 'super-admin',
-                'name': 'Super Administrator',
-                'description': 'Full platform access with all permissions',
-                'isCustom': False,
-                'permissionCount': 0,  # Will calculate below
-                'permissions': [
-                    # Users Management
-                    {'id': 'users_create', 'name': 'Create User', 'category': 'Users Management', 'description': 'Create new users'},
-                    {'id': 'users_edit', 'name': 'Edit User', 'category': 'Users Management', 'description': 'Edit user information'},
-                    {'id': 'users_delete', 'name': 'Delete User', 'category': 'Users Management', 'description': 'Delete user accounts'},
-                    {'id': 'users_view', 'name': 'View Users', 'category': 'Users Management', 'description': 'View all users'},
-                    {'id': 'users_export', 'name': 'Export Users', 'category': 'Users Management', 'description': 'Export user data'},
-                    # Academic Management
-                    {'id': 'academic_create_exam', 'name': 'Create Exam', 'category': 'Academic Management', 'description': 'Create new exams'},
-                    {'id': 'academic_edit_exam', 'name': 'Edit Exam', 'category': 'Academic Management', 'description': 'Edit exam details'},
-                    {'id': 'academic_publish_exam', 'name': 'Publish Exam', 'category': 'Academic Management', 'description': 'Publish exams for students'},
-                    {'id': 'academic_delete_exam', 'name': 'Delete Exam', 'category': 'Academic Management', 'description': 'Delete exams'},
-                    {'id': 'academic_manage_questions', 'name': 'Manage Questions', 'category': 'Academic Management', 'description': 'Create, edit, delete questions'},
-                    # Evaluations
-                    {'id': 'eval_view', 'name': 'View Evaluations', 'category': 'Evaluations', 'description': 'View all evaluations'},
-                    {'id': 'eval_assign', 'name': 'Assign Evaluator', 'category': 'Evaluations', 'description': 'Assign evaluators to submissions'},
-                    {'id': 'eval_approve', 'name': 'Approve Evaluation', 'category': 'Evaluations', 'description': 'Approve evaluation results'},
-                    {'id': 'eval_reject', 'name': 'Reject Evaluation', 'category': 'Evaluations', 'description': 'Reject evaluation results'},
-                    # Marketplace
-                    {'id': 'market_view_products', 'name': 'View Products', 'category': 'Marketplace', 'description': 'View all marketplace products'},
-                    {'id': 'market_approve_product', 'name': 'Approve Product', 'category': 'Marketplace', 'description': 'Approve products for listing'},
-                    {'id': 'market_remove_product', 'name': 'Remove Product', 'category': 'Marketplace', 'description': 'Remove products from marketplace'},
-                    {'id': 'market_view_orders', 'name': 'View Orders', 'category': 'Marketplace', 'description': 'View all orders'},
-                    {'id': 'market_process_payment', 'name': 'Process Payment', 'category': 'Marketplace', 'description': 'Process payments and refunds'},
-                    # Analytics
-                    {'id': 'analytics_view', 'name': 'View Analytics', 'category': 'Analytics', 'description': 'View platform analytics'},
-                    {'id': 'analytics_export', 'name': 'Export Reports', 'category': 'Analytics', 'description': 'Export analytics reports'},
-                    {'id': 'analytics_audit_logs', 'name': 'View Audit Logs', 'category': 'Analytics', 'description': 'View system audit logs'},
-                    # Settings
-                    {'id': 'settings_view', 'name': 'View Settings', 'category': 'Settings', 'description': 'View system settings'},
-                    {'id': 'settings_modify', 'name': 'Modify Settings', 'category': 'Settings', 'description': 'Modify system settings'},
-                    {'id': 'settings_manage_notif', 'name': 'Manage Notifications', 'category': 'Settings', 'description': 'Manage system notifications'},
-                    # Administrators
-                    {'id': 'admin_create', 'name': 'Create Admin', 'category': 'Administrators', 'description': 'Create new admin users'},
-                    {'id': 'admin_edit', 'name': 'Edit Admin', 'category': 'Administrators', 'description': 'Edit admin information'},
-                    {'id': 'admin_delete', 'name': 'Delete Admin', 'category': 'Administrators', 'description': 'Delete admin accounts'},
-                    {'id': 'admin_assign_roles', 'name': 'Assign Roles', 'category': 'Administrators', 'description': 'Assign roles to users'},
-                    # Support
-                    {'id': 'support_view_tickets', 'name': 'View Tickets', 'category': 'Support', 'description': 'View support tickets'},
-                    {'id': 'support_assign_ticket', 'name': 'Assign Ticket', 'category': 'Support', 'description': 'Assign tickets to staff'},
-                    {'id': 'support_close_ticket', 'name': 'Close Ticket', 'category': 'Support', 'description': 'Close support tickets'},
-                    {'id': 'support_respond', 'name': 'Respond to Ticket', 'category': 'Support', 'description': 'Respond to ticket messages'},
-                ]
-            },
-            'admin': {
-                'id': 'admin',
-                'name': 'Administrator',
-                'description': 'Can manage users, content, and settings',
-                'isCustom': False,
-                'permissionCount': 0,  # Will calculate below
-                'permissions': [
-                    # Users Management
-                    {'id': 'users_create', 'name': 'Create User', 'category': 'Users Management', 'description': 'Create new users'},
-                    {'id': 'users_edit', 'name': 'Edit User', 'category': 'Users Management', 'description': 'Edit user information'},
-                    {'id': 'users_delete', 'name': 'Delete User', 'category': 'Users Management', 'description': 'Delete user accounts'},
-                    {'id': 'users_view', 'name': 'View Users', 'category': 'Users Management', 'description': 'View all users'},
-                    # Academic Management
-                    {'id': 'academic_create_exam', 'name': 'Create Exam', 'category': 'Academic Management', 'description': 'Create new exams'},
-                    {'id': 'academic_edit_exam', 'name': 'Edit Exam', 'category': 'Academic Management', 'description': 'Edit exam details'},
-                    {'id': 'academic_manage_questions', 'name': 'Manage Questions', 'category': 'Academic Management', 'description': 'Create, edit, delete questions'},
-                    # Evaluations
-                    {'id': 'eval_view', 'name': 'View Evaluations', 'category': 'Evaluations', 'description': 'View all evaluations'},
-                    {'id': 'eval_assign', 'name': 'Assign Evaluator', 'category': 'Evaluations', 'description': 'Assign evaluators to submissions'},
-                    # Marketplace
-                    {'id': 'market_view_products', 'name': 'View Products', 'category': 'Marketplace', 'description': 'View all marketplace products'},
-                    {'id': 'market_approve_product', 'name': 'Approve Product', 'category': 'Marketplace', 'description': 'Approve products for listing'},
-                    {'id': 'market_view_orders', 'name': 'View Orders', 'category': 'Marketplace', 'description': 'View all orders'},
-                    # Analytics
-                    {'id': 'analytics_view', 'name': 'View Analytics', 'category': 'Analytics', 'description': 'View platform analytics'},
-                    # Settings
-                    {'id': 'settings_view', 'name': 'View Settings', 'category': 'Settings', 'description': 'View system settings'},
-                    # Support
-                    {'id': 'support_view_tickets', 'name': 'View Tickets', 'category': 'Support', 'description': 'View support tickets'},
-                    {'id': 'support_respond', 'name': 'Respond to Ticket', 'category': 'Support', 'description': 'Respond to ticket messages'},
-                ]
-            },
+            'admin': admin_role_def,
+            'super-admin': {**admin_role_def, 'id': 'super-admin', 'name': 'Administrator'},
             'teacher': {
                 'id': 'teacher',
                 'name': 'Teacher',
@@ -4664,7 +4630,7 @@ class AdminPermissionsView(APIView):
             for perm in permissions_structure[role_key]['permissions']:
                 categories.add(perm['category'])
 
-        roles = list(permissions_structure.values())
+        roles = [permissions_structure['admin'], permissions_structure['teacher'], permissions_structure['student']]
 
         return Response({
             'roles': roles,

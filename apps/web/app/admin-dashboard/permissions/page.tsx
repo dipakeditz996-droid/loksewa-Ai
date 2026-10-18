@@ -8,7 +8,7 @@ export default function PermissionsMatrixPage() {
   const [data, setData] = useState<PermissionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeRoleId, setActiveRoleId] = useState<string>("super-admin");
+  const [activeRoleId, setActiveRoleId] = useState<string>("admin");
 
   useEffect(() => {
     const fetchPermissions = async () => {

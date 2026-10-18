@@ -1,22 +1,22 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { 
-  BookOpen, Target, Clock, Calendar, CheckCircle2, Circle, 
+  BookOpen, Target, Clock, Calendar, CheckCircle2,
   ChevronRight, Sparkles, MessageSquare, FileText, ArrowRight, TrendingUp,
-  ShoppingBag, HelpCircle, Flame, Activity, Gift, Copy, Share2, Users, Coins,
+  ShoppingBag, Flame, Gift, Copy, Share2, Users, Coins,
   GraduationCap, AlertCircle, GripVertical, Lock
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { RetryImage } from "@/components/ui/retry-image";
 import { dashboardApi, QUICK_ACTIONS } from "@/lib/api/dashboard";
 import { gamificationService } from "@/lib/api/gamification";
 import { notesApi } from "@/lib/api/notes";
 import { useAuth } from "@/contexts/AuthContext";
+import { getAuthToken } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import {
   DndContext,
@@ -124,6 +124,8 @@ export default function StudentDashboardPage() {
   const effectiveCourseId = studentCtx?.activeCourse?.id;
   const isCtxLoading = studentCtx?.isLoading ?? false;
 
+  const hasToken = typeof window !== "undefined" ? !!getAuthToken() : false;
+
   const {
     data,
     isLoading: isDashboardLoading,
@@ -133,10 +135,10 @@ export default function StudentDashboardPage() {
   } = useQuery({
     queryKey: ["student-dashboard", effectiveCourseId ?? null],
     queryFn: () => dashboardApi.getStudentDashboard(effectiveCourseId),
-    enabled: !isCtxLoading,
+    enabled: hasToken || !!user,
     staleTime: 45 * 1000,
   });
-  const loading = !data && (isCtxLoading || isDashboardLoading);
+  const loading = !data;
   const error = isError && !data;
 
   // Background/secondary data - each cached independently so, e.g., a
@@ -152,17 +154,18 @@ export default function StudentDashboardPage() {
     queryFn: () => gamificationService.getStudentReferralDashboard().catch(() => null),
     staleTime: 60 * 1000,
   });
-  const { data: referralHistory = [] } = useQuery({
+  const { data: referralHistory = [], isLoading: isReferralHistoryLoading } = useQuery({
     queryKey: ["referral-history"],
     queryFn: () => gamificationService.getStudentReferralHistory().catch(() => []),
     staleTime: 60 * 1000,
   });
 
-  // Background data warming: once the dashboard itself has rendered, quietly
-  // pre-fetch Syllabus data after a 2.5s delay to keep network free for initial render.
+  // Background data warming: prefetched once after initial dashboard data renders
   const queryClient = useQueryClient();
+  const hasPrefetchedRef = useRef(false);
   useEffect(() => {
-    if (!data) return;
+    if (!data || hasPrefetchedRef.current) return;
+    hasPrefetchedRef.current = true;
     const timer = setTimeout(() => {
       queryClient.prefetchQuery({
         queryKey: ["syllabus-notes-portal", null],
@@ -173,14 +176,18 @@ export default function StudentDashboardPage() {
     return () => clearTimeout(timer);
   }, [data, queryClient]);
 
+  const [mounted, setMounted] = useState(false);
+
   // ── DnD state ──────────────────────────────────────────────────────────────
-  const [fullOrder, setFullOrder] = useState<FullWidthId[]>(() =>
-    loadOrder(STORAGE_KEY_FULL, FULL_WIDTH_WIDGETS)
-  );
-  const [gridOrder, setGridOrder] = useState<GridId[]>(() =>
-    loadOrder(STORAGE_KEY_GRID, GRID_WIDGETS)
-  );
+  const [fullOrder, setFullOrder] = useState<FullWidthId[]>([...FULL_WIDTH_WIDGETS]);
+  const [gridOrder, setGridOrder] = useState<GridId[]>([...GRID_WIDGETS]);
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    setFullOrder(loadOrder(STORAGE_KEY_FULL, FULL_WIDTH_WIDGETS));
+    setGridOrder(loadOrder(STORAGE_KEY_GRID, GRID_WIDGETS));
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -213,31 +220,7 @@ export default function StudentDashboardPage() {
     });
   }, []);
 
-  if (loading) {
-    // Section-shaped placeholders (no data is shown until it is real).
-    return (
-      <div className="p-4 md:p-8 space-y-6" aria-busy="true" aria-label="Loading your dashboard">
-        <div className="rounded-2xl border border-border bg-card p-6 space-y-5">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-14 w-14 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-4 w-56" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
-          </div>
-        </div>
-        <Skeleton className="h-40 rounded-2xl" />
-        <div className="grid md:grid-cols-3 gap-4">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-44 rounded-2xl" />)}
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !data) {
+  if (error) {
     return (
       <div className="p-12 text-center max-w-lg mx-auto">
         <h2 className="text-2xl font-bold mb-2">Dashboard Unavailable</h2>
@@ -248,13 +231,10 @@ export default function StudentDashboardPage() {
   }
 
   // Journey progress / active course come from the dashboard response itself
-  // (same overview computation) - no separate analytics request.
-  const analytics = { journey_progress: data.stats.progress, active_course: data.activeCourse };
+  const analytics = data ? { journey_progress: data.stats.progress, active_course: data.activeCourse } : null;
 
   // Server-enforced package lock:
-  // Authentication != Subscription. Users without an active package see the
-  // clear CTA, verification pending state, or renewal option.
-  if (!data.package?.hasActivePackage) {
+  if (data && !data.package?.hasActivePackage) {
     const isPending = data.package.latestPayment?.status === "PENDING";
     const isRejected = data.package.latestPayment?.status === "REJECTED";
     const isExpired = data.package.status === "EXPIRED" || (data.package.status === "ACTIVE" && data.package.remainingDays === 0);
@@ -282,7 +262,7 @@ export default function StudentDashboardPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Submitted:</span>
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium text-foreground" suppressHydrationWarning>
                       {data.package.latestPayment?.submittedAt 
                         ? new Date(data.package.latestPayment.submittedAt).toLocaleDateString() 
                         : 'Recently'}
@@ -354,13 +334,6 @@ export default function StudentDashboardPage() {
     );
   }
 
-  // Recharts data
-  const chartData = [...data.recentExams].reverse().map((exam, i) => ({
-    name: `Ex ${i+1}`,
-    score: exam.percentage,
-    fullTitle: exam.title
-  }));
-
   const WIDGET_LABELS: Record<string, string> = {
     motivation: "Quote of the Day",
     "quick-actions": "Quick Actions",
@@ -371,15 +344,19 @@ export default function StudentDashboardPage() {
     "upcoming-exams": "Upcoming Exams",
   };
 
+  const studentName = data?.profile?.name || user?.name || user?.username || "";
+  const studentAvatar = data?.profile?.avatar || user?.avatar || null;
+  const targetPosition = data?.profile?.targetPosition && data.profile.targetPosition !== "Student"
+    ? data.profile.targetPosition
+    : (user?.role ? user.role.replace("-", " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "Section Officer");
+  const activeCourse = studentCtx?.activeCourse || (data?.activeCourse ? { title: data.activeCourse.name, level_name: null } : null);
+
   return (
     <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-8 bg-muted/50 min-h-[calc(100vh-72px)]">
       
       {/* 1. HEADER (not draggable — always pinned at top) */}
       <section className="bg-card p-6 md:p-8 rounded-[16px] border border-border shadow-sm flex flex-col xl:flex-row justify-between gap-8 relative">
-        {/* Returning to this page within the 45s staleTime shows this cached
-            data immediately (no skeleton) while a background refresh runs -
-            this is the only visible trace of that refresh. */}
-        {dashboardFetching && !loading && (
+        {mounted && dashboardFetching && (
           <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
             <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Updating...
           </div>
@@ -388,34 +365,44 @@ export default function StudentDashboardPage() {
         {/* Left Side: Avatar & Gamification */}
         <div className="flex-1 flex flex-col justify-between gap-6">
           <div className="flex gap-4 items-center">
-            {data.profile.avatar ? (
-              <RetryImage src={data.profile.avatar} alt="Avatar" className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shadow-sm" />
-            ) : (
+            {studentAvatar ? (
+              <RetryImage src={studentAvatar} alt="Avatar" className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shadow-sm" />
+            ) : studentName ? (
               <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0 border-2 border-border/50 shadow-sm">
-                {data.profile.name.charAt(0)}
+                {studentName.charAt(0).toUpperCase()}
               </div>
+            ) : (
+              <Skeleton className="w-14 h-14 rounded-full" />
             )}
-              <div className="flex flex-col justify-center">
-              <h1 className="text-lg font-bold text-primary dark:text-foreground tracking-tight leading-tight">
-                {data.profile.name}
-              </h1>
+            <div className="flex flex-col justify-center">
+              {studentName ? (
+                <h1 className="text-lg font-bold text-primary dark:text-foreground tracking-tight leading-tight">
+                  {studentName}
+                </h1>
+              ) : (
+                <Skeleton className="h-6 w-40" />
+              )}
               <p className="text-[12px] font-medium text-muted-foreground mt-0.5 flex items-center gap-1.5">
                 <span className="bg-muted/80 text-muted-foreground px-2 py-0.5 rounded flex items-center gap-1"><GraduationCap className="w-3 h-3"/> Student</span>
                 <span className="w-1 h-1 rounded-full bg-secondary"></span>
-                <span>Applied for: <span className="font-semibold text-primary dark:text-foreground">{data.profile.targetPosition && data.profile.targetPosition !== "Student" ? data.profile.targetPosition : "Section Officer"}</span></span>
+                <span>Applied for: <span className="font-semibold text-primary dark:text-foreground">{targetPosition}</span></span>
               </p>
-              {studentCtx?.activeCourse ? (
+              {activeCourse ? (
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   <span className="text-[11px] font-semibold text-muted-foreground">Active Course:</span>
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-bold bg-[#D4A72C]/15 text-[#D4A72C] border border-[#D4A72C]/30">
                     <BookOpen className="w-3.5 h-3.5" />
-                    {studentCtx.activeCourse.title}
+                    {activeCourse.title}
                   </span>
-                  {studentCtx.activeCourse.level_name && (
+                  {activeCourse.level_name && (
                     <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded font-medium">
-                      {studentCtx.activeCourse.level_name}
+                      {activeCourse.level_name}
                     </span>
                   )}
+                </div>
+              ) : (loading || isCtxLoading) ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <Skeleton className="h-5 w-36 rounded-full" />
                 </div>
               ) : (
                 <div className="flex items-center gap-2 mt-2">
@@ -469,7 +456,7 @@ export default function StudentDashboardPage() {
                    <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Day Streak
                  </div>
                  <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
-                   {data.stats.studyStreak} Days
+                   {data?.stats?.studyStreak !== undefined ? data.stats.studyStreak : "—"} Days
                  </div>
                  <div className="text-[10px] text-muted-foreground font-medium">Active streak</div>
               </div>
@@ -503,7 +490,7 @@ export default function StudentDashboardPage() {
               </div>
               <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
                  <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1"><Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Day Streak</div>
-                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">{data.stats.studyStreak} Days</div>
+                 <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">{data?.stats?.studyStreak !== undefined ? data.stats.studyStreak : "—"} Days</div>
                  <div className="text-[10px] text-muted-foreground font-medium">Active streak</div>
               </div>
               <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
@@ -516,7 +503,7 @@ export default function StudentDashboardPage() {
 
         {/* Right Side: Profile Completion and Subscription */}
         <div className="xl:w-[280px] shrink-0 self-start w-full flex flex-col gap-4">
-          {data.profile.completionPercentage < 100 && (
+          {data?.profile && data.profile.completionPercentage < 100 && (
             <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900/50 p-4 rounded-xl">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-bold text-yellow-800 dark:text-yellow-200">Profile Completion</span>
@@ -531,7 +518,7 @@ export default function StudentDashboardPage() {
           <div className="bg-[#0B2545] dark:bg-[#0D1B2A] text-white p-5 rounded-2xl border border-[#163E6B] dark:border-[#243B53] shadow-lg relative overflow-hidden">
             <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
-            {data.package?.hasActivePackage && data.package.planName ? (
+            {data?.package?.hasActivePackage && data.package.planName ? (
               <div className="relative z-10 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -559,7 +546,9 @@ export default function StudentDashboardPage() {
                   {data.package.expiryDate && (
                     <div className="flex justify-between text-[11px] text-slate-400">
                       <span>Expires:</span>
-                      <span className="font-medium text-slate-200">{new Date(data.package.expiryDate).toLocaleDateString()}</span>
+                      <span className="font-medium text-slate-200" suppressHydrationWarning>
+                        {new Date(data.package.expiryDate).toLocaleDateString()}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -585,6 +574,15 @@ export default function StudentDashboardPage() {
                 <Button asChild className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold">
                   <Link href="/student/study-plan">Resume Journey</Link>
                 </Button>
+              </div>
+            ) : loading ? (
+              <div className="relative z-10 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-[#D4A72C]/20 rounded-lg"><Sparkles className="w-4 h-4 text-[#D4A72C]" /></div>
+                  <Skeleton className="h-5 w-28 bg-white/20" />
+                </div>
+                <Skeleton className="h-4 w-44 bg-white/10" />
+                <Skeleton className="h-9 w-full bg-white/10 mt-2 rounded-xl" />
               </div>
             ) : (
               <div className="relative z-10 space-y-3">
@@ -679,37 +677,56 @@ export default function StudentDashboardPage() {
                 );
               }
 
-              if (widgetId === "continue-study" && data.continueLearning) {
-                return (
-                  <SortableWidget key={widgetId} id={widgetId}>
-                    <section className="relative overflow-hidden bg-gradient-to-r from-[#0B2545] via-[#0E3259] to-[#163E6B] text-white rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
-                      <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#163E6B]/50 to-transparent pointer-events-none"></div>
-                      <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4A72C] opacity-10 blur-[60px] pointer-events-none"></div>
-                      <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 z-10">
-                        <div className="flex items-start gap-5">
-                          <div className="bg-[#0B2545] border border-[#163E6B] p-3.5 rounded-[12px] hidden sm:flex shrink-0">
-                            <BookOpen className="h-7 w-7 text-[#D4A72C]" strokeWidth={1.5} />
+              if (widgetId === "continue-study") {
+                if (data?.continueLearning) {
+                  return (
+                    <SortableWidget key={widgetId} id={widgetId}>
+                      <section className="relative overflow-hidden bg-gradient-to-r from-[#0B2545] via-[#0E3259] to-[#163E6B] text-white rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
+                        <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#163E6B]/50 to-transparent pointer-events-none"></div>
+                        <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4A72C] opacity-10 blur-[60px] pointer-events-none"></div>
+                        <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 z-10">
+                          <div className="flex items-start gap-5">
+                            <div className="bg-[#0B2545] border border-[#163E6B] p-3.5 rounded-[12px] hidden sm:flex shrink-0">
+                              <BookOpen className="h-7 w-7 text-[#D4A72C]" strokeWidth={1.5} />
+                            </div>
+                            <div>
+                              <div className="text-[12px] font-bold text-[#D4A72C] uppercase tracking-widest mb-1">
+                                Unfinished {data.continueLearning.type === 'practice' ? 'Practice' : 'Exam'}
+                              </div>
+                              <h3 className="font-bold text-[20px] text-white tracking-tight">{data.continueLearning.title}</h3>
+                              <div className="flex items-center gap-4 mt-5">
+                                <Progress value={data.continueLearning.progress} className="w-48 h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
+                                <span className="text-[13px] font-bold text-white">{data.continueLearning.progress}%</span>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-[12px] font-bold text-[#D4A72C] uppercase tracking-widest mb-1">
-                              Unfinished {data.continueLearning.type === 'practice' ? 'Practice' : 'Exam'}
-                            </div>
-                            <h3 className="font-bold text-[20px] text-white tracking-tight">{data.continueLearning.title}</h3>
-                            <div className="flex items-center gap-4 mt-5">
-                              <Progress value={data.continueLearning.progress} className="w-48 h-1.5 bg-card/20" indicatorClassName="bg-[#D4A72C]" />
-                              <span className="text-[13px] font-bold text-white">{data.continueLearning.progress}%</span>
-                            </div>
+                          <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-slate-950 font-bold px-8 h-12 rounded-xl shrink-0 shadow-md transition-all hover:scale-[1.02]" asChild>
+                            <Link href={data.continueLearning.url}>
+                              Resume <ArrowRight className="ml-2 h-5 w-5" />
+                            </Link>
+                          </Button>
+                        </div>
+                      </section>
+                    </SortableWidget>
+                  );
+                }
+                if (loading) {
+                  return (
+                    <SortableWidget key={widgetId} id={widgetId}>
+                      <div className="h-28 rounded-[16px] bg-card border border-border p-6 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Skeleton className="h-12 w-12 rounded-xl" />
+                          <div className="space-y-2">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-5 w-48" />
                           </div>
                         </div>
-                        <Button className="bg-[#D4A72C] hover:bg-[#b08b25] text-slate-950 font-bold px-8 h-12 rounded-xl shrink-0 shadow-md transition-all hover:scale-[1.02]" asChild>
-                          <Link href={data.continueLearning.url}>
-                            Resume <ArrowRight className="ml-2 h-5 w-5" />
-                          </Link>
-                        </Button>
+                        <Skeleton className="h-10 w-28 rounded-xl" />
                       </div>
-                    </section>
-                  </SortableWidget>
-                );
+                    </SortableWidget>
+                  );
+                }
+                return null;
               }
 
               if (widgetId === "referral-card" && referralData && referralData.settings?.is_enabled) {
@@ -830,7 +847,19 @@ export default function StudentDashboardPage() {
                         </div>
                       </div>
                       <div className="p-0 flex-1 flex flex-col">
-                        {referralHistory.length > 0 ? (
+                        {isReferralHistoryLoading ? (
+                          <div className="p-4 space-y-3">
+                            {[1, 2, 3].map((i) => (
+                              <div key={i} className="flex justify-between items-center py-2">
+                                <Skeleton className="h-4 w-28" />
+                                <div className="flex items-center gap-3">
+                                  <Skeleton className="h-4 w-12 rounded-md" />
+                                  <Skeleton className="h-4 w-10" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : referralHistory.length > 0 ? (
                           <div className="divide-y divide-slate-100">
                             {referralHistory.slice(0, 4).map((item, i) => (
                               <div key={i} className="flex justify-between items-center p-4 hover:bg-muted transition-colors">
@@ -878,34 +907,50 @@ export default function StudentDashboardPage() {
                         </div>
                       </div>
                       <div className="p-6 flex-1 flex flex-col justify-center gap-6">
-                        <div>
-                          <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-muted-foreground">Practice Score</span>
-                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.averageScore}%</span>
-                          </div>
-                          <Progress value={data.stats.averageScore} className="h-2 bg-muted/80" indicatorClassName="bg-blue-500" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-muted-foreground">Mock Exams</span>
-                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.completedExams} / {Math.max(data.stats.completedExams, data.stats.totalExams)}</span>
-                          </div>
-                          <Progress value={data.stats.totalExams > 0 ? Math.min((data.stats.completedExams / data.stats.totalExams) * 100, 100) : 0} className="h-2 bg-muted/80" indicatorClassName="bg-purple-500" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-muted-foreground">Questions Solved</span>
-                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.questionsAttempted}</span>
-                          </div>
-                          <Progress value={Math.min((data.stats.questionsAttempted / Math.max(data.stats.questionsAttempted + 50, 100)) * 100, 100)} className="h-2 bg-muted/80" indicatorClassName="bg-[#D4A72C]" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-end mb-2">
-                            <span className="text-sm font-semibold text-muted-foreground">Accuracy</span>
-                            <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.accuracy}%</span>
-                          </div>
-                          <Progress value={data.stats.accuracy} className="h-2 bg-muted/80" indicatorClassName="bg-green-500" />
-                        </div>
+                        {!data && loading ? (
+                          <>
+                            {[1, 2, 3, 4].map((i) => (
+                              <div key={i} className="space-y-2">
+                                <div className="flex justify-between">
+                                  <Skeleton className="h-4 w-24" />
+                                  <Skeleton className="h-4 w-10" />
+                                </div>
+                                <Skeleton className="h-2 w-full rounded-full" />
+                              </div>
+                            ))}
+                          </>
+                        ) : data ? (
+                          <>
+                            <div>
+                              <div className="flex justify-between items-end mb-2">
+                                <span className="text-sm font-semibold text-muted-foreground">Practice Score</span>
+                                <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.averageScore}%</span>
+                              </div>
+                              <Progress value={data.stats.averageScore} className="h-2 bg-muted/80" indicatorClassName="bg-blue-500" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between items-end mb-2">
+                                <span className="text-sm font-semibold text-muted-foreground">Mock Exams</span>
+                                <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.completedExams} / {Math.max(data.stats.completedExams, data.stats.totalExams)}</span>
+                              </div>
+                              <Progress value={data.stats.totalExams > 0 ? Math.min((data.stats.completedExams / data.stats.totalExams) * 100, 100) : 0} className="h-2 bg-muted/80" indicatorClassName="bg-purple-500" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between items-end mb-2">
+                                <span className="text-sm font-semibold text-muted-foreground">Questions Solved</span>
+                                <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.questionsAttempted}</span>
+                              </div>
+                              <Progress value={Math.min((data.stats.questionsAttempted / Math.max(data.stats.questionsAttempted + 50, 100)) * 100, 100)} className="h-2 bg-muted/80" indicatorClassName="bg-[#D4A72C]" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between items-end mb-2">
+                                <span className="text-sm font-semibold text-muted-foreground">Accuracy</span>
+                                <span className="text-sm font-bold text-primary dark:text-foreground">{data.stats.accuracy}%</span>
+                              </div>
+                              <Progress value={data.stats.accuracy} className="h-2 bg-muted/80" indicatorClassName="bg-green-500" />
+                            </div>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                   </SortableWidget>
@@ -928,7 +973,18 @@ export default function StudentDashboardPage() {
                         </div>
                       </div>
                       <div className="p-0 flex-1 flex flex-col">
-                        {data.todaysPlan.filter(p => p.type === 'exam').length > 0 ? (
+                        {!data && loading ? (
+                          <div className="p-5 space-y-4">
+                            <div className="flex gap-4">
+                              <Skeleton className="w-5 h-5 rounded-full" />
+                              <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-3/4" />
+                                <Skeleton className="h-3 w-1/3" />
+                                <Skeleton className="h-8 w-full mt-3 rounded-md" />
+                              </div>
+                            </div>
+                          </div>
+                        ) : data && data.todaysPlan.filter(p => p.type === 'exam').length > 0 ? (
                           <div className="divide-y divide-slate-100">
                             {data.todaysPlan.filter(p => p.type === 'exam').map(exam => (
                               <div key={exam.id} className="p-5 hover:bg-muted transition-colors">

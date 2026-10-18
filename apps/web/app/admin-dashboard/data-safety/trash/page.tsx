@@ -343,7 +343,7 @@ export default function AdminTrashPage() {
                           title={
                             item.is_protected
                               ? "Permanent deletion blocked: historical attempts depend on this record."
-                              : "Permanent Delete (Super Admin only)"
+                              : "Permanent Delete (Admin)"
                           }
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -548,7 +548,7 @@ export default function AdminTrashPage() {
                 {selectedItemForPermDelete.item_type})
               </div>
               <div>
-                Only Super Administrators can execute permanent deletion. Once purged, recovery is only possible via a full database restore.
+                Only Administrators can execute permanent deletion. Once purged, recovery is only possible via a full database restore.
               </div>
             </div>
 

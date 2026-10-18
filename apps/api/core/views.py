@@ -14,10 +14,14 @@ from django.utils import timezone
 from datetime import timedelta
 from .models import User
 
+from rest_framework_simplejwt.views import TokenRefreshView
+from .session_service import should_enforce_single_session, establish_active_session, invalidate_user_session
+from .serializers import CustomTokenRefreshSerializer
+
 logger = logging.getLogger(__name__)
 
 
-def _access_token_for(user):
+def _access_token_for(user, session_key=None):
     """Mints an access token whose lifetime comes from
     AdminSettings.session_timeout_minutes (Admin Settings > Security),
     for the views here that mint tokens manually instead of going through
@@ -25,8 +29,18 @@ def _access_token_for(user):
     from .models import AdminSettings
     minutes = AdminSettings.get_settings().session_timeout_minutes
     access = AccessToken.for_user(user)
+    if session_key or getattr(user, 'jwt_session_key', None):
+        access['session_key'] = session_key or user.jwt_session_key
     access.set_exp(lifetime=timedelta(minutes=minutes))
     return str(access)
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """
+    Session-aware token refresh view. Rejects refresh tokens belonging to
+    superseded or revoked sessions, and rotates active tokens.
+    """
+    serializer_class = CustomTokenRefreshSerializer
 
 class SignupRequestOTPView(APIView):
     """POST /api/auth/signup/request-otp/ - body: {email}. Resends a 6-digit
@@ -298,10 +312,19 @@ class VerifyEmailOTPView(APIView):
         from subscriptions.entitlements import EntitlementService
         EntitlementService.ensure_free_plan_entitlement(user)
 
+        # Single active session: atomically invalidate old sessions and establish new session
+        if should_enforce_single_session(user):
+            session_key = establish_active_session(user)
+        else:
+            session_key = getattr(user, 'jwt_session_key', None)
+
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
+        if session_key:
+            refresh['session_key'] = session_key
+
         return Response({
-            'access': _access_token_for(user),
+            'access': _access_token_for(user, session_key=session_key),
             'refresh': str(refresh),
             'user': {
                 'id': user.id,
@@ -457,10 +480,18 @@ class AdminLoginView(APIView):
             })
 
         # Generate JWT tokens
+        if should_enforce_single_session(user):
+            session_key = establish_active_session(user)
+        else:
+            session_key = getattr(user, 'jwt_session_key', None)
+
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
+        if session_key:
+            refresh['session_key'] = session_key
+
         return Response({
-            'access': _access_token_for(user),
+            'access': _access_token_for(user, session_key=session_key),
             'refresh': str(refresh),
             'user': {
                 'id': user.id,
@@ -474,18 +505,32 @@ class AdminLoginView(APIView):
 
 class AuthLogoutView(APIView):
     """
-    Logout endpoint — blacklists the refresh token so it cannot be reused.
+    Logout endpoint — blacklists the refresh token and invalidates the session.
     """
     permission_classes = [AllowAny]
 
     def post(self, request):
         refresh_token = request.data.get('refresh')
+        user_to_invalidate = None
+        session_key = None
+
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
+                user_id = token.payload.get('user_id')
+                session_key = token.payload.get('session_key')
+                if user_id:
+                    user_to_invalidate = User.objects.filter(id=user_id).first()
                 token.blacklist()
             except Exception:
                 pass  # Token may already be invalid/blacklisted
+
+        if not user_to_invalidate and getattr(request, 'user', None) and request.user.is_authenticated:
+            user_to_invalidate = request.user
+
+        if user_to_invalidate and should_enforce_single_session(user_to_invalidate):
+            invalidate_user_session(user_to_invalidate, session_key_to_match=session_key)
+
         return Response({'detail': 'Logged out successfully.'}, status=status.HTTP_200_OK)
 
 
@@ -647,7 +692,7 @@ class StudentDashboardView(APIView):
         try:
             from exams.models import ExaminationAttempt
             recent_attempts = ExaminationAttempt.objects.filter(
-                student=user, status='submitted'
+                student=user, status__in=['submitted', 'evaluated']
             ).select_related('examination').order_by('-started_at')[:5]
             
             for attempt in recent_attempts:
@@ -877,11 +922,19 @@ class SocialLoginView(APIView):
                 EntitlementService.ensure_free_plan_entitlement(user)
 
             from rest_framework_simplejwt.tokens import RefreshToken
+
+            if should_enforce_single_session(user):
+                session_key = establish_active_session(user)
+            else:
+                session_key = getattr(user, 'jwt_session_key', None)
+
             update_last_login(None, user)
             refresh = RefreshToken.for_user(user)
+            if session_key:
+                refresh['session_key'] = session_key
 
             return Response({
-                'access': _access_token_for(user),
+                'access': _access_token_for(user, session_key=session_key),
                 'refresh': str(refresh),
                 'is_new_user': is_new_user,
                 'profile_complete': profile_complete,

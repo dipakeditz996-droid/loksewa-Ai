@@ -160,7 +160,10 @@ export const adminQuestionApi = {
   getQuestion: async (id: number) => apiClient<AdminQuestion>(`/admin/questions/${id}/`),
   createQuestion: async (data: any) => apiClient<AdminQuestion>('/admin/questions/', { method: 'POST', body: JSON.stringify(data) }),
   updateQuestion: async (id: number, data: any) => apiClient<AdminQuestion>(`/admin/questions/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteQuestion: async (id: number) => apiClient<{ detail: string }>(`/admin/questions/${id}/`, { method: 'DELETE' }),
+  deleteQuestion: async (id: number, permanent: boolean = false) => apiClient<{ detail?: string, success?: boolean, message?: string }>(
+    `/admin/questions/${id}/${permanent ? '?permanent=true' : ''}`, 
+    { method: 'DELETE' }
+  ),
   duplicateQuestion: async (id: number) => apiClient<{ detail: string }>(`/admin/questions/${id}/duplicate/`, { method: 'POST' }),
   // Note: the DRF @action for this is named bulk_action with no custom
   // url_path, so its real URL keeps the underscore - it does NOT become

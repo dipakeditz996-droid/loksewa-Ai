@@ -1,12 +1,15 @@
 from datetime import timedelta
 
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.tokens import AccessToken
+from django.utils.translation import gettext_lazy as _
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
+from rest_framework_simplejwt.settings import api_settings
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import exceptions
+from .session_service import should_enforce_single_session, establish_active_session
 
 
-def _apply_admin_session_timeout(data, user, admin_settings=None):
+def _apply_admin_session_timeout(data, user, admin_settings=None, session_key=None):
     """Re-issues the access token with a lifetime pulled from
     AdminSettings.session_timeout_minutes (Admin Settings > Security), which
     the static SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'] setting cannot express
@@ -14,6 +17,8 @@ def _apply_admin_session_timeout(data, user, admin_settings=None):
     from .models import AdminSettings
     minutes = (admin_settings or AdminSettings.get_settings()).session_timeout_minutes
     access = AccessToken.for_user(user)
+    if session_key or getattr(user, 'jwt_session_key', None):
+        access['session_key'] = session_key or user.jwt_session_key
     access.set_exp(lifetime=timedelta(minutes=minutes))
     data['access'] = str(access)
     return data
@@ -125,7 +130,17 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             )
         self.user = user
         record_successful_login(user)
+
+        # Single active session: atomically invalidate old sessions and establish new session
+        if should_enforce_single_session(user):
+            session_key = establish_active_session(user)
+        else:
+            session_key = getattr(user, 'jwt_session_key', None)
+
         refresh = self.get_token(user)
+        if session_key:
+            refresh['session_key'] = session_key
+
         data = {'refresh': str(refresh), 'access': str(refresh.access_token)}
         if api_settings.UPDATE_LAST_LOGIN:
             update_last_login(None, user)
@@ -141,5 +156,54 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         if user.role == 'student':
             from .views import _get_package_status
             data['package'] = _get_package_status(user)
-        return _apply_admin_session_timeout(data, user, admin_settings)
+        return _apply_admin_session_timeout(data, user, admin_settings, session_key=session_key)
+
+
+class CustomTokenRefreshSerializer(TokenRefreshSerializer):
+    """
+    Validates token refresh requests with single-session awareness:
+    1. Checks if the refresh token's user exists and is active.
+    2. Validates that the refresh token's session_key matches the user's active session.
+       If revoked (or superseded by a newer login), refresh is strictly rejected.
+    3. On success, retains the session_key in rotated refresh and new access tokens,
+       and applies the dynamic admin session timeout.
+    """
+    def validate(self, attrs):
+        from .session_service import should_enforce_single_session
+        from .models import User, AdminSettings
+
+        refresh = self.token_class(attrs["refresh"])
+        user_id = refresh.payload.get(api_settings.USER_ID_CLAIM)
+
+        try:
+            user = User.objects.get(**{api_settings.USER_ID_FIELD: user_id})
+        except User.DoesNotExist:
+            raise exceptions.AuthenticationFailed(_("User not found"), code="user_not_found")
+
+        if not user.is_active:
+            raise exceptions.AuthenticationFailed(_("User is inactive"), code="user_inactive")
+
+        if should_enforce_single_session(user):
+            token_session_key = refresh.payload.get("session_key")
+            active_key = getattr(user, "jwt_session_key", None)
+            if active_key:
+                if not token_session_key or token_session_key != active_key:
+                    raise exceptions.AuthenticationFailed(
+                        {
+                            "detail": _("Your account was signed in on another device. Please log in again to continue."),
+                            "code": "session_revoked",
+                        }
+                    )
+
+        data = super().validate(attrs)
+
+        # Maintain session_key and session timeout on the new access token
+        minutes = AdminSettings.get_settings().session_timeout_minutes
+        access = AccessToken(data["access"])
+        if getattr(user, "jwt_session_key", None):
+            access["session_key"] = user.jwt_session_key
+        access.set_exp(lifetime=timedelta(minutes=minutes))
+        data["access"] = str(access)
+
+        return data
 

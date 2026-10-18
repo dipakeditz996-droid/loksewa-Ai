@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, fetchBlob } from './client';
 
 /** Examination.OBJECTIVE_CATEGORIES in exams/models.py — the four finalized
  * Objective Exam categories. May be null on older/uncategorized exams. */
@@ -418,12 +418,7 @@ export const studentExamsApi = {
   },
 
   getQuestionPaperBlob: async (examId: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/student/exams/${examId}/question-paper/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to load question paper PDF');
-    return await res.blob();
+    return await fetchBlob(`/student/exams/${examId}/question-paper/`);
   },
 
   uploadAnswerSheet: async (attemptId: number, formData: FormData) => {
@@ -440,12 +435,7 @@ export const studentExamsApi = {
   },
 
   getAnswerSheetBlob: async (attemptId: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/student/exam-attempts/${attemptId}/answer-sheet/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error('Failed to load submitted answer sheet');
-    return await res.blob();
+    return await fetchBlob(`/student/exam-attempts/${attemptId}/answer-sheet/`);
   },
 
   requestManualChecking: async (attemptId: number) => {
@@ -484,17 +474,14 @@ export const studentExamsApi = {
   },
 
   getExpertSolutionPdfBlob: async (examId: number) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/student/exams/${examId}/expert-solution-pdf/`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) {
-      if (res.status === 404) {
+    try {
+      return await fetchBlob(`/student/exams/${examId}/expert-solution-pdf/`);
+    } catch (err: any) {
+      if (err?.status === 404) {
         throw new Error('No Expert Solution has been published for this exam yet.');
       }
       throw new Error('Failed to load expert solution PDF');
     }
-    return await res.blob();
   },
 
   getSubjectiveExpertSolutionInfo: async (examId: number) => {

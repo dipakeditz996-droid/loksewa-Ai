@@ -112,8 +112,8 @@ notepad .env
 Fill in from Supabase → Project Settings → Database → Connection string (URI):
 
 ```env
-DATABASE_URL=postgresql://postgres.<ref>:<password>@<region>.pooler.supabase.com:6543/postgres
-DIRECT_URL=postgresql://postgres.<ref>:<password>@<region>.pooler.supabase.com:5432/postgres
+DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<REDACTED_PASSWORD>@<REGION>.pooler.supabase.com:6543/postgres
+DIRECT_URL=postgresql://postgres.<PROJECT_REF>:<REDACTED_PASSWORD>@<REGION>.pooler.supabase.com:5432/postgres
 ```
 
 URL-encode the password if it contains `@ : / ? # [ ] %`

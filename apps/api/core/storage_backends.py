@@ -172,10 +172,12 @@ class GoogleDriveStorage(Storage):
                 return google_drive.get_file_url(file_id, filename=original_filename)
             except Exception:
                 pass
-        try:
-            return self._local_storage.url(name)
-        except Exception:
-            return f'/media/{name}'
+        if self._local_storage.exists(name):
+            try:
+                return self._local_storage.url(name)
+            except Exception:
+                return f'/media/{name}'
+        return ''
 
     def get_available_name(self, name, max_length=None):
         return self._local_storage.get_available_name(name, max_length=max_length)

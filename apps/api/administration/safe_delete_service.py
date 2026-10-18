@@ -464,8 +464,8 @@ class SafeDeleteService:
         Strictly requires Super Admin role, exact confirmation text 'DELETE PERMANENTLY',
         and non-protected status.
         """
-        if not user or not user.is_authenticated or user.role != 'super-admin':
-            raise ValidationError("Permanent deletion requires Super Admin authorization.")
+        if not user or not user.is_authenticated or user.role not in ('admin', 'super-admin'):
+            raise ValidationError("Permanent deletion requires Admin authorization.")
 
         if confirmation_text.strip() != 'DELETE PERMANENTLY':
             raise ValidationError("Confirmation text must exactly match 'DELETE PERMANENTLY'.")

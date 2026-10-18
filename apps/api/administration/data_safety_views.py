@@ -87,7 +87,7 @@ class AdminDataSafetyOverviewView(APIView):
             last_permanent_delete = {
                 'title': last_perm_log.details.get('title', 'Unknown item'),
                 'item_type': last_perm_log.details.get('item_type', last_perm_log.entity_type),
-                'deleted_by': last_perm_log.actor.get_full_name() or last_perm_log.actor.username if last_perm_log.actor else 'Super Admin',
+                'deleted_by': last_perm_log.actor.get_full_name() or last_perm_log.actor.username if last_perm_log.actor else 'Admin',
                 'timestamp': last_perm_log.timestamp.isoformat(),
             }
 
@@ -285,8 +285,8 @@ class AdminDatabaseBackupViewSet(viewsets.ModelViewSet):
     def download_backup(self, request, pk=None):
         from administration.r2_storage_service import R2StorageService
 
-        if not request.user or not request.user.is_authenticated or request.user.role != 'super-admin':
-            return Response({'error': 'Super Admin authorization required to download database backups.'}, status=status.HTTP_403_FORBIDDEN)
+        if not request.user or not request.user.is_authenticated or request.user.role not in ('admin', 'super-admin'):
+            return Response({'error': 'Admin authorization required to download database backups.'}, status=status.HTTP_403_FORBIDDEN)
 
         backup = self.get_object()
         if not os.path.exists(backup.file_path):

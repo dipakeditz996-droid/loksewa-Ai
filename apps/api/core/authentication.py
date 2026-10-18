@@ -3,18 +3,14 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed, InvalidToken
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.utils import get_md5_hash_password
+from .session_service import validate_token_session
 
 
 class ProfileAwareJWTAuthentication(JWTAuthentication):
-    """Stock JWT authentication, with one difference: the user's student
-    profile is fetched in the same query.
-
-    The package-access check reads `user.student_profile` on every student
-    request (to honour admin-granted access), which cost a second round trip
-    to the database each time. The user is still loaded and validated from
-    the database on EVERY request - nothing is cached across requests - so
-    deactivation, role changes and password changes take effect immediately.
-    Users without a profile (staff) behave exactly as before.
+    """Stock JWT authentication, with two differences:
+    1. The user's student profile is fetched in the same query.
+    2. Single Active Session enforcement: rejects access tokens belonging to
+       superseded or revoked sessions immediately.
     """
 
     def get_user(self, validated_token):
@@ -37,5 +33,8 @@ class ProfileAwareJWTAuthentication(JWTAuthentication):
         if api_settings.CHECK_REVOKE_TOKEN:
             if validated_token.get(api_settings.REVOKE_TOKEN_CLAIM) != get_md5_hash_password(user.password):
                 raise AuthenticationFailed(_("The user's password has been changed."), code="password_changed")
+
+        # Single active session validation: ensure token belongs to the authoritative session
+        validate_token_session(user, validated_token.get("session_key"))
 
         return user

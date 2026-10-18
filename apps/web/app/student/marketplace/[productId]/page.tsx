@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { marketplaceApi, Product, Purchase } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CheckCircle, ShoppingBag, BookOpen, MapPin, User, FileText, Bookmark, Info, Star, ShieldAlert } from "lucide-react";
@@ -52,7 +53,6 @@ export default function ProductDetailPage() {
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
 
   const handleAddToCart = async () => {
     if (product.stock === 0) return;
@@ -83,7 +83,7 @@ export default function ProductDetailPage() {
           <div className="aspect-[4/3] w-full bg-muted rounded-2xl overflow-hidden relative border shadow-sm">
             {product.cover_image ? (
               <Image 
-                src={product.cover_image.startsWith('http') ? product.cover_image : `${baseUrl}${product.cover_image.startsWith('/') ? '' : '/'}${product.cover_image}`} 
+                src={buildMediaUrl(product.cover_image)} 
                 alt={product.title}
                 fill
                 className="object-cover"

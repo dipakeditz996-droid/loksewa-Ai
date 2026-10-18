@@ -1,4 +1,37 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+export function getApiBaseUrl(): string {
+  let url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+  url = url.trim().replace(/\/+$/, "");
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  return url;
+}
+
+export function getApiOrigin(): string {
+  const apiUrl = getApiBaseUrl();
+  return apiUrl.replace(/\/api\/?$/, "");
+}
+
+export function buildApiUrl(path: string): string {
+  if (!path) return getApiBaseUrl();
+  if (/^https?:\/\//i.test(path)) return path;
+  const base = getApiBaseUrl();
+  let cleanPath = path.startsWith("/") ? path : `/${path}`;
+  if (cleanPath.startsWith("/api/")) {
+    cleanPath = cleanPath.slice(4);
+  }
+  return `${base}${cleanPath}`;
+}
+
+export function buildMediaUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  const origin = getApiOrigin();
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${origin}${cleanPath}`;
+}
+
+export const API_URL = getApiBaseUrl();
 
 function extractErrorMessage(data: any): string {
   if (!data) return "An API error occurred";
@@ -47,6 +80,24 @@ export const clearAuthToken = () => {
   localStorage.removeItem("refresh_token");
 };
 
+// Concurrency-safe single active session logout lock
+let isRevokedRedirectInProgress = false;
+
+export function triggerSessionRevokedLogout(): void {
+  if (typeof window === "undefined") return;
+  if (isRevokedRedirectInProgress) return;
+  isRevokedRedirectInProgress = true;
+
+  clearAuthToken();
+
+  const path = window.location.pathname;
+  if (!path.includes("/login")) {
+    window.location.href = "/login?session_revoked=true";
+  } else {
+    isRevokedRedirectInProgress = false;
+  }
+}
+
 // Single-flight: the backend rotates and blacklists a refresh token on first
 // use (ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION), so when several
 // requests hit 401 at the same time only ONE refresh call may be made - the
@@ -75,7 +126,21 @@ async function doRefreshToken(): Promise<string | null> {
     });
 
     if (!response.ok) {
+      let isSessionRevoked = false;
+      try {
+        const errorJson = await response.json();
+        if (errorJson?.code === "session_revoked") {
+          isSessionRevoked = true;
+        }
+      } catch {
+        // Body was not JSON or could not be parsed
+      }
+
       clearAuthToken();
+
+      if (isSessionRevoked) {
+        triggerSessionRevokedLogout();
+      }
       return null;
     }
 
@@ -160,6 +225,22 @@ async function executeRequest<T>(
 
   // Handle Token Expiration or Missing Token
   if (response.status === 401) {
+    let isSessionRevoked = false;
+    try {
+      const cloned = response.clone();
+      const errorJson = await cloned.json();
+      if (errorJson?.code === "session_revoked") {
+        isSessionRevoked = true;
+      }
+    } catch {
+      // Body was not JSON or could not be parsed
+    }
+
+    if (isSessionRevoked) {
+      triggerSessionRevokedLogout();
+      return new Promise(() => {}); // never resolve to prevent further execution
+    }
+
     if (token) {
       const newToken = await refreshToken();
       if (newToken) {
@@ -246,11 +327,24 @@ export async function downloadFile(
 
   let response = await fetch(url, { headers });
 
-  if (response.status === 401 && token) {
-    const newToken = await refreshToken();
-    if (newToken) {
-      headers.set("Authorization", `Bearer ${newToken}`);
-      response = await fetch(url, { headers });
+  if (response.status === 401) {
+    try {
+      const cloned = response.clone();
+      const errorJson = await cloned.json();
+      if (errorJson?.code === "session_revoked") {
+        triggerSessionRevokedLogout();
+        return;
+      }
+    } catch {
+      // Body was not JSON or could not be parsed
+    }
+
+    if (token) {
+      const newToken = await refreshToken();
+      if (newToken) {
+        headers.set("Authorization", `Bearer ${newToken}`);
+        response = await fetch(url, { headers });
+      }
     }
   }
 
@@ -315,4 +409,38 @@ export async function downloadPublicFile(url: string, fallbackFilename: string):
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+export async function fetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const url = path.startsWith("http://") || path.startsWith("https://") ? path : buildApiUrl(path);
+  const token = getAuthToken();
+  const headers = new Headers(options.headers || {});
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  let res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    try {
+      const cloned = res.clone();
+      const errorJson = await cloned.json();
+      if (errorJson?.code === "session_revoked") {
+        triggerSessionRevokedLogout();
+        throw new ApiError(401, errorJson);
+      }
+    } catch (_err) {
+      // Body was already consumed or is non-JSON
+    }
+
+    if (!options.headers) {
+      const newToken = await refreshToken();
+      if (newToken) {
+        headers.set("Authorization", `Bearer ${newToken}`);
+        res = await fetch(url, { ...options, headers });
+      }
+    }
+  }
+  if (!res.ok) {
+    throw new ApiError(res.status, await res.text().catch(() => ({ detail: res.statusText })));
+  }
+  return res.blob();
 }

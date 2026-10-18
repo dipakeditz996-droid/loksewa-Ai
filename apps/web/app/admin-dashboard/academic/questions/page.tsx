@@ -193,31 +193,45 @@ export default function QuestionBankPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this question? Historical student exam attempts will remain safe.')) return;
+    if (!confirm('Move this question to Trash? Historical student attempts remain safe.')) return;
     try {
       await adminQuestionApi.deleteQuestion(id);
-      toast.success('Question deleted');
+      toast.success('Question moved to Trash');
       fetchStats();
       fetchQuestions();
     } catch (error) {
-      toast.error('Failed to delete question');
+      toast.error('Failed to move question to Trash');
+    }
+  };
+
+  const handleSinglePermanentDelete = async (id: number) => {
+    if (!confirm('⚠️ Are you sure you want to PERMANENTLY delete this question? This action cannot be undone and will not be moved to Trash.')) return;
+    try {
+      const res = await adminQuestionApi.deleteQuestion(id, true);
+      toast.success(res.message || 'Question permanently deleted');
+      fetchStats();
+      fetchQuestions();
+    } catch (error: any) {
+      toast.error(error?.data?.error || error?.message || 'Failed to permanently delete question');
     }
   };
   
   const handleBulkAction = async (
-    action: 'publish' | 'draft' | 'archive' | 'delete' | 'add_to_collection' | 'remove_from_collection' | 'add_tags' | 'remove_tags',
+    action: 'publish' | 'draft' | 'archive' | 'delete' | 'permanent_delete' | 'add_to_collection' | 'remove_from_collection' | 'add_tags' | 'remove_tags',
     collectionIds?: number[],
     tagIds?: number[]
   ) => {
     if (selectedIds.size === 0) return;
-    if (action === 'delete' && !confirm(`Are you sure you want to delete ${selectedIds.size} questions?`)) return;
+    if (action === 'delete' && !confirm(`Move ${selectedIds.size} questions to Trash?`)) return;
+    if (action === 'permanent_delete' && !confirm(`⚠️ PERMANENT DELETE (Shift+Delete):\n\nAre you sure you want to PERMANENTLY delete the ${selectedIds.size} selected question(s)?\n\nThis will permanently remove them from the database without moving to Trash. This action CANNOT be undone.`)) return;
 
     try {
       const res = await adminQuestionApi.bulkAction(action === 'publish' ? 'approve' : action, Array.from(selectedIds), collectionIds, tagIds);
       if (res.error) {
         toast.error(res.error);
       } else {
-        toast.success(`Successfully applied action to ${res.count} questions`);
+        toast.success(res.message || `Successfully applied action to ${res.count} questions`);
+        setSelectedIds(new Set());
         fetchStats();
         fetchQuestions();
         setIsCollectionModalOpen(false);
@@ -225,9 +239,37 @@ export default function QuestionBankPage() {
         setSelectedBulkTagIds([]);
       }
     } catch (error: any) {
-      toast.error(error?.data?.error || `Failed to perform bulk action`);
+      toast.error(error?.data?.error || error?.message || `Failed to perform action`);
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (selectedIds.size > 0) {
+        if (e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
+          e.preventDefault();
+          handleBulkAction('permanent_delete');
+        } else if (!e.shiftKey && e.key === 'Delete') {
+          e.preventDefault();
+          handleBulkAction('delete');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds]);
 
   const handleBulkMapCourseChange = (cid: string) => {
     setBulkMapCourseId(cid);
@@ -598,7 +640,19 @@ export default function QuestionBankPage() {
                   </button>
                   <button onClick={() => handleBulkAction('publish')} className="text-xs font-medium text-green-700 hover:text-green-800 ml-1">Publish</button>
                   <button onClick={() => handleBulkAction('draft')} className="text-xs font-medium text-gray-600 hover:text-gray-800 ml-1">Draft</button>
-                  <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-red-600 hover:text-red-800 ml-1">Delete</button>
+                  <div className="h-4 w-px bg-navy-200 mx-1"></div>
+                  <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-amber-700 hover:text-amber-800 ml-1" title="Shortcut: Delete">
+                    Move to Trash
+                  </button>
+                  <button 
+                    onClick={() => handleBulkAction('permanent_delete')} 
+                    className="text-xs font-semibold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded flex items-center gap-1 ml-1 transition-colors"
+                    title="Permanently destroy selected questions (Shortcut: Shift + Delete)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Permanent Delete</span>
+                    <kbd className="text-[10px] bg-rose-200 text-rose-900 px-1 py-0.2 rounded font-mono font-bold">Shift+Del</kbd>
+                  </button>
                 </div>
               )}
               <select 
@@ -891,9 +945,15 @@ export default function QuestionBankPage() {
                                 <Edit2 className="w-4 h-4" />
                               </Link>
                               <button 
-                                onClick={() => handleDelete(q.id)}
+                                onClick={(e) => {
+                                  if (e.shiftKey) {
+                                    handleSinglePermanentDelete(q.id);
+                                  } else {
+                                    handleDelete(q.id);
+                                  }
+                                }}
                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                title="Delete"
+                                title="Delete (Hold Shift to permanently delete)"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

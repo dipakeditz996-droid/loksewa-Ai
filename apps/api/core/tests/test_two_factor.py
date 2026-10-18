@@ -20,6 +20,11 @@ class TwoFactorSafetyTests(APITestCase):
             username='admin1', email='admin1@test.com', password='pass123',
             role='admin', is_staff=True)
 
+    def tearDown(self):
+        super().tearDown()
+        from django.core.cache import cache
+        cache.clear()
+
     def test_platform_toggle_alone_does_not_require_2fa(self):
         settings_obj = AdminSettings.get_settings()
         settings_obj.enable_two_factor_auth = True

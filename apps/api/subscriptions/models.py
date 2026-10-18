@@ -297,6 +297,14 @@ class UsageLedger(models.Model):
     def __str__(self):
         return f"[{self.created_at}] {self.student.username} {self.event_type} {self.amount} ({self.feature})"
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        try:
+            from django.core.cache import cache
+            cache.delete(f'student_entitlements:{self.student_id}')
+        except Exception:
+            pass
+
 class SubscriptionPayment(models.Model):
     STATUS_CHOICES = (
         ('PENDING', 'Pending'),

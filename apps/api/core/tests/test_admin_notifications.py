@@ -26,6 +26,11 @@ class NotifyAdminsTests(APITestCase):
         self.teacher = User.objects.create_user(
             username='teach1', email='teach1@test.com', password='pass123', role='teacher')
 
+    def tearDown(self):
+        super().tearDown()
+        from django.core.cache import cache
+        cache.clear()
+
     def test_fans_out_to_active_admins_only(self):
         NotificationService.notify_admins(
             notif_type='payment', title='Test', message='A test event.')

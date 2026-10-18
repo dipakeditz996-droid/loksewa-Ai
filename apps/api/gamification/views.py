@@ -198,18 +198,26 @@ def leaderboard(request):
     """
     if not _gamification_enabled():
         raise PermissionDenied("Gamification is currently disabled by the administrator.")
-    top_users = GamificationProfile.objects.select_related('user').order_by('-xp', 'user__date_joined')[:50]
-    
-    leaderboard_data = []
-    for idx, profile in enumerate(top_users):
-        leaderboard_data.append({
-            'rank': idx + 1,
-            'username': profile.user.username,
-            'full_name': profile.user.get_full_name(),
-            'avatar': profile.user.avatar,
-            'xp': profile.xp,
-            'level': profile.level
-        })
+    from django.core.cache import cache
+
+    cache_key = 'gamification_leaderboard_top50'
+    leaderboard_data = cache.get(cache_key)
+    if leaderboard_data is None:
+        top_users = GamificationProfile.objects.select_related('user').only(
+            'id', 'xp', 'level', 'user__id', 'user__username', 'user__first_name', 'user__last_name', 'user__avatar'
+        ).order_by('-xp', 'user__date_joined')[:50]
+        
+        leaderboard_data = []
+        for idx, profile in enumerate(top_users):
+            leaderboard_data.append({
+                'rank': idx + 1,
+                'username': profile.user.username,
+                'full_name': profile.user.get_full_name(),
+                'avatar': profile.user.avatar,
+                'xp': profile.xp,
+                'level': profile.level
+            })
+        cache.set(cache_key, leaderboard_data, 60)
         
     return Response(leaderboard_data)
 

@@ -117,6 +117,12 @@ class PermissionAndPhase2ATests(APITestCase):
         response = self.client.post('/api/admin/questions/', {
             'text': 'A new admin-authored question',
             'topic': self.topic1.id,
+            'question_type': 'mcq',
+            'option_a': 'Option 1',
+            'option_b': 'Option 2',
+            'option_c': 'Option 3',
+            'option_d': 'Option 4',
+            'correct_option': 'A',
         })
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         question = Question.objects.get(pk=response.data['id'])

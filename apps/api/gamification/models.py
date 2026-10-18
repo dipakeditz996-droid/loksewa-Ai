@@ -17,6 +17,11 @@ class GamificationProfile(models.Model):
     study_highest_streak = models.IntegerField(default=0)
     last_study_date = models.DateField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['-xp'], name='gamif_prof_xp_idx'),
+        ]
+
     def __str__(self):
         return f"{self.user.username} - Level {self.level} - {self.xp} XP"
 

@@ -53,6 +53,11 @@ class ExamPublishedNotificationTests(APITestCase):
             username='t1', email='t1@test.com', password='pass123', role='teacher')
         self.exam = _make_examination()
 
+    def tearDown(self):
+        super().tearDown()
+        from django.core.cache import cache
+        cache.clear()
+
     def test_publish_notifies_all_active_students_when_no_course(self):
         NotificationService.notify_students_exam_update(self.exam, 'published')
         recipients = set(
@@ -357,7 +362,9 @@ class StudyPlanCreatedNotificationTests(APITestCase):
         from exams.models import Exam as PositionExam, ExamCategory as Cat
 
         category = Cat.objects.create(name='Loksewa')
-        position = PositionExam.objects.create(name='Kharidar', category=category)
+        position = PositionExam.objects.create(name='Kharidar', category=category, status='active')
+        course = Course.objects.create(title='Kharidar Prep', slug='kharidar-prep', status='published', exam=position)
+        Enrollment.objects.create(student=self.student, course=course, status='active')
 
         response = self.client.post('/api/study-plan/plans/', {
             'exam': position.id,

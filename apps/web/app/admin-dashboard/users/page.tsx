@@ -486,6 +486,29 @@ export default function UsersManagementPage() {
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (selectedUsers.length > 0 && e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        openDeleteModal();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedUsers]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       
@@ -579,10 +602,12 @@ export default function UsersManagementPage() {
             <Button
               size="sm"
               variant="outline"
-              className="bg-white text-red-700 border-red-300 hover:bg-red-50"
+              className="bg-white text-red-700 border-red-300 hover:bg-red-50 gap-1.5"
               onClick={() => openDeleteModal()}
+              title="Delete selected users (Shortcut: Shift + Delete)"
             >
-              Delete
+              <span>Delete</span>
+              <kbd className="text-[10px] bg-red-100 text-red-800 px-1 py-0.2 rounded font-mono font-semibold">Shift+Del</kbd>
             </Button>
           </div>
         </div>
@@ -635,7 +660,7 @@ export default function UsersManagementPage() {
                         user.role === 'admin' || user.role === 'super-admin' ? 'bg-blue-100 text-blue-700' :
                         'bg-slate-100 text-slate-700'
                       }`}>
-                        {user.role}
+                        {user.role === 'super-admin' ? 'admin' : user.role}
                       </span>
                     </TableCell>
                     <TableCell>

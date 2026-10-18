@@ -177,12 +177,8 @@ export default function AdministratorsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                        admin.role === 'super-admin' ? 'bg-red-100 text-red-700' :
-                        admin.role === 'admin' ? 'bg-blue-100 text-blue-700' :
-                        'bg-slate-100 text-slate-700'
-                      }`}>
-                        {admin.role === 'super-admin' ? 'Super Admin' : 'Admin'}
+                      <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700">
+                        Admin
                       </span>
                     </TableCell>
                     <TableCell>

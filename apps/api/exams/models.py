@@ -276,6 +276,16 @@ class Question(models.Model):
         exams_count = self.examinations_set.count()
         return sets_count + exams_count
 
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at'], name='exams_q_created_idx'),
+            models.Index(fields=['status', 'question_type'], name='exams_q_stat_type_idx'),
+            models.Index(fields=['exam', 'status'], name='exams_q_exam_stat_idx'),
+            models.Index(fields=['subject', 'status'], name='exams_q_subj_stat_idx'),
+            models.Index(fields=['topic', 'status'], name='exams_q_topic_stat_idx'),
+        ]
+
     def __str__(self):
         return f"[{self.question_id or 'New'}] {self.text[:50]}"
 
@@ -425,6 +435,12 @@ class PracticeSession(models.Model):
     completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'completed', '-created_at'], name='exams_ps_usr_cmp_idx'),
+        ]
+
 class QuestionAttempt(models.Model):
     session = models.ForeignKey(PracticeSession, on_delete=models.CASCADE, related_name='attempts')
     question = models.ForeignKey(Question, on_delete=models.CASCADE)
@@ -471,6 +487,10 @@ class QuestionMastery(models.Model):
 
     class Meta:
         unique_together = ('user', 'question')
+        indexes = [
+            models.Index(fields=['user', 'next_review_at'], name='exams_qm_usr_rev_idx'),
+            models.Index(fields=['user', '-consecutive_incorrect'], name='exams_qm_usr_inc_idx'),
+        ]
 
     def record_answer(self, is_correct):
         import datetime
@@ -995,6 +1015,9 @@ class ExaminationAttempt(models.Model):
     
     class Meta:
         ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['student', 'status', '-started_at'], name='exams_ea_std_stat_idx'),
+        ]
         
     def __str__(self):
         return f"{self.student.username} - {self.examination.title}"

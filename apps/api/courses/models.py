@@ -28,6 +28,11 @@ class Course(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['status', '-featured', 'title'], name='courses_c_stat_feat_idx'),
+        ]
+
     def __str__(self):
         return self.title
 
@@ -46,6 +51,9 @@ class Enrollment(models.Model):
 
     class Meta:
         unique_together = ('student', 'course')
+        indexes = [
+            models.Index(fields=['student', 'status'], name='courses_enr_std_stat_idx'),
+        ]
 
     def __str__(self):
         return f"{self.student.username} -> {self.course.title}"
@@ -109,6 +117,9 @@ class CourseApplication(models.Model):
         # One active application per student per course
         unique_together = ('student', 'course')
         ordering = ['-applied_at']
+        indexes = [
+            models.Index(fields=['student', 'status'], name='courses_ca_std_stat_idx'),
+        ]
 
     def __str__(self):
         return f"{self.student.username} → {self.course.title} ({self.status})"

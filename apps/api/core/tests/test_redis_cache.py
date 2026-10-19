@@ -55,6 +55,46 @@ class RedisCacheConfigurationAndIsolationTests(TestCase):
             url = _resolve_redis_cache_url()
             self.assertEqual(url, 'redis://custom-cache:6379/5')
 
+    def test_upstash_direct_tls_cache_url_preserves_default_db(self):
+        """Direct Upstash rediss:// URL must be accepted as-is without forcing /1."""
+        from backend.settings import _resolve_redis_cache_url
+
+        upstash_url = 'rediss://default:mocktoken123@flowing-dog-12345.upstash.io:6379'
+        with patch.dict(os.environ, {'REDIS_CACHE_URL': upstash_url, 'REDIS_URL': ''}, clear=False):
+            url = _resolve_redis_cache_url()
+            self.assertEqual(url, upstash_url)
+
+    def test_upstash_explicit_db0_accepted(self):
+        """Upstash URL with explicit /0 path is accepted."""
+        from backend.settings import _resolve_redis_cache_url
+
+        upstash_url = 'rediss://default:mocktoken123@flowing-dog-12345.upstash.io:6379/0'
+        with patch.dict(os.environ, {'REDIS_CACHE_URL': upstash_url}, clear=False):
+            url = _resolve_redis_cache_url()
+            self.assertEqual(url, upstash_url)
+
+    def test_upstash_derived_from_redis_url_does_not_force_db1(self):
+        """When REDIS_URL points to Upstash, it must NOT be rewritten to /1 because Upstash only supports db 0."""
+        from backend.settings import _resolve_redis_cache_url
+
+        upstash_url = 'rediss://default:mocktoken123@flowing-dog-12345.upstash.io:6379'
+        with patch.dict(os.environ, {'REDIS_CACHE_URL': '', 'REDIS_URL': upstash_url}, clear=False):
+            url = _resolve_redis_cache_url()
+            # Must remain on db 0 / empty path, NOT forced to /1
+            self.assertNotEqual(url, f"{upstash_url}/1")
+            self.assertTrue(url.endswith(':6379') or url.endswith('/0'))
+
+    def test_placeholder_urls_ignored(self):
+        """Placeholder tokens in environment variables must be ignored and return empty string."""
+        from backend.settings import _resolve_redis_cache_url
+
+        with patch.dict(os.environ, {
+            'REDIS_CACHE_URL': 'rediss://default:YOUR_UPSTASH_ENDPOINT:6379',
+            'REDIS_URL': 'redis://default:[YOUR_PASSWORD]@localhost:6379'
+        }, clear=False):
+            url = _resolve_redis_cache_url()
+            self.assertEqual(url, '')
+
 
 class ResilientRedisCacheDegradationTests(TestCase):
     """Verifies that ResilientRedisCache never crashes callers on network/connection outages."""

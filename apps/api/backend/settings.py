@@ -328,9 +328,12 @@ import urllib.parse
 def _resolve_redis_cache_url():
     """
     Resolve and isolate Redis connection URL for Django shared cache.
-    1. Checks explicit REDIS_CACHE_URL first.
-    2. Derives from REDIS_URL or CELERY_BROKER_URL, isolating cache to db 1
-       so Celery (db 0) and Django cache never collide or cross-evict.
+    1. Checks explicit REDIS_CACHE_URL first (supporting Upstash rediss:// and db 0).
+    2. Derives from REDIS_URL or CELERY_BROKER_URL:
+       - For Upstash endpoints (which only support database 0), preserves db 0
+         and relies on KEY_PREFIX='loksewa' for namespace isolation.
+       - For standard/local Redis, isolates cache to db 1 so Celery (db 0)
+         and Django cache never collide or cross-evict.
     3. Handles plain redis:// and TLS rediss:// URLs cleanly.
     4. Returns empty string if no valid Redis URL is configured or placeholder detected.
     """
@@ -338,7 +341,12 @@ def _resolve_redis_cache_url():
     if any(marker in raw_cache_url for marker in ('YOUR_UPSTASH_ENDPOINT', '[YOUR_', '<YOUR_', 'default:[YOUR_PASSWORD]')):
         raw_cache_url = ''
     if raw_cache_url:
-        return raw_cache_url
+        try:
+            parsed = urllib.parse.urlparse(raw_cache_url)
+            if parsed.scheme in ('redis', 'rediss') and parsed.netloc:
+                return raw_cache_url
+        except Exception:
+            pass
 
     shared_redis = (os.environ.get('REDIS_URL') or os.environ.get('CELERY_BROKER_URL') or '').strip()
     if any(marker in shared_redis for marker in ('YOUR_UPSTASH_ENDPOINT', '[YOUR_', '<YOUR_', 'default:[YOUR_PASSWORD]')):
@@ -348,10 +356,19 @@ def _resolve_redis_cache_url():
 
     try:
         parsed = urllib.parse.urlparse(shared_redis)
-        if not parsed.scheme or parsed.scheme not in ('redis', 'rediss'):
+        if not parsed.scheme or parsed.scheme not in ('redis', 'rediss') or not parsed.netloc:
             return ''
-        # Celery uses /0 by default; route cache to /1 for operational isolation
-        isolated_path = '/1' if parsed.path in ('', '/', '/0') else parsed.path
+
+        # Upstash Redis is a managed cluster/serverless service that only supports database 0.
+        # Forcing /1 causes "ResponseError: ERR DB index is out of range".
+        is_upstash = 'upstash.io' in (parsed.hostname or '').lower()
+        if is_upstash:
+            # Preserve default database 0 on Upstash; KEY_PREFIX isolates keys
+            isolated_path = parsed.path if parsed.path in ('', '/', '/0') else '/0'
+        else:
+            # Standard Redis: Celery uses /0 by default; route cache to /1 for operational isolation
+            isolated_path = '/1' if parsed.path in ('', '/', '/0') else parsed.path
+
         return urllib.parse.urlunparse((
             parsed.scheme,
             parsed.netloc,

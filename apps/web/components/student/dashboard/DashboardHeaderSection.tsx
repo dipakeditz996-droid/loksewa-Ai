@@ -60,11 +60,15 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
       {/* Left Side: Avatar & Gamification */}
       <div className="flex-1 flex flex-col justify-between gap-6">
         <div className="flex gap-4 items-center">
-          {studentAvatar ? (
+          {!mounted ? (
+            <div className="w-14 h-14 rounded-full shrink-0">
+              <Skeleton className="w-14 h-14 rounded-full" />
+            </div>
+          ) : studentAvatar ? (
             <RetryImage
               src={studentAvatar}
               alt="Avatar"
-              className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shadow-sm"
+              className="w-14 h-14 rounded-full object-cover border-2 border-border/50 shadow-sm shrink-0"
             />
           ) : studentName ? (
             <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/30 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0 border-2 border-border/50 shadow-sm">
@@ -73,6 +77,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           ) : (
             <Skeleton className="w-14 h-14 rounded-full" />
           )}
+
           <div className="flex flex-col justify-center">
             {studentName ? (
               <h1 className="text-lg font-bold text-primary dark:text-foreground tracking-tight leading-tight">

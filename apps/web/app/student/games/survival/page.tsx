@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { gamesApi, ActiveSurvivalGame, SurvivalGame } from "@/lib/api/games";
 import { Button } from "@/components/ui/button";
 import { Loader2, Heart, HeartCrack, Trophy, Flame } from "lucide-react";
 
 export default function SurvivalGamePage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   
   const [game, setGame] = useState<ActiveSurvivalGame | SurvivalGame | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(15);
@@ -109,6 +111,10 @@ export default function SurvivalGamePage() {
         }, 1200);
       } else if (result.status === 'GAME_OVER') {
         setFeedback('incorrect'); // Last life lost
+        queryClient.invalidateQueries({ queryKey: ["gamification", "player-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["games", "history"] });
+        queryClient.invalidateQueries({ queryKey: ["gamification", "leaderboard"] });
+        queryClient.invalidateQueries({ queryKey: ["games", "leaderboard"] });
         setTimeout(() => {
           updateGame(result.game);
           isSubmittingRef.current = false;

@@ -28,9 +28,7 @@ export default function DuelWaitingRoomPage() {
       setMatch(currentMatch);
       setError(null);
 
-      if (currentMatch.status === "MATCHED" || currentMatch.status === "IN_PROGRESS") {
-        router.replace(`/student/games/duel/${matchId}`);
-      } else if (currentMatch.status === "COMPLETED") {
+      if (currentMatch.status === "MATCHED" || currentMatch.status === "IN_PROGRESS" || currentMatch.status === "COMPLETED") {
         router.replace(`/student/games/duel/${matchId}`);
       } else if (currentMatch.status === "CANCELLED") {
         setError("This challenge was cancelled. Return to 1 vs 1 to create another invite.");
@@ -42,10 +40,39 @@ export default function DuelWaitingRoomPage() {
   }, [matchId, router]);
 
   useEffect(() => {
-    void fetchMatch();
-    const interval = window.setInterval(() => void fetchMatch(), 2000);
-    return () => window.clearInterval(interval);
-  }, [fetchMatch]);
+    let timer: number | null = null;
+    let isMounted = true;
+
+    const poll = async () => {
+      if (document.hidden) return;
+      await fetchMatch();
+    };
+
+    void poll();
+
+    timer = window.setInterval(() => {
+      if (!isMounted || document.hidden) return;
+      // Stop polling if match is terminal
+      if (match && (match.status === "COMPLETED" || match.status === "CANCELLED" || match.status === "MATCHED")) {
+        return;
+      }
+      void fetchMatch();
+    }, 2000);
+
+    const handleVisibility = () => {
+      if (!document.hidden && isMounted) {
+        void fetchMatch();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      isMounted = false;
+      if (timer) window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [fetchMatch, match]);
 
   const copyInviteCode = async () => {
     if (!match?.invite_code) return;

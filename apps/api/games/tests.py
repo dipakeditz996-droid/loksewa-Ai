@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import patch
@@ -14,6 +15,7 @@ class LeaderboardTests(APITestCase):
     XP leaderboard in administration/leaderboard_views.py."""
 
     def setUp(self):
+        cache.clear()
         self.student = User.objects.create_user(
             username='student1', password='pass123', role='student')
 

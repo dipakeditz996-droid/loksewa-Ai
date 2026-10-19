@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { gamesApi, GameMatch } from "@/lib/api/games";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import {
 export default function DuelGamePage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const matchId = parseInt(params.id as string, 10);
   
   const [match, setMatch] = useState<GameMatch | null>(null);
@@ -49,21 +51,40 @@ export default function DuelGamePage() {
       
       if (data.status === 'COMPLETED' || data.status === 'CANCELLED') {
         if (pollInterval.current) clearInterval(pollInterval.current);
+        if (data.status === 'COMPLETED') {
+          queryClient.invalidateQueries({ queryKey: ["games", "history"] });
+          queryClient.invalidateQueries({ queryKey: ["gamification", "player-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["gamification", "leaderboard"] });
+          queryClient.invalidateQueries({ queryKey: ["games", "leaderboard"] });
+        }
       }
     } catch (err) {
       console.error(err);
     }
-  }, [matchId]);
+  }, [matchId, queryClient]);
 
   useEffect(() => {
     // Initial fetch
     fetchState();
     
-    // Poll every 1.5 seconds during active matchmaking and play
-    pollInterval.current = setInterval(fetchState, 1500);
+    // Visibility-aware polling
+    const tick = () => {
+      if (document.hidden) return; // Pause polling when tab is not visible
+      fetchState();
+    };
+
+    pollInterval.current = setInterval(tick, 1500);
+
+    const handleVisibility = () => {
+      if (!document.hidden) {
+        fetchState();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     
     return () => {
       if (pollInterval.current) clearInterval(pollInterval.current);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [fetchState]);
 
@@ -131,12 +152,18 @@ export default function DuelGamePage() {
     }
   };
   
-  // Reset selected option when question changes
+  // Reset selected option only when the question index advances or on fresh question
+  const lastQuestionIdxRef = useRef<number | null>(null);
   useEffect(() => {
-    if (match && !match.has_answered) {
-      setSelectedOption(null);
+    if (match) {
+      if (lastQuestionIdxRef.current !== null && lastQuestionIdxRef.current !== match.current_question_index) {
+        setSelectedOption(null);
+      } else if (!match.has_answered && !isSubmitting) {
+        setSelectedOption(null);
+      }
+      lastQuestionIdxRef.current = match.current_question_index;
     }
-  }, [match]);
+  }, [match?.current_question_index, match?.has_answered, isSubmitting]);
 
   if (!match) {
     return (

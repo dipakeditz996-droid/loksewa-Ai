@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { API_MUTATION_EVENT } from "@/lib/api/client";
+import { Toaster as SonnerToaster } from "sonner";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
@@ -37,6 +38,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
+      <SonnerToaster richColors position="top-right" closeButton />
     </QueryClientProvider>
   );
 }

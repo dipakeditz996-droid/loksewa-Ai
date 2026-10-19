@@ -4,8 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from django.db import transaction
-from django.db.models import Q, Avg, Max, F, FloatField, ExpressionWrapper, Exists, OuterRef
+from django.db.models import Q, Avg, Max, F, FloatField, ExpressionWrapper, Exists, OuterRef, Prefetch
 from django.core.paginator import Paginator
+from django.core.cache import cache
 import random
 from datetime import timedelta
 
@@ -93,6 +94,7 @@ def assign_random_questions(match, exam_id=None, subject_id=None, topic_id=None,
 
     options_pool = ['A', 'B', 'C', 'D']
 
+    gq_objects = []
     for idx, q in enumerate(questions):
         bot_selected = None
         bot_correct = False
@@ -110,7 +112,7 @@ def assign_random_questions(match, exam_id=None, subject_id=None, topic_id=None,
             # Realistic delay between 3.5s and 7.0s
             bot_delay = round(random.uniform(3.5, 7.0), 1)
 
-        GameQuestion.objects.create(
+        gq_objects.append(GameQuestion(
             match=match,
             question=q,
             order=idx,
@@ -118,7 +120,8 @@ def assign_random_questions(match, exam_id=None, subject_id=None, topic_id=None,
             bot_is_correct=bot_correct,
             bot_answer_delay=bot_delay,
             bot_answered=False
-        )
+        ))
+    GameQuestion.objects.bulk_create(gq_objects)
 
 # ==========================================
 # 1v1 MATCHMAKING & PLAY
@@ -294,7 +297,7 @@ class MatchStateView(views.APIView):
 
     def get(self, request, match_id):
         try:
-            match = GameMatch.objects.get(id=match_id)
+            match = GameMatch.objects.select_related('player1', 'player2', 'winner').get(id=match_id)
             # Security check: User must be player1 or player2
             if request.user != match.player1 and (match.is_bot_match or request.user != match.player2):
                 return Response({'error': 'Unauthorized'}, status=403)
@@ -303,15 +306,18 @@ class MatchStateView(views.APIView):
             if match.status == 'SEARCHING' and match.matchmaking_timeout_at and timezone.now() >= match.matchmaking_timeout_at:
                 match = transition_to_bot_match(match)
 
+            current_q = None
             # Check if current question timed out
             if match.status in ['MATCHED', 'IN_PROGRESS']:
-                current_q = match.game_questions.filter(order=match.current_question_index).first()
+                current_q = match.game_questions.select_related('question').filter(order=match.current_question_index).first()
                 if current_q and current_q.deadline and timezone.now() > current_q.deadline:
                     self.advance_question(match)
+                    current_q = match.game_questions.select_related('question').filter(order=match.current_question_index).first()
 
             # Simulate bot answer if active bot match
             if match.is_bot_match and match.status in ['MATCHED', 'IN_PROGRESS']:
-                current_q = match.game_questions.filter(order=match.current_question_index).first()
+                if not current_q:
+                    current_q = match.game_questions.select_related('question').filter(order=match.current_question_index).first()
                 if current_q and not current_q.bot_answered and current_q.deadline:
                     total_duration = QUESTION_TIME_SECONDS + (5 if match.current_question_index == 0 else 2)
                     remaining = (current_q.deadline - timezone.now()).total_seconds()
@@ -327,12 +333,14 @@ class MatchStateView(views.APIView):
                         human_answered = GameAnswer.objects.filter(game_question=current_q, player=match.player1).exists()
                         if human_answered:
                             self.advance_question(match)
+                            current_q = match.game_questions.select_related('question').filter(order=match.current_question_index).first()
 
             data = GameMatchSerializer(match).data
 
             # Attach current question and answer status
             if match.status in ['MATCHED', 'IN_PROGRESS']:
-                current_q = match.game_questions.filter(order=match.current_question_index).first()
+                if not current_q:
+                    current_q = match.game_questions.select_related('question').filter(order=match.current_question_index).first()
                 if current_q:
                     data['current_question'] = GameQuestionSerializer(current_q).data
                     has_answered = GameAnswer.objects.filter(game_question=current_q, player=request.user).exists()
@@ -382,6 +390,8 @@ class MatchStateView(views.APIView):
             match.is_draw = True
 
         match.save()
+        # Invalidate leaderboard cache
+        cache.delete('game_leaderboard_data')
 
         # Award XP:
         # Human player earns 10 XP per correct question (player1_score).
@@ -459,28 +469,27 @@ class MatchAnswerView(views.APIView):
 # SOLO SURVIVAL
 # ==========================================
 
+def get_survival_config(survived_count):
+    """
+    Returns deterministic difficulty, points, and timer seconds based on questions survived.
+    Pure CPU computation, 0 database queries.
+    """
+    if survived_count < 5:
+        return 'easy', 10, 15
+    elif survived_count < 10:
+        return 'medium', 20, 12
+    elif survived_count < 20:
+        return 'hard', 30, 10
+    else:
+        return 'hard', 50, 8
+
 def get_survival_question(survived_count, exam_id=None, subject_id=None, topic_id=None):
     """
     Returns the next survival question using the Master Question Bank.
     Difficulty escalates as the player survives more questions.
     Only approved questions are considered.
     """
-    if survived_count < 5:
-        diff = 'easy'
-        points = 10
-        time = 15
-    elif survived_count < 10:
-        diff = 'medium'
-        points = 20
-        time = 12
-    elif survived_count < 20:
-        diff = 'hard'
-        points = 30
-        time = 10
-    else:
-        diff = 'hard'
-        points = 50
-        time = 8
+    diff, points, time = get_survival_config(survived_count)
 
     service = QuestionSelectionService()
     result = service.select(
@@ -521,12 +530,13 @@ class SurvivalStartView(views.APIView):
         # Cancel previous active
         SurvivalGame.objects.filter(player=user, status='IN_PROGRESS').update(status='COMPLETED')
         
-        game = SurvivalGame.objects.create(player=user, lives_remaining=SURVIVAL_MAX_LIVES)
         q, points, t = get_survival_question(0)
-        
-        game.current_question = q
-        game.question_deadline = timezone.now() + timedelta(seconds=t + 2)
-        game.save()
+        game = SurvivalGame.objects.create(
+            player=user,
+            lives_remaining=SURVIVAL_MAX_LIVES,
+            current_question=q,
+            question_deadline=timezone.now() + timedelta(seconds=t + 2)
+        )
         EntitlementService.consume_game_match(user, 'survival', game.id)
         
         return Response(ActiveSurvivalSerializer(game).data)
@@ -535,7 +545,7 @@ class SurvivalActiveView(views.APIView):
     permission_classes = [IsAuthenticated, HasActiveSubscription]
 
     def get(self, request):
-        active = SurvivalGame.objects.filter(player=request.user, status='IN_PROGRESS').first()
+        active = SurvivalGame.objects.filter(player=request.user, status='IN_PROGRESS').select_related('current_question').first()
         if active and active.current_question:
             # If the user is returning to an active game whose question deadline expired while away:
             if active.question_deadline and timezone.now() > active.question_deadline:
@@ -545,6 +555,7 @@ class SurvivalActiveView(views.APIView):
                     active.status = 'COMPLETED'
                     active.ended_at = timezone.now()
                     active.save()
+                    cache.delete('game_leaderboard_data')
                     return Response({'active': False, 'game': None})
                 else:
                     q, points, t = get_survival_question(active.questions_survived)
@@ -559,7 +570,7 @@ class SurvivalAnswerView(views.APIView):
 
     def post(self, request, survival_id):
         try:
-            game = SurvivalGame.objects.get(id=survival_id, player=request.user, status='IN_PROGRESS')
+            game = SurvivalGame.objects.select_related('current_question').get(id=survival_id, player=request.user, status='IN_PROGRESS')
             
             selected_option = request.data.get('option') or request.data.get('selected_option')
             if selected_option is not None:
@@ -575,7 +586,7 @@ class SurvivalAnswerView(views.APIView):
                 
             # Score
             if is_correct:
-                _, points, _ = get_survival_question(game.questions_survived)
+                _, points, _ = get_survival_config(game.questions_survived)
                 game.score += points
                 game.questions_survived += 1
                 game.current_streak += 1
@@ -604,6 +615,9 @@ class SurvivalAnswerView(views.APIView):
                 if game.highest_streak > profile.best_survival_streak:
                     profile.best_survival_streak = game.highest_streak
                 profile.save()
+
+                # Invalidate leaderboard cache
+                cache.delete('game_leaderboard_data')
 
                 # Award XP from server-computed score — never trust client values.
                 # XP is only awarded once because completed games are rejected at
@@ -635,13 +649,19 @@ class GameHistoryView(views.APIView):
     def get(self, request):
         user = request.user
         
-        matches = GameMatch.objects.filter(Q(player1=user) | Q(player2=user)).order_by('-created_at')[:10]
+        matches = GameMatch.objects.filter(
+            Q(player1=user) | Q(player2=user)
+        ).select_related('player1', 'player2', 'winner').order_by('-created_at')[:10]
         match_data = GameMatchSerializer(matches, many=True).data
         
-        survivals = SurvivalGame.objects.filter(player=user).order_by('-created_at')[:10]
+        survivals = SurvivalGame.objects.filter(
+            player=user
+        ).select_related('player').order_by('-created_at')[:10]
         survival_data = SurvivalGameSerializer(survivals, many=True).data
 
-        weekly_quizzes = WeeklyQuizAttempt.objects.filter(student=user, status='COMPLETED').order_by('-completed_at')[:10]
+        weekly_quizzes = WeeklyQuizAttempt.objects.filter(
+            student=user, status='COMPLETED'
+        ).select_related('student', 'quiz').order_by('-completed_at')[:10]
         weekly_data = WeeklyQuizAttemptSerializer(weekly_quizzes, many=True).data
         
         return Response({
@@ -654,6 +674,10 @@ class LeaderboardView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        cached_data = cache.get('game_leaderboard_data')
+        if cached_data is not None:
+            return Response(cached_data)
+
         # Restricted to students - a teacher/admin who plays a duel while
         # testing still gets a GameProfile row, but this is a student
         # leaderboard and should never surface staff accounts.
@@ -661,10 +685,12 @@ class LeaderboardView(views.APIView):
         top_1v1 = base.order_by('-total_1v1_wins')[:10]
         top_survival = base.order_by('-best_survival_score')[:10]
 
-        return Response({
+        data = {
             'top_1v1': GameProfileSerializer(top_1v1, many=True).data,
             'top_survival': GameProfileSerializer(top_survival, many=True).data
-        })
+        }
+        cache.set('game_leaderboard_data', data, 60)
+        return Response(data)
 
 # ==========================================
 # WEEKLY QUIZ
@@ -697,7 +723,7 @@ def get_or_create_weekly_quiz(user=None):
         }
     )
 
-    if quiz.quiz_questions.count() == 0:
+    if created or not quiz.quiz_questions.exists():
         from courses.access import authorized_exam_ids
         exam_scope = None
         if user and user.is_authenticated:
@@ -719,12 +745,15 @@ def get_or_create_weekly_quiz(user=None):
             fallback = service.select(count=WEEKLY_QUIZ_QUESTIONS_COUNT, randomize=True, question_type='objective')
             questions = fallback['questions']
 
-        for idx, q in enumerate(questions):
-            WeeklyQuizQuestion.objects.create(
+        wq_objects = [
+            WeeklyQuizQuestion(
                 quiz=quiz,
                 question=q,
                 order=idx
             )
+            for idx, q in enumerate(questions)
+        ]
+        WeeklyQuizQuestion.objects.bulk_create(wq_objects)
 
     return quiz
 
@@ -733,15 +762,27 @@ class WeeklyQuizCurrentView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        quiz = get_or_create_weekly_quiz(request.user)
+        now = timezone.now()
+        current_year, current_week, _ = now.isocalendar()
+        cache_key = f"weekly_quiz_base_{current_year}_{current_week}"
+
+        quiz_data = cache.get(cache_key)
+        if not quiz_data:
+            quiz = get_or_create_weekly_quiz(request.user)
+            quiz_data = WeeklyQuizSerializer(quiz).data
+            cache.set(cache_key, quiz_data, 300)
+            quiz_id = quiz.id
+        else:
+            quiz_id = quiz_data['id']
+
         latest_attempt = WeeklyQuizAttempt.objects.filter(
-            quiz=quiz, student=request.user, status='COMPLETED'
-        ).first()
+            quiz_id=quiz_id, student=request.user, status='COMPLETED'
+        ).select_related('student', 'quiz').first()
         in_progress_attempt = WeeklyQuizAttempt.objects.filter(
-            quiz=quiz, student=request.user, status='IN_PROGRESS'
+            quiz_id=quiz_id, student=request.user, status='IN_PROGRESS'
         ).first()
 
-        data = WeeklyQuizSerializer(quiz).data
+        data = dict(quiz_data)
         data['has_attempted'] = latest_attempt is not None
         data['has_in_progress'] = in_progress_attempt is not None
         data['in_progress_attempt_id'] = in_progress_attempt.id if in_progress_attempt else None
@@ -1241,7 +1282,11 @@ class DailyDrillTodayView(views.APIView):
         nepal_tz = ZoneInfo(STUDY_TZ_NAME)
         today = timezone.localtime(timezone.now(), nepal_tz).date()
 
-        session = DailyDrillSession.objects.filter(student=request.user, date=today).first()
+        session = DailyDrillSession.objects.filter(
+            student=request.user, date=today
+        ).prefetch_related(
+            Prefetch('drill_questions', queryset=DailyDrillQuestion.objects.select_related('question').order_by('order'))
+        ).first()
         if session:
             # Check if active session exceeded timer duration (+30s grace)
             if session.status == 'IN_PROGRESS':
@@ -1415,14 +1460,20 @@ class DailyDrillStartView(views.APIView):
                 duration_seconds=300,
                 total_questions=len(selected_questions)
             )
-            for idx, q in enumerate(selected_questions):
-                DailyDrillQuestion.objects.create(
+            drill_q_objs = [
+                DailyDrillQuestion(
                     session=session,
                     question=q,
                     order=idx
                 )
+                for idx, q in enumerate(selected_questions)
+            ]
+            DailyDrillQuestion.objects.bulk_create(drill_q_objs)
             EntitlementService.consume_game_match(request.user, 'daily_drill', session.id)
 
+        session = DailyDrillSession.objects.prefetch_related(
+            Prefetch('drill_questions', queryset=DailyDrillQuestion.objects.select_related('question').order_by('order'))
+        ).get(id=session.id)
         return Response(DailyDrillSessionSerializer(session).data, status=status.HTTP_201_CREATED)
 
 
@@ -1599,7 +1650,11 @@ class DailyDrillDetailView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, session_id):
-        session = DailyDrillSession.objects.filter(id=session_id, student=request.user).first()
+        session = DailyDrillSession.objects.filter(
+            id=session_id, student=request.user
+        ).prefetch_related(
+            Prefetch('drill_questions', queryset=DailyDrillQuestion.objects.select_related('question').order_by('order'))
+        ).first()
         if not session:
             return Response({'error': 'Daily drill session not found or unauthorized.'}, status=status.HTTP_404_NOT_FOUND)
 

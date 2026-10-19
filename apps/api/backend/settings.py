@@ -323,17 +323,75 @@ if 'test' in sys.argv:
         }
     }
 
-# Fast In-Memory Cache with Redis fallback capability
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'loksewa-global-cache',
-        'TIMEOUT': 300,
-        'OPTIONS': {
-            'MAX_ENTRIES': 5000,
+import urllib.parse
+
+def _resolve_redis_cache_url():
+    """
+    Resolve and isolate Redis connection URL for Django shared cache.
+    1. Checks explicit REDIS_CACHE_URL first.
+    2. Derives from REDIS_URL or CELERY_BROKER_URL, isolating cache to db 1
+       so Celery (db 0) and Django cache never collide or cross-evict.
+    3. Handles plain redis:// and TLS rediss:// URLs cleanly.
+    4. Returns empty string if no valid Redis URL is configured or placeholder detected.
+    """
+    raw_cache_url = (os.environ.get('REDIS_CACHE_URL') or '').strip()
+    if any(marker in raw_cache_url for marker in ('YOUR_UPSTASH_ENDPOINT', '[YOUR_', '<YOUR_', 'default:[YOUR_PASSWORD]')):
+        raw_cache_url = ''
+    if raw_cache_url:
+        return raw_cache_url
+
+    shared_redis = (os.environ.get('REDIS_URL') or os.environ.get('CELERY_BROKER_URL') or '').strip()
+    if any(marker in shared_redis for marker in ('YOUR_UPSTASH_ENDPOINT', '[YOUR_', '<YOUR_', 'default:[YOUR_PASSWORD]')):
+        shared_redis = ''
+    if not shared_redis:
+        return ''
+
+    try:
+        parsed = urllib.parse.urlparse(shared_redis)
+        if not parsed.scheme or parsed.scheme not in ('redis', 'rediss'):
+            return ''
+        # Celery uses /0 by default; route cache to /1 for operational isolation
+        isolated_path = '/1' if parsed.path in ('', '/', '/0') else parsed.path
+        return urllib.parse.urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            isolated_path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+    except Exception:
+        return ''
+
+_redis_cache_location = _resolve_redis_cache_url()
+
+if _redis_cache_location and 'test' not in sys.argv:
+    CACHES = {
+        'default': {
+            'BACKEND': 'core.cache_backends.ResilientRedisCache',
+            'LOCATION': _redis_cache_location,
+            'TIMEOUT': 300,
+            'KEY_PREFIX': 'loksewa',
+            'OPTIONS': {
+                'socket_connect_timeout': 3,
+                'socket_timeout': 3,
+                'retry_on_timeout': True,
+                'health_check_interval': 30,
+            }
         }
     }
-}
+else:
+    # Fast In-Memory Cache for local development without Redis and standard test runs
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'loksewa-global-cache',
+            'TIMEOUT': 300,
+            'OPTIONS': {
+                'MAX_ENTRIES': 5000,
+            }
+        }
+    }
 
 
 # Password validation

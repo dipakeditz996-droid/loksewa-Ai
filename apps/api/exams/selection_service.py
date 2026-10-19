@@ -349,7 +349,6 @@ class QuestionSelectionService:
                 base_qs=base_qs,
                 topic_distribution=topic_distribution,
                 randomize=randomize,
-                total_available=base_qs.count(),
                 warnings=warnings,
             )
 
@@ -359,7 +358,6 @@ class QuestionSelectionService:
                 base_qs=base_qs,
                 difficulty_distribution=difficulty_distribution,
                 randomize=randomize,
-                total_available=base_qs.count(),
                 warnings=warnings,
             )
 
@@ -421,10 +419,11 @@ class QuestionSelectionService:
         }
 
     def _select_by_difficulty_distribution(
-        self, *, base_qs, difficulty_distribution, randomize, total_available, warnings
+        self, *, base_qs, difficulty_distribution, randomize, warnings, total_available=None
     ):
         requested = sum(difficulty_distribution.values())
         selected_questions = []
+        computed_total = 0
 
         for difficulty, needed in difficulty_distribution.items():
             if needed <= 0:
@@ -432,6 +431,7 @@ class QuestionSelectionService:
             diff_qs = base_qs.filter(difficulty=difficulty)
             available_ids = list(diff_qs.values_list("id", flat=True))
             available_count = len(available_ids)
+            computed_total += available_count
 
             if available_count < needed:
                 warnings.append(
@@ -458,7 +458,7 @@ class QuestionSelectionService:
 
         return {
             "questions": questions,
-            "available": total_available,
+            "available": total_available if total_available is not None else computed_total,
             "requested": requested,
             "selected": len(questions),
             "satisfied": len(questions) == requested,
@@ -466,10 +466,11 @@ class QuestionSelectionService:
         }
 
     def _select_by_topic_distribution(
-        self, *, base_qs, topic_distribution, randomize, total_available, warnings
+        self, *, base_qs, topic_distribution, randomize, warnings, total_available=None
     ):
         requested = sum(topic_distribution.values())
         selected_ids = []
+        computed_total = 0
 
         for topic_id, needed in topic_distribution.items():
             if needed <= 0:
@@ -477,6 +478,7 @@ class QuestionSelectionService:
             topic_qs = base_qs.filter(topic_id=int(topic_id))
             available_ids = list(topic_qs.values_list("id", flat=True))
             available_count = len(available_ids)
+            computed_total += available_count
 
             if available_count < needed:
                 warnings.append(
@@ -501,7 +503,7 @@ class QuestionSelectionService:
 
         return {
             "questions": questions,
-            "available": total_available,
+            "available": total_available if total_available is not None else computed_total,
             "requested": requested,
             "selected": len(questions),
             "satisfied": len(questions) == requested,

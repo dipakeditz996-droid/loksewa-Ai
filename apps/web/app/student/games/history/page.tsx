@@ -1,32 +1,25 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { gamesApi, GameMatch, SurvivalGame, GameProfile } from "@/lib/api/games";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { gamesApi } from "@/lib/api/games";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Swords, HeartPulse, Loader2 } from "lucide-react";
 
 export default function GameHistoryPage() {
-  const [history, setHistory] = useState<{ matches: GameMatch[]; survivals: SurvivalGame[] } | null>(null);
-  const [leaderboard, setLeaderboard] = useState<{ top_1v1: GameProfile[]; top_survival: GameProfile[] } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: history, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ["games", "history"],
+    queryFn: () => gamesApi.getHistory(),
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [hist, lead] = await Promise.all([
-          gamesApi.getHistory(),
-          gamesApi.getLeaderboard()
-        ]);
-        setHistory(hist);
-        setLeaderboard(lead);
-      } catch (err) {
-        console.error("Failed to load history", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data: leaderboard, isLoading: isLeaderboardLoading } = useQuery({
+    queryKey: ["games", "leaderboard"],
+    queryFn: () => gamesApi.getLeaderboard(),
+    staleTime: 60_000,
+  });
+
+  const isLoading = isHistoryLoading && isLeaderboardLoading && !history && !leaderboard;
 
   if (isLoading) {
     return (

@@ -718,7 +718,9 @@ class StudentDashboardView(APIView):
             from exams.models import ExaminationAttempt
             recent_attempts = ExaminationAttempt.objects.filter(
                 student=user, status__in=['submitted', 'evaluated']
-            ).select_related('examination').order_by('-started_at')[:5]
+            ).select_related('examination').only(
+                'id', 'started_at', 'score', 'percentage', 'examination__title', 'examination_id'
+            ).order_by('-started_at')[:5]
             
             for attempt in recent_attempts:
                 recent_exams_data.append({
@@ -744,29 +746,28 @@ class StudentDashboardView(APIView):
         purchases_data = []
         formatted_subject_performance = []
 
-        # Today's Plan: check whether student has a StudyPlan first to avoid
-        # scanning the entire study_plan_studytask table (which measured ~2.8s)
+        # Today's Plan: directly query tasks scoped to user's study plan in a single bounded query
         todays_plan = []
         try:
             from study_plan.models import StudyTask
             from django.utils import timezone
 
-            study_plan = getattr(user, 'study_plan', None)
-            if study_plan is not None:
-                today = timezone.localdate()
-                tasks = StudyTask.objects.filter(
-                    study_plan_id=study_plan.id,
-                    date=today
-                ).order_by('created_at')[:5]
+            today = timezone.localdate()
+            tasks = StudyTask.objects.filter(
+                study_plan__student=user,
+                date=today
+            ).only(
+                'id', 'title', 'task_type', 'status', 'duration_minutes'
+            ).order_by('created_at')[:5]
 
-                for task in tasks:
-                    todays_plan.append({
-                        "id": task.id,
-                        "title": task.title,
-                        "type": "exam" if task.task_type == "MODEL_EXAM" else "practice",
-                        "completed": task.status == 'COMPLETED',
-                        "duration": task.duration_minutes
-                    })
+            for task in tasks:
+                todays_plan.append({
+                    "id": task.id,
+                    "title": task.title,
+                    "type": "exam" if task.task_type == "MODEL_EXAM" else "practice",
+                    "completed": task.status == 'COMPLETED',
+                    "duration": task.duration_minutes
+                })
         except Exception as e:
             logger.error(f"Error fetching today's plan for dashboard: {e}")
 
@@ -802,9 +803,15 @@ class StudentDashboardView(APIView):
 def invalidate_package_status(user_id):
     if not user_id:
         return
+    if hasattr(user_id, '_cached_package_status_result'):
+        try:
+            delattr(user_id, '_cached_package_status_result')
+        except AttributeError:
+            pass
+    uid = getattr(user_id, 'id', user_id)
     from django.core.cache import cache
     try:
-        cache.delete(f'pkg_status:{user_id}')
+        cache.delete(f'pkg_status:{uid}')
     except Exception:
         pass
 
@@ -831,11 +838,16 @@ def _get_package_status(user):
             "latestPayment": None,
         }
 
+    cached_in_mem = getattr(user, '_cached_package_status_result', None)
+    if cached_in_mem is not None:
+        return cached_in_mem
+
     from django.core.cache import cache
     cache_key = f'pkg_status:{user.id}'
     try:
         cached = cache.get(cache_key)
         if cached is not None:
+            setattr(user, '_cached_package_status_result', cached)
             return cached
     except Exception:
         pass
@@ -883,6 +895,7 @@ def _get_package_status(user):
         cache.set(cache_key, result, 300)
     except Exception:
         pass
+    setattr(user, '_cached_package_status_result', result)
     return result
 
 

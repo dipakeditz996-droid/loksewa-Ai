@@ -143,12 +143,33 @@ class ActiveSurvivalSerializer(serializers.ModelSerializer):
     option_c = serializers.CharField(source='current_question.option_c', read_only=True)
     option_d = serializers.CharField(source='current_question.option_d', read_only=True)
 
+    remaining_seconds = serializers.SerializerMethodField()
+    time_limit_seconds = serializers.SerializerMethodField()
+
     class Meta:
         model = SurvivalGame
         fields = [
             'id', 'status', 'lives_remaining', 'score', 'questions_survived', 'highest_streak', 'current_streak',
-            'created_at', 'question_deadline', 'question_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d'
+            'created_at', 'question_deadline', 'remaining_seconds', 'time_limit_seconds',
+            'question_id', 'question_text', 'option_a', 'option_b', 'option_c', 'option_d'
         ]
+
+    def get_time_limit_seconds(self, obj):
+        count = obj.questions_survived
+        if count < 5:
+            return 15
+        elif count < 10:
+            return 12
+        elif count < 20:
+            return 10
+        return 8
+
+    def get_remaining_seconds(self, obj):
+        if not obj.question_deadline:
+            return self.get_time_limit_seconds(obj)
+        from django.utils import timezone
+        diff = (obj.question_deadline - timezone.now()).total_seconds()
+        return max(0, int(diff))
 
 
 class WeeklyQuizQuestionClientSerializer(serializers.ModelSerializer):

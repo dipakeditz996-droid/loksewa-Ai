@@ -10,48 +10,137 @@ export default function SurvivalGamePage() {
   const router = useRouter();
   
   const [game, setGame] = useState<ActiveSurvivalGame | SurvivalGame | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number>(15);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isLoadingActive, setIsLoadingActive] = useState(true);
 
+  // Mutable refs to prevent stale closure bugs inside setInterval/timeouts
+  const gameRef = useRef<ActiveSurvivalGame | SurvivalGame | null>(null);
+  const isSubmittingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const updateGame = (newGame: ActiveSurvivalGame | SurvivalGame | null) => {
+    gameRef.current = newGame;
+    setGame(newGame);
+  };
+
+  const getQuestionDuration = (survivedCount: number = 0) => {
+    if (survivedCount < 5) return 15;
+    if (survivedCount < 10) return 12;
+    if (survivedCount < 20) return 10;
+    return 8;
+  };
+
+  const clearExistingTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const handleTimeout = () => {
+    const active = gameRef.current;
+    if (!isSubmittingRef.current && active && active.status === 'IN_PROGRESS') {
+      submitAnswer(""); // Timeout counts as incorrect
+    }
+  };
+
+  const startTimer = (deadline?: string, defaultSeconds?: number) => {
+    clearExistingTimer();
+
+    const currentGame = gameRef.current;
+    const survived = currentGame && 'questions_survived' in currentGame ? currentGame.questions_survived : 0;
+    const fallbackSecs = defaultSeconds || getQuestionDuration(survived);
+
+    let initialSeconds = fallbackSecs;
+    if (deadline) {
+      const diffMs = new Date(deadline).getTime() - Date.now();
+      const calcSecs = Math.floor(diffMs / 1000);
+      // Only use deadline if it yields a positive remaining time
+      if (!isNaN(calcSecs) && calcSecs > 0) {
+        initialSeconds = calcSecs;
+      }
+    }
+
+    setTimeLeft(initialSeconds);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearExistingTimer();
+          setTimeout(() => {
+            handleTimeout();
+          }, 0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const submitAnswer = async (option: string) => {
+    const active = gameRef.current;
+    if (!active || active.status !== 'IN_PROGRESS' || isSubmittingRef.current) return;
+
+    clearExistingTimer();
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
+    setSelectedOption(option);
+
+    try {
+      const result = await gamesApi.submitSurvivalAnswer(active.id, option);
+
+      if (result.status === 'CONTINUE') {
+        setFeedback(result.is_correct ? 'correct' : 'incorrect');
+        setTimeout(() => {
+          updateGame(result.game);
+          setFeedback(null);
+          setSelectedOption(null);
+          isSubmittingRef.current = false;
+          setIsSubmitting(false);
+
+          if ('question_deadline' in result.game && result.game.question_deadline) {
+            const nextDuration = (result.game as any).remaining_seconds || (result.game as any).time_limit_seconds || getQuestionDuration(result.game.questions_survived);
+            startTimer(result.game.question_deadline, nextDuration);
+          }
+        }, 1200);
+      } else if (result.status === 'GAME_OVER') {
+        setFeedback('incorrect'); // Last life lost
+        setTimeout(() => {
+          updateGame(result.game);
+          isSubmittingRef.current = false;
+          setIsSubmitting(false);
+        }, 1200);
+      }
+    } catch (err) {
+      alert("Error submitting answer");
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      setSelectedOption(null);
+    }
+  };
+
   const startNewGame = async () => {
+    clearExistingTimer();
     setIsStarting(true);
     try {
       const newGame = await gamesApi.startSurvival();
-      setGame(newGame);
+      updateGame(newGame);
       setFeedback(null);
       setSelectedOption(null);
-      if (newGame.question_deadline) {
-        startTimer(newGame.question_deadline);
-      }
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+
+      const duration = newGame.remaining_seconds || newGame.time_limit_seconds || getQuestionDuration(newGame.questions_survived);
+      startTimer(newGame.question_deadline, duration);
     } catch (err) {
       alert("Failed to start game");
     } finally {
       setIsStarting(false);
     }
-  };
-
-  const startTimer = (deadline: string) => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    
-    const updateTimer = () => {
-      const diff = new Date(deadline).getTime() - new Date().getTime();
-      const secs = Math.max(0, Math.floor(diff / 1000));
-      setTimeLeft(secs);
-      
-      if (secs === 0) {
-        if (timerRef.current) clearInterval(timerRef.current);
-        handleAnswerTimeout();
-      }
-    };
-    
-    updateTimer();
-    timerRef.current = setInterval(updateTimer, 1000);
   };
 
   useEffect(() => {
@@ -60,10 +149,9 @@ export default function SurvivalGamePage() {
       try {
         const res = await gamesApi.getActiveSurvival();
         if (isMounted && res.active && res.game) {
-          setGame(res.game);
-          if (res.game.question_deadline) {
-            startTimer(res.game.question_deadline);
-          }
+          updateGame(res.game);
+          const duration = res.game.remaining_seconds || res.game.time_limit_seconds || getQuestionDuration(res.game.questions_survived);
+          startTimer(res.game.question_deadline, duration);
         }
       } catch (e) {
         // Fallback to start challenge screen
@@ -75,50 +163,9 @@ export default function SurvivalGamePage() {
 
     return () => {
       isMounted = false;
-      if (timerRef.current) clearInterval(timerRef.current);
+      clearExistingTimer();
     };
   }, []);
-
-  const handleAnswerTimeout = () => {
-    if (!isSubmitting && (!game?.status || game.status === 'IN_PROGRESS')) {
-      submitAnswer(""); // Timeout counts as incorrect
-    }
-  };
-
-  const submitAnswer = async (option: string) => {
-    if (!game || (game.status && game.status !== 'IN_PROGRESS') || isSubmitting) return;
-    
-    setSelectedOption(option);
-    setIsSubmitting(true);
-    if (timerRef.current) clearInterval(timerRef.current);
-    
-    try {
-      const result = await gamesApi.submitSurvivalAnswer(game.id, option);
-      
-      if (result.status === 'CONTINUE') {
-        setFeedback(result.is_correct ? 'correct' : 'incorrect');
-        setTimeout(() => {
-          setGame(result.game);
-          setFeedback(null);
-          setSelectedOption(null);
-          if ('question_deadline' in result.game && result.game.question_deadline) {
-            startTimer(result.game.question_deadline);
-          }
-          setIsSubmitting(false);
-        }, 1200);
-      } else if (result.status === 'GAME_OVER') {
-        setFeedback('incorrect'); // Last life lost
-        setTimeout(() => {
-          setGame(result.game);
-          setIsSubmitting(false);
-        }, 1200);
-      }
-    } catch (err) {
-      alert("Error submitting answer");
-      setIsSubmitting(false);
-      setSelectedOption(null);
-    }
-  };
 
   if (isLoadingActive) {
     return (

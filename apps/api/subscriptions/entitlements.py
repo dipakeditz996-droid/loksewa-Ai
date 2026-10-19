@@ -1314,6 +1314,9 @@ class EntitlementService:
         if CourseAccessService.is_privileged(user):
             return True, "Privileged user access granted.", {"is_unlimited": True, "remaining": -1}
 
+        if not AdminSettings.is_subscription_enforced():
+            return True, "Subscription enforcement disabled.", {"is_unlimited": True, "remaining": -1}
+
         is_admin_granted = has_admin_granted_access(user)
         active_sub = cls.get_active_subscription(user)
         if not active_sub and not is_admin_granted and user.is_active and getattr(user, 'role', None) == 'student':
@@ -1375,6 +1378,8 @@ class EntitlementService:
         Atomically charges 1 game match/session for `game_mode`.
         """
         if CourseAccessService.is_privileged(user):
+            return
+        if not AdminSettings.is_subscription_enforced():
             return
 
         feature_key = f"game:{game_mode}"

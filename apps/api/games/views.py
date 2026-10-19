@@ -537,6 +537,20 @@ class SurvivalActiveView(views.APIView):
     def get(self, request):
         active = SurvivalGame.objects.filter(player=request.user, status='IN_PROGRESS').first()
         if active and active.current_question:
+            # If the user is returning to an active game whose question deadline expired while away:
+            if active.question_deadline and timezone.now() > active.question_deadline:
+                active.lives_remaining -= 1
+                active.current_streak = 0
+                if active.lives_remaining <= 0:
+                    active.status = 'COMPLETED'
+                    active.ended_at = timezone.now()
+                    active.save()
+                    return Response({'active': False, 'game': None})
+                else:
+                    q, points, t = get_survival_question(active.questions_survived)
+                    active.current_question = q
+                    active.question_deadline = timezone.now() + timedelta(seconds=t + 2)
+                    active.save()
             return Response({'active': True, 'game': ActiveSurvivalSerializer(active).data})
         return Response({'active': False, 'game': None})
 
@@ -551,8 +565,9 @@ class SurvivalAnswerView(views.APIView):
             if selected_option is not None:
                 selected_option = str(selected_option).strip().upper()
             
-            # Check timeout
-            if game.question_deadline and timezone.now() > game.question_deadline:
+            # Check timeout (with a 2.5s network latency grace period)
+            grace_deadline = game.question_deadline + timedelta(seconds=2.5) if game.question_deadline else None
+            if grace_deadline and timezone.now() > grace_deadline:
                 is_correct = False # Timeout counts as wrong
             else:
                 correct_opt = (game.current_question.correct_option or '').strip().upper() if game.current_question else ''

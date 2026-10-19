@@ -301,8 +301,9 @@ export interface ActiveSurvivalGame extends SurvivalGame {
   option_a: string;
   option_b: string;
   option_c: string;
-  option_d: string;
   question_deadline: string;
+  remaining_seconds?: number;
+  time_limit_seconds?: number;
 }
 
 export interface GameProfile {

@@ -87,8 +87,9 @@ export function ReportQuestionModal({
       setSubmitted(true);
     } catch (err: any) {
       const detail =
-        err?.response?.data?.non_field_errors?.[0] ||
-        err?.response?.data?.detail ||
+        err?.message ||
+        err?.data?.detail ||
+        err?.data?.non_field_errors?.[0] ||
         'Failed to submit report. Please try again.';
       toast.error(detail);
     } finally {

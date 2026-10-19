@@ -352,6 +352,7 @@ export default function ExamsListingPage() {
   } = useQuery({
     queryKey: ["student-exams", effectiveCourseId ?? null],
     queryFn: () => studentExamsApi.getExams(effectiveCourseId),
+    enabled: !studentCtx || !studentCtx.isLoading,
     staleTime: 60 * 1000,
     retry: 2,
   });

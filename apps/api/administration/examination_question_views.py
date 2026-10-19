@@ -237,7 +237,7 @@ class ExaminationQuestionMixin:
                     topic_id=examination.topic_id,
                     question_type__in=Question.OBJECTIVE_TYPES,
                 )
-            elif examination.chapter_id:
+            elif getattr(examination, 'chapter_id', None):
                 approved_qs = approved_qs.filter(
                     Q(chapter_id=examination.chapter_id) | Q(topic__chapter_id=examination.chapter_id),
                     question_type__in=Question.OBJECTIVE_TYPES,

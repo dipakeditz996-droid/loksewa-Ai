@@ -230,6 +230,14 @@ class CourseAccessControlTests(APITestCase):
             course=self.course_civil,
         )
 
+    def tearDown(self):
+        super().tearDown()
+        from django.core.cache import cache
+        settings = AdminSettings.get_settings()
+        settings.enforce_subscription_access = False
+        settings.save()
+        cache.clear()
+
     # =========================================================================
     # 1. CORE COURSE ACCESS TESTS
     # =========================================================================

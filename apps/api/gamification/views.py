@@ -13,7 +13,7 @@ from .models import GamificationProfile, ReferralSetting, Referral, XPTransactio
 from .serializers import GamificationProfileSerializer, ReferralSettingSerializer, ReferralSerializer, XPTransactionSerializer, MotivationSerializer
 from .services import get_or_create_profile, award_xp
 
-REFERRAL_CACHE_TTL = 60
+REFERRAL_CACHE_TTL = 300
 MOTIVATION_CACHE_TTL = 86400  # 24 hours
 
 @api_view(['GET'])

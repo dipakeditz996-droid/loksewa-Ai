@@ -7,7 +7,35 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MyCoursesContent } from "@/components/student/learning/MyCoursesContent";
 import { StudentPurchasesContent } from "@/components/student/learning/StudentPurchasesContent";
 
-function MyLearningPageInner() {
+function MyCoursesFallbackSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="h-11 w-72 bg-muted/70 rounded-xl"></div>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <div className="space-y-2">
+          <div className="h-7 w-48 bg-muted/80 rounded-lg"></div>
+          <div className="h-4 w-96 bg-muted/60 rounded"></div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-card rounded-[24px] border border-border shadow-sm p-5 space-y-4">
+            <div className="h-44 bg-muted/80 rounded-[16px]"></div>
+            <div className="h-6 bg-muted/80 rounded w-3/4"></div>
+            <div className="h-4 bg-muted/60 rounded w-full"></div>
+            <div className="space-y-2 pt-2">
+              <div className="h-2 bg-muted/80 rounded w-full"></div>
+              <div className="h-4 bg-muted/60 rounded w-1/4"></div>
+            </div>
+            <div className="h-10 bg-muted/80 rounded-[12px] w-full"></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MyLearningTabs() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -21,8 +49,39 @@ function MyLearningPageInner() {
   };
 
   return (
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
+      <TabsList className="bg-muted/70 p-1 border border-border/60 rounded-xl h-auto flex flex-wrap sm:inline-flex">
+        <TabsTrigger 
+          value="courses" 
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+        >
+          <BookOpen className="w-4 h-4 text-[#D4A72C]" />
+          Courses
+        </TabsTrigger>
+        <TabsTrigger 
+          value="purchases" 
+          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+        >
+          <CreditCard className="w-4 h-4 text-[#D4A72C]" />
+          Purchases & Subscriptions
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="courses" className="mt-4 focus-visible:outline-none">
+        <MyCoursesContent />
+      </TabsContent>
+
+      <TabsContent value="purchases" className="mt-4 focus-visible:outline-none">
+        <StudentPurchasesContent />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+export default function MyLearningPage() {
+  return (
     <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header section */}
+      {/* Immediate layout shell: zero network delay, zero layout shift */}
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="bg-[#D4A72C]/10 text-[#D4A72C] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
@@ -38,47 +97,9 @@ function MyLearningPageInner() {
         </p>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-        <TabsList className="bg-muted/70 p-1 border border-border/60 rounded-xl h-auto flex flex-wrap sm:inline-flex">
-          <TabsTrigger 
-            value="courses" 
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <BookOpen className="w-4 h-4 text-[#D4A72C]" />
-            Courses
-          </TabsTrigger>
-          <TabsTrigger 
-            value="purchases" 
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-          >
-            <CreditCard className="w-4 h-4 text-[#D4A72C]" />
-            Purchases & Subscriptions
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="courses" className="mt-4 focus-visible:outline-none">
-          <MyCoursesContent />
-        </TabsContent>
-
-        <TabsContent value="purchases" className="mt-4 focus-visible:outline-none">
-          <StudentPurchasesContent />
-        </TabsContent>
-      </Tabs>
+      <Suspense fallback={<MyCoursesFallbackSkeleton />}>
+        <MyLearningTabs />
+      </Suspense>
     </div>
-  );
-}
-
-export default function MyLearningPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="p-8 flex justify-center items-center min-h-[400px]">
-          <div className="w-10 h-10 border-4 border-[#0B2545] border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      }
-    >
-      <MyLearningPageInner />
-    </Suspense>
   );
 }

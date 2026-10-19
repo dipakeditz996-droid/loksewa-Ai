@@ -9,8 +9,21 @@ import {
   ExternalLink, X, Maximize2, Minimize2, Clock, AlertCircle, RefreshCw, Loader2
 } from "lucide-react";
 import { notesApi, StudyMaterial } from "@/lib/api/notes";
+import dynamic from "next/dynamic";
 import { sortNotesAscending } from "@/lib/utils/note-sorting";
-import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
+
+const FirstPartyPdfViewer = dynamic(
+  () => import("@/components/common/FirstPartyPdfViewer").then((m) => m.FirstPartyPdfViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-muted-foreground gap-3">
+        <Loader2 className="w-8 h-8 text-[#C4A45C] animate-spin" />
+        <p className="text-sm font-medium animate-pulse text-slate-300">Opening PDF Document...</p>
+      </div>
+    ),
+  }
+);
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -163,22 +176,13 @@ export default function SyllabusNotesPortal({
     return sortNotesAscending(filtered);
   }, [currentSectionMaterials, selectedSubject, searchQuery]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="w-10 h-10 border-4 border-[#1A2E44] border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-medium text-muted-foreground animate-pulse">Loading Syllabus & Notes...</p>
-      </div>
-    );
-  }
-
-  if (error) {
+  if (error && !data) {
     return (
       <div className="max-w-4xl mx-auto py-12 px-4 text-center">
         <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-foreground mb-2">Access Restricted</h2>
+        <h2 className="text-2xl font-bold text-foreground mb-2">Access Restricted or Load Error</h2>
         <p className="text-muted-foreground max-w-md mx-auto mb-6">{error}</p>
         <Button onClick={() => refetch()} className="bg-[#1A2E44] text-white">
           <RefreshCw className="w-4 h-4 mr-2" /> Try Again
@@ -187,7 +191,7 @@ export default function SyllabusNotesPortal({
     );
   }
 
-  if (!data?.authorizedPreparations || data.authorizedPreparations.length === 0) {
+  if (!loading && (!data?.authorizedPreparations || data.authorizedPreparations.length === 0)) {
     return (
       <div className="max-w-4xl mx-auto py-16 px-4 text-center">
         <div className="w-20 h-20 bg-blue-50 text-[#1A2E44] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-blue-100">
@@ -206,7 +210,7 @@ export default function SyllabusNotesPortal({
     );
   }
 
-  const activePrep = data.selectedPreparation;
+  const activePrep = data?.selectedPreparation;
 
   return (
     <div className="max-w-[1400px] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-8">
@@ -227,36 +231,50 @@ export default function SyllabusNotesPortal({
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
             {/* Breadcrumb pills */}
-            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C4A45C] mb-3">
-              <span className="bg-white/10 px-2.5 py-1 rounded-md backdrop-blur-sm">
-                {activePrep?.categoryName || "PSC Exams"}
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 text-white/50" />
-              <span className="bg-white/10 px-2.5 py-1 rounded-md backdrop-blur-sm">
-                {activePrep?.levelName || "Exam Level"}
-              </span>
-              <ChevronRight className="w-3.5 h-3.5 text-white/50" />
-              <span className="bg-[#C4A45C]/20 text-[#E7CA85] border border-[#C4A45C]/30 px-2.5 py-1 rounded-md backdrop-blur-sm">
-                {activePrep?.name}
-              </span>
-            </div>
+            {loading && !data ? (
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-6 w-20 rounded-md bg-white/10 animate-pulse" />
+                <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+                <div className="h-6 w-24 rounded-md bg-white/10 animate-pulse" />
+                <ChevronRight className="w-3.5 h-3.5 text-white/30" />
+                <div className="h-6 w-36 rounded-md bg-[#C4A45C]/20 border border-[#C4A45C]/30 animate-pulse" />
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C4A45C] mb-3">
+                <span className="bg-white/10 px-2.5 py-1 rounded-md backdrop-blur-sm">
+                  {activePrep?.categoryName || "PSC Exams"}
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-white/50" />
+                <span className="bg-white/10 px-2.5 py-1 rounded-md backdrop-blur-sm">
+                  {activePrep?.levelName || "Exam Level"}
+                </span>
+                <ChevronRight className="w-3.5 h-3.5 text-white/50" />
+                <span className="bg-[#C4A45C]/20 text-[#E7CA85] border border-[#C4A45C]/30 px-2.5 py-1 rounded-md backdrop-blur-sm">
+                  {activePrep?.name || "Preparation"}
+                </span>
+              </div>
+            )}
 
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-2">
-              {activePrep?.name ? `${activePrep.name} — ${pageTitle}` : pageTitle}
-            </h1>
+            {loading && !data ? (
+              <div className="h-8 w-64 bg-white/15 rounded-lg animate-pulse mb-2" />
+            ) : (
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-2">
+                {activePrep?.name ? `${activePrep.name} — ${pageTitle}` : pageTitle}
+              </h1>
+            )}
             <p className="text-sm text-slate-300 max-w-2xl">
               {pageSubtitle}
             </p>
           </div>
 
           {/* Preparation Switcher (if student has multiple enrollments) */}
-          {data.authorizedPreparations.length > 1 && (
+          {(data?.authorizedPreparations?.length ?? 0) > 1 && (
             <div className="bg-white/10 p-2 rounded-xl backdrop-blur-md border border-white/15 shrink-0">
               <label className="text-xs font-medium text-slate-300 block mb-1.5 px-1">
                 Switch Preparation:
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {data.authorizedPreparations.map((p) => (
+                {data?.authorizedPreparations?.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => handlePrepChange(p.id)}
@@ -279,27 +297,43 @@ export default function SyllabusNotesPortal({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-white/10">
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Syllabus</div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data?.counts?.syllabus ?? 0} <span className="text-xs font-medium text-slate-400">files</span>
-            </div>
+            {loading && !data ? (
+              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                {data?.counts?.syllabus ?? 0} <span className="text-xs font-medium text-slate-400">files</span>
+              </div>
+            )}
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Subjective Topicwise</div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data?.counts?.subjective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
-            </div>
+            {loading && !data ? (
+              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                {data?.counts?.subjective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
+              </div>
+            )}
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Objective Topicwise</div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data?.counts?.objective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
-            </div>
+            {loading && !data ? (
+              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                {data?.counts?.objective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
+              </div>
+            )}
           </div>
           <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Revision Notes</div>
-            <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-              {data?.counts?.revision_notes ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
-            </div>
+            {loading && !data ? (
+              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
+            ) : (
+              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
+                {data?.counts?.revision_notes ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -385,19 +419,19 @@ export default function SyllabusNotesPortal({
                   onClick={() => setSubjectiveSubtype('all')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", subjectiveSubtype === 'all' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  All ({data.counts.subjective_topicwise})
+                  All ({data?.counts?.subjective_topicwise ?? 0})
                 </button>
                 <button
                   onClick={() => setSubjectiveSubtype('standard')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", subjectiveSubtype === 'standard' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  Standard ({data.sections.subjective_topicwise?.standard?.length || 0})
+                  Standard ({data?.sections?.subjective_topicwise?.standard?.length || 0})
                 </button>
                 <button
                   onClick={() => setSubjectiveSubtype('ai')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1", subjectiveSubtype === 'ai' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  <Sparkles className="w-3 h-3 text-[#C4A45C]" /> AI ({data.sections.subjective_topicwise?.ai?.length || 0})
+                  <Sparkles className="w-3 h-3 text-[#C4A45C]" /> AI ({data?.sections?.subjective_topicwise?.ai?.length || 0})
                 </button>
               </div>
             )}
@@ -408,19 +442,19 @@ export default function SyllabusNotesPortal({
                   onClick={() => setObjectiveSubtype('all')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", objectiveSubtype === 'all' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  All ({data.counts.objective_topicwise})
+                  All ({data?.counts?.objective_topicwise ?? 0})
                 </button>
                 <button
                   onClick={() => setObjectiveSubtype('standard')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", objectiveSubtype === 'standard' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  Standard ({data.sections.objective_topicwise?.standard?.length || 0})
+                  Standard ({data?.sections?.objective_topicwise?.standard?.length || 0})
                 </button>
                 <button
                   onClick={() => setObjectiveSubtype('ai')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all flex items-center gap-1", objectiveSubtype === 'ai' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  <Sparkles className="w-3 h-3 text-[#C4A45C]" /> AI ({data.sections.objective_topicwise?.ai?.length || 0})
+                  <Sparkles className="w-3 h-3 text-[#C4A45C]" /> AI ({data?.sections?.objective_topicwise?.ai?.length || 0})
                 </button>
               </div>
             )}
@@ -431,19 +465,19 @@ export default function SyllabusNotesPortal({
                   onClick={() => setRevisionSubtype('all')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", revisionSubtype === 'all' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  All ({data.counts.revision_notes})
+                  All ({data?.counts?.revision_notes ?? 0})
                 </button>
                 <button
                   onClick={() => setRevisionSubtype('subjective')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", revisionSubtype === 'subjective' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  Subjective ({data.sections.revision_notes?.subjective?.length || 0})
+                  Subjective ({data?.sections?.revision_notes?.subjective?.length || 0})
                 </button>
                 <button
                   onClick={() => setRevisionSubtype('objective')}
                   className={cn("px-3 py-1.5 rounded-md text-xs font-semibold transition-all", revisionSubtype === 'objective' ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
                 >
-                  Objective ({data.sections.revision_notes?.objective?.length || 0})
+                  Objective ({data?.sections?.revision_notes?.objective?.length || 0})
                 </button>
               </div>
             )}
@@ -485,18 +519,56 @@ export default function SyllabusNotesPortal({
       </div>
 
       {/* 3. MATERIAL CARDS LIST / GRID */}
-      {filteredMaterials.length === 0 ? (
+      {loading && !data ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={`skeleton-card-${i}`}
+              className="bg-card rounded-xl border border-border shadow-sm p-5 flex flex-col justify-between h-[270px] animate-pulse"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="h-5 w-24 bg-muted rounded-md" />
+                  <div className="h-4 w-16 bg-muted/60 rounded-md" />
+                </div>
+                <div className="h-6 w-4/5 bg-muted rounded-md mb-2" />
+                <div className="h-4 w-full bg-muted/50 rounded-md mb-4" />
+                <div className="space-y-1.5 p-2 rounded-lg bg-muted/30 border border-border/40">
+                  <div className="h-3.5 w-1/2 bg-muted/70 rounded" />
+                  <div className="h-3 w-1/3 bg-muted/50 rounded" />
+                </div>
+              </div>
+              <div className="pt-4 border-t border-border flex items-center justify-between gap-2">
+                <div className="h-8 w-24 bg-muted rounded-lg" />
+                <div className="h-8 w-28 bg-muted rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : filteredMaterials.length === 0 ? (
         <Card className="border-dashed border-2 border-border p-12 text-center bg-card">
           <CardContent className="flex flex-col items-center justify-center p-0">
             <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground mb-4">
               <FileText className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-foreground mb-1">No Materials Available</h3>
-            <p className="text-sm text-muted-foreground max-w-sm">
+            <p className="text-sm text-muted-foreground max-w-sm mb-4">
               {searchQuery || selectedSubject !== 'all'
                 ? "No study materials match your search filters."
                 : "Content for this section is currently being prepared and verified by our faculty."}
             </p>
+            {(searchQuery || selectedSubject !== 'all') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedSubject("all");
+                }}
+              >
+                Clear Filters
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (

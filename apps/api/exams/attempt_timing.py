@@ -230,6 +230,9 @@ def finalize_attempt(attempt, auto=False):
     try:
         from core.views import invalidate_student_dashboard
         invalidate_student_dashboard(attempt.student_id)
+        from django.core.cache import cache
+        cache.delete(f"std_att_result:{attempt.student_id}:{attempt.id}")
+        cache.delete(f"att_participants:{attempt.examination_id}")
     except Exception as e:
         import logging
         logging.getLogger(__name__).warning("Error invalidating dashboard on exam submit: %s", e)

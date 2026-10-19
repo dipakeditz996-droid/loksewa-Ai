@@ -302,13 +302,13 @@ option {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.6; box-shadow: 0 0 20px rgba(59,130,246,0.3); }
-  50% { opacity: 1; box-shadow: 0 0 40px rgba(59,130,246,0.6), 0 0 80px rgba(139,92,246,0.3); }
+  0%, 100% { opacity: 0.5; transform: scale(0.98); }
+  50% { opacity: 0.95; transform: scale(1.02); }
 }
 
 @keyframes pulse-gold {
-  0%, 100% { box-shadow: 0 0 15px rgba(212,167,44,0.2); }
-  50% { box-shadow: 0 0 30px rgba(212,167,44,0.5), 0 0 60px rgba(212,167,44,0.2); }
+  0%, 100% { opacity: 0.5; transform: scale(0.98); }
+  50% { opacity: 0.95; transform: scale(1.02); }
 }
 
 @keyframes spin-slow {
@@ -416,10 +416,12 @@ option {
 
 .animate-pulse-glow {
   animation: pulse-glow 3s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .animate-pulse-gold {
   animation: pulse-gold 3s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .animate-spin-slow {

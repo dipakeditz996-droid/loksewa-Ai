@@ -102,12 +102,37 @@ export interface PaginatedLeaderboard {
   results: LeaderboardEntry[];
 }
 
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const RESULT_LIST_CACHE_TTL = 60 * 1000; // 60 seconds
+const RESULT_DETAIL_CACHE_TTL = 60 * 1000; // 60 seconds
+
+let resultsListCache: CacheEntry<StudentResult[]> | null = null;
+const resultDetailCache = new Map<string, CacheEntry<StudentResult>>();
+
 export const studentResultService = {
-  async getStudentResults(): Promise<StudentResult[]> {
+  invalidateResultsCache(id?: string) {
+    if (id) {
+      resultDetailCache.delete(id.toString());
+    } else {
+      resultDetailCache.clear();
+    }
+    resultsListCache = null;
+  },
+
+  async getStudentResults(options?: { bypassCache?: boolean }): Promise<StudentResult[]> {
+    const now = Date.now();
+    if (!options?.bypassCache && resultsListCache && (now - resultsListCache.timestamp < RESULT_LIST_CACHE_TTL)) {
+      return resultsListCache.data;
+    }
+
     const res = await apiClient<any>('/student/exam-attempts/?status=results');
     const attempts: any[] = Array.isArray(res) ? res : (res?.results || []);
     
-    return attempts.filter(a => a.status === 'submitted' || a.status === 'evaluated').map(a => ({
+    const results = attempts.filter(a => a.status === 'submitted' || a.status === 'evaluated').map(a => ({
       id: a.id.toString(),
       examId: a.examination.toString(),
       examName: a.examination_title || 'Unknown Exam',
@@ -123,9 +148,21 @@ export const studentResultService = {
       incorrectAnswers: a.wrong_answers || 0,
       unanswered: a.unanswered || 0
     }));
+
+    resultsListCache = { data: results, timestamp: now };
+    return results;
   },
 
-  async getStudentResult(id: string): Promise<StudentResult | undefined> {
+  async getStudentResult(id: string, options?: { bypassCache?: boolean }): Promise<StudentResult | undefined> {
+    const now = Date.now();
+    const strId = id.toString();
+    if (!options?.bypassCache) {
+      const cached = resultDetailCache.get(strId);
+      if (cached && (now - cached.timestamp < RESULT_DETAIL_CACHE_TTL)) {
+        return cached.data;
+      }
+    }
+
     try {
       const attempt: any = await studentExamsApi.getResult(parseInt(id));
       
@@ -246,6 +283,8 @@ export const studentResultService = {
         hasSubmittedAnswerPdf: Boolean(attempt.has_submitted_answer_pdf || attempt.subjective_submission?.has_answer_pdf),
         checkingRequest: attempt.checking_request || attempt.subjective_submission?.checking_request || null,
       };
+
+      resultDetailCache.set(strId, { data: result, timestamp: now });
       return result;
     } catch (error) {
       console.error("Error fetching student result", error);

@@ -608,6 +608,20 @@ class ResetPasswordConfirmView(APIView):
         return Response({'detail': 'Your password has been reset. You can now sign in.'}, status=status.HTTP_200_OK)
 
 
+def get_student_dashboard_version(user_id):
+    if not user_id:
+        return 1
+    from django.core.cache import cache
+    try:
+        v = cache.get(f'student_dash_ver:{user_id}')
+        if not v:
+            cache.set(f'student_dash_ver:{user_id}', 1, 86400 * 30)
+            return 1
+        return v
+    except Exception:
+        return 1
+
+
 def invalidate_student_dashboard(user_id):
     if not user_id:
         return
@@ -615,6 +629,16 @@ def invalidate_student_dashboard(user_id):
     try:
         cache.delete(f'student_dashboard:{user_id}')
         cache.delete(f'student_dashboard_v2:{user_id}:')
+        # Atomically increment student dashboard and analytics version counters
+        # so all course-scoped cached variants are immediately invalidated.
+        try:
+            cache.incr(f'student_dash_ver:{user_id}')
+        except Exception:
+            cache.set(f'student_dash_ver:{user_id}', 2, 86400 * 30)
+        try:
+            cache.incr(f'analytics_ver:{user_id}')
+        except Exception:
+            cache.set(f'analytics_ver:{user_id}', 2, 86400 * 30)
     except Exception:
         pass
 
@@ -630,7 +654,8 @@ class StudentDashboardView(APIView):
         course_id_param = request.query_params.get('course_id') or ''
 
         from django.core.cache import cache
-        cache_key = f'student_dashboard_v2:{user.id}:{course_id_param}'
+        dash_ver = get_student_dashboard_version(user.id)
+        cache_key = f'student_dashboard_v3:{user.id}:{dash_ver}:{course_id_param}'
         try:
             cached = cache.get(cache_key)
             if cached is not None:
@@ -719,26 +744,29 @@ class StudentDashboardView(APIView):
         purchases_data = []
         formatted_subject_performance = []
 
-        # Today's Plan
+        # Today's Plan: check whether student has a StudyPlan first to avoid
+        # scanning the entire study_plan_studytask table (which measured ~2.8s)
         todays_plan = []
         try:
             from study_plan.models import StudyTask
             from django.utils import timezone
-            
-            today = timezone.localdate()
-            tasks = StudyTask.objects.filter(
-                study_plan__student=user,
-                date=today
-            ).order_by('created_at')[:5]
-            
-            for task in tasks:
-                todays_plan.append({
-                    "id": task.id,
-                    "title": task.title,
-                    "type": "exam" if task.task_type == "MODEL_EXAM" else "practice",
-                    "completed": task.status == 'COMPLETED',
-                    "duration": task.duration_minutes
-                })
+
+            study_plan = getattr(user, 'study_plan', None)
+            if study_plan is not None:
+                today = timezone.localdate()
+                tasks = StudyTask.objects.filter(
+                    study_plan_id=study_plan.id,
+                    date=today
+                ).order_by('created_at')[:5]
+
+                for task in tasks:
+                    todays_plan.append({
+                        "id": task.id,
+                        "title": task.title,
+                        "type": "exam" if task.task_type == "MODEL_EXAM" else "practice",
+                        "completed": task.status == 'COMPLETED',
+                        "duration": task.duration_minutes
+                    })
         except Exception as e:
             logger.error(f"Error fetching today's plan for dashboard: {e}")
 
@@ -764,7 +792,7 @@ class StudentDashboardView(APIView):
         }
 
         try:
-            cache.set(cache_key, data, 45)
+            cache.set(cache_key, data, 300)
         except Exception:
             pass
 
@@ -852,7 +880,7 @@ def _get_package_status(user):
         "latestPayment": latest_payment_data,
     }
     try:
-        cache.set(cache_key, result, 30)
+        cache.set(cache_key, result, 300)
     except Exception:
         pass
     return result

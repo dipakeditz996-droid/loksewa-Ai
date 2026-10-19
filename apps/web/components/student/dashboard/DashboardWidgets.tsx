@@ -337,7 +337,7 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
 
 // ─── 5. Referrals List Widget ──────────────────────────────────────────────────
 interface ReferralsListWidgetProps {
-  referralHistory: ReferralHistoryEntry[];
+  referralHistory?: ReferralHistoryEntry[];
   isLoading: boolean;
   dragHandle?: React.ReactNode;
 }
@@ -347,6 +347,8 @@ export const ReferralsListWidget = memo(function ReferralsListWidget({
   isLoading,
   dragHandle,
 }: ReferralsListWidgetProps) {
+  const showLoading = isLoading || referralHistory === undefined;
+
   return (
     <div className="bg-card border border-border shadow-sm rounded-[16px] flex flex-col overflow-hidden group/widget">
       <div className="p-4 border-b border-border/50 bg-muted/50 flex justify-between items-center">
@@ -361,7 +363,7 @@ export const ReferralsListWidget = memo(function ReferralsListWidget({
         </div>
       </div>
       <div className="p-0 flex-1 flex flex-col">
-        {isLoading ? (
+        {showLoading ? (
           <div className="p-4 space-y-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex justify-between items-center py-2">
@@ -373,7 +375,7 @@ export const ReferralsListWidget = memo(function ReferralsListWidget({
               </div>
             ))}
           </div>
-        ) : referralHistory.length > 0 ? (
+        ) : referralHistory && referralHistory.length > 0 ? (
           <div className="divide-y divide-border/50">
             {referralHistory.slice(0, 4).map((item, i) => (
               <div key={i} className="flex justify-between items-center p-4 hover:bg-muted transition-colors">

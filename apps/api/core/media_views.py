@@ -72,11 +72,47 @@ def drive_media_proxy(request, file_id):
     except google_drive.GoogleDriveError:
         return HttpResponse('Could not reach Google Drive.', status=502)
 
+    file_size = len(content)
+    range_header = request.META.get('HTTP_RANGE', '').strip()
+    if range_header and range_header.startswith('bytes=') and file_size > 0:
+        byte_range = range_header[6:].strip()
+        if ',' not in byte_range:
+            parts = byte_range.split('-')
+            start_str = parts[0].strip()
+            end_str = parts[1].strip() if len(parts) > 1 else ''
+            try:
+                if start_str and end_str:
+                    start = int(start_str)
+                    end = min(int(end_str), file_size - 1)
+                elif start_str:
+                    start = int(start_str)
+                    end = file_size - 1
+                elif end_str:
+                    start = max(0, file_size - int(end_str))
+                    end = file_size - 1
+                else:
+                    start = 0
+                    end = file_size - 1
+
+                if 0 <= start <= end < file_size:
+                    chunk = content[start:end + 1]
+                    response = HttpResponse(chunk, status=206, content_type=meta.get('mimeType') or 'application/octet-stream')
+                    response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+                    response['Content-Length'] = str(len(chunk))
+                    response['Accept-Ranges'] = 'bytes'
+                    response['Cache-Control'] = 'public, max-age=31536000, immutable'
+                    response['Access-Control-Allow-Origin'] = '*'
+                    response['Cross-Origin-Resource-Policy'] = 'cross-origin'
+                    response['Cross-Origin-Opener-Policy'] = 'unsafe-none'
+                    filename = meta.get('name', 'document.pdf')
+                    response['Content-Disposition'] = f'inline; filename="{filename}"'
+                    return response
+            except (ValueError, TypeError):
+                pass
+
     response = HttpResponse(content, content_type=meta.get('mimeType') or 'application/octet-stream')
-    # Files are immutable once uploaded (a "replace" creates a new Drive
-    # file with a new id via our storage backend), so this is safe to cache
-    # aggressively - it also directly reduces how often we hit the Drive
-    # API for the same image.
+    response['Accept-Ranges'] = 'bytes'
+    response['Content-Length'] = str(file_size)
     response['Cache-Control'] = 'public, max-age=31536000, immutable'
     response['Access-Control-Allow-Origin'] = '*'
     response['Cross-Origin-Resource-Policy'] = 'cross-origin'

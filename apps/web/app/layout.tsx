@@ -8,7 +8,7 @@ import { FocusModeProvider } from "@/contexts/FocusModeContext";
 import { PublicSiteShell } from "@/components/layout/PublicSiteShell";
 import Providers from "./providers";
 
-import { preconnect, prefetchDNS } from "react-dom";
+import { prefetchDNS } from "react-dom";
 
 // Lazy-load DND modal to keep it out of the critical root bundle on public routes
 const OsDndGuideModal = dynamic(
@@ -42,8 +42,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Hoist preconnect and dns-prefetch directly into document head without manual <head> JSX tag
-  preconnect(API_ORIGIN, { crossOrigin: "anonymous" });
+  // Hoist dns-prefetch directly into document head without opening an unused TCP/TLS socket on static pages
   prefetchDNS(API_ORIGIN);
 
   return (

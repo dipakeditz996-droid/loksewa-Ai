@@ -343,15 +343,13 @@ class QuestionSelectionService:
             exclude_ids=exclude_ids,
             exam_ids=exam_ids,
         )
-        total_available = base_qs.count()
-
         # ── Strategy 1: Topic Distribution ───────────────────────────────────
         if topic_distribution:
             return self._select_by_topic_distribution(
                 base_qs=base_qs,
                 topic_distribution=topic_distribution,
                 randomize=randomize,
-                total_available=total_available,
+                total_available=base_qs.count(),
                 warnings=warnings,
             )
 
@@ -361,7 +359,7 @@ class QuestionSelectionService:
                 base_qs=base_qs,
                 difficulty_distribution=difficulty_distribution,
                 randomize=randomize,
-                total_available=total_available,
+                total_available=base_qs.count(),
                 warnings=warnings,
             )
 
@@ -370,23 +368,23 @@ class QuestionSelectionService:
             base_qs=base_qs,
             count=count,
             randomize=randomize,
-            total_available=total_available,
             warnings=warnings,
         )
 
     # ── Private helpers ──────────────────────────────────────────────────────
 
-    def _select_by_count(self, *, base_qs, count, randomize, total_available, warnings):
+    def _select_by_count(self, *, base_qs, count, randomize, warnings):
         requested = count
-        if total_available < count:
-            warnings.append(
-                f"Only {total_available} approved question(s) are available for the "
-                f"selected criteria, but {count} were requested."
-            )
-            count = total_available
-
         if randomize:
             ids = list(base_qs.values_list("id", flat=True))
+            total_available = len(ids)
+            if total_available < count:
+                warnings.append(
+                    f"Only {total_available} approved question(s) are available for the "
+                    f"selected criteria, but {count} were requested."
+                )
+                count = total_available
+
             selected_ids = random.sample(ids, count) if len(ids) >= count else ids
             from .models import Question
             questions = list(
@@ -398,6 +396,14 @@ class QuestionSelectionService:
             # Shuffle to avoid consistent ordering by id
             random.shuffle(questions)
         else:
+            total_available = base_qs.count()
+            if total_available < count:
+                warnings.append(
+                    f"Only {total_available} approved question(s) are available for the "
+                    f"selected criteria, but {count} were requested."
+                )
+                count = total_available
+
             questions = list(
                 base_qs.select_related(
                     "topic", "topic__chapter", "topic__chapter__subject",

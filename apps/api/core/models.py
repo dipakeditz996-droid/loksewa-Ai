@@ -410,7 +410,7 @@ class AdminSettings(models.Model):
             pass
         obj, created = cls.objects.get_or_create(pk=1)
         try:
-            cache.set(cls.SETTINGS_CACHE_KEY, obj, 60)
+            cache.set(cls.SETTINGS_CACHE_KEY, obj, 300)
         except Exception:
             pass
         return obj

@@ -46,6 +46,7 @@ export default function ExamResultPage() {
     queryKey: ['student-attempt-result', attemptId],
     queryFn: () => studentExamsApi.getResult(attemptId),
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
     retry: false,
   });
 
@@ -72,6 +73,7 @@ export default function ExamResultPage() {
     queryKey: ['student-attempt-questions', attemptId],
     queryFn: () => studentExamsApi.getAttemptQuestions(attemptId),
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   const isSubjective =

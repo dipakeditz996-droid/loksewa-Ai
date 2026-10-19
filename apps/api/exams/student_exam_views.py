@@ -49,6 +49,32 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
     """
     permission_classes = [IsAuthenticated, HasActiveSubscription]
     serializer_class = StudentExaminationSerializer
+
+    def list(self, request, *args, **kwargs):
+        user = request.user
+        course_id = request.query_params.get('course_id') or ''
+        topicwise = request.query_params.get('topicwise') or ''
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+        if use_cache and user.is_authenticated:
+            from core.views import get_student_dashboard_version
+            from django.core.cache import cache
+            dash_ver = get_student_dashboard_version(user.id)
+            cache_key = f'student_exams_list:{user.id}:{dash_ver}:{course_id}:{topicwise}'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
+        response = super().list(request, *args, **kwargs)
+        if use_cache and user.is_authenticated:
+            try:
+                cache.set(cache_key, response.data, 120)
+            except Exception:
+                pass
+        return response
     
     def get_queryset(self):
         user = self.request.user
@@ -72,7 +98,21 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             exam_q = get_authorized_examination_filter(user)
             if exam_q is None:
                 return Examination.objects.none()
-            base_qs = Examination.objects.filter(status__in=['published', 'live']).filter(exam_q)
+            base_qs = (
+                Examination.objects
+                .filter(status__in=['published', 'live'])
+                .filter(exam_q)
+                .select_related('course', 'category', 'exam', 'subject', 'topic')
+            )
+            if user.is_authenticated:
+                from django.db.models import Prefetch
+                base_qs = base_qs.prefetch_related(
+                    Prefetch(
+                        'attempts',
+                        queryset=ExaminationAttempt.objects.filter(student=user).order_by('-submitted_at', '-id'),
+                        to_attr='student_attempts'
+                    )
+                )
             return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
 
         req_course_id = self.request.query_params.get('course_id')
@@ -114,14 +154,14 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             Examination.objects
             .filter(status__in=['published', 'live'])
             .filter(exam_q)
-            .select_related('course', 'category', 'exam', 'subject')
+            .select_related('course', 'category', 'exam', 'subject', 'topic')
         )
         if user.is_authenticated:
             from django.db.models import Prefetch
             base_qs = base_qs.prefetch_related(
                 Prefetch(
                     'attempts',
-                    queryset=ExaminationAttempt.objects.filter(student=user),
+                    queryset=ExaminationAttempt.objects.filter(student=user).order_by('-submitted_at', '-id'),
                     to_attr='student_attempts'
                 )
             )
@@ -141,8 +181,19 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
         return base_qs.filter(Q(exam_type='custom', created_by=user) | ~Q(exam_type='custom'))
 
     def retrieve(self, request, *args, **kwargs):
-        examination = self.get_object()
         user = request.user
+        exam_id = kwargs.get('pk') or kwargs.get('id')
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+        if use_cache and user.is_authenticated and exam_id:
+            from core.views import get_student_dashboard_version
+            dash_ver = get_student_dashboard_version(user.id)
+            cache_key = f'student_exam_detail_v1:{user.id}:{exam_id}:{dash_ver}'
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
+        examination = self.get_object()
         if user.role == 'student':
             from courses.access import is_examination_authorized_for_student
             if not is_examination_authorized_for_student(user, examination):
@@ -151,7 +202,13 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     status=status.HTTP_403_FORBIDDEN
                 )
         serializer = self.get_serializer(examination)
-        return Response(serializer.data)
+        resp_data = serializer.data
+        if use_cache and user.is_authenticated and exam_id:
+            try:
+                cache.set(cache_key, resp_data, 120)
+            except Exception:
+                pass
+        return Response(resp_data)
 
     @action(detail=True, methods=['get'], url_path='question-paper')
     def question_paper(self, request, pk=None):
@@ -412,6 +469,9 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                 student=user,
                 status='in-progress',
             )
+
+            from core.views import invalidate_student_dashboard
+            invalidate_student_dashboard(user.id)
 
         serializer = StudentExaminationAttemptSerializer(attempt)
         return Response(
@@ -821,7 +881,7 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             ExaminationAttempt.objects
             .filter(student=user)
             .select_related('examination', 'examination__course', 'examination__category', 'subjective_submission')
-            .prefetch_related('answers__question')
+            .prefetch_related('subjective_submission__checking_requests')
         )
 
         status_param = self.request.query_params.get('status')
@@ -840,19 +900,24 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             except (ValueError, TypeError):
                 pass
 
-        if user.role == 'student':
-            from courses.access import get_authorized_examination_filter
-            from django.db.models import Q
-            exam_q = get_authorized_examination_filter(user, target_course=course_id)
-            if exam_q is not None:
-                # Student is currently authorized: they can see their attempts for authorized exams,
-                # plus their historical submitted/evaluated attempts.
-                qs = qs.filter(
-                    Q(status__in=('submitted', 'evaluated')) | Q(examination__in=Examination.objects.filter(exam_q))
-                )
-            else:
-                # Student's course access is not active: historical completed attempts remain preserved.
-                qs = qs.filter(status__in=('submitted', 'evaluated'))
+        action = getattr(self, 'action', None)
+        if action in ('retrieve', 'active'):
+            qs = qs.prefetch_related('answers__question')
+
+        if getattr(self, 'action', None) == 'list' and user.role == 'student':
+            if status_param not in ('results', 'completed', 'finished'):
+                from courses.access import get_authorized_examination_filter
+                from django.db.models import Q
+                exam_q = get_authorized_examination_filter(user, target_course=course_id)
+                if exam_q is not None:
+                    # Student is currently authorized: they can see their attempts for authorized exams,
+                    # plus their historical submitted/evaluated attempts.
+                    qs = qs.filter(
+                        Q(status__in=('submitted', 'evaluated')) | Q(examination__in=Examination.objects.filter(exam_q))
+                    )
+                else:
+                    # Student's course access is not active: historical completed attempts remain preserved.
+                    qs = qs.filter(status__in=('submitted', 'evaluated'))
 
         return qs.order_by('-submitted_at', '-started_at', '-id')
 
@@ -862,6 +927,139 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
         if self.action == 'result':
             return StudentExaminationResultSerializer
         return super().get_serializer_class()
+
+    def _warm_rankings_cache(self, attempts, context):
+        if not attempts:
+            return
+        from django.core.cache import cache
+        from django.db.models import Count
+        exam_ids = {a.examination_id for a in attempts if getattr(a, 'examination_id', None)}
+        if not exam_ids:
+            return
+
+        participants_memo = context.setdefault('_participants_memo', {})
+        ranks_memo = context.setdefault('_ranks_memo', {})
+
+        missing_exam_ids = []
+        for eid in exam_ids:
+            c_key = f"att_participants:{eid}"
+            val = cache.get(c_key)
+            if val is not None:
+                participants_memo[eid] = val
+            else:
+                missing_exam_ids.append(eid)
+
+        if missing_exam_ids:
+            p_counts = dict(
+                ExaminationAttempt.objects.filter(
+                    examination_id__in=missing_exam_ids,
+                    status__in=['submitted', 'evaluated']
+                ).values('examination_id').annotate(
+                    cnt=Count('student', distinct=True)
+                ).values_list('examination_id', 'cnt')
+            )
+            for eid in missing_exam_ids:
+                cnt = p_counts.get(eid, 0)
+                participants_memo[eid] = cnt
+                try:
+                    cache.set(f"att_participants:{eid}", cnt, 600)
+                except Exception:
+                    pass
+
+        # For ranks: check cache for each attempt on the page
+        missing_rank_attempts = []
+        for a in attempts:
+            if a.percentage is not None and a.status in ['submitted', 'evaluated']:
+                pct_key = round(float(a.percentage), 2)
+                cache_key = f"att_rank:{a.examination_id}:{int(pct_key * 100)}"
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    ranks_memo[(a.examination_id, pct_key)] = cached
+                else:
+                    missing_rank_attempts.append(a)
+
+        # Batch compute missing ranks
+        for a in missing_rank_attempts:
+            pct_key = round(float(a.percentage), 2)
+            memo_key = (a.examination_id, pct_key)
+            if memo_key in ranks_memo:
+                continue
+            higher = ExaminationAttempt.objects.filter(
+                examination_id=a.examination_id,
+                status__in=['submitted', 'evaluated'],
+                percentage__gt=a.percentage
+            ).values('percentage').distinct().count()
+            rank = higher + 1
+            ranks_memo[memo_key] = rank
+            try:
+                cache.set(f"att_rank:{a.examination_id}:{int(pct_key * 100)}", rank, 600)
+            except Exception:
+                pass
+
+    def _attach_batch_answer_stats(self, attempts):
+        if not attempts:
+            return
+        from .models import StudentAnswer
+        from django.db.models import Count, Q
+        attempt_ids = [a.id for a in attempts]
+        ans_stats = {
+            row[0]: row[1:]
+            for row in StudentAnswer.objects.filter(attempt_id__in=attempt_ids).values('attempt_id').annotate(
+                correct=Count('id', filter=Q(is_correct=True)),
+                wrong=Count('id', filter=Q(is_correct=False) & (Q(selected_option__isnull=False) | ~Q(answer_text=''))),
+                attempted=Count('id', filter=Q(selected_option__isnull=False) | ~Q(answer_text='')),
+                total=Count('id')
+            ).values_list('attempt_id', 'correct', 'wrong', 'attempted', 'total')
+        }
+        for a in attempts:
+            stats = ans_stats.get(a.id, (0, 0, 0, 0))
+            a.annotated_correct = stats[0]
+            a.annotated_wrong = stats[1]
+            a.annotated_attempted = stats[2]
+            a.annotated_total_answers = stats[3]
+
+    def list(self, request, *args, **kwargs):
+        user = request.user
+        status_param = request.query_params.get('status', '')
+        page_param = request.query_params.get('page', '1')
+        page_size_param = request.query_params.get('page_size', '12')
+        course_id = request.query_params.get('course_id', '')
+
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+
+        if use_cache:
+            from core.views import get_student_dashboard_version
+            dash_ver = get_student_dashboard_version(user.id)
+            cache_key = f"std_results_list_v2:{user.id}:{dash_ver}:{status_param}:{course_id}:{page_param}:{page_size_param}"
+            cached_data = cache.get(cache_key)
+            if cached_data is not None:
+                return Response(cached_data)
+
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            context = self.get_serializer_context()
+            self._warm_rankings_cache(page, context)
+            self._attach_batch_answer_stats(page)
+            serializer = self.get_serializer(page, many=True, context=context)
+            resp = self.get_paginated_response(serializer.data)
+            try:
+                cache.set(cache_key, resp.data, 60)
+            except Exception:
+                pass
+            return resp
+
+        context = self.get_serializer_context()
+        self._warm_rankings_cache(queryset, context)
+        self._attach_batch_answer_stats(queryset)
+        serializer = self.get_serializer(queryset, many=True, context=context)
+        resp_data = serializer.data
+        try:
+            cache.set(cache_key, resp_data, 60)
+        except Exception:
+            pass
+        return Response(resp_data)
 
     def get_object(self):
         """
@@ -958,26 +1156,11 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def questions(self, request, pk=None):
         """Returns questions for this attempt. Exposes correct answers only after submission when review is allowed."""
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+
         attempt = self.get_object()
         examination = attempt.examination
-        
-        # Get questions depending on whether it's from a question_set or directly mapped
-        if examination.question_set:
-            questions = list(examination.question_set.questions.all())
-        else:
-            from .models import ExaminationQuestion
-            question_ids = list(
-                ExaminationQuestion.objects
-                .filter(examination=examination)
-                .order_by('order', 'id')
-                .values_list('question_id', flat=True)
-            )
-            q_map = {q.id: q for q in Question.objects.filter(id__in=question_ids)}
-            questions = [q_map[qid] for qid in question_ids if qid in q_map]
-
-        if examination.randomize_questions and examination.objective_category != 'past_year':
-            import random
-            random.Random(attempt.id).shuffle(questions)
 
         # Check if correct answer review is allowed
         can_review = False
@@ -991,22 +1174,74 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             else:
                 can_review = bool(examination.show_correct_answers)
 
+        mode_key = "review" if can_review else "secure"
+        cache_key = f"att_questions_v1:{attempt.id}:{mode_key}"
+        if use_cache:
+            cached_data = cache.get(cache_key)
+            if cached_data is not None:
+                return Response(cached_data)
+
+        fields = [
+            'id', 'text', 'question_type', 'difficulty',
+            'option_a', 'option_b', 'option_c', 'option_d',
+            'marks', 'negative_marks'
+        ]
+        if can_review:
+            fields.extend(['correct_option', 'explanation', 'model_answer'])
+
+        # Get questions depending on whether it's from a question_set or directly mapped
+        if examination.question_set:
+            questions = list(examination.question_set.questions.only(*fields))
+        else:
+            from .models import ExaminationQuestion
+            question_ids = list(
+                ExaminationQuestion.objects
+                .filter(examination=examination)
+                .order_by('order', 'id')
+                .values_list('question_id', flat=True)
+            )
+            q_map = {q.id: q for q in Question.objects.filter(id__in=question_ids).only(*fields)}
+            questions = [q_map[qid] for qid in question_ids if qid in q_map]
+
+        if examination.randomize_questions and examination.objective_category != 'past_year':
+            import random
+            random.Random(attempt.id).shuffle(questions)
+
         if can_review:
             serializer = StudentReviewQuestionSerializer(questions, many=True)
         else:
             serializer = StudentSecureQuestionSerializer(questions, many=True)
-        return Response(serializer.data)
+
+        data = serializer.data
+        if use_cache:
+            try:
+                cache.set(cache_key, data, 1800)
+            except Exception:
+                pass
+        return Response(data)
 
     def _get_examination_assigned_question_ids(self, attempt):
         examination = attempt.examination
+        from django.core.cache import cache
+        c_key = f"exam_assigned_qids_v1:{examination.id}"
+        cached = cache.get(c_key)
+        if cached is not None:
+            return cached
+
         if examination.question_set_id:
-            return set(examination.question_set.questions.values_list('id', flat=True))
-        from .models import ExaminationQuestion
-        return set(
-            ExaminationQuestion.objects
-            .filter(examination=examination)
-            .values_list('question_id', flat=True)
-        )
+            res = set(examination.question_set.questions.values_list('id', flat=True))
+        else:
+            from .models import ExaminationQuestion
+            res = set(
+                ExaminationQuestion.objects
+                .filter(examination=examination)
+                .values_list('question_id', flat=True)
+            )
+        try:
+            cache.set(c_key, res, 300)
+        except Exception:
+            pass
+        return res
 
     def _save_answers_payload(self, attempt, answers_payload):
         if not answers_payload:
@@ -1170,7 +1405,6 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             locked_attempt = (
                 ExaminationAttempt.objects
                 .select_for_update()
-                .select_related('examination', 'examination__course', 'examination__category')
                 .get(pk=attempt.pk)
             )
 
@@ -1188,6 +1422,12 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
                 self._save_answers_payload(locked_attempt, answers_payload)
 
             finalize_attempt(locked_attempt)
+            from core.views import invalidate_student_dashboard
+            invalidate_student_dashboard(request.user.id)
+            cache.delete(f"att_questions_v1:{locked_attempt.id}:secure")
+            cache.delete(f"att_questions_v1:{locked_attempt.id}:review")
+            cache.delete(f"std_att_result:{request.user.id}:{locked_attempt.id}")
+            cache.delete(f"student_exam_detail_v1:{request.user.id}:{locked_attempt.examination_id}")
 
             return Response({
                 'detail': 'Exam submitted successfully.',
@@ -1199,6 +1439,13 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'])
     def result(self, request, pk=None):
         """View results if visibility allows."""
+        att_id = pk or self.kwargs.get('pk')
+        if att_id:
+            cache_key = f"std_att_result:{request.user.id}:{att_id}"
+            cached_result = cache.get(cache_key)
+            if cached_result is not None:
+                return Response(cached_result)
+
         attempt = self.get_object()
         
         if attempt.status in ('in-progress', 'upload_pending'):
@@ -1228,8 +1475,44 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
                 if attempt.examination.end_time and timezone.now() < attempt.examination.end_time:
                     return Response({'detail': 'Result will be available after the exam window ends.'}, status=status.HTTP_403_FORBIDDEN)
 
+        # Cache check for finalized results
+        cache_key = f"std_att_result:{request.user.id}:{attempt.id}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return Response(cached_result)
+
+        # Lazy prefetch answers and evaluations only when visibility confirmed
+        from django.db.models import Prefetch, prefetch_related_objects
+        from .models import StudentAnswer
+        prefetch_related_objects(
+            [attempt],
+            'subjective_submission__evaluator',
+            'subjective_submission__question_scores',
+            'subjective_submission__checking_requests',
+            Prefetch(
+                'answers',
+                queryset=StudentAnswer.objects.select_related(
+                    'question',
+                    'question__subject',
+                    'question__topic',
+                    'question__chapter',
+                    'question__chapter__subject',
+                    'question__topic__chapter__subject'
+                )
+            )
+        )
+
         serializer = self.get_serializer(attempt)
-        return Response(serializer.data)
+        data = serializer.data
+
+        # Cache finalized results for 15 minutes
+        if attempt.status == 'evaluated' or (not is_subj and attempt.status == 'submitted'):
+            try:
+                cache.set(cache_key, data, 900)
+            except Exception:
+                pass
+
+        return Response(data)
 
     @action(detail=True, methods=['get', 'post'], url_path='answer-sheet')
     def answer_sheet(self, request, pk=None):
@@ -1380,6 +1663,8 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             # Trigger background OCR and rule-based evaluation reliably
             from .tasks import dispatch_subjective_submission_processing
             task_id = dispatch_subjective_submission_processing(submission.id)
+            # Invalidate cached result for this attempt
+            cache.delete(f"std_att_result:{request.user.id}:{attempt.id}")
 
             return Response({
                 'detail': 'Answer sheet uploaded and submitted successfully.',
@@ -1489,6 +1774,9 @@ class StudentExaminationAttemptViewSet(viewsets.ModelViewSet):
             EntitlementService.consume_evaluation(user, checking_req.id)
 
             transaction.on_commit(lambda: NotificationService.notify_checking_request_submitted(checking_req))
+
+        # Invalidate cached result for this attempt
+        cache.delete(f"std_att_result:{user.id}:{attempt.id}")
 
         serializer = SubjectiveCheckingRequestSerializer(checking_req)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -1661,121 +1949,109 @@ class TeacherExaminationAttemptViewSet(viewsets.ReadOnlyModelViewSet):
         return Response(serializer_class(attempt, context={'request': request}).data)
 
 
-def _build_leaderboard_data(request):
-    """
-    Build a leaderboard from ExaminationAttempt.
-
-    Strategy:
-    - Include status 'submitted' or 'evaluated'
-    - Best attempt per student per exam is used
-    - Returns a list of dicts with student info and ranking data
-    """
+def _get_leaderboard_queryset(request):
     exam_id_param = request.query_params.get('exam', 'all')
     time_filter = request.query_params.get('time_filter', 'all')
     ranking_type = request.query_params.get('ranking_type', 'overall')
     search_query = request.query_params.get('search', '').strip()
 
-    # A single leaderboard page view hits list, my-rank and stats
-    # independently, and each used to redo this same full-table scan and
-    # in-memory ranking from scratch. The ranking only needs to reflect
-    # recently submitted exams, not the current second, so a short cache
-    # keyed by the exact filter combination lets those three calls (and
-    # back-to-back requests from other students browsing the same filters)
-    # share one computed ranking instead of recomputing it every time.
-    cache_key = 'leaderboard:' + '|'.join([exam_id_param, time_filter, ranking_type, search_query])
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
     now = timezone.now()
-    
-    # ---- ExaminationAttempt ----
     exam_qs = ExaminationAttempt.objects.filter(status__in=['submitted', 'evaluated'])
-    
+
     if exam_id_param != 'all':
         exam_qs = exam_qs.filter(examination_id=exam_id_param)
-    
+
     if time_filter == 'year':
         exam_qs = exam_qs.filter(submitted_at__year=now.year)
     elif time_filter == 'month':
         exam_qs = exam_qs.filter(submitted_at__year=now.year, submitted_at__month=now.month)
     elif time_filter == 'week':
         exam_qs = exam_qs.filter(submitted_at__gte=now - timezone.timedelta(days=7))
-    
+
     if search_query:
         exam_qs = exam_qs.filter(
-            student__username__icontains=search_query
-        ) | exam_qs.filter(
-            student__first_name__icontains=search_query
-        ) | exam_qs.filter(
-            student__last_name__icontains=search_query
+            Q(student__username__icontains=search_query) |
+            Q(student__first_name__icontains=search_query) |
+            Q(student__last_name__icontains=search_query)
         )
 
-    # Build per-student aggregated data
-    # Key: student_id -> best stats
-    student_map = {}
-    
-    def _get_display_name(student):
-        name = f"{student.first_name} {student.last_name}".strip()
-        return name if name else student.username
-    
-    # Process ExaminationAttempt (best attempt = highest percentage per student)
-    for attempt in exam_qs.select_related('student', 'examination'):
-        sid = attempt.student.id
-        total_marks = attempt.examination.total_marks or 100
-        pct = attempt.percentage if attempt.percentage is not None else 0
-        score = attempt.score if attempt.score is not None else 0
-        
-        if sid not in student_map:
-            student_map[sid] = {
-                'student_id': sid,
-                'student_name': _get_display_name(attempt.student),
-                'profile_image': attempt.student.avatar or None,
-                'best_percentage': pct,
-                'best_score': score,
-                'total_exams': 1,
-                'avg_percentage': pct,
-                'sum_percentage': pct,
-            }
-        else:
-            student_map[sid]['total_exams'] += 1
-            student_map[sid]['sum_percentage'] += pct
-            student_map[sid]['avg_percentage'] = student_map[sid]['sum_percentage'] / student_map[sid]['total_exams']
-            if pct > student_map[sid]['best_percentage']:
-                student_map[sid]['best_percentage'] = pct
-                student_map[sid]['best_score'] = score
+    # Database-level aggregation across attempts per student
+    agg_qs = exam_qs.values(
+        'student_id',
+        'student__username',
+        'student__first_name',
+        'student__last_name',
+        'student__avatar',
+        'student__student_profile__show_leaderboard',
+    ).annotate(
+        total_exams=Count('id'),
+        best_score=Max('score'),
+        best_percentage=Max('percentage'),
+        avg_percentage=Avg('percentage'),
+    )
 
-    # Determine sort key based on ranking_type
     if ranking_type == 'overall':
-        # Sort by average percentage then best_score
-        students = sorted(student_map.values(), key=lambda x: (-x['avg_percentage'], -x['best_score']))
-        score_field = 'avg_percentage'
+        agg_qs = agg_qs.order_by('-avg_percentage', '-best_score', '-total_exams', 'student_id')
     else:
-        # Sort by best percentage then best_score
-        students = sorted(student_map.values(), key=lambda x: (-x['best_percentage'], -x['best_score']))
-        score_field = 'best_percentage'
-    
-    # Assign DenseRank (ties get the same rank)
+        agg_qs = agg_qs.order_by('-best_percentage', '-best_score', '-total_exams', 'student_id')
+
+    return agg_qs, ranking_type
+
+
+def _build_leaderboard_data(request):
+    """
+    Build a leaderboard from ExaminationAttempt using database-side aggregation.
+    """
+    exam_id_param = request.query_params.get('exam', 'all')
+    time_filter = request.query_params.get('time_filter', 'all')
+    ranking_type = request.query_params.get('ranking_type', 'overall')
+    search_query = request.query_params.get('search', '').strip()
+
+    cache_key = 'leaderboard_v3:' + '|'.join([exam_id_param, time_filter, ranking_type, search_query])
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    agg_qs, r_type = _get_leaderboard_queryset(request)
+    rows = list(agg_qs)
+
+    current_user_id = getattr(getattr(request, 'user', None), 'id', None)
     ranked = []
     current_rank = 0
     prev_key = None
-    for i, s in enumerate(students):
-        sort_key = (round(s['avg_percentage' if ranking_type == 'overall' else 'best_percentage'], 4), round(s['best_score'], 4))
+
+    for i, s in enumerate(rows):
+        pct_field = 'avg_percentage' if r_type == 'overall' else 'best_percentage'
+        pct_val = s.get(pct_field) or 0.0
+        score_val = s.get('best_score') or 0.0
+        sort_key = (round(pct_val, 4), round(score_val, 4))
         if sort_key != prev_key:
             current_rank = i + 1
             prev_key = sort_key
-        
+
+        sid = s['student_id']
+        show_lb = s.get('student__student_profile__show_leaderboard')
+        if show_lb is False and sid != current_user_id:
+            display_name = "Anonymous Aspirant"
+            avatar = None
+        else:
+            first_name = s.get('student__first_name') or ''
+            last_name = s.get('student__last_name') or ''
+            full_name = f"{first_name} {last_name}".strip()
+            display_name = full_name if full_name else (s.get('student__username') or 'Student')
+            avatar = s.get('student__avatar')
+
         ranked.append({
             'rank': current_rank,
-            'student_id': s['student_id'],
-            'student_name': s['student_name'],
-            'profile_image': s['profile_image'],
-            'score': round(s['best_score'], 2),
-            'percentage': round(s['avg_percentage' if ranking_type == 'overall' else 'best_percentage'], 2),
-            'total_exams': s['total_exams'],
+            'student_id': sid,
+            'student_name': display_name,
+            'profile_image': avatar,
+            'score': round(score_val, 2),
+            'percentage': round(pct_val, 2),
+            'total_exams': s.get('total_exams') or 1,
         })
 
-    cache.set(cache_key, ranked, 30)
+    cache.set(cache_key, ranked, 60)
     return ranked
 
 
@@ -1790,20 +2066,50 @@ class LeaderboardViewSet(viewsets.ViewSet):
             ranked = _build_leaderboard_data(request)
         except Exception as e:
             return Response({'detail': f'Error building leaderboard: {str(e)}'}, status=500)
-        
-        page = int(request.query_params.get('page', 1))
-        page_size = int(request.query_params.get('page_size', 20))
+
+        try:
+            page = max(int(request.query_params.get('page', 1)), 1)
+        except (TypeError, ValueError):
+            page = 1
+
+        try:
+            page_size = max(min(int(request.query_params.get('page_size', 20)), 100), 1)
+        except (TypeError, ValueError):
+            page_size = 20
+
         start = (page - 1) * page_size
         end = start + page_size
-        
+
         count = len(ranked)
         paginated = ranked[start:end]
 
+        # Consolidated single-trip return of current_user & summary stats
+        user_id = getattr(getattr(request, 'user', None), 'id', None)
+        current_user_item = next((item for item in ranked if item['student_id'] == user_id), None)
+
+        avg_pct = 0.0
+        highest_pct = 0.0
+        if count > 0:
+            percentages = [item['percentage'] for item in ranked]
+            avg_pct = sum(percentages) / count
+            highest_pct = max(percentages)
+
+        summary = {
+            'totalParticipants': count,
+            'averageScore': round(avg_pct, 1),
+            'highestScore': round(highest_pct, 1),
+        }
+
         return Response({
             'count': count,
+            'page': page,
+            'page_size': page_size,
+            'total_pages': max(1, (count + page_size - 1) // page_size),
             'next': page + 1 if end < count else None,
             'previous': page - 1 if page > 1 else None,
-            'results': paginated
+            'current_user': current_user_item,
+            'summary': summary,
+            'results': paginated,
         })
 
     @action(detail=False, methods=['get'], url_path='my-rank')
@@ -1812,7 +2118,7 @@ class LeaderboardViewSet(viewsets.ViewSet):
             ranked = _build_leaderboard_data(request)
         except Exception as e:
             return Response({'detail': f'Error building leaderboard: {str(e)}'}, status=500)
-        
+
         user_id = request.user.id
         my_item = next((item for item in ranked if item['student_id'] == user_id), None)
 
@@ -1827,10 +2133,10 @@ class LeaderboardViewSet(viewsets.ViewSet):
             ranked = _build_leaderboard_data(request)
         except Exception as e:
             return Response({'detail': f'Error building stats: {str(e)}'}, status=500)
-        
+
         total_participants = len(ranked)
-        avg_pct = 0
-        highest_pct = 0
+        avg_pct = 0.0
+        highest_pct = 0.0
 
         if total_participants > 0:
             percentages = [item['percentage'] for item in ranked]
@@ -1840,8 +2146,36 @@ class LeaderboardViewSet(viewsets.ViewSet):
         return Response({
             'totalParticipants': total_participants,
             'averageScore': round(avg_pct, 1),
-            'highestScore': round(highest_pct, 1)
+            'highestScore': round(highest_pct, 1),
         })
+
+    @action(detail=False, methods=['get'])
+    def trend(self, request):
+        """
+        Returns recent score trend for the authenticated student.
+        """
+        user = request.user
+        attempts = (
+            ExaminationAttempt.objects.filter(
+                student=user,
+                status__in=['submitted', 'evaluated'],
+            )
+            .select_related('examination')
+            .order_by('started_at')[:30]
+        )
+
+        data = []
+        for att in attempts:
+            d_str = str(att.started_at.date()) if att.started_at else ''
+            title = att.examination.title if att.examination else 'Exam'
+            data.append({
+                'date': d_str,
+                'label': title[:12] if title else d_str,
+                'score': round(att.score or 0.0, 1),
+                'percentage': round(att.percentage or 0.0, 1),
+            })
+
+        return Response(data)
 class CalmSessionLogView(APIView):
     permission_classes = [IsAuthenticated, HasActiveSubscription]
     

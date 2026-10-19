@@ -90,9 +90,15 @@ def _plan_for(user):
 def _active_exams():
     """Every active exam once (the table is tiny), with the parent chain and
     category the labels and the countdown need - no per-exam queries."""
+    from django.core.cache import cache
+    cached = cache.get('sp_active_exams_chain_v1')
+    if cached is not None:
+        return cached
     from exams.models import Exam
-    return list(Exam.objects.filter(is_active=True).select_related('parent__parent', 'category')
+    rows = list(Exam.objects.filter(is_active=True).select_related('parent__parent', 'category')
                 .order_by('category_id', 'order', 'id'))
+    cache.set('sp_active_exams_chain_v1', rows, 300)
+    return rows
 
 
 def resolve_preparation(user, exam_param=None, need_since=False):

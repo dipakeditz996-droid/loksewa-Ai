@@ -40,6 +40,7 @@ export default function ExamAttemptPage() {
     queryKey: ['student-attempt', attemptId],
     queryFn: () => studentExamsApi.getAttempt(attemptId),
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch exam details for time limit
@@ -47,6 +48,7 @@ export default function ExamAttemptPage() {
     queryKey: ['student-exam', examId],
     queryFn: () => studentExamsApi.getExamDetails(examId),
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   // Fetch questions
@@ -54,6 +56,7 @@ export default function ExamAttemptPage() {
     queryKey: ['student-attempt-questions', attemptId],
     queryFn: () => studentExamsApi.getAttemptQuestions(attemptId),
     refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   const executeSubmit = useCallback(async () => {

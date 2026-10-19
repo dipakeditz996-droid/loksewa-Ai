@@ -3,9 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Calendar, Clock, ExternalLink, Sparkles, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { schedulesApi, OfficialExamSchedule } from "@/lib/api/schedules";
+import { schedulesApi } from "@/lib/api/schedules";
 
 import { useOptionalStudentContext } from "@/contexts/StudentContext";
 
@@ -33,10 +32,17 @@ export function LoksewaExamCountdown({
 }) {
   const studentCtx = useOptionalStudentContext();
   const effectiveCourseId = courseId ?? studentCtx?.activeCourse?.id;
+  const contextSchedule = !courseId ? studentCtx?.examSchedule : null;
 
   const { data, isLoading: loading, isError: error, refetch } = useQuery({
     queryKey: ["next-official-exam", effectiveCourseId ?? null],
     queryFn: () => schedulesApi.getNextOfficialExam(effectiveCourseId),
+    initialData: contextSchedule ? {
+      schedule: contextSchedule,
+      course_id: studentCtx?.activeCourse?.id,
+      course_title: studentCtx?.activeCourse?.title,
+      server_time: new Date().toISOString(),
+    } as any : undefined,
     staleTime: 5 * 60 * 1000,
   });
   const schedule = data?.schedule ?? null;

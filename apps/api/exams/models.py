@@ -817,6 +817,8 @@ class Examination(models.Model):
 
     @property
     def is_scheduled_live(self):
+        if self.objective_category in ('past_year', 'model', 'topicwise'):
+            return False
         return self.objective_category == 'live' or bool(self.start_time)
 
     @property
@@ -825,9 +827,7 @@ class Examination(models.Model):
 
     @property
     def requires_admin_request(self):
-        # Taking a published Subjective Exam does NOT require Admin approval.
-        # Manual checking is an optional workflow requested AFTER submitting.
-        return False
+        return self.exam_type == 'subjective' and (self.objective_category == 'live' or 'live' in (self.title or '').lower())
 
     def __str__(self):
         return self.title

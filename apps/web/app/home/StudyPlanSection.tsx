@@ -57,7 +57,7 @@ export function StudyPlanSection() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 mb-5">
               <CalendarDays className="w-3.5 h-3.5 text-[#D4A72C]" />
-              <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#D4A72C]">AI Study Plan</span>
+              <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#8F6B12] dark:text-[#D4A72C]">AI Study Plan</span>
             </div>
 
             <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6 shadow-[0_10px_40px_rgba(0,0,0,0.05)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
@@ -89,7 +89,7 @@ export function StudyPlanSection() {
                     >
                       {/* Day label */}
                       <div className={`w-9 shrink-0 text-center text-[11px] font-[800] uppercase tracking-wide ${
-                        day.active ? "text-[#D4A72C]" : day.done ? "text-slate-500 dark:text-slate-400" : (s || TYPE_STYLES.practice).text
+                        day.active ? "text-[#8F6B12] dark:text-[#D4A72C]" : day.done ? "text-slate-500 dark:text-slate-400" : (s || TYPE_STYLES.practice).text
                       }`}>
                         {day.day}
                       </div>
@@ -108,7 +108,7 @@ export function StudyPlanSection() {
                       {/* Status */}
                       {day.done && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
                       {day.active && (
-                        <span className="text-[10px] font-[700] text-[#D4A72C] bg-[#D4A72C]/10 px-2 py-0.5 rounded-full whitespace-nowrap">TODAY</span>
+                        <span className="text-[10px] font-[700] text-[#8F6B12] dark:text-[#D4A72C] bg-[#D4A72C]/10 px-2 py-0.5 rounded-full whitespace-nowrap">TODAY</span>
                       )}
                     </div>
                   );

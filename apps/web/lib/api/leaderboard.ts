@@ -53,6 +53,7 @@ export interface LeaderboardStats {
 
 export interface ScoreTrendPoint {
   date: string;
+  label?: string;
   score: number;
 }
 
@@ -97,133 +98,139 @@ export function rankStudents(students: LeaderboardStudent[]): LeaderboardStudent
 
 export const leaderboardService = {
   /**
-   * Primary data fetcher. Tries real API first; falls back to demo data
-   * automatically when API returns empty, 401, 404, or any network error.
-   *
-   * IMPORTANT — Privacy: only public fields are returned. Email, phone,
-   * password, payment info, and internal IDs are never included.
+   * Primary data fetcher. Retrieves consolidated leaderboard, personal rank,
+   * and aggregate statistics in a single performant database-backed request.
    */
   async fetchLeaderboard(filters: LeaderboardFilters): Promise<LeaderboardPageResult> {
-    // ── Try real API first ──────────────────────────────────────────
-    try {
-      const params = new URLSearchParams({
-        page: filters.page.toString(),
-        page_size: filters.pageSize.toString(),
-        time_filter: filters.timeFilter,
-        ranking_type: filters.rankingType,
-        exam: filters.examFilter,
-        ...(filters.searchQuery ? { search: filters.searchQuery } : {}),
-      });
+    const params = new URLSearchParams({
+      page: filters.page.toString(),
+      page_size: filters.pageSize.toString(),
+      time_filter: filters.timeFilter,
+      ranking_type: filters.rankingType,
+      exam: filters.examFilter,
+      ...(filters.searchQuery ? { search: filters.searchQuery } : {}),
+    });
 
-      type ApiResponse = {
-        count: number;
-        next: string | null;
-        previous: string | null;
-        results: Array<{
-          rank: number;
-          student_id: number;
-          student_name: string;
-          profile_image?: string | null;
-          score: number;
-          percentage: number;
-          total_exams: number;
-          previous_rank?: number;
-        }>;
+    type LeaderboardApiRow = {
+      rank: number;
+      student_id: number;
+      student_name: string;
+      profile_image?: string | null;
+      score: number;
+      percentage: number;
+      total_exams: number;
+      previous_rank?: number;
+    };
+
+    type ApiResponse = {
+      count: number;
+      page?: number;
+      page_size?: number;
+      total_pages?: number;
+      next: string | number | null;
+      previous: string | number | null;
+      current_user?: LeaderboardApiRow | null;
+      summary?: {
+        totalParticipants: number;
+        averageScore: number;
+        highestScore: number;
       };
+      results: LeaderboardApiRow[];
+    };
 
-      const data = await apiClient<ApiResponse>(`/student/leaderboard/?${params}`);
-      const results = data.results ?? [];
+    const data = await apiClient<ApiResponse>(`/student/leaderboard/?${params}`);
+    const results = data.results ?? [];
 
-      if (results.length === 0) {
-        // Return empty result naturally instead of throwing error
-      }
+    const mapApiRowToStudent = (r: LeaderboardApiRow, isMe = false): LeaderboardStudent => {
+      const prevRank = r.previous_rank ?? r.rank;
+      const rankChange = prevRank - r.rank;
+      return {
+        studentId: `api-${r.student_id}`,
+        studentName: r.student_name,
+        avatar: r.profile_image ?? null,
+        rank: r.rank,
+        previousRank: prevRank,
+        rankChange,
+        score: r.score,
+        maxScore: 100,
+        percentage: r.percentage,
+        examsAttempted: r.total_exams,
+        testsCleared: r.percentage >= 40 ? r.total_exams : Math.floor(r.total_exams * 0.5),
+        averageScore: r.percentage,
+        bestScore: r.score,
+        timeTaken: 0,
+        trend: rankChange > 0 ? "up" : rankChange < 0 ? "down" : "same",
+        isCurrentUser: isMe,
+      };
+    };
 
-      // Map API shape → internal type (stripping sensitive fields)
-      const students: LeaderboardStudent[] = results.map((r) => {
-        const prevRank = r.previous_rank ?? r.rank;
-        const rankChange = prevRank - r.rank;
-        return {
-          studentId: `api-${r.student_id}`,
-          studentName: r.student_name,
-          avatar: r.profile_image ?? null,
-          rank: r.rank,
-          previousRank: prevRank,
-          rankChange,
-          score: r.score,
-          maxScore: 100,
-          percentage: r.percentage,
-          examsAttempted: r.total_exams,
-          testsCleared: Math.floor(r.total_exams * 0.8),
-          averageScore: r.percentage,
-          bestScore: r.score,
-          timeTaken: 45,
-          trend: rankChange > 0 ? "up" : rankChange < 0 ? "down" : "same",
-        };
-      });
+    const students: LeaderboardStudent[] = results.map((r) => mapApiRowToStudent(r));
 
-      // Fetch my-rank separately (non-blocking)
-      let currentUser: LeaderboardStudent | null = null;
+    // Resolve current student's personal ranking
+    let currentUser: LeaderboardStudent | null = null;
+    if (data.current_user) {
+      currentUser = mapApiRowToStudent(data.current_user, true);
+    } else {
+      // Non-blocking fallback if backend list response didn't supply it
       try {
-        const myRank = await apiClient<ApiResponse["results"][0]>(
+        const myRank = await apiClient<LeaderboardApiRow>(
           `/student/leaderboard/my-rank/?${params}`
         );
         if (myRank) {
-          const prevRank = myRank.previous_rank ?? myRank.rank;
-          const rankChange = prevRank - myRank.rank;
-          currentUser = {
-            studentId: `api-${myRank.student_id}`,
-            studentName: myRank.student_name,
-            avatar: myRank.profile_image ?? null,
-            rank: myRank.rank,
-            previousRank: prevRank,
-            rankChange,
-            score: myRank.score,
-            maxScore: 100,
-            percentage: myRank.percentage,
-            examsAttempted: myRank.total_exams,
-            testsCleared: Math.floor(myRank.total_exams * 0.8),
-            averageScore: myRank.percentage,
-            bestScore: myRank.score,
-            timeTaken: 45,
-            trend: rankChange > 0 ? "up" : rankChange < 0 ? "down" : "same",
-            isCurrentUser: true,
-          };
+          currentUser = mapApiRowToStudent(myRank, true);
         }
       } catch {
-        // my-rank failure is non-fatal
+        // my-rank fallback failure is non-fatal
       }
-
-      const stats = {
-        currentRank: currentUser?.rank ?? 0,
-        totalStudents: data.count,
-        score: currentUser?.score ?? 0,
-        maxScore: 100,
-        percentile: currentUser ? currentUser.percentage : 0,
-        rankChange: currentUser?.rankChange ?? 0,
-        bestRank: currentUser?.rank ?? 0,
-        averageScore: currentUser?.percentage ?? 0,
-        highestScore: currentUser?.percentage ?? 0,
-        testsTaken: currentUser?.examsAttempted ?? 0,
-        testsCleared: currentUser?.testsCleared ?? 0,
-        passRate: 100,
-      };
-
-      return {
-        students,
-        totalCount: data.count,
-        totalPages: Math.max(1, Math.ceil(data.count / filters.pageSize)),
-        currentUser,
-        stats,
-      };
-    } catch (e) {
-      throw e;
     }
+
+    const summary = data.summary ?? {
+      totalParticipants: data.count,
+      averageScore: currentUser?.percentage ?? 0,
+      highestScore: results[0]?.percentage ?? (currentUser?.percentage ?? 0),
+    };
+
+    const stats: LeaderboardStats = {
+      currentRank: currentUser?.rank ?? 0,
+      totalStudents: summary.totalParticipants,
+      score: currentUser?.score ?? 0,
+      maxScore: 100,
+      percentile: currentUser ? currentUser.percentage : 0,
+      rankChange: currentUser?.rankChange ?? 0,
+      bestRank: currentUser?.rank ?? 0,
+      averageScore: summary.averageScore,
+      highestScore: summary.highestScore,
+      testsTaken: currentUser?.examsAttempted ?? 0,
+      testsCleared: currentUser?.testsCleared ?? 0,
+      passRate: currentUser && currentUser.examsAttempted > 0
+        ? Math.round((currentUser.testsCleared / currentUser.examsAttempted) * 100)
+        : 0,
+    };
+
+    return {
+      students,
+      totalCount: data.count,
+      totalPages: data.total_pages ?? Math.max(1, Math.ceil(data.count / filters.pageSize)),
+      currentUser,
+      stats,
+    };
   },
 
   /** Fetch score trend for the current user */
   async fetchScoreTrend(): Promise<ScoreTrendPoint[]> {
-    const data = await apiClient<ScoreTrendPoint[]>("/student/leaderboard/trend/");
-    if (data && data.length > 0) return data;
-    return [];
+    try {
+      const data = await apiClient<Array<{ date: string; label?: string; score: number }>>("/student/leaderboard/trend/");
+      if (data && data.length > 0) {
+        return data.map((item) => ({
+          date: item.date,
+          label: item.label || item.date,
+          score: item.score,
+        }));
+      }
+      return [];
+    } catch {
+      return [];
+    }
   },
 };
+

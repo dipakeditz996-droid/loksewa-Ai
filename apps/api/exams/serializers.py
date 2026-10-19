@@ -58,14 +58,19 @@ class ChapterSerializer(serializers.ModelSerializer):
 
 class SubjectSerializer(serializers.ModelSerializer):
     chapters = ChapterSerializer(many=True, read_only=True)
-    units = ChapterSerializer(source='chapters', many=True, read_only=True)
     progress = serializers.SerializerMethodField()
     description = serializers.SerializerMethodField()
     title = serializers.CharField(source='name')
     
     class Meta:
         model = Subject
-        fields = ['id', 'title', 'name', 'code', 'progress', 'description', 'chapters', 'units']
+        fields = ['id', 'title', 'name', 'code', 'progress', 'description', 'chapters']
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Avoid running ChapterSerializer and TopicSerializer twice per subject
+        data['units'] = data.get('chapters', [])
+        return data
 
     def get_progress(self, obj):
         # Calculate subject progress based on topics (Mocking 0 for now unless fully implemented)
@@ -110,9 +115,13 @@ class ExamSerializer(serializers.ModelSerializer):
             subjects = list(Subject.objects.filter(paper__exam=obj).distinct())
 
         if not subjects:
-            fallback = list(Subject.objects.filter(examinations__exam=obj).distinct())
-            if fallback:
-                subjects = sorted(fallback, key=lambda s: s.id)
+            fallback_map = self.context.get('_fallback_subjects_map')
+            if fallback_map is not None:
+                subjects = fallback_map.get(obj.id, [])
+            elif 'papers' not in getattr(obj, '_prefetched_objects_cache', {}):
+                fallback = list(Subject.objects.filter(examinations__exam=obj).distinct())
+                if fallback:
+                    subjects = sorted(fallback, key=lambda s: s.id)
 
         return SubjectSerializer(subjects, many=True, context=self.context).data
 

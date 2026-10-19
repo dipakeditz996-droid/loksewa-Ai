@@ -87,7 +87,7 @@ export function SyllabusSection() {
             <div className="flex items-center gap-1.5 text-[11px] font-[600] text-slate-600 dark:text-slate-400 mb-5">
               {["Exam", "Paper", "Subject", "Chapter", "Topic"].map((item, i, arr) => (
                 <React.Fragment key={item}>
-                  <span className={i === 0 ? "text-[#D4A72C]" : i === arr.length - 1 ? "text-slate-700 dark:text-slate-200" : ""}>{item}</span>
+                  <span className={i === 0 ? "text-[#8F6B12] dark:text-[#D4A72C]" : i === arr.length - 1 ? "text-slate-700 dark:text-slate-200" : ""}>{item}</span>
                   {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />}
                 </React.Fragment>
               ))}
@@ -186,7 +186,7 @@ export function SyllabusSection() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: "Exam Positions", value: "20+", color: "text-[#D4A72C]" },
+                { label: "Exam Positions", value: "20+", color: "text-[#8F6B12] dark:text-[#D4A72C]" },
                 { label: "Subjects Covered", value: "100%", color: "text-emerald-500" },
                 { label: "Topics Mapped", value: "1,200+", color: "text-blue-500" },
                 { label: "Questions Linked", value: "250K+", color: "text-violet-500" },

@@ -27,6 +27,22 @@ const AuthContext = createContext<AuthContextType>({
 // logged in" reads this same query instead of independently hitting /auth/me/.
 export const CURRENT_USER_QUERY_KEY = ["current-user"];
 
+function getStoredUser(): User | null {
+  if (typeof window === "undefined") return null;
+  if (!getAuthToken()) {
+    try {
+      localStorage.removeItem("loksewa_auth_user");
+    } catch {}
+    return null;
+  }
+  try {
+    const raw = localStorage.getItem("loksewa_auth_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const queryClient = useQueryClient();
 
@@ -45,6 +61,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       queryClient.removeQueries({
         predicate: (q) => q.queryKey[0] !== CURRENT_USER_QUERY_KEY[0],
       });
+      try {
+        localStorage.removeItem(`loksewa_student_active_course_${previous.id}`);
+        localStorage.removeItem("loksewa_student_active_course");
+      } catch {}
     }
   };
 
@@ -52,9 +72,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     queryKey: CURRENT_USER_QUERY_KEY,
     queryFn: async () => {
       const fresh = await authApi.me().catch(() => null);
-      purgeOnIdentityChange(fresh?.id ?? null);
+      if (fresh) {
+        purgeOnIdentityChange(fresh.id ?? null);
+        try {
+          localStorage.setItem("loksewa_auth_user", JSON.stringify(fresh));
+        } catch {}
+      } else {
+        try {
+          localStorage.removeItem("loksewa_auth_user");
+        } catch {}
+      }
       return fresh;
     },
+    initialData: () => getStoredUser(),
     enabled: typeof window !== "undefined" ? !!getAuthToken() : false,
     staleTime: 60 * 1000,
   });
@@ -101,6 +131,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // addition to the full-page redirect authApi.logout performs.
     queryClient.clear();
     queryClient.setQueryData(CURRENT_USER_QUERY_KEY, null);
+    try {
+      localStorage.removeItem("loksewa_auth_user");
+      localStorage.removeItem("loksewa_student_active_course");
+    } catch {}
     authApi.logout(redirectTo);
   }, [queryClient]);
 

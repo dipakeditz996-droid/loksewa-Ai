@@ -177,10 +177,12 @@ export function FirstPartyPdfViewer({
       httpHeaders["Authorization"] = `Bearer ${token}`;
     }
 
+    let currentLoadingTask: any = null;
+
     loadPdfJs()
       .then((pdfjs) => {
         if (!active) return;
-        const loadingTask = pdfjs.getDocument({
+        currentLoadingTask = pdfjs.getDocument({
           url: resolvedUrl,
           httpHeaders,
           withCredentials: true,
@@ -188,7 +190,7 @@ export function FirstPartyPdfViewer({
           cMapPacked: true,
         });
 
-        return loadingTask.promise;
+        return currentLoadingTask.promise;
       })
       .then((doc) => {
         if (!active || !doc) return;
@@ -199,6 +201,9 @@ export function FirstPartyPdfViewer({
       })
       .catch((err) => {
         if (!active) return;
+        if (err?.name === "AbortException" || err?.message?.includes("destroyed")) {
+          return;
+        }
         console.error("PDF load error:", err);
         setError("Failed to render PDF document. The file may be corrupt or inaccessible.");
         setLoading(false);
@@ -206,6 +211,13 @@ export function FirstPartyPdfViewer({
 
     return () => {
       active = false;
+      if (currentLoadingTask) {
+        try {
+          currentLoadingTask.destroy();
+        } catch {
+          // ignore
+        }
+      }
     };
   }, [url, loadPdfJs]);
 

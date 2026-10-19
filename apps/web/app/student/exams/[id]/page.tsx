@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { studentExamsApi } from "@/lib/api/student-exams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -36,6 +36,7 @@ export default function ExamDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const examId = Number(params.id);
   const [isStarting, setIsStarting] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -43,7 +44,8 @@ export default function ExamDetailsPage() {
 
   const { data: exam, isLoading, error } = useQuery({
     queryKey: ['student-exam', examId],
-    queryFn: () => studentExamsApi.getExamDetails(examId)
+    queryFn: () => studentExamsApi.getExamDetails(examId),
+    staleTime: 60 * 1000,
   });
 
   const requiresAdminRequest = exam?.exam_type !== "subjective" && Boolean(exam?.requires_admin_request);
@@ -78,6 +80,8 @@ export default function ExamDetailsPage() {
   const startExamMutation = useMutation({
     mutationFn: () => studentExamsApi.startExam(examId),
     onSuccess: (data) => {
+      queryClient.setQueryData(['student-attempt', data.id], data);
+      queryClient.invalidateQueries({ queryKey: ['student-exams'] });
       toast.success("Exam started successfully!");
       router.push(`/student/exams/${examId}/attempt/${data.id}`);
     },
@@ -120,6 +124,7 @@ export default function ExamDetailsPage() {
   }, [searchParams, exam?.exam_type]);
 
   const handleStartExam = () => {
+    if (isStarting || startExamMutation.isPending) return;
     setIsStarting(true);
     startExamMutation.mutate();
   };

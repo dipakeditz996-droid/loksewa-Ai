@@ -519,19 +519,53 @@ class MyCoursesListView(APIView):
 
     def get(self, request):
         user = request.user
+        from django.core.cache import cache
         from courses.services.course_access_service import CourseAccessService
         from exams.models import UserTopicProgress, Topic
         from .models import Enrollment
+        from django.db.models import Count
+
+        # Versioned cache key tied to student's dashboard/progress version
+        dash_ver = cache.get(f'dashboard_version:{user.id}') or 1
+        cache_key = f'my_courses_v2:{user.id}:{dash_ver}'
+        try:
+            cached_data = cache.get(cache_key)
+            if cached_data is not None:
+                return Response(cached_data)
+        except Exception:
+            pass
 
         auth_courses = CourseAccessService.get_accessible_courses(user).select_related('exam')
-
-        # Bulk fetch all user's topic progress to avoid N+1
-        all_progress = UserTopicProgress.objects.filter(user=user, status='completed').values_list('topic_id', flat=True)
-        completed_topic_ids = set(all_progress)
 
         enrollments_by_course = {
             e.course_id: e for e in Enrollment.objects.filter(student=user, status='active')
         }
+
+        # Batch-calculate topic counts and user completion per exam in at most 2 queries total
+        exam_ids = [c.exam_id for c in auth_courses if c.exam_id]
+        exam_topic_counts = {}
+        exam_completed_counts = {}
+
+        if exam_ids:
+            topic_aggregates = (
+                Topic.objects.filter(chapter__subject__paper__exam_id__in=exam_ids)
+                .values('chapter__subject__paper__exam_id')
+                .annotate(total=Count('id'))
+            )
+            for row in topic_aggregates:
+                exam_topic_counts[row['chapter__subject__paper__exam_id']] = row['total']
+
+            completed_aggregates = (
+                UserTopicProgress.objects.filter(
+                    user=user,
+                    status='completed',
+                    topic__chapter__subject__paper__exam_id__in=exam_ids,
+                )
+                .values('topic__chapter__subject__paper__exam_id')
+                .annotate(completed=Count('id'))
+            )
+            for row in completed_aggregates:
+                exam_completed_counts[row['topic__chapter__subject__paper__exam_id']] = row['completed']
 
         data = []
         for course in auth_courses:
@@ -543,18 +577,9 @@ class MyCoursesListView(APIView):
                 except Exception:
                     pass
 
-            # Calculate progress
-            total_topics = 0
-            completed_in_course = 0
-            if course.exam:
-                topics = Topic.objects.filter(chapter__subject__paper__exam=course.exam)
-                total_topics = topics.count()
-                topic_ids = set(topics.values_list('id', flat=True))
-                completed_in_course = len(topic_ids.intersection(completed_topic_ids))
-
-            progress_percentage = 0
-            if total_topics > 0:
-                progress_percentage = int((completed_in_course / total_topics) * 100)
+            total_topics = exam_topic_counts.get(course.exam_id, 0) if course.exam_id else 0
+            completed_in_course = exam_completed_counts.get(course.exam_id, 0) if course.exam_id else 0
+            progress_percentage = int((completed_in_course / total_topics) * 100) if total_topics > 0 else 0
 
             data.append({
                 'enrollment_id': en.id if en else course.id,
@@ -575,6 +600,11 @@ class MyCoursesListView(APIView):
                 }
             })
 
+        try:
+            cache.set(cache_key, data, 300)
+        except Exception:
+            pass
+
         return Response(data)
 
 
@@ -588,6 +618,7 @@ class CourseDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, lookup_value):
+        from django.core.cache import cache
         try:
             if str(lookup_value).isdigit():
                 course = Course.objects.select_related('exam').get(id=int(lookup_value), status='published')
@@ -596,52 +627,77 @@ class CourseDetailView(APIView):
         except Course.DoesNotExist:
             return Response({'error': 'Course not found.'}, status=drf_status.HTTP_404_NOT_FOUND)
 
-        thumbnail_url = None
-        if course.thumbnail:
+        # Cache public course data and curriculum tree for 300s
+        course_tree_cache_key = f'course_detail_v2:{course.id}'
+        cached_course_data = None
+        try:
+            cached_course_data = cache.get(course_tree_cache_key)
+        except Exception:
+            pass
+
+        if cached_course_data is None:
+            thumbnail_url = None
+            if course.thumbnail:
+                try:
+                    thumbnail_url = request.build_absolute_uri(course.thumbnail.url)
+                except Exception:
+                    pass
+
+            base_data = {
+                'id': course.id,
+                'title': course.title,
+                'slug': course.slug,
+                'short_description': course.short_description,
+                'description': course.description,
+                'thumbnail': thumbnail_url,
+                'duration_months': course.duration_months,
+                'is_open_for_enrollment': course.is_open_for_enrollment,
+                'exam': {'id': course.exam.id, 'title': getattr(course.exam, 'name', getattr(course.exam, 'title', ''))} if course.exam else None,
+            }
+
+            # Prefetch curriculum hierarchy in bounded queries
+            if course.exam:
+                from exams.models import Subject
+                from exams.serializers import SubjectSerializer
+                subjects = (
+                    Subject.objects.filter(paper__exam=course.exam, is_active=True)
+                    .prefetch_related('chapters__topics')
+                )
+                base_data['subjects'] = SubjectSerializer(subjects, many=True, context={'request': request}).data
+                base_data['subject_count'] = len(subjects)
+            else:
+                base_data['subjects'] = []
+            from notes.models import StudyMaterial
+            from exams.models import Examination
+            base_data['materials_count'] = StudyMaterial.objects.filter(course=course, status='published').count()
+            base_data['mock_exams_count'] = Examination.objects.filter(course=course, status__in=['published', 'live']).count()
+
             try:
-                thumbnail_url = request.build_absolute_uri(course.thumbnail.url)
+                cache.set(course_tree_cache_key, base_data, 300)
             except Exception:
                 pass
+            cached_course_data = base_data
 
-        # Basic public data
-        data = {
-            'id': course.id,
-            'title': course.title,
-            'slug': course.slug,
-            'short_description': course.short_description,
-            'description': course.description,
-            'thumbnail': thumbnail_url,
-            'duration_months': course.duration_months,
-            'is_open_for_enrollment': course.is_open_for_enrollment,
-            'exam': {'id': course.exam.id, 'title': getattr(course.exam, 'name', getattr(course.exam, 'title', ''))} if course.exam else None,
-        }
-        
-        # Include the curriculum (subjects/chapters/topics)
-        if course.exam:
-            from exams.models import Subject
-            from exams.serializers import SubjectSerializer
-            subjects = Subject.objects.filter(paper__exam=course.exam, is_active=True)
-            data['subjects'] = SubjectSerializer(subjects, many=True, context={'request': request}).data
+        import copy
+        data = copy.deepcopy(cached_course_data)
+        subject_count = data.pop('subject_count', 0)
+        materials_count = data.pop('materials_count', 0)
+        mock_exams_count = data.pop('mock_exams_count', 0)
 
-        # Check enrollment
+        # Check enrollment dynamically for authenticated student
         is_enrolled = False
         if request.user.is_authenticated:
-            is_enrolled = Enrollment.objects.filter(student=request.user, course=course, status='active').exists()
+            from .models import Enrollment
+            is_enrolled = Enrollment.objects.filter(student=request.user, course_id=course.id, status='active').exists()
 
         data['is_enrolled'] = is_enrolled
 
         if is_enrolled:
-            # Add protected metadata for enrolled students
-            data['metadata'] = {}
-            if course.exam:
-                from exams.models import Subject
-                data['metadata']['subject_count'] = Subject.objects.filter(paper__exam=course.exam).count()
-                
-            from notes.models import StudyMaterial
-            data['metadata']['materials_count'] = StudyMaterial.objects.filter(course=course, status='published').count()
-            
-            from exams.models import Examination
-            data['metadata']['mock_exams_count'] = Examination.objects.filter(course=course, status__in=['published', 'live']).count()
+            data['metadata'] = {
+                'subject_count': subject_count,
+                'materials_count': materials_count,
+                'mock_exams_count': mock_exams_count,
+            }
 
         return Response(data)
 

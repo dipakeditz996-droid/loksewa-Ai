@@ -62,12 +62,19 @@ class Enrollment(models.Model):
         super().save(*args, **kwargs)
         if self.student_id:
             from .access import invalidate_student_course_context
-            invalidate_student_course_context(self.student_id)
+            try:
+                invalidate_student_course_context(self.student)
+            except Exception:
+                invalidate_student_course_context(self.student_id)
 
     def delete(self, *args, **kwargs):
+        student_obj = getattr(self, 'student', None)
         student_id = self.student_id
         super().delete(*args, **kwargs)
-        if student_id:
+        if student_obj:
+            from .access import invalidate_student_course_context
+            invalidate_student_course_context(student_obj)
+        elif student_id:
             from .access import invalidate_student_course_context
             invalidate_student_course_context(student_id)
 

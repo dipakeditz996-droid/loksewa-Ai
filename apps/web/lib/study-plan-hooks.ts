@@ -104,12 +104,12 @@ function useSectionQuery<T>(
 
 export function useStudyPreparations(exam: number | null) {
   return useSectionQuery("preparations", exam, (e) => studyPlanPageApi.preparations(e), (d) => d.selected,
-    { staleTime: 2 * 60 * 1000, revalidateOnVisit: false });
+    { staleTime: 5 * 60 * 1000, revalidateOnVisit: false });
 }
 
 export function useStudyPlan(exam: number | null) {
   return useSectionQuery("plan", exam, (e) => studyPlanPageApi.plan(e), (d) => d.exam?.id,
-    { staleTime: 30 * 1000, revalidateOnVisit: true });
+    { staleTime: 60 * 1000, revalidateOnVisit: true });
 }
 
 export function useStudyProgress(exam: number | null) {

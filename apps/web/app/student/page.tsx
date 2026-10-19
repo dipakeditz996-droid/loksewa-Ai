@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { dashboardApi } from "@/lib/api/dashboard";
 import { gamificationService } from "@/lib/api/gamification";
 import { notesApi } from "@/lib/api/notes";
+import { courseEnrollmentApi } from "@/lib/api/enrollment";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAuthToken } from "@/lib/api/client";
 import { useOptionalStudentContext } from "@/contexts/StudentContext";
@@ -39,13 +40,15 @@ const DraggableDashboardLayout = dynamic(
 export default function StudentDashboardPage() {
   const { user } = useAuth();
   const studentCtx = useOptionalStudentContext();
-  const effectiveCourseId = studentCtx?.activeCourse?.id;
+  const activeCourse = studentCtx?.activeCourse ?? null;
+  const effectiveCourseId = activeCourse?.id;
+  const activeExamId = activeCourse?.exam_id ?? null;
   const isCtxLoading = studentCtx?.isLoading ?? false;
 
   const hasToken = typeof window !== "undefined" ? !!getAuthToken() : false;
 
   // 1. Primary Dashboard Query
-  // Preserved fix: gated by !isCtxLoading so no unscoped request fires before context resolution.
+  // Runs in parallel with student context initialization to eliminate sequential waterfall
   const {
     data,
     isFetching: dashboardFetching,
@@ -54,8 +57,8 @@ export default function StudentDashboardPage() {
   } = useQuery({
     queryKey: ["student-dashboard", effectiveCourseId ?? null],
     queryFn: () => dashboardApi.getStudentDashboard(effectiveCourseId),
-    enabled: (hasToken || !!user) && !isCtxLoading,
-    staleTime: 45 * 1000,
+    enabled: hasToken || !!user,
+    staleTime: 60 * 1000,
   });
   const loading = !data;
   const error = isError && !data;
@@ -74,7 +77,7 @@ export default function StudentDashboardPage() {
     staleTime: 60 * 1000,
   });
 
-  const { data: referralHistory = [], isLoading: isReferralHistoryLoading } = useQuery({
+  const { data: referralHistory, isLoading: isReferralHistoryLoading } = useQuery({
     queryKey: ["referral-history"],
     queryFn: () => gamificationService.getStudentReferralHistory().catch(() => []),
     enabled: hasToken || !!user,
@@ -89,15 +92,21 @@ export default function StudentDashboardPage() {
     hasPrefetchedRef.current = true;
     const timer = setTimeout(() => {
       queryClient.prefetchQuery({
-        queryKey: ["syllabus-notes-portal", null],
-        queryFn: () => notesApi.getStudentPortalView(undefined),
+        queryKey: ["syllabus-notes-portal", activeExamId, effectiveCourseId ?? null],
+        queryFn: () => notesApi.getStudentPortalView(effectiveCourseId, activeExamId ?? undefined),
         staleTime: 5 * 60 * 1000,
+      });
+      queryClient.prefetchQuery({
+        queryKey: ["my-courses"],
+        queryFn: () => courseEnrollmentApi.getMyCourses(),
+        staleTime: 60 * 1000,
       });
     }, 2500);
     return () => clearTimeout(timer);
-  }, [data, queryClient]);
+  }, [data, queryClient, activeExamId, effectiveCourseId]);
 
   const [mounted, setMounted] = useState(false);
+  const [dndReady, setDndReady] = useState(false);
   const [fullOrder, setFullOrder] = useState<FullWidthId[]>([...FULL_WIDTH_WIDGETS]);
   const [gridOrder, setGridOrder] = useState<GridId[]>([...GRID_WIDGETS]);
 
@@ -105,6 +114,15 @@ export default function StudentDashboardPage() {
     setMounted(true);
     setFullOrder(loadOrder(STORAGE_KEY_FULL, FULL_WIDTH_WIDGETS));
     setGridOrder(loadOrder(STORAGE_KEY_GRID, GRID_WIDGETS));
+
+    // Defer loading heavy @dnd-kit bundle until after initial visual paint and browser idle
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const handle = (window as any).requestIdleCallback(() => setDndReady(true));
+      return () => (window as any).cancelIdleCallback(handle);
+    } else {
+      const timer = setTimeout(() => setDndReady(true), 1200);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   if (error) {
@@ -246,9 +264,12 @@ export default function StudentDashboardPage() {
     );
   }
 
-  const activeCourse =
-    studentCtx?.activeCourse ||
-    (data?.activeCourse ? { title: data.activeCourse.name, level_name: null } : null);
+  const headerActiveCourse =
+    activeCourse ||
+    (data?.activeCourse ? { id: data.activeCourse.id, title: data.activeCourse.name, level_name: null } : null);
+
+  const isReferralsLoading =
+    isReferralHistoryLoading || referralHistory === undefined || loading;
 
   const layoutProps = {
     fullOrder,
@@ -258,7 +279,7 @@ export default function StudentDashboardPage() {
     motivation,
     referralData,
     referralHistory,
-    isReferralHistoryLoading,
+    isReferralHistoryLoading: isReferralsLoading,
     onFullOrderChange: setFullOrder,
     onGridOrderChange: setGridOrder,
   };
@@ -270,7 +291,7 @@ export default function StudentDashboardPage() {
         data={data}
         loading={loading}
         user={user}
-        activeCourse={activeCourse}
+        activeCourse={headerActiveCourse}
         isCtxLoading={isCtxLoading}
         dashboardFetching={dashboardFetching}
         mounted={mounted}
@@ -289,8 +310,8 @@ export default function StudentDashboardPage() {
         <MockExamCountdown />
       </section>
 
-      {/* 4. Widget Sections: Fast static shell on SSR/initial paint, deferred dnd-kit on client */}
-      {mounted ? (
+      {/* 4. Widget Sections: Instant static shell on initial paint, deferred dnd-kit on idle */}
+      {mounted && dndReady ? (
         <DraggableDashboardLayout {...layoutProps} />
       ) : (
         <StaticDashboardLayout {...layoutProps} />

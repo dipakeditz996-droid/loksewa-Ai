@@ -38,12 +38,6 @@ def _practice_exam_scope(user, course_id=None):
         course = authorized_courses(user).filter(id=course_id, status='published').first()
         return get_course_exam_ids(course) if course else set()
 
-    ctx = get_student_course_context(user)
-    active_course = ctx.get('active_course')
-    if active_course and active_course.get('id'):
-        course = Course.objects.filter(id=active_course['id'], status='published').first()
-        return get_course_exam_ids(course) if course else set()
-
     return authorized_exam_ids(user)
 
 
@@ -185,12 +179,76 @@ class ExamViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated, HasActiveSubscription]
 
     def list(self, request, *args, **kwargs):
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+
+        course_id = request.query_params.get('course_id')
+        from courses.access import CourseAccessService
+        is_priv = CourseAccessService.is_privileged(request.user)
+
+        if course_id:
+            try:
+                cid = int(course_id)
+            except (TypeError, ValueError):
+                return Response([])
+            if not is_priv and not CourseAccessService.has_course_access(request.user, cid):
+                return Response([])
+
+        cache_key = None
+        if use_cache:
+            from django.core.cache import cache
+            from core.views import get_student_dashboard_version
+            dash_ver = get_student_dashboard_version(request.user.id)
+            if is_priv:
+                cache_key = f'staff_exam_tree_v2:{course_id or "all"}'
+            else:
+                cache_key = f'student_exam_tree_v2:{request.user.id}:{course_id or "all"}:{dash_ver}'
+            try:
+                cached_tree = cache.get(cache_key)
+                if cached_tree is not None:
+                    return Response(cached_tree)
+            except Exception:
+                pass
+
         from collections import Counter
         exams = list(self.filter_queryset(self.get_queryset()))
         counts = Counter(e.name for e in exams)
         context = self.get_serializer_context()
         context['duplicate_exam_names'] = {name for name, n in counts.items() if n > 1}
-        return Response(ExamSerializer(exams, many=True, context=context).data)
+
+        # Check which exams lack subjects in their prefetched papers
+        exams_lacking_subjects = []
+        for e in exams:
+            has_subjects = any(p.subjects.all() for p in getattr(e, 'papers', []).all()) if hasattr(e, 'papers') else False
+            if not has_subjects:
+                exams_lacking_subjects.append(e.id)
+
+        if exams_lacking_subjects:
+            from django.db.models import Prefetch
+            from .models import Subject, Chapter
+            fallback_qs = Subject.objects.filter(
+                examinations__exam_id__in=exams_lacking_subjects,
+                is_active=True
+            ).prefetch_related(
+                Prefetch('chapters', queryset=Chapter.objects.filter(is_active=True).prefetch_related('topics'))
+            ).distinct()
+            fallback_map: dict = {}
+            for s in fallback_qs:
+                for exam_rel in s.examinations.all():
+                    if exam_rel.exam_id in exams_lacking_subjects:
+                        fallback_map.setdefault(exam_rel.exam_id, []).append(s)
+            context['_fallback_subjects_map'] = fallback_map
+        else:
+            context['_fallback_subjects_map'] = {}
+
+        serialized = ExamSerializer(exams, many=True, context=context).data
+        if use_cache and cache_key:
+            try:
+                from django.core.cache import cache
+                cache.set(cache_key, serialized, 300)
+            except Exception:
+                pass
+        return Response(serialized)
 
     def get_queryset(self):
         from django.db.models import Prefetch
@@ -203,9 +261,9 @@ class ExamViewSet(viewsets.ReadOnlyModelViewSet):
         # topic queries here, 16 for subjects) - and each round trip to the
         # hosted database costs ~170ms.
         qs = Exam.objects.filter(is_active=True).select_related('parent', 'category').prefetch_related(
-            Prefetch('papers', queryset=Paper.objects.prefetch_related(
-                Prefetch('subjects', queryset=Subject.objects.prefetch_related(
-                    Prefetch('chapters', queryset=Chapter.objects.prefetch_related('topics'))
+            Prefetch('papers', queryset=Paper.objects.filter(is_active=True).prefetch_related(
+                Prefetch('subjects', queryset=Subject.objects.filter(is_active=True).prefetch_related(
+                    Prefetch('chapters', queryset=Chapter.objects.filter(is_active=True).prefetch_related('topics'))
                 ))
             ))
         ).order_by('category_id', 'order', 'id')
@@ -235,35 +293,110 @@ class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer
 
+    def list(self, request, *args, **kwargs):
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+        exam_id = request.query_params.get('exam')
+        cache_key = None
+        if use_cache:
+            from django.core.cache import cache
+            from core.views import get_student_dashboard_version
+            from courses.access import CourseAccessService
+            is_priv = CourseAccessService.is_privileged(request.user)
+            dash_ver = get_student_dashboard_version(request.user.id)
+            if is_priv:
+                cache_key = f'staff_subject_list_v1:{exam_id or "all"}'
+            else:
+                cache_key = f'student_subject_list_v1:{request.user.id}:{exam_id or "all"}:{dash_ver}'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
+        response = super().list(request, *args, **kwargs)
+        if use_cache and cache_key and response.status_code == 200:
+            try:
+                from django.core.cache import cache
+                cache.set(cache_key, response.data, 300)
+            except Exception:
+                pass
+        return response
+
     def get_queryset(self):
-        queryset = Subject.objects.all()
+        from django.db.models import Prefetch, Q
+        from .models import Chapter
+        queryset = Subject.objects.filter(is_active=True).prefetch_related(
+            Prefetch('chapters', queryset=Chapter.objects.filter(is_active=True).prefetch_related('topics'))
+        )
         user = self.request.user
         if user and user.is_authenticated and getattr(user, 'role', None) == 'student':
             from courses.services.course_access_service import CourseAccessService
             scope = CourseAccessService.get_accessible_academic_scope(user)
             if not scope['is_unrestricted']:
                 queryset = queryset.filter(id__in=scope['subject_ids'])
-        # Subject has no direct `exam` FK - it reaches Exam through Paper.
+        # Subject has no direct `exam` FK - it reaches Exam through Paper or Examination.
         exam_id = self.request.query_params.get('exam')
         if exam_id:
-            queryset = queryset.filter(paper__exam_id=exam_id).distinct()
-        return queryset
+            queryset = queryset.filter(
+                Q(paper__exam_id=exam_id) | Q(examinations__exam_id=exam_id)
+            ).distinct()
+        return queryset.order_by('order', 'id')
 
 class TopicViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
-    filterset_fields = ['subject']
+    filterset_fields = ['chapter']
+
+    def list(self, request, *args, **kwargs):
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+        subject_id = request.query_params.get('subject')
+        chapter_id = request.query_params.get('chapter')
+        cache_key = None
+        if use_cache:
+            from django.core.cache import cache
+            from core.views import get_student_dashboard_version
+            from courses.access import CourseAccessService
+            is_priv = CourseAccessService.is_privileged(request.user)
+            dash_ver = get_student_dashboard_version(request.user.id)
+            if is_priv:
+                cache_key = f'staff_topic_list_v1:{subject_id or "all"}:{chapter_id or "all"}'
+            else:
+                cache_key = f'student_topic_list_v1:{request.user.id}:{subject_id or "all"}:{chapter_id or "all"}:{dash_ver}'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
+        response = super().list(request, *args, **kwargs)
+        if use_cache and cache_key and response.status_code == 200:
+            try:
+                from django.core.cache import cache
+                cache.set(cache_key, response.data, 300)
+            except Exception:
+                pass
+        return response
 
     def get_queryset(self):
-        queryset = Topic.objects.all()
+        queryset = Topic.objects.filter(is_active=True).select_related('chapter')
         user = self.request.user
         if user and user.is_authenticated and getattr(user, 'role', None) == 'student':
             from courses.services.course_access_service import CourseAccessService
             scope = CourseAccessService.get_accessible_academic_scope(user)
             if not scope['is_unrestricted']:
                 queryset = queryset.filter(id__in=scope['topic_ids'])
-        return queryset
+        subject_id = self.request.query_params.get('subject')
+        if subject_id:
+            queryset = queryset.filter(chapter__subject_id=subject_id)
+        chapter_id = self.request.query_params.get('chapter')
+        if chapter_id:
+            queryset = queryset.filter(chapter_id=chapter_id)
+        return queryset.order_by('order', 'id')
 
     @action(detail=True, methods=['get'])
     def content(self, request, pk=None):
@@ -500,13 +633,29 @@ def _new_study_page_payload(session, question_ids, page, page_size):
     }
 
 
+def _attempts_prefetch_qs(session):
+    return QuestionAttempt.objects.filter(session=session).select_related(
+        'question',
+        'question__category',
+        'question__exam',
+        'question__exam__category',
+        'question__exam__parent__category',
+        'question__subject',
+        'question__subject__paper__exam',
+        'question__chapter',
+        'question__chapter__subject',
+        'question__chapter__subject__paper__exam',
+        'question__topic',
+        'question__topic__chapter',
+        'question__topic__chapter__subject',
+        'question__topic__chapter__subject__paper__exam',
+    ).prefetch_related('question__tag_objects')
+
+
 def _practice_result_payload(session, serializer_data):
     """The result of a COMPLETED session: its totals plus every question with
     the student's answer. Read-only."""
-    attempts = (
-        QuestionAttempt.objects.filter(session=session)
-        .select_related('question').prefetch_related('question__tag_objects')
-    )
+    attempts = _attempts_prefetch_qs(session)
     return {
         'session': serializer_data,
         'attempts': [{
@@ -1042,17 +1191,23 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
     @action(detail=False, methods=['get'])
     def revision_summary(self, request):
         """Counts behind each Revision Mode signal, without starting a session."""
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False) and request.META.get('SERVER_NAME') != 'testserver'
+
         from django.core.cache import cache
+        from core.views import get_student_dashboard_version
         course_id = request.query_params.get('course_id')
         scope = _practice_exam_scope(request.user, course_id)
         scope_key = 'all' if scope is None else ','.join(str(value) for value in sorted(scope))
-        cache_key = f'student_rev_summary:{request.user.id}:{scope_key}'
-        try:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return Response(cached)
-        except Exception:
-            pass
+        dash_ver = get_student_dashboard_version(request.user.id)
+        cache_key = f'student_rev_summary_v2:{request.user.id}:{scope_key}:{dash_ver}'
+        if use_cache:
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
         buckets = _revision_buckets(request.user, course_id)
         all_records = buckets['overdue'] + buckets['repeatedly_incorrect'] + buckets['recent_mistakes'] + buckets['weak_topics']
@@ -1065,10 +1220,11 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             'weak_topics': len({m.question_id for m in buckets['weak_topics']}),
             'total_available': len({m.question_id for m in all_records} | recent_ids),
         }
-        try:
-            cache.set(cache_key, data, 30)
-        except Exception:
-            pass
+        if use_cache:
+            try:
+                cache.set(cache_key, data, 180)
+            except Exception:
+                pass
         return Response(data)
 
     @action(detail=False, methods=['post'])
@@ -1373,7 +1529,7 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             # Idempotent re-fetch (e.g. the result page re-requesting a
             # session that was already finalized) — still return the full
             # attempts payload the result page needs, not just the session.
-            attempts = QuestionAttempt.objects.filter(session=session).select_related('question').prefetch_related('question__tag_objects')
+            attempts = _attempts_prefetch_qs(session)
             return Response({
                 'session': self.get_serializer(session).data,
                 'attempts': _attempts_data(attempts),
@@ -1402,11 +1558,7 @@ class PracticeSessionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
             session = PracticeSession.objects.select_for_update().get(pk=session.pk)
             already_completed = session.completed
 
-            attempts = list(
-                QuestionAttempt.objects.filter(session=session)
-                .select_related('question')
-                .prefetch_related('question__tag_objects')
-            )
+            attempts = list(_attempts_prefetch_qs(session))
 
             if not already_completed:
                 correct = 0
@@ -1544,6 +1696,11 @@ class UserTopicProgressViewSet(viewsets.ModelViewSet):
             }
         )
         serializer = self.get_serializer(obj)
+        try:
+            from core.views import invalidate_student_dashboard
+            invalidate_student_dashboard(request.user.id)
+        except Exception:
+            pass
         return Response(serializer.data)
 
 from rest_framework.views import APIView

@@ -35,35 +35,18 @@ class EntitlementService:
             return None if cached == '__none__' else cached
 
         now = timezone.now()
-        # 1. First look for active PAID subscriptions (plan__price > 0)
-        paid_subs = (
+        active_sub = (
             Subscription.objects.filter(
-                student=user,
-                status='ACTIVE',
-                plan__price__gt=0,
-            )
-            .filter(Q(expiry_date__isnull=True) | Q(expiry_date__gt=now))
-            .select_related('plan')
-            .order_by(F('expiry_date').desc(nulls_first=True), '-created_at')
-        )
-        first_paid = paid_subs.first()
-        if first_paid:
-            setattr(user, '_cached_active_subscription', first_paid)
-            return first_paid
-
-        # 2. If no active paid subscription, look for active FREE subscriptions
-        free_subs = (
-            Subscription.objects.filter(
+                Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
                 student=user,
                 status='ACTIVE',
             )
-            .filter(Q(expiry_date__isnull=True) | Q(expiry_date__gt=now))
             .select_related('plan')
-            .order_by('-created_at')
+            .order_by(F('plan__price').desc(), F('expiry_date').desc(nulls_first=True), '-created_at')
+            .first()
         )
-        res = free_subs.first()
-        setattr(user, '_cached_active_subscription', res or '__none__')
-        return res
+        setattr(user, '_cached_active_subscription', active_sub or '__none__')
+        return active_sub
 
     @classmethod
     def get_default_free_plan(cls) -> Optional[SubscriptionPlan]:
@@ -523,7 +506,7 @@ class EntitlementService:
 
         try:
             from django.core.cache import cache
-            cache.set(cache_key, result, 30)
+            cache.set(cache_key, result, 300)
         except Exception:
             pass
 
@@ -700,11 +683,10 @@ class EntitlementService:
         if CourseAccessService.is_privileged(user) or getattr(examination, 'is_free', False):
             return True, "Exempt from quota consumption.", {}
 
-        # If examination requires admin approval and student has an approved request, permit start
-        if getattr(examination, 'requires_admin_request', False):
-            from exams.models import ExaminationRequest
-            if ExaminationRequest.objects.filter(student=user, examination=examination, status='approved').exists():
-                return True, "Approved by admin for this examination.", {}
+        # If student has an approved request for this examination, permit start
+        from exams.models import ExaminationRequest
+        if ExaminationRequest.objects.filter(student=user, examination=examination, status='approved').exists():
+            return True, "Approved by admin for this examination.", {}
 
         active_sub = cls.get_active_subscription(user)
         plan = active_sub.plan if active_sub else None

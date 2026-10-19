@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
@@ -25,11 +25,14 @@ import {
   CheckCircle,
   ArrowRight,
   MessageSquare,
+  AlertCircle,
+  Filter,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { studentResultService } from "@/lib/api/student-results";
 import { studentExamsApi } from "@/lib/api/student-exams";
 import {
@@ -50,46 +53,70 @@ export default function FullResultPage() {
   const [topics, setTopics] = useState<TopicPerformance[]>([]);
   const [reviews, setReviews] = useState<QuestionReview[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [submittingChecking, setSubmittingChecking] = useState(false);
   const [downloadingExpertPdf, setDownloadingExpertPdf] = useState(false);
   const [expertSolutionInfo, setExpertSolutionInfo] = useState<any>(null);
+  const [reviewFilter, setReviewFilter] = useState<"all" | "correct" | "incorrect" | "unanswered">("all");
+
+  const filteredReviews = useMemo(() => {
+    if (reviewFilter === "all") return reviews;
+    if (reviewFilter === "correct") return reviews.filter((r) => r.status === "Correct");
+    if (reviewFilter === "incorrect") return reviews.filter((r) => r.status === "Incorrect");
+    if (reviewFilter === "unanswered") return reviews.filter((r) => r.status === "Unanswered");
+    return reviews;
+  }, [reviews, reviewFilter]);
+
+  const fetchData = useCallback(async (bypassCache = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const resultData = await studentResultService.getStudentResult(resultId, { bypassCache });
+      if (resultData) {
+        setResult(resultData);
+        if (resultData.reviews && resultData.reviews.length > 0) {
+          setReviews(resultData.reviews);
+        }
+        if (resultData.subjectBreakdown && resultData.subjectBreakdown.length > 0) {
+          setSubjects(resultData.subjectBreakdown);
+        }
+        if (resultData.topicBreakdown && resultData.topicBreakdown.length > 0) {
+          setTopics(resultData.topicBreakdown);
+        }
+
+        // Secondary / background tasks: do not block primary result presentation
+        if (resultData.isSubjective && resultData.examId) {
+          studentExamsApi.getSubjectiveExpertSolutionInfo(parseInt(resultData.examId))
+            .then((info) => setExpertSolutionInfo(info))
+            .catch(() => setExpertSolutionInfo(null));
+        }
+
+        // Optional historical aggregates only if breakdown is completely absent
+        if (!resultData.subjectBreakdown || resultData.subjectBreakdown.length === 0) {
+          studentResultService.getSubjectPerformance()
+            .then((sData) => { if (sData && sData.length > 0) setSubjects(sData); })
+            .catch(() => {});
+        }
+        if (!resultData.topicBreakdown || resultData.topicBreakdown.length === 0) {
+          studentResultService.getTopicPerformance()
+            .then((tData) => { if (tData && tData.length > 0) setTopics(tData); })
+            .catch(() => {});
+        }
+      } else {
+        setError("Result not found or access is restricted.");
+      }
+    } catch (err: any) {
+      console.error("Failed to load result details", err);
+      const msg = err?.data?.detail || err?.data?.error || err?.message || "Failed to load result details.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [resultId]);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const resultData = await studentResultService.getStudentResult(resultId);
-        if (resultData) {
-          setResult(resultData);
-          if (resultData.reviews && resultData.reviews.length > 0) {
-            setReviews(resultData.reviews);
-          }
-          if (resultData.subjectBreakdown && resultData.subjectBreakdown.length > 0) {
-            setSubjects(resultData.subjectBreakdown);
-          } else {
-            const sData = await studentResultService.getSubjectPerformance().catch(() => []);
-            setSubjects(sData);
-          }
-          if (resultData.topicBreakdown && resultData.topicBreakdown.length > 0) {
-            setTopics(resultData.topicBreakdown);
-          } else {
-            const tData = await studentResultService.getTopicPerformance().catch(() => []);
-            setTopics(tData);
-          }
-
-          if (resultData.isSubjective && resultData.examId) {
-            studentExamsApi.getSubjectiveExpertSolutionInfo(parseInt(resultData.examId))
-              .then((info) => setExpertSolutionInfo(info))
-              .catch(() => setExpertSolutionInfo(null));
-          }
-        }
-      } catch (error) {
-        console.error("Failed to load result details", error);
-      } finally {
-        setLoading(false);
-      }
-    }
     fetchData();
-  }, [resultId]);
+  }, [fetchData]);
 
   const handleRequestChecking = async () => {
     if (!result) return;
@@ -97,6 +124,7 @@ export default function FullResultPage() {
     try {
       const res = await studentExamsApi.requestManualChecking(parseInt(result.id));
       toast.success(res.detail || "Manual evaluation request submitted successfully!");
+      studentResultService.invalidateResultsCache(result.id);
       setResult((prev) => prev ? {
         ...prev,
         checkingRequest: {
@@ -141,19 +169,71 @@ export default function FullResultPage() {
 
   if (loading) {
     return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#0B2545] border-t-[#D4A72C]"></div>
+      <div className="space-y-6 pb-12 animate-in fade-in duration-300">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-10 rounded-lg" />
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-64" />
+              <Skeleton className="h-4 w-40" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-28" />
+            <Skeleton className="h-10 w-28" />
+          </div>
+        </div>
+
+        {/* 4 Stat Cards Skeleton */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="p-4">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Tabs & Content Shell */}
+        <div className="space-y-4">
+          <Skeleton className="h-11 w-full max-w-md rounded-lg" />
+          <Card className="p-6">
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-48" />
+              <div className="space-y-3">
+                <Skeleton className="h-16 w-full rounded-md" />
+                <Skeleton className="h-16 w-full rounded-md" />
+                <Skeleton className="h-16 w-full rounded-md" />
+              </div>
+            </div>
+          </Card>
+        </div>
       </div>
     );
   }
 
-  if (!result) {
+  if (error || !result) {
     return (
-      <div className="p-8 text-center text-muted-foreground">
-        <p>Result not found.</p>
-        <Button asChild variant="outline" className="mt-4">
-          <Link href="/student/results">Back to Results</Link>
-        </Button>
+      <div className="flex flex-col items-center justify-center p-12 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600 mb-4 dark:bg-red-950/40">
+          <AlertCircle className="h-6 w-6" />
+        </div>
+        <h3 className="text-lg font-semibold text-foreground">Result Unavailable</h3>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+          {error || "Result not found or access is restricted."}
+        </p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <Button onClick={() => fetchData(true)} variant="default" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/student/results">Back to Results</Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -476,6 +556,15 @@ export default function FullResultPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-primary dark:text-foreground">{result.examName}</h1>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => fetchData(true)}
+            className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            title="Refresh Result"
+          >
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </Button>
           <Button variant="outline" size="sm" className="hidden sm:flex">
             <Share2 className="w-4 h-4 mr-2" /> Share
           </Button>
@@ -673,7 +762,57 @@ export default function FullResultPage() {
 
       {/* Question Review */}
       <div>
-        <h2 className="text-xl font-bold text-primary dark:text-foreground mb-4">Review Answers</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h2 className="text-xl font-bold text-primary dark:text-foreground">Review Answers</h2>
+          {reviews.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-muted/60 rounded-lg text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setReviewFilter("all")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  reviewFilter === "all"
+                    ? "bg-background text-foreground shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All ({reviews.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewFilter("correct")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  reviewFilter === "correct"
+                    ? "bg-green-600 text-white shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-green-600 dark:hover:text-green-400"
+                }`}
+              >
+                Correct ({totalCorrect})
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewFilter("incorrect")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  reviewFilter === "incorrect"
+                    ? "bg-red-600 text-white shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                }`}
+              >
+                Incorrect ({totalIncorrect})
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewFilter("unanswered")}
+                className={`px-2.5 py-1 rounded-md transition-colors ${
+                  reviewFilter === "unanswered"
+                    ? "bg-foreground text-background shadow-sm font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Unanswered ({totalUnanswered})
+              </button>
+            </div>
+          )}
+        </div>
         
         {reviews.length > 0 && !reviews[0]?.reviewAllowed && (
           <div className="p-4 mb-4 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-sm flex items-center gap-2">
@@ -682,14 +821,21 @@ export default function FullResultPage() {
           </div>
         )}
 
-        <div className="space-y-4">
-          {reviews.map((review, idx) => {
+        {filteredReviews.length === 0 ? (
+          <div className="p-8 text-center bg-card border border-border rounded-xl text-sm text-muted-foreground">
+            No {reviewFilter} questions in this examination.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredReviews.map((review) => {
+              const originalIdx = reviews.findIndex((r) => r.id === review.id);
+              const idxNumber = originalIdx >= 0 ? originalIdx + 1 : 1;
             const isSubjective = review.questionType && !["mcq", "true_false"].includes(review.questionType);
             return (
               <div key={review.id} className="bg-card border border-border rounded-xl p-5 shadow-sm">
                 <div className="flex gap-4 items-start mb-4">
                   <div className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-muted/80 text-muted-foreground font-bold text-sm">
-                    {idx + 1}
+                    {idxNumber}
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-primary dark:text-foreground leading-relaxed mb-4">
@@ -823,14 +969,17 @@ export default function FullResultPage() {
             );
           })}
         </div>
+        )}
       </div>
       {/* Debug Info */}
-      <div className="mt-8 p-4 bg-muted/50 rounded-lg text-xs font-mono text-muted-foreground border border-border">
-        <p className="font-semibold mb-2">Debug Info (For Developer Only)</p>
-        <p>Rank Type: {typeof result.rank} | Value: {String(result.rank)}</p>
-        <p>Total Participants Type: {typeof result.totalParticipants} | Value: {String(result.totalParticipants)}</p>
-        <p>Correct: {result.correctAnswers} | Incorrect: {result.incorrectAnswers} | Unanswered: {result.unanswered}</p>
-      </div>
+      {process.env.NODE_ENV === "development" && (
+        <div className="mt-8 p-4 bg-muted/50 rounded-lg text-xs font-mono text-muted-foreground border border-border">
+          <p className="font-semibold mb-2">Debug Info (For Developer Only)</p>
+          <p>Rank Type: {typeof result.rank} | Value: {String(result.rank)}</p>
+          <p>Total Participants Type: {typeof result.totalParticipants} | Value: {String(result.totalParticipants)}</p>
+          <p>Correct: {result.correctAnswers} | Incorrect: {result.incorrectAnswers} | Unanswered: {result.unanswered}</p>
+        </div>
+      )}
     </div>
   );
 }

@@ -39,7 +39,7 @@ export function MockExamSection() {
             {/* Exam header bar */}
             <div className="bg-slate-50 dark:bg-[#04080F] border-b border-slate-200 dark:border-white/[0.05] px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-[800] uppercase tracking-widest text-[#D4A72C] mb-1">REALISTIC EXAM ENVIRONMENT</div>
+                <div className="text-[10px] font-[800] uppercase tracking-widest text-[#8F6B12] dark:text-[#D4A72C] mb-1">REALISTIC EXAM ENVIRONMENT</div>
                 <h3 className="text-[16px] font-[800] text-slate-800 dark:text-white">Section Officer — Full Mock Exam</h3>
               </div>
               <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-500/[0.08] border border-red-100 dark:border-red-500/[0.15] px-4 py-2 rounded-[10px]">
@@ -62,7 +62,7 @@ export function MockExamSection() {
             {/* Question */}
             <div className="px-6 py-5">
               <p className="text-[16px] md:text-[18px] font-[600] text-slate-800 dark:text-white leading-[1.65] mb-6">
-                Which of the following is related to the fundamental right to <span className="font-[800] text-[#D4A72C]">equality</span> according to the Constitution of Nepal 2072?
+                Which of the following is related to the fundamental right to <span className="font-[800] text-[#8F6B12] dark:text-[#D4A72C]">equality</span> according to the Constitution of Nepal 2072?
               </p>
 
               {/* Options */}
@@ -115,7 +115,7 @@ export function MockExamSection() {
               {[
                 { label: "Accuracy", value: "78%", icon: Target, color: "text-emerald-500" },
                 { label: "Avg. Speed", value: "62s / Q", icon: Clock, color: "text-blue-500" },
-                { label: "Est. Rank", value: "#41", icon: TrendingUp, color: "text-[#D4A72C]" },
+                { label: "Est. Rank", value: "#41", icon: TrendingUp, color: "text-[#8F6B12] dark:text-[#D4A72C]" },
                 { label: "Readiness", value: "Good", icon: FileText, color: "text-violet-500" },
               ].map(({ label, value, icon: Icon, color }) => (
                 <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 dark:border-white/[0.04] last:border-0">

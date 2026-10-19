@@ -17,6 +17,7 @@ export interface Topic {
   progress: number;
   accuracy: number | null;
   description?: string;
+  chapter_id?: number;
 }
 
 export interface Unit {
@@ -53,6 +54,14 @@ export const syllabusApi = {
   
   getExam: async (id: number): Promise<Exam> => {
     return apiClient<Exam>(`/exams/${id}/`);
+  },
+
+  getSubjects: async (examId: number | string): Promise<Subject[]> => {
+    return apiClient<Subject[]>(`/subjects/?exam=${examId}`);
+  },
+
+  getTopics: async (subjectId: number | string): Promise<Topic[]> => {
+    return apiClient<Topic[]>(`/topics/?subject=${subjectId}`);
   },
 
   updateTopicProgress: async (topicId: number, status: TopicStatus) => {

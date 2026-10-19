@@ -49,6 +49,8 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         self._authorise_exam(serializer.validated_data.get('exam'))
         serializer.save()
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(self.request.user.id)
 
     def perform_create(self, serializer):
         if not _study_plans_enabled():
@@ -61,6 +63,9 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
         # Generate initial tasks
         generate_study_plan_tasks(plan, regenerate_future=False)
 
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(self.request.user.id)
+
         from core.notification_service import NotificationService
         NotificationService.notify_study_plan_created(plan)
 
@@ -70,6 +75,8 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Study plans are currently disabled by the administrator.")
         plan = self.get_object()
         generate_study_plan_tasks(plan, regenerate_future=True)
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(request.user.id)
         return Response({"status": "Tasks regenerated successfully."})
 
     @action(detail=True, methods=['post'])
@@ -77,6 +84,8 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
         plan = self.get_object()
         plan.is_paused = True
         plan.save()
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(request.user.id)
         return Response({"status": "Plan paused."})
 
     @action(detail=True, methods=['post'])
@@ -86,6 +95,8 @@ class StudyPlanViewSet(viewsets.ModelViewSet):
         plan.save()
         # Generate tasks again to fill any gaps while paused
         generate_study_plan_tasks(plan, regenerate_future=False)
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(request.user.id)
         return Response({"status": "Plan resumed."})
 
     @action(detail=True, methods=['get'])
@@ -172,6 +183,8 @@ class StudyTaskViewSet(viewsets.ModelViewSet):
         except Exception:
             pass  # Don't fail the completion just because the streak update errored
 
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(request.user.id)
         return Response({"status": "Task marked as completed."})
 
 
@@ -180,6 +193,8 @@ class StudyTaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         task.status = 'SKIPPED'
         task.save()
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(request.user.id)
         return Response({"status": "Task marked as skipped."})
 
 

@@ -116,7 +116,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
                 )}
                 <div>
                   <div className="text-[13px] font-[700] text-slate-800 dark:text-white">{t.name}</div>
-                  <div className="text-[11.5px] text-[#D4A72C] font-[600]">{t.position}</div>
+                  <div className="text-[11.5px] text-[#8F6B12] dark:text-[#D4A72C] font-[600]">{t.position}</div>
                 </div>
               </div>
             </div>

@@ -177,12 +177,73 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         try:
+            f = material.file.open('rb')
+            filename = f"{material.slug or 'material'}.pdf"
+            content_type = 'application/pdf' if filename.lower().endswith('.pdf') else 'application/octet-stream'
+
+            file_size = getattr(material.file, 'size', None)
+            if file_size is None:
+                try:
+                    f.seek(0, 2)
+                    file_size = f.tell()
+                    f.seek(0)
+                except Exception:
+                    file_size = None
+
+            range_header = request.META.get('HTTP_RANGE', '').strip()
+            if range_header and range_header.startswith('bytes=') and file_size and file_size > 0:
+                byte_range = range_header[6:].strip()
+                if ',' not in byte_range:
+                    parts = byte_range.split('-')
+                    start_str = parts[0].strip()
+                    end_str = parts[1].strip() if len(parts) > 1 else ''
+                    try:
+                        if start_str and end_str:
+                            start = int(start_str)
+                            end = min(int(end_str), file_size - 1)
+                        elif start_str:
+                            start = int(start_str)
+                            end = file_size - 1
+                        elif end_str:
+                            start = max(0, file_size - int(end_str))
+                            end = file_size - 1
+                        else:
+                            start = 0
+                            end = file_size - 1
+
+                        if 0 <= start <= end < file_size:
+                            content_length = end - start + 1
+                            f.seek(start)
+                            chunk = f.read(content_length)
+                            from django.http import HttpResponse
+                            response = HttpResponse(chunk, status=206, content_type=content_type)
+                            response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+                            response['Content-Length'] = str(content_length)
+                            response['Accept-Ranges'] = 'bytes'
+                            response['Content-Disposition'] = f'inline; filename="{filename}"' if is_inline else f'attachment; filename="{filename}"'
+                            response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
+                            if is_inline:
+                                response['Cache-Control'] = 'private, max-age=86400'
+                            return response
+                        else:
+                            from django.http import HttpResponse
+                            resp = HttpResponse(status=416)
+                            resp['Content-Range'] = f'bytes */{file_size}'
+                            return resp
+                    except (ValueError, TypeError):
+                        pass
+
+            from django.http import FileResponse
             response = FileResponse(
-                material.file.open('rb'),
+                f,
                 as_attachment=not is_inline,
-                filename=f"{material.slug or 'material'}.pdf"
+                filename=filename,
+                content_type=content_type,
             )
-            response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+            response['Accept-Ranges'] = 'bytes'
+            if file_size:
+                response['Content-Length'] = str(file_size)
+            response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
             if is_inline:
                 response['Cache-Control'] = 'private, max-age=86400'
             return response
@@ -314,6 +375,32 @@ def get_study_material_sort_key(item):
     return (1, float('inf'), title.lower(), item_id)
 
 
+def get_notes_portal_version(user_id):
+    from django.core.cache import cache
+    try:
+        g_ver = cache.get('notes_global_ver') or 1
+        u_ver = cache.get(f'notes_user_ver:{user_id}') or 1
+        return f"{g_ver}_{u_ver}"
+    except Exception:
+        return "1_1"
+
+
+def invalidate_notes_portal(user_id=None):
+    from django.core.cache import cache
+    try:
+        if user_id:
+            try:
+                cache.incr(f'notes_user_ver:{user_id}')
+            except Exception:
+                cache.set(f'notes_user_ver:{user_id}', 2, 86400 * 30)
+        else:
+            try:
+                cache.incr('notes_global_ver')
+            except Exception:
+                cache.set('notes_global_ver', 2, 86400 * 30)
+    except Exception:
+        pass
+
 
 class StudentPortalSyllabusNotesView(APIView):
     """GET /api/notes/student/portal/
@@ -433,6 +520,15 @@ class StudentPortalSyllabusNotesView(APIView):
                 }
             })
 
+        notes_ver = get_notes_portal_version(user.id)
+        cache_key = f'student_notes_portal_v2:{user.id}:{notes_ver}:{selected_prep_id}:{req_course_id or "default"}'
+        try:
+            cached_data = cache.get(cache_key)
+            if cached_data is not None:
+                return Response(cached_data)
+        except Exception:
+            pass
+
         selected_info = authorized_prep_dict.get(selected_prep_id)
         if not selected_info:
             prep_obj = Exam.objects.filter(pk=selected_prep_id).select_related('parent', 'category').first()
@@ -509,7 +605,7 @@ class StudentPortalSyllabusNotesView(APIView):
             "total": len(all_materials)
         }
 
-        return Response({
+        payload = {
             "authorizedPreparations": authorized_preps_list,
             "selectedPreparation": {
                 "id": selected_exam.id,
@@ -537,7 +633,13 @@ class StudentPortalSyllabusNotesView(APIView):
                     "objective": rev_objective
                 }
             }
-        })
+        }
+        try:
+            cache.set(cache_key, payload, 300)
+        except Exception:
+            pass
+
+        return Response(payload)
 
 
 # TEACHER / ADMIN WORKFLOW VIEWS

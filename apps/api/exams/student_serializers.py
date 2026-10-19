@@ -117,10 +117,13 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
     def _attempts(self, obj):
         if hasattr(obj, 'student_attempts'):
             return obj.student_attempts
+        if hasattr(obj, '_memo_student_attempts'):
+            return obj._memo_student_attempts
         user = self._user()
         if not user or not user.is_authenticated:
             return []
-        return list(obj.attempts.filter(student=user))
+        obj._memo_student_attempts = list(obj.attempts.filter(student=user))
+        return obj._memo_student_attempts
 
     def _active_attempt(self, obj):
         attempts = self._attempts(obj)
@@ -419,10 +422,16 @@ class RankedAttemptMixin(serializers.Serializer):
         if obj.percentage is None or obj.status not in ['submitted', 'evaluated']:
             return None
         
+        ranks_memo = self.context.setdefault('_ranks_memo', {})
+        memo_key = (obj.examination_id, round(float(obj.percentage), 2))
+        if memo_key in ranks_memo:
+            return ranks_memo[memo_key]
+
         from django.core.cache import cache
         cache_key = f"att_rank:{obj.examination_id}:{int(obj.percentage * 100)}"
         cached = cache.get(cache_key)
         if cached is not None:
+            ranks_memo[memo_key] = cached
             return cached
 
         # DenseRank logic: number of distinct higher percentages + 1
@@ -433,25 +442,32 @@ class RankedAttemptMixin(serializers.Serializer):
             percentage__gt=obj.percentage
         ).values('percentage').distinct().count()
         rank = higher_scores_count + 1
+        ranks_memo[memo_key] = rank
         try:
-            cache.set(cache_key, rank, 60)
+            cache.set(cache_key, rank, 600)
         except Exception:
             pass
         return rank
 
     def get_total_participants(self, obj):
+        participants_memo = self.context.setdefault('_participants_memo', {})
+        if obj.examination_id in participants_memo:
+            return participants_memo[obj.examination_id]
+
         from django.core.cache import cache
         cache_key = f"att_participants:{obj.examination_id}"
         cached = cache.get(cache_key)
         if cached is not None:
+            participants_memo[obj.examination_id] = cached
             return cached
 
         count = ExaminationAttempt.objects.filter(
             examination=obj.examination,
             status__in=['submitted', 'evaluated']
         ).values('student').distinct().count()
+        participants_memo[obj.examination_id] = count
         try:
-            cache.set(cache_key, count, 60)
+            cache.set(cache_key, count, 600)
         except Exception:
             pass
         return count
@@ -523,14 +539,21 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
         ] + TIMING_FIELDS
 
     def get_checking_request_status(self, obj):
-        if hasattr(obj, 'subjective_submission'):
-            req = obj.subjective_submission.latest_checking_request
+        sub = getattr(obj, 'subjective_submission', None)
+        if sub:
+            reqs = getattr(sub, '_prefetched_objects_cache', {}).get('checking_requests')
+            if reqs is not None:
+                return reqs[0].status if reqs else None
+            req = sub.latest_checking_request
             return req.status if req else None
         return None
 
     def get_total_marks(self, obj):
         if hasattr(obj, 'subjective_submission') and obj.subjective_submission.is_published:
-            scores = list(obj.subjective_submission.question_scores.all())
+            sub = obj.subjective_submission
+            scores = getattr(sub, '_prefetched_objects_cache', {}).get('question_scores')
+            if scores is None:
+                scores = list(sub.question_scores.all())
             if scores:
                 t = sum(qs.max_marks for qs in scores)
                 if t > 0:
@@ -542,37 +565,66 @@ class StudentExaminationAttemptListSerializer(RankedAttemptMixin, AttemptTimingM
             return obj.subjective_submission.is_published
         return obj.status == 'evaluated'
 
+    def _get_answers_list(self, obj):
+        if not hasattr(obj, '_cached_answers_list'):
+            obj._cached_answers_list = list(obj.answers.all())
+        return obj._cached_answers_list
+
     def get_needs_evaluation(self, obj):
         if obj.examination.exam_type == 'subjective':
             if hasattr(obj, 'subjective_submission'):
                 return not obj.subjective_submission.is_published
             return obj.status != 'evaluated'
-        from .models import Question
-        return obj.status != 'in-progress' and any(
-            a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
-            for a in obj.answers.all()
-        )
+        # For non-subjective exams, evaluations are auto-scored upon submission
+        return False
 
     def get_total_questions(self, obj):
         if obj.examination.total_questions:
             return obj.examination.total_questions
-        ans_count = obj.answers.count()
-        if ans_count:
-            return ans_count
-        if obj.examination.question_set_id:
-            return obj.examination.question_set.questions.count()
-        from .models import ExaminationQuestion
-        return ExaminationQuestion.objects.filter(examination=obj.examination).count()
+        if hasattr(obj, 'annotated_total_answers') and obj.annotated_total_answers > 0:
+            return obj.annotated_total_answers
+        answers = getattr(obj, '_cached_answers_list', None)
+        if answers:
+            return len(answers)
+        exam = obj.examination
+        if hasattr(exam, '_memo_total_questions'):
+            return exam._memo_total_questions
+        from django.core.cache import cache
+        c_key = f"exam_tq:{exam.id}"
+        cached_count = cache.get(c_key)
+        if cached_count is not None:
+            exam._memo_total_questions = cached_count
+            return cached_count
+        if exam.question_set_id:
+            count = exam.question_set.questions.count()
+        else:
+            from .models import ExaminationQuestion
+            count = ExaminationQuestion.objects.filter(examination=exam).count()
+        exam._memo_total_questions = count
+        try:
+            cache.set(c_key, count, 3600)
+        except Exception:
+            pass
+        return count
 
     def get_correct_answers(self, obj):
-        return sum(1 for a in obj.answers.all() if a.is_correct)
+        if hasattr(obj, 'annotated_correct'):
+            return obj.annotated_correct
+        answers = self._get_answers_list(obj)
+        return sum(1 for a in answers if a.is_correct)
 
     def get_wrong_answers(self, obj):
-        return sum(1 for a in obj.answers.all() if not a.is_correct and (a.selected_option or a.answer_text))
+        if hasattr(obj, 'annotated_wrong'):
+            return obj.annotated_wrong
+        answers = self._get_answers_list(obj)
+        return sum(1 for a in answers if not a.is_correct and (a.selected_option or a.answer_text))
 
     def get_unanswered(self, obj):
         total = self.get_total_questions(obj)
-        attempted = sum(1 for a in obj.answers.all() if a.selected_option or a.answer_text)
+        if hasattr(obj, 'annotated_attempted'):
+            return max(0, total - obj.annotated_attempted)
+        answers = self._get_answers_list(obj)
+        attempted = sum(1 for a in answers if a.selected_option or a.answer_text)
         return max(0, total - attempted)
 
     def to_representation(self, instance):
@@ -624,25 +676,30 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
             'rank', 'total_participants'
         ] + TIMING_FIELDS
 
+    def _get_answers_list(self, obj):
+        if not hasattr(obj, '_prefetched_answers_cache'):
+            obj._prefetched_answers_cache = list(obj.answers.all())
+        return obj._prefetched_answers_cache
+
     def get_total_questions(self, obj):
         if obj.examination.total_questions:
             return obj.examination.total_questions
-        ans_count = obj.answers.count()
-        if ans_count:
-            return ans_count
+        answers = self._get_answers_list(obj)
+        if answers:
+            return len(answers)
         if obj.examination.question_set_id:
             return obj.examination.question_set.questions.count()
         from .models import ExaminationQuestion
         return ExaminationQuestion.objects.filter(examination=obj.examination).count()
 
     def get_attempted_questions(self, obj):
-        return sum(1 for a in obj.answers.all() if a.selected_option or a.answer_text)
+        return sum(1 for a in self._get_answers_list(obj) if a.selected_option or a.answer_text)
 
     def get_correct_answers(self, obj):
-        return sum(1 for a in obj.answers.all() if a.is_correct)
+        return sum(1 for a in self._get_answers_list(obj) if a.is_correct)
 
     def get_wrong_answers(self, obj):
-        return sum(1 for a in obj.answers.all() if not a.is_correct and (a.selected_option or a.answer_text))
+        return sum(1 for a in self._get_answers_list(obj) if not a.is_correct and (a.selected_option or a.answer_text))
 
     def get_unanswered(self, obj):
         total = self.get_total_questions(obj)
@@ -658,7 +715,7 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
 
     def get_subject_breakdown(self, obj):
         subjects = {}
-        for ans in obj.answers.select_related('question__subject', 'question__topic__chapter__subject', 'question__chapter__subject').all():
+        for ans in self._get_answers_list(obj):
             q = ans.question
             subj = q.subject or (q.topic.chapter.subject if q.topic and q.topic.chapter else None) or (q.chapter.subject if q.chapter else None)
             name = subj.name if subj else "General"
@@ -679,7 +736,7 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
 
     def get_topic_breakdown(self, obj):
         topics = {}
-        for ans in obj.answers.select_related('question__topic').all():
+        for ans in self._get_answers_list(obj):
             q = ans.question
             if not q.topic:
                 continue
@@ -699,7 +756,10 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
 
     def get_total_marks(self, obj):
         if hasattr(obj, 'subjective_submission') and obj.subjective_submission.is_published:
-            scores = list(obj.subjective_submission.question_scores.all())
+            sub = obj.subjective_submission
+            scores = getattr(sub, '_prefetched_objects_cache', {}).get('question_scores')
+            if scores is None:
+                scores = list(sub.question_scores.all())
             if scores:
                 t = sum(qs.max_marks for qs in scores)
                 if t > 0:
@@ -713,6 +773,10 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
 
     def get_question_scores(self, obj):
         if hasattr(obj, 'subjective_submission') and obj.subjective_submission.is_published:
+            sub = obj.subjective_submission
+            scores = getattr(sub, '_prefetched_objects_cache', {}).get('question_scores')
+            if scores is None:
+                scores = list(sub.question_scores.order_by('question_number', 'id'))
             return [
                 {
                     'id': qs.id,
@@ -721,7 +785,7 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
                     'marks_obtained': qs.marks_obtained,
                     'feedback': qs.feedback,
                 }
-                for qs in obj.subjective_submission.question_scores.order_by('question_number', 'id')
+                for qs in scores
             ]
         return []
 
@@ -758,7 +822,7 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
 
     def get_answers(self, obj):
         context = {**self.context, 'can_review_answers': self._can_review(obj)}
-        return StudentAnswerReviewSerializer(obj.answers.all(), many=True, context=context).data
+        return StudentAnswerReviewSerializer(self._get_answers_list(obj), many=True, context=context).data
 
     def get_needs_evaluation(self, obj):
         if obj.examination.exam_type == 'subjective':
@@ -768,7 +832,7 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
         from .models import Question
         return obj.status != 'in-progress' and any(
             a.question.question_type in Question.SUBJECTIVE_TYPES and a.evaluated_at is None
-            for a in obj.answers.all()
+            for a in self._get_answers_list(obj)
         )
 
     def get_evaluator_feedback(self, obj):
@@ -806,7 +870,12 @@ class StudentExaminationResultSerializer(RankedAttemptMixin, AttemptTimingMixin,
                     }
                     for qs in sub.question_scores.order_by('question_number', 'id')
                 ]
-            latest_req = sub.latest_checking_request
+            latest_req = None
+            reqs = getattr(sub, '_prefetched_objects_cache', {}).get('checking_requests')
+            if reqs is not None:
+                latest_req = reqs[0] if reqs else None
+            else:
+                latest_req = sub.latest_checking_request
             checking_request_data = None
             if latest_req:
                 checking_request_data = {

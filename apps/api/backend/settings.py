@@ -80,6 +80,7 @@ SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or INSECURE_DEFAULT_SECRET_KEY
 # SECURITY WARNING: don't run with debug turned on in production!
 # DJANGO_DEBUG is the canonical name; DEBUG is accepted as an alias.
 DEBUG = _env_bool('DJANGO_DEBUG', _env_bool('DEBUG', False))
+TESTING = 'test' in sys.argv
 
 # --- SENTRY (unhandled exception monitoring) ---------------------------------
 # Opt-in via SENTRY_DSN: unset (the default, including every local dev

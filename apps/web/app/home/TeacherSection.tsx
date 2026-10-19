@@ -27,7 +27,7 @@ export function TeacherSection() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 mb-6">
                 <GraduationCap className="w-3.5 h-3.5 text-[#D4A72C]" />
-                <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#D4A72C]">Teacher Ecosystem</span>
+                <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#8F6B12] dark:text-[#D4A72C]">Teacher Ecosystem</span>
               </div>
               
               <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-5 leading-[1.1]">
@@ -76,7 +76,7 @@ export function TeacherSection() {
                   <div className="w-10 h-10 rounded-[10px] bg-[#D4A72C] flex items-center justify-center text-[#020611] font-[800] text-[16px]">RP</div>
                   <div>
                     <div className="text-[14px] font-[800] text-slate-800 dark:text-white">Ramesh Poudel</div>
-                    <div className="text-[11px] text-[#D4A72C] font-[600]">Verified Educator</div>
+                    <div className="text-[11px] text-[#8F6B12] dark:text-[#D4A72C] font-[600]">Verified Educator</div>
                   </div>
                 </div>
 

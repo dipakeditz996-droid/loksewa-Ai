@@ -25,7 +25,7 @@ export interface DashboardLayoutProps {
   loading: boolean;
   motivation: { message: string } | null | undefined;
   referralData: StudentReferralDashboardData | null | undefined;
-  referralHistory: ReferralHistoryEntry[];
+  referralHistory?: ReferralHistoryEntry[];
   isReferralHistoryLoading: boolean;
   onFullOrderChange?: (newOrder: FullWidthId[]) => void;
   onGridOrderChange?: (newOrder: GridId[]) => void;

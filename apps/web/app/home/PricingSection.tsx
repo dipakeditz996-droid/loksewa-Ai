@@ -101,7 +101,7 @@ export function PricingSection({ packages }: Props) {
         <div className="text-center mb-16">
           <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 mb-5">
             <Sparkles className="w-3.5 h-3.5 text-[#D4A72C]" />
-            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#D4A72C]">Simple Pricing</span>
+            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#8F6B12] dark:text-[#D4A72C]">Simple Pricing</span>
           </div>
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
             Invest in your <span className="text-gradient-gold">future.</span>
@@ -158,7 +158,7 @@ export function PricingSection({ packages }: Props) {
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
                         pkg.is_popular ? "bg-[#D4A72C]/10" : "bg-emerald-500/10"
                       }`}>
-                        <Check className={`w-3 h-3 ${pkg.is_popular ? "text-[#D4A72C]" : "text-emerald-500"}`} />
+                        <Check className={`w-3 h-3 ${pkg.is_popular ? "text-[#8F6B12] dark:text-[#D4A72C]" : "text-emerald-500"}`} />
                       </div>
                       <span className="text-[14px] text-slate-600 dark:text-slate-300">{feature}</span>
                     </div>

@@ -506,3 +506,32 @@ class SyllabusListQueryCostTests(PracticeBase):
         self.assertEqual((first['status'], first['progress'], first['accuracy']), ('in-progress', 40, 75))
         untouched = next(t for t in topics if t['name'].endswith('-0-0-1'))
         self.assertEqual((untouched['status'], untouched['progress'], untouched['accuracy']), ('not-started', 0, None))
+
+    def test_subject_and_topic_viewsets_filtering_and_empty_states(self):
+        """Test the individual Subject and Topic endpoints when called by pickers."""
+        # Query subjects for self.exam
+        r_subj = self.client.get(f'/api/subjects/?exam={self.exam.id}')
+        self.assertEqual(r_subj.status_code, 200)
+        data = r_subj.json()['results'] if isinstance(r_subj.json(), dict) else r_subj.json()
+        self.assertTrue(len(data) > 0)
+        subj = data[0]
+        self.assertIn('chapters', subj)
+        self.assertIn('units', subj)
+        self.assertEqual(subj['chapters'], subj['units'])
+
+        # Query subjects for non-existent exam
+        r_empty = self.client.get('/api/subjects/?exam=999999')
+        self.assertEqual(r_empty.status_code, 200)
+        empty_data = r_empty.json()['results'] if isinstance(r_empty.json(), dict) else r_empty.json()
+        self.assertEqual(len(empty_data), 0)
+
+        # Query topics for valid subject
+        r_topic = self.client.get(f'/api/topics/?subject={subj["id"]}')
+        self.assertEqual(r_topic.status_code, 200)
+
+        # Query topics for non-existent subject
+        r_topic_empty = self.client.get('/api/topics/?subject=999999')
+        self.assertEqual(r_topic_empty.status_code, 200)
+        empty_topics = r_topic_empty.json()['results'] if isinstance(r_topic_empty.json(), dict) else r_topic_empty.json()
+        self.assertEqual(len(empty_topics), 0)
+

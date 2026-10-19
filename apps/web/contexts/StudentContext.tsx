@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useMemo } from "react";
+import React, { createContext, useContext, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,13 +57,37 @@ interface StudentContextValue {
   refetchContext: () => Promise<any>;
 }
 
+const LOCAL_STORAGE_ACTIVE_COURSE = "loksewa_student_active_course";
+
+export function getStoredActiveCourse(userId?: number | string | null): AuthorizedCourse | null {
+  if (typeof window === "undefined" || !userId) return null;
+  try {
+    const raw = localStorage.getItem(`loksewa_student_active_course_${userId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredActiveCourse(userId: number | string | null | undefined, course: AuthorizedCourse | null) {
+  if (typeof window === "undefined" || !userId) return;
+  try {
+    if (course) {
+      localStorage.setItem(`loksewa_student_active_course_${userId}`, JSON.stringify(course));
+    } else {
+      localStorage.removeItem(`loksewa_student_active_course_${userId}`);
+    }
+  } catch {}
+}
+
 const StudentContext = createContext<StudentContextValue | undefined>(undefined);
 
 export function StudentContextProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
   const isStudent = user?.role === "student";
+  const storedCourse = useMemo(() => getStoredActiveCourse(user?.id), [user?.id]);
 
   const {
     data,
@@ -85,6 +109,9 @@ export function StudentContextProvider({ children }: { children: React.ReactNode
       }),
     onSuccess: (updatedContext) => {
       queryClient.setQueryData(["student-context"], updatedContext);
+      if (updatedContext.active_course) {
+        setStoredActiveCourse(user?.id, updatedContext.active_course);
+      }
       // Invalidate all course-dependent queries so they immediately refresh in new context
       queryClient.invalidateQueries({ queryKey: ["student-dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["analytics-overview"] });
@@ -107,11 +134,17 @@ export function StudentContextProvider({ children }: { children: React.ReactNode
     },
   });
 
-  const activeCourse = data?.active_course || null;
-  const authorizedCourses = data?.authorized_courses || [];
+  const activeCourse = data?.active_course ?? storedCourse ?? null;
+  const authorizedCourses = data?.authorized_courses || (storedCourse ? [storedCourse] : []);
   const subscription = data?.subscription || null;
   const examSchedule = data?.exam_schedule || null;
   const scheduleMessage = data?.schedule_message || null;
+
+  useEffect(() => {
+    if (data?.active_course) {
+      setStoredActiveCourse(user?.id, data.active_course);
+    }
+  }, [data?.active_course, user?.id]);
 
   const isCourseAuthorized = useMemo(() => {
     const ids = new Set(authorizedCourses.map((c) => c.id));
@@ -123,13 +156,16 @@ export function StudentContextProvider({ children }: { children: React.ReactNode
     await selectCourseMutation.mutateAsync(courseId);
   };
 
+  // If we already have stored active course, we are not blocking dashboard rendering
+  const isInitializing = authLoading || (isStudent && isLoading && !data && !storedCourse);
+
   const value: StudentContextValue = {
     activeCourse,
     authorizedCourses,
     subscription,
     examSchedule,
     scheduleMessage,
-    isLoading: isStudent ? isLoading : false,
+    isLoading: isStudent ? isInitializing : false,
     isFetching: isStudent ? isFetching : false,
     isSwitching: selectCourseMutation.isPending,
     selectCourse,

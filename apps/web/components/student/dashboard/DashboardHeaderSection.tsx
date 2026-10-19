@@ -51,7 +51,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
 
   return (
     <section className="bg-card p-6 md:p-8 rounded-[16px] border border-border shadow-sm flex flex-col xl:flex-row justify-between gap-8 relative">
-      {mounted && dashboardFetching && (
+      {mounted && !loading && dashboardFetching && (
         <div className="absolute top-3 right-3 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
           <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin" /> Updating...
         </div>
@@ -197,11 +197,11 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                 <Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP
               </div>
-              <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
+              <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">
+                {referralData === null ? "—" : <Skeleton className="h-7 w-20 my-0.5" />}
+              </div>
               <div className="text-[10px] text-muted-foreground font-medium">
-                {referralData === undefined ? (
-                  "Loading..."
-                ) : (
+                {referralData === null ? (
                   <>
                     Unable to load{" "}
                     <button
@@ -212,29 +212,50 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
                       Retry
                     </button>
                   </>
+                ) : (
+                  <span className="text-muted-foreground/60">All time</span>
                 )}
               </div>
             </div>
+
             <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                 <Target className="w-3.5 h-3.5 text-blue-500" /> Current Level
               </div>
-              <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
+              <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">
+                {referralData === null ? "—" : <Skeleton className="h-7 w-16 my-0.5" />}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-medium">
+                <span className="text-muted-foreground/60">Tier level</span>
+              </div>
             </div>
+
             <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                 <Flame className="w-3.5 h-3.5 text-orange-500 fill-orange-500" /> Day Streak
               </div>
               <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
-                {data?.stats?.studyStreak !== undefined ? data.stats.studyStreak : "—"} Days
+                {data?.stats?.studyStreak !== undefined ? (
+                  `${data.stats.studyStreak} Days`
+                ) : loading ? (
+                  <Skeleton className="h-7 w-20 my-0.5" />
+                ) : (
+                  "0 Days"
+                )}
               </div>
               <div className="text-[10px] text-muted-foreground font-medium">Active streak</div>
             </div>
+
             <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                 <Coins className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" /> Coins
               </div>
-              <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">—</div>
+              <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">
+                {referralData === null ? "—" : <Skeleton className="h-7 w-16 my-0.5" />}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-medium">
+                <span className="text-muted-foreground/60">Available balance</span>
+              </div>
             </div>
           </div>
         )}

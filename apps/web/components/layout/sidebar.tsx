@@ -53,6 +53,11 @@ const DEFAULT_BRAND_NAME = "LoksewaAI";
 export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const pathname = usePathname();
   const { user: authUser } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Use real user if available, fallback to Guest for unauthenticated renders
   const user = authUser ? { name: authUser.name ? authUser.name : authUser.username } : { name: "Guest" };
@@ -421,12 +426,18 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
 
           <div className="flex items-center gap-3 bg-white/5 p-3 rounded-[12px] border border-white/10 mt-2">
             <Avatar className="h-10 w-10 border border-[#D4A72C]/30 bg-[#0A1118]">
-              <RetryImage src={authUser?.avatar || "/images/profile.png"} alt={user.name} className="aspect-square h-full w-full object-cover" />
+              <RetryImage 
+                src={(mounted && authUser?.avatar) ? authUser.avatar : "/images/profile.png"} 
+                alt={mounted ? user.name : "User"} 
+                className="aspect-square h-full w-full object-cover" 
+              />
             </Avatar>
             <div className="flex flex-col overflow-hidden">
-              <span className="text-[13px] font-bold text-white dark:text-foreground truncate">{user.name}</span>
+              <span className="text-[13px] font-bold text-white dark:text-foreground truncate">
+                {mounted ? user.name : "Guest"}
+              </span>
               <span className="text-[11px] font-medium text-slate-400 dark:text-muted-foreground truncate capitalize">
-                {authUser?.role?.replace("-", " ") || "User"}
+                {mounted ? (authUser?.role?.replace("-", " ") || "User") : "User"}
               </span>
             </div>
           </div>

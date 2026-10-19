@@ -78,6 +78,14 @@ export const clearAuthToken = () => {
   if (typeof window === "undefined") return;
   localStorage.removeItem("access_token");
   localStorage.removeItem("refresh_token");
+  try {
+    localStorage.removeItem("loksewa_auth_user");
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith("loksewa_student_active_course")) {
+        localStorage.removeItem(k);
+      }
+    });
+  } catch {}
 };
 
 // Concurrency-safe single active session logout lock

@@ -54,6 +54,12 @@ class PreparationView(APIView):
         except engine.PreparationDenied:
             raise PermissionDenied("You don't have access to this preparation.")
 
+    def _cache_allowed(self, request):
+        from django.conf import settings
+        if getattr(settings, 'TESTING', False) or request.META.get('SERVER_NAME') == 'testserver':
+            return False
+        return True
+
     header = staticmethod(prep_header)
 
 
@@ -61,15 +67,37 @@ class PreparationsView(PreparationView):
     """The switcher and the student's targets."""
 
     def get(self, request):
+        from core.models import AdminSettings
+        if not AdminSettings.is_study_plans_enabled():
+            raise PermissionDenied('Study plans are currently disabled by the administrator.')
+
+        from django.core.cache import cache
+        from core.views import get_student_dashboard_version
+        user = request.user
+        exam_param = request.query_params.get('exam')
+        dash_ver = get_student_dashboard_version(user.id)
+        use_cache = self._cache_allowed(request)
+        cache_key = f'sp_preparations_v2:{user.id}:{exam_param or "default"}:{dash_ver}' if use_cache else None
+        if use_cache and cache_key:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
         prep, exams = self.preparation(request)
         if prep is None:
-            return Response({'has_preparation': False, 'preparations': [], 'selected': None, 'preferences': None})
-        return Response({
+            data = {'has_preparation': False, 'preparations': [], 'selected': None, 'preferences': None}
+            if use_cache and cache_key:
+                cache.set(cache_key, data, 300)
+            return Response(data)
+        data = {
             'has_preparation': True,
             'selected': prep.exam.id,
             'preparations': engine.preparation_choices(request.user, exams),
             'preferences': prep.preferences,
-        })
+        }
+        if use_cache and cache_key:
+            cache.set(cache_key, data, 300)
+        return Response(data)
 
 
 def plan_payload(prep):
@@ -109,10 +137,33 @@ class PlanView(PreparationView):
     need_since = True
 
     def get(self, request):
+        from core.models import AdminSettings
+        if not AdminSettings.is_study_plans_enabled():
+            raise PermissionDenied('Study plans are currently disabled by the administrator.')
+
+        from django.core.cache import cache
+        from core.views import get_student_dashboard_version
+        user = request.user
+        exam_param = request.query_params.get('exam')
+        dash_ver = get_student_dashboard_version(user.id)
+        today_str = engine.local_today().isoformat()
+        use_cache = self._cache_allowed(request)
+        cache_key = f'sp_plan_v2:{user.id}:{exam_param or "default"}:{dash_ver}:{today_str}' if use_cache else None
+        if use_cache and cache_key:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
         prep, _exams = self.preparation(request)
         if prep is None:
-            return Response({'has_preparation': False})
-        return Response(plan_payload(prep))
+            data = {'has_preparation': False}
+            if use_cache and cache_key:
+                cache.set(cache_key, data, 180)
+            return Response(data)
+        data = plan_payload(prep)
+        if use_cache and cache_key:
+            cache.set(cache_key, data, 180)
+        return Response(data)
 
 
 def progress_payload(prep):
@@ -126,10 +177,33 @@ class ProgressView(PreparationView):
     need_since = True
 
     def get(self, request):
+        from core.models import AdminSettings
+        if not AdminSettings.is_study_plans_enabled():
+            raise PermissionDenied('Study plans are currently disabled by the administrator.')
+
+        from django.core.cache import cache
+        from core.views import get_student_dashboard_version
+        user = request.user
+        exam_param = request.query_params.get('exam')
+        dash_ver = get_student_dashboard_version(user.id)
+        today_str = engine.local_today().isoformat()
+        use_cache = self._cache_allowed(request)
+        cache_key = f'sp_progress_v2:{user.id}:{exam_param or "default"}:{dash_ver}:{today_str}' if use_cache else None
+        if use_cache and cache_key:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
         prep, _exams = self.preparation(request)
         if prep is None:
-            return Response({'has_preparation': False})
-        return Response(progress_payload(prep))
+            data = {'has_preparation': False}
+            if use_cache and cache_key:
+                cache.set(cache_key, data, 180)
+            return Response(data)
+        data = progress_payload(prep)
+        if use_cache and cache_key:
+            cache.set(cache_key, data, 180)
+        return Response(data)
 
 
 def week_payload(prep):
@@ -138,10 +212,33 @@ def week_payload(prep):
 
 class WeekView(PreparationView):
     def get(self, request):
+        from core.models import AdminSettings
+        if not AdminSettings.is_study_plans_enabled():
+            raise PermissionDenied('Study plans are currently disabled by the administrator.')
+
+        from django.core.cache import cache
+        from core.views import get_student_dashboard_version
+        user = request.user
+        exam_param = request.query_params.get('exam')
+        dash_ver = get_student_dashboard_version(user.id)
+        today_str = engine.local_today().isoformat()
+        use_cache = self._cache_allowed(request)
+        cache_key = f'sp_week_v2:{user.id}:{exam_param or "default"}:{dash_ver}:{today_str}' if use_cache else None
+        if use_cache and cache_key:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return Response(cached)
+
         prep, _exams = self.preparation(request)
         if prep is None:
-            return Response({'has_preparation': False})
-        return Response(week_payload(prep))
+            data = {'has_preparation': False}
+            if use_cache and cache_key:
+                cache.set(cache_key, data, 180)
+            return Response(data)
+        data = week_payload(prep)
+        if use_cache and cache_key:
+            cache.set(cache_key, data, 180)
+        return Response(data)
 
 
 class PreferencesView(PreparationView):
@@ -185,4 +282,6 @@ class PreferencesView(PreparationView):
             setattr(plan, k, v)
         plan.save()
         prep.plan = plan
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(request.user.id)
         return Response(prep.preferences)

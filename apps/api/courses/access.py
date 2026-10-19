@@ -54,10 +54,14 @@ def invalidate_student_course_context(user_id):
     """Invalidate cached student course context for user_id."""
     if not user_id:
         return
+    CourseAccessService.clear_user_cache(user_id)
+    uid = getattr(user_id, 'id', user_id)
     from django.core.cache import cache
     try:
-        cache.delete(f'student_course_ctx:{user_id}')
-        cache.delete(f'pkg_status:{user_id}')
+        cache.delete(f'student_course_ctx:{uid}')
+        cache.delete(f'pkg_status:{uid}')
+        from core.views import invalidate_student_dashboard
+        invalidate_student_dashboard(uid)
     except Exception:
         pass
 
@@ -181,7 +185,7 @@ def get_student_course_context(user):
         "schedule_message": schedule_message,
     }
     try:
-        cache.set(cache_key, result, 30)
+        cache.set(cache_key, result, 300)
     except Exception:
         pass
     return result
@@ -232,25 +236,28 @@ def get_authorized_examination_filter(user, target_course=None):
             return q
         return Q()
 
+    if target_course is not None:
+        from .models import Course
+        if not CourseAccessService.has_course_access(user, target_course):
+            # Requested course is NOT authorized for this student -> strict denial
+            return None
+
+        c_obj = target_course if isinstance(target_course, Course) else Course.objects.filter(id=target_course, status='published').first()
+        if not c_obj:
+            return None
+
+        exam_ids = get_course_exam_ids(c_obj)
+        q = Q(course=c_obj)
+        if exam_ids:
+            q |= Q(course__isnull=True, exam_id__in=exam_ids)
+        return q
+
     auth_courses = authorized_courses(user)
     if not auth_courses.exists():
         # Course-less published/live exams are platform-wide exams that remain
         # visible to students without a course enrollment. Course-scoped exams
         # continue to respect enrollment rules.
         return Q(status__in=['published', 'live'], course__isnull=True)
-
-    if target_course is not None:
-        from .models import Course
-        c_id = target_course.id if isinstance(target_course, Course) else target_course
-        c_obj = auth_courses.filter(id=c_id).first()
-        if not c_obj:
-            # Requested course is NOT authorized for this student -> strict denial
-            return None
-        exam_ids = get_course_exam_ids(c_obj)
-        q = Q(course=c_obj)
-        if exam_ids:
-            q |= Q(course__isnull=True, exam_id__in=exam_ids)
-        return q
 
     # No specific target course requested: student sees exams for ALL their authorized courses
     auth_course_ids = list(auth_courses.values_list('id', flat=True))

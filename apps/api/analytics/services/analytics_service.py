@@ -83,12 +83,13 @@ class AnalyticsService:
         authoritative source for any exam result, submission or payment
         status (those stay uncached and are read fresh at their own views).
         """
-        cache_key = f'analytics_overview:{user.id}:{course_id or "default"}'
+        ver = cache.get(f'analytics_ver:{user.id}') or 1
+        cache_key = f'analytics_overview_v2:{user.id}:{ver}:{course_id or "default"}'
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
         result = AnalyticsService._compute_overview(user, course_id=course_id)
-        cache.set(cache_key, result, 20)
+        cache.set(cache_key, result, 300)
         return result
 
     @staticmethod
@@ -188,6 +189,17 @@ class AnalyticsService:
     @staticmethod
     def get_performance_trend(user, days=30):
         """Returns accuracy trend over the last N days from practice sessions and exams."""
+        ver = cache.get(f'analytics_ver:{user.id}') or 1
+        cache_key = f'analytics_trend:{user.id}:{ver}:{days}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        result = AnalyticsService._compute_performance_trend(user, days)
+        cache.set(cache_key, result, 300)
+        return result
+
+    @staticmethod
+    def _compute_performance_trend(user, days=30):
         from django.db.models.functions import TruncDate
         start_date = timezone.now() - timedelta(days=days)
         
@@ -239,6 +251,17 @@ class AnalyticsService:
     @staticmethod
     def get_subject_performance(user):
         """Returns accuracy per subject aggregated from practice sessions and completed examination attempts."""
+        ver = cache.get(f'analytics_ver:{user.id}') or 1
+        cache_key = f'analytics_subject:{user.id}:{ver}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        result = AnalyticsService._compute_subject_performance(user)
+        cache.set(cache_key, result, 300)
+        return result
+
+    @staticmethod
+    def _compute_subject_performance(user):
         subject_data = {}
 
         # 1. Practice sessions
@@ -307,6 +330,17 @@ class AnalyticsService:
     @staticmethod
     def get_topic_performance(user):
         """Returns detailed topic analysis for priority areas from practice and exam attempts."""
+        ver = cache.get(f'analytics_ver:{user.id}') or 1
+        cache_key = f'analytics_topic:{user.id}:{ver}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        result = AnalyticsService._compute_topic_performance(user)
+        cache.set(cache_key, result, 300)
+        return result
+
+    @staticmethod
+    def _compute_topic_performance(user):
         topic_data = {}
 
         # 1. Check UserTopicProgress

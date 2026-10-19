@@ -70,7 +70,7 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
 
 
 import sys
-SCHEDULE_CACHE_TTL = 0 if 'test' in sys.argv else 30
+SCHEDULE_CACHE_TTL = 0 if 'test' in sys.argv else 300
 
 class StudentExamScheduleNextView(APIView):
     """
@@ -129,7 +129,7 @@ class StudentExamScheduleNextView(APIView):
                     if not res_data["schedule"]:
                         res_data["message"] = ctx.get('schedule_message') or "No exam schedule configured for this course yet."
                     try:
-                        cache.set(cache_key, res_data, 30)
+                        cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
                     except Exception:
                         pass
                     return Response(res_data)
@@ -141,7 +141,7 @@ class StudentExamScheduleNextView(APIView):
                         "server_time": timezone.now().isoformat()
                     }
                     try:
-                        cache.set(cache_key, res_data, 30)
+                        cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
                     except Exception:
                         pass
                     return Response(res_data)
@@ -218,7 +218,7 @@ class StudentExamScheduleNextView(APIView):
                 "server_time": timezone.now().isoformat()
             }
             try:
-                cache.set(cache_key, res_data, 30)
+                cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
             except Exception:
                 pass
             return Response(res_data)
@@ -229,7 +229,7 @@ class StudentExamScheduleNextView(APIView):
             "server_time": timezone.now().isoformat()
         }
         try:
-            cache.set(cache_key, res_data, 30)
+            cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
         except Exception:
             pass
         return Response(res_data)
@@ -332,7 +332,7 @@ class StudentUpcomingMockExamView(APIView):
                 "server_time": now.isoformat()
             }
             try:
-                cache.set(cache_key, res_data, 30)
+                cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
             except Exception:
                 pass
             return Response(res_data)
@@ -348,7 +348,7 @@ class StudentUpcomingMockExamView(APIView):
                 "server_time": now.isoformat()
             }
             try:
-                cache.set(cache_key, res_data, 30)
+                cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
             except Exception:
                 pass
             return Response(res_data)
@@ -360,7 +360,7 @@ class StudentUpcomingMockExamView(APIView):
             "server_time": now.isoformat()
         }
         try:
-            cache.set(cache_key, res_data, 30)
+            cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
         except Exception:
             pass
         return Response(res_data)

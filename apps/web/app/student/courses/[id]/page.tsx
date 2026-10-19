@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Target, FileText, Bookmark, PlayCircle, Clock, ChevronLeft, Calendar, Trophy, GraduationCap, LayoutDashboard, CheckCircle2, Circle } from "lucide-react";
+import { BookOpen, Target, FileText, Bookmark, PlayCircle, Clock, ChevronLeft, Calendar, Trophy, GraduationCap, LayoutDashboard, CheckCircle2, Circle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RetryImage } from "@/components/ui/retry-image";
+import { useQuery } from "@tanstack/react-query";
 import {
   Accordion,
   AccordionItem,
@@ -15,51 +15,67 @@ import Link from "next/link";
 import { courseEnrollmentApi } from "@/lib/api/enrollment";
 import { Suspense } from "react";
 
+function CourseDetailSkeleton() {
+  return (
+    <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-8 animate-pulse">
+      <div className="h-6 w-36 bg-muted/70 rounded"></div>
+      <div className="h-64 bg-card rounded-[24px] border border-border p-6 flex flex-col md:flex-row gap-6">
+        <div className="md:w-1/3 h-48 bg-muted/80 rounded-[16px]"></div>
+        <div className="md:w-2/3 space-y-4">
+          <div className="h-8 w-3/4 bg-muted/80 rounded-lg"></div>
+          <div className="h-4 w-full bg-muted/60 rounded"></div>
+          <div className="h-4 w-2/3 bg-muted/60 rounded"></div>
+          <div className="flex gap-3 pt-4">
+            <div className="h-9 w-32 bg-muted/80 rounded-[12px]"></div>
+            <div className="h-9 w-36 bg-muted/80 rounded-[12px]"></div>
+          </div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-card p-6 rounded-[20px] border border-border h-36"></div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CourseDetailContent() {
   const params = useParams();
   const router = useRouter();
   const idOrSlug = params.id as string;
   
-  const [course, setCourse] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: course,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["course-detail", idOrSlug],
+    queryFn: () => courseEnrollmentApi.getCourseDetails(idOrSlug),
+    enabled: Boolean(idOrSlug),
+    staleTime: 120 * 1000,
+  });
 
-  useEffect(() => {
-    async function loadCourse() {
-      if (!idOrSlug) return;
-      try {
-        const data = await courseEnrollmentApi.getCourseDetails(idOrSlug);
-        setCourse(data);
-      } catch (err: any) {
-        console.error("Failed to load course details:", err);
-        setError("Failed to load course details. Please try again later.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadCourse();
-  }, [idOrSlug]);
-
-  if (isLoading) {
-    return (
-      <div className="p-4 lg:p-8 max-w-5xl mx-auto space-y-8 animate-pulse">
-        <div className="h-64 bg-muted/80 rounded-[24px]"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          {[1, 2, 3].map(i => <div key={i} className="h-32 bg-muted/80 rounded-[16px]"></div>)}
-        </div>
-      </div>
-    );
+  if (isLoading && !course) {
+    return <CourseDetailSkeleton />;
   }
 
-  if (error || !course) {
+  if (isError || !course) {
     return (
       <div className="p-8 text-center flex flex-col items-center justify-center min-h-[60vh]">
         <Trophy className="w-16 h-16 text-red-200 mb-4" />
         <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-2">Course Not Found</h2>
-        <p className="text-muted-foreground mb-6">{error || "The course you are looking for does not exist or you don't have access."}</p>
-        <Button onClick={() => router.push('/student/courses')} className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118]">
-          Back to My Courses
-        </Button>
+        <p className="text-muted-foreground mb-6">The course you are looking for does not exist or you don't have access.</p>
+        <div className="flex items-center gap-3">
+          <Button onClick={() => refetch()} variant="outline" className="font-semibold">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Retry
+          </Button>
+          <Button onClick={() => router.push('/student/learning')} className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold">
+            Back to My Courses
+          </Button>
+        </div>
       </div>
     );
   }
@@ -68,7 +84,7 @@ function CourseDetailContent() {
     <div className="p-4 lg:p-8 max-w-6xl mx-auto space-y-8 pb-20">
       <Button 
         variant="ghost" 
-        onClick={() => router.push('/student/courses')}
+        onClick={() => router.push('/student/learning')}
         className="text-muted-foreground hover:text-primary dark:text-foreground p-0 h-auto hover:bg-transparent font-semibold flex items-center gap-1"
       >
         <ChevronLeft className="w-4 h-4" /> Back to My Courses
@@ -263,7 +279,7 @@ function CourseDetailContent() {
 
 export default function CourseDetailPage() {
   return (
-    <Suspense fallback={<div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0B2545]"></div></div>}>
+    <Suspense fallback={<CourseDetailSkeleton />}>
       <CourseDetailContent />
     </Suspense>
   );

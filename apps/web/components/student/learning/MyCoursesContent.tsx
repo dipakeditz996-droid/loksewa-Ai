@@ -1,31 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { BookOpen, Target, Clock, ArrowRight, PlayCircle, Trophy, BookMarked, GraduationCap } from "lucide-react";
+import { BookOpen, Target, Clock, ArrowRight, PlayCircle, Trophy, BookMarked, GraduationCap, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import Link from "next/link";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { courseEnrollmentApi, MyCourse } from "@/lib/api/enrollment";
 
 export function MyCoursesContent() {
-  const [courses, setCourses] = useState<MyCourse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    async function loadCourses() {
-      try {
-        const data = await courseEnrollmentApi.getMyCourses();
-        setCourses(data);
-      } catch (err: any) {
-        console.error("Failed to load courses:", err);
-        setError("Failed to load your courses. Please try again later.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadCourses();
-  }, []);
+  const {
+    data: courses = [],
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery<MyCourse[]>({
+    queryKey: ["my-courses"],
+    queryFn: () => courseEnrollmentApi.getMyCourses(),
+    staleTime: 60 * 1000,
+  });
+
+  const prefetchCourse = (courseId: number) => {
+    queryClient.prefetchQuery({
+      queryKey: ["course-detail", courseId],
+      queryFn: () => courseEnrollmentApi.getCourseDetails(courseId),
+      staleTime: 120 * 1000,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -53,7 +56,7 @@ export function MyCoursesContent() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading && courses.length === 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
             <div key={i} className="bg-card rounded-[24px] border border-border shadow-sm p-5 animate-pulse">
@@ -68,15 +71,16 @@ export function MyCoursesContent() {
             </div>
           ))}
         </div>
-      ) : error ? (
+      ) : isError && courses.length === 0 ? (
         <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 p-8 rounded-[20px] text-center">
           <Trophy className="w-12 h-12 text-red-300 mx-auto mb-3" />
           <h3 className="text-lg font-bold">Oops! Something went wrong</h3>
-          <p className="mt-1">{error}</p>
+          <p className="mt-1">Failed to load your courses. Please try again.</p>
           <Button 
-            onClick={() => window.location.reload()} 
+            onClick={() => refetch()} 
             className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold"
           >
+            <RefreshCw className="w-4 h-4 mr-2" />
             Try Again
           </Button>
         </div>
@@ -100,6 +104,7 @@ export function MyCoursesContent() {
           {courses.map((item) => (
             <div 
               key={item.enrollment_id} 
+              onMouseEnter={() => prefetchCourse(item.course.id)}
               className="bg-card rounded-[24px] border border-border shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden group flex flex-col"
             >
               <div className="relative h-48 bg-muted/80 overflow-hidden">

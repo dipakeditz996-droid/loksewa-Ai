@@ -5,6 +5,7 @@ export interface StudentFeedbackEntry {
   message: string;
   youtube_url: string;
   given_by: string | null;
+  is_from_student?: boolean;
   created_at: string;
 }
 
@@ -21,6 +22,12 @@ export interface StudentFeedbackListResponse {
 export const studentFeedbackApi = {
   list: async (page = 1) =>
     apiClient<StudentFeedbackListResponse>(`/student/feedback/?page=${page}`),
+
+  submit: async (message: string) =>
+    apiClient<StudentFeedbackEntry>("/student/feedback/", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
 };
 
 /** Extracts an 11-char YouTube video id from watch/short/embed URL forms.

@@ -486,53 +486,63 @@ function AnalyticsPanel({ stats, trend, loading, topStudents = [] }: AnalyticsPa
         <h3 className="text-[11px] font-bold text-white/40 uppercase tracking-widest mb-4">
           Score Trend
         </h3>
-        <div className="h-[160px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trend} margin={{ top: 5, right: 5, left: -30, bottom: 0 }}>
-              <defs>
-                <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.5} />
-                  <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 9, fill: "rgba(255,255,255,0.3)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[50, 100]}
-                tick={{ fontSize: 9, fill: "rgba(255,255,255,0.3)" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "#0D1F38",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: "#fff",
-                }}
-                itemStyle={{ color: "#a78bfa" }}
-                labelStyle={{ color: "rgba(255,255,255,0.5)", fontSize: 10 }}
-              />
-              <Area
-                type="monotone"
-                dataKey="score"
-                stroke="#7C3AED"
-                strokeWidth={2.5}
-                fill="url(#trendGrad)"
-                dot={{ r: 3, fill: "#7C3AED", strokeWidth: 0 }}
-                activeDot={{ r: 5, fill: "#a78bfa", strokeWidth: 0 }}
-                isAnimationActive
-                animationDuration={1200}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {loading && trend.length === 0 ? (
+          <div className="h-[160px] flex items-center justify-center">
+            <div className="w-5 h-5 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : trend.length > 0 ? (
+          <div className="h-[160px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trend} margin={{ top: 5, right: 5, left: -30, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 9, fill: "rgba(255,255,255,0.3)" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 9, fill: "rgba(255,255,255,0.3)" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "#0D1F38",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    color: "#fff",
+                  }}
+                  itemStyle={{ color: "#a78bfa" }}
+                  labelStyle={{ color: "rgba(255,255,255,0.5)", fontSize: 10 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#7C3AED"
+                  strokeWidth={2.5}
+                  fill="url(#trendGrad)"
+                  dot={{ r: 3, fill: "#7C3AED", strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: "#a78bfa", strokeWidth: 0 }}
+                  isAnimationActive
+                  animationDuration={800}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-[160px] flex items-center justify-center text-center px-4 text-white/30 text-xs">
+            Complete examinations to see your score trend
+          </div>
+        )}
       </div>
 
       {/* Top Performers */}
@@ -866,10 +876,21 @@ export function LeaderboardContent() {
   const [podiumAnimated, setPodiumAnimated] = useState(false);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const podiumRef = useRef<HTMLDivElement>(null);
+  const latestReqIdRef = useRef(0);
+
+  // Debounce search input so user doesn't have to hit enter manually
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setPage(1);
+      setSearchQuery(searchInput.trim());
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchData = useCallback(async (silent = false) => {
+    const reqId = ++latestReqIdRef.current;
     if (!silent) setStatus("loading");
 
     try {
@@ -881,6 +902,9 @@ export function LeaderboardContent() {
         timeFilter,
         searchQuery,
       });
+
+      // Ignore out-of-order stale responses
+      if (reqId !== latestReqIdRef.current) return;
 
       setStudents(result.students);
       setCurrentUser(result.currentUser);
@@ -894,6 +918,7 @@ export function LeaderboardContent() {
         setTimeout(() => setPodiumAnimated(true), 100);
       }
     } catch (err: unknown) {
+      if (reqId !== latestReqIdRef.current) return;
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Leaderboard]", msg);
       setStatus("error");
@@ -923,14 +948,14 @@ export function LeaderboardContent() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchData(true);
+    await Promise.all([fetchData(true), fetchAnalytics()]);
     setIsRefreshing(false);
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    setSearchQuery(searchInput);
+    setSearchQuery(searchInput.trim());
   };
 
   const onFilterChange = <T,>(setter: (v: T) => void) => (v: T) => {

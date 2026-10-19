@@ -27,7 +27,8 @@ export const practiceResultKey = (sessionId: number) => ["practice-result", sess
 export function usePracticeExams(courseIdOverride?: number | null) {
   const { user } = useAuth();
   const studentCtx = useOptionalStudentContext();
-  const effectiveCourseId = courseIdOverride ?? studentCtx?.activeCourse?.id ?? null;
+  const storedCourseId = typeof window !== "undefined" ? studentCtx?.activeCourse?.id ?? null : null;
+  const effectiveCourseId = courseIdOverride ?? studentCtx?.activeCourse?.id ?? storedCourseId;
 
   return useQuery({
     queryKey: practiceExamsKey(user?.id, effectiveCourseId),

@@ -1,13 +1,14 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Bell, Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/layout/notification-bell";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar } from "@/components/ui/avatar";
 import { RetryImage } from "@/components/ui/retry-image";
 import {
   DropdownMenu,
@@ -61,30 +62,34 @@ function resolveTeacherTitle(pathname: string | null): string {
 export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHeaderProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
 
-  if (!user) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  // Student and teacher each have a real notification center; admin/super-admin
-  // routes through the separate /admin-dashboard area (which passes its own
-  // viewAllHref directly to NotificationBell, bypassing this header).
   const viewAllHref = role === "student" ? "/student/notifications" : "/teacher/notifications";
 
-  const hour = new Date().getHours();
-  let greeting = "Good Evening";
-  let icon = "🌙";
-  if (hour < 12) {
-    greeting = "Good Morning";
-    icon = "☀️";
-  } else if (hour < 17) {
-    greeting = "Good Afternoon";
-    icon = "👋";
-  } else if (hour < 20) {
-    greeting = "Good Evening";
-    icon = "🌙";
-  } else {
-    greeting = "Good Night";
-    icon = "🌙";
+  let greeting = "Good Day";
+  let icon = "👋";
+  if (mounted) {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      greeting = "Good Morning";
+      icon = "☀️";
+    } else if (hour < 17) {
+      greeting = "Good Afternoon";
+      icon = "👋";
+    } else if (hour < 20) {
+      greeting = "Good Evening";
+      icon = "🌙";
+    } else {
+      greeting = "Good Night";
+      icon = "🌙";
+    }
   }
+
+  const displayName = user?.name ? user.name.split(" ")[0] : "Student";
 
   return (
     <header className="sticky top-0 z-30 flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-md px-4 sm:px-8 gap-2">
@@ -106,10 +111,23 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
               </span>
               <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Teacher Portal</span>
             </>
+          ) : role === "admin" || role === "super-admin" ? (
+            <>
+              <span className="text-[16px] font-bold text-foreground dark:text-white">
+                Admin Portal
+              </span>
+              <span className="text-[12px] font-medium text-muted-foreground dark:text-slate-300">Overview</span>
+            </>
           ) : (
             <>
               <span className="truncate text-[16px] font-bold text-foreground dark:text-white flex items-center gap-1.5">
-                {greeting}, {user.name.split(" ")[0]}! <span className="text-xl">{icon}</span>
+                {mounted && user?.name ? (
+                  <>
+                    {greeting}, {displayName}! <span className="text-xl">{icon}</span>
+                  </>
+                ) : (
+                  <span>Welcome back!</span>
+                )}
               </span>
               <span className="truncate text-[12px] font-medium text-muted-foreground dark:text-slate-300">Welcome back! Keep up the excellent work.</span>
             </>
@@ -117,7 +135,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
         </div>
         
         {/* On mobile, place CourseSwitcher here so it can shrink cleanly */}
-        {role === "student" && (
+        {role === "student" && mounted && (
           <div className="block lg:hidden min-w-0">
             <CourseSwitcher />
           </div>
@@ -135,59 +153,63 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
         </div>
 
         {/* Active Course Context Switcher - desktop only */}
-        {role === "student" && (
+        {role === "student" && mounted && (
           <div className="hidden lg:block">
             <CourseSwitcher />
           </div>
         )}
 
         {/* Do Not Disturb / Focus Mode - student portal only. */}
-        {role === "student" && <FocusModeHeaderToggle />}
+        {role === "student" && mounted && <FocusModeHeaderToggle />}
 
         <ThemeToggle />
 
-        <NotificationBell viewAllHref={viewAllHref} />
+        {mounted && <NotificationBell viewAllHref={viewAllHref} />}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-9 w-9 rounded-full ml-1">
-              <Avatar className="h-9 w-9 border border-slate-200 dark:border-[hsl(var(--border))]">
-                <RetryImage src={user.avatar || "/images/profile.png"} alt={user.name} className="aspect-square h-full w-full object-cover" />
-              </Avatar>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end" forceMount>
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none text-foreground">{user.name}</p>
-                <p className="text-xs leading-none text-muted-foreground">
-                  {user.email}
-                </p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="text-[13px] cursor-pointer">
-              <Link href={role === "student" ? "/student/settings" : `/${role}/settings`}>
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="text-[13px] cursor-pointer">
-              <Link href={role === "student" ? "/student/settings" : `/${role}/settings`}>
-                Settings
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              className="text-[13px] text-red-600 dark:text-red-400 focus:bg-red-50 focus:text-red-700 dark:focus:bg-red-950/30 dark:focus:text-red-400 cursor-pointer"
-              onClick={() => {
-                logout();
-                window.location.href = "/login";
-              }}
-            >
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {mounted && user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-9 w-9 rounded-full ml-1">
+                <Avatar className="h-9 w-9 border border-slate-200 dark:border-[hsl(var(--border))]">
+                  <RetryImage src={user.avatar || "/images/profile.png"} alt={user.name || "User"} className="aspect-square h-full w-full object-cover" />
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none text-foreground">{user.name}</p>
+                  <p className="text-xs leading-none text-muted-foreground">
+                    {user.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="text-[13px] cursor-pointer">
+                <Link href={role === "student" ? "/student/settings" : `/${role}/settings`}>
+                  Profile
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="text-[13px] cursor-pointer">
+                <Link href={role === "student" ? "/student/settings" : `/${role}/settings`}>
+                  Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                className="text-[13px] text-red-600 dark:text-red-400 focus:bg-red-50 focus:text-red-700 dark:focus:bg-red-950/30 dark:focus:text-red-400 cursor-pointer"
+                onClick={() => {
+                  logout();
+                  window.location.href = "/login";
+                }}
+              >
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <div className="h-9 w-9 rounded-full bg-muted/60 animate-pulse ml-1" />
+        )}
       </div>
     </header>
   );

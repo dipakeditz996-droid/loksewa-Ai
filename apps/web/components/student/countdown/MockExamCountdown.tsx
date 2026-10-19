@@ -29,7 +29,9 @@ export function MockExamCountdown({ className = "", enabled = true }: { classNam
     ...upcomingMockExamQuery,
     enabled,
   });
-  if (!enabled) return null;
+
+  // All hooks must be declared unconditionally (Rules of Hooks).
+  // The enabled guard is placed here, after all hook calls.
   const mockExam = data?.mock_exam ?? null;
   const [status, setStatus] = useState<"UPCOMING" | "LIVE" | "COMPLETED" | "NONE">("NONE");
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
@@ -81,6 +83,10 @@ export function MockExamCountdown({ className = "", enabled = true }: { classNam
     const interval = setInterval(calculateTime, 1000);
     return () => clearInterval(interval);
   }, [mockExam, serverOffsetMs]);
+
+  // Early exit after all hooks — safe to do here.
+  if (!enabled) return null;
+
 
   if (loading) {
     return (

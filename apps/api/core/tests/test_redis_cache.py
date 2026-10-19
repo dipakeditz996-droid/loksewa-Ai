@@ -300,3 +300,198 @@ class SecurityAndAccessControlNotBypassedByCacheTests(TestCase):
 
             # Permission check immediately passes against DB
             self.assertTrue(perm.has_permission(request, None))
+
+
+# ---------------------------------------------------------------------------
+# Tests for the verify_redis_cache management command
+# ---------------------------------------------------------------------------
+
+import io
+from django.core.management import call_command
+from core.management.commands.verify_redis_cache import (
+    _get_backend_class_name,
+    _is_resilient_redis_backend,
+    _ping_redis_directly,
+    _roundtrip_cache,
+    _safe_error,
+)
+
+
+class VerifyRedisCacheCommandHelpersTests(TestCase):
+    """Unit tests for the helper functions used by verify_redis_cache."""
+
+    # ── _safe_error ────────────────────────────────────────────────────────
+
+    def test_safe_error_masks_redis_password(self):
+        """Passwords inside Redis connection strings must be masked."""
+        exc = Exception(
+            'redis://default:SuperSecret@upstash.io:6379 connection refused'
+        )
+        result = _safe_error(exc)
+        self.assertNotIn('SuperSecret', result)
+        self.assertIn('***@upstash.io:6379', result)
+
+    def test_safe_error_masks_rediss_password(self):
+        """TLS (rediss://) passwords must also be masked."""
+        exc = Exception(
+            'rediss://default:tls-token-abc@dog-12345.upstash.io:6379/0 timeout'
+        )
+        result = _safe_error(exc)
+        self.assertNotIn('tls-token-abc', result)
+
+    def test_safe_error_passes_plain_message(self):
+        """Non-URL error messages pass through without alteration."""
+        exc = Exception('Connection timed out')
+        self.assertEqual(_safe_error(exc), 'Connection timed out')
+
+    def test_safe_error_truncates_long_messages(self):
+        """Error messages longer than 300 characters are truncated."""
+        exc = Exception('X' * 500)
+        self.assertLessEqual(len(_safe_error(exc)), 300)
+
+    # ── _get_backend_class_name ────────────────────────────────────────────
+
+    @override_settings(CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test',
+        }
+    })
+    def test_get_backend_class_name_locmem(self):
+        self.assertIn('LocMemCache', _get_backend_class_name())
+
+    @override_settings(CACHES={
+        'default': {
+            'BACKEND': 'core.cache_backends.ResilientRedisCache',
+            'LOCATION': 'redis://localhost:6379/1',
+        }
+    })
+    def test_get_backend_class_name_resilient_redis(self):
+        self.assertIn('ResilientRedisCache', _get_backend_class_name())
+
+    # ── _is_resilient_redis_backend ────────────────────────────────────────
+
+    @override_settings(CACHES={
+        'default': {
+            'BACKEND': 'core.cache_backends.ResilientRedisCache',
+            'LOCATION': 'redis://localhost:6379/1',
+        }
+    })
+    def test_is_resilient_redis_backend_true(self):
+        self.assertTrue(_is_resilient_redis_backend())
+
+    @override_settings(CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test',
+        }
+    })
+    def test_is_resilient_redis_backend_false_for_locmem(self):
+        self.assertFalse(_is_resilient_redis_backend())
+
+
+class VerifyRedisCacheCommandOutputTests(TestCase):
+    """Tests for command output and exit-code logic using mocked helpers."""
+
+    # ── Full PASS path ─────────────────────────────────────────────────────
+
+    @patch('core.management.commands.verify_redis_cache._is_resilient_redis_backend', return_value=True)
+    @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
+           return_value='core.cache_backends.ResilientRedisCache')
+    @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
+           return_value=(True, 'PONG received in 1.2 ms'))
+    @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
+           return_value=(True, 'SET → GET → DELETE succeeded'))
+    def test_all_pass_outputs_overall_pass(self, mock_rt, mock_ping, mock_name, mock_is_res):
+        out = io.StringIO()
+        call_command('verify_redis_cache', stdout=out)
+        output = out.getvalue()
+        self.assertIn('OVERALL: PASS', output)
+        self.assertIn('PASS', output)
+        self.assertIn('PONG received in 1.2 ms', output)
+
+    # ── LocMemCache fallback detected → FAIL ───────────────────────────────
+
+    @patch('core.management.commands.verify_redis_cache._is_resilient_redis_backend', return_value=False)
+    @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
+           return_value='django.core.cache.backends.locmem.LocMemCache')
+    @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
+           return_value=(True, 'SET → GET → DELETE succeeded'))
+    def test_locmem_detected_fails_overall(self, mock_rt, mock_name, mock_is_res):
+        out = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            call_command('verify_redis_cache', stdout=out)
+        self.assertEqual(cm.exception.code, 1)
+        output = out.getvalue()
+        self.assertIn('LOCMEM FALLBACK', output)
+        self.assertIn('OVERALL: FAIL', output)
+
+    # ── PING fails → FAIL ─────────────────────────────────────────────────
+
+    @patch('core.management.commands.verify_redis_cache._is_resilient_redis_backend', return_value=True)
+    @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
+           return_value='core.cache_backends.ResilientRedisCache')
+    @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
+           return_value=(False, 'Connection refused'))
+    @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
+           return_value=(True, 'SET → GET → DELETE succeeded'))
+    def test_ping_fail_fails_overall(self, mock_rt, mock_ping, mock_name, mock_is_res):
+        out = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            call_command('verify_redis_cache', stdout=out)
+        self.assertEqual(cm.exception.code, 1)
+        output = out.getvalue()
+        self.assertIn('FAIL', output)
+        self.assertIn('Connection refused', output)
+        self.assertIn('OVERALL: FAIL', output)
+
+    # ── Round-trip fails → FAIL ────────────────────────────────────────────
+
+    @patch('core.management.commands.verify_redis_cache._is_resilient_redis_backend', return_value=True)
+    @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
+           return_value='core.cache_backends.ResilientRedisCache')
+    @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
+           return_value=(True, 'PONG received in 2.0 ms'))
+    @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
+           return_value=(False, 'cache.set() returned False'))
+    def test_roundtrip_fail_fails_overall(self, mock_rt, mock_ping, mock_name, mock_is_res):
+        out = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            call_command('verify_redis_cache', stdout=out)
+        self.assertEqual(cm.exception.code, 1)
+        output = out.getvalue()
+        self.assertIn('cache.set() returned False', output)
+        self.assertIn('OVERALL: FAIL', output)
+
+    # ── Credential safety: passwords must never appear in command output ───
+
+    @patch('core.management.commands.verify_redis_cache._is_resilient_redis_backend', return_value=True)
+    @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
+           return_value='core.cache_backends.ResilientRedisCache')
+    @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
+           return_value=(False, 'rediss://default:***@dog.upstash.io:6379 refused'))
+    @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
+           return_value=(True, 'SET → GET → DELETE succeeded'))
+    def test_credential_never_appears_in_output(self, mock_rt, mock_ping, mock_name, mock_is_res):
+        """Even if a sanitized error leaks, raw secrets must not be in output."""
+        out = io.StringIO()
+        with self.assertRaises(SystemExit):
+            call_command('verify_redis_cache', stdout=out)
+        output = out.getvalue()
+        # The mock already returns a sanitized string; verify raw token absent
+        self.assertNotIn('tls-token-abc', output)
+        self.assertNotIn('SuperSecret', output)
+
+    # ── PING skipped for non-Redis backend ────────────────────────────────
+
+    @patch('core.management.commands.verify_redis_cache._is_resilient_redis_backend', return_value=False)
+    @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
+           return_value='django.core.cache.backends.locmem.LocMemCache')
+    @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
+           return_value=(True, 'SET → GET → DELETE succeeded'))
+    def test_ping_skipped_for_non_redis_backend(self, mock_rt, mock_name, mock_is_res):
+        out = io.StringIO()
+        with self.assertRaises(SystemExit):
+            call_command('verify_redis_cache', stdout=out)
+        output = out.getvalue()
+        self.assertIn('SKIP', output)

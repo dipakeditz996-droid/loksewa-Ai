@@ -73,6 +73,8 @@ fix_units.py
 replace_units.py
 input.txt
 verify*.py
+# Exception: management commands named verify_*.py are production code, not scratch scripts
+!apps/api/**/management/commands/verify*.py
 migrate_sq.py
 verification_report.md
 fake_data_findings.txt

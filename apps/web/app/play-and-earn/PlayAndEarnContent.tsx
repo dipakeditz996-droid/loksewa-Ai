@@ -25,7 +25,7 @@ export function PlayAndEarnContent() {
         <div className="absolute inset-0 z-0">
           <div
             className="absolute inset-0 opacity-[0.22] blur-[1px] bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url('/media/hero-bg.jpg')` }}
+            style={{ backgroundImage: `url('/media/hero_background.webp')` }}
           />
           <div className="absolute inset-0 bg-[#0A1118]/80 mix-blend-multiply" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#0A1118_100%)] opacity-80" />

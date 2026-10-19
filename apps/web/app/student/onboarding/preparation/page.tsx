@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { publicApi } from "@/lib/api/public-api";
 import { studentSettingsApi } from "@/lib/api/student-settings";
 import Link from "next/link";
-import bgImage from "@/media/signup.png";
+import bgImage from "@/media/signup.webp";
 
 // Finds the exam node matching `examId` anywhere in the hierarchy tree
 // (categories -> root exams -> nested children) and returns its courses.

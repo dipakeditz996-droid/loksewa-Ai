@@ -6,9 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { practiceApi } from "@/lib/api/practice";
 import { practiceResultKey } from "@/lib/practice-hooks";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ArrowLeft, CheckCircle2, XCircle, BarChart3, HelpCircle, RotateCcw, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle2, XCircle, BarChart3, HelpCircle, RotateCcw, Sparkles, Flag } from "lucide-react";
 import Link from "next/link";
 import { practiceError, PracticeError } from "@/lib/practice-errors";
+import { ReportQuestionModal } from "@/components/student/exams/ReportQuestionModal";
 
 export default function PracticeResultPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function PracticeResultPage() {
   const id = parseInt(params.id as string);
   const idValid = !Number.isNaN(id);
   const [activeFilter, setActiveFilter] = useState<'all' | 'mistakes' | 'correct'>('all');
+  const [reportingQuestion, setReportingQuestion] = useState<{ id: number; text: string } | null>(null);
 
   // Finishing a session already returned this exact payload and seeds the
   // cache (see the Finish handlers), so the result normally renders at once
@@ -297,6 +299,13 @@ export default function PracticeResultPage() {
                            <HelpCircle className="w-3.5 h-3.5" /> Still confused? Ask the Community
                          </Link>
                        )}
+                       <button
+                         type="button"
+                         onClick={() => setReportingQuestion({ id: attempt.question.id, text: attempt.question.text })}
+                         className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-red-500 transition-colors"
+                       >
+                         <Flag className="w-3.5 h-3.5" /> Report a problem
+                       </button>
                      </div>
                    </div>
                  </div>
@@ -323,6 +332,17 @@ export default function PracticeResultPage() {
             </Link>
           </Button>
         </div>
+      )}
+
+      {/* Report Question Modal */}
+      {reportingQuestion && result && (
+        <ReportQuestionModal
+          isOpen={true}
+          onClose={() => setReportingQuestion(null)}
+          questionId={reportingQuestion.id}
+          questionText={reportingQuestion.text}
+          context={{ practiceSessionId: result.session.id }}
+        />
       )}
 
     </div>

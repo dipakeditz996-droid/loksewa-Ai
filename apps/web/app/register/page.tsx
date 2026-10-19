@@ -35,7 +35,7 @@ import { ALL_NEPAL_DISTRICTS } from "@/lib/constants/nepal-districts";
 import { DistrictSelector } from "@/components/DistrictSelector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import bgImage from "@/media/signup.png";
+import bgImage from "@/media/signup.webp";
 import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
 
 const STEPS = ["Basic Info", "Address", "Preparation", "Review"];

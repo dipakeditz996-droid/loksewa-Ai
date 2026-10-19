@@ -56,7 +56,7 @@ export default function PayoutsTab() {
       setBalance(bal);
       setPayouts(pay);
       setAccounts(acc);
-      if (acc.length > 0 && !selectedAccountId) {
+      if (acc.length > 0 && acc[0] && !selectedAccountId) {
         setSelectedAccountId(String(acc[0].id));
       }
     } catch (err) {

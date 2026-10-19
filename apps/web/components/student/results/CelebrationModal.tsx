@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import confetti from "canvas-confetti";
 import { X, Share2, Award, Trophy, Medal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -48,35 +47,47 @@ export function CelebrationModal({
 
     if (prefersReducedMotion) return;
 
-    // Fire confetti based on rank
-    const duration = 3000;
-    const end = Date.now() + duration;
+    // Fire confetti dynamically based on rank
+    let cancelled = false;
+    import("canvas-confetti").then((mod) => {
+      if (cancelled) return;
+      const confetti = mod.default;
+      const duration = 3000;
+      const end = Date.now() + duration;
 
-    const frame = () => {
-      confetti({
-        particleCount: rank === 1 ? 5 : 3,
-        angle: 60,
-        spread: 55,
-        origin: { x: 0 },
-        colors: rank === 1 ? ["#FFD700", "#FFA500"] : rank === 2 ? ["#C0C0C0", "#A9A9A9"] : ["#CD7F32", "#8B4513"],
-        disableForReducedMotion: true,
-        zIndex: 9999,
-      });
-      confetti({
-        particleCount: rank === 1 ? 5 : 3,
-        angle: 120,
-        spread: 55,
-        origin: { x: 1 },
-        colors: rank === 1 ? ["#FFD700", "#FFA500"] : rank === 2 ? ["#C0C0C0", "#A9A9A9"] : ["#CD7F32", "#8B4513"],
-        disableForReducedMotion: true,
-        zIndex: 9999,
-      });
+      const frame = () => {
+        if (cancelled) return;
+        confetti({
+          particleCount: rank === 1 ? 5 : 3,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 },
+          colors: rank === 1 ? ["#FFD700", "#FFA500"] : rank === 2 ? ["#C0C0C0", "#A9A9A9"] : ["#CD7F32", "#8B4513"],
+          disableForReducedMotion: true,
+          zIndex: 9999,
+        });
+        confetti({
+          particleCount: rank === 1 ? 5 : 3,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 },
+          colors: rank === 1 ? ["#FFD700", "#FFA500"] : rank === 2 ? ["#C0C0C0", "#A9A9A9"] : ["#CD7F32", "#8B4513"],
+          disableForReducedMotion: true,
+          zIndex: 9999,
+        });
 
-      if (Date.now() < end) {
-        requestAnimationFrame(frame);
-      }
+        if (Date.now() < end) {
+          requestAnimationFrame(frame);
+        }
+      };
+      frame();
+    }).catch(() => {
+      // ignore dynamic import failure gracefully
+    });
+
+    return () => {
+      cancelled = true;
     };
-    frame();
   }, [isOpen, rank]);
 
   if (!isOpen) return null;

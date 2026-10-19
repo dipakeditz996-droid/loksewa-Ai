@@ -11,11 +11,16 @@ import {
   SubjectPerformance, TopicPerformance, AIInsight 
 } from "@/lib/api/analytics";
 import { cn } from "@/lib/utils";
-import { 
-  XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Area, AreaChart 
-} from 'recharts';
+import dynamic from "next/dynamic";
 import Link from "next/link";
+
+const PerformanceTrendChart = dynamic(
+  () => import("./PerformanceTrendChart"),
+  {
+    ssr: false,
+    loading: () => <TrendSkeleton />,
+  }
+);
 
 // ─── Skeletons ───────────────────────────────────────────────────────────────
 
@@ -254,26 +259,7 @@ export function StudentAnalyticsContent() {
           {trendLoading ? (
             <TrendSkeleton />
           ) : trend.length > 1 ? (
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#D4A72C" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#D4A72C" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} domain={[0, 100]} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    itemStyle={{ color: '#0B2545', fontWeight: 'bold' }}
-                  />
-                  <Area type="monotone" dataKey="accuracy" stroke="#D4A72C" strokeWidth={3} fillOpacity={1} fill="url(#colorAccuracy)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <PerformanceTrendChart trend={trend} />
           ) : (
             <div className="h-[300px] flex items-center justify-center text-muted-foreground font-medium bg-muted/40 rounded-lg text-sm px-6 text-center">
               Complete more practice sessions or mock exams to visualize your 14-day performance trend.

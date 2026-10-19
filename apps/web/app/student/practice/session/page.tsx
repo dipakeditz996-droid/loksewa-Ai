@@ -4,13 +4,14 @@ import React, { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { practiceApi, PracticeSessionResponse, Question } from "@/lib/api/practice";
 import { Button } from "@/components/ui/button";
-import { Loader2, Clock, CheckCircle2, ChevronLeft, ChevronRight, Flag, Star, AlertCircle } from "lucide-react";
+import { Loader2, Clock, CheckCircle2, ChevronLeft, ChevronRight, Flag, Star, AlertCircle, AlertTriangle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSavedQuestions, practiceResultKey } from "@/lib/practice-hooks";
 import { useOptionalStudentContext } from "@/contexts/StudentContext";
 import { notify } from "@/lib/notify";
 import { practiceError, practiceErrorMessage, PracticeError } from "@/lib/practice-errors";
 import { QuestionSkeleton } from "@/components/practice/TopicPracticeBrowser";
+import { ReportQuestionModal } from "@/components/student/exams/ReportQuestionModal";
 
 function PracticeSessionContent() {
   const searchParams = useSearchParams();
@@ -37,6 +38,7 @@ function PracticeSessionContent() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const startRequested = useRef(false);
+  const [reportingQuestionId, setReportingQuestionId] = useState<number | null>(null);
 
   const initSession = async () => {
     setLoading(true);
@@ -193,6 +195,7 @@ function PracticeSessionContent() {
   }
 
   return (
+    <>
     <div className="max-w-[1200px] mx-auto p-4 md:p-8 min-h-[calc(100vh-72px)] bg-muted/50 flex flex-col md:flex-row gap-6">
       
       {/* Main Question Area */}
@@ -210,6 +213,16 @@ function PracticeSessionContent() {
               <Button variant="ghost" size="sm" onClick={toggleReview} className={markedForReview[currentQ.id] ? "text-orange-500" : "text-muted-foreground"}>
                 <Flag className="w-4 h-4 mr-2" fill={markedForReview[currentQ.id] ? "currentColor" : "none"} />
                 {markedForReview[currentQ.id] ? "Marked" : "Mark for Review"}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setReportingQuestionId(currentQ.id)}
+                className="text-muted-foreground hover:text-red-500"
+                title="Report a problem with this question"
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Report
               </Button>
             </div>
           </div>
@@ -330,6 +343,21 @@ function PracticeSessionContent() {
       </div>
 
     </div>
+
+      {/* Report Question Modal */}
+      {sessionData && reportingQuestionId !== null && (() => {
+        const rq = sessionData.questions.find(q => q.id === reportingQuestionId);
+        return rq ? (
+          <ReportQuestionModal
+            isOpen={true}
+            onClose={() => setReportingQuestionId(null)}
+            questionId={rq.id}
+            questionText={rq.text}
+            context={{ practiceSessionId: sessionData.session.id }}
+          />
+        ) : null;
+      })()}
+    </>
   );
 }
 

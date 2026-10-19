@@ -11,7 +11,7 @@ import { examPreferencesApi, ExamPreferenceCategory, ExamPreferenceNode } from "
 import { ALL_NEPAL_DISTRICTS } from "@/lib/constants/nepal-districts";
 import { DistrictSelector } from "@/components/DistrictSelector";
 import Link from "next/link";
-import bgImage from "@/media/signup.png";
+import bgImage from "@/media/signup.webp";
 
 function isValidNepalPhone(phone: string): boolean {
   const cleaned = phone.replace(/[\s-]/g, "").replace(/^\+?977/, "");

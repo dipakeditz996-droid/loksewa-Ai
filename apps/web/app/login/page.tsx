@@ -5,7 +5,7 @@ import Link from "next/link";
 import { BookOpen, Eye, EyeOff, User, Lock, Trophy, BarChart2, ArrowRight, ArrowLeft, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import bgImage from "../../media/login.png";
+import bgImage from "../../media/login.webp";
 import leftBranchImg from "../../media/left-branch.png";
 import rightBranchImg from "../../media/right-branch.png";
 import Image from "next/image";

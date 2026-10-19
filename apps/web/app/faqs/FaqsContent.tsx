@@ -178,7 +178,7 @@ export function FaqsContent() {
         <div className="absolute inset-0 z-0">
           <div
             className="absolute inset-0 opacity-[0.20] blur-[1px] bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url('/media/hero-bg.jpg')` }}
+            style={{ backgroundImage: `url('/media/hero_background.webp')` }}
           />
           <div className="absolute inset-0 bg-[#0A1118]/80 mix-blend-multiply" />
           <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-[#163E6B]/50 rounded-full blur-[150px] pointer-events-none mix-blend-screen" />

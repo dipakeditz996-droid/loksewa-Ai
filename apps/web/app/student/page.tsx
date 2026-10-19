@@ -80,7 +80,7 @@ export default function StudentDashboardPage() {
   const { data: referralHistory, isLoading: isReferralHistoryLoading } = useQuery({
     queryKey: ["referral-history"],
     queryFn: () => gamificationService.getStudentReferralHistory().catch(() => []),
-    enabled: hasToken || !!user,
+    enabled: (hasToken || !!user) && !!data,
     staleTime: 60 * 1000,
   });
 
@@ -301,13 +301,13 @@ export default function StudentDashboardPage() {
 
       {/* 2. Dynamic Package, Entitlements & Usage Tracking */}
       <section>
-        <StudentEntitlementsUsageWidget />
+        <StudentEntitlementsUsageWidget enabled={!loading} />
       </section>
 
       {/* 3. Official Loksewa Exam Countdown & Upcoming Mock Exam Banner */}
       <section className="space-y-4">
         <LoksewaExamCountdown />
-        <MockExamCountdown />
+        <MockExamCountdown enabled={!loading} />
       </section>
 
       {/* 4. Widget Sections: Instant static shell on initial paint, deferred dnd-kit on idle */}

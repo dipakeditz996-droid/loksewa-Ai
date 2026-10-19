@@ -14,17 +14,18 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { subscriptionsApi, EffectiveEntitlements } from "@/lib/api/subscriptions";
 
-export function StudentEntitlementsUsageWidget() {
+export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: boolean }) {
   const [activeCategory, setActiveCategory] = useState<"objective" | "subjective" | "games" | "ai_practice">("objective");
   const [showHistory, setShowHistory] = useState(false);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery<EffectiveEntitlements>({
     queryKey: ["student-entitlements"],
     queryFn: () => subscriptionsApi.getMyEntitlements(),
+    enabled,
     staleTime: 30 * 1000,
   });
 
-  if (isLoading) {
+  if (!enabled || isLoading) {
     return (
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm animate-pulse space-y-4">
         <div className="h-6 w-48 bg-muted rounded"></div>

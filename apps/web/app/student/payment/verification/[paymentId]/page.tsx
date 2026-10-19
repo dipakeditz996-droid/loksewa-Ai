@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { subscriptionsApi, SubscriptionPayment } from "@/lib/api/subscriptions";
-import bgImage from "@/media/signup.png";
+import bgImage from "@/media/signup.webp";
 
 type VerificationStage = "LOADING" | "OCR_PROCESSING" | "AUTO_VERIFIED" | "NEEDS_ADMIN_REVIEW" | "REJECTED";
 

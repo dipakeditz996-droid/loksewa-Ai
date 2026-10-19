@@ -49,7 +49,9 @@ class PublicExamPreferenceTreeView(APIView):
             }
             for category in categories
         ]
-        return Response(data)
+        response = Response(data)
+        response['Cache-Control'] = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        return response
 
 
 class PublicSyllabusTreeView(APIView):
@@ -172,7 +174,9 @@ class PublicSyllabusTreeView(APIView):
             }
             for category in categories
         ]
-        return Response(data)
+        response = Response(data)
+        response['Cache-Control'] = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        return response
 
 
 class PublicExaminationListView(APIView):
@@ -199,7 +203,9 @@ class PublicExaminationListView(APIView):
                 'subjects': [e.subject.name] if e.subject else [],
                 'status': e.computed_status,
             })
-        return Response(data)
+        response = Response(data)
+        response['Cache-Control'] = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        return response
 
 
 class PublicSubjectListView(APIView):
@@ -218,7 +224,9 @@ class PublicSubjectListView(APIView):
         ).order_by('-q_count', 'name')[:12]
 
         data = [{'id': s.id, 'name': s.name, 'questionsCount': s.q_count} for s in subjects]
-        return Response(data)
+        response = Response(data)
+        response['Cache-Control'] = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        return response
 
 
 class PublicQuestionSetListView(APIView):
@@ -246,4 +254,6 @@ class PublicQuestionSetListView(APIView):
                 'estimatedMinutes': qs.time_limit,
                 'questionsCount': qs.total_questions,
             })
-        return Response(data)
+        response = Response(data)
+        response['Cache-Control'] = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        return response

@@ -59,7 +59,7 @@ export default function CoursesPage() {
             {/* 1. Base Image */}
             <div 
               className="absolute inset-0 opacity-[0.35] blur-[1px] bg-cover bg-center bg-no-repeat"
-              style={{ backgroundImage: `url('/media/course.jpg')` }}
+              style={{ backgroundImage: `url('/media/course.webp')` }}
             ></div>
             
             {/* 2. Single Dark Navy Overlay */}

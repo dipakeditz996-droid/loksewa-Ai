@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import confetti from "canvas-confetti";
 import { 
   gamesApi, 
   DailyDrillSession, 
@@ -161,15 +160,17 @@ export default function DailyDrillPage() {
       queryClient.invalidateQueries({ queryKey: ["games", "history"] });
 
       if (data.score > 0) {
-        try {
-          confetti({
-            particleCount: 70,
-            spread: 60,
-            origin: { y: 0.6 },
+        import("canvas-confetti")
+          .then((m) => {
+            m.default({
+              particleCount: 70,
+              spread: 60,
+              origin: { y: 0.6 },
+            });
+          })
+          .catch(() => {
+            // ignore confetti errors in unsupported environments
           });
-        } catch {
-          // ignore confetti errors in unsupported environments
-        }
       }
     },
   });

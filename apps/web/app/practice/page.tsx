@@ -267,8 +267,18 @@ export default function PracticePage() {
           </div>
 
           {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="p-6 rounded-[16px] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 animate-pulse space-y-4">
+                  <div className="h-6 w-3/4 bg-slate-200 dark:bg-white/10 rounded"></div>
+                  <div className="h-4 w-1/2 bg-slate-200 dark:bg-white/10 rounded"></div>
+                  <div className="grid grid-cols-2 gap-4 my-6">
+                    <div className="h-16 bg-slate-200 dark:bg-white/10 rounded-lg"></div>
+                    <div className="h-16 bg-slate-200 dark:bg-white/10 rounded-lg"></div>
+                  </div>
+                  <div className="h-12 bg-slate-200 dark:bg-white/10 rounded-xl"></div>
+                </div>
+              ))}
             </div>
           ) : filteredSets.length === 0 ? (
             <p className="text-slate-500 font-[500]">No practice sets have been published yet. Check back soon.</p>
@@ -326,8 +336,16 @@ export default function PracticePage() {
             <div className="lg:col-span-2">
               <h2 className="text-2xl font-[900] text-slate-900 dark:text-white mb-8">Practice by Subject</h2>
               {isLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-center justify-between p-5 rounded-[16px] bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 animate-pulse">
+                      <div className="space-y-2 w-3/4">
+                        <div className="h-5 w-2/3 bg-slate-200 dark:bg-white/10 rounded"></div>
+                        <div className="h-3 w-1/3 bg-slate-200 dark:bg-white/10 rounded"></div>
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-white/10"></div>
+                    </div>
+                  ))}
                 </div>
               ) : subjects.length === 0 ? (
                 <p className="text-slate-500 font-[500]">No subjects with published questions yet.</p>

@@ -30,6 +30,10 @@ const nextConfig = {
       'date-fns',
       'framer-motion',
       'recharts',
+      '@tanstack/react-query',
+      '@dnd-kit/core',
+      '@dnd-kit/sortable',
+      '@dnd-kit/utilities',
       '@radix-ui/react-accordion',
       '@radix-ui/react-dialog',
       '@radix-ui/react-dropdown-menu',
@@ -40,6 +44,7 @@ const nextConfig = {
     ],
   },
   images: {
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       {
         protocol: 'https',
@@ -56,6 +61,28 @@ const nextConfig = {
         port: '8000',
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: '/media/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/icons/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [

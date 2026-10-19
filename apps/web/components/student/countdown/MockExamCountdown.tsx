@@ -24,8 +24,12 @@ export const upcomingMockExamQuery = {
   staleTime: 60 * 1000,
 } as const;
 
-export function MockExamCountdown({ className = "" }: { className?: string }) {
-  const { data, isLoading: loading, isError: error, refetch } = useQuery(upcomingMockExamQuery);
+export function MockExamCountdown({ className = "", enabled = true }: { className?: string; enabled?: boolean }) {
+  const { data, isLoading: loading, isError: error, refetch } = useQuery({
+    ...upcomingMockExamQuery,
+    enabled,
+  });
+  if (!enabled) return null;
   const mockExam = data?.mock_exam ?? null;
   const [status, setStatus] = useState<"UPCOMING" | "LIVE" | "COMPLETED" | "NONE">("NONE");
   const [serverOffsetMs, setServerOffsetMs] = useState(0);

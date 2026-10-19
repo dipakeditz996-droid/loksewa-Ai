@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { subscriptionsApi, SubscriptionPlan } from "@/lib/api/subscriptions";
 import { marketplaceApi, PaymentMethod } from "@/lib/api/marketplace";
 import Link from "next/link";
-import bgImage from "@/media/signup.png";
+import bgImage from "@/media/signup.webp";
 
 export default function CheckoutPage() {
   const router = useRouter();

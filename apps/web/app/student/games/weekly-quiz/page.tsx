@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import confetti from "canvas-confetti";
 import { 
   gamesApi, 
   WeeklyQuizQuestionItem, 
@@ -93,15 +92,17 @@ export default function WeeklyQuizPage() {
 
       // Trigger celebratory confetti if score > 0
       if (data.score > 0) {
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.6 }
+        import("canvas-confetti")
+          .then((m) => {
+            m.default({
+              particleCount: 80,
+              spread: 70,
+              origin: { y: 0.6 },
+            });
+          })
+          .catch(() => {
+            // ignore confetti error in non-browser env
           });
-        } catch {
-          // ignore confetti error in non-browser env
-        }
       }
     },
   });

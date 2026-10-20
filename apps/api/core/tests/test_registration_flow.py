@@ -359,3 +359,42 @@ class CoursePersonalizationTests(APITestCase):
 
         matches = Course.objects.filter(exam=service)
         self.assertEqual(list(matches), [matching])
+
+
+class RegistrationPerformanceAndTaskTests(APITestCase):
+    def setUp(self):
+        self.category = ExamCategory.objects.create(name='PSC Exams', is_active=True)
+
+    def test_registration_returns_request_id_and_server_timing_headers(self):
+        payload = _valid_payload(
+            username='timinguser', email='timinguser@test.com',
+            exam_category_id=self.category.id
+        )
+        response = self.client.post('/api/auth/signup/', payload, HTTP_X_REQUEST_ID='test_req_12345')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.headers.get('X-Request-ID'), 'test_req_12345')
+        self.assertIn('total;dur=', response.headers.get('Server-Timing', ''))
+        self.assertIn('db;dur=', response.headers.get('Server-Timing', ''))
+
+    def test_registration_otp_persisted_before_acknowledgement(self):
+        payload = _valid_payload(
+            username='asyncuser', email='asyncuser@test.com',
+            exam_category_id=self.category.id
+        )
+        response = self.client.post('/api/auth/signup/', payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # OTP row must be safely persisted in database
+        otp = EmailOTP.objects.filter(email='asyncuser@test.com', purpose='signup').first()
+        self.assertIsNotNone(otp)
+        self.assertFalse(otp.is_used)
+        self.assertEqual(otp.attempts, 0)
+
+    def test_send_otp_email_task_execution(self):
+        from unittest.mock import patch
+        from core.tasks import send_otp_email_task
+
+        with patch('core.email_service.send_otp_email') as mock_send:
+            send_otp_email_task.apply(args=['student@test.com', '123456', 'signup'])
+            mock_send.assert_called_once_with('student@test.com', '123456', 'signup')
+

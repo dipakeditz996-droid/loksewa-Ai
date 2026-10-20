@@ -448,18 +448,23 @@ export function WeekCard({ data }: { data: WeekResponse }) {
             : "No study streak yet — answer a question to start one."}
         </p>
       </div>
-      <ol className="grid grid-cols-7 gap-1.5 text-center">
+      <ol className="grid grid-cols-7 gap-1 text-center">
         {days.map((d) => (
-          <li key={d.date} className={`rounded-[10px] border py-2 px-0.5 ${d.is_today ? "border-primary" : "border-border"}`}>
-            <p className="text-[11px] font-bold uppercase text-muted-foreground">{d.label}</p>
-            <p className="mt-1 text-[13px] font-bold min-h-[20px]">
-              {d.is_today && d.state !== "done" ? <span className="text-primary dark:text-foreground">Today</span>
-                : d.state === "done" ? <CheckCircle2 className="w-4 h-4 mx-auto text-green-600" aria-label="Target reached" />
-                : d.state === "partial" || d.state === "missed" || d.state === "open" ? <span className="text-muted-foreground">{d.percent ?? 0}%</span>
-                : <span className="text-muted-foreground">—</span>}
-            </p>
-            {d.is_today && d.state !== "none" && d.state !== "open" && (
-              <p className="text-[10px] text-muted-foreground">{d.percent ?? 0}%</p>
+          <li key={d.date} className={`rounded-[10px] border py-2 px-0.5 min-w-0 overflow-hidden ${d.is_today ? "border-primary bg-primary/5" : "border-border"}`}>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground leading-none truncate">{d.label}</p>
+            <div className="mt-1.5 min-h-[20px] flex items-center justify-center">
+              {d.is_today && d.state !== "done" ? (
+                <span className="text-[10px] font-bold text-primary dark:text-foreground leading-none">Now</span>
+              ) : d.state === "done" ? (
+                <CheckCircle2 className="w-3.5 h-3.5 mx-auto text-green-600" aria-label="Target reached" />
+              ) : d.state === "partial" || d.state === "missed" || d.state === "open" ? (
+                <span className="text-[11px] text-muted-foreground font-semibold">{d.percent ?? 0}%</span>
+              ) : (
+                <span className="text-[11px] text-muted-foreground">—</span>
+              )}
+            </div>
+            {d.is_today && d.state !== "none" && d.state !== "open" && d.state !== "done" && (
+              <p className="text-[9px] text-muted-foreground leading-none mt-0.5">{d.percent ?? 0}%</p>
             )}
           </li>
         ))}

@@ -453,8 +453,9 @@ export default function MarketplacePage() {
 
                           {/* Wishlist Button */}
                           <button
-                            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white/20"
+                            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 sm:bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-white/20"
                             onClick={handleWishlist}
+                            aria-label="Add to wishlist"
                           >
                             <Heart className="w-4 h-4 text-white" />
                           </button>

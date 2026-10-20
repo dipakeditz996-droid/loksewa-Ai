@@ -88,7 +88,9 @@ export function AnalyticsSection() {
                   ].map((bar, i) => (
                     <div key={i} className="flex flex-col items-center gap-3 w-8 relative group">
                       {/* Tooltip */}
-                      <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 dark:bg-white text-white dark:text-slate-900 text-[11px] font-[800] px-2.5 py-1 rounded-[6px] pointer-events-none">
+                      <div className={`absolute -top-10 transition-opacity bg-slate-800 dark:bg-white text-white dark:text-slate-900 text-[11px] font-[800] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-[6px] pointer-events-none shadow-md ${
+                        bar.active ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      }`}>
                         {bar.h}%
                       </div>
                       

@@ -73,7 +73,7 @@ export default function ExamsPage() {
               Explore Exams <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
             <Link href="/syllabus" className="w-full sm:w-auto">
-              <Button variant="outline" className="h-14 px-8 rounded-[12px] border-slate-300 dark:border-white/20 bg-white/50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-700 dark:text-white font-[700] text-[16px] backdrop-blur-sm w-full">
+              <Button variant="ghost" className="h-14 px-8 rounded-[12px] border border-slate-300 dark:border-white/20 bg-white/70 dark:bg-white/[0.06] hover:bg-white dark:hover:bg-white/[0.12] hover:border-slate-400 dark:hover:border-white/35 text-slate-700 dark:text-white hover:text-slate-900 dark:hover:text-white font-[700] text-[16px] backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5 w-full">
                 View Syllabus
               </Button>
             </Link>
@@ -662,7 +662,7 @@ export default function ExamsPage() {
           </p>
           <div className="flex justify-center gap-4">
             <Link href="/login">
-              <Button variant="outline" className="h-12 px-8 rounded-[10px] bg-white dark:bg-transparent border-slate-300 dark:border-white/20 text-slate-700 dark:text-slate-200 font-[700] hover:bg-slate-50 dark:hover:bg-white/10 shadow-sm">
+              <Button variant="ghost" className="h-12 px-8 rounded-[10px] bg-white/70 dark:bg-white/[0.06] border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/[0.12] hover:border-slate-400 dark:hover:border-white/35 font-[700] shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
                 Log In
               </Button>
             </Link>

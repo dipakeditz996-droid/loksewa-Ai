@@ -167,6 +167,7 @@ async function doRefreshToken(): Promise<string | null> {
 
 export interface ApiClientOptions extends RequestInit {
   skipRedirect?: boolean;
+  timeoutMs?: number;
 }
 
 const inFlightGetRequests = new Map<string, Promise<any>>();
@@ -214,21 +215,41 @@ async function executeRequest<T>(
     headers.set("Content-Type", "application/json");
   }
 
+  const timeoutMs = options.timeoutMs ?? 30000;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let signal = options.signal;
+
+  if (!signal && typeof AbortController !== "undefined" && timeoutMs > 0) {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+  }
+
   const config: RequestInit = {
     cache: 'no-store',
     ...options,
     headers,
+    signal,
   };
 
   let response: Response;
   try {
     response = await fetch(url, config);
   } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new ApiError(0, {
+        detail: "The request timed out. Please check your internet connection or try again."
+      });
+    }
     throw new ApiError(0, {
       detail: err?.message === "Failed to fetch"
         ? "Unable to connect to the backend server. Please verify your connection and ensure the server is running."
         : (err?.message || "Network request failed")
     });
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   // Handle Token Expiration or Missing Token

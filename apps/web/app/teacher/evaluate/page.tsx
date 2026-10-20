@@ -20,6 +20,7 @@ function AnnotatableText({
   onAnnotate: (text: string, start: number, end: number, comment: string) => void
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [activeAnnotationIndex, setActiveAnnotationIndex] = useState<number | null>(null);
 
   const handleMouseUp = () => {
     const selection = window.getSelection();
@@ -56,15 +57,35 @@ function AnnotatableText({
       parts.push(text.substring(lastIndex, ann.start_offset));
     }
     
+    const isActive = activeAnnotationIndex === i;
     parts.push(
       <span 
         key={`ann-${i}`} 
-        className="bg-[#F5E1A8] border-b-2 border-[#D4A72C] cursor-help relative group"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isActive}
+        aria-label={`Annotation: ${ann.comment}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setActiveAnnotationIndex(isActive ? null : i);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setActiveAnnotationIndex(isActive ? null : i);
+          }
+        }}
+        className="bg-[#F5E1A8] border-b-2 border-[#D4A72C] cursor-pointer relative group focus:outline-none focus:ring-2 focus:ring-[#D4A72C] rounded-sm"
       >
         {text.substring(ann.start_offset, ann.end_offset)}
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[250px] bg-slate-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl">
-          <div className="font-bold text-[#D4A72C] mb-1">Annotation</div>
-          {ann.comment}
+        <div className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[250px] max-w-[85vw] bg-slate-900 text-white text-xs rounded-lg p-3 transition-opacity z-20 shadow-xl ${
+          isActive ? "opacity-100 pointer-events-auto" : "opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+        }`}>
+          <div className="font-bold text-[#D4A72C] mb-1 flex items-center justify-between">
+            <span>Annotation</span>
+            <span className="text-[10px] text-white/60 sm:hidden">Tap to close</span>
+          </div>
+          <div className="leading-relaxed">{ann.comment}</div>
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
         </div>
       </span>

@@ -267,7 +267,7 @@ function PracticeSessionContent() {
               </div>
             </div>
 
-            <h2 className="text-[20px] md:text-[24px] font-semibold text-foreground leading-snug mb-8">
+            <h2 className="text-[18px] md:text-[22px] font-semibold text-foreground leading-snug mb-8 break-words overflow-wrap-anywhere">
               {currentQuestion.questionText}
             </h2>
 

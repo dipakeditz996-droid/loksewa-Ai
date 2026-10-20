@@ -335,7 +335,7 @@ export function TopicPracticeBrowser({ initial, savedQuestionIds, onToggleSave, 
                 </Button>
               </div>
 
-              <h2 className="text-xl font-medium text-primary dark:text-foreground leading-relaxed mb-8">{q.text}</h2>
+              <h2 className="text-[17px] font-medium text-primary dark:text-foreground leading-relaxed mb-8 break-words overflow-wrap-anywhere">{q.text}</h2>
 
               {q.hint && (
                 <div className="mb-5">
@@ -467,30 +467,30 @@ export function TopicPracticeBrowser({ initial, savedQuestionIds, onToggleSave, 
       )}
 
       {/* Page navigation */}
-      <div className="flex justify-between items-center bg-card p-4 rounded-[16px] border border-border shadow-sm">
+      <div className="flex flex-wrap justify-between items-center gap-3 bg-card p-4 rounded-[16px] border border-border shadow-sm">
         <Button
           variant="outline"
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page === 1}
-          className="h-12 px-6 rounded-[10px]"
+          className="h-12 px-6 rounded-[10px] flex-1 sm:flex-none min-w-[120px]"
         >
           <ChevronLeft className="w-4 h-4 mr-2" /> Previous
         </Button>
-        <span className="text-sm font-bold text-muted-foreground">
+        <span className="text-sm font-bold text-muted-foreground order-first w-full sm:order-none sm:w-auto text-center">
           Page {page} of {totalPages}
         </span>
         {isLastPage ? (
           <Button
             onClick={handleFinish}
             disabled={finishing}
-            className="h-12 px-6 rounded-[10px] bg-primary text-primary-foreground hover:bg-[#163E6B]"
+            className="h-12 px-6 rounded-[10px] bg-primary text-primary-foreground hover:bg-[#163E6B] flex-1 sm:flex-none min-w-[140px]"
           >
             <Flag className="w-4 h-4 mr-2" /> {finishing ? "Finishing..." : "Finish Practice"}
           </Button>
         ) : (
           <Button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="h-12 px-6 rounded-[10px] bg-primary text-primary-foreground hover:bg-[#163E6B]"
+            className="h-12 px-6 rounded-[10px] bg-primary text-primary-foreground hover:bg-[#163E6B] flex-1 sm:flex-none min-w-[120px]"
           >
             Next Page <ChevronRight className="w-4 h-4 ml-2" />
           </Button>

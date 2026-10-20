@@ -793,3 +793,9 @@ option {
 :root[data-exam-focus="on"] body {
   overscroll-behavior: contain;
 }
+
+/* Utility: word-break for long question text that overflows cards */
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

@@ -67,20 +67,20 @@ export function SocialProofSection({ testimonials, stats }: Props) {
         </div>
 
         {/* Metrics */}
-        <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${displayTestimonials.length > 0 ? "mb-20" : ""}`}>
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${displayTestimonials.length > 0 ? "mb-16 md:mb-20" : ""}`}>
           {metrics.map((m, i) => (
             <div
               key={m.label}
-              className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[20px] p-6 text-center group hover:border-[#D4A72C]/30 dark:hover:border-[#D4A72C]/20 transition-all card-hover"
+              className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 text-center group hover:border-[#D4A72C]/30 dark:hover:border-[#D4A72C]/20 transition-all card-hover overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#D4A72C]/[0.02] to-transparent rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className={`text-[36px] md:text-[44px] font-[900] mb-1 ${
+              <div className="absolute inset-0 bg-gradient-to-br from-[#D4A72C]/[0.02] to-transparent rounded-[16px] sm:rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className={`text-[24px] xs:text-[28px] sm:text-[36px] md:text-[44px] font-[900] mb-1 leading-tight tracking-tight tabular-nums ${
                 i === 3 ? "text-gradient-gold" : "text-slate-900 dark:text-white"
               }`}>
                 {m.value}
               </div>
-              <div className="text-[13px] font-[700] text-slate-800 dark:text-slate-200 mb-1">{m.label}</div>
-              <div className="text-[11.5px] text-slate-600 dark:text-slate-400 font-[500]">{m.description}</div>
+              <div className="text-[12px] sm:text-[13px] font-[700] text-slate-800 dark:text-slate-100 mb-1">{m.label}</div>
+              <div className="text-[10.5px] sm:text-[11.5px] text-slate-600 dark:text-slate-300 font-[500] leading-tight">{m.description}</div>
             </div>
           ))}
         </div>

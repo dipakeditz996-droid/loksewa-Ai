@@ -50,17 +50,17 @@ function MyLearningTabs() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full space-y-6">
-      <TabsList className="bg-muted/70 p-1 border border-border/60 rounded-xl h-auto flex flex-wrap sm:inline-flex">
+      <TabsList className="bg-muted/70 p-1 border border-border/60 rounded-xl h-auto flex flex-col sm:flex-row w-full sm:w-auto">
         <TabsTrigger 
           value="courses" 
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          className="flex items-center justify-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm w-full sm:w-auto"
         >
           <BookOpen className="w-4 h-4 text-[#D4A72C]" />
           Courses
         </TabsTrigger>
         <TabsTrigger 
           value="purchases" 
-          className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+          className="flex items-center justify-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm w-full sm:w-auto"
         >
           <CreditCard className="w-4 h-4 text-[#D4A72C]" />
           Purchases & Subscriptions

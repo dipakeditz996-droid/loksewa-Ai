@@ -51,7 +51,7 @@ export function CourseSwitcher() {
   if (authorizedCourses.length === 1 && activeCourse) {
     return (
       <div
-        className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary max-w-[190px] sm:max-w-[260px] truncate shadow-xs"
+        className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary max-w-[110px] xs:max-w-[140px] sm:max-w-[260px] truncate shadow-xs"
         title={activeCourse.title}
       >
         <GraduationCap className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -70,7 +70,7 @@ export function CourseSwitcher() {
           size="sm"
           disabled={isSwitching}
           className={cn(
-            "h-8 sm:h-9 px-3 rounded-full border-border bg-background/90 hover:bg-accent/80 text-xs font-semibold flex items-center gap-2 max-w-[180px] sm:max-w-[260px] md:max-w-[300px] transition-all shadow-xs",
+            "h-8 sm:h-9 px-2.5 sm:px-3 rounded-full border-border bg-background/90 hover:bg-accent/80 text-xs font-semibold flex items-center gap-1.5 sm:gap-2 max-w-[110px] xs:max-w-[140px] sm:max-w-[260px] md:max-w-[300px] transition-all shadow-xs",
             isSwitching && "opacity-70 cursor-wait"
           )}
           title={activeCourse?.title || "Switch Course"}

@@ -109,7 +109,10 @@ export default function CoursesPage() {
                   </div>
                 </div>
               </div>
-              <Button className="h-[54px] px-6 rounded-[12px] bg-white/5 border border-white/10 hover:bg-white/10 text-white font-[600] flex items-center gap-2 transition-all">
+              <Button
+                variant="ghost"
+                className="h-[54px] px-6 rounded-[12px] bg-white/[0.06] border border-white/20 hover:bg-white/[0.12] hover:border-white/35 text-white hover:text-white font-[600] flex items-center gap-2 transition-all shadow-sm"
+              >
                 <SlidersHorizontal className="w-4 h-4 text-slate-300" />
                 Filters
               </Button>
@@ -415,11 +418,16 @@ export default function CoursesPage() {
             </div>
           )}
 
-          <div className="mt-16 flex justify-center">
-            <Button variant="outline" className="h-[48px] px-8 rounded-[12px] font-[700] text-[15px] border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/5">
-              Load More Programs
-            </Button>
-          </div>
+          {!isLoading && !hasError && courses.length > 0 && (
+            <div className="mt-16 flex justify-center">
+              <Button
+                variant="ghost"
+                className="h-[48px] px-8 rounded-[12px] font-[700] text-[15px] border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white hover:text-slate-900 dark:hover:text-white bg-white/70 dark:bg-white/[0.06] hover:bg-white dark:hover:bg-white/[0.12] hover:border-slate-400 dark:hover:border-white/35 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5"
+              >
+                Load More Programs
+              </Button>
+            </div>
+          )}
         </section>
       </main>
     </>

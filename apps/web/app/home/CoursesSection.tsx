@@ -88,7 +88,10 @@ export function CoursesSection({ courses: apiCourses }: Props) {
             </h2>
           </div>
           <Link href="/courses">
-            <Button variant="outline" className="border-slate-300 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 bg-transparent h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap">
+            <Button
+              variant="outline"
+              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
+            >
               View All Courses
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Button>

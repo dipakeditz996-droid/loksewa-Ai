@@ -153,7 +153,8 @@ export function ProfileSection() {
               </Avatar>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Change profile photo"
+                className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 sm:group-hover:opacity-100 transition-opacity"
               >
                 {photoMutation.isPending ? (
                   <Loader2 className="h-5 w-5 text-white animate-spin" />
@@ -161,6 +162,13 @@ export function ProfileSection() {
                   <Camera className="h-5 w-5 text-white" />
                 )}
               </button>
+              <div 
+                onClick={() => fileInputRef.current?.click()} 
+                className="sm:hidden absolute -bottom-1 -right-1 p-1.5 bg-[#D4A72C] text-black rounded-full shadow-md cursor-pointer pointer-events-auto"
+                aria-hidden="true"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"

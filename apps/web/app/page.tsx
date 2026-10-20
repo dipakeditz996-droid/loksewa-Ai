@@ -53,10 +53,10 @@ export default async function Home() {
   return (
     // The site-wide theme toggle (next-themes) controls the dark mode via the <html> tag.
     // We remove the hardcoded `dark` class so the toggle button actually works.
-    <div className="w-full flex flex-col min-h-screen">
-      <main className="flex-1 bg-slate-50 dark:bg-[#020611] bg-aurora min-h-screen">
+    <div className="w-full flex flex-col min-h-screen overflow-x-clip">
+      <main className="flex-1 bg-slate-50 dark:bg-[#020611] bg-aurora min-h-screen overflow-x-clip">
         <HeroSection />
-        <section className="py-10 bg-white dark:bg-[#020611] relative">
+        <section className="pt-1 pb-12 sm:pt-3 sm:pb-14 relative z-20">
           <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
             <LoksewaExamCountdown />
           </div>

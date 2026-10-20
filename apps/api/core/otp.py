@@ -1,11 +1,15 @@
 import hashlib
+import logging
 import secrets
+import threading
 from datetime import timedelta
 
 from django.utils import timezone
 
 from .email_service import send_otp_email
 from .models import EmailOTP
+
+logger = logging.getLogger(__name__)
 
 OTP_TTL_MINUTES = 10
 MAX_ATTEMPTS = 5
@@ -21,11 +25,63 @@ def _hash_code(code):
     return hashlib.sha256(code.encode()).hexdigest()
 
 
+def dispatch_otp_email(to_email: str, code: str, purpose: str):
+    """Dispatches the OTP email asynchronously so the HTTP registration / resend
+    request is never blocked waiting on external email provider network roundtrips.
+
+    Uses Celery if a live worker is available; falls back cleanly to a background
+    daemon thread if Celery is unconfigured or inactive. In test environments
+    where CELERY_TASK_ALWAYS_EAGER is enabled, executes directly.
+    """
+    from django.conf import settings
+
+    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+        send_otp_email(to_email, code, purpose)
+        return
+
+    broker_url = getattr(settings, 'CELERY_BROKER_URL', '')
+    has_real_broker = (
+        broker_url
+        and ('redis://' in broker_url or 'rediss://' in broker_url or 'amqp://' in broker_url)
+        and not broker_url.startswith(('redis://localhost', 'redis://127.0.0.1', 'rediss://localhost', 'rediss://127.0.0.1'))
+        and not any(marker in broker_url for marker in ('YOUR_', '<YOUR_', '[YOUR_'))
+    )
+
+    if has_real_broker:
+        try:
+            from backend.celery import app as celery_app
+            pings = celery_app.control.ping(timeout=0.2)
+            if pings:
+                from .tasks import send_otp_email_task
+                send_otp_email_task.apply_async(args=[to_email, code, purpose])
+                return
+        except Exception as ping_err:
+            logger.debug("Celery worker ping check failed (%s); using daemon thread fallback.", ping_err)
+
+    # Threaded fallback: clean per-thread database connection lifecycle
+    def _thread_worker(email_val, code_val, purpose_val):
+        from django.db import connection
+        connection.close()
+        try:
+            send_otp_email(email_val, code_val, purpose_val)
+        except Exception as err:
+            logger.exception("Background thread failed sending OTP email for purpose=%s: %s", purpose_val, err)
+        finally:
+            connection.close()
+
+    t = threading.Thread(
+        target=_thread_worker,
+        args=(to_email, code, purpose),
+        name=f"otp-email-{purpose}",
+        daemon=True,
+    )
+    t.start()
+
+
 def create_and_send_otp(email, purpose):
-    """Generates a 6-digit code, stores its hash, and emails it via the
-    Django EmailService (Resend SMTP). Rate-limited to one send per
-    RESEND_COOLDOWN_SECONDS per (email, purpose) so a single email can't be
-    used to hammer the daily Resend send quota."""
+    """Generates a 6-digit code, stores its hash in the database first,
+    and then dispatches it asynchronously via Celery or a background thread.
+    Rate-limited to one send per RESEND_COOLDOWN_SECONDS per (email, purpose)."""
     email = email.strip().lower()
 
     recent = EmailOTP.objects.filter(email=email, purpose=purpose).order_by('-created_at').first()
@@ -41,7 +97,8 @@ def create_and_send_otp(email, purpose):
         code_hash=_hash_code(code),
         expires_at=timezone.now() + timedelta(minutes=OTP_TTL_MINUTES),
     )
-    send_otp_email(email, code, purpose)
+    dispatch_otp_email(email, code, purpose)
+
 
 
 RECOVERY_TTL_MINUTES = 10

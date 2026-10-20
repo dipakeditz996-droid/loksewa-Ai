@@ -77,7 +77,7 @@ export function WriteReviewDialog() {
       <Button
         asChild
         variant="outline"
-        className="border-slate-300 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 bg-transparent h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2"
+        className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 shadow-sm"
       >
         <Link href="/login">
           <PenLine className="w-4 h-4" />
@@ -92,7 +92,7 @@ export function WriteReviewDialog() {
       <Button
         variant="outline"
         onClick={openDialog}
-        className="border-slate-300 dark:border-white/10 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-white/5 bg-transparent h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2"
+        className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 shadow-sm"
       >
         <PenLine className="w-4 h-4" />
         {existing ? "Edit Your Review" : "Write a Review"}

@@ -53,10 +53,10 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className={examFocus ? "flex min-h-screen flex-col bg-muted" : "flex min-h-screen bg-muted/20"}>
+    <div className={examFocus ? "flex min-h-screen flex-col bg-muted overflow-x-clip w-full" : "flex min-h-screen bg-muted/20 overflow-x-clip w-full"}>
       {!examFocus && <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} role="student" />}
 
-      <div className={examFocus ? "flex min-w-0 flex-1 flex-col" : "flex min-w-0 flex-1 flex-col lg:pl-72 transition-all duration-300"}>
+      <div className={examFocus ? "flex min-w-0 flex-1 flex-col overflow-x-clip" : "flex min-w-0 flex-1 flex-col lg:pl-72 transition-all duration-300 overflow-x-clip"}>
         {examFocus && !onAttemptPage && attemptPath ? (
           <div className="flex items-center justify-center gap-3 bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -75,7 +75,7 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
             role="student"
           />
         )}
-        <main className={examFocus ? "flex-1" : "flex-1 overflow-y-auto"}>
+        <main className={examFocus ? "flex-1 min-w-0 overflow-x-clip" : "flex-1 min-w-0 overflow-y-auto overflow-x-clip"}>
           {children}
         </main>
       </div>

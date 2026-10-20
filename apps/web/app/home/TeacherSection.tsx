@@ -61,7 +61,7 @@ export function TeacherSection() {
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto h-[50px] px-8 rounded-[12px] font-[600] text-[15px] border-slate-300 dark:border-white/10 text-slate-700 dark:text-white bg-transparent hover:bg-slate-100 dark:hover:bg-white/5 flex items-center justify-center transition-all">
+                <Button asChild variant="outline" className="w-full sm:w-auto h-[50px] px-8 rounded-[12px] font-[600] text-[15px] border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] bg-transparent hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 flex items-center justify-center transition-all shadow-sm">
                   <Link href="/contact">
                     Apply to Teach
                   </Link>

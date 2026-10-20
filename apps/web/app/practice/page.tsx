@@ -69,8 +69,12 @@ export default function PracticePage() {
                 ⌘ K
               </div>
             </div>
-            <Button variant="outline" className="h-14 px-6 rounded-[12px] border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 backdrop-blur-sm gap-2 whitespace-nowrap">
-              <SlidersHorizontal className="w-4 h-4" /> Filters
+            <Button
+              variant="ghost"
+              className="h-14 px-6 rounded-[12px] border border-slate-300 dark:border-white/20 bg-white/80 dark:bg-white/[0.06] hover:bg-white dark:hover:bg-white/[0.12] hover:border-slate-400 dark:hover:border-white/35 text-slate-700 dark:text-white hover:text-slate-900 dark:hover:text-white backdrop-blur-sm gap-2 whitespace-nowrap shadow-sm hover:shadow-md transition-all group"
+            >
+              <SlidersHorizontal className="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors" />
+              <span>Filters</span>
             </Button>
           </div>
 

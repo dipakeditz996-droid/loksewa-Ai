@@ -95,6 +95,7 @@ function RegisterForm() {
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const [otpLoading, setOtpLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [resendActive, setResendActive] = useState(false);
 
@@ -245,8 +246,11 @@ function RegisterForm() {
   };
 
   const handleRegister = async () => {
+    if (isLoading) return;
     setError("");
     setIsLoading(true);
+    const reqId = `reg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const tStart = typeof performance !== "undefined" ? performance.now() : Date.now();
     try {
       const payload: Record<string, string> = {
         name: fullName.trim(),
@@ -266,10 +270,14 @@ function RegisterForm() {
         payload.course_id = courseId;
       }
 
-      await authApi.studentSignup(payload);
+      await authApi.studentSignup(payload, { requestId: reqId });
+      const duration = (typeof performance !== "undefined" ? performance.now() : Date.now()) - tStart;
+      console.info(`[registration] req_id=${reqId} succeeded in ${duration.toFixed(0)}ms`);
       setRegistrationStage("otp");
       setResendCooldown(60);
     } catch (err: any) {
+      const duration = (typeof performance !== "undefined" ? performance.now() : Date.now()) - tStart;
+      console.warn(`[registration] req_id=${reqId} failed after ${duration.toFixed(0)}ms:`, err);
       setError(err.message || err.error || err.detail || "Failed to create account. Please check your details.");
       // Return to first step if account validation failed
       if (err.missing_fields?.includes("email") || err.missing_fields?.includes("mobile")) {
@@ -342,7 +350,7 @@ function RegisterForm() {
 
   const handleResendOtp = async () => {
     setError("");
-    setOtpLoading(true);
+    setResendLoading(true);
     try {
       await authApi.requestSignupOtp(email);
       setResendCooldown(60);
@@ -351,7 +359,7 @@ function RegisterForm() {
     } catch (err: any) {
       setError(err.message || err.error || "Could not resend code. Please wait before trying again.");
     } finally {
-      setOtpLoading(false);
+      setResendLoading(false);
     }
   };
 
@@ -920,25 +928,25 @@ function RegisterForm() {
                       </div>
 
                       <div className="rounded-[12px] border border-white/10 bg-white/[0.03] p-4 space-y-3">
-                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
-                          <span className="text-white/50">Full Name</span>
-                          <span className="text-white font-medium">{fullName}</span>
+                        <div className="flex justify-between items-start gap-3 text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50 shrink-0">Full Name</span>
+                          <span className="text-white font-medium text-right break-all min-w-0">{fullName}</span>
                         </div>
-                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
-                          <span className="text-white/50">Email Address</span>
-                          <span className="text-white font-medium">{email}</span>
+                        <div className="flex justify-between items-start gap-3 text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50 shrink-0">Email</span>
+                          <span className="text-white font-medium text-right break-all min-w-0">{email}</span>
                         </div>
-                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
-                          <span className="text-white/50">Mobile Number</span>
-                          <span className="text-white font-medium">{mobile}</span>
+                        <div className="flex justify-between items-center gap-3 text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50 shrink-0">Mobile</span>
+                          <span className="text-white font-medium text-right">{mobile}</span>
                         </div>
-                        <div className="flex justify-between items-center text-[12px] border-b border-white/5 pb-2">
-                          <span className="text-white/50">Permanent Address</span>
-                          <span className="text-white font-medium">{localLevel}, {district}</span>
+                        <div className="flex justify-between items-start gap-3 text-[12px] border-b border-white/5 pb-2">
+                          <span className="text-white/50 shrink-0">Address</span>
+                          <span className="text-white font-medium text-right break-words min-w-0">{localLevel}, {district}</span>
                         </div>
-                        <div className="flex justify-between items-start text-[12px]">
-                          <span className="text-white/50">Preparation</span>
-                          <span className="text-[#D4A72C] font-semibold text-right max-w-[240px]">
+                        <div className="flex justify-between items-start gap-3 text-[12px]">
+                          <span className="text-white/50 shrink-0">Preparation</span>
+                          <span className="text-[#D4A72C] font-semibold text-right break-words min-w-0">
                             {[selectedExamCategory?.name, ...examPath.map((n) => n.name)].filter(Boolean).join(" → ")}
                           </span>
                         </div>
@@ -996,7 +1004,7 @@ function RegisterForm() {
 
             {/* STAGE: OTP / EMAIL VERIFICATION */}
             {registrationStage === "otp" && (
-              <div className="p-6 sm:p-8">
+              <div className="p-4 sm:p-6 md:p-8">
                 {error && (
                   <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-[12px] text-red-400 text-[13px] font-medium mb-5 flex items-start gap-2">
                     <X className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
@@ -1042,7 +1050,7 @@ function RegisterForm() {
                         </p>
 
                         {/* 6-Digit OTP Box Grid */}
-                        <div className="flex justify-between gap-2 sm:gap-3 my-4">
+                        <div className="flex justify-between gap-1.5 sm:gap-2.5 my-4">
                           {otpDigits.map((digit, idx) => (
                             <input
                               key={idx}
@@ -1055,7 +1063,7 @@ function RegisterForm() {
                               value={digit}
                               onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                               onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                              className="w-12 h-13 sm:w-14 sm:h-14 text-center text-[20px] font-bold bg-[#121B24] border border-white/20 rounded-[10px] text-white focus:border-[#D4A72C] focus:ring-2 focus:ring-[#D4A72C]/30 outline-none transition-all"
+                              className="flex-1 min-w-0 max-w-[52px] aspect-square text-center text-[18px] sm:text-[20px] font-bold bg-[#121B24] border border-white/20 rounded-[10px] text-white focus:border-[#D4A72C] focus:ring-2 focus:ring-[#D4A72C]/30 outline-none transition-all"
                             />
                           ))}
                         </div>
@@ -1083,15 +1091,24 @@ function RegisterForm() {
                           <span className="text-white/50">Didn't receive the email?</span>
                           <button
                             type="button"
-                            disabled={!resendActive || otpLoading}
+                            disabled={!resendActive || resendLoading}
                             onClick={handleResendOtp}
-                            className={`font-semibold transition-colors ${
-                              resendActive
+                            className={`font-semibold transition-colors flex items-center gap-1 ${
+                              resendActive && !resendLoading
                                 ? "text-[#D4A72C] hover:text-[#e0b745] cursor-pointer"
                                 : "text-white/40 cursor-not-allowed"
                             }`}
                           >
-                            {resendActive ? "Resend Code" : `Resend in ${resendCooldown}s`}
+                            {resendLoading ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Sending...
+                              </>
+                            ) : resendActive ? (
+                              "Resend Code"
+                            ) : (
+                              `Resend in ${resendCooldown}s`
+                            )}
                           </button>
                         </div>
 

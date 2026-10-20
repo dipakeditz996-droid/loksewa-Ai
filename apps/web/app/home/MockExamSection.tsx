@@ -97,7 +97,7 @@ export function MockExamSection() {
                   Mark for Review
                 </button>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="h-10 px-5 rounded-[10px] text-[13px] font-[600] border-slate-200 dark:border-white/10 text-slate-700 dark:text-white bg-transparent">
+                  <Button variant="outline" className="h-10 px-5 rounded-[10px] text-[13px] font-[600] border-slate-200 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 bg-transparent transition-all">
                     Previous
                   </Button>
                   <Button className="h-10 px-6 rounded-[10px] text-[13px] font-[700] bg-[#D4A72C] text-[#020611] hover:bg-[#C29322] border-none">

@@ -177,8 +177,8 @@ function OnboardingForm() {
                   </div>
 
                   <div>
-                    <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Permanent Address</p>
-                    <div className="grid grid-cols-2 gap-4">
+                    <p className="text-[11px] text-slate-300 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-[#D4A72C]" /> Permanent Address</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <DistrictSelector
                         id="district"
                         value={district}
@@ -189,13 +189,13 @@ function OnboardingForm() {
                   </div>
 
                   <div className="pt-2">
-                    <p className="text-[11px] text-white/50 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5" /> What are you preparing for? *</p>
+                    <p className="text-[11px] text-slate-300 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 text-[#D4A72C]" /> What are you preparing for? *</p>
                     {examTreeLoading ? (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {[1, 2, 3, 4].map((i) => <div key={i} className="h-[44px] rounded-[10px] bg-white/5 animate-pulse" />)}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {examTree.map((category) => {
                           const isSelected = examCategoryId === category.id;
                           return (
@@ -203,7 +203,7 @@ function OnboardingForm() {
                               key={category.id}
                               type="button"
                               onClick={() => { setExamCategoryId(category.id); setExamPath([]); }}
-                              className={`h-[44px] px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                              className={`min-h-[44px] h-auto py-2.5 px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-colors flex items-center ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-slate-200 hover:text-white hover:border-white/30'}`}
                             >
                               {category.name}
                             </button>
@@ -214,7 +214,7 @@ function OnboardingForm() {
 
                     {selectedExamCategory && examOptionsAtDepth(0).length > 0 && (
                       <div className="mt-3">
-                        <p className="text-[11px] text-white/50 font-semibold mb-2">{examDepthLabel(0)}</p>
+                        <p className="text-[11px] text-slate-300 font-semibold mb-2">{examDepthLabel(0)}</p>
                         <div className="flex flex-wrap gap-2">
                           {examOptionsAtDepth(0).map((node) => {
                             const isSelected = examPath[0]?.id === node.id;
@@ -223,7 +223,7 @@ function OnboardingForm() {
                                 key={node.id}
                                 type="button"
                                 onClick={() => selectExamNode(0, node)}
-                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-slate-200 hover:text-white hover:border-white/30'}`}
                               >
                                 {node.name}
                               </button>
@@ -235,7 +235,7 @@ function OnboardingForm() {
 
                     {examPath[0] && examOptionsAtDepth(1).length > 0 && (
                       <div className="mt-3">
-                        <p className="text-[11px] text-white/50 font-semibold mb-2">{examDepthLabel(1)}</p>
+                        <p className="text-[11px] text-slate-300 font-semibold mb-2">{examDepthLabel(1)}</p>
                         <div className="flex flex-wrap gap-2">
                           {examOptionsAtDepth(1).map((node) => {
                             const isSelected = examPath[1]?.id === node.id;
@@ -244,7 +244,7 @@ function OnboardingForm() {
                                 key={node.id}
                                 type="button"
                                 onClick={() => selectExamNode(1, node)}
-                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-white/70 hover:border-white/30'}`}
+                                className={`px-3 py-2 rounded-full border text-[12px] font-medium transition-colors ${isSelected ? 'border-[#D4A72C] bg-[#D4A72C]/10 text-[#D4A72C]' : 'border-white/15 bg-white/3 text-slate-200 hover:text-white hover:border-white/30'}`}
                               >
                                 {node.name}
                               </button>

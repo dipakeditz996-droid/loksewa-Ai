@@ -1,4 +1,6 @@
 import logging
+import time
+import uuid
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -89,6 +91,9 @@ class StudentSignupView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        t0 = time.perf_counter()
+        req_id = request.headers.get('X-Request-ID') or f"reg_{uuid.uuid4().hex[:8]}"
+
         username = request.data.get('username')
         email = (request.data.get('email') or '').strip()
         password = request.data.get('password')
@@ -101,6 +106,8 @@ class StudentSignupView(APIView):
         referral_code = request.data.get('ref', '').strip()
         plan_id = request.data.get('plan_id')
         course_id = request.data.get('course_id')
+
+        masked_email = f"{email[:1]}***@{email.split('@')[1]}" if '@' in email else '***'
 
         missing = []
         if not username and not email: missing.append('username')
@@ -133,12 +140,14 @@ class StudentSignupView(APIView):
         if not username and email:
             import re
             base_user = re.sub(r'[^a-zA-Z0-9_]', '', email.split('@')[0]) or 'student'
-            candidate = base_user
-            idx = 1
-            while User.objects.filter(username=candidate).exists():
-                candidate = f"{base_user}_{idx}"
-                idx += 1
-            username = candidate
+            existing = set(User.objects.filter(username__startswith=base_user).values_list('username', flat=True))
+            if base_user not in existing:
+                username = base_user
+            else:
+                idx = 1
+                while f"{base_user}_{idx}" in existing:
+                    idx += 1
+                username = f"{base_user}_{idx}"
 
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username already exists.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -183,6 +192,8 @@ class StudentSignupView(APIView):
             except (ValueError, TypeError):
                 target_course = None
 
+        t_val = time.perf_counter()
+
         try:
             with transaction.atomic():
                 user = User.objects.create_user(
@@ -216,14 +227,6 @@ class StudentSignupView(APIView):
                         status='pending'
                     )
 
-                    from core.notification_service import NotificationService
-                    NotificationService.notify_admins(
-                        notif_type='course_application',
-                        title='New Course Application',
-                        message=f"New student {username} applied for '{target_course.title}' during registration.",
-                        action_url='/admin-dashboard/applications',
-                    )
-
                 # Auto-grant default Free Plan entitlement
                 from subscriptions.entitlements import EntitlementService
                 EntitlementService.ensure_free_plan_entitlement(user)
@@ -235,19 +238,37 @@ class StudentSignupView(APIView):
                     details={'email': email, 'username': username},
                 )
         except Exception as e:
-            logger.exception("Failed to process registration for email=%s", email)
+            logger.exception("Failed to process registration for email=%s req_id=%s", masked_email, req_id)
             return Response({'error': 'Registration failed due to an internal error. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        # Admins should see this pending registration right away, and the
-        # student should get their first code - neither is critical enough
-        # to roll back a successfully-created account if it fails.
+        t_db = time.perf_counter()
+
+        # Admin notifications are best-effort alerts and must not block
+        # the response or roll back a successfully created account.
         from core.notification_service import NotificationService
-        NotificationService.notify_admins(
-            notif_type='new_registration',
-            title='New Student Registered',
-            message=f"{username} ({email}) just registered and is pending email verification.",
-            action_url='/admin-dashboard/students/pending-verification',
-        )
+        if target_course:
+            try:
+                NotificationService.notify_admins(
+                    notif_type='course_application',
+                    title='New Course Application',
+                    message=f"New student {username} applied for '{target_course.title}' during registration.",
+                    action_url='/admin-dashboard/applications',
+                )
+            except Exception:
+                logger.warning("Could not dispatch admin course application notification for req_id=%s", req_id)
+
+        try:
+            NotificationService.notify_admins(
+                notif_type='new_registration',
+                title='New Student Registered',
+                message=f"{username} ({email}) just registered and is pending email verification.",
+                action_url='/admin-dashboard/students/pending-verification',
+            )
+        except Exception:
+            logger.warning("Could not dispatch admin new registration notification for req_id=%s", req_id)
+
+        t_notif = time.perf_counter()
+
         from .otp import create_and_send_otp, OTPError
         try:
             create_and_send_otp(email, 'signup')
@@ -257,15 +278,33 @@ class StudentSignupView(APIView):
                 entity_type='User', entity_id=str(user.id), details={'email': email},
             )
         except OTPError:
-            logger.warning("Could not send initial signup OTP for email=%s", email)
+            logger.warning("Could not send initial signup OTP for email=%s req_id=%s", masked_email, req_id)
 
-        return Response({
+        t_otp = time.perf_counter()
+        t_total = t_otp - t0
+
+        logger.info(
+            "registration_timing: req_id=%s val=%.3fs db=%.3fs notif=%.3fs otp=%.3fs total=%.3fs email=%s",
+            req_id,
+            t_val - t0,
+            t_db - t_val,
+            t_notif - t_db,
+            t_otp - t_notif,
+            t_total,
+            masked_email,
+        )
+
+        resp = Response({
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'pending_verification': True,
             'detail': 'Registration successful. Please check your email for a verification code.',
         }, status=status.HTTP_201_CREATED)
+        resp['X-Request-ID'] = req_id
+        resp['Server-Timing'] = f"total;dur={t_total * 1000:.1f}, db;dur={(t_db - t_val) * 1000:.1f}"
+        return resp
+
 
 
 class VerifyEmailOTPView(APIView):

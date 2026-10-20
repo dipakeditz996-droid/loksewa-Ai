@@ -260,7 +260,10 @@ export function Navbar() {
                     authentication (see app/login/page.tsx). */}
                 <div className="flex gap-2">
                   <Link href="/login" onClick={(event) => handleNavigation(event, "/login")} className="flex-1">
-                    <Button variant="outline" className="w-full h-[44px] text-[14px] font-[600] border-slate-200 dark:border-white/10 text-slate-700 dark:text-white rounded-[14px] bg-transparent">
+                    <Button
+                      variant="ghost"
+                      className="w-full h-[44px] text-[14px] font-[600] border border-slate-200 dark:border-white/15 text-slate-700 dark:text-white hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/[0.10] rounded-[14px] bg-transparent transition-all"
+                    >
                       Log In
                     </Button>
                   </Link>

@@ -137,7 +137,7 @@ export function StudyQuestionBrowser({
           </Button>
         </div>
 
-        <h2 className="text-xl font-medium text-primary dark:text-foreground leading-relaxed mb-8">
+        <h2 className="text-[17px] font-medium text-primary dark:text-foreground leading-relaxed mb-8 break-words overflow-wrap-anywhere">
           {currentQ.text}
         </h2>
 
@@ -191,7 +191,7 @@ export function StudyQuestionBrowser({
                 }`}>
                   {opt.toUpperCase()}
                 </div>
-                <span className="text-[15px] font-medium text-primary dark:text-foreground">{optionText}</span>
+              <span className="text-[15px] font-medium text-primary dark:text-foreground break-words overflow-wrap-anywhere">{optionText}</span>
                 {icon}
               </button>
             );

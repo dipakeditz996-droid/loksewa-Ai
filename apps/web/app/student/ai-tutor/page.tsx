@@ -189,7 +189,7 @@ export default function AITutorPage() {
   const activeModeDetails = MODES.find(m => m.id === selectedMode) || MODES[0];
 
   return (
-    <div className="flex h-[calc(100vh-72px)] bg-muted overflow-hidden">
+    <div className="flex h-[calc(100svh-72px)] bg-muted overflow-hidden">
       
       {/* Sidebar - Conversation History */}
       <aside className="w-72 bg-card border-r border-border hidden md:flex flex-col shrink-0 overflow-hidden">
@@ -233,7 +233,7 @@ export default function AITutorPage() {
                 </div>
                 <button 
                   onClick={(e) => handleDeleteConversation(conv.id, e)}
-                  className="text-muted-foreground hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                  className="text-muted-foreground hover:text-red-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-red-500/10"
                   aria-label="Delete conversation"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -348,7 +348,7 @@ export default function AITutorPage() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 md:p-6 bg-card border-t border-border shrink-0">
+        <div className="p-3 md:p-5 bg-card border-t border-border shrink-0">
           <div className="max-w-4xl mx-auto">
             {error && (
               <div className="mb-3 px-4 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-lg text-sm flex items-center gap-2 border border-red-200 dark:border-red-800/40">
@@ -357,8 +357,8 @@ export default function AITutorPage() {
               </div>
             )}
             
-            <div className="relative flex items-end gap-2">
-              <div className="relative flex-1 bg-card rounded-xl shadow-sm border border-border focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all overflow-hidden">
+            <div className="flex items-end gap-2">
+              <div className="relative flex-1 min-w-0 bg-card rounded-xl shadow-sm border border-border focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all overflow-hidden">
                 {!activeConversationId && (
                   <div className="absolute top-0 left-0 right-0 h-8 bg-muted border-b border-border flex items-center px-3 text-xs font-medium text-muted-foreground">
                     <ActiveModeIcon mode={activeModeDetails.icon} />
@@ -375,7 +375,7 @@ export default function AITutorPage() {
                     }
                   }}
                   placeholder={!activeConversationId ? "Type your question here to start..." : "Reply to AI Tutor..."}
-                  className={`w-full bg-transparent border-0 focus:ring-0 resize-none p-3 text-[15px] min-h-[52px] max-h-32 ${!activeConversationId ? 'pt-10' : ''}`}
+                  className={`w-full bg-transparent border-0 focus:ring-0 resize-none text-[15px] min-h-[48px] max-h-[120px] ${!activeConversationId ? 'pt-10 pb-3 px-3' : 'p-3'}`}
                   rows={1}
                   disabled={isLoading}
                   style={{ overflowY: 'auto' }}
@@ -394,7 +394,7 @@ export default function AITutorPage() {
               </Button>
             </div>
             
-            <div className="text-center mt-3">
+            <div className="text-center mt-2">
               <p className="text-[11px] text-muted-foreground">
                 AI Tutor can make mistakes. Consider verifying important facts from the official syllabus.
               </p>

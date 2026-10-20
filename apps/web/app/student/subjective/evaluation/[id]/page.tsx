@@ -17,6 +17,7 @@ export default function SubjectiveEvaluationView() {
   const [attempt, setAttempt] = useState<SubjectiveAttempt | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedAnswerIndex, setSelectedAnswerIndex] = useState(0);
+  const [activeAnnotationIndex, setActiveAnnotationIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!attemptId) return;
@@ -76,15 +77,37 @@ export default function SubjectiveEvaluationView() {
         parts.push(text.substring(lastIndex, ann.start_offset));
       }
       
+      const isActive = activeAnnotationIndex === i;
       parts.push(
         <span 
           key={`ann-${i}`} 
-          className="bg-yellow-200/60 border-b-2 border-yellow-400 cursor-help relative group"
+          role="button"
+          tabIndex={0}
+          aria-expanded={isActive}
+          aria-label={`Annotation note: ${ann.comment}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setActiveAnnotationIndex(isActive ? null : i);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setActiveAnnotationIndex(isActive ? null : i);
+            }
+          }}
+          className="bg-yellow-200/70 dark:bg-yellow-500/30 border-b-2 border-yellow-400 cursor-pointer relative group focus:outline-none focus:ring-2 focus:ring-yellow-400 rounded-sm"
         >
           {text.substring(ann.start_offset, ann.end_offset)}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[250px] bg-popover text-popover-foreground text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 shadow-xl">
-            <div className="font-bold text-yellow-300 mb-1">Annotation Note</div>
-            {ann.comment}
+          <div 
+            className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[260px] max-w-[85vw] bg-slate-900 text-white text-xs rounded-lg p-3 transition-all z-30 shadow-xl ${
+              isActive ? "opacity-100 pointer-events-auto visible" : "opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto"
+            }`}
+          >
+            <div className="font-bold text-yellow-300 mb-1 flex items-center justify-between">
+              <span>Annotation Note</span>
+              <span className="text-[10px] text-white/60 sm:hidden">Tap to close</span>
+            </div>
+            <div className="leading-relaxed">{ann.comment}</div>
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
           </div>
         </span>

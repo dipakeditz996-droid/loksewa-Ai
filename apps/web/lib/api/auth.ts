@@ -48,10 +48,14 @@ export const authApi = {
    * verification (no tokens issued here) and sends the first OTP - call
    * verifyEmailOtp next, which is what actually logs the student in.
    */
-  studentSignup: async (data: Record<string, string>) => {
+  studentSignup: async (data: Record<string, string>, options?: { requestId?: string }) => {
+    const headers: Record<string, string> = {};
+    if (options?.requestId) {
+      headers["X-Request-ID"] = options.requestId;
+    }
     return apiClient<{ id: number; username: string; email: string; pending_verification: true; detail: string }>(
       "/auth/signup/",
-      { method: "POST", body: JSON.stringify(data) }
+      { method: "POST", body: JSON.stringify(data), headers }
     );
   },
 

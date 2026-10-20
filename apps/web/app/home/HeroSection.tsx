@@ -514,7 +514,7 @@ export function HeroSection() {
   const reducedMotion = useSafeReducedMotion();
 
   return (
-    <section className="bg-grain relative min-h-screen flex items-center pt-24 pb-16 sm:pt-28 sm:pb-20 lg:pt-32 lg:pb-24 overflow-hidden bg-slate-50 dark:bg-[#070E1B]">
+    <section className="bg-grain relative min-h-screen flex items-center pt-24 pb-6 sm:pt-28 sm:pb-14 lg:pt-32 lg:pb-20 overflow-hidden bg-slate-50 dark:bg-[#070E1B]">
 
       {/* ── Background layers ──────────────────────────────────────────────── */}
 
@@ -576,10 +576,10 @@ export function HeroSection() {
               <MagneticCTA />
               <Link href="/courses" className="w-full sm:w-auto">
                 <Button
-                  variant="outline"
-                  className="h-[56px] px-7 border-slate-300 dark:border-white/15 text-slate-700 dark:text-white hover:bg-white dark:hover:bg-white/[0.07] hover:-translate-y-0.5 hover:border-slate-400 dark:hover:border-white/25 bg-white/60 dark:bg-white/[0.03] backdrop-blur-md rounded-[14px] font-[700] text-[16px] w-full sm:w-auto flex items-center justify-center gap-2.5 transition-all group"
+                  variant="ghost"
+                  className="h-[56px] px-7 border border-slate-300 dark:border-white/20 text-slate-700 dark:text-white hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/[0.12] hover:-translate-y-0.5 hover:border-slate-400 dark:hover:border-white/35 bg-white/70 dark:bg-white/[0.06] backdrop-blur-md rounded-[14px] font-[700] text-[16px] w-full sm:w-auto flex items-center justify-center gap-2.5 shadow-sm hover:shadow-md transition-all group"
                 >
-                  <Play className="w-4 h-4 fill-current group-hover:scale-110 transition-transform" />
+                  <Play className="w-4 h-4 fill-current text-slate-700 dark:text-white group-hover:text-slate-900 dark:group-hover:text-white group-hover:scale-110 transition-transform" />
                   Explore Platform
                 </Button>
               </Link>

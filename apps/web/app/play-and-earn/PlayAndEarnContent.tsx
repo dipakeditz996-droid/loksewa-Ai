@@ -67,7 +67,10 @@ export function PlayAndEarnContent() {
               </Button>
             </Link>
             <Link href={getProtectedHref("/student/leaderboard-analytics")}>
-              <Button variant="outline" className="border-white/15 text-white hover:bg-white/10 font-semibold text-sm h-11 px-6 rounded-full bg-white/5 backdrop-blur-sm">
+              <Button
+                variant="ghost"
+                className="border border-white/20 text-white hover:text-white hover:bg-white/[0.12] hover:border-white/35 font-semibold text-sm h-11 px-6 rounded-full bg-white/[0.06] backdrop-blur-sm shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5"
+              >
                 View Leaderboard
               </Button>
             </Link>

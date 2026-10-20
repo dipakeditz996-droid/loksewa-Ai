@@ -40,16 +40,16 @@ export function MyCoursesContent() {
             Continue learning and pick up right where you left off. Track your progress across all your enrolled courses.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button asChild className="bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[12px] shadow-[0_4px_14px_rgba(212,167,44,0.3)]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+          <Button asChild className="w-full sm:w-auto justify-center bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[12px] shadow-[0_4px_14px_rgba(212,167,44,0.3)] text-xs sm:text-sm h-10 px-4">
             <Link href="/student/onboarding/preparation">
-              <GraduationCap className="w-4 h-4 mr-2" />
+              <GraduationCap className="w-4 h-4 mr-2 shrink-0" />
               Buy Another Course
             </Link>
           </Button>
-          <Button variant="outline" asChild className="border-border text-primary dark:text-foreground hover:bg-muted shrink-0 font-semibold shadow-sm rounded-[12px]">
+          <Button variant="outline" asChild className="w-full sm:w-auto justify-center border-border text-primary dark:text-foreground hover:bg-muted font-semibold shadow-sm rounded-[12px] text-xs sm:text-sm h-10 px-4">
             <Link href="/student/marketplace">
-              <Target className="w-4 h-4 mr-2" />
+              <Target className="w-4 h-4 mr-2 shrink-0" />
               Marketplace
             </Link>
           </Button>
@@ -129,8 +129,8 @@ export function MyCoursesContent() {
                   )}
                 </div>
                 
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Link href={`/student/courses/${item.course.id}`} className="w-12 h-12 bg-card/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-card/30 transition-colors text-white">
+                <div className="absolute inset-0 bg-black/20 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Link href={`/student/courses/${item.course.id}`} aria-label={`Start course ${item.course.title}`} className="w-12 h-12 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-black/60 transition-colors text-white shadow-md">
                     <PlayCircle className="w-6 h-6" />
                   </Link>
                 </div>

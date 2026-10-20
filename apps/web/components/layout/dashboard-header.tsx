@@ -92,12 +92,12 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
   const displayName = user?.name ? user.name.split(" ")[0] : "Student";
 
   return (
-    <header className="sticky top-0 z-30 flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-md px-4 sm:px-8 gap-2">
-      <div className="flex min-w-0 items-center gap-2 sm:gap-4 flex-1">
+    <header className="sticky top-0 z-30 flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background/80 backdrop-blur-md px-2.5 sm:px-8 gap-1.5 sm:gap-2">
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-4 flex-1">
         <Button
           variant="ghost"
           size="icon"
-          className="lg:hidden shrink-0"
+          className="lg:hidden shrink-0 h-9 w-9 p-0"
           onClick={onMenuClick}
         >
           <Menu className="h-5 w-5 text-[#0B2545] dark:text-white" />
@@ -142,7 +142,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
         )}
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+      <div className="flex items-center gap-1 sm:gap-4 shrink-0">
         <div className="hidden md:flex relative w-64 lg:w-80">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -160,7 +160,11 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
         )}
 
         {/* Do Not Disturb / Focus Mode - student portal only. */}
-        {role === "student" && mounted && <FocusModeHeaderToggle />}
+        {role === "student" && mounted && (
+          <div className="hidden sm:block">
+            <FocusModeHeaderToggle />
+          </div>
+        )}
 
         <ThemeToggle />
 

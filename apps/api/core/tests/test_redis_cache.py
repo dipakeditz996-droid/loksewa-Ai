@@ -401,7 +401,7 @@ class VerifyRedisCacheCommandOutputTests(TestCase):
     @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
            return_value=(True, 'PONG received in 1.2 ms'))
     @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
-           return_value=(True, 'SET → GET → DELETE succeeded'))
+           return_value=(True, 'SET -> GET -> DELETE succeeded'))
     def test_all_pass_outputs_overall_pass(self, mock_rt, mock_ping, mock_name, mock_is_res):
         out = io.StringIO()
         call_command('verify_redis_cache', stdout=out)
@@ -416,7 +416,7 @@ class VerifyRedisCacheCommandOutputTests(TestCase):
     @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
            return_value='django.core.cache.backends.locmem.LocMemCache')
     @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
-           return_value=(True, 'SET → GET → DELETE succeeded'))
+           return_value=(True, 'SET -> GET -> DELETE succeeded'))
     def test_locmem_detected_fails_overall(self, mock_rt, mock_name, mock_is_res):
         out = io.StringIO()
         with self.assertRaises(SystemExit) as cm:
@@ -434,7 +434,7 @@ class VerifyRedisCacheCommandOutputTests(TestCase):
     @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
            return_value=(False, 'Connection refused'))
     @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
-           return_value=(True, 'SET → GET → DELETE succeeded'))
+           return_value=(True, 'SET -> GET -> DELETE succeeded'))
     def test_ping_fail_fails_overall(self, mock_rt, mock_ping, mock_name, mock_is_res):
         out = io.StringIO()
         with self.assertRaises(SystemExit) as cm:
@@ -453,14 +453,14 @@ class VerifyRedisCacheCommandOutputTests(TestCase):
     @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
            return_value=(True, 'PONG received in 2.0 ms'))
     @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
-           return_value=(False, 'cache.set() returned False'))
+           return_value=(False, 'cache.get() returned None after cache.set()'))
     def test_roundtrip_fail_fails_overall(self, mock_rt, mock_ping, mock_name, mock_is_res):
         out = io.StringIO()
         with self.assertRaises(SystemExit) as cm:
             call_command('verify_redis_cache', stdout=out)
         self.assertEqual(cm.exception.code, 1)
         output = out.getvalue()
-        self.assertIn('cache.set() returned False', output)
+        self.assertIn('cache.get() returned None after cache.set()', output)
         self.assertIn('OVERALL: FAIL', output)
 
     # ── Credential safety: passwords must never appear in command output ───
@@ -471,7 +471,7 @@ class VerifyRedisCacheCommandOutputTests(TestCase):
     @patch('core.management.commands.verify_redis_cache._ping_redis_directly',
            return_value=(False, 'rediss://default:***@dog.upstash.io:6379 refused'))
     @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
-           return_value=(True, 'SET → GET → DELETE succeeded'))
+           return_value=(True, 'SET -> GET -> DELETE succeeded'))
     def test_credential_never_appears_in_output(self, mock_rt, mock_ping, mock_name, mock_is_res):
         """Even if a sanitized error leaks, raw secrets must not be in output."""
         out = io.StringIO()
@@ -488,10 +488,109 @@ class VerifyRedisCacheCommandOutputTests(TestCase):
     @patch('core.management.commands.verify_redis_cache._get_backend_class_name',
            return_value='django.core.cache.backends.locmem.LocMemCache')
     @patch('core.management.commands.verify_redis_cache._roundtrip_cache',
-           return_value=(True, 'SET → GET → DELETE succeeded'))
+           return_value=(True, 'SET -> GET -> DELETE succeeded'))
     def test_ping_skipped_for_non_redis_backend(self, mock_rt, mock_name, mock_is_res):
         out = io.StringIO()
         with self.assertRaises(SystemExit):
             call_command('verify_redis_cache', stdout=out)
         output = out.getvalue()
         self.assertIn('SKIP', output)
+
+
+class RoundtripCacheUnitTests(TestCase):
+    """
+    Direct unit and regression tests for _roundtrip_cache() in verify_redis_cache.
+    Validates:
+      - Successful writes (SET -> GET equality -> DELETE)
+      - Read mismatches
+      - Key not found / write failure (GET returns None)
+      - Backend exceptions (with credential masking)
+      - Cleanup guarantees even on failure
+      - Both LocMemCache and ResilientRedisCache (mocked) behavior
+    """
+
+    def test_roundtrip_locmem_real_success(self):
+        """LocMemCache successfully performs SET -> GET equality -> DELETE roundtrip."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        ok, detail = _roundtrip_cache()
+        self.assertTrue(ok)
+        self.assertEqual(detail, 'SET -> GET -> DELETE succeeded')
+
+    @patch('core.management.commands.verify_redis_cache.cache.get')
+    @patch('core.management.commands.verify_redis_cache.cache.set')
+    def test_roundtrip_read_mismatch(self, mock_set, mock_get):
+        """When retrieved value does not match expected, roundtrip returns False with mismatch detail."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        mock_get.return_value = {'corrupted': 'data'}
+        ok, detail = _roundtrip_cache()
+        self.assertFalse(ok)
+        self.assertIn('Value mismatch', detail)
+
+    @patch('core.management.commands.verify_redis_cache.cache.get')
+    @patch('core.management.commands.verify_redis_cache.cache.set')
+    def test_roundtrip_get_returns_none(self, mock_set, mock_get):
+        """When cache.get() returns None after set, roundtrip returns False."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        mock_get.return_value = None
+        ok, detail = _roundtrip_cache()
+        self.assertFalse(ok)
+        self.assertIn('cache.get() returned None', detail)
+
+    @patch('core.management.commands.verify_redis_cache.cache.set')
+    def test_roundtrip_backend_exception_sanitizes_credentials(self, mock_set):
+        """If cache raises an exception with connection URL/passwords, credentials are sanitized."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        mock_set.side_effect = Exception("Connection error to rediss://default:supersecretpassword@upstash.io:6379/0 failed")
+        ok, detail = _roundtrip_cache()
+        self.assertFalse(ok)
+        self.assertNotIn('supersecretpassword', detail)
+        self.assertIn('***@', detail)
+
+    @patch('core.management.commands.verify_redis_cache.cache.delete')
+    @patch('core.management.commands.verify_redis_cache.cache.get')
+    @patch('core.management.commands.verify_redis_cache.cache.set')
+    def test_roundtrip_cleanup_guaranteed_on_exception(self, mock_set, mock_get, mock_delete):
+        """cache.delete() must be called in finally block even when get() raises."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        mock_get.side_effect = RuntimeError("Simulated read explosion")
+        ok, detail = _roundtrip_cache()
+        self.assertFalse(ok)
+        self.assertTrue(mock_delete.called)
+
+    @patch('core.management.commands.verify_redis_cache.cache.get')
+    @patch('core.management.commands.verify_redis_cache.cache.delete')
+    @patch('core.management.commands.verify_redis_cache.cache.set')
+    def test_roundtrip_delete_failure(self, mock_set, mock_delete, mock_get):
+        """If key still exists after delete, roundtrip returns False."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        expected_val = {'verify': True, 'phase': '2H'}
+        # First get returns expected, second get (post delete) still returns expected
+        mock_get.side_effect = [expected_val, expected_val]
+        ok, detail = _roundtrip_cache()
+        self.assertFalse(ok)
+        self.assertIn('failed to remove diagnostic key', detail)
+
+    def test_roundtrip_resilient_redis_cache_mocked(self):
+        """ResilientRedisCache mocked backend performs roundtrip without errors."""
+        from core.management.commands.verify_redis_cache import _roundtrip_cache
+        fake_storage = {}
+
+        def fake_set(k, v, timeout=None):
+            fake_storage[k] = v
+            # ResilientRedisCache delegates to RedisCache which returns None in standard Django
+            return None
+
+        def fake_get(k, default=None):
+            return fake_storage.get(k, default)
+
+        def fake_delete(k):
+            fake_storage.pop(k, None)
+            return True
+
+        with patch('core.management.commands.verify_redis_cache.cache.set', side_effect=fake_set), \
+             patch('core.management.commands.verify_redis_cache.cache.get', side_effect=fake_get), \
+             patch('core.management.commands.verify_redis_cache.cache.delete', side_effect=fake_delete):
+            ok, detail = _roundtrip_cache()
+            self.assertTrue(ok)
+            self.assertEqual(detail, 'SET -> GET -> DELETE succeeded')
+            self.assertEqual(len(fake_storage), 0)

@@ -208,6 +208,11 @@ class Subscription(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['student', 'status', 'expiry_date'], name='sub_std_stat_exp_idx'),
+        ]
+
     def __str__(self):
         return f"{self.student.username} - {self.plan.name} ({self.status}) [{self.source}]"
         

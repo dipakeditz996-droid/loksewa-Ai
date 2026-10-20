@@ -93,6 +93,9 @@ class StudyTask(models.Model):
 
     class Meta:
         ordering = ['date', 'created_at']
+        indexes = [
+            models.Index(fields=['study_plan', 'date', 'created_at'], name='study_plan_task_plan_date_idx'),
+        ]
 
 class StudyPlanTemplateTask(models.Model):
     template = models.ForeignKey(StudyPlanTemplate, on_delete=models.CASCADE, related_name='tasks')

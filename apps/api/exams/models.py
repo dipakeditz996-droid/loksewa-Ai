@@ -454,6 +454,11 @@ class QuestionAttempt(models.Model):
     is_viewed = models.BooleanField(default=False)
     viewed_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['session', 'is_correct'], name='exams_qa_sess_corr_idx'),
+        ]
+
 class QuestionMastery(models.Model):
     """Per-student, per-question performance history used only by Revision Mode.
 
@@ -1037,6 +1042,9 @@ class StudentAnswer(models.Model):
 
     class Meta:
         unique_together = ('attempt', 'question')
+        indexes = [
+            models.Index(fields=['attempt', 'is_correct'], name='exams_sa_att_corr_idx'),
+        ]
         
     def __str__(self):
         return f"Answer to Q{self.question_id} by {self.attempt.student.username}"
@@ -1246,6 +1254,9 @@ class ExamSchedule(models.Model):
 
     class Meta:
         ordering = ['-is_active', 'exam_date', 'exam_time', '-created_at']
+        indexes = [
+            models.Index(fields=['is_published', 'exam_date', '-is_active'], name='exams_es_pub_date_act_idx'),
+        ]
 
     def save(self, *args, **kwargs):
         from datetime import datetime, time

@@ -99,29 +99,35 @@ def _ping_redis_directly() -> tuple[bool, str]:
 
 def _roundtrip_cache() -> tuple[bool, str]:
     """
-    Perform a unique SET / GET / DELETE round-trip via Django's cache API.
+    Perform a unique SET -> GET -> DELETE round-trip via Django's cache API.
 
     Uses a `loksewa_diag:` key prefix with a UUID suffix so it can never
-    collide with real application keys.  Always cleans up.
+    collide with real application keys. Always cleans up.
     """
     diag_key = f'loksewa_diag:{uuid.uuid4().hex}'
     expected_value = {'verify': True, 'phase': '2H'}
 
     try:
-        # SET
-        set_ok = cache.set(diag_key, expected_value, timeout=30)
-        if not set_ok:
-            return False, 'cache.set() returned False'
+        # 1. SET (Django BaseCache.set returns None in standard spec)
+        cache.set(diag_key, expected_value, timeout=30)
 
-        # GET
+        # 2. GET (verify write equality)
         retrieved = cache.get(diag_key)
+        if retrieved is None:
+            return False, 'cache.get() returned None after cache.set() (write failed or key not stored)'
         if retrieved != expected_value:
             return False, (
                 f'Value mismatch: expected {expected_value!r}, '
                 f'got {retrieved!r}'
             )
 
-        return True, 'SET → GET → DELETE succeeded'
+        # 3. DELETE (verify cleanup)
+        cache.delete(diag_key)
+        post_delete = cache.get(diag_key)
+        if post_delete is not None:
+            return False, 'cache.delete() failed to remove diagnostic key'
+
+        return True, 'SET -> GET -> DELETE succeeded'
 
     except Exception as exc:
         return False, _safe_error(exc)
@@ -183,7 +189,7 @@ class Command(BaseCommand):
                 overall_pass = False
 
         # ── 3. Cache round-trip ───────────────────────────────────────────
-        self.stdout.write('\n[3] Cache round-trip  SET → GET → DELETE')
+        self.stdout.write('\n[3] Cache round-trip  SET -> GET -> DELETE')
         rt_ok, rt_detail = _roundtrip_cache()
         rt_label = 'PASS' if rt_ok else 'FAIL'
         self.stdout.write(f'    Result            : {rt_label}')
@@ -194,9 +200,9 @@ class Command(BaseCommand):
         # ── Summary ───────────────────────────────────────────────────────
         self.stdout.write('\n' + '=' * 66)
         if overall_pass:
-            self.stdout.write('OVERALL: PASS — Redis cache is operational')
+            self.stdout.write('OVERALL: PASS -- Redis cache is operational')
         else:
-            self.stdout.write('OVERALL: FAIL — one or more checks did not pass')
+            self.stdout.write('OVERALL: FAIL -- one or more checks did not pass')
         self.stdout.write('=' * 66 + '\n')
 
         if not overall_pass:

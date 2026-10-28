@@ -140,6 +140,8 @@ const BLANK_FORM = {
   isbn: "",
   edition: "",
   publication_year: "",
+  published_date: "",
+  total_pages: "",
   negotiable: false,
   // condition details
   highlighting: false,
@@ -281,6 +283,8 @@ export default function SellerDashboardPage() {
       isbn: listing.isbn || "",
       edition: listing.edition || "",
       publication_year: listing.publication_year || "",
+      published_date: listing.published_date || "",
+      total_pages: listing.total_pages !== undefined && listing.total_pages !== null ? String(listing.total_pages) : "",
       negotiable: listing.negotiable ?? false,
       highlighting: cd.highlighting ?? false,
       writing_notes: cd.writing_notes ?? false,
@@ -347,6 +351,12 @@ export default function SellerDashboardPage() {
       if (form.edition) fd.append("edition", form.edition);
       if (form.publication_year)
         fd.append("publication_year", form.publication_year);
+      if (form.published_date) fd.append("published_date", form.published_date);
+      if (form.total_pages) {
+        fd.append("total_pages", form.total_pages);
+      } else if (editingId) {
+        fd.append("total_pages", "");
+      }
 
       // Condition details as JSON
       const conditionDetails = {
@@ -571,6 +581,36 @@ export default function SellerDashboardPage() {
                     className="input-style"
                     placeholder="e.g. 2023"
                     maxLength={4}
+                  />
+                </div>
+                <div>
+                  <label className="label-style">Published Date (optional)</label>
+                  <input
+                    value={form.published_date}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        published_date: e.target.value,
+                      }))
+                    }
+                    className="input-style"
+                    placeholder="e.g. 2081 B.S. or 2024"
+                  />
+                </div>
+                <div>
+                  <label className="label-style">Total Pages (optional)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.total_pages}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        total_pages: e.target.value,
+                      }))
+                    }
+                    className="input-style"
+                    placeholder="e.g. 450"
                   />
                 </div>
                 <div>

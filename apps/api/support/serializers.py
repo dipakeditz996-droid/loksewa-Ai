@@ -29,6 +29,7 @@ class StudentProfileSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'full_name', 'first_name', 'last_name',
             'avatar', 'role', 'date_joined',
             'phone', 'bio',
+            'permanent_district', 'permanent_local_level',
             'target_category', 'target_category_name',
             'target_position', 'target_position_name',
             'preferred_study_time', 'daily_study_goal_minutes',

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { marketplaceApi, Product } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
 import { ArrowLeft, Loader2, ShoppingCart, Tag, MapPin, User, BookOpen } from "lucide-react";
 
 export default function ProductDetailPage() {
@@ -83,11 +84,37 @@ export default function ProductDetailPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
           {/* Left: Image */}
-          <div className="rounded-2xl overflow-hidden bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm aspect-square flex items-center justify-center">
+          <div className="rounded-2xl overflow-hidden bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 shadow-lg aspect-[4/5] sm:aspect-square flex items-center justify-center p-6 relative">
             {product.cover_image ? (
-              <img src={product.cover_image} alt={product.title} className="w-full h-full object-cover" />
+              <>
+                <img
+                  src={buildMediaUrl(product.cover_image)}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-25 scale-125 pointer-events-none select-none"
+                />
+                <div className="relative z-10 h-full w-full flex items-center justify-center">
+                  <img
+                    src={buildMediaUrl(product.cover_image)}
+                    alt={product.title}
+                    className="max-h-full max-w-full object-contain rounded-lg shadow-[0_12px_30px_rgba(0,0,0,0.25)] dark:shadow-[0_16px_36px_rgba(0,0,0,0.7)]"
+                  />
+                </div>
+              </>
             ) : (
-              <BookOpen className="w-24 h-24 text-slate-300 dark:text-white/20" />
+              <div className="w-48 h-64 rounded-lg bg-gradient-to-br from-[#163E6B] to-[#0A1118] p-5 flex flex-col justify-between shadow-2xl border-l-4 border-amber-400">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-white/80">Loksewa</span>
+                  <BookOpen className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white line-clamp-3 leading-snug mb-1">{product.title}</h3>
+                  <span className="text-xs text-white/70">{product.category}</span>
+                </div>
+                <div className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
+                  Official Resource
+                </div>
+              </div>
             )}
           </div>
 
@@ -119,9 +146,19 @@ export default function ProductDetailPage() {
                   <span className="text-lg font-semibold text-slate-400 line-through mb-1">Rs. {product.price}</span>
                 )}
               </div>
-              <p className={`text-sm font-bold ${product.stock === 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                {stockText}
-              </p>
+              <div className="flex items-center gap-3">
+                <p className={`text-sm font-bold ${product.stock === 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {stockText}
+                </p>
+                <span className="text-slate-300 dark:text-slate-700">•</span>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                  {Number(product.delivery_fee) > 0 ? (
+                    <span>Delivery: <strong className="text-slate-900 dark:text-white">Rs. {product.delivery_fee}</strong></span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Free delivery</span>
+                  )}
+                </p>
+              </div>
             </div>
 
             <div className="prose dark:prose-invert">
@@ -133,6 +170,8 @@ export default function ProductDetailPage() {
                 {product.publisher && <div><span className="text-slate-500">Publisher:</span> <span className="font-semibold">{product.publisher}</span></div>}
                 {product.isbn && <div><span className="text-slate-500">ISBN:</span> <span className="font-semibold">{product.isbn}</span></div>}
                 {product.edition && <div><span className="text-slate-500">Edition:</span> <span className="font-semibold">{product.edition}</span></div>}
+                {product.published_date && <div><span className="text-slate-500">Published Date:</span> <span className="font-semibold">{product.published_date}</span></div>}
+                {product.total_pages && <div><span className="text-slate-500">Total Pages:</span> <span className="font-semibold">{product.total_pages}</span></div>}
               </div>
 
             <Button 

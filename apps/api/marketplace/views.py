@@ -1,3 +1,4 @@
+from core.validators import get_nepal_province_for_district
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -779,6 +780,48 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
             DeliveryAddress.objects.filter(student=self.request.user).update(is_default=False)
         serializer.save()
 
+    @action(detail=False, methods=['get'], url_path='profile-address')
+    def profile_address(self, request):
+        """
+        Derives delivery information from the authenticated student's profile.
+        Never trusts client-supplied profile IDs.
+        """
+        user = request.user
+        profile = getattr(user, 'student_profile', None)
+
+        full_name = user.get_full_name() or user.username
+        phone_number = (profile.phone if profile else '') or ''
+        district = (profile.permanent_district if profile else '') or ''
+        municipality = (profile.permanent_local_level if profile else '') or ''
+        province = get_nepal_province_for_district(district) if district else ''
+
+        missing_fields = []
+        if not full_name:
+            missing_fields.append('full_name')
+        if not phone_number:
+            missing_fields.append('phone_number')
+        if not province:
+            missing_fields.append('province')
+        if not district:
+            missing_fields.append('district')
+        if not municipality:
+            missing_fields.append('municipality')
+        missing_fields.extend(['ward_number', 'tole_area'])
+
+        return Response({
+            'full_name': full_name,
+            'phone_number': phone_number,
+            'province': province,
+            'district': district,
+            'municipality': municipality,
+            'ward_number': '',
+            'tole_area': '',
+            'street_landmark': '',
+            'delivery_note': '',
+            'missing_fields': missing_fields,
+            'is_profile_complete': len(missing_fields) == 0,
+        })
+
 
 class CartViewSet(viewsets.ModelViewSet):
     serializer_class = CartSerializer
@@ -912,37 +955,89 @@ class OrderViewSet(viewsets.ModelViewSet):
             'items__product', 'status_history'
         ).order_by('-created_at')
 
-    def _calculate_delivery_fee(self, delivery_address):
-        rules = DeliveryFeeRule.objects.filter(is_active=True).order_by('-priority', '-created_at')
-        for rule in rules:
-            if (rule.municipality
-                    and rule.municipality.lower() == delivery_address.municipality.lower()
-                    and rule.district.lower() == delivery_address.district.lower()
-                    and rule.province.lower() == delivery_address.province.lower()):
-                return rule.fee
-            if (rule.district
-                    and rule.district.lower() == delivery_address.district.lower()
-                    and rule.province.lower() == delivery_address.province.lower()
-                    and not rule.municipality):
-                return rule.fee
-            if (rule.province
-                    and rule.province.lower() == delivery_address.province.lower()
-                    and not rule.district and not rule.municipality):
-                return rule.fee
-            if not rule.province and not rule.district and not rule.municipality:
-                return rule.fee
-        return Decimal('0.00')
+    def _calculate_delivery_fee(self, delivery_address, items=None):
+        regional_fee = Decimal('0.00')
+        if delivery_address:
+            mun = getattr(delivery_address, 'municipality', '') or ''
+            dist = getattr(delivery_address, 'district', '') or ''
+            prov = getattr(delivery_address, 'province', '') or ''
+            rules = DeliveryFeeRule.objects.filter(is_active=True).order_by('-priority', '-created_at')
+            for rule in rules:
+                if (rule.municipality
+                        and rule.municipality.lower() == mun.lower()
+                        and rule.district.lower() == dist.lower()
+                        and rule.province.lower() == prov.lower()):
+                    regional_fee = rule.fee
+                    break
+                if (rule.district
+                        and rule.district.lower() == dist.lower()
+                        and rule.province.lower() == prov.lower()
+                        and not rule.municipality):
+                    regional_fee = rule.fee
+                    break
+                if (rule.province
+                        and rule.province.lower() == prov.lower()
+                        and not rule.district and not rule.municipality):
+                    regional_fee = rule.fee
+                    break
+                if not rule.province and not rule.district and not rule.municipality:
+                    regional_fee = rule.fee
+                    break
+
+        if items is None:
+            user = getattr(self.request, 'user', None)
+            if user and user.is_authenticated:
+                cart = Cart.objects.filter(student=user).first()
+                if cart:
+                    items = list(cart.items.select_related('product', 'product__seller').all())
+
+        product_fee = Decimal('0.00')
+        if items:
+            seller_shipments = {}
+            for it in items:
+                prod = getattr(it, 'product', it)
+                if prod and hasattr(prod, 'delivery_fee'):
+                    s_id = getattr(prod, 'seller_id', None)
+                    fee = getattr(prod, 'delivery_fee', Decimal('0.00')) or Decimal('0.00')
+                    if s_id not in seller_shipments or fee > seller_shipments[s_id]:
+                        seller_shipments[s_id] = fee
+            product_fee = sum(seller_shipments.values(), Decimal('0.00'))
+
+        return max(regional_fee, product_fee)
 
     @action(detail=False, methods=['post'])
     def calculate_fee(self, request):
         delivery_address_id = request.data.get('delivery_address_id')
-        if not delivery_address_id:
+        product_id = request.data.get('product_id')
+        province = request.data.get('province')
+        district = request.data.get('district')
+        municipality = request.data.get('municipality')
+
+        delivery_address = None
+        if delivery_address_id:
+            try:
+                delivery_address = DeliveryAddress.objects.get(id=delivery_address_id, student=request.user)
+            except DeliveryAddress.DoesNotExist:
+                return Response({"detail": "Delivery address not found"}, status=status.HTTP_404_NOT_FOUND)
+        elif province or district or municipality:
+            class TempAddress:
+                pass
+            delivery_address = TempAddress()
+            delivery_address.province = province or ''
+            delivery_address.district = district or ''
+            delivery_address.municipality = municipality or ''
+        else:
             return Response({"detail": "Delivery address is required"}, status=status.HTTP_400_BAD_REQUEST)
-        try:
-            delivery_address = DeliveryAddress.objects.get(id=delivery_address_id, student=request.user)
-        except DeliveryAddress.DoesNotExist:
-            return Response({"detail": "Delivery address not found"}, status=status.HTTP_404_NOT_FOUND)
-        fee = self._calculate_delivery_fee(delivery_address)
+
+        items = None
+        if product_id:
+            try:
+                prod = Product.objects.get(id=product_id)
+                items = [prod]
+            except Product.DoesNotExist:
+                pass
+
+        fee = self._calculate_delivery_fee(delivery_address, items=items)
         return Response({"delivery_fee": fee})
 
     @action(detail=True, methods=['post'])
@@ -1001,10 +1096,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("The marketplace is currently disabled by the administrator.")
 
         delivery_address_id = request.data.get('delivery_address_id')
+        delivery_address_data = request.data.get('delivery_address')
         shipping_address_raw = request.data.get('shipping_address')
         contact_number_raw = request.data.get('contact_number')
 
         delivery_address = None
+        shipping_address_snapshot = {}
         delivery_fee = Decimal('0.00')
 
         if delivery_address_id:
@@ -1013,7 +1110,17 @@ class OrderViewSet(viewsets.ModelViewSet):
             except DeliveryAddress.DoesNotExist:
                 return Response({"detail": "Delivery address not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            delivery_fee = self._calculate_delivery_fee(delivery_address)
+            shipping_address_snapshot = {
+                'full_name': delivery_address.full_name,
+                'phone_number': delivery_address.phone_number,
+                'province': delivery_address.province,
+                'district': delivery_address.district,
+                'municipality': delivery_address.municipality,
+                'ward_number': delivery_address.ward_number,
+                'tole_area': delivery_address.tole_area,
+                'street_landmark': delivery_address.street_landmark or '',
+                'delivery_note': delivery_address.delivery_note or '',
+            }
             shipping_address_str = (
                 f"{delivery_address.full_name}\n{delivery_address.phone_number}\n"
                 f"{delivery_address.province}, {delivery_address.district}, "
@@ -1026,11 +1133,70 @@ class OrderViewSet(viewsets.ModelViewSet):
                 shipping_address_str += f"\nNote: {delivery_address.delivery_note}"
             
             contact_number_str = delivery_address.phone_number
+
+        elif delivery_address_data and isinstance(delivery_address_data, dict):
+            required_fields = ['full_name', 'phone_number', 'province', 'district', 'municipality', 'ward_number', 'tole_area']
+            missing = [f for f in required_fields if not str(delivery_address_data.get(f) or '').strip()]
+            if missing:
+                return Response(
+                    {"detail": f"Please provide required delivery fields: {', '.join(missing)}.", "missing_fields": missing},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            save_to_addresses = request.data.get('save_to_addresses', True)
+            if save_to_addresses:
+                delivery_address = DeliveryAddress.objects.create(
+                    student=request.user,
+                    full_name=delivery_address_data['full_name'].strip(),
+                    phone_number=delivery_address_data['phone_number'].strip(),
+                    province=delivery_address_data['province'].strip(),
+                    district=delivery_address_data['district'].strip(),
+                    municipality=delivery_address_data['municipality'].strip(),
+                    ward_number=str(delivery_address_data['ward_number']).strip(),
+                    tole_area=delivery_address_data['tole_area'].strip(),
+                    street_landmark=(delivery_address_data.get('street_landmark') or '').strip(),
+                    delivery_note=(delivery_address_data.get('delivery_note') or '').strip(),
+                    is_default=bool(request.data.get('is_default', False))
+                )
+            else:
+                class TempAddr:
+                    pass
+                delivery_address = TempAddr()
+                for k, v in delivery_address_data.items():
+                    setattr(delivery_address, k, v)
+
+            shipping_address_snapshot = {
+                'full_name': delivery_address_data['full_name'].strip(),
+                'phone_number': delivery_address_data['phone_number'].strip(),
+                'province': delivery_address_data['province'].strip(),
+                'district': delivery_address_data['district'].strip(),
+                'municipality': delivery_address_data['municipality'].strip(),
+                'ward_number': str(delivery_address_data['ward_number']).strip(),
+                'tole_area': delivery_address_data['tole_area'].strip(),
+                'street_landmark': (delivery_address_data.get('street_landmark') or '').strip(),
+                'delivery_note': (delivery_address_data.get('delivery_note') or '').strip(),
+            }
+            shipping_address_str = (
+                f"{shipping_address_snapshot['full_name']}\n{shipping_address_snapshot['phone_number']}\n"
+                f"{shipping_address_snapshot['province']}, {shipping_address_snapshot['district']}, "
+                f"{shipping_address_snapshot['municipality']}-{shipping_address_snapshot['ward_number']}\n"
+                f"{shipping_address_snapshot['tole_area']}"
+            )
+            if shipping_address_snapshot['street_landmark']:
+                shipping_address_str += f"\nLandmark: {shipping_address_snapshot['street_landmark']}"
+            if shipping_address_snapshot['delivery_note']:
+                shipping_address_str += f"\nNote: {shipping_address_snapshot['delivery_note']}"
+            contact_number_str = shipping_address_snapshot['phone_number']
+
         else:
             if not shipping_address_raw or not contact_number_raw:
                 return Response({"detail": "Delivery address or shipping details are required"}, status=status.HTTP_400_BAD_REQUEST)
             shipping_address_str = shipping_address_raw
             contact_number_str = contact_number_raw
+            shipping_address_snapshot = {
+                'shipping_address': shipping_address_raw,
+                'contact_number': contact_number_raw
+            }
 
         from core.notification_service import NotificationService
 
@@ -1060,13 +1226,16 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             total_amount = sum(item.product.final_price * item.quantity for item in cart_items)
 
+            delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
+
             order = Order.objects.create(
                 student=request.user,
                 total_amount=total_amount,
                 delivery_fee=delivery_fee,
-                delivery_address_ref=delivery_address,
+                delivery_address_ref=delivery_address if isinstance(delivery_address, DeliveryAddress) else None,
                 shipping_address=shipping_address_str,
                 contact_number=contact_number_str,
+                shipping_address_snapshot=shipping_address_snapshot,
                 status='PENDING_PAYMENT',
             )
 
@@ -1123,7 +1292,7 @@ class OrderViewSet(viewsets.ModelViewSet):
 # Fields that trigger re-review if changed on an ACTIVE listing
 _REVIEW_FIELDS = {
     'price', 'condition', 'description', 'title',
-    'author', 'publisher', 'isbn', 'edition', 'condition_details',
+    'author', 'publisher', 'isbn', 'edition', 'condition_details', 'published_date', 'total_pages',
 }
 
 MAX_IMAGES_DEFAULT = 6

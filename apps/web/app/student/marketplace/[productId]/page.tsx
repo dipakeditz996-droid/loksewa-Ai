@@ -6,7 +6,7 @@ import { marketplaceApi, Product, Purchase } from "@/lib/api/marketplace";
 import { buildMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, CheckCircle, ShoppingBag, BookOpen, MapPin, User, FileText, Bookmark, Info, Star, ShieldAlert } from "lucide-react";
+import { ArrowLeft, CheckCircle, ShoppingBag, BookOpen, MapPin, User, FileText, Bookmark, Info, Star, ShieldAlert, Calendar } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
@@ -80,15 +80,27 @@ export default function ProductDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
         {/* Left Col: Image */}
         <div className="space-y-4">
-          <div className="aspect-[4/3] w-full bg-muted rounded-2xl overflow-hidden relative border shadow-sm">
+          <div className="aspect-[4/5] sm:aspect-square w-full bg-slate-100/90 dark:bg-slate-900/50 rounded-2xl overflow-hidden relative border shadow-sm flex items-center justify-center p-6">
             {product.cover_image ? (
-              <Image 
-                src={buildMediaUrl(product.cover_image)} 
-                alt={product.title}
-                fill
-                className="object-cover"
-                unoptimized
-              />
+              <>
+                <Image 
+                  src={buildMediaUrl(product.cover_image)} 
+                  alt=""
+                  fill
+                  className="object-cover blur-2xl opacity-25 scale-125 pointer-events-none"
+                  unoptimized
+                />
+                <div className="relative z-10 h-full w-full flex items-center justify-center">
+                  <Image 
+                    src={buildMediaUrl(product.cover_image)} 
+                    alt={product.title}
+                    width={320}
+                    height={420}
+                    className="max-h-full max-w-full object-contain rounded-lg shadow-xl"
+                    unoptimized
+                  />
+                </div>
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-primary/5 text-primary">
                 <ShoppingBag className="h-16 w-16 opacity-30" />
@@ -120,6 +132,13 @@ export default function ProductDetailPage() {
                 <span className="text-lg text-muted-foreground line-through font-medium">
                   Rs. {product.price}
                 </span>
+              )}
+            </div>
+            <div className="text-sm font-medium text-muted-foreground">
+              {Number(product.delivery_fee) > 0 ? (
+                <span>Delivery: <strong className="text-foreground">Rs. {product.delivery_fee}</strong></span>
+              ) : (
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Free Delivery</span>
               )}
             </div>
 
@@ -160,6 +179,18 @@ export default function ProductDetailPage() {
                  <div className="flex flex-col">
                    <span className="font-semibold text-foreground flex items-center gap-1"><Info className="h-3.5 w-3.5" /> Edition</span>
                    <span>{product.edition}</span>
+                 </div>
+               )}
+               {product.published_date && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Published Date</span>
+                   <span>{product.published_date}</span>
+                 </div>
+               )}
+               {product.total_pages && (
+                 <div className="flex flex-col">
+                   <span className="font-semibold text-foreground flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Total Pages</span>
+                   <span>{product.total_pages}</span>
                  </div>
                )}
                {product.location && (

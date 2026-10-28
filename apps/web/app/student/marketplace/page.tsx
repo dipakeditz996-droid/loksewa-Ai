@@ -148,15 +148,27 @@ export default function MarketplacePage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {products.map((product: Product) => (
             <Card key={product.id} className="flex flex-col overflow-hidden hover:shadow-md transition-shadow">
-              <div className="aspect-video w-full bg-muted relative">
+              <div className="aspect-[4/3] w-full bg-slate-100/90 dark:bg-slate-900/50 relative flex items-center justify-center p-3 overflow-hidden">
                 {product.cover_image ? (
-                  <Image 
-                    src={buildMediaUrl(product.cover_image)} 
-                    alt={product.title}
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
+                  <>
+                    <Image 
+                      src={buildMediaUrl(product.cover_image)} 
+                      alt=""
+                      fill
+                      className="object-cover blur-xl opacity-25 scale-125 pointer-events-none"
+                      unoptimized
+                    />
+                    <div className="relative z-10 h-full w-full flex items-center justify-center">
+                      <Image 
+                        src={buildMediaUrl(product.cover_image)} 
+                        alt={product.title}
+                        width={180}
+                        height={240}
+                        className="max-h-full max-w-full object-contain rounded-[4px] shadow-md group-hover:scale-105 transition-all duration-300"
+                        unoptimized
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-primary/5 text-primary">
                     <ShoppingBag className="h-10 w-10 opacity-50" />

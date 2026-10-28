@@ -11,6 +11,8 @@ export interface StudentProfile {
   role: string;
   date_joined: string;
   phone: string;
+  permanent_district?: string;
+  permanent_local_level?: string;
   bio: string;
   target_category: number | null;
   target_category_name: string | null;

@@ -54,6 +54,53 @@ def is_valid_nepal_district(district):
     return aliases.get(d) in NEPAL_DISTRICTS_LOWER
 
 
+DISTRICT_TO_PROVINCE = {
+    # Koshi Province (14)
+    "bhojpur": "Koshi Province", "dhankuta": "Koshi Province", "ilam": "Koshi Province",
+    "jhapa": "Koshi Province", "khotang": "Koshi Province", "morang": "Koshi Province",
+    "okhaldhunga": "Koshi Province", "panchthar": "Koshi Province", "sankhuwasabha": "Koshi Province",
+    "solukhumbu": "Koshi Province", "sunsari": "Koshi Province", "taplejung": "Koshi Province",
+    "terhathum": "Koshi Province", "udayapur": "Koshi Province",
+    # Madhesh Province (8)
+    "bara": "Madhesh Province", "dhanusha": "Madhesh Province", "mahottari": "Madhesh Province",
+    "parsa": "Madhesh Province", "rautahat": "Madhesh Province", "saptari": "Madhesh Province",
+    "sarlahi": "Madhesh Province", "siraha": "Madhesh Province",
+    # Bagmati Province (13)
+    "bhaktapur": "Bagmati Province", "chitwan": "Bagmati Province", "dhading": "Bagmati Province",
+    "dolakha": "Bagmati Province", "kathmandu": "Bagmati Province", "kavrepalanchok": "Bagmati Province",
+    "kavre": "Bagmati Province", "lalitpur": "Bagmati Province", "makwanpur": "Bagmati Province",
+    "nuwakot": "Bagmati Province", "ramechhap": "Bagmati Province", "rasuwa": "Bagmati Province",
+    "sindhuli": "Bagmati Province", "sindhupalchok": "Bagmati Province", "sindhupalchowk": "Bagmati Province",
+    # Gandaki Province (11)
+    "baglung": "Gandaki Province", "gorkha": "Gandaki Province", "kaski": "Gandaki Province",
+    "lamjung": "Gandaki Province", "manang": "Gandaki Province", "mustang": "Gandaki Province",
+    "myagdi": "Gandaki Province", "nawalpur": "Gandaki Province", "parbat": "Gandaki Province",
+    "syangja": "Gandaki Province", "tanahun": "Gandaki Province",
+    # Lumbini Province (12)
+    "arghakhanchi": "Lumbini Province", "banke": "Lumbini Province", "bardiya": "Lumbini Province",
+    "dang": "Lumbini Province", "gulmi": "Lumbini Province", "kapilvastu": "Lumbini Province",
+    "palpa": "Lumbini Province", "parasi": "Lumbini Province", "nawalparasi": "Lumbini Province",
+    "pyuthan": "Lumbini Province", "rolpa": "Lumbini Province", "rukum east": "Lumbini Province",
+    "rupandehi": "Lumbini Province",
+    # Karnali Province (10)
+    "dailekh": "Karnali Province", "dolpa": "Karnali Province", "humla": "Karnali Province",
+    "jajarkot": "Karnali Province", "jumla": "Karnali Province", "kalikot": "Karnali Province",
+    "mugu": "Karnali Province", "rukum west": "Karnali Province", "rukum": "Karnali Province",
+    "salyan": "Karnali Province", "surkhet": "Karnali Province",
+    # Sudurpashchim Province (9)
+    "achham": "Sudurpashchim Province", "baitadi": "Sudurpashchim Province", "bajhang": "Sudurpashchim Province",
+    "bajura": "Sudurpashchim Province", "dadeldhura": "Sudurpashchim Province", "darchula": "Sudurpashchim Province",
+    "doti": "Sudurpashchim Province", "kailali": "Sudurpashchim Province", "kanchanpur": "Sudurpashchim Province",
+}
+
+
+def get_nepal_province_for_district(district):
+    """Return the canonical Nepal province for a district name."""
+    if not district or not isinstance(district, str):
+        return ''
+    return DISTRICT_TO_PROVINCE.get(district.strip().lower(), '')
+
+
 def is_valid_nepal_phone(phone):
     """True if `phone` is a 10-digit Nepali mobile number (96/97/98-prefixed),
     after stripping spaces, hyphens, and an optional +977/977 country code.

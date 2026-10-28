@@ -2,14 +2,14 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { marketplaceApi, Cart, PaymentMethod, DeliveryAddress, Order } from "@/lib/api/marketplace";
+import { marketplaceApi, Cart, PaymentMethod, DeliveryAddress, Order, ProfileAddressResponse } from "@/lib/api/marketplace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus } from "lucide-react";
+import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus, UserCheck, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
@@ -24,6 +24,23 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [calculatedFee, setCalculatedFee] = useState<number | null>(null);
   
+  // "Use my existing info" state
+  const [useExistingInfo, setUseExistingInfo] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [existingInfoForm, setExistingInfoForm] = useState<Partial<DeliveryAddress>>({
+    full_name: "",
+    phone_number: "",
+    province: "",
+    district: "",
+    municipality: "",
+    ward_number: "",
+    tole_area: "",
+    street_landmark: "",
+    delivery_note: "",
+  });
+  const [missingProfileFields, setMissingProfileFields] = useState<string[]>([]);
+  const [saveToAddresses, setSaveToAddresses] = useState(true);
+
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [selectedMethodId, setSelectedMethodId] = useState<string>("");
   
@@ -64,6 +81,9 @@ export default function CheckoutPage() {
         const addrId = defaultAddr ? defaultAddr.id : (addressData[0]?.id ?? 0);
         setSelectedAddressId(addrId);
         fetchDeliveryFee(addrId);
+      } else {
+        // If student has no saved addresses, default to prefilling profile info
+        handleToggleUseExistingInfo(true);
       }
       
       if (methData.length > 0) {
@@ -92,6 +112,66 @@ export default function CheckoutPage() {
     }
   };
 
+  const fetchDeliveryFeeForLocation = async (province?: string, district?: string, municipality?: string) => {
+    try {
+      const res = await marketplaceApi.calculateFee({
+        province: province || "",
+        district: district || "",
+        municipality: municipality || "",
+      });
+      setCalculatedFee(Number(res.delivery_fee));
+    } catch (err) {
+      console.error("Failed to calculate location fee", err);
+      setCalculatedFee(0);
+    }
+  };
+
+  const handleToggleUseExistingInfo = async (checked: boolean) => {
+    setUseExistingInfo(checked);
+    if (checked) {
+      try {
+        setLoadingProfile(true);
+        const profileData = await marketplaceApi.getProfileAddress();
+        setExistingInfoForm(prev => ({
+          full_name: prev.full_name || profileData.full_name || "",
+          phone_number: prev.phone_number || profileData.phone_number || "",
+          province: prev.province || profileData.province || "",
+          district: prev.district || profileData.district || "",
+          municipality: prev.municipality || profileData.municipality || "",
+          ward_number: prev.ward_number || profileData.ward_number || "",
+          tole_area: prev.tole_area || profileData.tole_area || "",
+          street_landmark: prev.street_landmark || profileData.street_landmark || "",
+          delivery_note: prev.delivery_note || profileData.delivery_note || "",
+        }));
+        setMissingProfileFields(profileData.missing_fields || []);
+        
+        const prov = profileData.province || existingInfoForm.province;
+        const dist = profileData.district || existingInfoForm.district;
+        const mun = profileData.municipality || existingInfoForm.municipality;
+        if (prov || dist || mun) {
+          fetchDeliveryFeeForLocation(prov, dist, mun);
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile address", err);
+        toast.error("Failed to load profile details");
+      } finally {
+        setLoadingProfile(false);
+      }
+    } else {
+      if (selectedAddressId) {
+        fetchDeliveryFee(selectedAddressId);
+      }
+    }
+  };
+
+  const handleExistingInfoFieldChange = (field: keyof DeliveryAddress, val: string) => {
+    const updated = { ...existingInfoForm, [field]: val };
+    setExistingInfoForm(updated);
+    if (field === 'province' || field === 'district' || field === 'municipality') {
+      fetchDeliveryFeeForLocation(updated.province, updated.district, updated.municipality);
+    }
+  };
+
   const handleAddressSelection = (val: string) => {
     const id = Number(val);
     setSelectedAddressId(id);
@@ -113,19 +193,44 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
-    if (!selectedAddressId) {
-      toast.error("Please select a delivery address.");
-      return;
-    }
-    try {
-      setSubmitting(true);
-      const createdOrder = await marketplaceApi.createOrder({ delivery_address_id: selectedAddressId });
-      setOrder(createdOrder);
-      toast.success("Order confirmed. Please proceed to payment.");
-    } catch (error: any) {
-      toast.error(error?.data?.detail || error?.message || "Failed to place order.");
-    } finally {
-      setSubmitting(false);
+    if (useExistingInfo) {
+      const required: (keyof DeliveryAddress)[] = [
+        'full_name', 'phone_number', 'province', 'district', 'municipality', 'ward_number', 'tole_area'
+      ];
+      const missing = required.filter(f => !String(existingInfoForm[f] || '').trim());
+      if (missing.length > 0) {
+        toast.error(`Please complete required fields: ${missing.join(', ').replace(/_/g, ' ')}`);
+        return;
+      }
+
+      try {
+        setSubmitting(true);
+        const createdOrder = await marketplaceApi.createOrder({
+          delivery_address: existingInfoForm,
+          save_to_addresses: saveToAddresses,
+        });
+        setOrder(createdOrder);
+        toast.success("Order confirmed. Please proceed to payment.");
+      } catch (error: any) {
+        toast.error(error?.data?.detail || error?.message || "Failed to place order.");
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      if (!selectedAddressId) {
+        toast.error("Please select a delivery address.");
+        return;
+      }
+      try {
+        setSubmitting(true);
+        const createdOrder = await marketplaceApi.createOrder({ delivery_address_id: selectedAddressId });
+        setOrder(createdOrder);
+        toast.success("Order confirmed. Please proceed to payment.");
+      } catch (error: any) {
+        toast.error(error?.data?.detail || error?.message || "Failed to place order.");
+      } finally {
+        setSubmitting(false);
+      }
     }
   };
 
@@ -213,8 +318,11 @@ export default function CheckoutPage() {
   const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
   
   const subtotal = cart?.items.reduce((acc, item) => acc + (parseFloat(item.product_details?.final_price || "0") * item.quantity), 0) || 0;
-  const deliveryFee = calculatedFee ?? 0;
-  const grandTotal = subtotal + deliveryFee;
+  const currentDeliveryFee = order ? Number(order.delivery_fee) : (calculatedFee ?? 0);
+  const grandTotal = order ? (Number(order.total_amount) + Number(order.delivery_fee)) : (subtotal + currentDeliveryFee);
+
+  // Address used snapshot display
+  const activeSnapshot = order?.shipping_address_snapshot || (useExistingInfo ? existingInfoForm : addresses.find(a => a.id === selectedAddressId));
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
@@ -240,96 +348,253 @@ export default function CheckoutPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Delivery Address</CardTitle>
-                <CardDescription>Select or add a new delivery address for your physical books</CardDescription>
+                <CardDescription>Select or customize your delivery address for physical shipment</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {addresses.length === 0 ? (
-                   <div className="p-4 bg-muted rounded-md text-center">
-                     <MapPin className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                     <p className="text-muted-foreground mb-4">No delivery addresses found.</p>
-                   </div>
-                ) : (
-                  <RadioGroup value={selectedAddressId?.toString()} onValueChange={handleAddressSelection} className="space-y-3">
-                    {addresses.map(addr => (
-                      <div key={addr.id} className="flex items-start space-x-3 border p-4 rounded-lg">
-                        <RadioGroupItem value={addr.id.toString()} id={`addr-${addr.id}`} className="mt-1" />
-                        <Label htmlFor={`addr-${addr.id}`} className="flex flex-col cursor-pointer">
-                          <span className="font-semibold">{addr.full_name} ({addr.phone_number}) {addr.is_default && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded ml-2">Default</span>}</span>
-                          <span className="text-muted-foreground font-normal text-sm mt-1">
-                            {addr.province}, {addr.district}, {addr.municipality}-{addr.ward_number}
-                          </span>
-                          <span className="text-muted-foreground font-normal text-sm">
-                            {addr.tole_area} {addr.street_landmark && `(${addr.street_landmark})`}
-                          </span>
-                        </Label>
+              <CardContent className="space-y-5">
+
+                {/* Option: Use my existing info */}
+                <div className={`p-4 rounded-xl border transition-all ${
+                  useExistingInfo 
+                    ? "bg-primary/5 border-primary/40 shadow-sm" 
+                    : "bg-slate-50 dark:bg-white/[0.03] border-slate-200 dark:border-white/10"
+                }`}>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useExistingInfo}
+                      onChange={(e) => handleToggleUseExistingInfo(e.target.checked)}
+                      className="mt-1 w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <UserCheck className="w-4 h-4 text-primary" />
+                        <span className="font-semibold text-sm text-foreground">Use my existing info</span>
                       </div>
-                    ))}
-                  </RadioGroup>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Prefill available delivery details directly from your registered student profile
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Prefilled Profile Form & Review Section */}
+                  {useExistingInfo && (
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10 space-y-4">
+                      {loadingProfile ? (
+                        <div className="text-xs text-muted-foreground animate-pulse py-2">
+                          Loading saved profile information...
+                        </div>
+                      ) : (
+                        <>
+                          {missingProfileFields.length > 0 && (
+                            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                              <div>
+                                <span className="font-semibold">Review your delivery address:</span> We prefilled details from your profile. Please complete the missing delivery fields (e.g. Ward Number and Tole/Area) below.
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Full Name <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.full_name || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("full_name", e.target.value)}
+                                placeholder="Recipient full name"
+                                className={!existingInfoForm.full_name?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Phone Number <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.phone_number || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("phone_number", e.target.value)}
+                                placeholder="Mobile number"
+                                className={!existingInfoForm.phone_number?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Province <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.province || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("province", e.target.value)}
+                                placeholder="e.g. Bagmati"
+                                className={!existingInfoForm.province?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">District <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.district || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("district", e.target.value)}
+                                placeholder="e.g. Kathmandu"
+                                className={!existingInfoForm.district?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Municipality / Local Level <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.municipality || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("municipality", e.target.value)}
+                                placeholder="e.g. Kathmandu Metropolitan"
+                                className={!existingInfoForm.municipality?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Ward Number <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.ward_number || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("ward_number", e.target.value)}
+                                placeholder="e.g. 10"
+                                className={!existingInfoForm.ward_number?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Tole / Area / Street <span className="text-red-500">*</span></Label>
+                              <Input
+                                value={existingInfoForm.tole_area || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("tole_area", e.target.value)}
+                                placeholder="e.g. Baneshwor"
+                                className={!existingInfoForm.tole_area?.trim() ? "border-amber-400" : ""}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Nearby Landmark (Optional)</Label>
+                              <Input
+                                value={existingInfoForm.street_landmark || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("street_landmark", e.target.value)}
+                                placeholder="e.g. Near Krishna Mandir"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs font-medium">Delivery Note (Optional)</Label>
+                              <Input
+                                value={existingInfoForm.delivery_note || ""}
+                                onChange={(e) => handleExistingInfoFieldChange("delivery_note", e.target.value)}
+                                placeholder="e.g. Call before arrival"
+                              />
+                            </div>
+                          </div>
+
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer pt-1">
+                            <input
+                              type="checkbox"
+                              checked={saveToAddresses}
+                              onChange={(e) => setSaveToAddresses(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300"
+                            />
+                            Save this address to my saved delivery addresses for future orders
+                          </label>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* If NOT using existing info, show saved address book */}
+                {!useExistingInfo && (
+                  <>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Or Choose from Saved Addresses
+                    </div>
+                    {addresses.length === 0 ? (
+                      <div className="p-4 bg-muted rounded-md text-center">
+                        <MapPin className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground mb-4">No saved delivery addresses found.</p>
+                      </div>
+                    ) : (
+                      <RadioGroup value={selectedAddressId?.toString()} onValueChange={handleAddressSelection} className="space-y-3">
+                        {addresses.map(addr => (
+                          <div key={addr.id} className="flex items-start space-x-3 border p-4 rounded-lg hover:border-primary/50 transition-colors">
+                            <RadioGroupItem value={addr.id.toString()} id={`addr-${addr.id}`} className="mt-1" />
+                            <Label htmlFor={`addr-${addr.id}`} className="flex flex-col cursor-pointer flex-1">
+                              <span className="font-semibold">{addr.full_name} ({addr.phone_number}) {addr.is_default && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded ml-2">Default</span>}</span>
+                              <span className="text-muted-foreground font-normal text-sm mt-1">
+                                {addr.province}, {addr.district}, {addr.municipality}-{addr.ward_number}
+                              </span>
+                              <span className="text-muted-foreground font-normal text-sm">
+                                {addr.tole_area} {addr.street_landmark && `(${addr.street_landmark})`}
+                              </span>
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    )}
+                    
+                    <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2" /> Add Different Address</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[500px]">
+                        <DialogHeader>
+                          <DialogTitle>Add Delivery Address</DialogTitle>
+                        </DialogHeader>
+                        <form onSubmit={handleCreateAddress} className="space-y-4 pt-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Full Name *</Label>
+                              <Input required value={newAddress.full_name} onChange={e => setNewAddress({...newAddress, full_name: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Phone Number *</Label>
+                              <Input required value={newAddress.phone_number} onChange={e => setNewAddress({...newAddress, phone_number: e.target.value})} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Province *</Label>
+                              <Input required value={newAddress.province} onChange={e => setNewAddress({...newAddress, province: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>District *</Label>
+                              <Input required value={newAddress.district} onChange={e => setNewAddress({...newAddress, district: e.target.value})} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Municipality/VDC *</Label>
+                              <Input required value={newAddress.municipality} onChange={e => setNewAddress({...newAddress, municipality: e.target.value})} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Ward No. *</Label>
+                              <Input required value={newAddress.ward_number} onChange={e => setNewAddress({...newAddress, ward_number: e.target.value})} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Tole/Area *</Label>
+                            <Input required value={newAddress.tole_area} onChange={e => setNewAddress({...newAddress, tole_area: e.target.value})} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Street/Landmark (Optional)</Label>
+                            <Input value={newAddress.street_landmark} onChange={e => setNewAddress({...newAddress, street_landmark: e.target.value})} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Delivery Note (Optional)</Label>
+                            <Input value={newAddress.delivery_note} onChange={e => setNewAddress({...newAddress, delivery_note: e.target.value})} />
+                          </div>
+                          <Button type="submit" className="w-full">Save Address</Button>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </>
                 )}
-                
-                <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2" /> Add New Address</Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>Add Delivery Address</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleCreateAddress} className="space-y-4 pt-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Full Name *</Label>
-                          <Input required value={newAddress.full_name} onChange={e => setNewAddress({...newAddress, full_name: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Phone Number *</Label>
-                          <Input required value={newAddress.phone_number} onChange={e => setNewAddress({...newAddress, phone_number: e.target.value})} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Province *</Label>
-                          <Input required value={newAddress.province} onChange={e => setNewAddress({...newAddress, province: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>District *</Label>
-                          <Input required value={newAddress.district} onChange={e => setNewAddress({...newAddress, district: e.target.value})} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label>Municipality/VDC *</Label>
-                          <Input required value={newAddress.municipality} onChange={e => setNewAddress({...newAddress, municipality: e.target.value})} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Ward No. *</Label>
-                          <Input required value={newAddress.ward_number} onChange={e => setNewAddress({...newAddress, ward_number: e.target.value})} />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Tole/Area *</Label>
-                        <Input required value={newAddress.tole_area} onChange={e => setNewAddress({...newAddress, tole_area: e.target.value})} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Street/Landmark (Optional)</Label>
-                        <Input value={newAddress.street_landmark} onChange={e => setNewAddress({...newAddress, street_landmark: e.target.value})} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Delivery Note (Optional)</Label>
-                        <Input value={newAddress.delivery_note} onChange={e => setNewAddress({...newAddress, delivery_note: e.target.value})} />
-                      </div>
-                      <Button type="submit" className="w-full">Save Address</Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
               </CardContent>
               <CardFooter className="bg-muted/30 pt-6">
                 <Button 
                   onClick={handlePlaceOrder} 
-                  className="w-full h-12 text-lg" 
-                  disabled={submitting || !selectedAddressId || addresses.length === 0}
+                  className="w-full h-12 text-lg font-semibold" 
+                  disabled={submitting || (!useExistingInfo && !selectedAddressId)}
                 >
-                  {submitting ? "Placing Order..." : "Confirm Delivery Address"}
+                  {submitting ? "Confirming Delivery..." : "Confirm Delivery Address"}
                 </Button>
               </CardFooter>
             </Card>
@@ -348,14 +613,14 @@ export default function CheckoutPage() {
                   ) : (
                     <RadioGroup value={selectedMethodId} onValueChange={setSelectedMethodId} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {methods.map((method) => (
-                        <div key={method.id}>
+                        <div key={method.id} className="relative">
                           <RadioGroupItem value={method.id.toString()} id={`method-${method.id}`} className="peer sr-only" />
                           <Label
                             htmlFor={`method-${method.id}`}
-                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-center h-full"
+                            className="flex flex-col items-center justify-between p-4 border-2 rounded-xl cursor-pointer peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5 hover:bg-muted/50 transition-all text-center h-full"
                           >
-                            <span className="font-semibold text-lg">{method.display_name}</span>
-                            <span className="text-xs text-muted-foreground mt-1">{method.method_type}</span>
+                            <span className="font-bold text-sm mb-1">{method.display_name}</span>
+                            <span className="text-xs text-muted-foreground">{method.method_type}</span>
                           </Label>
                         </div>
                       ))}
@@ -365,36 +630,29 @@ export default function CheckoutPage() {
               </Card>
 
               {selectedMethod && (
-                <Card className="border-primary/20 shadow-md">
-                  <CardHeader className="bg-primary/5 pb-4 border-b">
-                    <CardTitle className="text-xl flex items-center gap-2">
-                      Payment Instructions for {selectedMethod.display_name}
-                    </CardTitle>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Payment Details: {selectedMethod.display_name}</CardTitle>
                   </CardHeader>
-                  <CardContent className="pt-6 space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 items-start">
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-6 items-center">
                       {selectedMethod.qr_image && (
-                        <div className="flex flex-col items-center p-4 bg-card border rounded-xl shadow-sm">
-                          <div className="relative w-48 h-48 mb-2">
-                            <Image
-                              src={selectedMethod.qr_image.startsWith('http') ? selectedMethod.qr_image : `${baseUrl}${selectedMethod.qr_image.startsWith('/') ? '' : '/'}${selectedMethod.qr_image}`}
-                              alt={`QR for ${selectedMethod.display_name}`}
-                              fill
-                              className="object-contain"
-                              unoptimized
-                            />
-                          </div>
-                          <p className="text-sm font-medium text-muted-foreground">Scan to pay</p>
+                        <div className="w-44 h-44 relative bg-white p-2 rounded-xl border shadow-sm shrink-0">
+                          <Image 
+                            src={selectedMethod.qr_image.startsWith('http') ? selectedMethod.qr_image : `${baseUrl}${selectedMethod.qr_image.startsWith('/') ? '' : '/'}${selectedMethod.qr_image}`} 
+                            alt="Payment QR" 
+                            fill 
+                            className="object-contain" 
+                            unoptimized
+                          />
                         </div>
                       )}
-                      
-                      <div className="space-y-4">
-                        <div className="bg-muted/50 p-4 rounded-lg border">
-                          <h4 className="font-semibold mb-3">Account Details</h4>
-                          <dl className="space-y-2 text-sm">
+                      <div className="flex-1 space-y-3 w-full">
+                        <div className="bg-muted/50 p-4 rounded-xl border space-y-2 text-sm">
+                          <dl className="space-y-1.5">
                             <div className="flex justify-between border-b pb-1">
                               <dt className="text-muted-foreground">Account Name</dt>
-                              <dd className="font-medium">{selectedMethod.account_name}</dd>
+                              <dd className="font-semibold">{selectedMethod.account_name}</dd>
                             </div>
                             <div className="flex justify-between border-b pb-1">
                               <dt className="text-muted-foreground">Account Number / ID</dt>
@@ -414,14 +672,43 @@ export default function CheckoutPage() {
                             )}
                             <div className="flex justify-between pt-2">
                               <dt className="text-muted-foreground font-semibold">Total to Pay</dt>
-                              <dd className="font-bold text-lg text-primary">Rs. {order.total_amount}</dd>
+                              <dd className="font-bold text-lg text-primary">Rs. {(Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2)}</dd>
                             </div>
                           </dl>
                         </div>
 
+                      </div>
+                    </div>
+
+                    {/* Step-by-Step Payment Instructions */}
+                    <div className="mt-4 pt-4 border-t space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                        <Info className="h-4 w-4" />
+                        <span>Payment Instructions</span>
+                      </div>
+                      
+                      <div className="p-4 bg-primary/5 dark:bg-white/[0.03] border border-primary/20 dark:border-white/10 rounded-xl space-y-3 text-xs leading-relaxed">
+                        <ol className="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300">
+                          <li>
+                            Open your <strong>{selectedMethod.display_name}</strong> app or mobile banking.
+                          </li>
+                          <li>
+                            Scan the QR code above or transfer exactly <strong className="text-primary font-bold">Rs. {(Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2)}</strong> to account number <span className="font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-foreground">{selectedMethod.account_number}</span> ({selectedMethod.account_name}).
+                          </li>
+                          <li>
+                            In the <strong>Remarks / Purpose</strong> field, write your Order reference: <span className="font-mono font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">Order #{order.id}</span>
+                          </li>
+                          <li>
+                            Complete the payment, then take a <strong>screenshot</strong> of the success receipt and copy the <strong>Transaction ID / Reference Code</strong>.
+                          </li>
+                          <li>
+                            Enter the Transaction ID and attach the screenshot in the form below, then click <strong>Submit Payment for Verification</strong>.
+                          </li>
+                        </ol>
+
                         {selectedMethod.instructions && (
-                          <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/30 p-3 rounded border border-blue-100 dark:border-blue-900/50">
-                            <strong>Instructions:</strong> {selectedMethod.instructions}
+                          <div className="pt-2 border-t border-primary/10 dark:border-white/10 text-muted-foreground">
+                            <span className="font-semibold text-foreground">Specific Note:</span> {selectedMethod.instructions}
                           </div>
                         )}
                       </div>
@@ -510,7 +797,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* Right Col: Summary */}
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-5 space-y-6">
           <Card className="sticky top-6">
             <CardHeader className="bg-muted/50 border-b">
               <CardTitle>Order Summary</CardTitle>
@@ -533,6 +820,9 @@ export default function CheckoutPage() {
                     <h4 className="font-semibold leading-tight line-clamp-2 text-sm">{item.product_details?.title}</h4>
                     <p className="text-xs text-muted-foreground mt-1">Qty: {item.quantity}</p>
                     <p className="font-medium text-sm mt-1">Rs. {item.product_details?.final_price}</p>
+                    {Number(item.product_details?.delivery_fee) > 0 && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">Base delivery: Rs. {item.product_details?.delivery_fee}</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -542,19 +832,64 @@ export default function CheckoutPage() {
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal ({cart?.items.length} items)</span>
-                  <span>Rs. {subtotal.toFixed(2)}</span>
+                  <span className="font-medium">Rs. {subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-sm items-center">
                   <span className="text-muted-foreground">Delivery Fee</span>
-                  <span>{calculatedFee === null && !order ? "Calculating..." : `Rs. ${(order ? Number(order.delivery_fee) : deliveryFee).toFixed(2)}`}</span>
+                  <span>
+                    {calculatedFee === null && !order ? (
+                      <span className="text-muted-foreground italic">Calculating...</span>
+                    ) : currentDeliveryFee === 0 ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Free delivery</span>
+                    ) : (
+                      <span className="font-medium">Rs. {currentDeliveryFee.toFixed(2)}</span>
+                    )}
+                  </span>
                 </div>
                 
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
                   <span>Total to Pay</span>
-                  <span className="text-primary">Rs. {order ? (Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2) : grandTotal.toFixed(2)}</span>
+                  <span className="text-primary">Rs. {grandTotal.toFixed(2)}</span>
                 </div>
               </div>
+
+              {/* Delivery Address Snapshot */}
+              {activeSnapshot && (
+                <div className="pt-2 border-t">
+                  <div className="p-3.5 bg-slate-50 dark:bg-white/[0.04] rounded-xl border text-xs space-y-1">
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between mb-1">
+                      <span className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-primary" /> Delivery Destination
+                      </span>
+                      {order?.shipping_address_snapshot && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                          <ShieldCheck className="w-3 h-3" /> Saved Snapshot
+                        </span>
+                      )}
+                    </div>
+                    {'full_name' in activeSnapshot && activeSnapshot.full_name && (
+                      <p className="font-medium text-foreground">
+                        {activeSnapshot.full_name} {activeSnapshot.phone_number && `(${activeSnapshot.phone_number})`}
+                      </p>
+                    )}
+                    {'province' in activeSnapshot && (activeSnapshot.province || activeSnapshot.district) && (
+                      <p className="text-muted-foreground">
+                        {activeSnapshot.tole_area && `${activeSnapshot.tole_area}, `}
+                        {activeSnapshot.ward_number && `Ward ${activeSnapshot.ward_number}, `}
+                        {activeSnapshot.municipality && `${activeSnapshot.municipality}, `}
+                        {activeSnapshot.district && `${activeSnapshot.district}, `}
+                        {activeSnapshot.province}
+                      </p>
+                    )}
+                    {'street_landmark' in activeSnapshot && activeSnapshot.street_landmark && (
+                      <p className="text-muted-foreground italic">
+                        Landmark: {activeSnapshot.street_landmark}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

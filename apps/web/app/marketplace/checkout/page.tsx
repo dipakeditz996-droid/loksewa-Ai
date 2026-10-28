@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { marketplaceApi, Cart, Order, PaymentMethod } from "@/lib/api/marketplace";
-import { ArrowLeft, ArrowRight, CheckCircle2, ImageIcon, UploadCloud, X, AlertCircle } from "lucide-react";
+import { marketplaceApi, Cart, Order, PaymentMethod, ProfileAddressResponse } from "@/lib/api/marketplace";
+import { ArrowLeft, ArrowRight, CheckCircle2, ImageIcon, UploadCloud, X, AlertCircle, UserCheck, MapPin } from "lucide-react";
 import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
 export default function CheckoutPage() {
@@ -20,6 +20,12 @@ export default function CheckoutPage() {
   const [notes, setNotes] = useState("");
   const [processingOrder, setProcessingOrder] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [calculatedFee, setCalculatedFee] = useState<number | null>(null);
+
+  // "Use my existing info" state
+  const [useExistingInfo, setUseExistingInfo] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [missingProfileFields, setMissingProfileFields] = useState<string[]>([]);
   
   // Step 2: Payment
   const [selectedMethodId, setSelectedMethodId] = useState<number | null>(null);
@@ -47,6 +53,44 @@ export default function CheckoutPage() {
         setLoading(false);
       });
   }, [router]);
+
+  const handleToggleUseExistingInfo = async (checked: boolean) => {
+    setUseExistingInfo(checked);
+    if (checked) {
+      try {
+        setLoadingProfile(true);
+        const profileData = await marketplaceApi.getProfileAddress();
+        if (profileData.phone_number && !phone) {
+          setPhone(profileData.phone_number);
+        }
+        const addressParts = [
+          profileData.tole_area,
+          profileData.ward_number ? `Ward ${profileData.ward_number}` : '',
+          profileData.municipality,
+          profileData.district,
+          profileData.province
+        ].filter(Boolean);
+        
+        if (addressParts.length > 0 && !address) {
+          setAddress(addressParts.join(', '));
+        }
+        setMissingProfileFields(profileData.missing_fields || []);
+
+        if (profileData.province || profileData.district || profileData.municipality) {
+          const feeRes = await marketplaceApi.calculateFee({
+            province: profileData.province,
+            district: profileData.district,
+            municipality: profileData.municipality,
+          });
+          setCalculatedFee(Number(feeRes.delivery_fee));
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile address", err);
+      } finally {
+        setLoadingProfile(false);
+      }
+    }
+  };
 
   const handleContinueToPayment = async () => {
     if (hasPhysicalItems && (!address.trim() || !phone.trim())) {
@@ -115,7 +159,10 @@ export default function CheckoutPage() {
     const price = item.product_details?.final_price ? parseFloat(item.product_details.final_price) : 0;
     return sum + price * item.quantity;
   }, 0);
-  const totalAmount = createdOrder ? parseFloat(createdOrder.total_amount) : subtotal;
+  const currentFee = createdOrder ? Number(createdOrder.delivery_fee) : (calculatedFee ?? 0);
+  const totalAmount = createdOrder 
+    ? (Number(createdOrder.total_amount) + Number(createdOrder.delivery_fee)) 
+    : (subtotal + currentFee);
 
   const renderOrderSummary = () => (
     <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6 h-fit sticky top-24">
@@ -129,6 +176,9 @@ export default function CheckoutPage() {
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-bold truncate">{item.product_details?.title}</h4>
               <p className="text-xs text-slate-500">Qty: {item.quantity} × Rs. {item.product_details?.final_price}</p>
+              {Number(item.product_details?.delivery_fee) > 0 && (
+                <p className="text-[11px] text-slate-400">Base delivery: Rs. {item.product_details?.delivery_fee}</p>
+              )}
             </div>
             <div className="text-sm font-bold shrink-0">
               Rs. {parseFloat(item.product_details?.final_price || "0") * item.quantity}
@@ -139,12 +189,31 @@ export default function CheckoutPage() {
       <div className="pt-6 border-t border-slate-200 dark:border-white/10 space-y-3 font-semibold">
         <div className="flex justify-between text-slate-600 dark:text-slate-400 text-sm">
           <span>Subtotal</span>
-          <span>Rs. {subtotal}</span>
+          <span>Rs. {subtotal.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-slate-600 dark:text-slate-400 text-sm">
+          <span>Delivery Fee</span>
+          <span>
+            {currentFee === 0 ? (
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Free delivery</span>
+            ) : (
+              `Rs. ${currentFee.toFixed(2)}`
+            )}
+          </span>
         </div>
         <div className="pt-4 border-t border-slate-200 dark:border-white/10 flex justify-between text-lg font-bold">
           <span>Total</span>
-          <span>Rs. {totalAmount}</span>
+          <span className="text-[#163E6B] dark:text-[#D4A72C]">Rs. {totalAmount.toFixed(2)}</span>
         </div>
+        {address && (
+          <div className="pt-3 border-t border-slate-200/60 dark:border-white/10 text-xs text-slate-500 font-normal">
+            <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 mb-0.5">
+              <MapPin className="w-3.5 h-3.5 text-primary" /> Delivery Destination:
+            </span>
+            <p className="text-slate-600 dark:text-slate-400">{address}</p>
+            {phone && <p className="text-slate-600 dark:text-slate-400 mt-0.5">Phone: {phone}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -166,7 +235,38 @@ export default function CheckoutPage() {
         {step === 1 && (
           <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-12">
             <div className="space-y-6">
-                            <h2 className="text-3xl font-extrabold">{hasPhysicalItems ? 'Delivery Details' : 'Contact Details'}</h2>
+              <h2 className="text-3xl font-extrabold">{hasPhysicalItems ? 'Delivery Details' : 'Contact Details'}</h2>
+              
+              {hasPhysicalItems && (
+                <div className="p-4 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useExistingInfo}
+                      onChange={(e) => handleToggleUseExistingInfo(e.target.checked)}
+                      className="mt-1 w-4 h-4 rounded border-slate-300 text-primary cursor-pointer"
+                    />
+                    <div>
+                      <div className="flex items-center gap-1.5 font-semibold text-sm">
+                        <UserCheck className="w-4 h-4 text-primary" />
+                        <span>Use my existing info</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Prefill available delivery details from your registered student profile
+                      </p>
+                    </div>
+                  </label>
+                  {useExistingInfo && missingProfileFields.length > 0 && (
+                    <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                      <div>
+                        Profile partially prefilled. Please review and ensure your street/ward details are complete below.
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-4">
                 <div>
                   <label className="text-sm font-bold">Phone Number {hasPhysicalItems && '*'}</label>
@@ -175,7 +275,7 @@ export default function CheckoutPage() {
                 {hasPhysicalItems && (
                 <div>
                   <label className="text-sm font-bold">Full Address *</label>
-                  <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full h-12 px-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="House no, Street, City" />
+                  <input type="text" value={address} onChange={e => setAddress(e.target.value)} className="w-full h-12 px-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="House no, Street, Ward, Municipality, District" />
                 </div>
                 )}
                 <div>
@@ -211,7 +311,7 @@ export default function CheckoutPage() {
                   <p className="font-bold">Amount To Pay</p>
                   <p className="text-xs text-slate-500">Please pay exactly this amount.</p>
                 </div>
-                <div className="text-2xl font-black text-[#163E6B] dark:text-[#D4A72C]">Rs. {totalAmount}</div>
+                <div className="text-2xl font-black text-[#163E6B] dark:text-[#D4A72C]">Rs. {totalAmount.toFixed(2)}</div>
               </div>
 
               {/* Payment Methods Selection */}
@@ -255,15 +355,43 @@ export default function CheckoutPage() {
                           {m.account_number && <p className="text-sm"><span className="text-slate-500">Account No / ID:</span> <span className="font-semibold">{m.account_number}</span></p>}
                           {m.bank_name && <p className="text-sm"><span className="text-slate-500">Bank:</span> <span className="font-semibold">{m.bank_name}</span></p>}
                           {m.branch && <p className="text-sm"><span className="text-slate-500">Branch:</span> <span className="font-semibold">{m.branch}</span></p>}
-                          {m.instructions && (
-                            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900 text-blue-800 dark:text-blue-300 rounded-lg text-sm">
-                              {m.instructions}
-                            </div>
-                          )}
                         </div>
                       </>
                     );
                   })()}
+
+                  {/* Step-by-Step Payment Instructions */}
+                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/10 space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-[#163E6B] dark:text-[#D4A72C]">
+                      <span>Payment Instructions</span>
+                    </div>
+                    
+                    <div className="p-4 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl space-y-3 text-xs leading-relaxed">
+                      <ol className="list-decimal list-inside space-y-2 text-slate-700 dark:text-slate-300">
+                        <li>
+                          Open your <strong>{paymentMethods.find(m => m.id === selectedMethodId)?.display_name}</strong> app or mobile banking.
+                        </li>
+                        <li>
+                          Scan the QR code or transfer exactly <strong className="text-[#163E6B] dark:text-[#D4A72C] font-bold">Rs. {totalAmount.toFixed(2)}</strong> to account number <span className="font-mono font-bold bg-slate-200/60 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-900 dark:text-white">{paymentMethods.find(m => m.id === selectedMethodId)?.account_number}</span> ({paymentMethods.find(m => m.id === selectedMethodId)?.account_name}).
+                        </li>
+                        <li>
+                          In the <strong>Remarks / Purpose</strong> field, write: <span className="font-mono font-bold bg-[#163E6B]/10 dark:bg-[#D4A72C]/10 text-[#163E6B] dark:text-[#D4A72C] px-1.5 py-0.5 rounded">Order #{createdOrder?.id}</span>
+                        </li>
+                        <li>
+                          Complete the transaction, take a <strong>screenshot</strong> of the completed payment receipt, and copy the <strong>Transaction ID / Reference Code</strong>.
+                        </li>
+                        <li>
+                          Enter the Transaction ID and upload the screenshot below, then click <strong>Confirm & Submit Payment</strong>.
+                        </li>
+                      </ol>
+
+                      {paymentMethods.find(m => m.id === selectedMethodId)?.instructions && (
+                        <div className="pt-2 border-t border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400">
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">Specific Note:</span> {paymentMethods.find(m => m.id === selectedMethodId)?.instructions}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 

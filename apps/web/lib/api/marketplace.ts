@@ -37,6 +37,7 @@ export interface Product {
   discount_price: string | null;
   marked_price?: string | null;
   final_price: string;
+  delivery_fee?: string;
   cover_image: string | null;
   is_published: boolean;
   is_seller_listing: boolean;
@@ -64,6 +65,8 @@ export interface Product {
   isbn?: string;
   edition?: string;
   publication_year?: string;
+  published_date?: string;
+  total_pages?: number | null;
   brand?: string;
   seller?: number | null;
   seller_details?: SellerDetails | null;
@@ -222,14 +225,30 @@ export interface Order {
     | "REFUNDED";
   total_amount: string;
   delivery_fee: string;
+  final_total?: string;
   shipping_address: string;
   contact_number: string;
+  shipping_address_snapshot?: Record<string, any>;
   delivery_address_ref?: number | null;
   delivery_address_details?: DeliveryAddress;
   items: OrderItem[];
   status_history?: OrderStatusHistory[];
   created_at: string;
   updated_at: string;
+}
+
+export interface ProfileAddressResponse {
+  full_name: string;
+  phone_number: string;
+  province: string;
+  district: string;
+  municipality: string;
+  ward_number: string;
+  tole_area: string;
+  street_landmark: string;
+  delivery_note: string;
+  missing_fields: string[];
+  is_profile_complete: boolean;
 }
 
 /** Seller's view of an order (buyer identity is anonymized) */
@@ -499,7 +518,13 @@ export const marketplaceApi = {
       method: "POST",
     });
   },
-  calculateFee: async (data: { delivery_address_id: number }) => {
+  calculateFee: async (data: {
+    delivery_address_id?: number;
+    product_id?: number;
+    province?: string;
+    district?: string;
+    municipality?: string;
+  }) => {
     return apiClient<{ delivery_fee: string | number }>(
       "/marketplace/student/orders/calculate_fee/",
       { method: "POST", body: JSON.stringify(data) }
@@ -507,14 +532,22 @@ export const marketplaceApi = {
   },
   createOrder: async (data: {
     delivery_address_id?: number;
+    delivery_address?: Partial<DeliveryAddress>;
     shipping_address?: string;
     contact_number?: string;
     note?: string;
+    save_to_addresses?: boolean;
+    is_default?: boolean;
   }) => {
     return apiClient<Order>("/marketplace/student/orders/checkout/", {
       method: "POST",
       body: JSON.stringify(data),
     });
+  },
+  getProfileAddress: async () => {
+    return apiClient<ProfileAddressResponse>(
+      "/marketplace/student/delivery-addresses/profile-address/"
+    );
   },
 
   // Student - Delivery Addresses

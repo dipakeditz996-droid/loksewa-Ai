@@ -39,6 +39,9 @@ interface ProductFormState {
   publisher: string;
   isbn: string;
   edition: string;
+  published_date: string;
+  total_pages: string;
+  delivery_fee: string;
   location: string;
 }
 
@@ -46,7 +49,8 @@ const EMPTY_FORM: ProductFormState = {
   title: "", description: "", category: "NEW_BOOK", target_position: "",
   price: "0", discount_price: "", is_published: false,
   features: "", cover_image: null,
-  stock: "1", condition: "NEW", author: "", publisher: "", isbn: "", edition: "", location: ""
+  stock: "1", condition: "NEW", author: "", publisher: "", isbn: "", edition: "",
+  published_date: "", total_pages: "", delivery_fee: "0", location: ""
 };
 
 export default function MarketplaceProductsPage() {
@@ -112,6 +116,9 @@ export default function MarketplaceProductsPage() {
       publisher: product.publisher || "",
       isbn: product.isbn || "",
       edition: product.edition || "",
+      published_date: product.published_date || "",
+      total_pages: product.total_pages !== undefined && product.total_pages !== null ? String(product.total_pages) : "",
+      delivery_fee: product.delivery_fee !== undefined && product.delivery_fee !== null ? String(product.delivery_fee) : "0",
       location: product.location || "",
     });
     setFormError("");
@@ -136,6 +143,9 @@ export default function MarketplaceProductsPage() {
       publisher: product.publisher || "",
       isbn: product.isbn || "",
       edition: product.edition || "",
+      published_date: product.published_date || "",
+      total_pages: product.total_pages !== undefined && product.total_pages !== null ? String(product.total_pages) : "",
+      delivery_fee: product.delivery_fee !== undefined && product.delivery_fee !== null ? String(product.delivery_fee) : "0",
       location: product.location || "",
     });
     setFormError("");
@@ -165,6 +175,20 @@ export default function MarketplaceProductsPage() {
       if (form.publisher) data.append("publisher", form.publisher);
       if (form.isbn) data.append("isbn", form.isbn);
       if (form.edition) data.append("edition", form.edition);
+      if (form.published_date) data.append("published_date", form.published_date);
+      if (form.total_pages) {
+        data.append("total_pages", form.total_pages);
+      } else if (editingProduct) {
+        data.append("total_pages", "");
+      }
+      if (form.delivery_fee !== undefined && form.delivery_fee !== "") {
+        if (Number(form.delivery_fee) < 0) {
+          setFormError("Delivery fee cannot be negative.");
+          setSubmitting(false);
+          return;
+        }
+        data.append("delivery_fee", form.delivery_fee);
+      }
       if (form.location) data.append("location", form.location);
       data.append(
         "features",
@@ -285,6 +309,13 @@ export default function MarketplaceProductsPage() {
                           <span className="font-bold text-slate-800">Rs. {product.price}</span>
                         )}
                       </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {Number(product.delivery_fee) > 0 ? (
+                          <span>Delivery: Rs. {product.delivery_fee}</span>
+                        ) : (
+                          <span className="text-emerald-600 font-medium">Free Delivery</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getStatusColor(product.is_published)}`}>
@@ -371,7 +402,7 @@ export default function MarketplaceProductsPage() {
                   <Input value={form.target_position} onChange={(e) => setForm({ ...form, target_position: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold text-slate-700">Price (Rs.)</label>
                   <Input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
@@ -379,6 +410,10 @@ export default function MarketplaceProductsPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold text-slate-700">Discount Price (Rs.)</label>
                   <Input type="number" min="0" value={form.discount_price} onChange={(e) => setForm({ ...form, discount_price: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Delivery Fee (Rs.)</label>
+                  <Input type="number" min="0" step="any" value={form.delivery_fee} onChange={(e) => setForm({ ...form, delivery_fee: e.target.value })} placeholder="0" />
                 </div>
               </div>
               <div className="flex gap-6">
@@ -435,6 +470,26 @@ export default function MarketplaceProductsPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-semibold text-slate-700">Edition</label>
                   <Input value={form.edition} onChange={(e) => setForm({ ...form, edition: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Published Date (optional)</label>
+                  <Input
+                    value={form.published_date}
+                    onChange={(e) => setForm({ ...form, published_date: e.target.value })}
+                    placeholder="e.g. 2081 B.S. or 2024"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">Total Pages (optional)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.total_pages}
+                    onChange={(e) => setForm({ ...form, total_pages: e.target.value })}
+                    placeholder="e.g. 450"
+                  />
                 </div>
               </div>
               <div className="space-y-1.5">

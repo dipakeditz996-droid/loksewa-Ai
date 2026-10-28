@@ -57,16 +57,28 @@ export function MarketplaceSection({ products }: Props) {
               <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] overflow-hidden hover:border-violet-500/30 dark:hover:border-violet-500/30 transition-all shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.4)] card-hover h-full flex flex-col">
                 
                 {/* Image placeholder (gradient) */}
-                <div className={`h-[140px] relative ${p.image || "bg-gradient-to-br from-violet-500 to-blue-600"} p-4 flex flex-col justify-between overflow-hidden`}>
+                <div className={`h-[170px] relative ${p.image || "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900"} p-3 flex flex-col justify-between overflow-hidden`}>
                   {p.cover_image && (
-                    <Image
-                      src={buildMediaUrl(p.cover_image)}
-                      alt={p.title || "Book cover"}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      unoptimized
-                    />
+                    <>
+                      <Image
+                        src={buildMediaUrl(p.cover_image)}
+                        alt=""
+                        fill
+                        className="object-cover blur-xl opacity-30 scale-125 pointer-events-none"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        unoptimized
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center p-2.5">
+                        <Image
+                          src={buildMediaUrl(p.cover_image)}
+                          alt={p.title || "Book cover"}
+                          width={140}
+                          height={170}
+                          className="max-h-full max-w-full object-contain rounded-[4px] shadow-md group-hover:scale-105 transition-transform duration-300"
+                          unoptimized
+                        />
+                      </div>
+                    </>
                   )}
                   <div className="relative flex justify-between items-start">
                     <span className="text-[10px] font-[800] uppercase tracking-wide bg-white/20 text-white backdrop-blur-md px-2.5 py-1 rounded-full flex items-center gap-1.5">

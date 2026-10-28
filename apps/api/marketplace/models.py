@@ -1,3 +1,4 @@
+from decimal import Decimal
 # pyrefly: ignore [missing-import]
 from django.db import models
 # pyrefly: ignore [missing-import]
@@ -69,6 +70,8 @@ class Product(models.Model):
     isbn = models.CharField(max_length=20, blank=True)
     edition = models.CharField(max_length=50, blank=True)
     publication_year = models.CharField(max_length=4, blank=True)
+    published_date = models.CharField(max_length=100, blank=True, help_text='e.g. 2081 B.S. or 2024-05-01')
+    total_pages = models.PositiveIntegerField(null=True, blank=True, help_text='Total number of pages in the book')
     brand = models.CharField(max_length=255, blank=True)
 
     target_exam = models.ForeignKey(
@@ -86,6 +89,11 @@ class Product(models.Model):
     # Nullable here because non-seller (platform) products predate this field
     # and don't carry a printed MRP concept the same way.
     marked_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    delivery_fee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text="Standard delivery / shipping charge set by administrator. 0 = Free delivery."
+    )
 
     cover_image = models.ImageField(
         upload_to='marketplace/covers/', null=True, blank=True,
@@ -331,9 +339,13 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
-    # Store a snapshot of the shipping address as text
+    # Store a snapshot of the shipping address as text and structured JSON
     shipping_address = models.TextField(blank=True)
     contact_number = models.CharField(max_length=20, blank=True)
+    shipping_address_snapshot = models.JSONField(
+        default=dict, blank=True,
+        help_text="Immutable snapshot of delivery address at the time the order was placed."
+    )
 
     delivery_address_ref = models.ForeignKey(
         DeliveryAddress, on_delete=models.SET_NULL, null=True, blank=True,

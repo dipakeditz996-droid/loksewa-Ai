@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { publicApi, type PublicProduct } from "@/lib/api/public-api";
+import { buildMediaUrl } from "@/lib/api/client";
 
 type ProductType = "Physical" | "Digital";
 
@@ -89,7 +90,7 @@ function mapProduct(p: PublicProduct, idx: number): Product {
     isBestSeller: false,
     isNewArrival: false,
     imageColor: IMAGE_GRADIENTS[idx % IMAGE_GRADIENTS.length] as string,
-    coverImage: p.cover_image,
+    coverImage: p.cover_image ? buildMediaUrl(p.cover_image) : null,
     condition: p.condition,
     sellerName: p.seller_details
       ? `${p.seller_details.first_name || ""}${(p.seller_details as any).last_name ? ` ${(p.seller_details as any).last_name}` : ""}`.trim() || null
@@ -446,23 +447,52 @@ export default function MarketplacePage() {
                         onClick={() => router.push(`/marketplace/product/${product.id}`)}
                       >
                         {/* Product Image Area */}
-                        <div className={`relative h-48 w-full ${product.coverImage ? "" : `bg-gradient-to-br ${product.imageColor}`}`}>
+                        <div className="relative h-64 w-full bg-slate-100/90 dark:bg-slate-900/50 border-b border-slate-200/60 dark:border-white/5 flex items-center justify-center p-4 overflow-hidden">
                           {product.coverImage ? (
-                            <img src={product.coverImage} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
+                            <>
+                              <img
+                                src={product.coverImage}
+                                alt=""
+                                aria-hidden="true"
+                                className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-25 dark:opacity-20 pointer-events-none select-none"
+                              />
+                              <div className="relative z-10 h-full w-full flex items-center justify-center">
+                                <img
+                                  src={product.coverImage}
+                                  alt={product.name}
+                                  className="max-h-full max-w-full object-contain rounded-[6px] shadow-[0_6px_16px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.6)] group-hover:scale-105 group-hover:shadow-[0_10px_25px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out"
+                                />
+                              </div>
+                            </>
                           ) : (
-                            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff1a_1px,transparent_1px),linear-gradient(to_bottom,#ffffff1a_1px,transparent_1px)] bg-[size:12px_12px]"></div>
+                            <div className={`relative z-10 w-32 h-44 rounded-[6px] bg-gradient-to-br ${product.imageColor} p-3 flex flex-col justify-between shadow-[0_6px_16px_rgba(0,0,0,0.18)] border-l-4 border-amber-400/80 group-hover:scale-105 transition-all duration-300`}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-black uppercase tracking-wider text-white/80">Loksewa</span>
+                                <BookOpen className="w-3.5 h-3.5 text-white/80" />
+                              </div>
+                              <div>
+                                <p className="text-[11px] font-bold text-white line-clamp-3 leading-tight mb-1">
+                                  {product.name}
+                                </p>
+                                <span className="text-[9px] text-white/70 font-medium">
+                                  {product.category}
+                                </span>
+                              </div>
+                              <div className="text-[8px] text-white/50 uppercase tracking-widest font-mono">
+                                Study Resource
+                              </div>
+                            </div>
                           )}
 
                           {/* Wishlist Button */}
                           <button
-                            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 sm:bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-white/20"
+                            className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/40 sm:bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-white/20"
                             onClick={handleWishlist}
                             aria-label="Add to wishlist"
                           >
                             <Heart className="w-4 h-4 text-white" />
                           </button>
                         </div>
-
                         {/* Product Details */}
                         <div className="p-5 flex flex-col flex-1">
                           {/* Category + Seller type badges */}

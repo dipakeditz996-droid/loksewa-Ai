@@ -39,9 +39,23 @@ class SafeSellerSerializer(serializers.ModelSerializer):
         return obj.date_joined.strftime('%b %Y') if obj.date_joined else None
 
 
+class OptionalIntegerField(serializers.IntegerField):
+    def to_internal_value(self, data):
+        if data == '' or data is None:
+            return None
+        return super().to_internal_value(data)
+
+
 class ProductSerializer(serializers.ModelSerializer):
     description = serializers.CharField(required=False, allow_blank=True, default='')
+    published_date = serializers.CharField(required=False, allow_blank=True, default='')
+    total_pages = OptionalIntegerField(required=False, allow_null=True)
     final_price = serializers.ReadOnlyField()
+    delivery_fee = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, min_value=Decimal('0.00'),
+        default=Decimal('0.00'),
+        error_messages={'min_value': 'Delivery fee cannot be negative.'}
+    )
     is_seller_listing = serializers.ReadOnlyField()
     images = ProductImageSerializer(many=True, read_only=True)
     seller_details = serializers.SerializerMethodField()
@@ -89,6 +103,8 @@ class SellerListingSerializer(serializers.ModelSerializer):
     so a direct API call can't bypass it.
     """
     description = serializers.CharField(required=False, allow_blank=True, default='')
+    published_date = serializers.CharField(required=False, allow_blank=True, default='')
+    total_pages = OptionalIntegerField(required=False, allow_null=True)
     final_price = serializers.ReadOnlyField()
     is_seller_listing = serializers.ReadOnlyField()
     images = ProductImageSerializer(many=True, read_only=True)
@@ -115,7 +131,7 @@ class SellerListingSerializer(serializers.ModelSerializer):
         exclude = ()
         read_only_fields = (
             'seller', 'is_published', 'listing_status', 'rejection_reason',
-            'created_at', 'updated_at',
+            'delivery_fee', 'created_at', 'updated_at',
         )
 
     def validate(self, data):
@@ -253,11 +269,18 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     delivery_address_details = DeliveryAddressSerializer(source='delivery_address_ref', read_only=True)
     status_history = OrderStatusHistorySerializer(many=True, read_only=True)
+    final_total = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = '__all__'
-        read_only_fields = ('student', 'total_amount', 'delivery_fee', 'status', 'created_at', 'updated_at')
+        read_only_fields = (
+            'student', 'total_amount', 'delivery_fee', 'status',
+            'shipping_address_snapshot', 'created_at', 'updated_at'
+        )
+
+    def get_final_total(self, obj):
+        return (obj.total_amount + obj.delivery_fee).quantize(Decimal('0.01'))
 
 
 class DeliveryFeeRuleSerializer(serializers.ModelSerializer):

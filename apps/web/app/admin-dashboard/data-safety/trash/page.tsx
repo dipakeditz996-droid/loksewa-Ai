@@ -15,6 +15,10 @@ import {
   ShieldAlert,
   Info,
   X,
+  Clock,
+  Calendar,
+  Sparkles,
+  Settings2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +46,18 @@ export default function AdminTrashPage() {
   const [permDeleteConfirmText, setPermDeleteConfirmText] = useState("");
   const [isDeletingPermanently, setIsDeletingPermanently] = useState(false);
 
+  // Auto-Empty Retention Timeline State
+  const [retentionDays, setRetentionDays] = useState<number>(30);
+  const [isRetentionModalOpen, setIsRetentionModalOpen] = useState(false);
+  const [selectedRetentionDays, setSelectedRetentionDays] = useState<number>(30);
+  const [customDaysValue, setCustomDaysValue] = useState<string>("");
+  const [isSavingRetention, setIsSavingRetention] = useState(false);
+
+  // Empty Recycle Bin State
+  const [isEmptyTrashModalOpen, setIsEmptyTrashModalOpen] = useState(false);
+  const [emptyTrashConfirmText, setEmptyTrashConfirmText] = useState("");
+  const [isEmptyingTrash, setIsEmptyingTrash] = useState(false);
+
   // Parent restore prompt state
   const [parentRestorePrompt, setParentRestorePrompt] = useState<{
     item: TrashItem;
@@ -68,9 +84,25 @@ export default function AdminTrashPage() {
     }
   };
 
+  const fetchRetentionPolicy = async () => {
+    try {
+      const res = await adminDataSafetyApi.getTrashRetention();
+      if (typeof res?.retention_days === "number") {
+        setRetentionDays(res.retention_days);
+        setSelectedRetentionDays(res.retention_days);
+      }
+    } catch (err) {
+      console.warn("Could not load trash retention policy:", err);
+    }
+  };
+
   useEffect(() => {
     fetchTrashItems();
   }, [page, selectedModule, protectedFilter]);
+
+  useEffect(() => {
+    fetchRetentionPolicy();
+  }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +166,57 @@ export default function AdminTrashPage() {
     }
   };
 
+  const handleEmptyTrash = async () => {
+    if (emptyTrashConfirmText !== "EMPTY TRASH") {
+      toast.error("Please type EMPTY TRASH exactly as shown to proceed.");
+      return;
+    }
+
+    try {
+      setIsEmptyingTrash(true);
+      toast.loading("Emptying recycle bin...", { id: "empty-trash" });
+      const res = await adminDataSafetyApi.emptyTrash();
+      toast.success(
+        res.message || `Recycle bin emptied (${res.purged_count} recoverable items purged).`,
+        { id: "empty-trash" }
+      );
+      setIsEmptyTrashModalOpen(false);
+      setEmptyTrashConfirmText("");
+      fetchTrashItems();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to empty recycle bin.", { id: "empty-trash" });
+    } finally {
+      setIsEmptyingTrash(false);
+    }
+  };
+
+  const handleSaveRetention = async () => {
+    const daysToSave = customDaysValue !== "" ? parseInt(customDaysValue, 10) : selectedRetentionDays;
+    if (isNaN(daysToSave) || daysToSave < 0 || daysToSave > 365) {
+      toast.error("Please choose a valid retention period between 0 and 365 days.");
+      return;
+    }
+
+    try {
+      setIsSavingRetention(true);
+      toast.loading("Updating auto-empty timeline...", { id: "save-retention" });
+      const res = await adminDataSafetyApi.setTrashRetention(daysToSave);
+      setRetentionDays(res.retention_days);
+      setSelectedRetentionDays(res.retention_days);
+      setCustomDaysValue("");
+      toast.success(
+        res.message || `Auto-empty timeline set to ${res.retention_days} days.`,
+        { id: "save-retention" }
+      );
+      setIsRetentionModalOpen(false);
+      fetchTrashItems();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update retention timeline.", { id: "save-retention" });
+    } finally {
+      setIsSavingRetention(false);
+    }
+  };
+
   const modules = ["Academic", "Exams", "Courses", "Notes", "Packages", "Marketplace"];
 
   return (
@@ -163,7 +246,43 @@ export default function AdminTrashPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Auto-Empty Retention Timeline Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedRetentionDays(retentionDays);
+              setCustomDaysValue("");
+              setIsRetentionModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-medium"
+            title="Configure auto-empty timeline"
+          >
+            <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+            <span>
+              Auto-Empty:{" "}
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                {retentionDays === 0 ? "Disabled (Manual)" : `${retentionDays} Days`}
+              </span>
+            </span>
+          </Button>
+
+          {/* Empty Recycle Bin Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEmptyTrashConfirmText("");
+              setIsEmptyTrashModalOpen(true);
+            }}
+            disabled={totalCount === 0}
+            className="flex items-center gap-1.5 border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-xs font-medium"
+          >
+            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+            <span>Empty Recycle Bin</span>
+          </Button>
+
           <Button variant="outline" size="sm" onClick={() => fetchTrashItems()}>
             Refresh
           </Button>
@@ -582,6 +701,205 @@ export default function AdminTrashPage() {
                 className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
               >
                 {isDeletingPermanently ? "Permanently Deleting..." : "Delete Permanently"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Empty Recycle Bin Confirmation Modal */}
+      {isEmptyTrashModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-rose-300 dark:border-rose-900 rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 bg-rose-100 dark:bg-rose-950/60 rounded-full">
+                <Trash2 className="h-6 w-6 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                  Empty Entire Recycle Bin
+                </h3>
+                <p className="text-xs text-rose-600 font-medium">
+                  Permanently purge all recoverable soft-deleted items.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+              <div className="font-semibold flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <span>Safeguard Protection Notice</span>
+              </div>
+              <p>
+                All <strong>recoverable</strong> soft-deleted records will be permanently removed.
+              </p>
+              <p>
+                <strong>Shielded items</strong> (records tied to student attempts, order histories, or parent hierarchy dependencies) will remain <strong>safely preserved</strong> to prevent database corruption.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                To confirm emptying the recycle bin, type <span className="font-mono text-rose-600 font-bold">EMPTY TRASH</span> below:
+              </label>
+              <Input
+                placeholder="EMPTY TRASH"
+                value={emptyTrashConfirmText}
+                onChange={(e) => setEmptyTrashConfirmText(e.target.value)}
+                className="font-mono text-sm border-rose-300 focus-visible:ring-rose-500"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isEmptyingTrash}
+                onClick={() => {
+                  setIsEmptyTrashModalOpen(false);
+                  setEmptyTrashConfirmText("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={emptyTrashConfirmText !== "EMPTY TRASH" || isEmptyingTrash}
+                onClick={handleEmptyTrash}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+              >
+                {isEmptyingTrash ? "Emptying Recycle Bin..." : "Empty Recycle Bin Now"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 5: Auto-Empty Retention Timeline Modal */}
+      {isRetentionModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border rounded-xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 rounded-lg text-indigo-600 dark:text-indigo-400">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                    Auto-Empty Retention Timeline
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Set how long soft-deleted records remain in the Recycle Bin before automatic purging.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRetentionModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                Select Retention Timeline
+              </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                {[
+                  { days: 7, label: "7 Days", desc: "Aggressive cleanup" },
+                  { days: 14, label: "14 Days", desc: "Bi-weekly" },
+                  { days: 30, label: "30 Days", desc: "Recommended", badge: true },
+                  { days: 60, label: "60 Days", desc: "Extended retention" },
+                  { days: 90, label: "90 Days", desc: "Quarterly cleanup" },
+                  { days: 0, label: "Never", desc: "Manual cleanup only" },
+                ].map((opt) => {
+                  const isSelected = selectedRetentionDays === opt.days && customDaysValue === "";
+                  return (
+                    <button
+                      key={opt.days}
+                      type="button"
+                      onClick={() => {
+                        setSelectedRetentionDays(opt.days);
+                        setCustomDaysValue("");
+                      }}
+                      className={`p-3 text-left rounded-lg border text-sm transition-all flex flex-col justify-between ${
+                        isSelected
+                          ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="font-semibold text-slate-900 dark:text-white">
+                          {opt.label}
+                        </span>
+                        {opt.badge && (
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 px-1.5 py-0.5 rounded font-medium">
+                            Standard
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-500">{opt.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom timeline input */}
+              <div className="pt-2">
+                <label className="text-xs font-medium text-slate-600 dark:text-slate-400 block mb-1.5">
+                  Or specify custom days (1 – 365):
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    placeholder="e.g. 45"
+                    value={customDaysValue}
+                    onChange={(e) => {
+                      setCustomDaysValue(e.target.value);
+                      const parsed = parseInt(e.target.value, 10);
+                      if (!isNaN(parsed)) setSelectedRetentionDays(parsed);
+                    }}
+                    className="w-32 text-sm"
+                  />
+                  <span className="text-xs text-slate-500">days</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-1">
+              <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5 text-indigo-500" />
+                <span>How Auto-Empty Works</span>
+              </div>
+              <p>
+                When a timeline is active (e.g. 30 days), any recoverable item soft-deleted more than 30 days ago is automatically purged. Shielded items with live dependencies are safely skipped.
+              </p>
+              <p>
+                Selecting <strong>Never</strong> disables automatic purging, allowing items to stay in the Recycle Bin until an administrator explicitly empties it.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isSavingRetention}
+                onClick={() => setIsRetentionModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={isSavingRetention}
+                onClick={handleSaveRetention}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+              >
+                {isSavingRetention ? "Saving Timeline..." : "Save Retention Timeline"}
               </Button>
             </div>
           </div>

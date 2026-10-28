@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { 
   Search, Filter, PlusCircle, FileText, ChevronRight, MoreHorizontal, ClipboardList, Inbox, Award,
   Clock, DownloadCloud, Lock, Unlock, Eye, HelpCircle, Archive, Trash2, Calendar, FileCheck
@@ -62,45 +63,37 @@ export default function ExamsOverviewPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [majorArea, setMajorArea] = useState<"all" | "topicwise" | "objective" | "subjective">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [exams, setExams] = useState<Examination[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<any>(null);
-  
-  // Pagination
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
-  useEffect(() => {
-    fetchData();
-  }, [page]);
+  const { data: stats } = useQuery({
+    queryKey: ["admin-exams-overview"],
+    queryFn: () => adminExamApi.getOverview(),
+    staleTime: 60_000,
+  });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [overviewData, examsData] = await Promise.all([
-        adminExamApi.getOverview(),
-        adminExamApi.getExams({ page } as any) // Assuming pagination is supported, if not it will ignore
-      ]);
-      setStats(overviewData);
-      
-      if (examsData && Array.isArray(examsData.results)) {
-        setExams(examsData.results);
-        setTotalCount(examsData.count);
-        setTotalPages(Math.ceil(examsData.count / 10)); // Assuming 10 per page
-      } else {
-        // Fallback if not paginated
-        setExams(examsData as any);
-        setTotalCount((examsData as any).length);
-        setTotalPages(1);
-      }
-    } catch (error) {
-      console.error("Failed to fetch exams data:", error);
-      toast.error("Failed to load exams");
-    } finally {
-      setLoading(false);
+  const { data: examsData, isLoading: loading } = useQuery({
+    queryKey: ["admin-exams", page],
+    queryFn: () => adminExamApi.getExams({ page } as any),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+
+  const exams: Examination[] = React.useMemo(() => {
+    if (!examsData) return [];
+    if (Array.isArray((examsData as any).results)) {
+      return (examsData as any).results;
     }
-  };
+    if (Array.isArray(examsData)) {
+      return examsData;
+    }
+    return [];
+  }, [examsData]);
+
+  const totalCount = examsData && Array.isArray((examsData as any).results)
+    ? (examsData as any).count
+    : (Array.isArray(examsData) ? examsData.length : 0);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / 20));
 
   const filteredExams = exams
     .filter(e =>

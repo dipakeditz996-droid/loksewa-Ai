@@ -59,7 +59,7 @@ export default function PracticePage() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto mb-10">
             <div className="relative w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />https://127.0.0.1:64554/static/artifacts/6142294a-0a87-49a5-81fc-c186bff40f53/.user_uploaded/media_1792467929653.png?csrf=95ff603e-72ca-40d6-8428-d741f381e215
               <input 
                 type="text" 
                 placeholder="Search questions, subjects, topics, or practice sets..." 

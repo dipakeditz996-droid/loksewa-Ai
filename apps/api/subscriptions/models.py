@@ -233,14 +233,15 @@ class Subscription(models.Model):
         super().save(*args, **kwargs)
         if self.student_id:
             from courses.access import invalidate_student_course_context
-            invalidate_student_course_context(self.student_id)
+            invalidate_student_course_context(self.student or self.student_id)
 
     def delete(self, *args, **kwargs):
+        student = self.student if self.student_id else None
         student_id = self.student_id
         super().delete(*args, **kwargs)
-        if student_id:
+        if student or student_id:
             from courses.access import invalidate_student_course_context
-            invalidate_student_course_context(student_id)
+            invalidate_student_course_context(student or student_id)
 
 
 class StudentEntitlement(models.Model):

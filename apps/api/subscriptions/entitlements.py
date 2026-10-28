@@ -102,9 +102,10 @@ class EntitlementService:
         return cls.activate_free_plan(user, default_plan)
 
     @classmethod
-    def activate_free_plan(cls, user: User, plan: SubscriptionPlan) -> Subscription:
+    def activate_free_plan(cls, user: User, plan: SubscriptionPlan, course_ids: Optional[List[int]] = None) -> Subscription:
         """
         Activates a genuinely free plan for a student with transactional safety.
+        Supports single course, bundle, and multi-selection preparation enrollments.
         """
         if plan.price > 0:
             raise ValueError("Only zero-cost packages can be activated as Free Plans.")
@@ -136,13 +137,46 @@ class EntitlementService:
                     expiry_date=expiry,
                 )
 
-            # Auto-enroll in plan course if SINGLE or BUNDLE
-            if plan.course_id and plan.course and plan.course.status == 'published':
-                from courses.models import Enrollment
+            # Auto-enroll in plan course if SINGLE, BUNDLE, or MULTI
+            from courses.models import Course, Enrollment
+            from .models import SubscriptionCourseSelection
+            
+            if plan.package_type == 'BUNDLE':
+                for c in plan.eligible_courses.filter(status='published'):
+                    Enrollment.objects.get_or_create(
+                        student=user,
+                        course=c,
+                        defaults={'status': 'active'}
+                    )
+                    SubscriptionCourseSelection.objects.get_or_create(
+                        subscription=sub,
+                        course=c,
+                    )
+            elif plan.package_type == 'MULTI' and course_ids:
+                allowed_count = plan.allowed_preparation_count or 1
+                valid_courses = Course.objects.filter(id__in=course_ids[:allowed_count], status='published')
+                eligible_ids = set(plan.eligible_courses.values_list('id', flat=True))
+                if eligible_ids:
+                    valid_courses = valid_courses.filter(id__in=eligible_ids)
+                for c in valid_courses:
+                    Enrollment.objects.get_or_create(
+                        student=user,
+                        course=c,
+                        defaults={'status': 'active'}
+                    )
+                    SubscriptionCourseSelection.objects.get_or_create(
+                        subscription=sub,
+                        course=c,
+                    )
+            elif plan.course_id and plan.course and plan.course.status == 'published':
                 Enrollment.objects.get_or_create(
                     student=user,
                     course=plan.course,
                     defaults={'status': 'active'}
+                )
+                SubscriptionCourseSelection.objects.get_or_create(
+                    subscription=sub,
+                    course=plan.course,
                 )
 
             # Initialize entitlements & quotas
@@ -153,9 +187,13 @@ class EntitlementService:
                 reason="Activated Free Plan"
             )
 
-            # Invalidate cached context
+            # Invalidate cached context on user and caches
+            from courses.services.course_access_service import CourseAccessService
+            CourseAccessService.clear_user_cache(user)
+            setattr(user, '_cached_active_subscription', sub)
+
             from courses.access import invalidate_student_course_context
-            invalidate_student_course_context(user.id)
+            invalidate_student_course_context(user)
 
         return sub
 
@@ -1198,6 +1236,21 @@ class EntitlementService:
                 mod_key = f"module:{mod}"
                 mod_en = 1 if (mod_key not in fl or (isinstance(fl[mod_key], dict) and fl[mod_key].get('enabled', True))) else 0
                 cls._grant_single_entitlement(student, subscription, mod_key, mod_en, reset_freq, admin_user, reason or f"Granted {plan.name} {mod} access")
+
+            from courses.services.course_access_service import CourseAccessService
+            CourseAccessService.clear_user_cache(student)
+            if subscription and subscription.is_active:
+                setattr(student, '_cached_active_subscription', subscription)
+            elif hasattr(student, '_cached_active_subscription'):
+                try:
+                    delattr(student, '_cached_active_subscription')
+                except AttributeError:
+                    pass
+            try:
+                from django.core.cache import cache
+                cache.delete(f'student_entitlements:{student.id}')
+            except Exception:
+                pass
 
     @classmethod
     def admin_adjust_quota(cls, student: User, feature: str, delta: int, admin_user: User, reason: str) -> StudentEntitlement:

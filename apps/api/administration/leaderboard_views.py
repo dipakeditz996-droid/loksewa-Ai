@@ -12,6 +12,8 @@ Ranking and aggregation are done by the database. Rank is derived from the
 page offset over a fully deterministic ORDER BY, so it is stable across pages
 and never computed in the browser.
 """
+from django.conf import settings
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Q, Sum, Value
 from django.db.models.functions import Coalesce
@@ -88,6 +90,23 @@ class AdminLeaderboardView(APIView):
             qs = qs.filter(enrollments__course_id=course_id, enrollments__status='active')
 
         search = (request.query_params.get('search') or '').strip()
+
+        try:
+            page_size = min(max(int(request.query_params.get('page_size', 20)), 1), 100)
+        except (TypeError, ValueError):
+            page_size = 20
+        try:
+            page_number = max(int(request.query_params.get('page', 1)), 1)
+        except (TypeError, ValueError):
+            page_number = 1
+
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            cache_key = f"admin:leaderboard:{category}:{period}:{course_id or 'all'}:{search}:{page_number}:{page_size}"
+            cached_payload = cache.get(cache_key)
+            if cached_payload is not None:
+                return Response(cached_payload)
+
         if search:
             qs = qs.filter(
                 Q(username__icontains=search) |
@@ -96,7 +115,8 @@ class AdminLeaderboardView(APIView):
                 Q(last_name__icontains=search)
             )
 
-        # ── Annotations, all computed in SQL ──────────────────────────────────
+        base_student_qs = qs
+
         attempt_filter = Q(examination_attempts__status__in=['submitted', 'evaluated'])
         if since:
             attempt_filter &= Q(examination_attempts__submitted_at__gte=since)
@@ -150,7 +170,7 @@ class AdminLeaderboardView(APIView):
         # of queries regardless of how many students match.
         student_ids = qs.values('id')
 
-        total_students = qs.count()
+        total_students = base_student_qs.count()
 
         if since:
             xp_rows = XPTransaction.objects.filter(
@@ -178,20 +198,15 @@ class AdminLeaderboardView(APIView):
         )['value']
 
         # "Active" means the student has actually done something measurable.
-        active_students = qs.filter(
-            Q(current_streak__gt=0) | Q(exams_completed__gt=0)
-        ).count()
-
-        try:
-            page_size = min(max(int(request.query_params.get('page_size', 20)), 1), 100)
-        except (TypeError, ValueError):
-            page_size = 20
-        try:
-            page_number = max(int(request.query_params.get('page', 1)), 1)
-        except (TypeError, ValueError):
-            page_number = 1
+        active_attempt_filter = Q(examination_attempts__status__in=['submitted', 'evaluated'])
+        if since:
+            active_attempt_filter &= Q(examination_attempts__submitted_at__gte=since)
+        active_students = base_student_qs.order_by().filter(
+            Q(gamification_profile__study_current_streak__gt=0) | active_attempt_filter
+        ).values('id').distinct().count()
 
         paginator = Paginator(qs, page_size)
+        paginator.count = total_students
         page = paginator.get_page(page_number)
         offset = (page.number - 1) * page_size
 
@@ -214,7 +229,7 @@ class AdminLeaderboardView(APIView):
                 'best_score': round(user.best_score or 0, 2),
             })
 
-        return Response({
+        payload = {
             'count': paginator.count,
             'page': page.number,
             'page_size': page_size,
@@ -231,4 +246,7 @@ class AdminLeaderboardView(APIView):
                 'active_students': active_students,
             },
             'results': results,
-        })
+        }
+        if use_cache:
+            cache.set(cache_key, payload, 60)
+        return Response(payload)

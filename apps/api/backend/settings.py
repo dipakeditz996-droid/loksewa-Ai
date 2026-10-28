@@ -580,8 +580,17 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'ai_tutor': os.environ.get('AI_TUTOR_THROTTLE_RATE', '20/minute'),
+    },
 }
+
+# --- AI TUTOR & GEMINI PROVIDER CONFIGURATION ---
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '').strip()
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-lite').strip()
+GEMINI_REQUEST_TIMEOUT = float(os.environ.get('GEMINI_REQUEST_TIMEOUT', '15.0'))
+GEMINI_MAX_OUTPUT_TOKENS = int(os.environ.get('GEMINI_MAX_OUTPUT_TOKENS', '800'))
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
@@ -594,6 +603,7 @@ SIMPLE_JWT = {
     # (JWT auth bypasses Django's session login signal), which silently
     # breaks any "active user" reporting built on it.
     'UPDATE_LAST_LOGIN': True,
+    'CHECK_REVOKE_TOKEN': True,
 }
 
 AUTH_USER_MODEL = 'core.User'

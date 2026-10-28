@@ -39,12 +39,43 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         qs = SubscriptionPlan.objects.select_related(
             'course', 'course__exam', 'course__exam__parent', 'course__exam__category'
         ).prefetch_related(
-            'eligible_courses', 'eligible_courses__exam', 'eligible_courses__exam__parent', 'eligible_courses__exam__category'
+            'eligible_courses', 'eligible_courses__exam', 'eligible_courses__exam__parent', 'eligible_courses__exam__category',
+            'free_mock_exams'
         ).order_by('display_order')
         user = self.request.user
         if not (user and user.is_authenticated and user.role in ('admin', 'super-admin')):
             qs = qs.filter(status='ACTIVE')
         return qs
+
+    def list(self, request, *args, **kwargs):
+        from django.conf import settings
+        is_admin = request.user and request.user.is_authenticated and request.user.role in ('admin', 'super-admin')
+        use_cache = is_admin and not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            from administration.cache_service import CACHE_KEY_PACKAGES_LIST
+            cached_data = cache.get(CACHE_KEY_PACKAGES_LIST)
+            if cached_data is not None:
+                return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+
+        if use_cache and response.status_code == 200:
+            from django.core.cache import cache
+            from administration.cache_service import CACHE_KEY_PACKAGES_LIST
+            cache.set(CACHE_KEY_PACKAGES_LIST, response.data, 60)
+
+        return response
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_packages()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_packages()
 
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
@@ -71,6 +102,8 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         }
 
         has_history = any(dependencies.values())
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_packages()
         if not has_history:
             plan_name = plan.name
             plan.delete()
@@ -280,11 +313,22 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
             return Response({'error': 'This is a paid package. Please complete the verified payment checkout.'}, status=status.HTTP_400_BAD_REQUEST)
         if plan.status != 'ACTIVE' or not plan.is_published:
             return Response({'error': 'This package is not currently available for activation.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Parse optional course_ids for MULTI/flexible preparations
+        raw_courses = request.data.getlist('course_ids') if hasattr(request.data, 'getlist') else request.data.get('course_ids', [])
+        course_ids = []
+        if isinstance(raw_courses, list):
+            course_ids = [int(c) for c in raw_courses if str(c).isdigit()]
+        elif isinstance(raw_courses, str):
+            course_ids = [int(c.strip()) for c in raw_courses.split(',') if c.strip().isdigit()]
+
         from .entitlements import EntitlementService
-        sub = EntitlementService.activate_free_plan(request.user, plan)
+        sub = EntitlementService.activate_free_plan(request.user, plan, course_ids=course_ids)
+        is_already_active = bool(sub.created_at and sub.created_at < timezone.now() - timedelta(seconds=2))
         return Response({
             'success': True,
             'status': 'activated',
+            'is_already_active': is_already_active,
             'subscription_id': sub.id,
             'plan_id': plan.id,
             'plan_name': plan.name,
@@ -401,8 +445,28 @@ class SubscriptionPaymentViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        from django.db.models import Prefetch
+        from courses.models import CourseApplication
+
         qs = SubscriptionPayment.objects.select_related(
-            'plan', 'student', 'plan__course', 'verified_by'
+            'plan',
+            'plan__course',
+            'plan__course__exam',
+            'plan__course__exam__category',
+            'plan__course__exam__parent',
+            'student',
+            'payment_method',
+            'verified_by',
+        ).prefetch_related(
+            'plan__free_mock_exams',
+            'plan__eligible_courses',
+            'plan__eligible_courses__exam',
+            'plan__eligible_courses__exam__category',
+            'plan__eligible_courses__exam__parent',
+            Prefetch(
+                'course_applications',
+                queryset=CourseApplication.objects.select_related('course', 'course__exam')
+            ),
         )
         if self.request.user.role in ['admin', 'super-admin']:
             return qs.order_by('-submitted_at')

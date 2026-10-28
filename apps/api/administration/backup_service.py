@@ -98,7 +98,6 @@ class BackupService:
         filename = f"{name.replace(' ', '_').lower()}.json.gz"
         file_path = str(cls.BACKUP_DIR / filename)
 
-        record_counts = cls.get_record_counts()
         db_engine = connection.settings_dict.get('ENGINE', 'unknown')
 
         # Retention duration
@@ -114,7 +113,7 @@ class BackupService:
             backup_type=backup_type,
             status='in_progress',
             db_engine=db_engine,
-            record_counts=record_counts,
+            record_counts={},
             schema_version='django_6.1',
             retention_until=retention_until,
             is_protected=is_protected,
@@ -124,14 +123,24 @@ class BackupService:
         hasher = hashlib.sha256()
 
         try:
-            # Query objects to serialize
+            # Query objects to serialize and capture record counts inline
+            record_counts = {}
             objects_to_serialize = []
             for model_str in cls.MODELS_TO_BACKUP:
                 try:
                     m = apps.get_model(model_str)
-                    objects_to_serialize.extend(m.objects.all().iterator(chunk_size=1000))
+                    m2m_names = [f.name for f in m._meta.many_to_many if getattr(f, 'serialize', True)]
+                    qs = m.objects.all()
+                    if m2m_names:
+                        qs = qs.prefetch_related(*m2m_names)
+                    items = list(qs)
+                    if items:
+                        objects_to_serialize.extend(items)
+                    record_counts[m._meta.verbose_name_plural.title()] = len(items)
                 except Exception as e:
                     logger.warning(f"Could not export model {model_str}: {e}")
+
+            backup.record_counts = record_counts
 
             # Stream into gzip
             with open(file_path, 'wb') as raw_file:

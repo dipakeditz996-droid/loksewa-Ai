@@ -364,6 +364,9 @@ class SafeDeleteService:
             }
         )
 
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_data_safety()
+
         return trash_item
 
     @classmethod
@@ -450,6 +453,9 @@ class SafeDeleteService:
             }
         )
 
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_data_safety()
+
         return {
             'success': True,
             'message': f"{trash_item.item_type} '{trash_item.title}' has been successfully restored.",
@@ -510,7 +516,170 @@ class SafeDeleteService:
             }
         )
 
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_data_safety()
+
         return {
             'success': True,
             'message': f"{trash_item.item_type} '{trash_item.title}' has been permanently deleted.",
+        }
+
+    @classmethod
+    def get_trash_retention_days(cls) -> int:
+        from django.core.cache import cache
+        from django.conf import settings
+        try:
+            cached = cache.get('admin:trash:retention_days')
+            if cached is not None:
+                return int(cached)
+        except Exception:
+            pass
+        latest = AuditLog.objects.filter(action='TRASH_RETENTION_POLICY_CHANGED').order_by('-timestamp').first()
+        if latest and isinstance(latest.details, dict) and 'retention_days' in latest.details:
+            days = int(latest.details['retention_days'])
+        else:
+            days = getattr(settings, 'TRASH_RETENTION_DAYS', 30)
+        try:
+            cache.set('admin:trash:retention_days', days, 86400 * 30)
+        except Exception:
+            pass
+        return days
+
+    @classmethod
+    def set_trash_retention_days(cls, days: int, user=None) -> int:
+        from django.core.cache import cache
+        try:
+            cache.set('admin:trash:retention_days', days, 86400 * 30)
+        except Exception:
+            pass
+        AuditLog.objects.create(
+            actor=user if user and user.is_authenticated else None,
+            action='TRASH_RETENTION_POLICY_CHANGED',
+            entity_type='TrashPolicy',
+            entity_id='retention',
+            details={'retention_days': days}
+        )
+        return days
+
+    @classmethod
+    def empty_trash(cls, user=None) -> dict:
+        """
+        Permanently deletes all non-protected/unshielded items in the trash.
+        Protected/shielded items are retained to protect historical references.
+        """
+        items = list(TrashItem.objects.filter(is_restored=False, is_permanent_deleted=False))
+        purged_count = 0
+        shielded_count = 0
+        now = timezone.now()
+
+        for trash_item in items:
+            try:
+                model_class = apps.get_model(trash_item.app_label, trash_item.model_name)
+                instance = model_class.objects.filter(pk=trash_item.object_id).first()
+            except LookupError:
+                instance = None
+
+            # Re-check live dependencies if instance exists
+            if instance:
+                dep_info = cls.check_dependencies(instance)
+                if dep_info['is_protected']:
+                    trash_item.is_protected = True
+                    trash_item.protection_reasons = dep_info['protection_reasons']
+                    trash_item.save(update_fields=['is_protected', 'protection_reasons'])
+                    shielded_count += 1
+                    continue
+                else:
+                    instance.delete()
+            elif trash_item.is_protected:
+                shielded_count += 1
+                continue
+
+            trash_item.is_permanent_deleted = True
+            trash_item.permanent_deleted_at = now
+            trash_item.permanent_deleted_by = user if user and user.is_authenticated else None
+            trash_item.save(update_fields=['is_permanent_deleted', 'permanent_deleted_at', 'permanent_deleted_by'])
+            purged_count += 1
+
+        AuditLog.objects.create(
+            actor=user if user and user.is_authenticated else None,
+            action='EMPTY_TRASH',
+            entity_type='TrashItem',
+            entity_id=None,
+            details={
+                'purged_count': purged_count,
+                'shielded_count': shielded_count,
+            }
+        )
+
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_data_safety()
+
+        msg = f"Recycle bin emptied. {purged_count} recoverable item(s) permanently removed."
+        if shielded_count > 0:
+            msg += f" {shielded_count} shielded item(s) preserved."
+
+        return {
+            'success': True,
+            'purged_count': purged_count,
+            'shielded_count': shielded_count,
+            'message': msg
+        }
+
+    @classmethod
+    def auto_clean_expired_trash(cls, user=None) -> dict:
+        """
+        Automatically cleans up trash items older than the configured retention days.
+        If retention_days is 0, auto-cleanup is disabled.
+        """
+        retention_days = cls.get_trash_retention_days()
+        if retention_days <= 0:
+            return {'purged_count': 0, 'retention_days': 0, 'message': 'Auto-cleanup is disabled (Never).'}
+
+        cutoff = timezone.now() - timezone.timedelta(days=retention_days)
+        expired_items = list(TrashItem.objects.filter(
+            deleted_at__lt=cutoff,
+            is_restored=False,
+            is_permanent_deleted=False,
+            is_protected=False,
+        ))
+
+        purged_count = 0
+        now = timezone.now()
+        for trash_item in expired_items:
+            try:
+                model_class = apps.get_model(trash_item.app_label, trash_item.model_name)
+                instance = model_class.objects.filter(pk=trash_item.object_id).first()
+                if instance:
+                    dep_info = cls.check_dependencies(instance)
+                    if dep_info['is_protected']:
+                        trash_item.is_protected = True
+                        trash_item.protection_reasons = dep_info['protection_reasons']
+                        trash_item.save(update_fields=['is_protected', 'protection_reasons'])
+                        continue
+                    instance.delete()
+            except Exception:
+                pass
+
+            trash_item.is_permanent_deleted = True
+            trash_item.permanent_deleted_at = now
+            trash_item.permanent_deleted_by = user if user and user.is_authenticated else None
+            trash_item.save(update_fields=['is_permanent_deleted', 'permanent_deleted_at', 'permanent_deleted_by'])
+            purged_count += 1
+
+        if purged_count > 0:
+            AuditLog.objects.create(
+                actor=user if user and user.is_authenticated else None,
+                action='TRASH_AUTO_CLEANUP',
+                entity_type='TrashItem',
+                entity_id=None,
+                details={'retention_days': retention_days, 'purged_count': purged_count}
+            )
+            from administration.cache_service import AdminCacheService
+            AdminCacheService.invalidate_data_safety()
+
+        return {
+            'success': True,
+            'purged_count': purged_count,
+            'retention_days': retention_days,
+            'message': f"Cleaned up {purged_count} expired item(s) older than {retention_days} days."
         }

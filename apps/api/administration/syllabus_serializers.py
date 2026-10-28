@@ -18,16 +18,20 @@ class ExamCategorySerializer(serializers.ModelSerializer):
         ]
 
     def get_position_count(self, obj):
-        return obj.exams.count()
+        val = getattr(obj, 'position_count_annotated', None)
+        return val if val is not None else obj.exams.count()
 
     def get_notes_count(self, obj):
-        return StudyMaterial.objects.filter(exam__category=obj).exclude(status='archived').count()
+        val = getattr(obj, 'notes_count_annotated', None)
+        return val if val is not None else StudyMaterial.objects.filter(exam__category=obj).exclude(status='archived').count()
 
     def get_questions_count(self, obj):
-        return Question.objects.filter(topic__chapter__subject__paper__exam__category=obj).count()
+        val = getattr(obj, 'questions_count_annotated', None)
+        return val if val is not None else Question.objects.filter(topic__chapter__subject__paper__exam__category=obj).count()
 
     def get_exams_count(self, obj):
-        return Examination.objects.filter(category=obj).count()
+        val = getattr(obj, 'exams_count_annotated', None)
+        return val if val is not None else Examination.objects.filter(category=obj).count()
 
 
 class ExamSerializer(serializers.ModelSerializer):
@@ -49,16 +53,20 @@ class ExamSerializer(serializers.ModelSerializer):
         read_only_fields = ['is_active']
 
     def get_paper_count(self, obj):
-        return obj.papers.count()
+        val = getattr(obj, 'paper_count_annotated', None)
+        return val if val is not None else obj.papers.count()
 
     def get_notes_count(self, obj):
-        return StudyMaterial.objects.filter(exam=obj).exclude(status='archived').count()
+        val = getattr(obj, 'notes_count_annotated', None)
+        return val if val is not None else StudyMaterial.objects.filter(exam=obj).exclude(status='archived').count()
 
     def get_questions_count(self, obj):
-        return Question.objects.filter(topic__chapter__subject__paper__exam=obj).count()
+        val = getattr(obj, 'questions_count_annotated', None)
+        return val if val is not None else Question.objects.filter(topic__chapter__subject__paper__exam=obj).count()
 
     def get_exams_count(self, obj):
-        return Examination.objects.filter(exam=obj).count()
+        val = getattr(obj, 'exams_count_annotated', None)
+        return val if val is not None else Examination.objects.filter(exam=obj).count()
 
 
 class PaperSerializer(serializers.ModelSerializer):
@@ -74,7 +82,8 @@ class PaperSerializer(serializers.ModelSerializer):
         ]
 
     def get_subject_count(self, obj):
-        return obj.subjects.count()
+        val = getattr(obj, 'subject_count_annotated', None)
+        return val if val is not None else obj.subjects.count()
 
 
 class SubjectSerializer(serializers.ModelSerializer):
@@ -100,18 +109,22 @@ class SubjectSerializer(serializers.ModelSerializer):
         }
 
     def get_chapter_count(self, obj):
-        return obj.chapters.count()
+        val = getattr(obj, 'chapter_count_annotated', None)
+        return val if val is not None else obj.chapters.count()
 
     def get_notes_count(self, obj):
-        return StudyMaterial.objects.filter(
+        val = getattr(obj, 'notes_count_annotated', None)
+        return val if val is not None else StudyMaterial.objects.filter(
             Q(subject=obj) | Q(chapter__subject=obj) | Q(topic__chapter__subject=obj)
         ).exclude(status='archived').distinct().count()
 
     def get_questions_count(self, obj):
-        return Question.objects.filter(topic__chapter__subject=obj).count()
+        val = getattr(obj, 'questions_count_annotated', None)
+        return val if val is not None else Question.objects.filter(topic__chapter__subject=obj).count()
 
     def get_exams_count(self, obj):
-        return Examination.objects.filter(
+        val = getattr(obj, 'exams_count_annotated', None)
+        return val if val is not None else Examination.objects.filter(
             Q(subject=obj) | Q(questions__topic__chapter__subject=obj)
         ).distinct().count()
 

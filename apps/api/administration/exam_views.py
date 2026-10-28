@@ -2,7 +2,8 @@ from rest_framework import viewsets, status, serializers, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from django.db.models import Count, Avg
+from django.db.models import Count, Avg, OuterRef, Subquery, IntegerField
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 import copy
 
@@ -174,15 +175,60 @@ class SubjectiveQuestionSetViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
+class ExaminationPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
-    queryset = Examination.objects.all().select_related('category', 'exam', 'subject', 'topic', 'question_set').order_by('-created_at')
+    _attempts_subquery = ExaminationAttempt.objects.filter(
+        examination=OuterRef('pk')
+    ).values('examination').annotate(cnt=Count('id')).values('cnt')
+
+    queryset = Examination.objects.all().select_related(
+        'category', 'exam', 'subject', 'topic', 'question_set', 'course'
+    ).prefetch_related('eligibility_rules').annotate(
+        attempts_count_annotated=Coalesce(Subquery(_attempts_subquery, output_field=IntegerField()), 0)
+    ).order_by('-created_at')
     serializer_class = ExaminationSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = ExaminationPagination
+
+    def list(self, request, *args, **kwargs):
+        from django.conf import settings
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            import hashlib
+            import urllib.parse
+            from django.core.cache import cache
+            from .cache_service import AdminCacheService
+            version = AdminCacheService.get_exams_version()
+            norm_qs = urllib.parse.urlencode(sorted(request.query_params.lists()))
+            cache_key = f"admin:exams:list:v{version}:{hashlib.md5(f'{request.path}:{norm_qs}'.encode()).hexdigest()}"
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
+        response = super().list(request, *args, **kwargs)
+
+        if use_cache and response.status_code == 200:
+            try:
+                cache.set(cache_key, response.data, 120)  # 2m TTL
+            except Exception:
+                pass
+
+        return response
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         reason = request.data.get('reason', '') if isinstance(request.data, dict) else ''
         trash_item = SafeDeleteService.soft_delete(instance, request.user, reason=reason)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
         return Response({
             'success': True,
             'message': f"Examination '{trash_item.title}' has been moved to Trash.",
@@ -214,6 +260,13 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
                     raise ValidationError({'request_id': 'This request is already linked to an examination.'})
                 exam_request.examination = examination
                 exam_request.save(update_fields=['examination', 'updated_at'])
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
 
     @action(detail=False, methods=['post'], url_path='generate-subjective-live')
     def generate_subjective_live(self, request):
@@ -523,6 +576,9 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
             rule.examination = new_exam
             rule.save()
             
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
+
         serializer = self.get_serializer(new_exam)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -618,6 +674,9 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         from core.notification_service import NotificationService
         NotificationService.notify_students_exam_update(exam, 'published')
 
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
+
         serializer = self.get_serializer(exam)
         return Response(serializer.data)
 
@@ -651,6 +710,8 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         if qset.question_count:
             examination.total_questions = qset.question_count
         examination.save()
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
 
         serializer = self.get_serializer(examination)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -669,6 +730,9 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
         if was_cancellation:
             from core.notification_service import NotificationService
             NotificationService.notify_students_exam_update(exam, 'cancelled')
+
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_exams_overview()
 
         serializer = self.get_serializer(exam)
         return Response(serializer.data)

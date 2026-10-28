@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   Pencil,
@@ -204,7 +205,6 @@ export default function AdminPackagesPage() {
   const [courses, setCourses] = useState<PublicCourse[]>([]);
   const [academicExams, setAcademicExams] = useState<AdminPosition[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   
   // Package CRUD & Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -245,32 +245,43 @@ export default function AdminPackagesPage() {
   const [selectedLevel, setSelectedLevel] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  const queryClient = useQueryClient();
+  const { data: pageData, isLoading: queryLoading } = useQuery({
+    queryKey: ["admin-packages-bundle"],
+    queryFn: async () => {
+      const [planData, coursesData, categoriesData, examsData, allExamsData] = await Promise.all([
+        subscriptionsApi.adminListPlans(),
+        publicApi.getCourses(),
+        adminSyllabusApi.getCategories().catch(() => [] as AdminExamCategory[]),
+        adminSyllabusApi.getPositions().catch(() => [] as AdminPosition[]),
+        adminExamApi.getExams().catch(() => ({ results: [] })),
+      ]);
+      return { planData, coursesData, categoriesData, examsData, allExamsData };
+    },
+    staleTime: 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!pageData) return;
+    const { planData, coursesData, categoriesData, examsData, allExamsData } = pageData;
+    setPlans([...planData].sort((a, b) => a.display_order - b.display_order));
+    if (coursesData) setCourses(coursesData);
+    setAcademicExams(examsData);
+    if (allExamsData && allExamsData.results) {
+      setAvailableExams(allExamsData.results);
+    }
+    if (categoriesData && categoriesData.length > 0) {
+      const names = categoriesData
+        .filter((cat) => cat.is_active)
+        .sort((a, b) => (a.order || 0) - (b.order || 0))
+        .map((cat) => cat.name);
+      setAllCategories(names);
+    }
+  }, [pageData]);
+
+  const loading = queryLoading && !pageData;
   const load = () => {
-    setLoading(true);
-    Promise.all([
-      subscriptionsApi.adminListPlans(),
-      publicApi.getCourses(),
-      adminSyllabusApi.getCategories().catch(() => [] as AdminExamCategory[]),
-      adminSyllabusApi.getPositions().catch(() => [] as AdminPosition[]),
-      adminExamApi.getExams().catch(() => ({ results: [] })),
-    ])
-      .then(([planData, coursesData, categoriesData, examsData, allExamsData]) => {
-        setPlans([...planData].sort((a, b) => a.display_order - b.display_order));
-        if (coursesData) setCourses(coursesData);
-        setAcademicExams(examsData);
-        if (allExamsData && allExamsData.results) {
-          setAvailableExams(allExamsData.results);
-        }
-        if (categoriesData && categoriesData.length > 0) {
-          const names = categoriesData
-            .filter((cat) => cat.is_active)
-            .sort((a, b) => (a.order || 0) - (b.order || 0))
-            .map((cat) => cat.name);
-          setAllCategories(names);
-        }
-      })
-      .catch(() => toast.error("Failed to load packages."))
-      .finally(() => setLoading(false));
+    queryClient.invalidateQueries({ queryKey: ["admin-packages-bundle"] });
   };
 
   const handleSetDefaultFree = async (plan: SubscriptionPlan) => {
@@ -285,8 +296,6 @@ export default function AdminPackagesPage() {
       setSettingDefaultFreeId(null);
     }
   };
-
-  useEffect(load, []);
 
   const academicExamById = useMemo(
     () => new Map(academicExams.map((exam) => [exam.id, exam])),

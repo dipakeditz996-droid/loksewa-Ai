@@ -163,6 +163,35 @@ export const adminDataSafetyApi = {
     });
   },
 
+  emptyTrash: (): Promise<{
+    success: boolean;
+    purged_count: number;
+    shielded_count: number;
+    message: string;
+  }> => {
+    return apiClient("/admin/data-safety/trash/empty-trash/", {
+      method: "POST",
+    });
+  },
+
+  getTrashRetention: (): Promise<{ retention_days: number }> => {
+    return apiClient<{ retention_days: number }>("/admin/data-safety/trash/retention/");
+  },
+
+  setTrashRetention: (
+    days: number
+  ): Promise<{
+    success: boolean;
+    retention_days: number;
+    cleanup?: { success: boolean; purged_count: number; message: string };
+    message: string;
+  }> => {
+    return apiClient("/admin/data-safety/trash/retention/", {
+      method: "POST",
+      body: JSON.stringify({ days }),
+    });
+  },
+
   getBackups: (params?: {
     status?: string;
     backup_type?: string;
@@ -183,6 +212,7 @@ export const adminDataSafetyApi = {
     return apiClient<DatabaseBackup>("/admin/data-safety/backups/", {
       method: "POST",
       body: JSON.stringify(data),
+      timeoutMs: 180000,
     });
   },
 
@@ -197,6 +227,7 @@ export const adminDataSafetyApi = {
   }> => {
     return apiClient(`/admin/data-safety/backups/${id}/verify/`, {
       method: "POST",
+      timeoutMs: 120000,
     });
   },
 
@@ -226,6 +257,7 @@ export const adminDataSafetyApi = {
     return apiClient(`/admin/data-safety/backups/${id}/restore/`, {
       method: "POST",
       body: JSON.stringify({ confirmation }),
+      timeoutMs: 180000,
     });
   },
 
@@ -241,6 +273,34 @@ export const adminDataSafetyApi = {
 
   getBackupDownloadUrl: (id: number): string => {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
-    return `${baseUrl}/admin/data-safety/backups/${id}/download/`;
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+    return `${baseUrl}/admin/data-safety/backups/${id}/download/${tokenParam}`;
+  },
+
+  downloadBackup: async (id: number, name: string): Promise<void> => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : "";
+    const url = `${baseUrl}/admin/data-safety/backups/${id}/download/${tokenParam}`;
+
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.detail || err?.error || `Download failed with HTTP ${res.status}`);
+    }
+
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = `${name.replace(/\s+/g, "_").toLowerCase()}.json.gz`;
+    document.body.appendChild(link);
+    link.click();
+    window.URL.revokeObjectURL(blobUrl);
+    document.body.removeChild(link);
   },
 };

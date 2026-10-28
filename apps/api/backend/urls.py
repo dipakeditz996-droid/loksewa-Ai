@@ -30,6 +30,7 @@ from core.two_factor_views import (
     TwoFactorDisableView,
     TwoFactorLoginView,
 )
+from ai_tutor.views import AITutorEndpointView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -70,6 +71,7 @@ urlpatterns = [
     path('api/study-plan/', include('study_plan.urls')),
     path('api/admin/', include('administration.urls')),
     path('api/tutor/', include('ai_tutor.urls')),
+    path('api/ai/tutor/', AITutorEndpointView.as_view(), name='ai_tutor_api_endpoint'),
     path('api/support/', include('support.urls')),
     path('api/student/', include('support.student_urls')),
     path('api/subscriptions/', include('subscriptions.urls')),

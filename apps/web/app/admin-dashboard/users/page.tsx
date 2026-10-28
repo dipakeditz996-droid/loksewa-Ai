@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   Users, UserPlus, Search, Filter,
   MoreVertical, Eye, Edit, ShieldAlert,
@@ -67,9 +68,25 @@ export default function UsersManagementPage() {
   }, [searchTerm]);
   const [filterRole, setFilterRole] = useState("All Roles");
   
-  const [users, setUsers] = useState<UserData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [totalUsers, setTotalUsers] = useState(0);
+  const queryClient = useQueryClient();
+  const { data: usersData, isLoading } = useQuery({
+    queryKey: ["admin-users", filterRole, debouncedSearchTerm],
+    queryFn: async () => {
+      let url = '/admin/users/?page=1&page_size=50';
+      if (filterRole !== "All Roles") {
+        url += `&role=${filterRole.toLowerCase()}`;
+      }
+      if (debouncedSearchTerm) {
+        url += `&search=${encodeURIComponent(debouncedSearchTerm)}`;
+      }
+      return apiClient<{users: UserData[], total: number}>(url);
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+  });
+
+  const users = usersData?.users || [];
+  const totalUsers = usersData?.total || 0;
 
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [suspendModalOpen, setSuspendModalOpen] = useState(false);
@@ -254,29 +271,9 @@ export default function UsersManagementPage() {
     setShowNewPassword(true);
   };
 
-  const fetchUsers = async () => {
-    setIsLoading(true);
-    try {
-      let url = '/admin/users/?page=1&page_size=50';
-      if (filterRole !== "All Roles") {
-        url += `&role=${filterRole.toLowerCase()}`;
-      }
-      if (debouncedSearchTerm) {
-        url += `&search=${encodeURIComponent(debouncedSearchTerm)}`;
-      }
-      const data = await apiClient<{users: UserData[], total: number}>(url);
-      setUsers(data.users);
-      setTotalUsers(data.total);
-    } catch (error) {
-      console.error("Failed to fetch users", error);
-    } finally {
-      setIsLoading(false);
-    }
+  const fetchUsers = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-users"] });
   };
-
-  useEffect(() => {
-    fetchUsers();
-  }, [filterRole, debouncedSearchTerm]);
 
   const activeUsers = users.filter(u => u.isActive).length;
   const inactiveUsers = users.filter(u => !u.isActive).length;

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { adminQuestionSetApi, QuestionSet } from '@/lib/api/admin-question-sets';
 import { 
   Plus, Search, RefreshCw, MoreVertical, Edit, Copy, 
@@ -12,33 +13,23 @@ import { toast } from 'react-hot-toast';
 
 export default function QuestionSetsPage() {
   const router = useRouter();
-  const [sets, setSets] = useState<QuestionSet[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'draft' | 'published' | 'archived'>('all');
   
-  const fetchSets = async () => {
-    setLoading(true);
-    try {
-      const res = await adminQuestionSetApi.getQuestionSets();
-      setSets(res.results || []);
-    } catch (error: any) {
-      toast.error('Failed to fetch question sets');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: res, isLoading: loading, isFetching, refetch } = useQuery({
+    queryKey: ['admin-question-sets'],
+    queryFn: () => adminQuestionSetApi.getQuestionSets(),
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    fetchSets();
-  }, []);
+  const sets: QuestionSet[] = res?.results || [];
 
   const handleDuplicate = async (id: number) => {
     if (!confirm('Duplicate this question set?')) return;
     try {
       await adminQuestionSetApi.duplicateQuestionSet(id);
       toast.success('Set duplicated successfully');
-      fetchSets();
+      refetch();
     } catch (e: any) {
       toast.error(e.message || 'Failed to duplicate set');
     }
@@ -49,7 +40,7 @@ export default function QuestionSetsPage() {
     try {
       await adminQuestionSetApi.deleteQuestionSet(id);
       toast.success('Question set deleted');
-      fetchSets();
+      refetch();
     } catch (e: any) {
       toast.error(e.message || 'Failed to delete set');
     }
@@ -64,7 +55,7 @@ export default function QuestionSetsPage() {
         await adminQuestionSetApi.publishQuestionSet(set.id);
         toast.success('Set published successfully');
       }
-      fetchSets();
+      refetch();
     } catch (e: any) {
       toast.error(e.message || 'Failed to update status. Check if you have enough questions selected.');
     }
@@ -88,11 +79,11 @@ export default function QuestionSetsPage() {
         </div>
         <div className="flex items-center gap-3">
           <button 
-            onClick={fetchSets}
+            onClick={() => refetch()}
             className="p-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
             title="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
           <Link
             href="/admin-dashboard/academic/question-sets/create"

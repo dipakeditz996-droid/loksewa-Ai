@@ -1,4 +1,5 @@
 from rest_framework import viewsets, serializers
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .permissions import IsAdminUser
@@ -14,6 +15,7 @@ class QuestionSetQuestionSerializer(serializers.ModelSerializer):
         model = QuestionSetQuestion
         fields = ['id', 'question', 'question_details', 'order', 'marks']
         read_only_fields = ['id']
+
 
 class QuestionSetSerializer(serializers.ModelSerializer):
     questions_list = QuestionSetQuestionSerializer(source='question_set_questions', many=True, read_only=True)
@@ -51,10 +53,50 @@ class QuestionSetSerializer(serializers.ModelSerializer):
             validated_data['created_by'] = request.user
         return super().create(validated_data)
 
+
+class QuestionSetListSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    position_name = serializers.CharField(source='exam.name', read_only=True)
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    unit_name = serializers.CharField(source='chapter.title', read_only=True)
+    topic_name = serializers.CharField(source='topic.name', read_only=True)
+    questions_list = serializers.SerializerMethodField()
+
+    def get_questions_list(self, obj):
+        count = getattr(obj, 'questions_count_annotated', None)
+        if count is None:
+            count = obj.question_set_questions.count()
+        return [None] * count
+
+    class Meta:
+        model = QuestionSet
+        fields = '__all__'
+        read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+
+class QuestionSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class QuestionSetViewSet(viewsets.ModelViewSet):
-    queryset = QuestionSet.objects.all().order_by('-created_at')
     serializer_class = QuestionSetSerializer
     permission_classes = [IsAdminUser]
+    pagination_class = QuestionSetPagination
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return QuestionSetListSerializer
+        return QuestionSetSerializer
+
+    def get_queryset(self):
+        from django.db.models import Count
+        return QuestionSet.objects.select_related(
+            'category', 'exam', 'subject', 'chapter', 'topic'
+        ).annotate(
+            questions_count_annotated=Count('question_set_questions', distinct=True)
+        ).order_by('-created_at')
 
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):

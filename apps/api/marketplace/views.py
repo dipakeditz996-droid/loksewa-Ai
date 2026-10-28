@@ -212,7 +212,14 @@ class AdminPaymentMethodViewSet(viewsets.ModelViewSet):
 
 
 class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = PaymentSubmission.objects.all().order_by('-submitted_at')
+    queryset = PaymentSubmission.objects.select_related(
+        'student',
+        'product',
+        'product__seller',
+        'payment_method',
+        'order',
+        'verified_by',
+    ).order_by('-submitted_at')
     serializer_class = PaymentSubmissionSerializer
     permission_classes = [IsAdminUser]
     pagination_class = MarketplacePagination
@@ -340,7 +347,14 @@ class AdminPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
     # Safe to paginate: adminGetPurchases() in lib/api/marketplace.ts is
     # defined but has no frontend caller today (grepped the whole apps/web
     # tree), so there's no array-typed consumer this would break.
-    queryset = Purchase.objects.all().order_by('-created_at')
+    queryset = Purchase.objects.select_related(
+        'student',
+        'product',
+        'product__seller',
+        'payment_submission',
+        'payment_submission__student',
+        'payment_submission__payment_method',
+    ).order_by('-created_at')
     serializer_class = PurchaseSerializer
     permission_classes = [IsAdminUser]
     pagination_class = StandardResultsSetPagination
@@ -367,7 +381,14 @@ class AdminPurchaseViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Order.objects.all().select_related('student', 'delivery_address_ref').prefetch_related('items__product').order_by('-created_at')
+    queryset = Order.objects.all().select_related(
+        'student',
+        'delivery_address_ref',
+    ).prefetch_related(
+        'items__product',
+        'items__product__seller',
+        'status_history',
+    ).order_by('-created_at')
     serializer_class = OrderSerializer
     permission_classes = [IsAdminUser]
     pagination_class = MarketplacePagination

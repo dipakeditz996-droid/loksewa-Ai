@@ -142,8 +142,8 @@ export default function AdminApplicationsPage() {
     setIsLoading(true);
     try {
       const [paymentsData, applicationsData] = await Promise.all([
-        apiClient<Payment[]>("/subscriptions/payments/"),
-        apiClient<{ results: CourseApplication[] }>("/admin/course-applications/"),
+        apiClient<Payment[]>("/subscriptions/payments/", { timeoutMs: 60000 }),
+        apiClient<{ results: CourseApplication[] }>("/admin/course-applications/", { timeoutMs: 60000 }),
       ]);
       setPayments((paymentsData as any).results || paymentsData || []);
       setFreeApplications((applicationsData.results || []).filter((a) => !a.payment));

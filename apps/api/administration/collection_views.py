@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from exams.models import QuestionCollection, CollectionRule, Question, ExamCategory, Exam, Subject, Chapter, Topic
 from courses.services.course_access_service import CourseAccessService
 from rest_framework import serializers
-from django.db.models import Q
+from django.db.models import Q, Count
 
 
 class CollectionRuleSerializer(serializers.ModelSerializer):
@@ -57,19 +57,21 @@ class QuestionCollectionSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_by', 'created_at', 'updated_at']
 
     def get_question_count(self, obj):
-        return obj.questions.count()
+        val = getattr(obj, 'question_count_annotated', None)
+        return val if val is not None else obj.questions.count()
+
+    def _get_course(self, obj):
+        if not hasattr(obj, '_cached_course'):
+            obj._cached_course = CourseAccessService.get_question_course(obj) if obj.exam_id else None
+        return obj._cached_course
 
     def get_course_id(self, obj):
-        if obj.exam_id:
-            c = CourseAccessService.get_question_course(obj)
-            return c.id if c else None
-        return None
+        c = self._get_course(obj)
+        return c.id if c else None
 
     def get_course_title(self, obj):
-        if obj.exam_id:
-            c = CourseAccessService.get_question_course(obj)
-            return c.title if c else None
-        return None
+        c = self._get_course(obj)
+        return c.title if c else None
 
     def create(self, validated_data):
         rule_data = validated_data.pop('rule', None)
@@ -143,7 +145,9 @@ class CollectionQuestionSerializer(serializers.ModelSerializer):
 
 class QuestionCollectionViewSet(viewsets.ModelViewSet):
     queryset = QuestionCollection.objects.select_related(
-        'category', 'exam', 'subject', 'chapter', 'topic', 'created_by'
+        'category', 'exam', 'subject', 'chapter', 'topic', 'created_by', 'rule'
+    ).annotate(
+        question_count_annotated=Count('questions', distinct=True)
     ).order_by('-created_at')
     serializer_class = QuestionCollectionSerializer
     permission_classes = [IsAdminUser]
@@ -171,6 +175,18 @@ class QuestionCollectionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_collections()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_collections()
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_collections()
 
     @action(detail=True, methods=['get'])
     def questions(self, request, pk=None):

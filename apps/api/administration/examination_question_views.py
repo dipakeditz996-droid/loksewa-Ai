@@ -99,6 +99,8 @@ def _recalculate_totals(examination):
     examination.total_questions = rows.count()
     examination.total_marks = sum(r.marks for r in rows) or 0
     examination.save(update_fields=['total_questions', 'total_marks', 'updated_at'])
+    from .cache_service import AdminCacheService
+    AdminCacheService.invalidate_exams_overview()
 
 
 class ExaminationQuestionMixin:

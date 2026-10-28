@@ -102,6 +102,9 @@ class ExaminationSerializer(serializers.ModelSerializer):
         return False
 
     def get_attempts_count(self, obj):
+        val = getattr(obj, 'attempts_count_annotated', None)
+        if val is not None:
+            return val
         return obj.attempts.count()
 
 class ExaminationAttemptSerializer(serializers.ModelSerializer):

@@ -12,6 +12,7 @@ EXPIRING_SOON_THRESHOLD_DAYS = 7
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     eligible_courses_details = serializers.SerializerMethodField(read_only=True)
     course_details = serializers.SerializerMethodField(read_only=True)
+    is_free = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = SubscriptionPlan
@@ -57,12 +58,7 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
     def get_course_details(self, obj):
         if not obj.course:
             return None
-        c = obj.course
-        if hasattr(c, 'exam') and c.exam and hasattr(c.exam, 'category'):
-            return self._format_course_detail(c)
-        from courses.models import Course
-        c_full = Course.objects.select_related('exam', 'exam__parent', 'exam__category').filter(id=obj.course_id).first()
-        return self._format_course_detail(c_full)
+        return self._format_course_detail(obj.course)
 
     def validate(self, data):
         if (
@@ -208,14 +204,14 @@ class SubscriptionPaymentSerializer(serializers.ModelSerializer):
         )
 
     def get_selected_courses(self, obj):
-        apps = list(obj.course_applications.select_related('course', 'course__exam'))
+        apps = list(obj.course_applications.all())
         res = [
             {
                 "id": app.course.id,
                 "title": app.course.title,
-                "exam": app.course.exam.name if app.course.exam else None
+                "exam": app.course.exam.name if (app.course and app.course.exam) else None
             }
-            for app in apps
+            for app in apps if app.course
         ]
         if not res and obj.plan and obj.plan.course:
             res.append({

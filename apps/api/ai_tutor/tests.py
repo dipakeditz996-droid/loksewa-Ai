@@ -11,6 +11,10 @@ class AITutorConfigEnforcementTests(APITestCase):
         self.student = User.objects.create_user(
             username='stu1', password='pw', role='student')
         self.client.force_authenticate(user=self.student)
+        settings = AdminSettings.get_settings()
+        settings.enable_ai_tutor = True
+        settings.ai_tutor_daily_message_limit = 20
+        settings.save()
 
     def test_conversation_creation_blocked_when_disabled(self):
         settings = AdminSettings.get_settings()

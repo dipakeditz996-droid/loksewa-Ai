@@ -270,6 +270,7 @@ class FreePlanAndPackageSystemTests(TestCase):
         )
         self.free_plan.free_mock_exams.add(exam)
 
+
         # 1. Initial check: can attempt
         can_attempt, reason, remaining = EntitlementService.check_exam_access(self.student, exam)
         self.assertTrue(can_attempt)

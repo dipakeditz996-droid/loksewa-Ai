@@ -51,6 +51,7 @@ export default function AdminDatabaseBackupsPage() {
 
   // Details Modal
   const [selectedBackupForDetails, setSelectedBackupForDetails] = useState<DatabaseBackup | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   // Restore Modal
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<DatabaseBackup | null>(null);
@@ -130,6 +131,20 @@ export default function AdminDatabaseBackupsPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to toggle backup protection.";
       toast.error(msg, { id: `protect-${backup.id}` });
+    }
+  };
+
+  const handleDownload = async (backup: DatabaseBackup) => {
+    try {
+      setDownloadingId(backup.id);
+      toast.loading(`Preparing ${backup.name} download...`, { id: `download-${backup.id}` });
+      await adminDataSafetyApi.downloadBackup(backup.id, backup.name);
+      toast.success(`Download started for "${backup.name}"!`, { id: `download-${backup.id}` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to download backup archive.";
+      toast.error(msg, { id: `download-${backup.id}` });
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -463,20 +478,16 @@ export default function AdminDatabaseBackupsPage() {
                           Verify
                         </Button>
 
-                        <a
-                          href={adminDataSafetyApi.getBackupDownloadUrl(b.id)}
-                          target="_blank"
-                          rel="noreferrer"
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDownload(b)}
+                          disabled={downloadingId === b.id}
+                          className="text-xs h-7 px-2 text-slate-600 hover:text-slate-900"
+                          title="Download GZIP Archive (Super Admin)"
                         >
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-xs h-7 px-2 text-slate-600 hover:text-slate-900"
-                            title="Download GZIP Archive (Super Admin)"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                        </a>
+                          <Download className={`h-3.5 w-3.5 ${downloadingId === b.id ? "animate-bounce text-indigo-600" : ""}`} />
+                        </Button>
 
                         <Button
                           size="sm"
@@ -754,6 +765,16 @@ export default function AdminDatabaseBackupsPage() {
               </Button>
 
               <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleDownload(selectedBackupForDetails)}
+                  disabled={downloadingId === selectedBackupForDetails.id}
+                  className="text-xs gap-1 text-slate-700 hover:bg-slate-100"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {downloadingId === selectedBackupForDetails.id ? "Downloading..." : "Download"}
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"

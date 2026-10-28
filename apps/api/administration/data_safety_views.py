@@ -33,7 +33,16 @@ class AdminDataSafetyOverviewView(APIView):
 
     def get(self, request):
         from django.conf import settings
+        from django.db.models import Count, Q
         from administration.r2_storage_service import R2StorageService
+
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            from administration.cache_service import CACHE_KEY_DATA_SAFETY_OVERVIEW
+            cached = cache.get(CACHE_KEY_DATA_SAFETY_OVERVIEW)
+            if cached is not None:
+                return Response(cached, status=status.HTTP_200_OK)
 
         now = timezone.now()
         one_day_ago = now - timezone.timedelta(hours=24)
@@ -44,16 +53,24 @@ class AdminDataSafetyOverviewView(APIView):
         storage_backend = 'Cloudflare R2' if r2_configured else 'Local Filesystem'
         retention_days = getattr(settings, 'BACKUP_RETENTION_DAYS', 30)
 
-        # Backups metrics
-        all_backups = DatabaseBackup.objects.all()
-        last_backup = all_backups.filter(status='verified').first()
-        latest_any_backup = all_backups.first()
-        verified_backups_count = all_backups.filter(status='verified').count()
-        r2_verified_count = all_backups.filter(r2_verified=True).count()
-        failed_backups_count = all_backups.filter(status__in=['failed', 'corrupted']).count()
-        expired_backups_count = all_backups.filter(status='expired').count()
-        protected_backups_count = all_backups.filter(is_protected=True).count()
-        total_backups_count = all_backups.count()
+        # Backups metrics - combined into 1 aggregated query
+        b_stats = DatabaseBackup.objects.aggregate(
+            total=Count('id'),
+            verified=Count('id', filter=Q(status='verified')),
+            r2_verified=Count('id', filter=Q(r2_verified=True)),
+            failed=Count('id', filter=Q(status__in=['failed', 'corrupted'])),
+            expired=Count('id', filter=Q(status='expired')),
+            protected=Count('id', filter=Q(is_protected=True)),
+        )
+        total_backups_count = b_stats['total']
+        verified_backups_count = b_stats['verified']
+        r2_verified_count = b_stats['r2_verified']
+        failed_backups_count = b_stats['failed']
+        expired_backups_count = b_stats['expired']
+        protected_backups_count = b_stats['protected']
+
+        last_backup = DatabaseBackup.objects.filter(status='verified').first()
+        latest_any_backup = DatabaseBackup.objects.first()
 
         safety_warnings = []
         if not r2_configured:
@@ -71,17 +88,20 @@ class AdminDataSafetyOverviewView(APIView):
         else:
             backup_status = "healthy"
 
-        # Trash metrics
-        trash_qs = TrashItem.objects.filter(is_restored=False, is_permanent_deleted=False)
-        trash_items_count = trash_qs.count()
-        protected_records_count = trash_qs.filter(is_protected=True).count()
+        # Trash metrics - combined into 1 aggregated query
+        t_stats = TrashItem.objects.filter(is_restored=False, is_permanent_deleted=False).aggregate(
+            total=Count('id'),
+            protected=Count('id', filter=Q(is_protected=True)),
+        )
+        trash_items_count = t_stats['total']
+        protected_records_count = t_stats['protected']
 
         recently_restored_count = TrashItem.objects.filter(
             is_restored=True, restored_at__gte=seven_days_ago
         ).count()
 
         # Last permanent delete audit log
-        last_perm_log = AuditLog.objects.filter(action='PERMANENT_DELETE').order_by('-timestamp').first()
+        last_perm_log = AuditLog.objects.filter(action='PERMANENT_DELETE').select_related('actor').order_by('-timestamp').first()
         last_permanent_delete = None
         if last_perm_log:
             last_permanent_delete = {
@@ -95,7 +115,7 @@ class AdminDataSafetyOverviewView(APIView):
         if last_backup:
             last_backup_data = DatabaseBackupSerializer(last_backup).data
 
-        return Response({
+        payload = {
             'backup_status': backup_status,
             'last_backup': last_backup_data,
             'r2_configured': r2_configured,
@@ -112,7 +132,14 @@ class AdminDataSafetyOverviewView(APIView):
             'recently_restored_count': recently_restored_count,
             'last_permanent_delete': last_permanent_delete,
             'safety_warnings': safety_warnings,
-        }, status=status.HTTP_200_OK)
+        }
+
+        if use_cache:
+            from django.core.cache import cache
+            from administration.cache_service import CACHE_KEY_DATA_SAFETY_OVERVIEW
+            cache.set(CACHE_KEY_DATA_SAFETY_OVERVIEW, payload, 120)
+
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class AdminTrashViewSet(viewsets.ReadOnlyModelViewSet):
@@ -194,6 +221,53 @@ class AdminTrashViewSet(viewsets.ReadOnlyModelViewSet):
             'restored_count': restored_count,
             'failed_count': len(failed_items),
             'failed_items': failed_items,
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='empty-trash')
+    def empty_trash(self, request):
+        """
+        Permanently empties all recoverable records from the Recycle Bin.
+        Shielded items (with live student attempts, orders, or active dependencies)
+        are safely preserved.
+        """
+        try:
+            result = SafeDeleteService.empty_trash(user=request.user)
+            return Response(result, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'error': f"Failed to empty recycle bin: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get', 'post'], url_path='retention')
+    def retention_policy(self, request):
+        """
+        GET: Returns current auto-empty retention timeline days.
+        POST: Updates retention timeline days (e.g. 7, 14, 30, 60, 90, 0=Never)
+              and immediately triggers auto-cleanup if days > 0.
+        """
+        if request.method == 'GET':
+            retention_days = SafeDeleteService.get_trash_retention_days()
+            return Response({'retention_days': retention_days}, status=status.HTTP_200_OK)
+
+        days = request.data.get('days')
+        if days is None:
+            return Response({'error': 'Parameter "days" is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            days = int(days)
+            if days < 0 or days > 365:
+                return Response({'error': 'Retention days must be between 0 and 365 (0 = Never / Manual).'}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid number of days specified.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        res = SafeDeleteService.set_trash_retention_days(days, user=request.user)
+        cleanup_res = None
+        if days > 0:
+            cleanup_res = SafeDeleteService.auto_clean_expired_trash(user=request.user)
+
+        return Response({
+            'success': True,
+            'retention_days': days,
+            'cleanup': cleanup_res,
+            'message': f"Recycle bin auto-empty timeline set to {days} days." if days > 0 else "Recycle bin auto-empty disabled (Manual cleanup only)."
         }, status=status.HTTP_200_OK)
 
 
@@ -281,11 +355,32 @@ class AdminDatabaseBackupViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f"Restore failed: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def get_permissions(self):
+        if self.action == 'download_backup':
+            from rest_framework.permissions import AllowAny
+            return [AllowAny()]
+        return super().get_permissions()
+
     @action(detail=True, methods=['get'], url_path='download')
     def download_backup(self, request, pk=None):
         from administration.r2_storage_service import R2StorageService
+        from rest_framework_simplejwt.tokens import AccessToken
+        from django.contrib.auth import get_user_model
 
-        if not request.user or not request.user.is_authenticated or request.user.role not in ('admin', 'super-admin'):
+        user = request.user
+        if not user or not user.is_authenticated:
+            token = request.query_params.get('token')
+            if token:
+                try:
+                    validated_token = AccessToken(token)
+                    User = get_user_model()
+                    candidate = User.objects.get(id=validated_token['user_id'])
+                    if candidate.is_active:
+                        user = candidate
+                except Exception:
+                    pass
+
+        if not user or not user.is_authenticated or user.role not in ('admin', 'super-admin'):
             return Response({'error': 'Admin authorization required to download database backups.'}, status=status.HTTP_403_FORBIDDEN)
 
         backup = self.get_object()

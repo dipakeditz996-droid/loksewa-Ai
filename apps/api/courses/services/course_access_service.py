@@ -42,7 +42,7 @@ class CourseAccessService:
         """Clear in-memory cached course/exam permissions on the user object."""
         if not user_or_id:
             return
-        for attr in ('_accessible_course_ids_cache', '_accessible_exam_ids_cache', '_cached_active_subscriptions_list', '_accessible_academic_scope_cache'):
+        for attr in ('_accessible_course_ids_cache', '_accessible_exam_ids_cache', '_cached_active_subscriptions_list', '_cached_active_subscription', '_accessible_academic_scope_cache'):
             if hasattr(user_or_id, attr):
                 try:
                     delattr(user_or_id, attr)

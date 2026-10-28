@@ -39,7 +39,7 @@ from .student_serializers import (
     StudentLeaderboardSerializer
 )
 from core.pagination import StandardResultsSetPagination
-from django.db.models import F, Window, Sum, Avg, Max, Count, FloatField, ExpressionWrapper
+from django.db.models import F, Window, Sum, Avg, Max, Count, FloatField, ExpressionWrapper, Q
 from django.db.models.functions import DenseRank
 from subscriptions.permissions import HasActiveSubscription
 

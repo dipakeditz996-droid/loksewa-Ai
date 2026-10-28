@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from administration.permissions import IsAdminUser
+from django.conf import settings
 from django.db.models import Q, ProtectedError
 from exams.models import ExamCategory, Exam, Paper, Subject, Chapter, Topic, Question, Examination
 from notes.models import StudyMaterial
@@ -105,6 +106,16 @@ def get_node_dependencies(instance):
 class BaseSyllabusViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_syllabus_tree()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_syllabus_tree()
+
     @action(detail=False, methods=['patch'])
     def reorder(self, request):
         serializer = ReorderSerializer(data=request.data, many=True)
@@ -148,6 +159,8 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
             obj.order = items_map[obj.id]
 
         model_cls.objects.bulk_update(objs, ['order'])
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_syllabus_tree()
         return Response({'status': 'reordered', 'updated_count': len(objs)})
 
     @action(detail=True, methods=['get'])
@@ -166,6 +179,8 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
         if hasattr(instance, 'status'):
             instance.status = 'active' if instance.is_active else 'inactive'
         instance.save()
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_syllabus_tree()
         return Response({
             'id': instance.id,
             'is_active': instance.is_active,
@@ -184,6 +199,8 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_409_CONFLICT)
         reason = request.data.get('reason', '') if isinstance(request.data, dict) else ''
         trash_item = SafeDeleteService.soft_delete(instance, request.user, reason=reason)
+        from .cache_service import AdminCacheService
+        AdminCacheService.invalidate_syllabus_tree()
         return Response({
             'success': True,
             'message': f"{trash_item.item_type} '{trash_item.title}' has been moved to Trash.",
@@ -192,14 +209,25 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 class ExamCategoryViewSet(BaseSyllabusViewSet):
-    queryset = ExamCategory.objects.all().order_by('order', 'id')
     serializer_class = ExamCategorySerializer
+
+    def get_queryset(self):
+        from django.db.models import Count
+        return ExamCategory.objects.annotate(
+            position_count_annotated=Count('exams', distinct=True)
+        ).order_by('order', 'id')
 
 class ExamViewSet(BaseSyllabusViewSet):
     serializer_class = ExamSerializer
     
     def get_queryset(self):
-        queryset = Exam.objects.all().order_by('order', 'id')
+        from django.db.models import Count, Q
+        queryset = Exam.objects.select_related('category', 'parent').annotate(
+            paper_count_annotated=Count('papers', distinct=True),
+            exams_count_annotated=Count('examinations', distinct=True),
+            notes_count_annotated=Count('materials', filter=~Q(materials__status='archived'), distinct=True),
+            questions_count_annotated=Count('questions', distinct=True)
+        ).order_by('order', 'id')
         category_id = self.request.query_params.get('category', None)
         if category_id:
             queryset = queryset.filter(category_id=category_id)
@@ -209,7 +237,10 @@ class PaperViewSet(BaseSyllabusViewSet):
     serializer_class = PaperSerializer
     
     def get_queryset(self):
-        queryset = Paper.objects.all().order_by('order', 'id')
+        from django.db.models import Count
+        queryset = Paper.objects.select_related('exam').annotate(
+            subject_count_annotated=Count('subjects', distinct=True)
+        ).order_by('order', 'id')
         exam_id = self.request.query_params.get('exam', None)
         if exam_id:
             queryset = queryset.filter(exam_id=exam_id)
@@ -219,7 +250,13 @@ class SubjectViewSet(BaseSyllabusViewSet):
     serializer_class = SubjectSerializer
     
     def get_queryset(self):
-        queryset = Subject.objects.all().order_by('order', 'id')
+        from django.db.models import Count, Q
+        queryset = Subject.objects.select_related('paper__exam').annotate(
+            chapter_count_annotated=Count('chapters', distinct=True),
+            exams_count_annotated=Count('examinations', distinct=True),
+            notes_count_annotated=Count('materials', filter=~Q(materials__status='archived'), distinct=True),
+            questions_count_annotated=Count('questions', distinct=True)
+        ).order_by('order', 'id')
         paper_id = self.request.query_params.get('paper', None)
         if paper_id:
             queryset = queryset.filter(paper_id=paper_id)
@@ -237,7 +274,10 @@ class ChapterViewSet(BaseSyllabusViewSet):
     serializer_class = ChapterSerializer
     
     def get_queryset(self):
-        queryset = Chapter.objects.all().order_by('order', 'id')
+        from django.db.models import Count
+        queryset = Chapter.objects.select_related('subject__paper__exam').annotate(
+            topic_count_annotated=Count('topics', distinct=True)
+        ).order_by('order', 'id')
         subject_id = self.request.query_params.get('subject', None) or self.request.query_params.get('subject_id', None)
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
@@ -253,7 +293,7 @@ class TopicViewSet(BaseSyllabusViewSet):
     serializer_class = TopicSerializer
     
     def get_queryset(self):
-        queryset = Topic.objects.all().order_by('order', 'id')
+        queryset = Topic.objects.select_related('chapter__subject__paper__exam').order_by('order', 'id')
         chapter_id = self.request.query_params.get('chapter', None) or self.request.query_params.get('chapter_id', None)
         if chapter_id:
             queryset = queryset.filter(chapter_id=chapter_id)
@@ -274,95 +314,118 @@ class SyllabusTreeView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        categories = ExamCategory.objects.prefetch_related(
-            'exams__children__children__papers__subjects__chapters__topics',
-            'exams__papers__subjects__chapters__topics',
-        ).order_by('order', 'id')
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = 'admin:syllabus:tree'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
-        # Chaining .order_by()/.filter() onto an already-prefetched relation
-        # manager (e.g. `paper.subjects.all().order_by(...)`) builds a brand
-        # new queryset that bypasses prefetch_related's cache entirely,
-        # silently turning this back into an N+1 - one query per subject,
-        # chapter, topic, exam and paper. Sorting/filtering the already-cached
-        # list in Python instead reads from that cache, keeping the whole
-        # tree at the handful of queries the prefetch_related above set up.
-        def _sorted(items):
-            return sorted(items, key=lambda o: (o.order, o.id))
+        from collections import defaultdict
 
-        def build_paper(paper):
-            paper_data = {
-                'id': paper.id,
-                'name': paper.name,
-                'is_active': paper.is_active,
-                'subjects': [],
-            }
-            for sub in _sorted(paper.subjects.all()):
-                sub_data = {
-                    'id': sub.id,
-                    'name': sub.name,
-                    'is_active': sub.is_active,
-                    'chapters': [],
-                }
-                for chap in _sorted(sub.chapters.all()):
-                    chap_data = {
-                        'id': chap.id,
-                        'name': chap.title,
-                        'is_active': chap.is_active,
-                        'topics': [
-                            {'id': topic.id, 'name': topic.name, 'is_active': topic.is_active}
-                            for topic in _sorted(chap.topics.all())
-                        ],
-                    }
-                    sub_data['chapters'].append(chap_data)
-                paper_data['subjects'].append(sub_data)
-            return paper_data
+        categories = list(ExamCategory.objects.only('id', 'name', 'is_active', 'order').order_by('order', 'id'))
+        exams = list(Exam.objects.only('id', 'name', 'status', 'is_active', 'category_id', 'parent_id', 'order').order_by('order', 'id'))
+        papers = list(Paper.objects.only('id', 'name', 'is_active', 'exam_id', 'order').order_by('order', 'id'))
+        subjects = list(Subject.objects.only('id', 'name', 'is_active', 'paper_id', 'order').order_by('order', 'id'))
+        chapters = list(Chapter.objects.only('id', 'title', 'is_active', 'subject_id', 'order').order_by('order', 'id'))
+        topics = list(Topic.objects.only('id', 'name', 'is_active', 'chapter_id', 'order').order_by('order', 'id'))
 
-        # Exam is self-nesting (see exams.models.Exam): a "Level" (4th/5th/7th
-        # Level) is a parent-less Exam row, and its child Exam rows are the
-        # "Preparation/Service" underneath it (e.g. Civil Engineering). Build
-        # that nesting recursively instead of flattening every Exam row in
-        # the category onto one list, which mixed Levels and Services
-        # together as siblings.
-        def build_exam(exam):
+        topics_by_chapter = defaultdict(list)
+        for t in topics:
+            topics_by_chapter[t.chapter_id].append({'id': t.id, 'name': t.name, 'is_active': t.is_active})
+
+        chapters_by_subject = defaultdict(list)
+        for c in chapters:
+            chapters_by_subject[c.subject_id].append({
+                'id': c.id,
+                'name': c.title,
+                'is_active': c.is_active,
+                'topics': topics_by_chapter.get(c.id, [])
+            })
+
+        subjects_by_paper = defaultdict(list)
+        for s in subjects:
+            subjects_by_paper[s.paper_id].append({
+                'id': s.id,
+                'name': s.name,
+                'is_active': s.is_active,
+                'chapters': chapters_by_subject.get(s.id, [])
+            })
+
+        papers_by_exam = defaultdict(list)
+        for p in papers:
+            papers_by_exam[p.exam_id].append({
+                'id': p.id,
+                'name': p.name,
+                'is_active': p.is_active,
+                'subjects': subjects_by_paper.get(p.id, [])
+            })
+
+        child_exams_by_parent = defaultdict(list)
+        root_exams_by_category = defaultdict(list)
+        for e in exams:
+            if e.parent_id is None:
+                root_exams_by_category[e.category_id].append(e)
+            else:
+                child_exams_by_parent[e.parent_id].append(e)
+
+        def assemble_exam(exam):
             return {
                 'id': exam.id,
                 'name': exam.name,
                 'status': exam.status,
                 'is_active': exam.is_active,
                 'category_id': exam.category_id,
-                'children': [
-                    build_exam(child) for child in _sorted(exam.children.all())
-                ],
-                'papers': [
-                    build_paper(paper) for paper in _sorted(exam.papers.all())
-                ],
+                'children': [assemble_exam(child) for child in child_exams_by_parent.get(exam.id, [])],
+                'papers': papers_by_exam.get(exam.id, [])
             }
 
         tree_data = []
         for cat in categories:
-            cat_data = {
+            tree_data.append({
                 'id': cat.id,
                 'name': cat.name,
                 'is_active': cat.is_active,
-                'positions': [
-                    build_exam(exam)
-                    for exam in _sorted(cat.exams.all())
-                    if exam.parent_id is None
-                ],
-            }
-            tree_data.append(cat_data)
+                'positions': [assemble_exam(exam) for exam in root_exams_by_category.get(cat.id, [])]
+            })
 
+        if use_cache:
+            try:
+                cache.set(cache_key, tree_data, 600)  # 10m TTL
+            except Exception:
+                pass
         return Response(tree_data)
 
 class SyllabusStatsView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
 
     def get(self, request):
-        return Response({
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = 'admin:syllabus:stats'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
+        data = {
             'categories': ExamCategory.objects.count(),
             'exams': Exam.objects.count(),
             'papers': Paper.objects.count(),
             'subjects': Subject.objects.count(),
             'chapters': Chapter.objects.count(),
             'topics': Topic.objects.count()
-        })
+        }
+        if use_cache:
+            try:
+                cache.set(cache_key, data, 180)  # 3m TTL
+            except Exception:
+                pass
+        return Response(data)

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   BookOpen, Layers, LibraryBig, CheckSquare, FileText, Plus,
@@ -20,34 +21,31 @@ export default function AcademicOverviewPage() {
   const [viewMode, setViewMode] = useState<"table" | "tree">("table");
   const [searchQuery, setSearchQuery] = useState("");
   
-  // Real data state
-  const [exams, setExams] = useState<ApiExam[]>([]);
-  const [papers, setPapers] = useState<ApiPaper[]>([]);
-  const [subjects, setSubjects] = useState<ApiSubject[]>([]);
-  const [statsData, setStatsData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: statsData } = useQuery({
+    queryKey: ["admin-academic-stats"],
+    queryFn: () => adminAcademicApi.getStats(),
+    staleTime: 60_000,
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, examsRes, papersRes, subjectsRes] = await Promise.all([
-          adminAcademicApi.getStats(),
-          adminAcademicApi.getExams(),
-          adminAcademicApi.getPapers(),
-          adminAcademicApi.getSubjects()
-        ]);
-        setStatsData(statsRes);
-        setExams(examsRes);
-        setPapers(papersRes);
-        setSubjects(subjectsRes);
-      } catch (error) {
-        console.error("Failed to fetch academic data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const { data: exams = [], isLoading: examsLoading } = useQuery({
+    queryKey: ["admin-academic-exams"],
+    queryFn: () => adminAcademicApi.getExams(),
+    staleTime: 60_000,
+  });
+
+  const { data: papers = [], isLoading: papersLoading } = useQuery({
+    queryKey: ["admin-academic-papers"],
+    queryFn: () => adminAcademicApi.getPapers(),
+    staleTime: 60_000,
+  });
+
+  const { data: subjects = [], isLoading: subjectsLoading } = useQuery({
+    queryKey: ["admin-academic-subjects"],
+    queryFn: () => adminAcademicApi.getSubjects(),
+    staleTime: 60_000,
+  });
+
+  const isLoading = examsLoading || papersLoading || subjectsLoading;
 
   const stats = [
     {

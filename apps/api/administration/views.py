@@ -1,4 +1,5 @@
 import logging
+from django.conf import settings
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -49,56 +50,53 @@ class AdminDashboardStatsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from django.core.cache import cache
-        cache_key = 'admin:dashboard:stats'
-        try:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return Response(cached)
-        except Exception:
-            pass
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = 'admin:dashboard:stats'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
-        # Users - one aggregate query instead of three separate counts
-        user_counts = User.objects.aggregate(
-            total_students=Count('id', filter=Q(role='student')),
-            active_students=Count('id', filter=Q(role='student', is_active=True)),
-            evaluators=Count('id', filter=Q(role='teacher')),
-        )
-        total_students = user_counts['total_students']
-        active_students = user_counts['active_students']
-        evaluators = user_counts['evaluators']
+        from django.db import connection
+        today = timezone.now().date()
+        now = timezone.now()
 
-        # Academic
-        published_exams = Exam.objects.filter(is_active=True).count()
-        questions = Question.objects.count()
-        study_materials = StudyMaterial.objects.filter(status='published').count()
+        # 1. Batched scalar metrics (single round-trip to DB)
+        sql = """
+        SELECT
+            (SELECT COUNT(*) FROM core_user WHERE role = 'student') AS total_students,
+            (SELECT COUNT(*) FROM core_user WHERE role = 'student' AND is_active = true) AS active_students,
+            (SELECT COUNT(*) FROM core_user WHERE role = 'teacher') AS evaluators,
+            (SELECT COUNT(*) FROM exams_exam WHERE is_active = true) AS published_exams,
+            (SELECT COUNT(*) FROM exams_question) AS questions,
+            (SELECT COUNT(*) FROM notes_studymaterial WHERE status = 'published') AS study_materials,
+            (SELECT COUNT(*) FROM exams_subjectiveanswer WHERE status = 'submitted') AS pending_evaluations,
+            (SELECT COUNT(*) FROM support_supportticket WHERE status IN ('open', 'in_progress')) AS pending_tickets,
+            (SELECT COUNT(*) FROM marketplace_product WHERE is_published = true) AS marketplace_listings,
+            (SELECT COUNT(*) FROM marketplace_paymentsubmission WHERE status = 'PENDING') AS order_requests,
+            (SELECT COUNT(*) FROM marketplace_purchase) AS total_orders,
+            (SELECT COALESCE(SUM(amount_paid), 0) FROM marketplace_purchase WHERE status = 'ACTIVE') AS revenue,
+            (SELECT COUNT(*) FROM games_gamematch WHERE status = 'COMPLETED') AS games_played_match,
+            (SELECT COUNT(*) FROM games_survivalgame WHERE status = 'COMPLETED') AS games_played_survival,
+            (SELECT COUNT(*) FROM ai_tutor_conversation) AS total_ai_sessions,
+            (SELECT COALESCE(SUM(request_count), 0) FROM ai_tutor_tutorusage WHERE date = %s) AS ai_sessions_today;
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql, [today])
+            row = cursor.fetchone()
+            cols = [col[0] for col in cursor.description]
+            b_stats = dict(zip(cols, row))
 
-        # Evaluations
-        from exams.models import Evaluation, SubjectiveAnswer
-        pending_evaluations = SubjectiveAnswer.objects.filter(status='submitted').count()
-
-        # Support Tickets
-        from support.models import SupportTicket
-        pending_tickets = SupportTicket.objects.filter(status__in=['open', 'in_progress']).count()
-
-        # Marketplace & MRR
-        marketplace_listings = Product.objects.filter(is_published=True).count()
-        order_requests = PaymentSubmission.objects.filter(status='PENDING').count()
-        purchase_stats = Purchase.objects.aggregate(
-            total_orders=Count('id'),
-            revenue=Sum('amount_paid', filter=Q(status='ACTIVE')),
-        )
-        total_orders = purchase_stats['total_orders']
-        revenue = float(purchase_stats['revenue'] or 0)
-        
-        # MRR: compute entirely in the DB using a conditional expression so
-        # no Subscription rows are loaded into Python memory.
+        # 2. MRR calculation
         from django.db.models import Case, When, FloatField, ExpressionWrapper, F
         from django.db.models.functions import Cast
-        from django.db.models import DecimalField
         mrr_qs = (
             Subscription.objects
-            .filter(status='ACTIVE', expiry_date__gt=timezone.now())
+            .filter(status='ACTIVE', expiry_date__gt=now)
             .select_related('plan')
             .aggregate(
                 mrr_days=Sum(
@@ -125,27 +123,48 @@ class AdminDashboardStatsView(APIView):
                 )
             )
         )
-        mrr = float(mrr_qs['mrr_days'] or 0)
 
-        # Games
-        games_played = (
-            GameMatch.objects.filter(status='COMPLETED').count() +
-            SurvivalGame.objects.filter(status='COMPLETED').count()
+        # 3. Recent items for live activity feed
+        recent_users = list(
+            User.objects.order_by('-date_joined')
+            .only('id', 'username', 'first_name', 'last_name', 'date_joined')[:3]
+        )
+        recent_orders = list(
+            Purchase.objects.select_related('student', 'product')
+            .only('id', 'status', 'created_at', 'student__id', 'student__username', 'student__first_name', 'student__last_name', 'product__id', 'product__title')
+            .order_by('-created_at')[:3]
+        )
+        all_recent = list(
+            ExaminationAttempt.objects.select_related('student', 'examination')
+            .only('id', 'status', 'started_at', 'student__id', 'student__username', 'student__first_name', 'student__last_name', 'examination__id', 'examination__title')
+            .order_by('-started_at')[:3]
         )
 
-        # AI Tutor
-        total_ai_sessions = Conversation.objects.count()
-        today = timezone.now().date()
-        ai_sessions_today = TutorUsage.objects.filter(date=today).aggregate(
-            total=Sum('request_count')
-        )['total'] or 0
+        total_students = b_stats['total_students']
+        active_students = b_stats['active_students']
+        evaluators = b_stats['evaluators']
+
+        published_exams = b_stats['published_exams']
+        questions = b_stats['questions']
+        study_materials = b_stats['study_materials']
+        pending_evaluations = b_stats['pending_evaluations']
+        pending_tickets = b_stats['pending_tickets']
+
+        marketplace_listings = b_stats['marketplace_listings']
+        order_requests = b_stats['order_requests']
+        total_orders = b_stats['total_orders']
+        revenue = float(b_stats['revenue'] or 0)
+        mrr = float(mrr_qs['mrr_days'] or 0)
+
+        games_played = (b_stats['games_played_match'] or 0) + (b_stats['games_played_survival'] or 0)
+        total_ai_sessions = b_stats['total_ai_sessions']
+        ai_sessions_today = b_stats['ai_sessions_today']
 
         # Build real recent activity from DB
         recent_activity = []
         activity_id = 1
 
         # Recent registrations
-        recent_users = User.objects.order_by('-date_joined')[:3]
         for u in recent_users:
             recent_activity.append({
                 "id": activity_id,
@@ -158,8 +177,6 @@ class AdminDashboardStatsView(APIView):
             activity_id += 1
 
         # Recent exam attempts
-        all_recent = ExaminationAttempt.objects.select_related('student', 'examination').order_by('-started_at')[:3]
-
         for a in all_recent:
             title = a.examination.title
             recent_activity.append({
@@ -173,7 +190,6 @@ class AdminDashboardStatsView(APIView):
             activity_id += 1
 
         # Recent marketplace orders
-        recent_orders = Purchase.objects.select_related('student', 'product').order_by('-created_at')[:3]
         for o in recent_orders:
             recent_activity.append({
                 "id": activity_id,
@@ -221,10 +237,11 @@ class AdminDashboardStatsView(APIView):
             },
             "recentActivity": recent_activity,
         }
-        try:
-            cache.set(cache_key, payload, 120)  # 120s — was 30s
-        except Exception:
-            pass
+        if use_cache:
+            try:
+                cache.set(cache_key, payload, 120)  # 120s — was 30s
+            except Exception:
+                pass
         return Response(payload)
 
 
@@ -302,15 +319,17 @@ class AdminAnalyticsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from django.core.cache import cache
+        use_cache = not getattr(settings, 'TESTING', False)
         period = request.query_params.get('period', '30d')
-        cache_key = f'admin:analytics:{period}'
-        try:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return Response(cached)
-        except Exception:
-            pass
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = f'admin:analytics:{period}'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
         days, chart_data = _analytics_chart_data(period)
         payload = {
@@ -324,10 +343,11 @@ class AdminAnalyticsView(APIView):
                 "practiceSessions": sum(r["practiceSessions"] for r in chart_data),
             }
         }
-        try:
-            cache.set(cache_key, payload, 90)  # 90s per period
-        except Exception:
-            pass
+        if use_cache:
+            try:
+                cache.set(cache_key, payload, 90)  # 90s per period
+            except Exception:
+                pass
         return Response(payload)
 
 
@@ -368,27 +388,49 @@ class AdminStudentsAnalyticsView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        use_cache = not getattr(settings, 'TESTING', False)
         period = request.query_params.get('period', '30d')
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = f'admin:analytics:students:{period}'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
         days, chart_data = _analytics_chart_data(period)
         registration_trend = [{'date': r['date'], 'count': r['registrations']} for r in chart_data]
 
         students = User.objects.filter(role='student')
-        total_students = students.count()
-
         now = timezone.now()
-        active_7d = students.filter(last_login__gte=now - timedelta(days=7)).count()
-        active_30d = students.filter(last_login__gte=now - timedelta(days=30)).count()
-        never_logged_in = students.filter(last_login__isnull=True).count()
+        user_stats = students.aggregate(
+            total=Count('id'),
+            active_7d=Count('id', filter=Q(last_login__gte=now - timedelta(days=7))),
+            active_30d=Count('id', filter=Q(last_login__gte=now - timedelta(days=30))),
+            never_logged_in=Count('id', filter=Q(last_login__isnull=True)),
+        )
 
         completed = ExaminationAttempt.objects.filter(
             student__role='student', status__in=('submitted', 'evaluated')
         )
 
-        score_distribution = []
-        for low, high in SCORE_BUCKETS:
-            label = f"{low}-100" if high > 100 else f"{low}-{high}"
-            count = completed.filter(percentage__gte=low, percentage__lt=high).count()
-            score_distribution.append({'range': label, 'count': count})
+        # Single-pass bucket aggregation instead of 5 separate round-trips
+        score_aggs = completed.aggregate(
+            b0_20=Count('id', filter=Q(percentage__gte=0, percentage__lt=20)),
+            b20_40=Count('id', filter=Q(percentage__gte=20, percentage__lt=40)),
+            b40_60=Count('id', filter=Q(percentage__gte=40, percentage__lt=60)),
+            b60_80=Count('id', filter=Q(percentage__gte=60, percentage__lt=80)),
+            b80_100=Count('id', filter=Q(percentage__gte=80, percentage__lt=101)),
+        )
+        score_distribution = [
+            {'range': '0-20', 'count': score_aggs['b0_20']},
+            {'range': '20-40', 'count': score_aggs['b20_40']},
+            {'range': '40-60', 'count': score_aggs['b40_60']},
+            {'range': '60-80', 'count': score_aggs['b60_80']},
+            {'range': '80-100', 'count': score_aggs['b80_100']},
+        ]
 
         top_performers = (
             completed.values('student_id', 'student__username', 'student__first_name', 'student__last_name')
@@ -405,19 +447,25 @@ class AdminStudentsAnalyticsView(APIView):
             'averagePercentage': round(row['avg_percentage'] or 0, 2),
         } for row in top_performers]
 
-        return Response({
+        payload = {
             'period': period,
             'days': days,
             'registrationTrend': registration_trend,
             'summary': {
-                'totalStudents': total_students,
-                'active7d': active_7d,
-                'active30d': active_30d,
-                'neverLoggedIn': never_logged_in,
+                'totalStudents': user_stats['total'],
+                'active7d': user_stats['active_7d'],
+                'active30d': user_stats['active_30d'],
+                'neverLoggedIn': user_stats['never_logged_in'],
             },
             'scoreDistribution': score_distribution,
             'topPerformers': top_performers_data,
-        })
+        }
+        if use_cache:
+            try:
+                cache.set(cache_key, payload, 90)
+            except Exception:
+                pass
+        return Response(payload)
 
 
 class AdminUsersView(APIView):
@@ -430,7 +478,9 @@ class AdminUsersView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 20))
 
-        qs = User.objects.all().order_by('-date_joined')
+        qs = User.objects.all().only(
+            'id', 'username', 'first_name', 'last_name', 'email', 'role', 'is_active', 'date_joined', 'avatar'
+        ).order_by('-date_joined')
         if role:
             if role == 'admin':
                 qs = qs.filter(role__in=['admin', 'super-admin'])
@@ -444,9 +494,18 @@ class AdminUsersView(APIView):
                 Q(last_name__icontains=search)
             )
 
-        total = qs.count()
         start = (page - 1) * page_size
-        users = qs[start:start + page_size]
+        if page == 1:
+            batch = list(qs[0:page_size + 1])
+            if len(batch) <= page_size:
+                total = len(batch)
+                users = batch
+            else:
+                total = qs.count()
+                users = batch[:page_size]
+        else:
+            total = qs.count()
+            users = list(qs[start:start + page_size])
 
         data = []
         for u in users:
@@ -935,7 +994,12 @@ class AdminUserDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            user = User.objects.select_related('student_profile', 'teacher_profile').get(pk=pk)
+            user = User.objects.select_related(
+                'student_profile__target_category',
+                'student_profile__target_position',
+                'student_profile__admin_granted_by',
+                'teacher_profile',
+            ).get(pk=pk)
         except User.DoesNotExist:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1267,14 +1331,16 @@ class AdminExamsOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from django.core.cache import cache
-        cache_key = 'admin:exams:overview'
-        try:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return Response(cached)
-        except Exception:
-            pass
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = 'admin:exams:overview'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
         exam_stats = Examination.objects.aggregate(
             total=Count('id'),
@@ -1324,10 +1390,11 @@ class AdminExamsOverviewView(APIView):
             "pendingEvaluationRequests": pending_evaluation_requests,
             "recentExams": recent_data,
         }
-        try:
-            cache.set(cache_key, payload, 120)
-        except Exception:
-            pass
+        if use_cache:
+            try:
+                cache.set(cache_key, payload, 120)
+            except Exception:
+                pass
         return Response(payload)
 
 
@@ -1336,14 +1403,16 @@ class AdminAITutorOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from django.core.cache import cache
-        cache_key = 'admin:ai_tutor:overview'
-        try:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return Response(cached)
-        except Exception:
-            pass
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = 'admin:ai_tutor:overview'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
         total_sessions = Conversation.objects.count()
         today = timezone.now().date()
@@ -1385,10 +1454,11 @@ class AdminAITutorOverviewView(APIView):
             "topModes": top_modes,
             "trend": trend_data,
         }
-        try:
-            cache.set(cache_key, payload, 120)
-        except Exception:
-            pass
+        if use_cache:
+            try:
+                cache.set(cache_key, payload, 120)
+            except Exception:
+                pass
         return Response(payload)
 
 
@@ -1632,14 +1702,16 @@ class AdminMarketplaceOverviewView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        from django.core.cache import cache
-        cache_key = 'admin:marketplace:overview'
-        try:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return Response(cached)
-        except Exception:
-            pass
+        use_cache = not getattr(settings, 'TESTING', False)
+        if use_cache:
+            from django.core.cache import cache
+            cache_key = 'admin:marketplace:overview'
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
 
         product_stats = Product.objects.aggregate(
             total=Count('id'),
@@ -1738,10 +1810,11 @@ class AdminMarketplaceOverviewView(APIView):
             "paymentMethodBreakdown": payment_method_breakdown,
             "recentOrders": recent_data,
         }
-        try:
-            cache.set(cache_key, payload, 120)
-        except Exception:
-            pass
+        if use_cache:
+            try:
+                cache.set(cache_key, payload, 120)
+            except Exception:
+                pass
         return Response(payload)
 
 
@@ -1760,12 +1833,13 @@ def _evaluator_stats(user):
     )['avg']
 
     # Derive subjects from evaluated answers
-    subject_names = list(
-        Evaluation.objects.filter(evaluator=user)
-        .select_related('answer__question__topic__unit__subject')
-        .values_list('answer__question__topic__unit__subject__name', flat=True)
+    subject_names = [
+        name for name in Evaluation.objects.filter(evaluator=user)
+        .exclude(answer__question__subject__name__isnull=True)
+        .values_list('answer__question__subject__name', flat=True)
         .distinct()
-    )
+        if name
+    ]
 
     # Pending = submitted answers not yet evaluated
     pending = SubjectiveAnswer.objects.filter(
@@ -1812,7 +1886,9 @@ class AdminEvaluatorListView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 20))
 
-        qs = User.objects.filter(role='teacher').order_by('-date_joined')
+        qs = User.objects.filter(role='teacher').only(
+            'id', 'username', 'first_name', 'last_name', 'email', 'is_active', 'date_joined', 'avatar'
+        ).order_by('-date_joined')
 
         if search:
             qs = qs.filter(
@@ -1828,23 +1904,37 @@ class AdminEvaluatorListView(APIView):
 
         total = qs.count()
         start = (page - 1) * page_size
-        evaluators = qs[start:start + page_size]
 
         from exams.models import Evaluation, SubjectiveAnswer
-        from django.db.models import Avg
+        from django.db.models import Avg, Count
+
+        qs_slice = qs.annotate(
+            total_evals=Count('evaluations_given', distinct=True),
+            avg_marks=Avg('evaluations_given__marks_obtained')
+        )[start:start + page_size]
+
+        evaluators = list(qs_slice)
+        evaluator_ids = [u.id for u in evaluators]
+
+        subjects_by_evaluator = {}
+        if evaluator_ids:
+            eval_subjects = (
+                Evaluation.objects.filter(evaluator_id__in=evaluator_ids)
+                .exclude(answer__question__subject__name__isnull=True)
+                .values('evaluator_id', 'answer__question__subject__name')
+                .distinct()
+            )
+            for row in eval_subjects:
+                eid = row['evaluator_id']
+                s_name = row['answer__question__subject__name']
+                if s_name:
+                    subjects_by_evaluator.setdefault(eid, []).append(s_name)
 
         data = []
         for u in evaluators:
-            total_evals = Evaluation.objects.filter(evaluator=u).count()
-            avg_marks = Evaluation.objects.filter(evaluator=u).aggregate(
-                avg=Avg('marks_obtained')
-            )['avg']
-            subjects = list(
-                Evaluation.objects.filter(evaluator=u)
-                .select_related('answer__question__topic__unit__subject')
-                .values_list('answer__question__topic__unit__subject__name', flat=True)
-                .distinct()
-            )
+            total_evals = getattr(u, 'total_evals', 0) or 0
+            avg_marks = getattr(u, 'avg_marks', None)
+            subjects = subjects_by_evaluator.get(u.id, [])
             data.append({
                 "id": u.id,
                 "name": u.get_full_name() or u.username,
@@ -2098,6 +2188,16 @@ class AdminCourseApplicationView(APIView):
             'student', 'course', 'subscription_payment', 'subscription_payment__plan',
             'marketplace_payment', 'marketplace_payment__product',
             'reviewed_by'
+        ).only(
+            'id', 'student_id', 'course_id', 'subscription_payment_id', 'marketplace_payment_id',
+            'status', 'applied_at', 'reviewed_at', 'reviewed_by_id', 'note',
+            'student__id', 'student__username', 'student__first_name', 'student__last_name', 'student__email',
+            'course__id', 'course__title',
+            'subscription_payment__id', 'subscription_payment__status', 'subscription_payment__amount', 'subscription_payment__submitted_at',
+            'subscription_payment__plan__id', 'subscription_payment__plan__name',
+            'marketplace_payment__id', 'marketplace_payment__status', 'marketplace_payment__submitted_amount', 'marketplace_payment__submitted_at',
+            'marketplace_payment__product__id', 'marketplace_payment__product__title',
+            'reviewed_by__id', 'reviewed_by__username', 'reviewed_by__first_name', 'reviewed_by__last_name',
         ).order_by('-applied_at')
 
         if status_filter:
@@ -2105,14 +2205,19 @@ class AdminCourseApplicationView(APIView):
 
         total = qs.count()
         start = (page - 1) * per_page
-        applications = qs[start:start + per_page]
+        applications = list(qs[start:start + per_page])
+
+        student_ids = [a.student_id for a in applications]
+        course_ids = [a.course_id for a in applications]
+        enrollments_map = {}
+        if applications:
+            for e in Enrollment.objects.filter(student_id__in=student_ids, course_id__in=course_ids):
+                enrollments_map[(e.student_id, e.course_id)] = e
 
         data = []
         for app in applications:
-            # Enrollment status for this student+course
-            enrollment = Enrollment.objects.filter(
-                student=app.student, course=app.course
-            ).first()
+            # Enrollment status for this student+course (batch-resolved)
+            enrollment = enrollments_map.get((app.student_id, app.course_id))
 
             payment = app.subscription_payment
 
@@ -2526,11 +2631,16 @@ class AdminStudyMaterialsView(APIView):
         page = int(request.query_params.get('page', 1))
         page_size = int(request.query_params.get('page_size', 50))
 
+        include_content = request.query_params.get('include_content', 'false').lower() == 'true'
+
         # Admin-controlled order first (Syllabus Builder reordering), newest
         # first as a tiebreak among equal/unset orders.
         qs = StudyMaterial.objects.select_related(
             'teacher', 'subject', 'chapter', 'topic', 'exam', 'exam__parent', 'exam__category', 'course'
-        ).order_by('order', '-created_at')
+        )
+        if not include_content:
+            qs = qs.defer('content')
+        qs = qs.order_by('order', '-created_at')
 
         if status_filter and status_filter != 'all':
             qs = qs.filter(status=status_filter)
@@ -2593,7 +2703,7 @@ class AdminStudyMaterialsView(APIView):
                 "title": material.title,
                 "slug": material.slug,
                 "description": material.description or '',
-                "content": material.content or '',
+                "content": (material.content or '') if include_content else '',
                 "teacher": material.teacher.get_full_name() or material.teacher.username if material.teacher else 'Unknown',
                 "examId": material.exam_id,
                 "examName": material.exam.name if material.exam else 'N/A',
@@ -3025,6 +3135,11 @@ class AdminStudyMaterialDetailView(APIView):
             value = request.data['available_to_ai_tutor']
             if isinstance(value, bool):
                 material.available_to_ai_tutor = value
+            else:
+                return Response(
+                    {'error': 'available_to_ai_tutor must be a boolean.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         material.save()
 

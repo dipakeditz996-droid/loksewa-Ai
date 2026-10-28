@@ -96,6 +96,7 @@ openpyxl==3.1.5
 # Creates printable subjective examination question papers from the approved
 # Question Bank and stores them through the Examination FileField storage.
 reportlab==5.0.1
+pymupdf==1.28.2
 
 # -- Error monitoring (Sentry) -------------------------------------------------
 # sentry-sdk: reports unhandled exceptions in real time. Wired in

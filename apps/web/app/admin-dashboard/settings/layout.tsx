@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  Settings, Globe, Search, Shield,
+  Settings, Globe, Search, Shield, FileText,
   Menu, X
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ const SETTINGS_NAV = [
   // (IsAdminUser). Distinct from the platform-wide password *policy* fields
   // already on the Overview tab's "security" block.
   { title: "Security", href: "/admin-dashboard/settings/security", icon: Shield },
+  { title: "PDF Branding", href: "/admin-dashboard/settings/branding", icon: FileText },
   // BACKEND GAP — the following settings have no Django model, serializer, or API endpoint.
   // They are intentionally excluded until backend support is implemented:
   // - General     (/settings/general)

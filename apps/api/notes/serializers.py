@@ -27,6 +27,7 @@ class StudyMaterialListSerializer(serializers.ModelSerializer):
     chapter_name = serializers.CharField(source='chapter.title', read_only=True, default=None)
     topic_name = serializers.CharField(source='topic.name', read_only=True, default=None)
     course_title = serializers.CharField(source='course.title', read_only=True, default=None)
+    display_title = serializers.SerializerMethodField()
     file = serializers.SerializerMethodField()
     file_url = serializers.SerializerMethodField()
     is_bookmarked = serializers.SerializerMethodField()
@@ -35,7 +36,7 @@ class StudyMaterialListSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudyMaterial
         fields = [
-            'id', 'title', 'slug', 'description', 'material_type',
+            'id', 'title', 'display_title', 'slug', 'description', 'material_type',
             'content_category', 'note_type',
             'access_type', 'status', 'is_downloadable', 'estimated_reading_time', 'updated_at', 'created_at',
             'order',
@@ -47,6 +48,10 @@ class StudyMaterialListSerializer(serializers.ModelSerializer):
             'file', 'file_url',
             'is_bookmarked', 'progress'
         ]
+
+    def get_display_title(self, obj):
+        from core.pdf_utils import format_material_display_title
+        return format_material_display_title(obj)
 
     def get_file_url(self, obj):
         if obj.file:

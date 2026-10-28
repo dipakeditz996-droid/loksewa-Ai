@@ -48,7 +48,11 @@ class IsAdminUser(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(
             request.user and request.user.is_authenticated
-            and request.user.role in ['admin', 'super-admin']
+            and (
+                getattr(request.user, 'role', None) in ['admin', 'super-admin']
+                or getattr(request.user, 'is_staff', False)
+                or getattr(request.user, 'is_superuser', False)
+            )
         )
 
 
@@ -58,7 +62,11 @@ class IsAdminUserOrReadOnly(permissions.BasePermission):
             return True
         return bool(
             request.user and request.user.is_authenticated
-            and request.user.role in ['admin', 'super-admin']
+            and (
+                getattr(request.user, 'role', None) in ['admin', 'super-admin']
+                or getattr(request.user, 'is_staff', False)
+                or getattr(request.user, 'is_superuser', False)
+            )
         )
 
 
@@ -81,9 +89,9 @@ class PublicProductListView(APIView):
 
     def get(self, request):
         try:
-            limit = min(int(request.query_params.get('limit', 6)), 100)
+            limit = min(int(request.query_params.get('limit', 24)), 100)
         except (TypeError, ValueError):
-            limit = 6
+            limit = 24
         products = (
             Product.objects
             .filter(is_published=True, listing_status='ACTIVE')
@@ -150,6 +158,26 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         elif is_seller == 'false':
             qs = qs.filter(seller=None)
         return qs
+
+    def perform_create(self, serializer):
+        is_published = serializer.validated_data.get('is_published', False)
+        status_val = serializer.validated_data.get('listing_status')
+        if not status_val:
+            status_val = 'ACTIVE' if is_published else 'DRAFT'
+        serializer.save(listing_status=status_val, is_published=is_published)
+
+    def perform_update(self, serializer):
+        is_published = serializer.validated_data.get('is_published', serializer.instance.is_published)
+        status_val = serializer.validated_data.get('listing_status')
+        if 'is_published' in serializer.validated_data and 'listing_status' not in serializer.validated_data:
+            if is_published:
+                status_val = 'ACTIVE'
+            elif serializer.instance.listing_status == 'ACTIVE':
+                status_val = 'DRAFT'
+        if status_val:
+            serializer.save(listing_status=status_val, is_published=is_published)
+        else:
+            serializer.save()
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -565,7 +593,7 @@ class AdminListingReportViewSet(viewsets.ReadOnlyModelViewSet):
 
 class StudentProductViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
     pagination_class = MarketplacePagination
 
     def get_queryset(self):

@@ -256,6 +256,55 @@ export interface AdminAITutorPrompts {
   modes: Record<AITutorMode, { promptText: string; updatedAt: string }>;
 }
 
+export interface AdminAITutorGuardrail {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  status: "active" | "degraded" | "inactive";
+  enforcementLevel: string;
+  details: string;
+}
+
+export interface AdminAITutorSafetyLog {
+  id: number;
+  conversationId: number;
+  timestamp: string;
+  student: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  queryExcerpt: string;
+  fullQuery: string;
+  guardrail: string;
+  status: "passed" | "refused" | "blocked" | "warning";
+  severity: "low" | "medium" | "critical";
+  reason: string;
+  responseExcerpt: string;
+  mode: string;
+}
+
+export interface AdminAITutorSafetyResponse {
+  status: "operational" | "attention";
+  provider: string;
+  model: string;
+  metrics: {
+    cleanPassRate: number;
+    totalScanned: number;
+    flaggedCount: number;
+    activePoliciesCount: number;
+    indexedKnowledgeSources: number;
+    dailyLimit: number;
+  };
+  guardrails: AdminAITutorGuardrail[];
+  logs: AdminAITutorSafetyLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface AdminRecentOrder {
   id: number;
   product: string;
@@ -868,6 +917,24 @@ export const adminApi = {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  },
+
+  getAITutorSafety: async (params?: {
+    search?: string;
+    status?: string;
+    severity?: string;
+    guardrail?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<AdminAITutorSafetyResponse> => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set("search", params.search);
+    if (params?.status) query.set("status", params.status);
+    if (params?.severity) query.set("severity", params.severity);
+    if (params?.guardrail) query.set("guardrail", params.guardrail);
+    if (params?.page) query.set("page", String(params.page));
+    if (params?.pageSize) query.set("page_size", String(params.pageSize));
+    return apiClient<AdminAITutorSafetyResponse>(`/admin/ai-tutor/safety/?${query.toString()}`);
   },
 
   getMarketplaceOverview: async (): Promise<AdminMarketplaceOverview> => {

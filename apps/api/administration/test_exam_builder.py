@@ -425,3 +425,26 @@ class AnalyticsResultsTests(ExamBuilderTestBase):
         self.as_admin()
         res = self.client.get(f'{self.url}results/')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+class DeleteExamTests(ExamBuilderTestBase):
+    def test_soft_delete_moves_exam_to_trash(self):
+        self.as_admin()
+        res = self.client.delete(self.url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data.get('success'))
+        self.examination.refresh_from_db()
+        self.assertEqual(self.examination.status, 'archived')
+
+    def test_permanent_delete_removes_exam_completely(self):
+        self.as_admin()
+        exam_id = self.examination.id
+        res = self.client.delete(f'{self.url}?permanent=true')
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertTrue(res.data.get('success'))
+        self.assertFalse(Examination.objects.filter(id=exam_id).exists())
+
+    def test_student_cannot_delete_exam(self):
+        self.client.force_authenticate(user=self.student)
+        res = self.client.delete(f'{self.url}?permanent=true')
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+

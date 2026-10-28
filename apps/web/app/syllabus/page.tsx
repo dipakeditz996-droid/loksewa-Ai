@@ -20,7 +20,7 @@ export default function SyllabusPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedLevelId, setSelectedLevelId] = useState<number | null>(null);
   const [selectedPrepId, setSelectedPrepId] = useState<number | null>(null);
-  const [viewingPdf, setViewingPdf] = useState<{ id: number; title: string; fileUrl: string | null; externalUrl: string | null } | null>(null);
+  const [viewingPdf, setViewingPdf] = useState<{ id: number; title: string; displayTitle?: string; contentCategory?: string; fileUrl: string | null; externalUrl: string | null } | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
@@ -58,19 +58,34 @@ export default function SyllabusPage() {
     revision_notes: "Revision Notes",
   };
 
+  const getMaterialTitle = (mat: { title: string; displayTitle?: string; contentCategory?: string } | null) => {
+    if (!mat) return "Document";
+    if (mat.displayTitle) return mat.displayTitle;
+    const isSyllabus = mat.contentCategory === "syllabus" || !mat.contentCategory;
+    const kind = isSyllabus ? "Syllabus" : "Note";
+    const examName = selectedExam?.name || "";
+    if (examName && !mat.title.toLowerCase().includes(examName.toLowerCase())) {
+      return `${examName} - ${kind}`;
+    }
+    if (!mat.title.toLowerCase().includes(kind.toLowerCase())) {
+      return `${mat.title} - ${kind}`;
+    }
+    return mat.title;
+  };
+
   // Actually saves the file instead of just opening the browser's PDF
   // viewer, which is what a plain <a target="_blank"> did before. Falls
   // back to opening the link directly if the fetch itself fails (e.g. no
   // file behind an external_url).
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
-  const handleDownloadMaterial = async (mat: { id: number; title: string; fileUrl: string | null; externalUrl: string | null }) => {
+  const handleDownloadMaterial = async (mat: { id: number; title: string; displayTitle?: string; contentCategory?: string; fileUrl: string | null; externalUrl: string | null }) => {
     if (!mat.fileUrl) {
       if (mat.externalUrl) window.open(mat.externalUrl, "_blank", "noopener,noreferrer");
       return;
     }
     setDownloadingId(mat.id);
     try {
-      await downloadPublicFile(mat.fileUrl, `${mat.title}.pdf`);
+      await downloadPublicFile(mat.fileUrl, `${getMaterialTitle(mat)}.pdf`);
     } catch {
       toast.error("Couldn't download the file. Opening it instead.");
       window.open(mat.fileUrl, "_blank", "noopener,noreferrer");
@@ -510,8 +525,8 @@ export default function SyllabusPage() {
             {/* Modal Header */}
             <div className="relative bg-slate-950 text-white px-5 py-3.5 flex items-center justify-between border-b border-slate-800 shrink-0 gap-4">
               <div className="min-w-0 pr-2 max-w-[60%] sm:max-w-[45%]">
-                <h2 className="text-sm sm:text-base font-bold truncate text-white" title={viewingPdf.title}>
-                  {viewingPdf.title}
+                <h2 className="text-sm sm:text-base font-bold truncate text-white" title={getMaterialTitle(viewingPdf)}>
+                  {getMaterialTitle(viewingPdf)}
                 </h2>
                 <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#C4A45C] truncate mt-0.5">
                   <span className="truncate">{selectedExam?.name}</span>
@@ -557,7 +572,7 @@ export default function SyllabusPage() {
             <div className="flex-1 bg-slate-900 relative overflow-hidden flex flex-col">
               <FirstPartyPdfViewer
                 url={viewingPdf.fileUrl || viewingPdf.externalUrl}
-                title={viewingPdf.title}
+                title={getMaterialTitle(viewingPdf)}
                 allowDownload={true}
                 onDownload={() => handleDownloadMaterial(viewingPdf)}
               />

@@ -167,6 +167,10 @@ class StudyMaterial(models.Model):
             self.slug = slugify(self.title) + '-' + str(uuid.uuid4())[:8]
         super().save(*args, **kwargs)
 
+    def get_display_title(self):
+        from core.pdf_utils import format_material_display_title
+        return format_material_display_title(self)
+
     def __str__(self):
         return self.title
 

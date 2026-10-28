@@ -158,6 +158,7 @@ export default function MarketplaceProductsPage() {
       data.append("price", form.price || "0");
       if (form.discount_price) data.append("discount_price", form.discount_price);
       data.append("is_published", String(form.is_published));
+      data.append("listing_status", form.is_published ? "ACTIVE" : "DRAFT");
       data.append("stock", form.stock);
       if (form.condition) data.append("condition", form.condition);
       if (form.author) data.append("author", form.author);
@@ -190,8 +191,12 @@ export default function MarketplaceProductsPage() {
   const handleTogglePublish = async (product: Product) => {
     setBusyId(product.id);
     try {
-      await marketplaceApi.adminUpdateProduct(product.id, { is_published: !product.is_published });
-      toast.success(product.is_published ? "Product unpublished." : "Product published.");
+      const nextPublished = !product.is_published;
+      await marketplaceApi.adminUpdateProduct(product.id, {
+        is_published: nextPublished,
+        listing_status: nextPublished ? "ACTIVE" : "DRAFT",
+      });
+      toast.success(nextPublished ? "Product published." : "Product unpublished.");
       await fetchProducts();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update product.");

@@ -5,8 +5,13 @@ import Link from "next/link";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { 
   Search, Filter, PlusCircle, FileText, ChevronRight, MoreHorizontal, ClipboardList, Inbox, Award,
-  Clock, DownloadCloud, Lock, Unlock, Eye, HelpCircle, Archive, Trash2, Calendar, FileCheck
+  Clock, DownloadCloud, Lock, Unlock, Eye, HelpCircle, Archive, Trash2, Calendar, FileCheck,
+  AlertTriangle, Loader2
 } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,10 +65,78 @@ const StatusBadge = ({ status }: { status: string }) => {
 };
 
 export default function ExamsOverviewPage() {
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [majorArea, setMajorArea] = useState<"all" | "topicwise" | "objective" | "subjective">("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<Examination | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+
+  const handleDeleteExam = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      await adminExamApi.deleteExam(deleteTarget.id, { permanent: true });
+      toast.success(`Exam "${deleteTarget.title}" permanently deleted.`);
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-exams"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-exams-overview"] });
+    } catch (err: any) {
+      console.error("Failed to delete exam:", err);
+      toast.error(err?.message || "Failed to permanently delete exam.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDuplicateExam = async (exam: Examination) => {
+    try {
+      setActionLoadingId(exam.id);
+      await adminExamApi.duplicateExam(exam.id);
+      toast.success(`Exam "${exam.title}" duplicated.`);
+      queryClient.invalidateQueries({ queryKey: ["admin-exams"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-exams-overview"] });
+    } catch (err: any) {
+      console.error("Failed to duplicate exam:", err);
+      toast.error(err?.message || "Failed to duplicate exam.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handlePublishExam = async (exam: Examination) => {
+    try {
+      setActionLoadingId(exam.id);
+      await adminExamApi.publishExam(exam.id);
+      toast.success(`Exam "${exam.title}" published.`);
+      queryClient.invalidateQueries({ queryKey: ["admin-exams"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-exams-overview"] });
+    } catch (err: any) {
+      console.error("Failed to publish exam:", err);
+      toast.error(err?.message || "Failed to publish exam.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleArchiveExam = async (exam: Examination) => {
+    try {
+      setActionLoadingId(exam.id);
+      await adminExamApi.archiveExam(exam.id);
+      toast.success(`Exam "${exam.title}" archived.`);
+      queryClient.invalidateQueries({ queryKey: ["admin-exams"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-exams-overview"] });
+    } catch (err: any) {
+      console.error("Failed to archive exam:", err);
+      toast.error(err?.message || "Failed to archive exam.");
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
 
   const { data: stats } = useQuery({
     queryKey: ["admin-exams-overview"],
@@ -400,7 +473,7 @@ export default function ExamsOverviewPage() {
                               <MoreHorizontal className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-48">
                             <DropdownMenuItem asChild>
                               <Link href={`/admin-dashboard/exams/${exam.id}`}>Overview</Link>
                             </DropdownMenuItem>
@@ -421,15 +494,51 @@ export default function ExamsOverviewPage() {
                                 Edit Exam
                               </Link>
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem>Duplicate Exam</DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDuplicateExam(exam)}
+                              disabled={actionLoadingId === exam.id}
+                              className="cursor-pointer"
+                            >
+                              Duplicate Exam
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {exam.status === "live" || (exam as any).status === "published" ? (
-                              <DropdownMenuItem className="text-amber-600">Close Exam</DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-amber-600 cursor-pointer"
+                                onClick={() => handleArchiveExam(exam)}
+                                disabled={actionLoadingId === exam.id}
+                              >
+                                Close Exam
+                              </DropdownMenuItem>
                             ) : (
-                              <DropdownMenuItem className="text-emerald-600">Publish Exam</DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-emerald-600 cursor-pointer"
+                                onClick={() => handlePublishExam(exam)}
+                                disabled={actionLoadingId === exam.id}
+                              >
+                                Publish Exam
+                              </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem className="text-red-600">Archive</DropdownMenuItem>
+                            {exam.status !== "archived" && (
+                              <DropdownMenuItem
+                                className="text-slate-600 cursor-pointer"
+                                onClick={() => handleArchiveExam(exam)}
+                                disabled={actionLoadingId === exam.id}
+                              >
+                                Archive
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-red-600 focus:text-red-600 focus:bg-red-50 flex items-center gap-2 cursor-pointer font-medium"
+                              onClick={() => {
+                                setDeleteTarget(exam);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                              Delete Permanently
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -467,6 +576,74 @@ export default function ExamsOverviewPage() {
           </div>
         </div>
       </div>
+
+      {/* Permanent Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) {
+            setDeleteDialogOpen(open);
+            if (!open) setDeleteTarget(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5 text-red-600" />
+              Permanently Delete Exam
+            </DialogTitle>
+            <DialogDescription className="space-y-3 pt-2 text-slate-600" asChild>
+              <div>
+                <p className="text-sm">
+                  Are you sure you want to permanently delete{" "}
+                  <span className="font-semibold text-slate-900">"{deleteTarget?.title}"</span>?
+                </p>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 space-y-1.5 mt-2">
+                  <p className="font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                    This action is permanent and cannot be undone!
+                  </p>
+                  <p>
+                    All associated questions, test configurations, and student attempt records (
+                    {deleteTarget?.attempts_count ? `${deleteTarget.attempts_count} attempt(s)` : "no attempts recorded"}
+                    ) will be permanently deleted from the database.
+                  </p>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setDeleteTarget(null);
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold flex items-center gap-1.5"
+              onClick={handleDeleteExam}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  Delete Permanently
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

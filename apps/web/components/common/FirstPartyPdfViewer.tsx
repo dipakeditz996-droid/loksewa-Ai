@@ -170,11 +170,14 @@ export function FirstPartyPdfViewer({
     setRenderedPages(new Set());
     pageDimensionsRef.current = null;
 
-    const resolvedUrl = normalizePdfUrl(url);
+    let resolvedUrl = normalizePdfUrl(url);
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
     const httpHeaders: Record<string, string> = {};
     if (token && !resolvedUrl.startsWith("blob:") && !resolvedUrl.startsWith("data:")) {
       httpHeaders["Authorization"] = `Bearer ${token}`;
+      if (resolvedUrl.includes("/media/drive/") && !resolvedUrl.includes("token=")) {
+        resolvedUrl += (resolvedUrl.includes("?") ? "&" : "?") + `token=${encodeURIComponent(token)}`;
+      }
     }
 
     let currentLoadingTask: any = null;

@@ -11,10 +11,39 @@ with a saved link can still fetch a payment screenshot the way they always
 could with a public-read S3 URL; per-file access control is a separate,
 larger feature, not something this endpoint changes either way.
 """
-from django.http import HttpResponse, HttpResponseNotFound
+from django.http import HttpResponse, HttpResponseNotFound, HttpResponseForbidden
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 from core import google_drive
+
+
+def _get_authenticated_user(request):
+    """Attempt to resolve user from request.user, session, Authorization Bearer token, or ?token= query param."""
+    user = getattr(request, 'user', None)
+    if user and user.is_authenticated:
+        return user
+
+    from core.authentication import ProfileAwareJWTAuthentication
+    jwt_auth = ProfileAwareJWTAuthentication()
+
+    # 1. Check HTTP Authorization header
+    try:
+        auth_res = jwt_auth.authenticate(request)
+        if auth_res:
+            return auth_res[0]
+    except Exception:
+        pass
+
+    # 2. Check query parameter `token` or `jwt`
+    token_param = request.GET.get('token') or request.GET.get('jwt')
+    if token_param:
+        try:
+            validated_token = jwt_auth.get_validated_token(token_param)
+            return jwt_auth.get_user(validated_token)
+        except Exception:
+            pass
+
+    return None
 
 
 def _drive_file_id_matches(value, file_id):
@@ -35,29 +64,82 @@ def _drive_file_id_matches(value, file_id):
 
 @xframe_options_exempt
 def drive_media_proxy(request, file_id):
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        response = HttpResponse(status=200)
+        origin = request.META.get('HTTP_ORIGIN')
+        response['Access-Control-Allow-Origin'] = origin if origin else '*'
+        if origin:
+            response['Access-Control-Allow-Credentials'] = 'true'
+        response['Access-Control-Allow-Methods'] = 'GET, HEAD, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Authorization, Content-Type, Range'
+        return response
+
     from notes.models import StudyMaterial
     from exams.models import Examination, SubjectiveSubmission
-    from django.http import HttpResponseForbidden
+    from courses.services.course_access_service import CourseAccessService
 
-    # Reject unauthenticated/direct proxy access for genuinely protected materials.
+    # Check if the requested file belongs to protected resources
+    matching_material = None
+    matching_exam = None
+    matching_submission = None
+
+    # Check StudyMaterial (excluding public syllabus)
+    materials = StudyMaterial.objects.exclude(content_category='syllabus').filter(file__contains=file_id)
+    for mat in materials:
+        if _drive_file_id_matches(mat.file.name, file_id):
+            matching_material = mat
+            break
+
+    if not matching_material:
+        # Fallback check across all non-syllabus materials in case file path doesn't contain file_id directly
+        all_materials = StudyMaterial.objects.exclude(content_category='syllabus').only('id', 'file', 'course_id', 'exam_id', 'status', 'access_type')
+        for mat in all_materials:
+            if _drive_file_id_matches(mat.file.name, file_id):
+                matching_material = mat
+                break
+
+    if not matching_material:
+        candidate_exams = Examination.objects.filter(question_paper_pdf__contains=file_id)
+        for exam in candidate_exams:
+            if _drive_file_id_matches(exam.question_paper_pdf, file_id):
+                matching_exam = exam
+                break
+
+    if not matching_material and not matching_exam:
+        candidate_submissions = SubjectiveSubmission.objects.filter(answer_pdf__contains=file_id)
+        for sub in candidate_submissions:
+            if _drive_file_id_matches(sub.answer_pdf, file_id):
+                matching_submission = sub
+                break
+
+    is_protected = bool(matching_material or matching_exam or matching_submission)
+
+    # Reject unauthenticated/unauthorized proxy access for genuinely protected materials.
     # Official syllabus PDFs remain public; only restricted exam/submission materials
-    # should be blocked through this proxy.
-    protected_study_materials = StudyMaterial.objects.exclude(content_category='syllabus').only('file')
-    is_protected = any(
-        _drive_file_id_matches(material.file.name, file_id)
-        for material in protected_study_materials
-    )
-
-    if not is_protected:
-        question_paper_values = Examination.objects.filter(question_paper_pdf__isnull=False).values_list('question_paper_pdf', flat=True)
-        answer_pdf_values = SubjectiveSubmission.objects.filter(answer_pdf__isnull=False).values_list('answer_pdf', flat=True)
-        is_protected = any(
-            _drive_file_id_matches(value, file_id)
-            for value in list(question_paper_values) + list(answer_pdf_values)
-        )
-
+    # and course notes should be blocked when unauthenticated/unauthorized.
     if is_protected:
-        return HttpResponseForbidden("Direct access to protected materials via Drive proxy is forbidden. Please access files via the authorized download API.")
+        user = _get_authenticated_user(request)
+        if not user:
+            return HttpResponseForbidden(
+                "Direct access to protected materials via Drive proxy is forbidden. Please access files via the authorized download API."
+            )
+
+        if CourseAccessService.is_privileged(user):
+            has_access = True
+        elif matching_material:
+            has_access = CourseAccessService.has_note_access(user, matching_material)
+        elif matching_exam:
+            has_access = CourseAccessService.filter_examinations_queryset(
+                user, Examination.objects.filter(id=matching_exam.id)
+            ).exists()
+        elif matching_submission:
+            has_access = (matching_submission.student_id == user.id)
+        else:
+            has_access = False
+
+        if not has_access:
+            return HttpResponseForbidden("You do not have access to this protected resource.")
 
     try:
         meta = google_drive.get_file(file_id)
@@ -71,6 +153,23 @@ def drive_media_proxy(request, file_id):
         content = google_drive.download_file(file_id)
     except google_drive.GoogleDriveError:
         return HttpResponse('Could not reach Google Drive.', status=502)
+
+    from core.pdf_utils import resolve_file_display_info, inject_pdf_title, build_content_disposition
+
+    display_title, _ = resolve_file_display_info(file_id)
+    if not display_title:
+        display_title = meta.get('name', 'document.pdf')
+
+    mime_type = meta.get('mimeType') or 'application/octet-stream'
+    if content.startswith(b'%PDF-') or 'pdf' in mime_type.lower():
+        content = inject_pdf_title(content, display_title)
+        mime_type = 'application/pdf'
+
+    content_disposition = build_content_disposition(display_title, disposition_type='inline')
+
+    origin = request.META.get('HTTP_ORIGIN')
+    allow_origin = origin if origin else '*'
+    cache_control = 'private, no-cache' if is_protected else 'public, max-age=31536000, immutable'
 
     file_size = len(content)
     range_header = request.META.get('HTTP_RANGE', '').strip()
@@ -96,27 +195,29 @@ def drive_media_proxy(request, file_id):
 
                 if 0 <= start <= end < file_size:
                     chunk = content[start:end + 1]
-                    response = HttpResponse(chunk, status=206, content_type=meta.get('mimeType') or 'application/octet-stream')
+                    response = HttpResponse(chunk, status=206, content_type=mime_type)
                     response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
                     response['Content-Length'] = str(len(chunk))
                     response['Accept-Ranges'] = 'bytes'
-                    response['Cache-Control'] = 'public, max-age=31536000, immutable'
-                    response['Access-Control-Allow-Origin'] = '*'
+                    response['Cache-Control'] = cache_control
+                    response['Access-Control-Allow-Origin'] = allow_origin
+                    if origin:
+                        response['Access-Control-Allow-Credentials'] = 'true'
                     response['Cross-Origin-Resource-Policy'] = 'cross-origin'
                     response['Cross-Origin-Opener-Policy'] = 'unsafe-none'
-                    filename = meta.get('name', 'document.pdf')
-                    response['Content-Disposition'] = f'inline; filename="{filename}"'
+                    response['Content-Disposition'] = content_disposition
                     return response
             except (ValueError, TypeError):
                 pass
 
-    response = HttpResponse(content, content_type=meta.get('mimeType') or 'application/octet-stream')
+    response = HttpResponse(content, content_type=mime_type)
     response['Accept-Ranges'] = 'bytes'
     response['Content-Length'] = str(file_size)
-    response['Cache-Control'] = 'public, max-age=31536000, immutable'
-    response['Access-Control-Allow-Origin'] = '*'
+    response['Cache-Control'] = cache_control
+    response['Access-Control-Allow-Origin'] = allow_origin
+    if origin:
+        response['Access-Control-Allow-Credentials'] = 'true'
     response['Cross-Origin-Resource-Policy'] = 'cross-origin'
     response['Cross-Origin-Opener-Policy'] = 'unsafe-none'
-    filename = meta.get('name', 'document.pdf')
-    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    response['Content-Disposition'] = content_disposition
     return response

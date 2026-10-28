@@ -382,44 +382,45 @@ export default function CreateExamPage() {
       .finally(() => setAcademicLoading((prev) => ({ ...prev, topics: false })));
   }, [chapterId]);
 
-  const buildPayload = () => ({
-    title: title.trim(),
-    description,
-    exam_type: examType,
-    objective_category: examType === "subject" ? "topicwise" : objectiveCategory || null,
-    instructions,
-    category: categoryId,
-    exam: positionId,
-    subject: subjectId ?? null,
-    course: courseId ?? null,
-    topic: topicId ?? null,
-    time_limit: timeLimit,
-    passing_marks: passingMarks,
-    marks_per_question: marksPerQuestion,
-    negative_marking: negativeMarking,
-    negative_marking_value: negativeValue,
-    max_attempts: maxAttempts,
-    allow_resume: allowResume,
-    auto_submit: autoSubmit,
-    result_visibility: resultVisibility,
-    show_correct_answers: showAnswers,
-    // Hard-blocked for Old Past Exams — the backend enforces this too, but
-    // the saved value should reflect reality rather than a checkbox the UI
-    // has since disabled.
-    randomize_questions: objectiveCategory === "past_year" ? false : randomizeQuestions,
-    randomize_options: randomizeOptions,
-    start_time: toIso(startTime),
-    end_time: toIso(endTime),
-    ...(examType === "subjective"
-      ? {
-        total_marks: subjectiveTotalMarks,
-        upload_deadline_minutes: uploadDeadlineMinutes,
-        allowed_file_types: allowedFileTypes,
-        max_upload_size_mb: maxUploadSizeMb,
-        evaluation_type: evaluationType,
-      }
-      : {}),
-  });
+  const buildPayload = () => {
+    const isSubjective = examType === "subjective";
+    return {
+      title: title.trim(),
+      description,
+      exam_type: examType,
+      objective_category: examType === "subject" ? "topicwise" : objectiveCategory || null,
+      instructions,
+      category: categoryId,
+      exam: positionId,
+      subject: subjectId ?? null,
+      course: courseId ?? null,
+      topic: topicId ?? null,
+      time_limit: timeLimit,
+      passing_marks: passingMarks,
+      negative_marking: isSubjective ? false : negativeMarking,
+      negative_marking_value: isSubjective ? 0 : negativeValue,
+      max_attempts: maxAttempts,
+      allow_resume: allowResume,
+      auto_submit: autoSubmit,
+      result_visibility: resultVisibility,
+      show_correct_answers: isSubjective ? false : showAnswers,
+      // Hard-blocked for Subjective & Old Past Exams
+      randomize_questions: (isSubjective || objectiveCategory === "past_year") ? false : randomizeQuestions,
+      randomize_options: isSubjective ? false : randomizeOptions,
+      start_time: toIso(startTime),
+      end_time: toIso(endTime),
+      ...(!isSubjective ? { marks_per_question: marksPerQuestion } : {}),
+      ...(isSubjective
+        ? {
+          total_marks: subjectiveTotalMarks,
+          upload_deadline_minutes: uploadDeadlineMinutes,
+          allowed_file_types: allowedFileTypes,
+          max_upload_size_mb: maxUploadSizeMb,
+          evaluation_type: evaluationType,
+        }
+        : {}),
+    };
+  };
 
   const handleQuestionPaperFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -780,6 +781,8 @@ export default function CreateExamPage() {
                         setQuestionSourceMode("excel");
                       } else if (item.id === "subjective") {
                         setExamType("subjective");
+                        setRandomizeQuestions(false);
+                        setRandomizeOptions(false);
                         if (!objectiveCategory) {
                           setObjectiveCategory("model");
                         }

@@ -33,13 +33,17 @@ def get_node_dependencies(instance):
         counts['exams'] = Examination.objects.filter(category=instance).count()
     elif isinstance(instance, Exam):
         counts['children'] = instance.children.count() + instance.papers.count()
-        counts['notes'] = StudyMaterial.objects.filter(exam=instance).count()
+        counts['notes'] = StudyMaterial.objects.filter(
+            Q(exam=instance) | Q(exam__parent=instance)
+        ).count()
         counts['questions'] = Question.objects.filter(
             Q(exam=instance) | Q(exam__parent=instance) |
             Q(subject__paper__exam=instance) | Q(chapter__subject__paper__exam=instance) |
-            Q(topic__chapter__subject__paper__exam=instance)
+            Q(topic__chapter__subject__paper__exam=instance) |
+            Q(subject__paper__exam__parent=instance) | Q(chapter__subject__paper__exam__parent=instance) |
+            Q(topic__chapter__subject__paper__exam__parent=instance)
         ).distinct().count()
-        counts['exams'] = Examination.objects.filter(exam=instance).count()
+        counts['exams'] = Examination.objects.filter(Q(exam=instance) | Q(exam__parent=instance)).count()
     elif isinstance(instance, Paper):
         counts['children'] = instance.subjects.count()
         counts['notes'] = StudyMaterial.objects.filter(subject__paper=instance).count()
@@ -102,6 +106,274 @@ def get_node_dependencies(instance):
         'message': message,
         'is_active': getattr(instance, 'is_active', True),
     }
+
+def cascade_delete_syllabus_node(instance, user=None):
+    """
+    Permanently deletes a syllabus node (ExamCategory, Exam, Paper, Subject, Chapter, Topic)
+    along with ALL descendant nodes (child exams, papers, subjects, chapters, topics)
+    and ALL questions, exams, study materials, and other related items.
+    """
+    model_name = instance.__class__.__name__
+    name = getattr(instance, 'name', getattr(instance, 'title', str(instance)))
+    instance_id = instance.id
+
+    from exams.models import (
+        ExamCategory, Exam, Paper, Subject, Chapter, Topic,
+        Question, Examination, SubjectiveQuestionSet, QuestionSet, QuestionCollection
+    )
+    from notes.models import StudyMaterial
+    from courses.models import Course
+    from administration.models import AuditLog, TrashItem
+    from administration.cache_service import AdminCacheService
+
+    exam_ids = []
+    paper_ids = []
+    subject_ids = []
+    chapter_ids = []
+    topic_ids = []
+
+    if isinstance(instance, ExamCategory):
+        exams = Exam.objects.filter(category=instance)
+        exam_ids = list(exams.values_list('id', flat=True))
+        papers = Paper.objects.filter(exam_id__in=exam_ids)
+        paper_ids = list(papers.values_list('id', flat=True))
+        subjects = Subject.objects.filter(paper_id__in=paper_ids)
+        subject_ids = list(subjects.values_list('id', flat=True))
+        chapters = Chapter.objects.filter(subject_id__in=subject_ids)
+        chapter_ids = list(chapters.values_list('id', flat=True))
+        topics = Topic.objects.filter(chapter_id__in=chapter_ids)
+        topic_ids = list(topics.values_list('id', flat=True))
+
+        questions = Question.objects.filter(
+            Q(category=instance) |
+            Q(exam_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        notes = StudyMaterial.objects.filter(
+            Q(exam_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        examinations = Examination.objects.filter(
+            Q(category=instance) |
+            Q(exam_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids)
+        )
+        subj_sets = SubjectiveQuestionSet.objects.filter(
+            Q(exam_category=instance) |
+            Q(level_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids)
+        )
+        q_sets = QuestionSet.objects.filter(
+            Q(category=instance) |
+            Q(exam_id__in=exam_ids)
+        )
+        q_cols = QuestionCollection.objects.filter(
+            Q(category=instance) |
+            Q(exam_id__in=exam_ids)
+        )
+        courses = Course.objects.filter(exam_id__in=exam_ids)
+
+    elif isinstance(instance, Exam):
+        exam_ids = [instance.id]
+        child_ids = list(Exam.objects.filter(parent=instance).values_list('id', flat=True))
+        exam_ids.extend(child_ids)
+        current_ids = child_ids
+        while current_ids:
+            next_level = list(Exam.objects.filter(parent_id__in=current_ids).values_list('id', flat=True))
+            if not next_level:
+                break
+            exam_ids.extend(next_level)
+            current_ids = next_level
+
+        papers = Paper.objects.filter(exam_id__in=exam_ids)
+        paper_ids = list(papers.values_list('id', flat=True))
+        subjects = Subject.objects.filter(paper_id__in=paper_ids)
+        subject_ids = list(subjects.values_list('id', flat=True))
+        chapters = Chapter.objects.filter(subject_id__in=subject_ids)
+        chapter_ids = list(chapters.values_list('id', flat=True))
+        topics = Topic.objects.filter(chapter_id__in=chapter_ids)
+        topic_ids = list(topics.values_list('id', flat=True))
+
+        questions = Question.objects.filter(
+            Q(exam_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        notes = StudyMaterial.objects.filter(
+            Q(exam_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        examinations = Examination.objects.filter(
+            Q(exam_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids)
+        )
+        subj_sets = SubjectiveQuestionSet.objects.filter(
+            Q(level_id__in=exam_ids) |
+            Q(subject_id__in=subject_ids)
+        )
+        q_sets = QuestionSet.objects.filter(exam_id__in=exam_ids)
+        q_cols = QuestionCollection.objects.filter(exam_id__in=exam_ids)
+        courses = Course.objects.filter(exam_id__in=exam_ids)
+
+    elif isinstance(instance, Paper):
+        paper_ids = [instance.id]
+        subjects = Subject.objects.filter(paper=instance)
+        subject_ids = list(subjects.values_list('id', flat=True))
+        chapters = Chapter.objects.filter(subject_id__in=subject_ids)
+        chapter_ids = list(chapters.values_list('id', flat=True))
+        topics = Topic.objects.filter(chapter_id__in=chapter_ids)
+        topic_ids = list(topics.values_list('id', flat=True))
+
+        questions = Question.objects.filter(
+            Q(subject_id__in=subject_ids) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        notes = StudyMaterial.objects.filter(
+            Q(subject_id__in=subject_ids) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        examinations = Examination.objects.filter(subject_id__in=subject_ids)
+        subj_sets = SubjectiveQuestionSet.objects.filter(subject_id__in=subject_ids)
+
+    elif isinstance(instance, Subject):
+        subject_ids = [instance.id]
+        chapters = Chapter.objects.filter(subject=instance)
+        chapter_ids = list(chapters.values_list('id', flat=True))
+        topics = Topic.objects.filter(chapter_id__in=chapter_ids)
+        topic_ids = list(topics.values_list('id', flat=True))
+
+        questions = Question.objects.filter(
+            Q(subject=instance) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        notes = StudyMaterial.objects.filter(
+            Q(subject=instance) |
+            Q(chapter_id__in=chapter_ids) |
+            Q(topic_id__in=topic_ids)
+        )
+        examinations = Examination.objects.filter(subject=instance)
+        subj_sets = SubjectiveQuestionSet.objects.filter(subject=instance)
+
+    elif isinstance(instance, Chapter):
+        chapter_ids = [instance.id]
+        topics = Topic.objects.filter(chapter=instance)
+        topic_ids = list(topics.values_list('id', flat=True))
+
+        questions = Question.objects.filter(
+            Q(chapter=instance) |
+            Q(topic_id__in=topic_ids)
+        )
+        notes = StudyMaterial.objects.filter(
+            Q(chapter=instance) |
+            Q(topic_id__in=topic_ids)
+        )
+
+    elif isinstance(instance, Topic):
+        topic_ids = [instance.id]
+        questions = Question.objects.filter(topic=instance)
+        notes = StudyMaterial.objects.filter(topic=instance)
+
+    deleted_counts = {
+        'questions': 0,
+        'notes': 0,
+        'examinations': 0,
+        'subjective_question_sets': 0,
+        'question_sets': 0,
+        'question_collections': 0,
+        'courses': 0,
+        'topics': len(topic_ids),
+        'chapters': len(chapter_ids),
+        'subjects': len(subject_ids),
+        'papers': len(paper_ids),
+        'exams': len(exam_ids),
+    }
+
+    from django.db import transaction
+    with transaction.atomic():
+        if 'questions' in locals():
+            deleted_counts['questions'] = questions.count()
+            # Explicit delete to trigger CASCADE on all dependent models (attempts, answers, etc.)
+            questions.delete()
+
+        if 'examinations' in locals():
+            deleted_counts['examinations'] = examinations.count()
+            examinations.delete()
+
+        if 'subj_sets' in locals():
+            deleted_counts['subjective_question_sets'] = subj_sets.count()
+            subj_sets.delete()
+
+        if 'q_sets' in locals():
+            deleted_counts['question_sets'] = q_sets.count()
+            q_sets.delete()
+
+        if 'q_cols' in locals():
+            deleted_counts['question_collections'] = q_cols.count()
+            q_cols.delete()
+
+        if 'notes' in locals():
+            deleted_counts['notes'] = notes.count()
+            notes.delete()
+
+        if 'courses' in locals():
+            deleted_counts['courses'] = courses.count()
+            courses.delete()
+
+        # Delete nodes bottom-up
+        if topic_ids:
+            Topic.objects.filter(id__in=topic_ids).delete()
+        if chapter_ids:
+            Chapter.objects.filter(id__in=chapter_ids).delete()
+        if subject_ids:
+            Subject.objects.filter(id__in=subject_ids).delete()
+        if paper_ids:
+            Paper.objects.filter(id__in=paper_ids).delete()
+        if exam_ids:
+            Exam.objects.filter(id__in=exam_ids).delete()
+
+        # Clean up any TrashItems for these object IDs
+        all_obj_ids = [str(instance_id)]
+        all_obj_ids.extend([str(i) for i in exam_ids + paper_ids + subject_ids + chapter_ids + topic_ids])
+        TrashItem.objects.filter(
+            app_label__in=['exams', 'notes'],
+            object_id__in=all_obj_ids
+        ).delete()
+
+        # If instance still exists in db (e.g. ExamCategory), delete it
+        if instance.pk:
+            try:
+                instance.refresh_from_db()
+                instance.delete()
+            except Exception:
+                pass
+
+        # AuditLog
+        AuditLog.objects.create(
+            actor=user if user and user.is_authenticated else None,
+            action='DELETE',
+            entity_type=model_name.lower(),
+            entity_id=str(instance_id),
+            details={
+                'title': name,
+                'deleted_counts': deleted_counts,
+                'cascade': True,
+            }
+        )
+
+    AdminCacheService.invalidate_syllabus_tree()
+    AdminCacheService.invalidate_data_safety()
+
+    return deleted_counts
 
 class BaseSyllabusViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -188,24 +460,21 @@ class BaseSyllabusViewSet(viewsets.ModelViewSet):
             'message': f"{instance} is now {'active' if instance.is_active else 'archived'}."
         })
 
+
+
+
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if request.query_params.get('force') == 'true':
-            deps = get_node_dependencies(instance)
-            return Response({
-                'error': 'Deletion of master academic records is disabled.',
-                'detail': 'Direct force deletion of syllabus records is blocked to protect shared academic data. Use safe archiving or Trash.',
-                'dependencies': deps,
-            }, status=status.HTTP_409_CONFLICT)
-        reason = request.data.get('reason', '') if isinstance(request.data, dict) else ''
-        trash_item = SafeDeleteService.soft_delete(instance, request.user, reason=reason)
-        from .cache_service import AdminCacheService
-        AdminCacheService.invalidate_syllabus_tree()
+        model_name = instance.__class__.__name__
+        name = getattr(instance, 'name', getattr(instance, 'title', str(instance)))
+
+        deleted_counts = cascade_delete_syllabus_node(instance, user=request.user)
+
         return Response({
             'success': True,
-            'message': f"{trash_item.item_type} '{trash_item.title}' has been moved to Trash.",
-            'trash_item_id': trash_item.id,
-            'can_restore': True,
+            'message': f"{model_name} '{name}' and all associated nodes and questions were successfully deleted.",
+            'deleted_counts': deleted_counts,
         }, status=status.HTTP_200_OK)
 
 class ExamCategoryViewSet(BaseSyllabusViewSet):
@@ -294,6 +563,9 @@ class TopicViewSet(BaseSyllabusViewSet):
     
     def get_queryset(self):
         queryset = Topic.objects.select_related('chapter__subject__paper__exam').order_by('order', 'id')
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(name__icontains=search)
         chapter_id = self.request.query_params.get('chapter', None) or self.request.query_params.get('chapter_id', None)
         if chapter_id:
             queryset = queryset.filter(chapter_id=chapter_id)

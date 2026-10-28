@@ -225,6 +225,30 @@ class ExaminationViewSet(ExaminationQuestionMixin, viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+        permanent = (
+            request.query_params.get('permanent') == 'true'
+            or (isinstance(request.data, dict) and request.data.get('permanent') is True)
+        )
+        if permanent:
+            from administration.models import TrashItem, AuditLog
+            title = instance.title
+            exam_id = instance.id
+            TrashItem.objects.filter(app_label='exams', model_name='examination', object_id=str(instance.id)).delete()
+            instance.delete()
+            AuditLog.objects.create(
+                actor=request.user,
+                action='PERMANENT_DELETE',
+                entity_type='Examination',
+                entity_id=str(exam_id),
+                details={"title": title, "exam_id": exam_id}
+            )
+            from .cache_service import AdminCacheService
+            AdminCacheService.invalidate_exams_overview()
+            return Response({
+                'success': True,
+                'message': f"Examination '{title}' has been permanently deleted from the database.",
+            }, status=status.HTTP_200_OK)
+
         reason = request.data.get('reason', '') if isinstance(request.data, dict) else ''
         trash_item = SafeDeleteService.soft_delete(instance, request.user, reason=reason)
         from .cache_service import AdminCacheService

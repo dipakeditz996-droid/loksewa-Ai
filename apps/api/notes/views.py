@@ -176,19 +176,22 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        try:
-            f = material.file.open('rb')
-            filename = f"{material.slug or 'material'}.pdf"
-            content_type = 'application/pdf' if filename.lower().endswith('.pdf') else 'application/octet-stream'
+        from core.pdf_utils import format_material_display_title, inject_pdf_title, build_content_disposition
 
-            file_size = getattr(material.file, 'size', None)
-            if file_size is None:
-                try:
-                    f.seek(0, 2)
-                    file_size = f.tell()
-                    f.seek(0)
-                except Exception:
-                    file_size = None
+        try:
+            display_title = format_material_display_title(material)
+            disposition_type = 'inline' if is_inline else 'attachment'
+            content_disposition = build_content_disposition(display_title, disposition_type=disposition_type)
+
+            f = material.file.open('rb')
+            raw_content = f.read()
+            f.close()
+
+            content_type = 'application/pdf' if (raw_content.startswith(b'%PDF-') or (material.file.name and material.file.name.lower().endswith('.pdf'))) else 'application/octet-stream'
+            if content_type == 'application/pdf' and is_inline:
+                raw_content = inject_pdf_title(raw_content, display_title)
+
+            file_size = len(raw_content)
 
             range_header = request.META.get('HTTP_RANGE', '').strip()
             if range_header and range_header.startswith('bytes=') and file_size and file_size > 0:
@@ -213,14 +216,13 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
 
                         if 0 <= start <= end < file_size:
                             content_length = end - start + 1
-                            f.seek(start)
-                            chunk = f.read(content_length)
+                            chunk = raw_content[start:end + 1]
                             from django.http import HttpResponse
                             response = HttpResponse(chunk, status=206, content_type=content_type)
                             response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
                             response['Content-Length'] = str(content_length)
                             response['Accept-Ranges'] = 'bytes'
-                            response['Content-Disposition'] = f'inline; filename="{filename}"' if is_inline else f'attachment; filename="{filename}"'
+                            response['Content-Disposition'] = content_disposition
                             response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
                             if is_inline:
                                 response['Cache-Control'] = 'private, max-age=86400'
@@ -233,16 +235,11 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
                     except (ValueError, TypeError):
                         pass
 
-            from django.http import FileResponse
-            response = FileResponse(
-                f,
-                as_attachment=not is_inline,
-                filename=filename,
-                content_type=content_type,
-            )
+            from django.http import HttpResponse
+            response = HttpResponse(raw_content, content_type=content_type)
             response['Accept-Ranges'] = 'bytes'
-            if file_size:
-                response['Content-Length'] = str(file_size)
+            response['Content-Length'] = str(file_size)
+            response['Content-Disposition'] = content_disposition
             response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
             if is_inline:
                 response['Cache-Control'] = 'private, max-age=86400'

@@ -1,3 +1,14 @@
+from .pdf_branding_views import (
+    AdminPdfBrandingSettingsView,
+    AdminPdfBrandingLogoUploadView,
+    AdminPdfBrandingWatermarkImageUploadView,
+    AdminPdfBrandingDocumentsView,
+    AdminPdfBrandingDocumentDetailView,
+    AdminPdfBrandingBulkPreviewView,
+    AdminPdfBrandingBulkApplyView,
+    AdminPdfBrandingJobDetailView,
+    AdminPdfBrandingJobsListView,
+)
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .registration_views import (
@@ -24,6 +35,7 @@ from .views import (
     AdminAITutorConversationDetailView,
     AdminAITutorUsageView,
     AdminAITutorPromptsView,
+    AdminAITutorSafetyView,
     AdminMarketplaceOverviewView,
     AdminEvaluatorListView,
     AdminEvaluatorDetailView,
@@ -163,6 +175,7 @@ urlpatterns = [
     path('ai-tutor/conversations/<int:pk>/', AdminAITutorConversationDetailView.as_view(), name='admin-ai-tutor-conversation-detail'),
     path('ai-tutor/usage/', AdminAITutorUsageView.as_view(), name='admin-ai-tutor-usage'),
     path('ai-tutor/prompts/', AdminAITutorPromptsView.as_view(), name='admin-ai-tutor-prompts'),
+    path('ai-tutor/safety/', AdminAITutorSafetyView.as_view(), name='admin-ai-tutor-safety'),
     path('ai-tutor/generate-bulk-content/', AIBulkGenerateContentView.as_view(), name='admin-ai-bulk-generate'),
     path('marketplace/', AdminMarketplaceOverviewView.as_view(), name='admin-marketplace'),
     # Evaluator management
@@ -222,6 +235,16 @@ urlpatterns = [
     path('support/tickets/<int:pk>/reply/', AdminTicketReplyView.as_view(), name='admin-ticket-reply'),
     path('support/tickets/<int:pk>/status/', AdminTicketUpdateStatusView.as_view(), name='admin-ticket-status'),
     # Settings
+        # PDF Branding and Watermark Management
+    path('pdf-branding/settings/', AdminPdfBrandingSettingsView.as_view(), name='admin-pdf-branding-settings'),
+    path('pdf-branding/logo/', AdminPdfBrandingLogoUploadView.as_view(), name='admin-pdf-branding-logo'),
+    path('pdf-branding/watermark-image/', AdminPdfBrandingWatermarkImageUploadView.as_view(), name='admin-pdf-branding-watermark-image'),
+    path('pdf-branding/documents/', AdminPdfBrandingDocumentsView.as_view(), name='admin-pdf-branding-documents'),
+    path('pdf-branding/documents/<int:pk>/', AdminPdfBrandingDocumentDetailView.as_view(), name='admin-pdf-branding-document-detail'),
+    path('pdf-branding/bulk-preview/', AdminPdfBrandingBulkPreviewView.as_view(), name='admin-pdf-branding-bulk-preview'),
+    path('pdf-branding/bulk-apply/', AdminPdfBrandingBulkApplyView.as_view(), name='admin-pdf-branding-bulk-apply'),
+    path('pdf-branding/jobs/', AdminPdfBrandingJobsListView.as_view(), name='admin-pdf-branding-jobs-list'),
+    path('pdf-branding/jobs/<int:pk>/', AdminPdfBrandingJobDetailView.as_view(), name='admin-pdf-branding-job-detail'),
     path('settings/', AdminSettingsView.as_view(), name='admin-settings'),
     path('change-password/', AdminChangePasswordView.as_view(), name='admin-change-password'),
     # Storage health check

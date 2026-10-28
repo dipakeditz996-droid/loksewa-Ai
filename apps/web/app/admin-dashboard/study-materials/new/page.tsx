@@ -49,6 +49,7 @@ export default function AddMaterialPage() {
   const [externalUrl, setExternalUrl] = useState("");
   const [contentCategory, setContentCategory] = useState<ContentCategory | "">("");
   const [allowDownload, setAllowDownload] = useState<boolean>(false);
+  const [brandingDecision, setBrandingDecision] = useState<"default" | "apply" | "skip">("default");
   const [materialType, setMaterialType] = useState<MaterialType>("notes");
   const [difficulty, setDifficulty] = useState<MaterialDifficulty>("beginner");
   const [access, setAccess] = useState<MaterialAccess>("free");
@@ -106,6 +107,7 @@ export default function AddMaterialPage() {
         topic: topic ?? null,
         content_category: contentCategory as ContentCategory,
         is_downloadable: allowDownload,
+        branding_decision: brandingDecision,
         description: description.trim(),
         content,
         material_type: materialType,
@@ -216,6 +218,56 @@ export default function AddMaterialPage() {
                   >
                     <X className="w-4 h-4" />
                   </button>
+                </div>
+              )}
+
+              {/* PDF Branding & Watermark Option */}
+              {file && (file.name.toLowerCase().endsWith(".pdf") || file.type.includes("pdf")) && (
+                <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#0B2545]" />
+                    <label className="text-xs font-bold text-[#0B2545] uppercase tracking-wider">
+                      PDF Branding & Watermark Decision
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBrandingDecision("default")}
+                      className={`p-2.5 rounded-lg border text-left text-xs transition-colors ${
+                        brandingDecision === "default"
+                          ? "border-[#0B2545] bg-[#0B2545]/10 font-bold text-[#0B2545]"
+                          : "border-slate-200 hover:border-slate-300 text-slate-700 bg-white"
+                      }`}
+                    >
+                      <span className="block font-semibold">Global Default</span>
+                      <span className="text-[10px] text-slate-500">Apply platform policy</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrandingDecision("apply")}
+                      className={`p-2.5 rounded-lg border text-left text-xs transition-colors ${
+                        brandingDecision === "apply"
+                          ? "border-emerald-600 bg-emerald-50 font-bold text-emerald-800"
+                          : "border-slate-200 hover:border-slate-300 text-slate-700 bg-white"
+                      }`}
+                    >
+                      <span className="block font-semibold">Brand Now</span>
+                      <span className="text-[10px] text-slate-500">Logo + watermark</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBrandingDecision("skip")}
+                      className={`p-2.5 rounded-lg border text-left text-xs transition-colors ${
+                        brandingDecision === "skip"
+                          ? "border-amber-600 bg-amber-50 font-bold text-amber-800"
+                          : "border-slate-200 hover:border-slate-300 text-slate-700 bg-white"
+                      }`}
+                    >
+                      <span className="block font-semibold">No Branding</span>
+                      <span className="text-[10px] text-slate-500">Keep original clean</span>
+                    </button>
+                  </div>
                 </div>
               )}
 

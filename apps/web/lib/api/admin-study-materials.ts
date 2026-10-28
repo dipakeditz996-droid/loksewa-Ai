@@ -157,7 +157,9 @@ export interface CreateStudyMaterialPayload {
   title: string;
   exam: number;
   content_category?: ContentCategory;
+  contentCategory?: ContentCategory;
   note_type?: NoteType;
+  noteType?: NoteType;
   subject?: number | null;
   chapter?: number | null;
   topic?: number | null;
@@ -165,8 +167,10 @@ export interface CreateStudyMaterialPayload {
   description?: string;
   content?: string;
   material_type?: MaterialType;
+  materialType?: MaterialType;
   difficulty?: MaterialDifficulty;
   access_type?: MaterialAccess;
+  accessType?: MaterialAccess;
   status?: MaterialStatus;
   external_url?: string;
   estimated_reading_time?: number;
@@ -174,6 +178,8 @@ export interface CreateStudyMaterialPayload {
   file?: File | null;
   is_downloadable?: boolean;
   isDownloadable?: boolean;
+  branding_decision?: 'default' | 'apply' | 'skip';
+  brandingDecision?: 'default' | 'apply' | 'skip';
 }
 
 function buildRequest(payload: CreateStudyMaterialPayload | Partial<CreateStudyMaterialPayload>) {
@@ -252,7 +258,20 @@ export const adminStudyMaterialApi = {
 
   update: async (id: number | string, payload: Partial<CreateStudyMaterialPayload>) => {
     const { body } = buildRequest(payload);
-    return apiClient<{ success: boolean; id: number; status: MaterialStatus; fileUrl?: string }>(
+    return apiClient<{
+      success: boolean;
+      id: number;
+      title: string;
+      description?: string;
+      status: MaterialStatus;
+      contentCategory?: ContentCategory;
+      materialType?: MaterialType;
+      accessType?: MaterialAccess;
+      fileUrl?: string;
+      fileName?: string;
+      order?: number;
+      isDownloadable?: boolean;
+    }>(
       `/admin/study-materials/${id}/`,
       { method: "PATCH", body }
     );

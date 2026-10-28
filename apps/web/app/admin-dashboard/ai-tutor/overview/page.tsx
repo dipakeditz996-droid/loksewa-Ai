@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
+import Link from "next/link";
 import {
   MessageSquare, Users, Activity, Clock, Server,
-  ShieldAlert,
+  ShieldAlert, ShieldCheck, ArrowRight,
   CheckCircle2, AlertCircle, RefreshCw
 } from "lucide-react";
 import { adminApi } from "@/lib/api/admin";
@@ -100,32 +100,34 @@ export default function AITutorOverviewPage() {
         </div>
       </div>
 
-      {/* Backend Gaps Section */}
+      {/* Safety & Moderation Logs Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-amber-50 rounded-lg">
-            <ShieldAlert className="w-6 h-6 text-amber-500" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-[#0B2545] mb-2 flex items-center gap-3">
-              Safety & Moderation Logs
-              <span className="text-xs font-bold px-2 py-1 rounded border text-amber-600 bg-amber-50 border-amber-200">
-                Backend Gap
-              </span>
-            </h3>
-            <p className="text-sm text-slate-600 mb-4 max-w-3xl leading-relaxed">
-              A moderation/safety log (flagged content, admin review trail) is not currently supported -
-              there is no logging model for it in this codebase yet. Configuration, Prompts, Knowledge
-              Base, and Usage Analytics are all real and already available in their own tabs.
-            </p>
-
-            <div className="grid grid-cols-1 max-w-xs gap-4 mt-6 opacity-60 pointer-events-none">
-              <div className="border border-slate-200 rounded-lg p-4 flex items-center gap-3 bg-slate-50">
-                <ShieldAlert className="w-5 h-5 text-slate-400" />
-                <span className="text-sm font-medium text-slate-500">Safety Logs</span>
-              </div>
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-[#0B2545] mb-1 flex items-center gap-3">
+                Safety & Moderation Logs
+                <span className="text-xs font-semibold px-2 py-0.5 rounded-full border text-emerald-700 bg-emerald-50 border-emerald-200">
+                  Operational
+                </span>
+              </h3>
+              <p className="text-sm text-slate-600 max-w-2xl leading-relaxed">
+                Multi-category content moderation, prompt injection protection, syllabus boundary enforcement,
+                and real-time student query audit logging are active.
+              </p>
             </div>
           </div>
+
+          <Link
+            href="/admin-dashboard/ai-tutor/safety"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#0B2545] hover:bg-[#081b33] text-white text-sm font-medium transition-colors shrink-0"
+          >
+            Open Safety Dashboard
+            <ArrowRight className="w-4 h-4" />
+          </Link>
         </div>
       </div>
     </div>

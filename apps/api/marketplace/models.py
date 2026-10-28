@@ -116,6 +116,32 @@ class Product(models.Model):
         """True when this product was listed by a student seller (not platform stock)."""
         return self.seller is not None
 
+    def save(self, *args, **kwargs):
+        # Keep is_published and listing_status consistent
+        if self.pk:
+            old = Product.objects.filter(pk=self.pk).values('is_published', 'listing_status').first()
+            if old:
+                if not old['is_published'] and self.is_published:
+                    if self.listing_status in ('PENDING_REVIEW', 'DRAFT', ''):
+                        self.listing_status = 'ACTIVE'
+                elif old['is_published'] and not self.is_published:
+                    if self.listing_status == 'ACTIVE':
+                        self.listing_status = 'DRAFT'
+                elif self.is_published and self.listing_status in ('PENDING_REVIEW', 'DRAFT', ''):
+                    self.listing_status = 'ACTIVE'
+        else:
+            if self.is_published:
+                if self.listing_status in ('PENDING_REVIEW', 'DRAFT', ''):
+                    self.listing_status = 'ACTIVE'
+            else:
+                if not self.seller and self.listing_status == 'PENDING_REVIEW':
+                    self.listing_status = 'DRAFT'
+
+        if kwargs.get('update_fields') is not None:
+            kwargs['update_fields'] = list(set(kwargs['update_fields']) | {'is_published', 'listing_status'})
+
+        super().save(*args, **kwargs)
+
 
 class PaymentMethod(models.Model):
     METHOD_CHOICES = (

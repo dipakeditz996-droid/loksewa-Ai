@@ -549,8 +549,9 @@ export const adminExamApi = {
     });
   },
 
-  deleteExam: async (id: number) => {
-    return apiClient(`/admin/exams/${id}/`, {
+  deleteExam: async (id: number, options?: { permanent?: boolean }) => {
+    const query = options?.permanent ? '?permanent=true' : '';
+    return apiClient<{ success: boolean; message: string }>(`/admin/exams/${id}/${query}`, {
       method: 'DELETE',
     });
   },

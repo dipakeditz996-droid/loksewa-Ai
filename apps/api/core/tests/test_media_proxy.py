@@ -78,3 +78,100 @@ class DriveMediaProxyTests(TestCase):
             resp = self.client.get(URL)
         self.assertNotEqual(resp.status_code, 401)
         self.assertNotEqual(resp.status_code, 403)
+
+    @patch('core.media_views.google_drive.download_file')
+    @patch('core.media_views.google_drive.get_file')
+    def test_syllabus_displays_course_name_and_syllabus(self, mock_get_file, mock_download):
+        import pymupdf
+        from exams.models import Exam, ExamCategory
+        from courses.models import Course
+        from notes.models import StudyMaterial
+
+        cat = ExamCategory.objects.create(name='PSC')
+        exam = Exam.objects.create(category=cat, name='5th Level')
+        course = Course.objects.create(title='Civil Sub Engineer', slug='civil-sub-eng', exam=exam)
+        StudyMaterial.objects.create(
+            title='5th',
+            course=course,
+            exam=exam,
+            content_category='syllabus',
+            file='study_materials/pdfs/FILE123__5th.pdf',
+        )
+
+        # Minimal valid PDF
+        doc = pymupdf.open()
+        doc.new_page()
+        pdf_bytes = doc.tobytes()
+
+        mock_get_file.return_value = {'id': 'FILE123', 'name': '5th', 'mimeType': 'application/pdf'}
+        mock_download.return_value = pdf_bytes
+
+        resp = self.client.get(URL)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Civil Sub Engineer - Syllabus.pdf', resp['Content-Disposition'])
+
+        # Verify PDF Title metadata was injected
+        resp_doc = pymupdf.open(stream=resp.content, filetype='pdf')
+        self.assertEqual(resp_doc.metadata.get('title'), 'Civil Sub Engineer - Syllabus')
+
+    @patch('core.media_views.google_drive.download_file')
+    @patch('core.media_views.google_drive.get_file')
+    def test_note_title_formatting(self, mock_get_file, mock_download):
+        from core.pdf_utils import format_material_display_title
+        from exams.models import Exam, ExamCategory
+        from courses.models import Course
+        from notes.models import StudyMaterial
+
+        cat = ExamCategory.objects.create(name='PSC')
+        exam = Exam.objects.create(category=cat, name='5th Level')
+        course = Course.objects.create(title='Civil Sub Engineer', slug='civil-sub-eng-note', exam=exam)
+        sm = StudyMaterial.objects.create(
+            title='5th',
+            course=course,
+            exam=exam,
+            content_category='subjective_topicwise',
+            file='study_materials/pdfs/NOTE456__note.pdf',
+        )
+
+        title = format_material_display_title(sm)
+        self.assertEqual(title, 'Civil Sub Engineer - Note')
+
+    @patch('core.media_views.google_drive.download_file')
+    @patch('core.media_views.google_drive.get_file')
+    def test_protected_material_access_control(self, mock_get_file, mock_download):
+        from django.contrib.auth import get_user_model
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from exams.models import Exam, ExamCategory
+        from courses.models import Course
+        from notes.models import StudyMaterial
+
+        User = get_user_model()
+        admin_user = User.objects.create_superuser('admin_tester', 'admin@example.com', 'Pass1234!')
+        cat = ExamCategory.objects.create(name='PSC Admin Test')
+        exam = Exam.objects.create(category=cat, name='Officer')
+        course = Course.objects.create(title='Admin Course', slug='admin-course-proxy', exam=exam)
+        StudyMaterial.objects.create(
+            title='Protected Note',
+            course=course,
+            exam=exam,
+            content_category='revision_notes',
+            file='study_materials/pdfs/PROT999__protected_note.pdf',
+        )
+
+        mock_get_file.return_value = {'id': 'PROT999', 'name': 'protected_note.pdf', 'mimeType': 'application/pdf'}
+        mock_download.return_value = b'%PDF-1.4 test pdf content'
+
+        prot_url = '/api/media/drive/PROT999/'
+
+        # 1. Unauthenticated request -> 403 Forbidden
+        resp_unauth = self.client.get(prot_url)
+        self.assertEqual(resp_unauth.status_code, 403)
+
+        # 2. Authenticated admin request via Bearer header -> 200 OK
+        token = str(RefreshToken.for_user(admin_user).access_token)
+        resp_auth = self.client.get(prot_url, HTTP_AUTHORIZATION=f'Bearer {token}')
+        self.assertEqual(resp_auth.status_code, 200)
+
+        # 3. Authenticated admin request via ?token= query param -> 200 OK
+        resp_token_param = self.client.get(f'{prot_url}?token={token}')
+        self.assertEqual(resp_token_param.status_code, 200)

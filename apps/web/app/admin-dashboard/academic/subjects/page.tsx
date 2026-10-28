@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Plus, Search, Filter, Download, Upload, MoreHorizontal, 
-  Eye, Edit, Trash2, Copy, Power, BookOpen, ArrowUp, ArrowDown, Unlink
+  Eye, Edit, Trash2, Copy, Power, BookOpen, ArrowUp, ArrowDown, Unlink, GripVertical
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,6 +174,29 @@ export default function SubjectsPage() {
     }
   };
 
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleDropSubject = async (fromIndex: number | null, toIndex: number) => {
+    if (fromIndex === null || fromIndex === toIndex || search !== "") return;
+    const newList = [...subjects];
+    const [moved] = newList.splice(fromIndex, 1);
+    if (!moved) return;
+    newList.splice(toIndex, 0, moved);
+    setSubjects(newList);
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+
+    try {
+      await adminAcademicApi.reorderSubjects(
+        newList.map((s, i) => ({ id: s.id, order: i + 1 }))
+      );
+    } catch {
+      toast.error("Failed to save order.");
+      fetchData();
+    }
+  };
+
   const moveSubject = async (index: number, direction: "up" | "down") => {
     const newList = [...subjects];
     const swapIdx = direction === "up" ? index - 1 : index + 1;
@@ -303,25 +326,60 @@ export default function SubjectsPage() {
                 </TableRow>
               ) : (
                 filteredSubjects.map((subject, index) => (
-                  <TableRow key={subject.id} className="group">
+                  <TableRow
+                    key={subject.id}
+                    draggable={search === ""}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      setDraggedIdx(index);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOverIdx !== index) setDragOverIdx(index);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedIdx(null);
+                      setDragOverIdx(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleDropSubject(draggedIdx, index);
+                    }}
+                    className={`group transition-colors ${
+                      draggedIdx === index
+                        ? "opacity-40 bg-blue-50/50"
+                        : dragOverIdx === index
+                        ? "bg-blue-50/80 border-t-2 border-b-2 border-blue-500"
+                        : ""
+                    }`}
+                  >
                     <TableCell className="text-center">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <button
-                          disabled={index === 0}
-                          onClick={() => moveSubject(index, "up")}
-                          className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
-                          title="Move up"
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div
+                          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 p-0.5 rounded hover:bg-slate-200/50 transition-colors"
+                          title="Hold and drag to reorder"
                         >
-                          <ArrowUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          disabled={index === filteredSubjects.length - 1}
-                          onClick={() => moveSubject(index, "down")}
-                          className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
-                          title="Move down"
-                        >
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
+                          <GripVertical className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <button
+                            disabled={index === 0}
+                            onClick={() => moveSubject(index, "up")}
+                            className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
+                            title="Move up"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            disabled={index === filteredSubjects.length - 1}
+                            onClick={() => moveSubject(index, "down")}
+                            className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-center">

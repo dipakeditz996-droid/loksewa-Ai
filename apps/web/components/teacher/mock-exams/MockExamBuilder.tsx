@@ -604,15 +604,17 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
           <CheckCircle className="w-4 h-4 text-slate-500"/> Scoring & Marking
         </div>
         <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-card">
-          <div className="space-y-2">
-            <Label>Marks per Question</Label>
-            <Input 
-              type="number" 
-              step="0.5"
-              value={formData.marks_per_question} 
-              onChange={e => setFormData({...formData, marks_per_question: parseFloat(e.target.value) || 1})} 
-            />
-          </div>
+          {!isSubjectiveExam && (
+            <div className="space-y-2">
+              <Label>Marks per Question</Label>
+              <Input 
+                type="number" 
+                step="0.5"
+                value={formData.marks_per_question} 
+                onChange={e => setFormData({...formData, marks_per_question: parseFloat(e.target.value) || 1})} 
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Total Marks</Label>
             <Input 
@@ -672,20 +674,24 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
                 onCheckedChange={val => setFormData({...formData, show_correct_answers: val})} 
               />
             </div>
-            <div className="flex items-center justify-between">
-              <Label className="cursor-pointer text-slate-700 font-medium">Randomize Questions</Label>
-              <Switch 
-                checked={formData.randomize_questions} 
-                onCheckedChange={val => setFormData({...formData, randomize_questions: val})} 
-              />
-            </div>
-            <div className="flex items-center justify-between">
-              <Label className="cursor-pointer text-slate-700 font-medium">Randomize Options</Label>
-              <Switch 
-                checked={formData.randomize_options} 
-                onCheckedChange={val => setFormData({...formData, randomize_options: val})} 
-              />
-            </div>
+            {!isSubjectiveExam && (
+              <>
+                <div className="flex items-center justify-between">
+                  <Label className="cursor-pointer text-slate-700 font-medium">Randomize Questions</Label>
+                  <Switch 
+                    checked={formData.randomize_questions} 
+                    onCheckedChange={val => setFormData({...formData, randomize_questions: val})} 
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label className="cursor-pointer text-slate-700 font-medium">Randomize Options</Label>
+                  <Switch 
+                    checked={formData.randomize_options} 
+                    onCheckedChange={val => setFormData({...formData, randomize_options: val})} 
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

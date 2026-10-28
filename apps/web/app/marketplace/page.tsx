@@ -91,7 +91,9 @@ function mapProduct(p: PublicProduct, idx: number): Product {
     imageColor: IMAGE_GRADIENTS[idx % IMAGE_GRADIENTS.length] as string,
     coverImage: p.cover_image,
     condition: p.condition,
-    sellerName: p.seller_details ? p.seller_details.first_name + (p.seller_details as any).last_name ? ` ${(p.seller_details as any).last_name}` : "" : null,
+    sellerName: p.seller_details
+      ? `${p.seller_details.first_name || ""}${(p.seller_details as any).last_name ? ` ${(p.seller_details as any).last_name}` : ""}`.trim() || null
+      : null,
   };
 }
 
@@ -113,7 +115,7 @@ export default function MarketplacePage() {
 
   useEffect(() => {
     let mounted = true;
-    publicApi.getProducts(24).then((data) => {
+    publicApi.getProducts(50).then((data) => {
       if (!mounted) return;
       setProducts((data || []).map(mapProduct));
       setIsLoading(false);

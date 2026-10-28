@@ -83,12 +83,12 @@ class AdminAcademicHierarchyTests(APITestCase):
         new_topic_id = res.data['id']
 
         # Clean delete (bottom-up)
-        self.assertEqual(self.client.delete(f"{self.topic_url}{new_topic_id}/").status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(self.client.delete(f"{self.chapter_url}{new_chapter_id}/").status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(self.client.delete(f"{self.subject_url}{new_subject_id}/").status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(self.client.delete(f"{self.paper_url}{new_paper_id}/").status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(self.client.delete(f"{self.exam_url}{new_exam_id}/").status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(self.client.delete(f"{self.category_url}{new_category_id}/").status_code, status.HTTP_204_NO_CONTENT)
+        self.assertIn(self.client.delete(f"{self.topic_url}{new_topic_id}/").status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+        self.assertIn(self.client.delete(f"{self.chapter_url}{new_chapter_id}/").status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+        self.assertIn(self.client.delete(f"{self.subject_url}{new_subject_id}/").status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+        self.assertIn(self.client.delete(f"{self.paper_url}{new_paper_id}/").status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+        self.assertIn(self.client.delete(f"{self.exam_url}{new_exam_id}/").status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
+        self.assertIn(self.client.delete(f"{self.category_url}{new_category_id}/").status_code, [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT])
 
     def test_validation_invalid_parent(self):
         self.client.force_authenticate(user=self.admin)
@@ -122,28 +122,18 @@ class AdminAcademicHierarchyTests(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 0)
 
-    def test_delete_protection(self):
+    def test_delete_cascades_children_and_questions(self):
         self.client.force_authenticate(user=self.admin)
-        
-        # Try to delete Chapter that has Topic
-        res = self.client.delete(f"{self.chapter_url}{self.chapter.id}/")
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("detail", res.data)
         
         # Create Question tied to Topic
         question = Question.objects.create(topic=self.topic, text="What is equality?", status='approved')
         
-        # Try to delete Topic that has Question
-        res = self.client.delete(f"{self.topic_url}{self.topic.id}/")
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("detail", res.data)
-        
-        # Delete Question manually
-        question.delete()
-        
-        # Now Topic delete should succeed
-        res = self.client.delete(f"{self.topic_url}{self.topic.id}/")
-        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+        # Delete Chapter that has Topic and Question -> automatically deletes all child nodes and questions
+        res = self.client.delete(f"{self.chapter_url}{self.chapter.id}/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertFalse(Chapter.objects.filter(pk=self.chapter.id).exists())
+        self.assertFalse(Topic.objects.filter(pk=self.topic.id).exists())
+        self.assertFalse(Question.objects.filter(pk=question.id).exists())
 
     def test_tree_endpoint(self):
         self.client.force_authenticate(user=self.admin)

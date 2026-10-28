@@ -82,10 +82,11 @@ class PublicSyllabusTreeView(APIView):
         # rather than one per node - only published + free materials are
         # shown here since this page is anonymous-facing (no student/
         # subscription context to check premium access against).
+        from core.pdf_utils import format_material_display_title
         materials_by_exam: dict = {}
         materials_qs = StudyMaterial.objects.filter(
             exam__in=exams, status='published', access_type='free', content_category='syllabus',
-        ).order_by('order', 'title')
+        ).select_related('course', 'exam', 'exam__parent', 'exam__category').order_by('order', 'title')
         for m in materials_qs:
             file_url = None
             if m.file:
@@ -93,9 +94,13 @@ class PublicSyllabusTreeView(APIView):
                     file_url = request.build_absolute_uri(m.file.url)
                 except Exception:
                     file_url = m.file.url
+            display_title = format_material_display_title(m)
+            # If title is short (like '5th') or generic, use display_title as title
+            final_title = display_title if (not m.title or len(m.title) <= 5 or m.title.strip().lower() in ('5th', '4th', '7th', 'syllabus', 'notes', 'note')) else m.title
             materials_by_exam.setdefault(m.exam_id, []).append({
                 'id': m.id,
-                'title': m.title,
+                'title': final_title,
+                'displayTitle': display_title,
                 'contentCategory': m.content_category,
                 'fileUrl': file_url,
                 'externalUrl': m.external_url or None,

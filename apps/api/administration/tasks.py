@@ -71,3 +71,19 @@ def run_backup_retention_cleanup():
     except Exception as e:
         logger.exception("Scheduled retention cleanup task failed")
         return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task(name='administration.tasks.run_pdf_branding_batch_job')
+def run_pdf_branding_batch_job_task(job_id):
+    """Background worker task executing a PdfBrandingBatchJob."""
+    from .pdf_branding_service import PdfBrandingService
+
+    logger.info(f"Starting PdfBrandingBatchJob #{job_id} in background...")
+    try:
+        job = PdfBrandingService.execute_batch_job(job_id)
+        if job:
+            logger.info(f"PdfBrandingBatchJob #{job_id} finished: {job.success_count} succeeded, {job.failed_count} failed.")
+        return {'status': 'completed', 'job_id': job_id}
+    except Exception as e:
+        logger.exception(f"PdfBrandingBatchJob #{job_id} encountered fatal error: {e}")
+        return {'status': 'failed', 'job_id': job_id, 'error': str(e)}

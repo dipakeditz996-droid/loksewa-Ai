@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ChevronRight, ChevronDown, Folder, FileText, CheckSquare,
   BookOpen, Layers, Plus, Settings, Trash2, Loader2, X, UploadCloud,
-  Eye, Search, ChevronUp,
+  Eye, Search, ChevronUp, GripVertical, Edit,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import {
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { adminAcademicApi, ExamStatus } from "@/lib/api/admin-academic-api";
-import { adminStudyMaterialApi, ContentCategory, StudyMaterialListItem } from "@/lib/api/admin-study-materials";
+import { adminStudyMaterialApi, ContentCategory, StudyMaterialListItem, CreateStudyMaterialPayload } from "@/lib/api/admin-study-materials";
 import { toast } from "sonner";
 
 const CONTENT_CATEGORY_OPTIONS: { value: ContentCategory; label: string }[] = [
@@ -488,6 +488,104 @@ export default function SyllabusBuilderPage() {
   // two possibly-equal/unset order numbers. This is what controls the order
   // materials appear in on the public syllabus page for this exam node.
   const [reorderingMaterials, setReorderingMaterials] = useState(false);
+  const [draggedMatIdx, setDraggedMatIdx] = useState<number | null>(null);
+  const [dragOverMatIdx, setDragOverMatIdx] = useState<number | null>(null);
+  const [editingMaterial, setEditingMaterial] = useState<StudyMaterialListItem | null>(null);
+  const [isSavingMaterial, setIsSavingMaterial] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState<ContentCategory>("syllabus");
+  const [editStatus, setEditStatus] = useState<string>("published");
+  const [editAccessType, setEditAccessType] = useState<string>("free");
+  const [editAllowDownload, setEditAllowDownload] = useState<boolean>(true);
+  const [editReplacementFile, setEditReplacementFile] = useState<File | null>(null);
+
+  const handleOpenEditMaterial = (mat: StudyMaterialListItem) => {
+    setEditingMaterial(mat);
+    setEditTitle(mat.title);
+    setEditDescription(mat.description || "");
+    setEditCategory(mat.contentCategory);
+    setEditStatus(mat.status);
+    setEditAccessType(mat.accessType || "free");
+    setEditAllowDownload(mat.isDownloadable ?? (mat as any).is_downloadable ?? true);
+    setEditReplacementFile(null);
+  };
+
+  const handleSaveMaterial = async () => {
+    if (!editingMaterial || isSavingMaterial) return;
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) {
+      toast.error("Material title is required.");
+      return;
+    }
+
+    setIsSavingMaterial(true);
+    try {
+      const payload: Partial<CreateStudyMaterialPayload> = {
+        title: trimmedTitle,
+        description: editDescription.trim(),
+        content_category: editCategory,
+        contentCategory: editCategory,
+        status: editStatus as any,
+        access_type: editAccessType as any,
+        accessType: editAccessType as any,
+        is_downloadable: editAllowDownload,
+        isDownloadable: editAllowDownload,
+      };
+
+      if (editReplacementFile) {
+        payload.file = editReplacementFile;
+      }
+
+      const res = await adminStudyMaterialApi.update(editingMaterial.id, payload);
+
+      setNodeMaterials(prev => prev.map(m => {
+        if (m.id !== editingMaterial.id) return m;
+        return {
+          ...m,
+          title: trimmedTitle,
+          description: editDescription.trim(),
+          contentCategory: editCategory,
+          status: (editStatus as any) || m.status,
+          accessType: (editAccessType as any) || m.accessType,
+          isDownloadable: editAllowDownload,
+          fileUrl: res.fileUrl || m.fileUrl,
+          fileName: editReplacementFile ? editReplacementFile.name : (res.fileName || m.fileName),
+        };
+      }));
+
+      toast.success("Material updated successfully.");
+      setEditingMaterial(null);
+      setEditReplacementFile(null);
+      if (selectedNode) loadNodeMaterials(selectedNode.id);
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.message || "Failed to update material.");
+    } finally {
+      setIsSavingMaterial(false);
+    }
+  };
+
+  const handleDropMaterial = async (fromIndex: number | null, toIndex: number) => {
+    if (fromIndex === null || fromIndex === toIndex || reorderingMaterials) return;
+    const reordered = [...nodeMaterials];
+    const [moved] = reordered.splice(fromIndex, 1);
+    if (!moved) return;
+    reordered.splice(toIndex, 0, moved);
+    setNodeMaterials(reordered);
+    setReorderingMaterials(true);
+    try {
+      await Promise.all(reordered.map((m, i) => adminStudyMaterialApi.update(m.id, { order: i })));
+      toast.success("Materials reordered successfully.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save new order.");
+      if (selectedNode) loadNodeMaterials(selectedNode.id);
+    } finally {
+      setReorderingMaterials(false);
+      setDraggedMatIdx(null);
+      setDragOverMatIdx(null);
+    }
+  };
+
   const handleMoveMaterial = async (index: number, direction: -1 | 1) => {
     const newIndex = index + direction;
     if (newIndex < 0 || newIndex >= nodeMaterials.length || reorderingMaterials) return;
@@ -1084,9 +1182,39 @@ export default function SyllabusBuilderPage() {
                       {nodeMaterials.map((mat, index) => (
                         <div
                           key={mat.id}
-                          className="flex items-center justify-between gap-3 p-3 border border-slate-100 rounded-lg bg-slate-50/50"
+                          draggable={!reorderingMaterials}
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "move";
+                            setDraggedMatIdx(index);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            if (dragOverMatIdx !== index) setDragOverMatIdx(index);
+                          }}
+                          onDragEnd={() => {
+                            setDraggedMatIdx(null);
+                            setDragOverMatIdx(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            handleDropMaterial(draggedMatIdx, index);
+                          }}
+                          className={`flex items-center justify-between gap-3 p-3 border rounded-lg transition-all ${
+                            draggedMatIdx === index
+                              ? "opacity-40 border-blue-400 bg-blue-50/40 scale-[0.99]"
+                              : dragOverMatIdx === index
+                              ? "border-blue-500 bg-blue-50/70 ring-2 ring-blue-300 shadow-sm"
+                              : "border-slate-100 bg-slate-50/50 hover:bg-slate-100/70"
+                          }`}
                         >
-                          <div className="flex items-center gap-3 min-w-0">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 p-1 rounded hover:bg-slate-200/50 transition-colors shrink-0"
+                              title="Hold and drag to reorder"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </div>
                             <div className="flex flex-col shrink-0 -my-1">
                               <button
                                 type="button"
@@ -1134,6 +1262,15 @@ export default function SyllabusBuilderPage() {
                                 <Eye className="w-4 h-4" />
                               </a>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditMaterial(mat)}
+                              className="p-2 rounded-md text-slate-500 hover:bg-blue-50 hover:text-[#0B2545] transition-colors"
+                              title="Edit material"
+                              aria-label="Edit material"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
                             <button
                               type="button"
                               disabled={deletingMaterialId === mat.id}
@@ -1278,6 +1415,184 @@ export default function SyllabusBuilderPage() {
           onClose={() => setUploadTarget(null)}
           onSuccess={() => { setUploadTarget(null); fetchTree(); loadNodeMaterials(uploadTarget.id); }}
         />
+      )}
+
+      {/* ── Edit Uploaded Material Modal ────────────────────────────────────── */}
+      {editingMaterial && (
+        <Dialog open={!!editingMaterial} onOpenChange={(open) => { if (!open) setEditingMaterial(null); }}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Edit Uploaded Material</DialogTitle>
+              <DialogDescription>
+                Editing material attached to: <strong>{selectedNode?.name || selectedNode?.title || editingMaterial.examName}</strong>
+                {editingMaterial.levelName && <span className="text-slate-500"> ({editingMaterial.levelName})</span>}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-2">
+              <div className="space-y-2">
+                <Label>Title <span className="text-red-500 ml-1">*</span></Label>
+                <Input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="e.g. Official Syllabus 2081"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Content Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {CONTENT_CATEGORY_OPTIONS.map((opt) => (
+                    <button
+                      type="button"
+                      key={opt.value}
+                      onClick={() => setEditCategory(opt.value)}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold border text-left transition-colors ${
+                        editCategory === opt.value
+                          ? "bg-[#0B2545] text-white border-[#0B2545]"
+                          : "border-slate-200 text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Optional description..."
+                  rows={2}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+              </div>
+
+              {/* PDF Document info & optional replacement */}
+              <div className="space-y-2">
+                <Label>PDF Document</Label>
+                <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-slate-200 bg-slate-50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-700 truncate">
+                        {editingMaterial.fileName || "Current PDF Document"}
+                      </p>
+                      <p className="text-[11px] text-slate-400">Current file preserved unless replacement is selected</p>
+                    </div>
+                  </div>
+                  {editingMaterial.fileUrl && (
+                    <a
+                      href={editingMaterial.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors shrink-0"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Preview
+                    </a>
+                  )}
+                </div>
+
+                {editReplacementFile ? (
+                  <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/60">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UploadCloud className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-emerald-800 truncate">
+                          Replacement: {editReplacementFile.name}
+                        </p>
+                        <p className="text-[11px] text-emerald-600">Will replace PDF on save</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditReplacementFile(null)}
+                      className="p-1 rounded text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      title="Cancel replacement"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 border border-dashed border-slate-300 rounded-lg py-2.5 px-3 cursor-pointer hover:border-slate-400 bg-white hover:bg-slate-50 transition-colors">
+                    <UploadCloud className="w-4 h-4 text-slate-400" />
+                    <span className="text-xs font-medium text-slate-600">Choose new PDF to replace (optional, up to 20MB)</span>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={(e) => setEditReplacementFile(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Access Type</Label>
+                  <select
+                    value={editAccessType}
+                    onChange={(e) => setEditAccessType(e.target.value as "free" | "premium")}
+                    className="w-full h-9 rounded-md border border-slate-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#0B2545]"
+                  >
+                    <option value="free">Free for authorized students</option>
+                    <option value="premium">Premium only</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Publication Status</Label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    className="w-full h-9 rounded-md border border-slate-200 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#0B2545]"
+                  >
+                    <option value="published">Published (Immediate access)</option>
+                    <option value="draft">Save as Draft</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <div className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="flex-1">
+                    <label htmlFor="edit-syllabus-allow-downloads" className="text-xs font-bold text-[#0B2545] cursor-pointer block">
+                      Allow Student Downloads
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      {editAllowDownload
+                        ? "Enabled: Authorized students can download the note file to their device."
+                        : "Disabled: Students can view the note online, but cannot download it through the application's download functionality."}
+                    </p>
+                  </div>
+                  <input
+                    id="edit-syllabus-allow-downloads"
+                    type="checkbox"
+                    checked={editAllowDownload}
+                    onChange={(e) => setEditAllowDownload(e.target.checked)}
+                    className="w-4 h-4 mt-0.5 rounded border-slate-300 text-[#0B2545] focus:ring-[#0B2545] cursor-pointer"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingMaterial(null)} disabled={isSavingMaterial}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-[#0B2545] hover:bg-[#0B2545]/90 text-white gap-2"
+                onClick={handleSaveMaterial}
+                disabled={isSavingMaterial || !editTitle.trim()}
+              >
+                {isSavingMaterial ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

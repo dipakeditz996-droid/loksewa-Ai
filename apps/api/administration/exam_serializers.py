@@ -90,6 +90,9 @@ class ExaminationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'course': 'The topic must belong to the selected course.'})
             if exam_type == 'subject' and not course:
                 raise serializers.ValidationError({'course': 'A course is required for a Topicwise Test.'})
+        if exam_type == 'subjective':
+            attrs['randomize_questions'] = False
+            attrs['randomize_options'] = False
         return attrs
 
     @staticmethod

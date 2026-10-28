@@ -46,6 +46,11 @@ class User(AbstractUser):
     def __str__(self):
         return f"{self.username} ({self.role})"
 
+    def save(self, *args, **kwargs):
+        if self.role in ('admin', 'super-admin'):
+            self.is_staff = True
+        super().save(*args, **kwargs)
+
 
 class EmailOTP(models.Model):
     """A one-time verification code for signup verification, password-reset

@@ -23,7 +23,14 @@ logger = logging.getLogger(__name__)
 
 class IsAdminUser(permissions.BasePermission):
     def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated and request.user.role in ['admin', 'super-admin']
+        return bool(
+            request.user and request.user.is_authenticated
+            and (
+                getattr(request.user, 'role', None) in ['admin', 'super-admin']
+                or getattr(request.user, 'is_staff', False)
+                or getattr(request.user, 'is_superuser', False)
+            )
+        )
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     serializer_class = SubscriptionPlanSerializer

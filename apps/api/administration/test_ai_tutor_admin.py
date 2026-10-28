@@ -12,6 +12,7 @@ OVERVIEW_URL = '/api/admin/ai-tutor/'
 PROVIDER_STATUS_URL = '/api/admin/ai-tutor/provider-status/'
 CONVERSATIONS_URL = '/api/admin/ai-tutor/conversations/'
 USAGE_URL = '/api/admin/ai-tutor/usage/'
+SAFETY_URL = '/api/admin/ai-tutor/safety/'
 
 
 def conversation_detail_url(pk):
@@ -69,6 +70,9 @@ class PermissionTests(AITutorAdminTestBase):
         conv = self.make_conversation()
         url = conversation_detail_url(conv.id)
         self._assert_locked_down(url)
+
+    def test_safety_permissions(self):
+        self._assert_locked_down(SAFETY_URL)
 
     def test_super_admin_allowed_on_overview(self):
         self.client.force_authenticate(user=self.superadmin)
@@ -270,3 +274,33 @@ class UsageTests(AITutorAdminTestBase):
         self.as_admin()
         resp = self.client.get(USAGE_URL, {'days': 999})
         self.assertLessEqual(len(resp.data['trend']), 90)
+
+
+class SafetyTests(AITutorAdminTestBase):
+    def test_safety_overview_metrics(self):
+        conv = self.make_conversation()
+        Message.objects.create(conversation=conv, role='user', content='What are fundamental rights in Nepal?')
+        Message.objects.create(conversation=conv, role='assistant', content='Fundamental rights are in Part 3.')
+
+        self.as_admin()
+        resp = self.client.get(SAFETY_URL)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('status', resp.data)
+        self.assertIn('metrics', resp.data)
+        self.assertEqual(resp.data['metrics']['totalScanned'], 1)
+        self.assertGreaterEqual(resp.data['metrics']['cleanPassRate'], 90.0)
+        self.assertGreaterEqual(len(resp.data['guardrails']), 6)
+        self.assertEqual(len(resp.data['logs']), 1)
+        self.assertEqual(resp.data['logs'][0]['status'], 'passed')
+
+    def test_safety_search_filter(self):
+        conv = self.make_conversation()
+        Message.objects.create(conversation=conv, role='user', content='Special unique keyword loksewa_topic')
+        Message.objects.create(conversation=conv, role='user', content='Another question')
+
+        self.as_admin()
+        resp = self.client.get(SAFETY_URL, {'search': 'loksewa_topic'})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data['logs']), 1)
+        self.assertIn('loksewa_topic', resp.data['logs'][0]['fullQuery'])
+

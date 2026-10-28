@@ -2,7 +2,14 @@ from rest_framework import permissions
 
 
 def is_admin(user):
-    return bool(user and user.is_authenticated and user.role in ('admin', 'super-admin'))
+    return bool(
+        user and user.is_authenticated
+        and (
+            getattr(user, 'role', None) in ('admin', 'super-admin')
+            or getattr(user, 'is_staff', False)
+            or getattr(user, 'is_superuser', False)
+        )
+    )
 
 
 class IsOwnerOrAdmin(permissions.BasePermission):

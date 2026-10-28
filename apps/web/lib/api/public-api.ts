@@ -119,6 +119,7 @@ export interface PublicSyllabusPaper {
 export interface PublicSyllabusMaterial {
   id: number;
   title: string;
+  displayTitle?: string;
   contentCategory: string;
   fileUrl: string | null;
   externalUrl: string | null;

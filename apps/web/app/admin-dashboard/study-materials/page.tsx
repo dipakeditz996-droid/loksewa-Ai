@@ -41,6 +41,7 @@ import {
 } from "@/lib/api/admin-study-materials";
 import { sortNotesAscending } from "@/lib/utils/note-sorting";
 import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
+import { downloadFile } from "@/lib/api/client";
 import {
   adminAcademicApi,
   ApiSubject,
@@ -1982,6 +1983,22 @@ function ViewPdfModal({
   material: StudyMaterialListItem;
   onClose: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    if (!material.fileUrl) return;
+    try {
+      setDownloading(true);
+      await downloadFile(material.fileUrl, `${material.title || "material"}.pdf`);
+      toast.success("Download started");
+    } catch (err: unknown) {
+      const errorObj = err as { data?: { detail?: string }; message?: string };
+      toast.error(errorObj?.data?.detail || errorObj?.message || "Failed to download PDF");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-5xl w-full h-[88vh] flex flex-col shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
@@ -1998,15 +2015,15 @@ function ViewPdfModal({
 
           <div className="flex items-center gap-2">
             {material.fileUrl && (
-              <a
-                href={material.fileUrl}
-                download
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 bg-[#C4A45C] hover:bg-[#b09048] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading}
+                className="px-3 py-1.5 bg-[#C4A45C] hover:bg-[#b09048] disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" /> Download PDF
-              </a>
+                {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                {downloading ? "Downloading..." : "Download PDF"}
+              </button>
             )}
             <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
               &#10005;
@@ -2021,12 +2038,7 @@ function ViewPdfModal({
               url={material.fileUrl}
               title={material.title}
               allowDownload={true}
-              onDownload={() => {
-                const a = document.createElement("a");
-                a.href = material.fileUrl || "";
-                a.download = `${material.title || "material"}.pdf`;
-                a.click();
-              }}
+              onDownload={handleDownload}
             />
           ) : (
             <div className="flex items-center justify-center h-full text-slate-400 text-sm">

@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   BookOpen, Layers, LibraryBig, CheckSquare, FileText, Plus,
   MoreVertical, Edit2, Copy, Archive, Search, ChevronRight, ChevronDown,
-  ArrowUpDown, ListTree, Table2, Upload
+  ArrowUpDown, ArrowUp, ArrowDown, GripVertical, ListTree, Table2, Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,8 @@ import { adminAcademicApi, ApiExam, ApiPaper, ApiSubject, ApiChapter, ApiTopic }
 export default function AcademicOverviewPage() {
   const [viewMode, setViewMode] = useState<"table" | "tree">("table");
   const [searchQuery, setSearchQuery] = useState("");
+  const queryClient = useQueryClient();
+
   
   const { data: statsData } = useQuery({
     queryKey: ["admin-academic-stats"],
@@ -46,6 +49,49 @@ export default function AcademicOverviewPage() {
   });
 
   const isLoading = examsLoading || papersLoading || subjectsLoading;
+
+  const [localExams, setLocalExams] = useState<ApiExam[]>([]);
+  const [draggedExamIdx, setDraggedExamIdx] = useState<number | null>(null);
+  const [dragOverExamIdx, setDragOverExamIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (exams) {
+      setLocalExams([...exams].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    }
+  }, [exams]);
+
+  const handleDropExam = async (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) {
+      setDraggedExamIdx(null);
+      setDragOverExamIdx(null);
+      return;
+    }
+    const updated = [...localExams];
+    const [moved] = updated.splice(fromIdx, 1);
+    if (!moved) return;
+    updated.splice(toIdx, 0, moved);
+    const reordered = updated.map((item, idx) => ({ ...item, order: idx + 1 }));
+    setLocalExams(reordered);
+    setDraggedExamIdx(null);
+    setDragOverExamIdx(null);
+    try {
+      await adminAcademicApi.reorderItems(
+        "exams",
+        reordered.map((item) => ({ id: item.id, order: item.order }))
+      );
+      toast.success("Exams reordered successfully.");
+      queryClient.invalidateQueries({ queryKey: ["admin-academic-exams"] });
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save exam order.");
+      setLocalExams([...exams].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+    }
+  };
+
+  const moveExam = (index: number, direction: "up" | "down") => {
+    const toIdx = direction === "up" ? index - 1 : index + 1;
+    if (toIdx < 0 || toIdx >= localExams.length) return;
+    handleDropExam(index, toIdx);
+  };
 
   const stats = [
     {
@@ -85,9 +131,7 @@ export default function AcademicOverviewPage() {
     }
   ];
 
-  const filteredExams = exams.filter(exam => 
-    exam.name.toLowerCase().includes(searchQuery.toLowerCase())
-  ).sort((a, b) => a.order - b.order);
+  const filteredExams = localExams.filter(exam => exam.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // Simple Tree Node Component
   const TreeNode = ({ exam }: { exam: ApiExam }) => {
@@ -228,12 +272,62 @@ export default function AcademicOverviewPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 ">
-                {filteredExams.map((exam) => {
+                {filteredExams.map((exam, index) => {
                   const paperCount = papers.filter(p => p.exam === exam.id).length;
                   return (
-                    <tr key={exam.id} className="hover:bg-slate-50 :bg-white/5 transition-colors group">
+                    <tr
+                      key={exam.id}
+                      draggable={!searchQuery}
+                      onDragStart={() => setDraggedExamIdx(index)}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverExamIdx(index);
+                      }}
+                      onDragEnd={() => {
+                        setDraggedExamIdx(null);
+                        setDragOverExamIdx(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedExamIdx !== null) {
+                          handleDropExam(draggedExamIdx, index);
+                        }
+                      }}
+                      className={`hover:bg-slate-50 transition-colors group ${
+                        draggedExamIdx === index
+                          ? "opacity-40 bg-blue-50/50"
+                          : dragOverExamIdx === index
+                          ? "bg-blue-50/80 border-t-2 border-b-2 border-blue-500"
+                          : ""
+                      }`}
+                    >
                       <td className="px-6 py-4">
-                        <ArrowUpDown className="w-4 h-4 text-slate-300 cursor-grab hover:text-slate-500" />
+                        <div className="flex items-center gap-1.5">
+                          <div
+                            className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 p-0.5 rounded hover:bg-slate-200/50 transition-colors"
+                            title="Hold and drag to reorder"
+                          >
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <button
+                              disabled={index === 0 || !!searchQuery}
+                              onClick={() => moveExam(index, "up")}
+                              className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
+                              title="Move up"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              disabled={index === filteredExams.length - 1 || !!searchQuery}
+                              onClick={() => moveExam(index, "down")}
+                              className="p-0.5 rounded hover:bg-slate-100 disabled:opacity-25 disabled:cursor-not-allowed text-slate-400 hover:text-slate-700"
+                              title="Move down"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">

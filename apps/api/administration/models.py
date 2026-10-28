@@ -229,3 +229,219 @@ class DatabaseBackup(models.Model):
     def is_verified(self):
         return self.status == 'verified'
 
+
+
+class PdfBrandingSetting(models.Model):
+    """Platform-wide central PDF branding & watermark configuration (singleton)."""
+    # Logo settings
+    logo_file = models.FileField(upload_to='branding/logos/', null=True, blank=True, max_length=500)
+    logo_enabled = models.BooleanField(default=True)
+    logo_placement = models.CharField(
+        max_length=30, default='top-right',
+        choices=[
+            ('top-left', 'Top Left'),
+            ('top-right', 'Top Right'),
+            ('top-center', 'Top Center'),
+            ('bottom-left', 'Bottom Left'),
+            ('bottom-right', 'Bottom Right'),
+            ('bottom-center', 'Bottom Center'),
+        ]
+    )
+    logo_size = models.CharField(
+        max_length=20, default='medium',
+        choices=[('small', 'Small'), ('medium', 'Medium'), ('large', 'Large')]
+    )
+    logo_opacity = models.FloatField(default=1.0)
+    logo_margin = models.IntegerField(default=24)  # points from page edge
+
+    # Watermark settings
+    watermark_enabled = models.BooleanField(default=True)
+    watermark_type = models.CharField(
+        max_length=20, default='text',
+        choices=[('text', 'Text Watermark'), ('image', 'Image Watermark')]
+    )
+    watermark_text = models.CharField(max_length=150, default='LoksewaAI')
+    watermark_image_file = models.FileField(upload_to='branding/watermarks/', null=True, blank=True, max_length=500)
+    watermark_placement = models.CharField(
+        max_length=30, default='center',
+        choices=[
+            ('center', 'Center'),
+            ('diagonal-center', 'Diagonal Center'),
+            ('top-center', 'Top Center'),
+            ('bottom-center', 'Bottom Center'),
+            ('tile', 'Repeating Tiled'),
+        ]
+    )
+    watermark_opacity = models.FloatField(default=0.15)
+    watermark_rotation = models.IntegerField(default=45)  # -180 to 180 degrees
+    watermark_size = models.CharField(
+        max_length=20, default='medium',
+        choices=[('small', 'Small (36pt)'), ('medium', 'Medium (52pt)'), ('large', 'Large (72pt)')]
+    )
+    watermark_color = models.CharField(max_length=30, default='#0B2545')
+
+    # Defaults and Category Policy
+    apply_by_default_on_upload = models.BooleanField(
+        default=True,
+        help_text="Whether newly uploaded PDFs should have branding applied by default."
+    )
+    include_in_bulk_by_default = models.BooleanField(
+        default=True,
+        help_text="Whether existing PDFs should be selected by default in bulk operations."
+    )
+    eligible_categories = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of StudyMaterial content_category values eligible for branding."
+    )
+
+    # Version tracking
+    version = models.IntegerField(default=1, help_text="Increments on every branding update to detect outdated versions.")
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pdf_branding_updates')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    CACHE_KEY = 'pdf_branding_settings:singleton'
+
+    class Meta:
+        verbose_name = 'PDF Branding Setting'
+        verbose_name_plural = 'PDF Branding Settings'
+
+    @classmethod
+    def get_settings(cls):
+        from django.core.cache import cache
+        try:
+            cached = cache.get(cls.CACHE_KEY)
+            if cached is not None:
+                return cached
+        except Exception:
+            pass
+
+        obj, created = cls.objects.get_or_create(id=1, defaults={
+            'eligible_categories': ['syllabus', 'subjective_topicwise', 'objective_topicwise', 'revision_notes']
+        })
+        if created or not obj.eligible_categories:
+            obj.eligible_categories = ['syllabus', 'subjective_topicwise', 'objective_topicwise', 'revision_notes']
+            obj.save(update_fields=['eligible_categories'])
+
+        try:
+            cache.set(cls.CACHE_KEY, obj, 3600)
+        except Exception:
+            pass
+        return obj
+
+    def save(self, *args, **kwargs):
+        from django.core.cache import cache
+        if self.pk:
+            self.version = (self.version or 0) + 1
+        super().save(*args, **kwargs)
+        try:
+            cache.delete(self.CACHE_KEY)
+        except Exception:
+            pass
+
+    def compute_config_hash(self):
+        import hashlib, json
+        data = {
+            'logo_enabled': self.logo_enabled,
+            'logo_file': self.logo_file.name if self.logo_file else '',
+            'logo_placement': self.logo_placement,
+            'logo_size': self.logo_size,
+            'logo_opacity': self.logo_opacity,
+            'watermark_enabled': self.watermark_enabled,
+            'watermark_type': self.watermark_type,
+            'watermark_text': self.watermark_text,
+            'watermark_image_file': self.watermark_image_file.name if self.watermark_image_file else '',
+            'watermark_placement': self.watermark_placement,
+            'watermark_opacity': self.watermark_opacity,
+            'watermark_rotation': self.watermark_rotation,
+            'watermark_size': self.watermark_size,
+            'watermark_color': self.watermark_color,
+            'version': self.version,
+        }
+        return hashlib.sha256(json.dumps(data, sort_keys=True).encode('utf-8')).hexdigest()[:16]
+
+
+class PdfBrandingRecord(models.Model):
+    """Maintains branding lifecycle, audit status, and pristine original copy for a document."""
+    STATUS_CHOICES = (
+        ('unbranded', 'Unbranded'),
+        ('branded', 'Branded'),
+        ('processing', 'Processing'),
+        ('failed', 'Failed'),
+        ('excluded', 'Excluded'),
+    )
+    DECISION_CHOICES = (
+        ('default', 'Use Global Default'),
+        ('apply', 'Apply Branding'),
+        ('skip', 'Skip Branding'),
+    )
+
+    material = models.OneToOneField(
+        'notes.StudyMaterial', on_delete=models.CASCADE,
+        related_name='branding_record', null=True, blank=True
+    )
+    document_title = models.CharField(max_length=255, blank=True)
+    document_category = models.CharField(max_length=100, blank=True)
+    
+    # Storage of clean original PDF
+    original_file = models.FileField(
+        upload_to='pdf_branding/originals/', null=True, blank=True, max_length=500,
+        help_text="Pristine unbranded original PDF, preserved so future re-branding starts clean without duplicate watermarks."
+    )
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='unbranded', db_index=True)
+    decision = models.CharField(max_length=20, choices=DECISION_CHOICES, default='default')
+    applied_version = models.IntegerField(default=0)
+    applied_hash = models.CharField(max_length=64, blank=True, default='')
+    
+    last_processed_at = models.DateTimeField(null=True, blank=True)
+    error_message = models.TextField(blank=True, default='')
+    page_count = models.IntegerField(default=0)
+    file_size_bytes = models.BigIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"BrandingRecord({self.material_id or self.document_title}: {self.status} v{self.applied_version})"
+
+
+class PdfBrandingBatchJob(models.Model):
+    """Tracks batch operations applying or reprocessing branding across documents."""
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    operation = models.CharField(max_length=30, default='bulk_apply', choices=[
+        ('bulk_apply', 'Bulk Apply Branding'),
+        ('reprocess_all', 'Reprocess with Latest Config'),
+        ('retry_failed', 'Retry Failed Items'),
+    ])
+    total_files = models.IntegerField(default=0)
+    processed_count = models.IntegerField(default=0)
+    success_count = models.IntegerField(default=0)
+    failed_count = models.IntegerField(default=0)
+    skipped_count = models.IntegerField(default=0)
+
+    applied_version = models.IntegerField(default=1)
+    file_ids = models.JSONField(default=list, blank=True, help_text="Target StudyMaterial IDs")
+    results = models.JSONField(default=list, blank=True, help_text="Per-file processing outcomes")
+    error_summary = models.TextField(blank=True, default='')
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='pdf_branding_jobs')
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"PdfBrandingJob #{self.id} ({self.status}) - {self.processed_count}/{self.total_files}"

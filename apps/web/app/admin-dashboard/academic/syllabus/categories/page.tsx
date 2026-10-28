@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, ChevronRight, Edit, Trash2, ArrowUp, ArrowDown, Database, CheckCircle2, XCircle, ArrowLeft } from "lucide-react";
+import { Plus, Search, ChevronRight, Edit, Trash2, ArrowUp, ArrowDown, Database, CheckCircle2, XCircle, ArrowLeft, GripVertical } from "lucide-react";
 import { adminSyllabusApi, AdminExamCategory } from "@/lib/api/admin-syllabus";
 
 export default function CategoriesPage() {
@@ -82,6 +82,31 @@ export default function CategoriesPage() {
       } catch (error) {
         console.error("Failed to delete", error);
       }
+    }
+  };
+
+  const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleDrop = async (fromIndex: number | null, toIndex: number) => {
+    if (fromIndex === null || fromIndex === toIndex || search !== "") return;
+    const newCategories = [...categories];
+    const [moved] = newCategories.splice(fromIndex, 1);
+    if (!moved) return;
+    newCategories.splice(toIndex, 0, moved);
+
+    const updated = newCategories.map((cat, idx) => ({ ...cat, order: idx }));
+    setCategories(updated);
+    setDraggedIdx(null);
+    setDragOverIdx(null);
+
+    try {
+      await adminSyllabusApi.reorderCategories(
+        updated.map((c) => ({ id: c.id, order: c.order }))
+      );
+    } catch (error) {
+      console.error("Reorder failed", error);
+      loadData();
     }
   };
 
@@ -188,23 +213,60 @@ export default function CategoriesPage() {
                 </tr>
               ) : (
                 filteredCategories.map((category, index) => (
-                  <tr key={category.id} className="hover:bg-slate-50/50 transition-colors">
+                  <tr
+                    key={category.id}
+                    draggable={search === ""}
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      setDraggedIdx(index);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      if (dragOverIdx !== index) setDragOverIdx(index);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedIdx(null);
+                      setDragOverIdx(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleDrop(draggedIdx, index);
+                    }}
+                    className={`transition-colors ${
+                      draggedIdx === index
+                        ? "opacity-40 bg-blue-50/50"
+                        : dragOverIdx === index
+                        ? "bg-blue-50/80 border-t-2 border-b-2 border-blue-500"
+                        : "hover:bg-slate-50/50"
+                    }`}
+                  >
                     <td className="px-6 py-4">
-                      <div className="flex flex-col gap-1">
-                        <button 
-                          disabled={index === 0 || search !== ""}
-                          onClick={() => handleMove(index, 'up')}
-                          className="text-slate-400 hover:text-[#0B2545] disabled:opacity-30 transition-colors"
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-600 p-1 rounded hover:bg-slate-200/50 transition-colors"
+                          title="Hold and drag to reorder"
                         >
-                          <ArrowUp className="h-4 w-4" />
-                        </button>
-                        <button 
-                          disabled={index === categories.length - 1 || search !== ""}
-                          onClick={() => handleMove(index, 'down')}
-                          className="text-slate-400 hover:text-[#0B2545] disabled:opacity-30 transition-colors"
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </button>
+                          <GripVertical className="h-4 w-4" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button 
+                            disabled={index === 0 || search !== ""}
+                            onClick={() => handleMove(index, 'up')}
+                            className="text-slate-400 hover:text-[#0B2545] disabled:opacity-30 transition-colors"
+                            title="Move up"
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button 
+                            disabled={index === categories.length - 1 || search !== ""}
+                            onClick={() => handleMove(index, 'down')}
+                            className="text-slate-400 hover:text-[#0B2545] disabled:opacity-30 transition-colors"
+                            title="Move down"
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">

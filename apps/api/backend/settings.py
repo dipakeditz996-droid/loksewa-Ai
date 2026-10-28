@@ -257,9 +257,10 @@ _running_schema_command = len(sys.argv) > 1 and sys.argv[1] in _SCHEMA_COMMANDS
 _force_direct = _env_bool('DJANGO_DB_USE_DIRECT')
 
 _active_db_url = DATABASE_URL
+_allow_direct = os.environ.get('DJANGO_DB_USE_DIRECT', '').lower() not in ('0', 'false', 'no')
 if 'test' in sys.argv:
     _active_db_url = None
-elif DIRECT_URL and (_running_schema_command or _force_direct):
+elif DIRECT_URL and _allow_direct and (_running_schema_command or _force_direct):
     _active_db_url = DIRECT_URL
 
 if _active_db_url:

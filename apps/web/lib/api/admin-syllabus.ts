@@ -139,7 +139,7 @@ export const adminSyllabusApi = {
   },
   deleteCategory: (id: number, force: boolean = true) => {
     clearAcademicTreeCache();
-    return apiClient(`${SYLLABUS_BASE}/categories/${id}/${force ? '?force=true' : ''}`, { method: "DELETE" });
+    return apiClient(`${SYLLABUS_BASE}/categories/${id}/${force ? '?force=true' : ''}`, { method: "DELETE", timeoutMs: 120000 });
   },
   reorderCategories: (data: ReorderItem[]) => {
     clearAcademicTreeCache();
@@ -163,7 +163,7 @@ export const adminSyllabusApi = {
   },
   deletePosition: (id: number, force: boolean = true) => {
     clearAcademicTreeCache();
-    return apiClient(`${SYLLABUS_BASE}/exams/${id}/${force ? '?force=true' : ''}`, { method: "DELETE" });
+    return apiClient(`${SYLLABUS_BASE}/exams/${id}/${force ? '?force=true' : ''}`, { method: "DELETE", timeoutMs: 120000 });
   },
   reorderPositions: (data: ReorderItem[]) => {
     clearAcademicTreeCache();
@@ -183,7 +183,7 @@ export const adminSyllabusApi = {
   },
   deleteSubject: (id: number, force: boolean = true) => {
     clearAcademicTreeCache();
-    return apiClient(`${SYLLABUS_BASE}/subjects/${id}/${force ? '?force=true' : ''}`, { method: "DELETE" });
+    return apiClient(`${SYLLABUS_BASE}/subjects/${id}/${force ? '?force=true' : ''}`, { method: "DELETE", timeoutMs: 120000 });
   },
   reorderSubjects: (data: ReorderItem[]) => {
     clearAcademicTreeCache();
@@ -203,7 +203,7 @@ export const adminSyllabusApi = {
   },
   deleteChapter: (id: number, force: boolean = true) => {
     clearAcademicTreeCache();
-    return apiClient(`${SYLLABUS_BASE}/chapters/${id}/${force ? '?force=true' : ''}`, { method: "DELETE" });
+    return apiClient(`${SYLLABUS_BASE}/chapters/${id}/${force ? '?force=true' : ''}`, { method: "DELETE", timeoutMs: 120000 });
   },
   reorderChapters: (data: ReorderItem[]) => {
     clearAcademicTreeCache();
@@ -223,7 +223,7 @@ export const adminSyllabusApi = {
   },
   deleteTopic: (id: number, force: boolean = true) => {
     clearAcademicTreeCache();
-    return apiClient(`${SYLLABUS_BASE}/topics/${id}/${force ? '?force=true' : ''}`, { method: "DELETE" });
+    return apiClient(`${SYLLABUS_BASE}/topics/${id}/${force ? '?force=true' : ''}`, { method: "DELETE", timeoutMs: 120000 });
   },
   reorderTopics: (data: ReorderItem[]) => {
     clearAcademicTreeCache();

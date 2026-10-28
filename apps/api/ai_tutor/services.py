@@ -4,18 +4,22 @@ from google.genai import types
 from django.conf import settings
 from .models import Message
 
-# Try to get API key from environment, else use a placeholder or None
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+def _get_gemini_api_key():
+    return getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '').strip()
+
+def _get_gemini_model():
+    return getattr(settings, 'GEMINI_MODEL', '') or os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-lite').strip()
 
 class AITutorService:
     def __init__(self):
-        self.is_mock = not bool(GEMINI_API_KEY)
+        api_key = _get_gemini_api_key()
+        self.is_mock = not bool(api_key)
         if not self.is_mock:
-            self.client = genai.Client(api_key=GEMINI_API_KEY)
+            self.client = genai.Client(api_key=api_key)
         else:
             self.client = None
             
-        self.model_name = 'gemini-2.5-flash'
+        self.model_name = _get_gemini_model()
         self.last_token_count = 0
 
     def construct_system_prompt(self, conversation):
@@ -163,10 +167,11 @@ import json
 
 class AdminAILogic:
     def __init__(self):
-        self.is_mock = not bool(GEMINI_API_KEY)
+        api_key = _get_gemini_api_key()
+        self.is_mock = not bool(api_key)
         if not self.is_mock:
-            self.client = genai.Client(api_key=GEMINI_API_KEY)
-        self.model_name = 'gemini-2.5-flash'
+            self.client = genai.Client(api_key=api_key)
+        self.model_name = _get_gemini_model()
         
     def generate_options(self, question_text, subject):
         """Generate options A, B, C, D and correct_answer for a given question."""

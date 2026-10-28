@@ -1472,10 +1472,12 @@ class AdminAITutorProviderStatusView(APIView):
 
     def get(self, request):
         import os
-        configured = bool(os.environ.get('GEMINI_API_KEY', '').strip())
+        from django.conf import settings
+        configured = bool(getattr(settings, 'GEMINI_API_KEY', '') or os.environ.get('GEMINI_API_KEY', '').strip())
+        model = getattr(settings, 'GEMINI_MODEL', '') or os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-lite').strip()
         return Response({
             "provider": "gemini",
-            "model": "gemini-2.5-flash",
+            "model": model,
             "status": "configured" if configured else "not_configured",
         })
 

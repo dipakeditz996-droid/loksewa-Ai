@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from django.db import transaction
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from rest_framework.pagination import PageNumberPagination
 from core.pagination import StandardResultsSetPagination
 
@@ -269,8 +269,21 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            new_status = serializer.validated_data.get('status')
-            rejection_reason = serializer.validated_data.get('rejection_reason', '')
+            action_input = (request.data.get('action') or request.data.get('status') or '').upper().strip()
+            if action_input in ['APPROVE', 'APPROVED']:
+                new_status = 'APPROVED'
+            elif action_input in ['REJECT', 'REJECTED']:
+                new_status = 'REJECTED'
+            else:
+                new_status = serializer.validated_data.get('status')
+
+            rejection_reason = (
+                serializer.validated_data.get('rejection_reason') 
+                or request.data.get('rejection_reason') 
+                or request.data.get('reason') 
+                or request.data.get('admin_notes') 
+                or ''
+            )
 
             if new_status == 'REJECTED' and not rejection_reason:
                 return Response(
@@ -287,15 +300,35 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
             if new_status == 'APPROVED':
                 if submission.order:
                     old_order_status = submission.order.status
-                    submission.order.status = 'CONFIRMED'
-                    submission.order.save(update_fields=['status'])
-                    OrderStatusHistory.objects.create(
-                        order=submission.order,
-                        previous_status=old_order_status,
-                        new_status='CONFIRMED',
-                        changed_by=request.user,
-                        note='Payment approved by admin',
-                    )
+                    order = submission.order
+                    final_tot = (order.total_amount + order.delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    if submission.is_cod_advance or order.is_cod:
+                        order.status = 'CONFIRMED'
+                        order.payment_status = 'PARTIALLY_PAID'
+                        order.cod_advance_paid = submission.submitted_amount
+                        order.cod_remaining_balance = max(
+                            Decimal('0.00'),
+                            (final_tot - order.cod_advance_paid).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        )
+                        order.save(update_fields=['status', 'payment_status', 'cod_advance_paid', 'cod_remaining_balance', 'updated_at'])
+                        OrderStatusHistory.objects.create(
+                            order=order,
+                            previous_status=old_order_status,
+                            new_status='CONFIRMED',
+                            changed_by=request.user,
+                            note=f'COD 15% advance payment (NPR {submission.submitted_amount}) verified by admin. Remaining balance NPR {order.cod_remaining_balance} payable on delivery.',
+                        )
+                    else:
+                        order.status = 'CONFIRMED'
+                        order.payment_status = 'PAID'
+                        order.save(update_fields=['status', 'payment_status', 'updated_at'])
+                        OrderStatusHistory.objects.create(
+                            order=order,
+                            previous_status=old_order_status,
+                            new_status='CONFIRMED',
+                            changed_by=request.user,
+                            note='Full payment approved by admin',
+                        )
                 elif submission.product:
                     Purchase.objects.update_or_create(
                         student=submission.student,
@@ -310,14 +343,16 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
             elif new_status == 'REJECTED':
                 if submission.order:
                     old_order_status = submission.order.status
-                    submission.order.status = 'PENDING_PAYMENT'
-                    submission.order.save(update_fields=['status'])
+                    order = submission.order
+                    order.status = 'PENDING_PAYMENT'
+                    order.payment_status = 'UNPAID'
+                    order.save(update_fields=['status', 'payment_status', 'updated_at'])
                     OrderStatusHistory.objects.create(
-                        order=submission.order,
+                        order=order,
                         previous_status=old_order_status,
                         new_status='PENDING_PAYMENT',
                         changed_by=request.user,
-                        note=f'Payment rejected by admin: {rejection_reason}',
+                        note=f'Payment attempt #{submission.attempt_number} rejected by admin: {rejection_reason}',
                     )
 
         from core.notification_service import NotificationService
@@ -718,20 +753,44 @@ class StudentPaymentSubmissionViewSet(viewsets.ModelViewSet):
         else:
             if order.student != self.request.user:
                 raise PermissionDenied("You do not have permission to submit payment for this order.")
-            if order.status not in ['PENDING_PAYMENT', 'PAYMENT_REJECTED', 'PAYMENT_SUBMITTED']:
+            if order.status not in ['PENDING_PAYMENT', 'PAYMENT_REJECTED', 'PAYMENT_SUBMITTED'] or order.payment_status == 'PAID':
                 raise ValidationError({"detail": "Order is not in a payable state."})
-            expected_amount = order.total_amount + order.delivery_fee
+            
+            # Authoritative calculation of expected_amount:
+            if order.is_cod:
+                expected_amount = order.cod_advance_required
+                is_cod_advance = True
+            else:
+                expected_amount = (order.total_amount + order.delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                is_cod_advance = False
             title = f"Order #{order.id}"
+            attempt_number = order.payment_submissions.count() + 1
 
-        serializer.save(
-            student=self.request.user,
-            expected_amount=expected_amount,
-            submitted_amount=expected_amount,
-        )
-
-        if order:
+        if product:
+            serializer.save(
+                student=self.request.user,
+                expected_amount=expected_amount,
+                submitted_amount=expected_amount,
+                is_cod_advance=False,
+                attempt_number=1,
+            )
+        else:
+            serializer.save(
+                student=self.request.user,
+                expected_amount=expected_amount,
+                submitted_amount=expected_amount,
+                is_cod_advance=is_cod_advance,
+                attempt_number=attempt_number,
+            )
             order.status = 'PAYMENT_SUBMITTED'
-            order.save()
+            order.save(update_fields=['status', 'updated_at'])
+            OrderStatusHistory.objects.create(
+                order=order,
+                previous_status=order.status,
+                new_status='PAYMENT_SUBMITTED',
+                changed_by=self.request.user,
+                note=f"Payment proof submitted for {'COD 15% advance' if is_cod_advance else 'order'} (Attempt #{attempt_number})."
+            )
 
         from core.notification_service import NotificationService
         NotificationService.notify_admins(
@@ -1090,6 +1149,50 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         return Response(OrderSerializer(order).data)
 
+    @action(detail=True, methods=['post'], url_path='switch-payment-mode')
+    def switch_payment_mode(self, request, pk=None):
+        """Allow a student to switch between full prepaid payment and COD (15% advance)."""
+        order = self.get_object()
+        if order.student != request.user:
+            raise PermissionDenied("You can only modify your own orders.")
+        if order.status not in ['PENDING_PAYMENT', 'PAYMENT_SUBMITTED'] or order.payment_status == 'PAID':
+            return Response({"detail": "This order is not eligible for payment modification."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.payment_submissions.filter(status='PENDING').exists():
+            return Response({"detail": "Cannot switch payment mode while a payment verification is pending review."}, status=status.HTTP_400_BAD_REQUEST)
+
+        target_mode = str(request.data.get('payment_mode') or '').upper().strip()
+        if target_mode not in ['PREPAID', 'COD']:
+            return Response({"detail": "Invalid payment mode. Choose 'PREPAID' or 'COD'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            final_total = (order.total_amount + order.delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if target_mode == 'COD':
+                order.is_cod = True
+                order.payment_method_type = 'COD'
+                order.cod_advance_rate = Decimal('15.00')
+                order.cod_advance_required = (final_total * Decimal('0.15')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                order.cod_remaining_balance = (final_total - (order.cod_advance_paid if order.cod_advance_paid > 0 else order.cod_advance_required)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            else:
+                order.is_cod = False
+                order.payment_method_type = 'PREPAID'
+                order.cod_advance_rate = Decimal('0.00')
+                order.cod_advance_required = Decimal('0.00')
+                order.cod_remaining_balance = Decimal('0.00')
+
+            order.save(update_fields=['is_cod', 'payment_method_type', 'cod_advance_rate', 'cod_advance_required', 'cod_remaining_balance', 'updated_at'])
+
+            OrderStatusHistory.objects.create(
+                order=order,
+                previous_status=order.status,
+                new_status=order.status,
+                changed_by=request.user,
+                note=f"Payment mode switched to {target_mode} by student."
+            )
+
+        return Response(OrderSerializer(order).data)
+
     @action(detail=False, methods=['post'])
     def checkout(self, request):
         if not _marketplace_enabled():
@@ -1225,13 +1328,36 @@ class OrderViewSet(viewsets.ModelViewSet):
                 product.save(update_fields=['stock', 'listing_status', 'is_published'])
 
             total_amount = sum(item.product.final_price * item.quantity for item in cart_items)
-
             delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
+            final_total = (total_amount + delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            payment_mode = str(request.data.get('payment_mode') or 'PREPAID').upper().strip()
+            is_cod = (payment_mode == 'COD')
+
+            if is_cod:
+                cod_advance_rate = Decimal('15.00')
+                cod_advance_required = (final_total * Decimal('0.15')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                cod_advance_paid = Decimal('0.00')
+                cod_remaining_balance = (final_total - cod_advance_required).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                payment_method_type = 'COD'
+            else:
+                cod_advance_rate = Decimal('0.00')
+                cod_advance_required = Decimal('0.00')
+                cod_advance_paid = Decimal('0.00')
+                cod_remaining_balance = Decimal('0.00')
+                payment_method_type = 'PREPAID'
 
             order = Order.objects.create(
                 student=request.user,
                 total_amount=total_amount,
                 delivery_fee=delivery_fee,
+                payment_method_type=payment_method_type,
+                is_cod=is_cod,
+                cod_advance_rate=cod_advance_rate,
+                cod_advance_required=cod_advance_required,
+                cod_advance_paid=cod_advance_paid,
+                cod_remaining_balance=cod_remaining_balance,
+                payment_status='UNPAID',
                 delivery_address_ref=delivery_address if isinstance(delivery_address, DeliveryAddress) else None,
                 shipping_address=shipping_address_str,
                 contact_number=contact_number_str,
@@ -1267,7 +1393,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 previous_status='',
                 new_status='PENDING_PAYMENT',
                 changed_by=request.user,
-                note='Order created via Checkout',
+                note=f"Order created via Checkout ({'COD with 15% Advance' if is_cod else 'Full Online Payment'})",
             )
 
             # Clear cart

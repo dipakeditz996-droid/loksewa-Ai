@@ -3,7 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { marketplaceApi, Order, Review, Dispute } from "@/lib/api/marketplace";
-import { Loader2, Package, ArrowLeft, CheckCircle2, Clock, Truck, FileText, CheckCircle, MapPin, Box, Star, AlertTriangle, MessageSquare } from "lucide-react";
+import { Loader2, Package, ArrowLeft, CheckCircle2, Clock, Truck, FileText, CheckCircle, MapPin, Box, Star, AlertTriangle, MessageSquare, XCircle, RefreshCw, CreditCard, UploadCloud, Info, X, ShieldCheck } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { PaymentMethod } from "@/lib/api/marketplace";
+import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { TrustModals } from "@/components/marketplace/trust-modals";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -28,6 +35,18 @@ export default function StudentOrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
 
+  // Payment recovery modal state
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentRecoveryMode, setPaymentRecoveryMode] = useState<'TRY_AGAIN' | 'SWITCH_METHOD'>('TRY_AGAIN');
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState<number | null>(null);
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState<'PREPAID' | 'COD'>('PREPAID');
+  const [txnCode, setTxnCode] = useState("");
+  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [paymentNote, setPaymentNote] = useState("");
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
   // Modal states
   const [modalType, setModalType] = useState<'REVIEW' | 'DISPUTE'>('REVIEW');
   const [modalItemId, setModalItemId] = useState<number | null>(null);
@@ -38,14 +57,25 @@ export default function StudentOrderDetailPage() {
     Promise.all([
       marketplaceApi.getOrder(Number(orderId)),
       marketplaceApi.getReviews(),
-      marketplaceApi.getDisputes()
+      marketplaceApi.getDisputes(),
+      marketplaceApi.getPaymentMethods()
     ])
-      .then(([orderData, reviewsData, disputesData]) => {
+      .then(([orderData, reviewsData, disputesData, methodsData]) => {
         setOrder(orderData);
         setReviews(reviewsData);
         setDisputes(disputesData);
+        setPaymentMethods(methodsData);
+        if (methodsData.length > 0 && !selectedMethodId) {
+          setSelectedMethodId(methodsData[0]?.id ?? null);
+        }
+        if (orderData.is_cod) {
+          setSelectedPaymentMode('COD');
+        } else {
+          setSelectedPaymentMode('PREPAID');
+        }
         setLoading(false);
       })
+      
       .catch((err) => {
         console.error(err);
         setLoading(false);
@@ -55,6 +85,79 @@ export default function StudentOrderDetailPage() {
   useEffect(() => {
     fetchOrderData();
   }, [orderId]);
+
+  const openPaymentRecoveryModal = (mode: 'TRY_AGAIN' | 'SWITCH_METHOD') => {
+    if (!order) return;
+    setPaymentRecoveryMode(mode);
+    setTxnCode("");
+    setScreenshot(null);
+    setScreenshotPreview(null);
+    setPaymentNote("");
+    if (order.latest_payment_submission?.payment_method_id) {
+      setSelectedMethodId(order.latest_payment_submission.payment_method_id);
+    } else if (paymentMethods.length > 0) {
+      setSelectedMethodId(paymentMethods[0]?.id ?? null);
+    }
+    setSelectedPaymentMode(order.is_cod ? 'COD' : 'PREPAID');
+    setPaymentModalOpen(true);
+  };
+
+  const handleSwitchMode = async (targetMode: 'PREPAID' | 'COD') => {
+    if (!order || targetMode === selectedPaymentMode) return;
+    try {
+      const updated = await marketplaceApi.switchPaymentMode(order.id, targetMode);
+      setOrder(updated);
+      setSelectedPaymentMode(targetMode);
+      toast.success(`Switched to ${targetMode === 'COD' ? 'Cash on Delivery (15% Advance)' : 'Full Online Payment'}`);
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || "Failed to switch payment mode");
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Screenshot must be less than 5MB");
+        return;
+      }
+      setScreenshot(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setScreenshotPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSubmitRecoveryPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order || !selectedMethodId) {
+      toast.error("Please select a payment method.");
+      return;
+    }
+    if (!txnCode.trim() || !screenshot) {
+      toast.error("Please enter the transaction reference code and upload your payment screenshot.");
+      return;
+    }
+
+    setSubmittingPayment(true);
+    try {
+      const formData = new FormData();
+      formData.append('order', order.id.toString());
+      formData.append('payment_method', selectedMethodId.toString());
+      formData.append('transaction_id', txnCode.trim());
+      formData.append('screenshot', screenshot);
+      if (paymentNote.trim()) formData.append('note', paymentNote.trim());
+
+      await marketplaceApi.submitPayment(formData);
+      toast.success("Payment proof submitted successfully! Awaiting admin verification.");
+      setPaymentModalOpen(false);
+      fetchOrderData();
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || "Failed to submit payment proof.");
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
 
   const handleCancelOrder = async () => {
     if (!order) return;
@@ -119,24 +222,124 @@ export default function StudentOrderDetailPage() {
           </div>
         </div>
 
-        {/* Unpaid Order Action Banner */}
-        {order.status === 'PENDING_PAYMENT' && (
-          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        {/* Payment Rejection Recovery Card */}
+        {order.latest_payment_submission?.status === 'REJECTED' && order.can_retry_payment && (
+          <div className="bg-red-50 dark:bg-red-950/20 border-2 border-red-300 dark:border-red-800/60 rounded-2xl p-6 mb-8 shadow-sm">
+            <div className="flex items-start gap-4">
+              <XCircle className="w-8 h-8 text-red-600 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h3 className="text-xl font-extrabold text-red-900 dark:text-red-200">
+                    Payment not completed
+                  </h3>
+                  <span className="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-full font-bold self-start">
+                    Attempt #{order.latest_payment_submission.attempt_number} Rejected
+                  </span>
+                </div>
+                
+                <div className="text-sm text-red-800 dark:text-red-300 space-y-1.5 bg-red-100/50 dark:bg-red-900/20 p-3.5 rounded-xl border border-red-200 dark:border-red-800/40">
+                  <p>
+                    <strong>Reason supplied by administrator:</strong>{" "}
+                    <span className="font-semibold text-red-950 dark:text-red-100">
+                      {order.latest_payment_submission.rejection_reason || "Invalid / Unclear screenshot or incorrect transaction code."}
+                    </span>
+                  </p>
+                  <p className="text-xs text-red-700/90 dark:text-red-400">
+                    Rejected Amount: Rs. {order.latest_payment_submission.submitted_amount} • Ref: {order.latest_payment_submission.transaction_id}
+                    {order.latest_payment_submission.verified_at && ` • ${new Date(order.latest_payment_submission.verified_at).toLocaleString()}`}
+                  </p>
+                </div>
+                
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Your order is still held in our system. You can review your transaction and try submitting again, or switch to another supported payment method.
+                </p>
+
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <Button 
+                    onClick={() => openPaymentRecoveryModal('TRY_AGAIN')} 
+                    className="bg-[#163E6B] hover:bg-[#163E6B]/90 text-white font-bold gap-2"
+                  >
+                    <RefreshCw className="w-4 h-4" /> Try Again
+                  </Button>
+                  <Button 
+                    onClick={() => openPaymentRecoveryModal('SWITCH_METHOD')} 
+                    variant="outline" 
+                    className="border-slate-300 font-bold gap-2 bg-white dark:bg-slate-800"
+                  >
+                    <CreditCard className="w-4 h-4" /> Pay Another Way
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    onClick={handleCancelOrder} 
+                    disabled={cancelling}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 text-xs ml-auto"
+                  >
+                    {cancelling ? "Cancelling..." : "Cancel Order"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Submitted Awaiting Verification Banner */}
+        {order.status === 'PAYMENT_SUBMITTED' && (
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 rounded-2xl p-6 mb-8 flex items-start gap-4">
+            <Clock className="w-6 h-6 text-blue-600 shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-bold text-amber-900 dark:text-amber-200 text-base">Payment Awaiting Submission</h4>
-              <p className="text-sm text-amber-800/80 dark:text-amber-300/70 mt-1">
-                Your order is reserved. Please submit payment proof to confirm, or cancel this order to release stock.
+              <h4 className="font-bold text-blue-900 dark:text-blue-200 text-base">
+                Payment Verification Pending
+              </h4>
+              <p className="text-sm text-blue-800/80 dark:text-blue-300/70 mt-1">
+                Your payment proof ({order.is_cod ? '15% COD Advance' : 'Full Online Payment'}) has been submitted and is currently being reviewed by our administration. Once verified, your physical items will be packaged and dispatched.
               </p>
             </div>
-            <div className="flex gap-3">
+          </div>
+        )}
+
+        {/* Unpaid Order Action Banner (if not rejected yet) */}
+        {order.status === 'PENDING_PAYMENT' && order.latest_payment_submission?.status !== 'REJECTED' && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h4 className="font-bold text-amber-900 dark:text-amber-200 text-base">
+                {order.is_cod ? "COD Advance Payment Required (15%)" : "Payment Awaiting Submission"}
+              </h4>
+              <p className="text-sm text-amber-800/80 dark:text-amber-300/70 mt-1">
+                {order.is_cod 
+                  ? `Please pay the mandatory 15% advance (Rs. ${order.cod_advance_required}) to confirm and dispatch your order. The remaining 85% balance (Rs. ${order.cod_remaining_balance}) is paid in cash upon delivery.`
+                  : `Your order is reserved. Please submit payment proof (Rs. ${Number(order.total_amount) + Number(order.delivery_fee)}) to confirm dispatch.`}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
               <Button 
-                variant="destructive" 
+                onClick={() => openPaymentRecoveryModal('TRY_AGAIN')} 
+                className="bg-[#163E6B] hover:bg-[#163E6B]/90 text-white font-bold"
+              >
+                Submit Payment Proof
+              </Button>
+              <Button 
+                variant="outline" 
                 onClick={handleCancelOrder} 
                 disabled={cancelling}
-                className="font-bold"
+                className="text-red-600 border-red-200 hover:bg-red-50 font-bold"
               >
                 {cancelling ? "Cancelling..." : "Cancel Order"}
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* COD Advance Verified Info Banner */}
+        {order.is_cod && order.payment_status === 'PARTIALLY_PAID' && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-2xl p-6 mb-8 flex items-start gap-4">
+            <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-emerald-900 dark:text-emerald-200 text-base">
+                COD Advance Verified • Order Confirmed for Dispatch
+              </h4>
+              <p className="text-sm text-emerald-800/80 dark:text-emerald-300/70 mt-1">
+                Your 15% advance payment (Rs. {order.cod_advance_paid}) was verified. The remaining 85% balance of <strong className="text-emerald-950 dark:text-emerald-100">Rs. {order.cod_remaining_balance}</strong> will be collected in cash when your package is delivered to your address.
+              </p>
             </div>
           </div>
         )}
@@ -271,22 +474,56 @@ export default function StudentOrderDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
-            <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6">
-              <h3 className="font-bold text-lg mb-4">Payment Summary</h3>
-              <div className="space-y-3 text-sm mb-4 pb-4 border-b border-slate-100 dark:border-white/10">
+            <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6 space-y-4">
+              <div className="flex justify-between items-center mb-1">
+                <h3 className="font-bold text-lg">Payment Summary</h3>
+                <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/10">
+                  {order.is_cod ? "COD (15% Advance)" : "Prepaid (Online)"}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-sm pb-4 border-b border-slate-100 dark:border-white/10">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Subtotal</span>
+                  <span className="text-slate-500">Product Subtotal</span>
                   <span className="font-medium">Rs. {order.total_amount}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Delivery Fee</span>
-                  <span className="font-medium">Rs. {order.delivery_fee}</span>
+                  <span className="text-slate-500">Delivery Charge</span>
+                  <span className="font-medium">
+                    {Number(order.delivery_fee) > 0 ? `Rs. ${order.delivery_fee}` : "Free delivery"}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 border-t border-slate-100 dark:border-white/10 font-bold">
+                  <span>Final Order Total</span>
+                  <span className="text-[#163E6B] dark:text-[#D4A72C]">
+                    Rs. {Number(order.total_amount) + Number(order.delivery_fee)}
+                  </span>
                 </div>
               </div>
-              <div className="flex justify-between items-center text-lg font-extrabold">
-                <span>Total</span>
-                <span className="text-[#163E6B] dark:text-[#D4A72C]">
-                  Rs. {Number(order.total_amount) + Number(order.delivery_fee)}
+
+              {order.is_cod && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 text-xs space-y-2">
+                  <div className="font-bold text-amber-900 dark:text-amber-200 flex justify-between">
+                    <span>15% Advance Required:</span>
+                    <span>Rs. {order.cod_advance_required}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600 dark:text-slate-300">
+                    <span>Advance Status:</span>
+                    <span className="font-semibold text-emerald-600">
+                      {order.payment_status === 'PARTIALLY_PAID' ? `Verified (Rs. ${order.cod_advance_paid})` : 'Pending'}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-amber-200 dark:border-amber-900/50 flex justify-between font-bold text-amber-950 dark:text-amber-100">
+                    <span>85% Payable on Delivery:</span>
+                    <span>Rs. {order.cod_remaining_balance}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center text-xs text-slate-500 pt-1">
+                <span>Payment State:</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">
+                  {order.payment_status || "UNPAID"}
                 </span>
               </div>
             </div>
@@ -308,6 +545,218 @@ export default function StudentOrderDetailPage() {
           </div>
 
         </div>
+      {/* Payment Recovery & Submission Modal */}
+      <Dialog open={paymentModalOpen} onOpenChange={setPaymentModalOpen}>
+        <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-[#163E6B] dark:text-[#D4A72C]" />
+              {paymentRecoveryMode === 'TRY_AGAIN' ? 'Complete Payment Proof' : 'Pay Another Way / Switch Payment Mode'}
+            </DialogTitle>
+            <DialogDescription>
+              Submit your verified payment proof for Order #ORD-{order.id}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmitRecoveryPayment} className="space-y-5 pt-3">
+            {/* Payment Mode Selector if switching */}
+            {paymentRecoveryMode === 'SWITCH_METHOD' && (
+              <div className="space-y-2 pb-3 border-b">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Select Payment Mode</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('PREPAID')}
+                    className={`p-3.5 rounded-xl border text-left transition-all ${
+                      selectedPaymentMode === 'PREPAID'
+                        ? 'border-[#163E6B] bg-[#163E6B]/5 ring-2 ring-[#163E6B] dark:border-[#D4A72C] dark:ring-[#D4A72C]'
+                        : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <p className="font-bold text-sm">Full Online Payment</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Pay 100% now via wallet / bank</p>
+                    <p className="font-extrabold text-[#163E6B] dark:text-[#D4A72C] mt-1 text-sm">
+                      Rs. {Number(order.total_amount) + Number(order.delivery_fee)}
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('COD')}
+                    className={`p-3.5 rounded-xl border text-left transition-all ${
+                      selectedPaymentMode === 'COD'
+                        ? 'border-[#163E6B] bg-[#163E6B]/5 ring-2 ring-[#163E6B] dark:border-[#D4A72C] dark:ring-[#D4A72C]'
+                        : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <p className="font-bold text-sm">Cash on Delivery</p>
+                      <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.5 rounded">15% Advance</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">Pay 15% now, 85% on delivery</p>
+                    <p className="font-extrabold text-amber-600 mt-1 text-sm">
+                      Rs. {((Number(order.total_amount) + Number(order.delivery_fee)) * 0.15).toFixed(2)}
+                    </p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Payable Amount Highlight */}
+            <div className="bg-[#163E6B]/5 dark:bg-[#D4A72C]/10 border border-[#163E6B]/20 rounded-xl p-4 flex justify-between items-center">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  {order.is_cod ? "15% Mandatory Advance Amount" : "Payable Amount (100%)"}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {order.is_cod ? `Remaining 85% (Rs. ${order.cod_remaining_balance}) paid in cash on delivery` : "Total order amount"}
+                </p>
+              </div>
+              <div className="text-2xl font-black text-[#163E6B] dark:text-[#D4A72C]">
+                Rs. {order.is_cod ? order.cod_advance_required : (Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2)}
+              </div>
+            </div>
+
+            {/* Payment Method Selector */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold uppercase tracking-wider text-slate-500">Choose Wallet / Bank</Label>
+              <div className="grid grid-cols-3 gap-3">
+                {paymentMethods.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setSelectedMethodId(m.id)}
+                    className={`p-3 rounded-xl border text-center transition-all ${
+                      selectedMethodId === m.id
+                        ? 'border-[#163E6B] bg-[#163E6B]/5 ring-2 ring-[#163E6B] dark:border-[#D4A72C] dark:ring-[#D4A72C]'
+                        : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <p className="font-bold text-xs">{m.display_name}</p>
+                    <p className="text-[10px] text-slate-400">{m.method_type}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Selected Method Details & QR */}
+            {(() => {
+              const method = paymentMethods.find(m => m.id === selectedMethodId);
+              if (!method) return null;
+              const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
+              const qrSrc = method.qr_image ? (method.qr_image.startsWith('http') ? method.qr_image : `${baseUrl}${method.qr_image.startsWith('/') ? '' : '/'}${method.qr_image}`) : null;
+              const payable = order.is_cod ? order.cod_advance_required : (Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2);
+
+              return (
+                <div className="p-4 bg-slate-50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl space-y-3">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    {qrSrc && (
+                      <div className="w-28 h-28 relative bg-white p-1 rounded-lg border shrink-0">
+                        <Image src={qrSrc} alt="QR" fill className="object-contain" unoptimized />
+                      </div>
+                    )}
+                    <div className="flex-1 text-xs space-y-1 w-full">
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-slate-500">Account Name:</span>
+                        <span className="font-semibold">{method.account_name}</span>
+                      </div>
+                      <div className="flex justify-between border-b pb-1">
+                        <span className="text-slate-500">Account No / ID:</span>
+                        <span className="font-mono font-bold">{method.account_number}</span>
+                      </div>
+                      {method.bank_name && (
+                        <div className="flex justify-between border-b pb-1">
+                          <span className="text-slate-500">Bank & Branch:</span>
+                          <span className="font-medium">{method.bank_name} ({method.branch || 'Main'})</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between pt-1 font-bold text-primary">
+                        <span>Exact Transfer:</span>
+                        <span>Rs. {payable}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Instruction text */}
+                  <div className="bg-blue-50/70 dark:bg-blue-950/30 p-2.5 rounded-lg border border-blue-200/60 text-[11px] text-slate-700 dark:text-slate-300 space-y-1">
+                    <p>• Transfer <strong>Rs. {payable}</strong> to the account above.</p>
+                    <p>• In Remarks/Purpose, write: <strong className="font-mono">Order #{order.id}</strong></p>
+                    {method.instructions && <p>• {method.instructions}</p>}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Transaction ID */}
+            <div className="space-y-1.5">
+              <Label htmlFor="rec-txnId" className="text-xs font-semibold">Transaction ID / Reference Code *</Label>
+              <Input
+                id="rec-txnId"
+                placeholder="e.g. 000ABC123XYZ"
+                value={txnCode}
+                onChange={e => setTxnCode(e.target.value)}
+                required
+                className="font-mono"
+              />
+            </div>
+
+            {/* Screenshot Upload */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Payment Screenshot Receipt *</Label>
+              <div className="border-2 border-dashed rounded-xl p-4 text-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
+                {screenshotPreview ? (
+                  <div className="space-y-2 flex flex-col items-center">
+                    <div className="relative w-36 h-48 rounded-md overflow-hidden border">
+                      <Image src={screenshotPreview} alt="Screenshot" fill className="object-cover" />
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setScreenshot(null); setScreenshotPreview(null); }}>
+                      Change Screenshot
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    <UploadCloud className="w-8 h-8 text-slate-400 mx-auto mb-1" />
+                    <p className="text-xs font-semibold">Click to upload payment receipt</p>
+                    <p className="text-[10px] text-slate-400 mb-2">JPG, PNG, or WEBP (max 5MB)</p>
+                    <input
+                      id="rec-screenshot"
+                      type="file"
+                      accept="image/png, image/jpeg, image/webp"
+                      className="hidden"
+                      onChange={handleFileChange}
+                    />
+                    <Button type="button" variant="secondary" size="sm" onClick={() => document.getElementById('rec-screenshot')?.click()}>
+                      Choose File
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="space-y-1.5">
+              <Label htmlFor="rec-note" className="text-xs font-semibold">Optional Note for Admin</Label>
+              <Textarea
+                id="rec-note"
+                placeholder="Any comment about this payment retry..."
+                value={paymentNote}
+                onChange={e => setPaymentNote(e.target.value)}
+                rows={2}
+                className="resize-none text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={() => setPaymentModalOpen(false)} disabled={submittingPayment}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingPayment || !txnCode.trim() || !screenshot} className="bg-[#163E6B] text-white font-bold">
+                {submittingPayment ? "Submitting Proof..." : "Submit Payment for Verification"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
       </main>
       
       <TrustModals 

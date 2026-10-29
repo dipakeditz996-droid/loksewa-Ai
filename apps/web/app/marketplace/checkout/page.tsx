@@ -20,6 +20,7 @@ export default function CheckoutPage() {
   const [notes, setNotes] = useState("");
   const [processingOrder, setProcessingOrder] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [paymentMode, setPaymentMode] = useState<'PREPAID' | 'COD'>('PREPAID');
   const [calculatedFee, setCalculatedFee] = useState<number | null>(null);
 
   // "Use my existing info" state
@@ -103,7 +104,8 @@ export default function CheckoutPage() {
       const order = await marketplaceApi.createOrder({
         shipping_address: address,
         contact_number: phone,
-        note: notes
+        note: notes,
+        payment_mode: paymentMode,
       });
       setCreatedOrder(order);
       setStep(2);
@@ -164,6 +166,11 @@ export default function CheckoutPage() {
     ? (Number(createdOrder.total_amount) + Number(createdOrder.delivery_fee)) 
     : (subtotal + currentFee);
 
+  const isCodActive = createdOrder ? (createdOrder.payment_mode === 'COD' || createdOrder.is_cod) : (paymentMode === 'COD');
+  const codAdvance = createdOrder?.cod_advance_required ? Number(createdOrder.cod_advance_required) : Math.round((totalAmount * 0.15) * 100) / 100;
+  const codRemaining = createdOrder?.cod_remaining_balance ? Number(createdOrder.cod_remaining_balance) : Math.max(0, totalAmount - codAdvance);
+  const payableNow = isCodActive ? codAdvance : totalAmount;
+
   const renderOrderSummary = () => (
     <div className="bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-6 h-fit sticky top-24">
       <h3 className="text-xl font-bold mb-6">Order Summary</h3>
@@ -201,9 +208,27 @@ export default function CheckoutPage() {
             )}
           </span>
         </div>
-        <div className="pt-4 border-t border-slate-200 dark:border-white/10 flex justify-between text-lg font-bold">
-          <span>Total</span>
-          <span className="text-[#163E6B] dark:text-[#D4A72C]">Rs. {totalAmount.toFixed(2)}</span>
+        <div className="pt-3 border-t border-slate-200 dark:border-white/10 flex justify-between text-sm font-semibold">
+          <span>Order Total</span>
+          <span>Rs. {totalAmount.toFixed(2)}</span>
+        </div>
+
+        {isCodActive && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1.5 text-xs">
+            <div className="flex justify-between font-bold text-amber-800 dark:text-amber-200">
+              <span>Required 15% Advance (Now)</span>
+              <span>Rs. {codAdvance.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-slate-500">
+              <span>Remaining 85% on Delivery</span>
+              <span>Rs. {codRemaining.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="pt-2 border-t border-slate-200 dark:border-white/10 flex justify-between text-lg font-bold">
+          <span>{isCodActive ? "Advance Due Now" : "Total to Pay"}</span>
+          <span className="text-[#163E6B] dark:text-[#D4A72C]">Rs. {payableNow.toFixed(2)}</span>
         </div>
         {address && (
           <div className="pt-3 border-t border-slate-200/60 dark:border-white/10 text-xs text-slate-500 font-normal">
@@ -283,6 +308,41 @@ export default function CheckoutPage() {
                   <textarea value={notes} onChange={e => setNotes(e.target.value)} className="w-full h-24 p-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800" placeholder="Special delivery instructions"></textarea>
                 </div>
               </div>
+              {/* Payment Mode Selection */}
+              <div className="space-y-3 pt-2">
+                <label className="text-sm font-bold">Select Payment Mode</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div
+                    onClick={() => setPaymentMode('PREPAID')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentMode === 'PREPAID'
+                        ? "border-[#163E6B] bg-[#163E6B]/5 dark:border-[#D4A72C] dark:bg-[#D4A72C]/10"
+                        : "border-slate-200 dark:border-white/10 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-sm">Full Online Payment</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">100% Prepaid</span>
+                    </div>
+                    <p className="text-xs text-slate-500">Pay complete amount online now via eSewa, Khalti, or Bank.</p>
+                  </div>
+                  <div
+                    onClick={() => setPaymentMode('COD')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentMode === 'COD'
+                        ? "border-amber-500 bg-amber-500/10 dark:border-amber-400"
+                        : "border-slate-200 dark:border-white/10 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-sm">Cash on Delivery (COD)</span>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">15% Advance</span>
+                    </div>
+                    <p className="text-xs text-slate-500">Pay 15% advance online to confirm dispatch. Remaining 85% paid on delivery.</p>
+                  </div>
+                </div>
+              </div>
+
               <Button 
                 onClick={handleContinueToPayment} 
                 disabled={processingOrder} 
@@ -308,10 +368,14 @@ export default function CheckoutPage() {
               <h2 className="text-3xl font-extrabold">Payment Verification</h2>
               <div className="bg-[#163E6B]/5 dark:bg-[#D4A72C]/5 border border-[#163E6B]/20 rounded-xl p-6 flex justify-between items-center">
                 <div>
-                  <p className="font-bold">Amount To Pay</p>
-                  <p className="text-xs text-slate-500">Please pay exactly this amount.</p>
+                  <p className="font-bold">{isCodActive ? "15% Advance Amount Due Now" : "Amount To Pay"}</p>
+                  <p className="text-xs text-slate-500">
+                    {isCodActive 
+                      ? `COD selected. Remaining Rs. ${codRemaining.toFixed(2)} is due upon delivery.`
+                      : "Please pay exactly this amount."}
+                  </p>
                 </div>
-                <div className="text-2xl font-black text-[#163E6B] dark:text-[#D4A72C]">Rs. {totalAmount.toFixed(2)}</div>
+                <div className="text-2xl font-black text-[#163E6B] dark:text-[#D4A72C]">Rs. {payableNow.toFixed(2)}</div>
               </div>
 
               {/* Payment Methods Selection */}
@@ -372,7 +436,7 @@ export default function CheckoutPage() {
                           Open your <strong>{paymentMethods.find(m => m.id === selectedMethodId)?.display_name}</strong> app or mobile banking.
                         </li>
                         <li>
-                          Scan the QR code or transfer exactly <strong className="text-[#163E6B] dark:text-[#D4A72C] font-bold">Rs. {totalAmount.toFixed(2)}</strong> to account number <span className="font-mono font-bold bg-slate-200/60 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-900 dark:text-white">{paymentMethods.find(m => m.id === selectedMethodId)?.account_number}</span> ({paymentMethods.find(m => m.id === selectedMethodId)?.account_name}).
+                          Scan the QR code or transfer exactly <strong className="text-[#163E6B] dark:text-[#D4A72C] font-bold">Rs. {payableNow.toFixed(2)}</strong> {isCodActive ? '(15% COD advance)' : ''} to account number <span className="font-mono font-bold bg-slate-200/60 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-900 dark:text-white">{paymentMethods.find(m => m.id === selectedMethodId)?.account_number}</span> ({paymentMethods.find(m => m.id === selectedMethodId)?.account_name}).
                         </li>
                         <li>
                           In the <strong>Remarks / Purpose</strong> field, write: <span className="font-mono font-bold bg-[#163E6B]/10 dark:bg-[#D4A72C]/10 text-[#163E6B] dark:text-[#D4A72C] px-1.5 py-0.5 rounded">Order #{createdOrder?.id}</span>
@@ -428,7 +492,7 @@ export default function CheckoutPage() {
                 {submittingPayment ? (
                   <ButtonSpinner text="Verifying &amp; Submitting Payment..." />
                 ) : (
-                  "Confirm & Submit Payment"
+                  isCodActive ? "Confirm & Submit 15% Advance" : "Confirm & Submit Payment"
                 )}
               </Button>
             </div>

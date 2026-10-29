@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 # pyrefly: ignore [missing-import]
 from django.db import models
 # pyrefly: ignore [missing-import]
@@ -215,6 +215,8 @@ class PaymentSubmission(models.Model):
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     rejection_reason = models.TextField(blank=True)
+    is_cod_advance = models.BooleanField(default=False, help_text="True if this submission is for a 15% COD advance payment.")
+    attempt_number = models.PositiveIntegerField(default=1, help_text="Sequence number for retry attempts on this order.")
 
     submitted_at = models.DateTimeField(auto_now_add=True)
     verified_at = models.DateTimeField(null=True, blank=True)
@@ -222,6 +224,11 @@ class PaymentSubmission(models.Model):
         User, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='verified_payments'
     )
+
+    def save(self, *args, **kwargs):
+        if not self.student_id and self.order_id and self.order:
+            self.student = self.order.student
+        super().save(*args, **kwargs)
 
     def __str__(self):
         ref = self.product.title if self.product else f"Order #{self.order_id}"
@@ -335,7 +342,27 @@ class Order(models.Model):
     )
 
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='marketplace_orders')
+    PAYMENT_MODE_CHOICES = (
+        ('PREPAID', 'Full Online Payment'),
+        ('COD', 'Cash on Delivery (15% Advance)'),
+    )
+
+    PAYMENT_STATUS_CHOICES = (
+        ('UNPAID', 'Unpaid'),
+        ('PARTIALLY_PAID', 'Partially Paid (COD Advance Verified)'),
+        ('PAID', 'Fully Paid'),
+        ('REFUNDED', 'Refunded'),
+    )
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING_PAYMENT')
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='UNPAID')
+    payment_method_type = models.CharField(max_length=20, choices=PAYMENT_MODE_CHOICES, default='PREPAID')
+    is_cod = models.BooleanField(default=False)
+    cod_advance_rate = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
+    cod_advance_required = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    cod_advance_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    cod_remaining_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
@@ -354,6 +381,32 @@ class Order(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def final_total(self):
+        return (self.total_amount + self.delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def payment_mode(self):
+        return self.payment_method_type
+
+    @payment_mode.setter
+    def payment_mode(self, value):
+        self.payment_method_type = value
+
+    def calculate_cod_amounts(self):
+        """Authoritative calculation of 15% advance and remaining 85% balance."""
+        tot = self.final_total
+        if self.is_cod:
+            self.cod_advance_required = (tot * Decimal('0.15')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            advance_paid = Decimal(str(self.cod_advance_paid or '0.00'))
+            if advance_paid > 0:
+                self.cod_remaining_balance = max(Decimal('0.00'), (tot - advance_paid).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+            else:
+                self.cod_remaining_balance = max(Decimal('0.00'), (tot - self.cod_advance_required).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        else:
+            self.cod_advance_required = Decimal('0.00')
+            self.cod_remaining_balance = Decimal('0.00')
 
     def __str__(self):
         return f"Order #{self.id} by {self.student.username} - {self.status}"

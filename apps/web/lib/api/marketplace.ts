@@ -94,6 +94,37 @@ export interface PaymentMethod {
   instructions: string;
 }
 
+export interface PaymentSubmissionOrderItem {
+  id: number;
+  product_id?: number | null;
+  title: string;
+  quantity: number;
+  price: string;
+  total_price?: string;
+  cover_image?: string | null;
+  category?: string | null;
+  condition?: string | null;
+  seller_name?: string | null;
+}
+
+export interface PaymentSubmissionOrderDetails {
+  id: number;
+  total_amount: string;
+  delivery_fee: string;
+  final_total: string;
+  is_cod: boolean;
+  payment_method_type: string;
+  cod_advance_required: string;
+  cod_advance_paid: string;
+  cod_remaining_balance: string;
+  status: string;
+  payment_status: string;
+  shipping_address: string;
+  shipping_address_snapshot: Record<string, any>;
+  contact_number?: string;
+  items: PaymentSubmissionOrderItem[];
+}
+
 export interface PaymentSubmission {
   id: number;
   student: number;
@@ -107,7 +138,8 @@ export interface PaymentSubmission {
     [key: string]: unknown;
   };
   product: number | null;
-  product_details?: Product;
+  product_details?: Product | null;
+  product_name?: string;
   order: number | null;
   payment_method: number;
   payment_method_details?: PaymentMethod;
@@ -118,6 +150,9 @@ export interface PaymentSubmission {
   note: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   rejection_reason: string;
+  is_cod_advance?: boolean;
+  attempt_number?: number;
+  order_details?: PaymentSubmissionOrderDetails | null;
   submitted_at: string;
   verified_at: string | null;
 }
@@ -223,6 +258,14 @@ export interface Order {
     | "DELIVERED"
     | "CANCELLED"
     | "REFUNDED";
+  payment_status?: "UNPAID" | "PARTIALLY_PAID" | "PAID" | "REFUNDED";
+  payment_method_type?: "PREPAID" | "COD";
+  payment_mode?: "PREPAID" | "COD";
+  is_cod?: boolean;
+  cod_advance_rate?: string | number;
+  cod_advance_required?: string;
+  cod_advance_paid?: string;
+  cod_remaining_balance?: string;
   total_amount: string;
   delivery_fee: string;
   final_total?: string;
@@ -233,6 +276,21 @@ export interface Order {
   delivery_address_details?: DeliveryAddress;
   items: OrderItem[];
   status_history?: OrderStatusHistory[];
+  latest_payment_submission?: {
+    id: number;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    rejection_reason: string;
+    transaction_id: string;
+    expected_amount: string;
+    submitted_amount: string;
+    is_cod_advance: boolean;
+    attempt_number: number;
+    submitted_at: string | null;
+    verified_at: string | null;
+    payment_method_id: number;
+    payment_method_name: string | null;
+  } | null;
+  can_retry_payment?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -538,10 +596,17 @@ export const marketplaceApi = {
     note?: string;
     save_to_addresses?: boolean;
     is_default?: boolean;
+    payment_mode?: "PREPAID" | "COD";
   }) => {
     return apiClient<Order>("/marketplace/student/orders/checkout/", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+  switchPaymentMode: async (orderId: number, payment_mode: "PREPAID" | "COD") => {
+    return apiClient<Order>(`/marketplace/student/orders/${orderId}/switch-payment-mode/`, {
+      method: "POST",
+      body: JSON.stringify({ payment_mode }),
     });
   },
   getProfileAddress: async () => {

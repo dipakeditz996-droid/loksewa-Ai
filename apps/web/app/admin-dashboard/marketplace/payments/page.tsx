@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { 
   Search, Filter, CheckCircle2, XCircle, CreditCard, AlertCircle,
-  Eye, Image as ImageIcon, MessageSquareWarning, X, Download, ZoomIn, AlertTriangle
+  Eye, Image as ImageIcon, MessageSquareWarning, X, Download, ZoomIn, AlertTriangle,
+  Package, MapPin, Phone
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,14 +48,40 @@ export default function MarketplacePaymentsPage() {
     }
   };
 
+  const getPaymentItemSummary = (p: PaymentSubmission) => {
+    if (p.product_name) return p.product_name;
+    if (p.order_details?.items && p.order_details.items.length > 0) {
+      const items = p.order_details.items;
+      const first = items[0];
+      if (first) {
+        if (items.length === 1) {
+          return `${first.title} (x${first.quantity})`;
+        }
+        return `${first.title} (+${items.length - 1} more items)`;
+      }
+    }
+    if (p.product_details?.title) {
+      return p.product_details.title;
+    }
+    if (p.order_details?.id || p.order) {
+      return `Order #${p.order_details?.id || p.order}`;
+    }
+    return "Product Purchase";
+  };
+
   const filteredPayments = submissions.filter(p => {
     const studentName = p.student_details?.first_name 
       ? `${p.student_details.first_name} ${p.student_details.last_name}`
       : p.student_details?.username || "Unknown";
+    const itemSummary = getPaymentItemSummary(p).toLowerCase();
+    const orderRef = (p.order_details?.id || p.order) ? `order #${p.order_details?.id || p.order}` : "";
+    const s = search.toLowerCase();
     return (
-      p.transaction_id.toLowerCase().includes(search.toLowerCase()) || 
-      studentName.toLowerCase().includes(search.toLowerCase()) ||
-      p.id.toString().includes(search)
+      p.transaction_id.toLowerCase().includes(s) || 
+      studentName.toLowerCase().includes(s) ||
+      p.id.toString().includes(s) ||
+      itemSummary.includes(s) ||
+      orderRef.includes(s)
     );
   });
 
@@ -70,7 +97,11 @@ export default function MarketplacePaymentsPage() {
 
   const handleApprove = async () => {
     if(!selectedPayment) return;
-    if(confirm(`Are you sure you want to approve transaction ${selectedPayment.transaction_id}? This will grant access to the student.`)) {
+    const isCod = selectedPayment.is_cod_advance || selectedPayment.order_details?.is_cod;
+    const confirmMsg = isCod 
+      ? `Approve 15% COD advance payment (Rs. ${selectedPayment.submitted_amount}) for Order #${selectedPayment.order_details?.id || selectedPayment.id}?\n\nThis will confirm the order for dispatch. The remaining balance (Rs. ${selectedPayment.order_details?.cod_remaining_balance || '85%'}) will remain payable upon delivery.`
+      : `Approve payment of Rs. ${selectedPayment.submitted_amount} for transaction ${selectedPayment.transaction_id}?`;
+    if (confirm(confirmMsg)) {
       setSubmitting(true);
       try {
         await marketplaceApi.adminReviewSubmission(selectedPayment.id, 'APPROVED');
@@ -109,7 +140,7 @@ export default function MarketplacePaymentsPage() {
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
-              placeholder="Search Transaction ID, Order ID, Student..."
+              placeholder="Search Transaction ID, Order ID, Student, Product..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9 bg-slate-50"
@@ -149,6 +180,7 @@ export default function MarketplacePaymentsPage() {
                   const studentName = payment.student_details?.first_name 
                     ? `${payment.student_details.first_name} ${payment.student_details.last_name}`
                     : payment.student_details?.username || "Unknown";
+                  const itemSummary = getPaymentItemSummary(payment);
                     
                   return (
                     <TableRow 
@@ -157,12 +189,37 @@ export default function MarketplacePaymentsPage() {
                       onClick={() => setSelectedPayment(payment)}
                     >
                       <TableCell>
-                        <div className="font-mono text-xs font-bold text-[#0B2545]">{payment.transaction_id}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-[#0B2545]">{payment.transaction_id}</span>
+                          {(payment.is_cod_advance || payment.order_details?.is_cod) && (
+                            <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 font-extrabold px-1.5 py-0.5 rounded">
+                              15% COD
+                            </span>
+                          )}
+                          {(payment.attempt_number || 1) > 1 && (
+                            <span className="text-[10px] bg-slate-100 text-slate-600 font-medium px-1.5 py-0.5 rounded">
+                              Att #{payment.attempt_number}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm font-medium text-slate-700 mt-1">{studentName}</div>
+                        <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate max-w-[240px]" title={itemSummary}>
+                          <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{itemSummary}</span>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-bold text-slate-800">Rs. {Number(payment.submitted_amount).toLocaleString()}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{payment.payment_method_details?.display_name || 'N/A'}</div>
+                        <div className="font-bold text-slate-800">
+                          Rs. {Number(payment.submitted_amount).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {payment.payment_method_details?.display_name || 'N/A'}
+                          {(payment.is_cod_advance || payment.order_details?.is_cod) && payment.order_details?.cod_remaining_balance && (
+                            <span className="block text-[11px] text-amber-700 font-medium">
+                              Due on delivery: Rs. {Number(payment.order_details.cod_remaining_balance).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getStatusColor(payment.status)}`}>
@@ -193,7 +250,11 @@ export default function MarketplacePaymentsPage() {
                 <CreditCard className="w-5 h-5 text-[#D4A72C]" />
                 Verify Payment
               </h3>
-              <p className="text-white/60 text-xs mt-0.5">Order: #{selectedPayment.id}</p>
+              <p className="text-white/70 text-xs mt-0.5">
+                {selectedPayment.order_details?.id || selectedPayment.order
+                  ? `Order #${selectedPayment.order_details?.id || selectedPayment.order} • Payment ID #${selectedPayment.id}`
+                  : `Payment ID #${selectedPayment.id}`}
+              </p>
             </div>
             <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-full h-8 w-8" onClick={() => setSelectedPayment(null)}>
               <X className="w-5 h-5" />
@@ -220,26 +281,222 @@ export default function MarketplacePaymentsPage() {
                       {(selectedPayment.student_details?.first_name?.[0] || selectedPayment.student_details?.username?.[0] || 'U').toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <p className="font-semibold text-slate-800 text-sm truncate">
+                  <p className="font-semibold text-slate-800 text-sm truncate" title={selectedPayment.student_details?.first_name ? `${selectedPayment.student_details.first_name} ${selectedPayment.student_details.last_name}` : selectedPayment.student_details?.username || "Unknown"}>
                     {selectedPayment.student_details?.first_name 
                       ? `${selectedPayment.student_details.first_name} ${selectedPayment.student_details.last_name}`
                       : selectedPayment.student_details?.username || "Unknown"}
                   </p>
                 </div>
               </div>
+
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <p className="text-xs text-slate-500 font-medium">Product</p>
-                <p className="font-semibold text-[#0B2545] text-sm mt-1 truncate">{selectedPayment.product_details?.title}</p>
+                <p className="text-xs text-slate-500 font-medium">Product / Items</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Package className="w-4 h-4 text-[#0B2545] shrink-0" />
+                  <p className="font-semibold text-[#0B2545] text-sm truncate" title={getPaymentItemSummary(selectedPayment)}>
+                    {getPaymentItemSummary(selectedPayment)}
+                  </p>
+                </div>
+                {selectedPayment.order_details?.items && selectedPayment.order_details.items.length > 0 && (
+                  <span className="text-[11px] text-slate-500 block mt-0.5">
+                    {selectedPayment.order_details.items.length} item{selectedPayment.order_details.items.length > 1 ? 's' : ''} in order
+                  </span>
+                )}
               </div>
+
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                <p className="text-xs text-slate-500 font-medium">Payment Method</p>
-                <p className="font-bold text-slate-800 mt-1">{selectedPayment.payment_method_details?.display_name}</p>
+                <p className="text-xs text-slate-500 font-medium">Payment Method & Mode</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="font-bold text-slate-800 text-sm">
+                    {selectedPayment.payment_method_details?.display_name || 'N/A'}
+                  </span>
+                  {selectedPayment.is_cod_advance || selectedPayment.order_details?.is_cod ? (
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                      15% COD Advance
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-slate-700 bg-slate-200 px-1.5 py-0.5 rounded">
+                      Prepaid
+                    </span>
+                  )}
+                </div>
+                {(selectedPayment.attempt_number || 1) > 1 && (
+                  <span className="text-[11px] text-slate-500 block mt-0.5">
+                    Attempt #{selectedPayment.attempt_number}
+                  </span>
+                )}
               </div>
+
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                 <p className="text-xs text-slate-500 font-medium">Amount to Verify</p>
-                <p className="font-bold text-emerald-600 text-lg mt-0.5 leading-none">Rs. {Number(selectedPayment.submitted_amount).toLocaleString()}</p>
+                <p className="font-bold text-emerald-600 text-lg mt-0.5 leading-none">
+                  Rs. {Number(selectedPayment.submitted_amount).toLocaleString()}
+                </p>
+                {(selectedPayment.is_cod_advance || selectedPayment.order_details?.is_cod) && selectedPayment.order_details?.final_total && (
+                  <p className="text-[11px] text-amber-700 mt-1 font-medium">
+                    15% of total Rs. {Number(selectedPayment.order_details.final_total).toLocaleString()}
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Complete Order Accounting & Products */}
+            {selectedPayment.order_details && (
+              <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-3.5">
+                <div className="flex justify-between items-center border-b border-slate-200/80 pb-2.5">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-[#0B2545]" />
+                    Order #{selectedPayment.order_details.id} Products & Summary
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                      Order: {selectedPayment.order_details.status}
+                    </span>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      Payment: {selectedPayment.order_details.payment_status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ordered Products List */}
+                {selectedPayment.order_details.items?.length > 0 ? (
+                  <div className="space-y-2">
+                    <span className="text-xs font-semibold text-slate-600 block">Ordered Products:</span>
+                    <div className="space-y-2">
+                      {selectedPayment.order_details.items.map((it) => (
+                        <div key={it.id} className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-slate-200 shadow-xs">
+                          {it.cover_image ? (
+                            <img
+                              src={it.cover_image}
+                              alt={it.title}
+                              className="w-12 h-14 object-cover rounded border border-slate-200 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-14 bg-slate-100 rounded border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
+                              <Package className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h5 className="font-semibold text-sm text-slate-800 truncate" title={it.title}>
+                              {it.title}
+                            </h5>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-0.5">
+                              {it.category && (
+                                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase">
+                                  {it.category.replace('_', ' ')}
+                                </span>
+                              )}
+                              {it.seller_name && (
+                                <span>Sold by: <strong className="text-slate-700 font-medium">{it.seller_name}</strong></span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-600 font-medium mt-1">
+                              Qty: {it.quantity} × Rs. {Number(it.price).toLocaleString()} = <span className="font-bold text-[#0B2545]">Rs. {Number(it.total_price || (Number(it.price) * it.quantity)).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 italic py-1">No product items found for this order.</div>
+                )}
+                
+                {/* Financial Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-white p-2.5 rounded-lg border border-slate-200">
+                  <div>
+                    <span className="text-slate-500 block">Subtotal:</span>
+                    <span className="font-semibold text-slate-800">Rs. {Number(selectedPayment.order_details.total_amount).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Delivery Fee:</span>
+                    <span className="font-semibold text-slate-800">Rs. {Number(selectedPayment.order_details.delivery_fee).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Final Total:</span>
+                    <span className="font-bold text-[#0B2545]">Rs. {Number(selectedPayment.order_details.final_total).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block">Payment Mode:</span>
+                    <span className="font-bold text-slate-700">{selectedPayment.order_details.is_cod ? '15% COD' : 'Prepaid'}</span>
+                  </div>
+                </div>
+
+                {selectedPayment.order_details.is_cod && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-900 space-y-1">
+                    <div className="flex justify-between font-semibold">
+                      <span>Mandatory 15% Advance Required:</span>
+                      <span>Rs. {Number(selectedPayment.order_details.cod_advance_required).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span>Verified Advance Received:</span>
+                      <span>Rs. {Number(selectedPayment.order_details.cod_advance_paid).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-amber-800 pt-1 border-t border-amber-200">
+                      <span>Remaining 85% Due on Delivery:</span>
+                      <span>Rs. {Number(selectedPayment.order_details.cod_remaining_balance).toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+
+                {(selectedPayment.order_details.shipping_address || selectedPayment.order_details.contact_number) && (
+                  <div className="pt-2 border-t border-slate-200/70 text-xs text-slate-600 space-y-1">
+                    {selectedPayment.order_details.contact_number && (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="font-semibold text-slate-700">Contact:</span>
+                        <span>{selectedPayment.order_details.contact_number}</span>
+                      </div>
+                    )}
+                    {selectedPayment.order_details.shipping_address && (
+                      <div className="flex items-start gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-semibold text-slate-700">Delivery Destination: </span>
+                          <span className="whitespace-pre-line">{selectedPayment.order_details.shipping_address}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Direct Product Details (when not an order) */}
+            {!selectedPayment.order_details && selectedPayment.product_details && (
+              <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/80 pb-2">
+                  <Package className="w-4 h-4 text-[#0B2545]" />
+                  Product Details
+                </h4>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+                  {selectedPayment.product_details.cover_image ? (
+                    <img
+                      src={selectedPayment.product_details.cover_image}
+                      alt={selectedPayment.product_details.title}
+                      className="w-14 h-16 object-cover rounded border border-slate-200 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-16 bg-slate-100 rounded border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
+                      <Package className="w-7 h-7" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h5 className="font-bold text-sm text-slate-800 truncate">
+                      {selectedPayment.product_details.title}
+                    </h5>
+                    {selectedPayment.product_details.category && (
+                      <span className="inline-block bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase mt-0.5">
+                        {selectedPayment.product_details.category.replace('_', ' ')}
+                      </span>
+                    )}
+                    <div className="text-sm font-bold text-emerald-600 mt-1">
+                      Rs. {Number(selectedPayment.product_details.final_price || selectedPayment.product_details.price).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Transaction Code Box */}
             <div className="bg-slate-800 rounded-lg p-4 text-center">
@@ -292,7 +549,9 @@ export default function MarketplacePaymentsPage() {
             {selectedPayment.status === "PENDING" && (
               <Button onClick={handleApprove} disabled={submitting} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-11">
                 <CheckCircle2 className="w-5 h-5 mr-2" />
-                Approve & Grant Access
+                {selectedPayment.is_cod_advance || selectedPayment.order_details?.is_cod
+                  ? "Approve 15% Advance & Confirm Dispatch"
+                  : "Approve Full Payment & Confirm Order"}
               </Button>
             )}
             

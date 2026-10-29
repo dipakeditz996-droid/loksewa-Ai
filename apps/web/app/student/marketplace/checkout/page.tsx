@@ -46,6 +46,7 @@ export default function CheckoutPage() {
   
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState<Order | null>(null);
+  const [paymentMode, setPaymentMode] = useState<'PREPAID' | 'COD'>('PREPAID');
   
   const [transactionId, setTransactionId] = useState("");
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -208,6 +209,7 @@ export default function CheckoutPage() {
         const createdOrder = await marketplaceApi.createOrder({
           delivery_address: existingInfoForm,
           save_to_addresses: saveToAddresses,
+          payment_mode: paymentMode,
         });
         setOrder(createdOrder);
         toast.success("Order confirmed. Please proceed to payment.");
@@ -223,7 +225,10 @@ export default function CheckoutPage() {
       }
       try {
         setSubmitting(true);
-        const createdOrder = await marketplaceApi.createOrder({ delivery_address_id: selectedAddressId });
+        const createdOrder = await marketplaceApi.createOrder({ 
+          delivery_address_id: selectedAddressId,
+          payment_mode: paymentMode,
+        });
         setOrder(createdOrder);
         toast.success("Order confirmed. Please proceed to payment.");
       } catch (error: any) {
@@ -320,6 +325,11 @@ export default function CheckoutPage() {
   const subtotal = cart?.items.reduce((acc, item) => acc + (parseFloat(item.product_details?.final_price || "0") * item.quantity), 0) || 0;
   const currentDeliveryFee = order ? Number(order.delivery_fee) : (calculatedFee ?? 0);
   const grandTotal = order ? (Number(order.total_amount) + Number(order.delivery_fee)) : (subtotal + currentDeliveryFee);
+  
+  const isCodActive = order ? (order.payment_mode === 'COD' || order.is_cod) : (paymentMode === 'COD');
+  const codAdvance = order?.cod_advance_required ? Number(order.cod_advance_required) : Math.round((grandTotal * 0.15) * 100) / 100;
+  const codRemaining = order?.cod_remaining_balance ? Number(order.cod_remaining_balance) : Math.max(0, grandTotal - codAdvance);
+  const payableNow = isCodActive ? codAdvance : grandTotal;
 
   // Address used snapshot display
   const activeSnapshot = order?.shipping_address_snapshot || (useExistingInfo ? existingInfoForm : addresses.find(a => a.id === selectedAddressId));
@@ -587,6 +597,52 @@ export default function CheckoutPage() {
                     </Dialog>
                   </>
                 )}
+                {/* Payment Mode Selection: Prepaid vs COD */}
+                <div className="pt-4 border-t space-y-3">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Select Payment Mode
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div
+                      onClick={() => setPaymentMode('PREPAID')}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        paymentMode === 'PREPAID'
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm text-foreground">Full Online Payment</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                          100% Prepaid
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Pay the full amount now via eSewa, Khalti, or Bank QR. Fast dispatch upon verification.
+                      </p>
+                    </div>
+
+                    <div
+                      onClick={() => setPaymentMode('COD')}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        paymentMode === 'COD'
+                          ? "border-amber-500 bg-amber-50/50 dark:bg-amber-950/20 shadow-sm"
+                          : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm text-foreground">Cash on Delivery (COD)</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                          15% Advance
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Pay 15% advance online to confirm delivery. Pay remaining 85% in cash when delivered.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
               </CardContent>
               <CardFooter className="bg-muted/30 pt-6">
                 <Button 
@@ -594,7 +650,7 @@ export default function CheckoutPage() {
                   className="w-full h-12 text-lg font-semibold" 
                   disabled={submitting || (!useExistingInfo && !selectedAddressId)}
                 >
-                  {submitting ? "Confirming Delivery..." : "Confirm Delivery Address"}
+                  {submitting ? "Processing Order..." : (paymentMode === 'COD' ? "Proceed to 15% Advance Payment" : "Proceed to Payment")}
                 </Button>
               </CardFooter>
             </Card>
@@ -671,9 +727,18 @@ export default function CheckoutPage() {
                               </>
                             )}
                             <div className="flex justify-between pt-2">
-                              <dt className="text-muted-foreground font-semibold">Total to Pay</dt>
-                              <dd className="font-bold text-lg text-primary">Rs. {(Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2)}</dd>
+                              <dt className="text-muted-foreground font-semibold">
+                                {order.is_cod ? "15% Advance to Pay Now" : "Total to Pay"}
+                              </dt>
+                              <dd className="font-bold text-lg text-primary">
+                                Rs. {(order.is_cod ? Number(order.cod_advance_required) : (Number(order.total_amount) + Number(order.delivery_fee))).toFixed(2)}
+                              </dd>
                             </div>
+                            {order.is_cod && (
+                              <div className="mt-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2.5 rounded-lg border border-amber-200 dark:border-amber-900/50">
+                                <strong>Cash on Delivery (COD) Active:</strong> The remaining balance of <strong>Rs. {Number(order.cod_remaining_balance).toFixed(2)}</strong> (85%) will be collected in cash upon delivery.
+                              </div>
+                            )}
                           </dl>
                         </div>
 
@@ -693,7 +758,7 @@ export default function CheckoutPage() {
                             Open your <strong>{selectedMethod.display_name}</strong> app or mobile banking.
                           </li>
                           <li>
-                            Scan the QR code above or transfer exactly <strong className="text-primary font-bold">Rs. {(Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2)}</strong> to account number <span className="font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-foreground">{selectedMethod.account_number}</span> ({selectedMethod.account_name}).
+                            Scan the QR code above or transfer exactly <strong className="text-primary font-bold">Rs. {(order.is_cod ? Number(order.cod_advance_required) : (Number(order.total_amount) + Number(order.delivery_fee))).toFixed(2)}</strong> {order.is_cod ? '(15% COD advance payment)' : ''} to account number <span className="font-mono font-bold bg-muted px-1.5 py-0.5 rounded text-foreground">{selectedMethod.account_number}</span> ({selectedMethod.account_name}).
                           </li>
                           <li>
                             In the <strong>Remarks / Purpose</strong> field, write your Order reference: <span className="font-mono font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">Order #{order.id}</span>
@@ -787,7 +852,7 @@ export default function CheckoutPage() {
                       className="w-full h-12 text-lg" 
                       disabled={submitting || !selectedMethodId || !transactionId || !screenshot}
                     >
-                      {submitting ? "Submitting..." : "Submit Payment for Verification"}
+                      {submitting ? "Submitting..." : (order.is_cod ? "Submit 15% Advance for Verification" : "Submit Payment for Verification")}
                     </Button>
                   </CardFooter>
                 </form>
@@ -847,10 +912,31 @@ export default function CheckoutPage() {
                   </span>
                 </div>
                 
+                <div className="flex justify-between font-bold text-base pt-2 border-t">
+                  <span>Final Order Total</span>
+                  <span>Rs. {grandTotal.toFixed(2)}</span>
+                </div>
+
+                {isCodActive && (
+                  <div className="p-3 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 rounded-xl space-y-2 text-xs">
+                    <div className="flex justify-between text-amber-900 dark:text-amber-200 font-semibold">
+                      <span>Required 15% Advance (Payable Now)</span>
+                      <span>Rs. {codAdvance.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Remaining Balance (Due on Delivery)</span>
+                      <span>Rs. {codRemaining.toFixed(2)}</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      * 15% advance must be verified before this COD order can be confirmed and dispatched.
+                    </p>
+                  </div>
+                )}
+
                 <Separator />
                 <div className="flex justify-between font-bold text-lg">
-                  <span>Total to Pay</span>
-                  <span className="text-primary">Rs. {grandTotal.toFixed(2)}</span>
+                  <span>{isCodActive ? "Advance Payable Now" : "Total to Pay"}</span>
+                  <span className="text-primary">Rs. {payableNow.toFixed(2)}</span>
                 </div>
               </div>
 

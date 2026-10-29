@@ -550,8 +550,25 @@ if EMAIL_HOST:
     EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '465'))
     EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
     EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-    EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', True)
-    EMAIL_USE_TLS = False if EMAIL_USE_SSL else _env_bool('EMAIL_USE_TLS', False)
+    # Smart TLS/SSL resolution:
+    # - Port 587 uses STARTTLS (standard for Gmail SMTP: smtp.gmail.com)
+    # - Port 465 uses SSL (Resend SMTP relay: smtp.resend.com)
+    # Explicit env vars EMAIL_USE_TLS / EMAIL_USE_SSL override port defaults.
+    _raw_ssl = os.environ.get('EMAIL_USE_SSL')
+    _raw_tls = os.environ.get('EMAIL_USE_TLS')
+    if _raw_tls is not None and _env_bool('EMAIL_USE_TLS', False):
+        EMAIL_USE_TLS = True
+        EMAIL_USE_SSL = False
+    elif _raw_ssl is not None and _env_bool('EMAIL_USE_SSL', False):
+        EMAIL_USE_SSL = True
+        EMAIL_USE_TLS = False
+    else:
+        if EMAIL_PORT == 587:
+            EMAIL_USE_TLS = True
+            EMAIL_USE_SSL = False
+        else:
+            EMAIL_USE_SSL = True
+            EMAIL_USE_TLS = False
     # Without this, a blocked/slow outbound SMTP connection (common on PaaS
     # free/starter tiers that throttle port 465/587) hangs with no default
     # socket timeout - the whole signup/OTP request then hangs until the

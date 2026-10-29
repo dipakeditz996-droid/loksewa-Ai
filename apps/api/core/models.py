@@ -553,3 +553,92 @@ def _forget_cached_enforcement_flag(sender, **kwargs):
         cache.delete_many([AdminSettings.ENFORCE_ACCESS_CACHE_KEY, AdminSettings.STUDY_PLANS_CACHE_KEY])
     except Exception:
         pass
+
+
+class AdminEmailRecipient(models.Model):
+    """
+    Configurable email recipient addresses for administrator system notifications.
+    Admins can configure multiple email addresses and subscribe them to specific event categories.
+    """
+    CATEGORY_CHOICES = (
+        ('registration', 'New Student Registration'),
+        ('payment', 'Subscription & Package Payments'),
+        ('marketplace', 'Marketplace Orders & Payments'),
+        ('security', 'Account & Security Alerts'),
+        ('system', 'System & Error Alerts'),
+    )
+
+    email = models.EmailField(unique=True, db_index=True)
+    name = models.CharField(max_length=255, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    event_categories = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of categories this admin receives: registration, payment, marketplace, security, system"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['is_active', 'email']),
+        ]
+
+    def __str__(self):
+        return f"{self.email} ({self.name or 'Admin'})"
+
+
+class EmailDeliveryLog(models.Model):
+    """
+    Structured delivery audit log for all transactional and administrative emails.
+    Tracks status, retry attempts, sanitized errors, and enforces deduplication.
+    Never stores plain-text passwords, OTP codes, or reset tokens.
+    """
+    STATUS_CHOICES = (
+        ('queued', 'Queued'),
+        ('sent', 'Sent'),
+        ('retrying', 'Retrying'),
+        ('failed', 'Failed'),
+    )
+    CATEGORY_CHOICES = (
+        ('registration', 'Registration & Verification'),
+        ('payment', 'Payment & Subscription'),
+        ('marketplace', 'Marketplace'),
+        ('security', 'Security & Authentication'),
+        ('system', 'System Alerts'),
+        ('announcement', 'Announcement'),
+        ('test', 'Test Email'),
+    )
+    ROLE_CHOICES = (
+        ('student', 'Student'),
+        ('admin', 'Admin'),
+        ('other', 'Other'),
+    )
+
+    event_category = models.CharField(max_length=50, choices=CATEGORY_CHOICES, db_index=True)
+    recipient_email = models.EmailField(db_index=True)
+    recipient_role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
+    subject = models.CharField(max_length=255)
+    template_name = models.CharField(max_length=100, blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued', db_index=True)
+    idempotency_key = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    attempts = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=3)
+    error_message = models.TextField(blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['event_category', 'status']),
+            models.Index(fields=['idempotency_key']),
+            models.Index(fields=['recipient_email', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.recipient_email} - {self.subject} ({self.status})"
+

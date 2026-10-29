@@ -845,8 +845,8 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='profile-address')
     def profile_address(self, request):
         """
-        Derives delivery information from the authenticated student's profile.
-        Never trusts client-supplied profile IDs.
+        Derives delivery information directly from the authenticated student's registration profile.
+        Prioritizes the exact details entered during student signup (name, mobile, district, municipality).
         """
         user = request.user
         profile = getattr(user, 'student_profile', None)
@@ -857,7 +857,8 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
             except Exception:
                 profile = None
 
-        full_name = user.get_full_name() or user.username
+        # Registration details entered by the student
+        full_name = (user.get_full_name() or user.username or '').strip()
         phone_number = (profile.phone if profile else '') or ''
         district = (profile.permanent_district if profile else '') or ''
         municipality = (profile.permanent_local_level if profile else '') or ''
@@ -868,19 +869,15 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
         street_landmark = ''
         delivery_note = ''
 
-        # If student already has saved delivery addresses, use their most recent/default to complete missing info
+        # If student has a saved delivery address, use only supplemental fields (ward, tole, etc.)
+        # but NEVER overwrite the student's registered full_name or phone_number.
         saved_addr = DeliveryAddress.objects.filter(student=user).order_by('-is_default', '-created_at').first()
         if saved_addr:
-            if not full_name:
-                full_name = saved_addr.full_name or full_name
-            if not phone_number:
-                phone_number = saved_addr.phone_number or ''
-            if not district:
-                district = saved_addr.district or ''
-            if not municipality:
-                municipality = saved_addr.municipality or ''
-            if not province:
-                province = saved_addr.province or get_nepal_province_for_district(district)
+            if not district and saved_addr.district:
+                district = saved_addr.district
+                province = get_nepal_province_for_district(district) or saved_addr.province or ''
+            if not municipality and saved_addr.municipality:
+                municipality = saved_addr.municipality
             ward_number = saved_addr.ward_number or ''
             tole_area = saved_addr.tole_area or ''
             street_landmark = saved_addr.street_landmark or ''
@@ -1235,6 +1232,18 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def checkout(self, request):
+        try:
+            return self._perform_checkout(request)
+        except ValidationError as ve:
+            detail = ve.detail if hasattr(ve, 'detail') else str(ve)
+            return Response(detail if isinstance(detail, dict) else {"detail": str(detail)}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionDenied as pe:
+            return Response({"detail": str(pe)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as exc:
+            logger.exception("Order checkout error for user %s: %s", getattr(request.user, 'id', None), exc)
+            return Response({"detail": f"Could not complete checkout: {str(exc)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def _perform_checkout(self, request):
         if not _marketplace_enabled():
             raise PermissionDenied("The marketplace is currently disabled by the administrator.")
 

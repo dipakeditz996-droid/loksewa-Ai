@@ -37,3 +37,22 @@ def send_otp_email_task(self, to_email: str, code: str, purpose: str):
         logger.warning("send_otp_email_task failed for purpose=%s (retrying): %s", purpose, exc)
         raise self.retry(exc=exc)
 
+
+@shared_task(
+    bind=True,
+    name='core.tasks.process_email_delivery_task',
+    max_retries=3,
+    default_retry_delay=15,
+)
+def process_email_delivery_task(self, log_id: int):
+    """Asynchronously processes an email delivery log and retries on failure."""
+    from .email_notification_service import process_email_delivery
+    try:
+        success = process_email_delivery(log_id)
+        if not success:
+            logger.warning("process_email_delivery returned False for log_id=%s", log_id)
+    except Exception as exc:
+        logger.warning("process_email_delivery_task failed for log_id=%s (retrying): %s", log_id, exc)
+        raise self.retry(exc=exc)
+
+

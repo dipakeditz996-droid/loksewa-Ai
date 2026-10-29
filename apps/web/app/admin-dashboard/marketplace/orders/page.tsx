@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search, Filter, ShoppingCart, CheckCircle2,
-  MoreHorizontal, Eye, Box, MapPin, Loader2, ArrowRight
+  MoreHorizontal, Eye, Box, MapPin, Loader2, ArrowRight, CreditCard, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 
 export default function MarketplaceOrdersPage() {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [orders, setOrders] = useState<Order[]>([]);
@@ -193,21 +195,45 @@ export default function MarketplaceOrdersPage() {
                         {Number(order.delivery_fee) > 0 && <div className="text-[10px] text-slate-400">inc. Rs {order.delivery_fee} del.</div>}
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getOrderStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${getOrderStatusColor(order.status)}`}>
+                            {order.status}
+                          </span>
+                          {(order.status === "PAYMENT_SUBMITTED" || order.status === "PAYMENT_VERIFICATION") && (
+                            <button 
+                              onClick={() => router.push(`/admin-dashboard/marketplace/payments?order_id=${order.id}`)}
+                              className="text-[11px] text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-0.5 hover:underline"
+                            >
+                              Verify now <ArrowRight className="w-2.5 h-2.5" />
+                            </button>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => {
-                            setViewOrder(order);
-                            setNewStatus(order.status);
-                          }}
-                        >
-                          Manage
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {(order.status === "PAYMENT_SUBMITTED" || order.status === "PAYMENT_VERIFICATION" || order.latest_payment_submission) && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 px-2.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200 flex items-center gap-1 font-semibold"
+                              title="Verify Payment"
+                              onClick={() => router.push(`/admin-dashboard/marketplace/payments?order_id=${order.id}`)}
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              Verify
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                              setViewOrder(order);
+                              setNewStatus(order.status);
+                            }}
+                          >
+                            Manage
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -235,6 +261,54 @@ export default function MarketplaceOrdersPage() {
                   </span>
                   <span className="text-sm font-semibold">Total: Rs. {Number(viewOrder.total_amount) + Number(viewOrder.delivery_fee)}</span>
                 </div>
+
+                {/* Payment Verification Quick Access Card */}
+                <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-white border border-blue-200/80 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 bg-[#0B2545] text-amber-400 rounded-lg shrink-0 mt-0.5 sm:mt-0">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-800 text-sm">Payment Verification</span>
+                        {viewOrder.latest_payment_submission ? (
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase border ${
+                            viewOrder.latest_payment_submission.status === "APPROVED"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : viewOrder.latest_payment_submission.status === "REJECTED"
+                              ? "bg-rose-100 text-rose-800 border-rose-300"
+                              : "bg-amber-100 text-amber-800 border-amber-300"
+                          }`}>
+                            Submission: {viewOrder.latest_payment_submission.status}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            {viewOrder.payment_status || viewOrder.status}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600">
+                        {viewOrder.latest_payment_submission?.transaction_id ? (
+                          <>
+                            Txn ID: <strong className="font-mono text-slate-800">{viewOrder.latest_payment_submission.transaction_id}</strong>
+                            {" • "}Submitted: <strong>Rs. {viewOrder.latest_payment_submission.submitted_amount || viewOrder.total_amount}</strong>
+                          </>
+                        ) : (
+                          "View manual payment screenshot, verify transaction, and approve or reject payment."
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button 
+                    size="sm"
+                    className="bg-[#0B2545] hover:bg-[#134074] text-white font-medium text-xs px-3.5 h-9 shrink-0 flex items-center gap-1.5 w-full sm:w-auto shadow-sm"
+                    onClick={() => router.push(`/admin-dashboard/marketplace/payments?order_id=${viewOrder.id}`)}
+                  >
+                    <span>Verify Payment</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
                 
                 <div>
                   <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-slate-700">
@@ -254,6 +328,13 @@ export default function MarketplaceOrdersPage() {
                       <div key={item.id} className="flex flex-col gap-3 bg-slate-50 p-4 rounded-lg border text-sm">
                         <div className="flex justify-between items-start">
                           <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              {(item.product || item.product_details?.id) && (
+                                <span className="bg-blue-50 text-[#0B2545] font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                                  Product ID: #{item.product || item.product_details?.id}
+                                </span>
+                              )}
+                            </div>
                             <div className="font-bold text-slate-800">{item.product_details?.title || item.snapshot_product_name || `Product #${item.product}`}</div>
                             <div className="text-slate-500 text-xs mt-1">
                               Qty: {item.quantity} × Rs. {item.price}

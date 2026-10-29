@@ -318,6 +318,8 @@ class PaymentSubmissionSerializer(serializers.ModelSerializer):
 
     product_name = serializers.SerializerMethodField()
 
+    product_id = serializers.SerializerMethodField()
+
     payment_method_details = PaymentMethodSerializer(source='payment_method', read_only=True)
 
     order_details = serializers.SerializerMethodField()
@@ -335,6 +337,22 @@ class PaymentSubmissionSerializer(serializers.ModelSerializer):
             'verified_by', 'expected_amount', 'submitted_amount', 'is_cod_advance', 'attempt_number'
 
         )
+
+    def get_product_id(self, obj):
+
+        if obj.product_id:
+
+            return obj.product_id
+
+        if obj.order:
+
+            first_item = obj.order.items.first()
+
+            if first_item and first_item.product_id:
+
+                return first_item.product_id
+
+        return None
 
     def get_product_details(self, obj):
 
@@ -700,6 +718,22 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
             'fulfillment_status', 'payout_status', 'snapshot_product_name'
 
         )
+
+    def get_product_id(self, obj):
+
+        if obj.product_id:
+
+            return obj.product_id
+
+        if obj.order:
+
+            first_item = obj.order.items.first()
+
+            if first_item and first_item.product_id:
+
+                return first_item.product_id
+
+        return None
 
     def get_product_details(self, obj):
 

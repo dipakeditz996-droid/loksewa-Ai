@@ -139,6 +139,7 @@ export interface PaymentSubmission {
     [key: string]: unknown;
   };
   product: number | null;
+  product_id?: number | null;
   product_details?: Product | null;
   product_name?: string;
   order: number | null;
@@ -622,53 +623,20 @@ export const marketplaceApi = {
     });
   },
   getProfileAddress: async (): Promise<ProfileAddressResponse> => {
-    // 1. Primary: dedicated delivery profile endpoint
+    // 1. Primary: dedicated delivery profile endpoint from backend
     try {
       const res = await apiClient<ProfileAddressResponse>(
         "/marketplace/student/delivery-addresses/profile-address/"
       );
-      if (res && typeof res === "object") {
+      if (res && typeof res === "object" && (res.full_name || res.phone_number || res.district)) {
         return res;
       }
     } catch (primaryErr) {
-      console.warn("Delivery profile endpoint unavailable, falling back to student profile:", primaryErr);
+      console.warn("Delivery profile endpoint unavailable, falling back to registered student profile:", primaryErr);
     }
 
-    // 2. Secondary fallback: check student's existing saved delivery addresses
-    try {
-      const addresses = await marketplaceApi.getDeliveryAddresses();
-      if (Array.isArray(addresses) && addresses.length > 0) {
-        const addr = addresses.find((a) => a.is_default) || addresses[0];
-        if (addr) {
-          const missing: string[] = [];
-          if (!addr.full_name) missing.push("full_name");
-          if (!addr.phone_number) missing.push("phone_number");
-          if (!addr.province) missing.push("province");
-          if (!addr.district) missing.push("district");
-          if (!addr.municipality) missing.push("municipality");
-          if (!addr.ward_number) missing.push("ward_number");
-          if (!addr.tole_area) missing.push("tole_area");
-
-          return {
-            full_name: addr.full_name || "",
-            phone_number: addr.phone_number || "",
-            province: addr.province || "",
-            district: addr.district || "",
-            municipality: addr.municipality || "",
-            ward_number: addr.ward_number || "",
-            tole_area: addr.tole_area || "",
-            street_landmark: addr.street_landmark || "",
-            delivery_note: addr.delivery_note || "",
-            missing_fields: missing,
-            is_profile_complete: missing.length === 0,
-          };
-        }
-      }
-    } catch (addrErr) {
-      console.warn("Saved addresses fallback unavailable:", addrErr);
-    }
-
-    // 3. Tertiary fallback: student profile endpoint (/support/profile/)
+    // 2. Secondary fallback: student profile endpoint (/support/profile/)
+    // Directly extracts registration information entered during signup (name, phone, permanent_district, permanent_local_level)
     try {
       const profile = await apiClient<any>("/support/profile/");
       const fullName =
@@ -678,7 +646,7 @@ export const marketplaceApi = {
       const phone = typeof profile?.phone === "string" ? profile.phone.trim() : "";
       const district = typeof profile?.permanent_district === "string" ? profile.permanent_district.trim() : "";
       const municipality = typeof profile?.permanent_local_level === "string" ? profile.permanent_local_level.trim() : "";
-      const province = getProvinceForDistrict(district);
+      const province = district ? getProvinceForDistrict(district) : "";
 
       const missing: string[] = [];
       if (!fullName) missing.push("full_name");
@@ -699,36 +667,56 @@ export const marketplaceApi = {
         street_landmark: "",
         delivery_note: "",
         missing_fields: missing,
-        is_profile_complete: missing.length === 0,
+        is_profile_complete: false,
       };
-    } catch (fallbackErr) {
-      console.warn("Support profile endpoint unavailable, falling back to local cached session:", fallbackErr);
+    } catch (profileErr) {
+      console.warn("Student support profile endpoint unavailable:", profileErr);
     }
 
-    // 3. Final safety net: extract what we can from local session without throwing
-    let fallbackName = "";
+    // 3. Fallback: current logged-in user in localStorage
     if (typeof window !== "undefined") {
       try {
-        const rawUser = localStorage.getItem("loksewa_auth_user");
-        if (rawUser) {
-          const parsed = JSON.parse(rawUser);
-          fallbackName = (parsed?.name || parsed?.username || "").trim();
+        const stored = localStorage.getItem("loksewa_auth_user");
+        if (stored) {
+          const user = JSON.parse(stored);
+          const fullName =
+            (typeof user?.full_name === "string" && user.full_name.trim()) ||
+            `${user?.first_name || ""} ${user?.last_name || ""}`.trim() ||
+            (typeof user?.username === "string" ? user.username.trim() : "");
+          const phone = typeof user?.phone === "string" ? user.phone.trim() : "";
+          const district = typeof user?.permanent_district === "string" ? user.permanent_district.trim() : "";
+          const municipality = typeof user?.permanent_local_level === "string" ? user.permanent_local_level.trim() : "";
+          const province = district ? getProvinceForDistrict(district) : "";
+
+          const missing: string[] = [];
+          if (!fullName) missing.push("full_name");
+          if (!phone) missing.push("phone_number");
+          if (!province) missing.push("province");
+          if (!district) missing.push("district");
+          if (!municipality) missing.push("municipality");
+          missing.push("ward_number", "tole_area");
+
+          return {
+            full_name: fullName,
+            phone_number: phone,
+            province,
+            district,
+            municipality,
+            ward_number: "",
+            tole_area: "",
+            street_landmark: "",
+            delivery_note: "",
+            missing_fields: missing,
+            is_profile_complete: false,
+          };
         }
-      } catch {}
+      } catch (storageErr) {
+        // ignore
+      }
     }
 
-    const missing = [
-      "full_name",
-      "phone_number",
-      "province",
-      "district",
-      "municipality",
-      "ward_number",
-      "tole_area",
-    ].filter((f) => f !== "full_name" || !fallbackName);
-
     return {
-      full_name: fallbackName,
+      full_name: "",
       phone_number: "",
       province: "",
       district: "",
@@ -737,7 +725,7 @@ export const marketplaceApi = {
       tole_area: "",
       street_landmark: "",
       delivery_note: "",
-      missing_fields: missing,
+      missing_fields: ["full_name", "phone_number", "province", "district", "municipality", "ward_number", "tole_area"],
       is_profile_complete: false,
     };
   },
@@ -969,6 +957,9 @@ export const marketplaceApi = {
   // Admin - Orders
   adminGetOrders: async () => {
     return apiClient<Order[]>("/marketplace/admin/orders/");
+  },
+  adminGetOrder: async (id: number) => {
+    return apiClient<Order>(`/marketplace/admin/orders/${id}/`);
   },
   adminUpdateOrderStatus: async (id: number, status: string, note?: string) => {
     return apiClient<Order>(`/marketplace/admin/orders/${id}/update_status/`, {

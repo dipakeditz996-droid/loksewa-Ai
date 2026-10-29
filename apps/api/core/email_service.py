@@ -11,7 +11,7 @@ RESEND_API_URL = 'https://api.resend.com/emails'
 RESEND_API_TIMEOUT_SECONDS = 10
 
 
-def _send_email(subject, text_body, html_body, to_email):
+def _send_email(subject, text_body, html_body, to_email, event_category='security', template_name=''):
     """Sends one email, preferring Resend's HTTPS API (RESEND_API_KEY) over
     Django's configured mail backend when both are available. The HTTPS API
     call is bounded by RESEND_API_TIMEOUT_SECONDS regardless of platform
@@ -20,7 +20,26 @@ def _send_email(subject, text_body, html_body, to_email):
     RESEND_API_KEY comment. Never raises: callers treat "did it actually
     send" as best-effort and always keep the OTP row so a resend is
     possible either way.
+    Logs delivery status to EmailDeliveryLog without storing sensitive codes.
     """
+    from .models import EmailDeliveryLog
+    from django.utils import timezone
+    import re
+
+    log = None
+    try:
+        log = EmailDeliveryLog.objects.create(
+            event_category=event_category,
+            recipient_email=to_email,
+            recipient_role='student',
+            subject=subject,
+            template_name=template_name or 'transactional',
+            status='queued',
+            attempts=1,
+        )
+    except Exception as log_err:
+        logger.debug("Could not initialize EmailDeliveryLog: %s", log_err)
+
     if settings.RESEND_API_KEY:
         try:
             response = requests.post(
@@ -36,9 +55,19 @@ def _send_email(subject, text_body, html_body, to_email):
                 timeout=RESEND_API_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
+            if log:
+                log.status = 'sent'
+                log.sent_at = timezone.now()
+                log.error_message = ''
+                log.save(update_fields=['status', 'sent_at', 'error_message', 'updated_at'])
             return
-        except Exception:
+        except Exception as exc:
             logger.exception('Resend API email send failed for %s', to_email)
+            if log:
+                clean_err = re.sub(r'\b\d{6}\b', '[CODE_REDACTED]', str(exc))
+                log.status = 'failed'
+                log.error_message = clean_err[:500]
+                log.save(update_fields=['status', 'error_message', 'updated_at'])
             return
 
     try:
@@ -48,8 +77,18 @@ def _send_email(subject, text_body, html_body, to_email):
         )
         message.attach_alternative(html_body, 'text/html')
         message.send(fail_silently=False)
-    except Exception:
+        if log:
+            log.status = 'sent'
+            log.sent_at = timezone.now()
+            log.error_message = ''
+            log.save(update_fields=['status', 'sent_at', 'error_message', 'updated_at'])
+    except Exception as exc:
         logger.exception('SMTP email send failed for %s', to_email)
+        if log:
+            clean_err = re.sub(r'\b\d{6}\b', '[CODE_REDACTED]', str(exc))
+            log.status = 'failed'
+            log.error_message = clean_err[:500]
+            log.save(update_fields=['status', 'error_message', 'updated_at'])
 
 
 _PURPOSE_COPY = {
@@ -280,7 +319,7 @@ def send_account_created_email(
     ])
     text_body = "\n".join(text_lines)
 
-    _send_email('Your LoksewaAI account has been created', text_body, html_body, to_email)
+    _send_email('Your LoksewaAI account has been created', text_body, html_body, to_email, event_category='registration', template_name='account_created')
 
 
 _PASSWORD_CHANGED_HTML = """\
@@ -320,7 +359,7 @@ def send_password_changed_email(to_email, role='account'):
     """
     text_body = _PASSWORD_CHANGED_TEXT.format(role=role)
     html_body = _PASSWORD_CHANGED_HTML.format(role=role)
-    _send_email('Your LoksewaAI password was changed', text_body, html_body, to_email)
+    _send_email('Your LoksewaAI password was changed', text_body, html_body, to_email, event_category='security', template_name='password_changed')
 
 
 def send_otp_email(to_email, code, purpose):
@@ -339,4 +378,5 @@ def send_otp_email(to_email, code, purpose):
     text_body = _TEXT_TEMPLATE.format(intro=intro, code=code, ttl=_OTP_TTL_MINUTES)
     html_body = _HTML_TEMPLATE.format(intro=intro, code=code, ttl=_OTP_TTL_MINUTES)
 
-    _send_email(subject, text_body, html_body, to_email)
+    category = 'registration' if purpose == 'signup' else 'security'
+    _send_email(subject, text_body, html_body, to_email, event_category=category, template_name=f'{purpose}_otp')

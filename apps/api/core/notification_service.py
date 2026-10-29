@@ -201,6 +201,14 @@ class NotificationService:
             action_url=action_url,
             priority='normal'
         )
+        try:
+            from .email_notification_service import EmailNotificationService
+            from marketplace.models import Order
+            order = Order.objects.filter(id=order_id).first()
+            if order:
+                EmailNotificationService.send_student_order_status_email(order, order.status)
+        except Exception as e:
+            logger.warning("Failed to dispatch student order status email: %s", e)
 
     @classmethod
     def notify_student_payment_submitted(cls, student, title_ref, amount, action_url=None):
@@ -216,6 +224,11 @@ class NotificationService:
             action_url=action_url,
             priority='normal'
         )
+        try:
+            from .email_notification_service import EmailNotificationService
+            EmailNotificationService.send_student_payment_submitted_email(student, title_ref, amount)
+        except Exception as e:
+            logger.warning("Failed to dispatch student payment submitted email: %s", e)
 
     @classmethod
     def notify_student_payment_manual_review(cls, student, title_ref, action_url=None):
@@ -246,6 +259,11 @@ class NotificationService:
             action_url=action_url,
             priority='important'
         )
+        try:
+            from .email_notification_service import EmailNotificationService
+            EmailNotificationService.send_student_payment_approved_email(student, title_ref)
+        except Exception as e:
+            logger.warning("Failed to dispatch student payment approved email: %s", e)
 
     @classmethod
     def notify_student_payment_rejected(cls, student, title_ref, reason, action_url=None):
@@ -261,6 +279,11 @@ class NotificationService:
             action_url=action_url,
             priority='critical'
         )
+        try:
+            from .email_notification_service import EmailNotificationService
+            EmailNotificationService.send_student_payment_rejected_email(student, title_ref, reason)
+        except Exception as e:
+            logger.warning("Failed to dispatch student payment rejected email: %s", e)
 
     @classmethod
     def notify_subscription_expiring_soon(cls, days_ahead=7):
@@ -424,6 +447,34 @@ class NotificationService:
             )
             for admin in admins
         ])
+
+        # Centralized Admin Email Notification Dispatch
+        if admin_settings.enable_email_notifications:
+            try:
+                import html as py_html
+                from .email_notification_service import EmailNotificationService
+                cat_map = {
+                    'payment': 'payment',
+                    'order': 'marketplace',
+                    'marketplace': 'marketplace',
+                    'security': 'security',
+                    'account': 'security',
+                    'system': 'system',
+                }
+                email_cat = cat_map.get(notif_type, 'system')
+                idemp_prefix = f"admin-notif:{notif_type}:{title}:{timezone.now().strftime('%Y%m%d%H%M')}" if dedupe_minutes else None
+                EmailNotificationService.notify_admins(
+                    category=email_cat,
+                    subject=title,
+                    headline=title,
+                    content_html=f"<p>{py_html.escape(message)}</p>",
+                    content_text=message,
+                    action_button_label="Open Admin Dashboard" if action_url else None,
+                    action_button_url=action_url,
+                    idempotency_prefix=idemp_prefix,
+                )
+            except Exception as email_err:
+                logger.warning("Failed to dispatch admin email notification for '%s': %s", title, email_err)
 
     @classmethod
     def notify_system_failure(cls, component, detail, action_url=None, priority='critical', dedupe_minutes=15):

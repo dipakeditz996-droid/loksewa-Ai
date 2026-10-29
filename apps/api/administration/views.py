@@ -1197,7 +1197,8 @@ class AdminUserDetailView(APIView):
 
 
         username, email, role = user.username, user.email, user.role
-        user.delete()
+        from administration.user_delete_service import fast_delete_user
+        fast_delete_user(user)
 
         AuditLog.objects.create(
             actor=request.user, action='DELETE_USER',

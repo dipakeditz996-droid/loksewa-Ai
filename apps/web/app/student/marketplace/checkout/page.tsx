@@ -194,6 +194,12 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
+    if (!cart || !cart.items || cart.items.length === 0) {
+      toast.error("Your cart is empty. Please add items to your cart before proceeding.");
+      router.push("/student/marketplace/cart");
+      return;
+    }
+
     if (useExistingInfo) {
       const required: (keyof DeliveryAddress)[] = [
         'full_name', 'phone_number', 'province', 'district', 'municipality', 'ward_number', 'tole_area'

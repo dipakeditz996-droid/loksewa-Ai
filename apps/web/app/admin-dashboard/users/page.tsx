@@ -470,9 +470,12 @@ export default function UsersManagementPage() {
     setDeleteError("");
     setIsDeleting(true);
     try {
-      await Promise.all(ids.map((id) =>
-        apiClient(`/admin/users/${id}/`, { method: 'DELETE' })
-      ));
+      for (const id of ids) {
+        await apiClient(`/admin/users/${id}/`, {
+          method: 'DELETE',
+          timeoutMs: 60000,
+        });
+      }
       setSelectedUsers([]);
       setDeleteModalOpen(false);
       fetchUsers();

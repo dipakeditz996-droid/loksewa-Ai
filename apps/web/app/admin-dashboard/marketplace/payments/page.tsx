@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { 
   Search, Filter, CheckCircle2, XCircle, CreditCard, AlertCircle,
   Eye, Image as ImageIcon, MessageSquareWarning, X, Download, ZoomIn, AlertTriangle,
@@ -17,8 +18,18 @@ import { RetryImage } from "@/components/ui/retry-image";
 import { marketplaceApi, PaymentSubmission } from "@/lib/api/marketplace";
 import { toast } from "sonner";
 
-export default function MarketplacePaymentsPage() {
-  const [search, setSearch] = useState("");
+function MarketplacePaymentsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const orderIdParam = searchParams.get("order_id");
+  const paymentIdParam = searchParams.get("payment_id");
+  const initialSearch = searchParams.get("search");
+
+  const [search, setSearch] = useState(() => {
+    if (orderIdParam) return orderIdParam;
+    if (initialSearch) return initialSearch;
+    return "";
+  });
   const [submissions, setSubmissions] = useState<PaymentSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState<PaymentSubmission | null>(null);
@@ -32,14 +43,84 @@ export default function MarketplacePaymentsPage() {
     fetchSubmissions();
   }, []);
 
+  useEffect(() => {
+    if (orderIdParam) {
+      setSearch(orderIdParam);
+    }
+  }, [orderIdParam]);
+
   const fetchSubmissions = async () => {
     setLoading(true);
     try {
       const data = await marketplaceApi.adminGetSubmissions();
+      // Enrich submissions that reference an order if order_details / product_name is missing
+      const needOrders = data.some(p => p.order && (!p.order_details?.items?.length || !p.product_name));
+      if (needOrders) {
+        try {
+          const orders = await marketplaceApi.adminGetOrders();
+          const orderMap = new Map(orders.map(o => [o.id, o]));
+          data.forEach(p => {
+            if (p.order && orderMap.has(p.order)) {
+              const o = orderMap.get(p.order)!;
+              if (!p.order_details || !p.order_details.items?.length) {
+                p.order_details = {
+                  id: o.id,
+                  total_amount: o.total_amount,
+                  delivery_fee: o.delivery_fee,
+                  final_total: o.final_total || String(Number(o.total_amount) + Number(o.delivery_fee)),
+                  is_cod: !!o.is_cod,
+                  payment_method_type: o.payment_method_type || 'PREPAID',
+                  cod_advance_required: String(o.cod_advance_required || '0.00'),
+                  cod_advance_paid: String(o.cod_advance_paid || '0.00'),
+                  cod_remaining_balance: String(o.cod_remaining_balance || '0.00'),
+                  status: o.status,
+                  payment_status: o.payment_status || 'UNPAID',
+                  shipping_address: o.shipping_address,
+                  shipping_address_snapshot: o.shipping_address_snapshot || {},
+                  contact_number: o.contact_number,
+                  items: (o.items || []).map((it) => ({
+                    id: it.id,
+                    product_id: it.product || it.product_details?.id || null,
+                    title: it.snapshot_product_name || it.product_details?.title || 'Product',
+                    quantity: it.quantity,
+                    price: it.price,
+                    total_price: String((Number(it.price) * it.quantity).toFixed(2)),
+                    cover_image: it.product_details?.cover_image || null,
+                    category: it.product_details?.category || null,
+                    condition: it.product_details?.condition || null,
+                    seller_name: it.snapshot_seller_name || null,
+                  })),
+                };
+              }
+              if (!p.product_id && o.items?.[0]) {
+                p.product_id = o.items[0].product || o.items[0].product_details?.id || null;
+              }
+              if ((!p.product_name || p.product_name.startsWith('Order #')) && o.items?.[0]) {
+                p.product_name = o.items[0].snapshot_product_name || o.items[0].product_details?.title || undefined;
+              }
+            }
+          });
+        } catch (e) {
+          console.warn("Could not enrich payments with orders list:", e);
+        }
+      }
+
       setSubmissions(data);
       if (selectedPayment) {
         const updated = data.find(p => p.id === selectedPayment.id);
         setSelectedPayment(updated || null);
+      } else if (orderIdParam) {
+        const oId = Number(orderIdParam);
+        const match = data.find(p => p.order === oId || p.order_details?.id === oId);
+        if (match) {
+          setSelectedPayment(match);
+        }
+      } else if (paymentIdParam) {
+        const pId = Number(paymentIdParam);
+        const match = data.find(p => p.id === pId);
+        if (match) {
+          setSelectedPayment(match);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch submissions:", error);
@@ -48,40 +129,104 @@ export default function MarketplacePaymentsPage() {
     }
   };
 
-  const getPaymentItemSummary = (p: PaymentSubmission) => {
-    if (p.product_name) return p.product_name;
+  // Helper to extract Product ID from PaymentSubmission
+  const getPaymentProductId = (p: PaymentSubmission): string | number | null => {
+    if (p.product_id) return p.product_id;
+    if (p.product) return p.product;
+    if (p.product_details?.id) return p.product_details.id;
+    if (p.order_details?.items && p.order_details.items.length > 0) {
+      const item = p.order_details.items[0];
+      if (item?.product_id) return item.product_id;
+    }
+    return null;
+  };
+
+  // Helper to extract clean Product Name / Title from PaymentSubmission
+  const getPaymentProductName = (p: PaymentSubmission): string => {
+    if (p.product_details?.title) return p.product_details.title;
+    if (p.product_name && !p.product_name.startsWith("Order #")) return p.product_name;
     if (p.order_details?.items && p.order_details.items.length > 0) {
       const items = p.order_details.items;
       const first = items[0];
       if (first) {
         if (items.length === 1) {
-          return `${first.title} (x${first.quantity})`;
+          return first.title;
         }
         return `${first.title} (+${items.length - 1} more items)`;
       }
     }
-    if (p.product_details?.title) {
-      return p.product_details.title;
-    }
+    if (p.product_name) return p.product_name;
     if (p.order_details?.id || p.order) {
       return `Order #${p.order_details?.id || p.order}`;
     }
     return "Product Purchase";
   };
 
+  // Ensure full order details are loaded when a payment is selected
+  useEffect(() => {
+    if (selectedPayment?.order && (!selectedPayment.order_details || !selectedPayment.order_details.items || selectedPayment.order_details.items.length === 0)) {
+      marketplaceApi.adminGetOrder(selectedPayment.order)
+        .then((orderData) => {
+          if (!orderData) return;
+          setSelectedPayment((prev) => {
+            if (!prev || prev.id !== selectedPayment.id) return prev;
+            return {
+              ...prev,
+              order_details: {
+                id: orderData.id,
+                total_amount: orderData.total_amount,
+                delivery_fee: orderData.delivery_fee,
+                final_total: orderData.final_total || String(Number(orderData.total_amount) + Number(orderData.delivery_fee)),
+                is_cod: !!orderData.is_cod,
+                payment_method_type: orderData.payment_method_type || 'PREPAID',
+                cod_advance_required: String(orderData.cod_advance_required || '0.00'),
+                cod_advance_paid: String(orderData.cod_advance_paid || '0.00'),
+                cod_remaining_balance: String(orderData.cod_remaining_balance || '0.00'),
+                status: orderData.status,
+                payment_status: orderData.payment_status || 'UNPAID',
+                shipping_address: orderData.shipping_address,
+                shipping_address_snapshot: orderData.shipping_address_snapshot || {},
+                contact_number: orderData.contact_number,
+                items: (orderData.items || []).map((it) => ({
+                  id: it.id,
+                  product_id: it.product || it.product_details?.id || null,
+                  title: it.snapshot_product_name || it.product_details?.title || 'Product',
+                  quantity: it.quantity,
+                  price: it.price,
+                  total_price: String((Number(it.price) * it.quantity).toFixed(2)),
+                  cover_image: it.product_details?.cover_image || null,
+                  category: it.product_details?.category || null,
+                  condition: it.product_details?.condition || null,
+                  seller_name: it.snapshot_seller_name || null,
+                })),
+              },
+            };
+          });
+        })
+        .catch((err) => console.error("Failed to load order details fallback:", err));
+    }
+  }, [selectedPayment?.id, selectedPayment?.order]);
+
   const filteredPayments = submissions.filter(p => {
     const studentName = p.student_details?.first_name 
       ? `${p.student_details.first_name} ${p.student_details.last_name}`
       : p.student_details?.username || "Unknown";
-    const itemSummary = getPaymentItemSummary(p).toLowerCase();
+    const prodName = getPaymentProductName(p).toLowerCase();
+    const prodId = String(getPaymentProductId(p) || "");
     const orderRef = (p.order_details?.id || p.order) ? `order #${p.order_details?.id || p.order}` : "";
-    const s = search.toLowerCase();
+    const s = search.toLowerCase().trim();
+    if (!s) return true;
+    const cleanNum = s.replace(/[^0-9]/g, "");
     return (
       p.transaction_id.toLowerCase().includes(s) || 
       studentName.toLowerCase().includes(s) ||
       p.id.toString().includes(s) ||
-      itemSummary.includes(s) ||
-      orderRef.includes(s)
+      prodName.includes(s) ||
+      prodId.includes(s) ||
+      orderRef.toLowerCase().includes(s) ||
+      (p.order && String(p.order).toLowerCase().includes(s)) ||
+      (p.order_details?.id && String(p.order_details.id).toLowerCase().includes(s)) ||
+      (cleanNum && (String(p.order) === cleanNum || String(p.order_details?.id) === cleanNum || String(p.id) === cleanNum))
     );
   });
 
@@ -151,6 +296,32 @@ export default function MarketplacePaymentsPage() {
           </Button>
         </div>
 
+        {orderIdParam && (
+          <div className="bg-blue-50/90 border-x border-b border-blue-100 px-4 py-2.5 flex items-center justify-between text-xs text-[#0B2545]">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">Filtered for Order #{orderIdParam}</span>
+              {filteredPayments.length > 0 ? (
+                <span className="bg-blue-200/70 text-blue-900 font-bold px-2 py-0.5 rounded text-[11px]">
+                  {filteredPayments.length} payment record(s)
+                </span>
+              ) : (
+                <span className="bg-amber-100 text-amber-800 font-medium px-2 py-0.5 rounded text-[11px]">
+                  No payment voucher uploaded yet
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setSearch("");
+                router.replace("/admin-dashboard/marketplace/payments");
+              }}
+              className="text-blue-700 hover:text-blue-900 font-medium underline cursor-pointer"
+            >
+              Show all payments
+            </button>
+          </div>
+        )}
+
         <div className="bg-white rounded-b-xl shadow-sm border border-slate-200 flex-1 overflow-y-auto">
           <Table>
             <TableHeader className="sticky top-0 bg-slate-50 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
@@ -170,9 +341,14 @@ export default function MarketplacePaymentsPage() {
                 </TableRow>
               ) : filteredPayments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-32 text-center text-slate-500">
+                  <TableCell colSpan={4} className="h-36 text-center text-slate-500">
                     <CreditCard className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p>No payments found.</p>
+                    <p className="font-medium text-slate-700">No payment submissions found.</p>
+                    {orderIdParam && (
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        No manual payment voucher was submitted yet for Order #{orderIdParam}. If this was a COD or online gateway order, payment may be collected upon delivery or processed directly.
+                      </p>
+                    )}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -180,7 +356,8 @@ export default function MarketplacePaymentsPage() {
                   const studentName = payment.student_details?.first_name 
                     ? `${payment.student_details.first_name} ${payment.student_details.last_name}`
                     : payment.student_details?.username || "Unknown";
-                  const itemSummary = getPaymentItemSummary(payment);
+                  const productName = getPaymentProductName(payment);
+                  const productId = getPaymentProductId(payment);
                     
                   return (
                     <TableRow 
@@ -203,9 +380,25 @@ export default function MarketplacePaymentsPage() {
                           )}
                         </div>
                         <div className="text-sm font-medium text-slate-700 mt-1">{studentName}</div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5 truncate max-w-[240px]" title={itemSummary}>
-                          <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{itemSummary}</span>
+
+                        {/* Product Name & Product ID */}
+                        <div className="mt-1 space-y-0.5">
+                          <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5 truncate max-w-[240px]" title={productName}>
+                            <Package className="w-3.5 h-3.5 text-[#0B2545] shrink-0" />
+                            <span className="truncate">{productName}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {productId && (
+                              <span className="inline-flex items-center font-mono text-[10px] font-bold bg-blue-50 text-[#0B2545] border border-blue-200 px-1.5 py-0.5 rounded">
+                                Product ID: #{productId}
+                              </span>
+                            )}
+                            {(payment.order_details?.id || payment.order) && (
+                              <span className="inline-flex items-center text-[10px] font-medium bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                Order #{payment.order_details?.id || payment.order}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -241,7 +434,11 @@ export default function MarketplacePaymentsPage() {
       </div>
 
       {/* Verification Panel (Slide-over/Side Panel) */}
-      {selectedPayment && (
+      {selectedPayment && (() => {
+        const selectedProductName = getPaymentProductName(selectedPayment);
+        const selectedProductId = getPaymentProductId(selectedPayment);
+
+        return (
         <div className="flex flex-col w-full lg:w-1/2 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden shrink-0">
           {/* Panel Header */}
           <div className="bg-[#0B2545] text-white p-4 flex justify-between items-center shrink-0">
@@ -254,6 +451,7 @@ export default function MarketplacePaymentsPage() {
                 {selectedPayment.order_details?.id || selectedPayment.order
                   ? `Order #${selectedPayment.order_details?.id || selectedPayment.order} • Payment ID #${selectedPayment.id}`
                   : `Payment ID #${selectedPayment.id}`}
+                {selectedProductId && ` • Product ID #${selectedProductId}`}
               </p>
             </div>
             <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 rounded-full h-8 w-8" onClick={() => setSelectedPayment(null)}>
@@ -291,15 +489,29 @@ export default function MarketplacePaymentsPage() {
 
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                 <p className="text-xs text-slate-500 font-medium">Product / Items</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Package className="w-4 h-4 text-[#0B2545] shrink-0" />
-                  <p className="font-semibold text-[#0B2545] text-sm truncate" title={getPaymentItemSummary(selectedPayment)}>
-                    {getPaymentItemSummary(selectedPayment)}
-                  </p>
+                <div className="flex items-start gap-1.5 mt-1">
+                  <Package className="w-4 h-4 text-[#0B2545] shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-[#0B2545] text-sm truncate" title={selectedProductName}>
+                      {selectedProductName}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {selectedProductId && (
+                        <span className="font-mono text-[10px] font-bold bg-blue-100 text-[#0B2545] border border-blue-200 px-1.5 py-0.5 rounded">
+                          Product ID: #{selectedProductId}
+                        </span>
+                      )}
+                      {(selectedPayment.order_details?.id || selectedPayment.order) && (
+                        <span className="text-[10px] font-medium text-slate-600 bg-slate-200/70 px-1.5 py-0.5 rounded">
+                          Order #{selectedPayment.order_details?.id || selectedPayment.order}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                {selectedPayment.order_details?.items && selectedPayment.order_details.items.length > 0 && (
-                  <span className="text-[11px] text-slate-500 block mt-0.5">
-                    {selectedPayment.order_details.items.length} item{selectedPayment.order_details.items.length > 1 ? 's' : ''} in order
+                {selectedPayment.order_details?.items && selectedPayment.order_details.items.length > 1 && (
+                  <span className="text-[11px] text-slate-500 block mt-1">
+                    +{selectedPayment.order_details.items.length - 1} more item(s) in this order
                   </span>
                 )}
               </div>
@@ -377,6 +589,18 @@ export default function MarketplacePaymentsPage() {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              {(it.product_id || it.id) && (
+                                <span className="bg-blue-50 text-[#0B2545] font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                                  Product ID: #{it.product_id || it.id}
+                                </span>
+                              )}
+                              {it.category && (
+                                <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase">
+                                  {it.category.replace('_', ' ')}
+                                </span>
+                              )}
+                            </div>
                             <h5 className="font-semibold text-sm text-slate-800 truncate" title={it.title}>
                               {it.title}
                             </h5>
@@ -482,7 +706,19 @@ export default function MarketplacePaymentsPage() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <h5 className="font-bold text-sm text-slate-800 truncate">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      {(selectedPayment.product_details.id || selectedPayment.product) && (
+                        <span className="bg-blue-50 text-[#0B2545] font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                          Product ID: #{selectedPayment.product_details.id || selectedPayment.product}
+                        </span>
+                      )}
+                      {selectedPayment.product_details.category && (
+                        <span className="inline-block bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase">
+                          {selectedPayment.product_details.category.replace('_', ' ')}
+                        </span>
+                      )}
+                    </div>
+                    <h5 className="font-bold text-sm text-slate-800 truncate" title={selectedPayment.product_details.title}>
                       {selectedPayment.product_details.title}
                     </h5>
                     {selectedPayment.product_details.category && (
@@ -494,6 +730,33 @@ export default function MarketplacePaymentsPage() {
                       Rs. {Number(selectedPayment.product_details.final_price || selectedPayment.product_details.price).toLocaleString()}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Fallback Product Info Card when neither detailed section is populated */}
+            {!selectedPayment.order_details && !selectedPayment.product_details && (
+              <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700 flex items-center gap-1.5 border-b border-slate-200/80 pb-2">
+                  <Package className="w-4 h-4 text-[#0B2545]" />
+                  Product Information
+                </h4>
+                <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    {selectedProductId && (
+                      <span className="bg-blue-50 text-[#0B2545] font-mono text-xs font-bold px-2 py-0.5 rounded border border-blue-200">
+                        Product ID: #{selectedProductId}
+                      </span>
+                    )}
+                    {selectedPayment.order && (
+                      <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                        Order #{selectedPayment.order}
+                      </span>
+                    )}
+                  </div>
+                  <h5 className="font-bold text-sm text-slate-800">
+                    {selectedProductName}
+                  </h5>
                 </div>
               </div>
             )}
@@ -580,7 +843,8 @@ export default function MarketplacePaymentsPage() {
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Reject Modal Overlay */}
       {isRejectModalOpen && (
@@ -633,5 +897,13 @@ export default function MarketplacePaymentsPage() {
       )}
 
     </div>
+  );
+}
+
+export default function MarketplacePaymentsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-400">Loading payment verifications...</div>}>
+      <MarketplacePaymentsContent />
+    </Suspense>
   );
 }

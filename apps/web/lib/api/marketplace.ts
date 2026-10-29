@@ -599,10 +599,21 @@ export const marketplaceApi = {
     is_default?: boolean;
     payment_mode?: "PREPAID" | "COD";
   }) => {
-    return apiClient<Order>("/marketplace/student/orders/checkout/", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    try {
+      return await apiClient<Order>("/marketplace/student/orders/checkout/", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    } catch (err: any) {
+      // If /checkout/ fails or returns 404/500, fallback to standard /orders/
+      if (err?.status === 404 || err?.status === 500) {
+        return apiClient<Order>("/marketplace/student/orders/", {
+          method: "POST",
+          body: JSON.stringify(data),
+        });
+      }
+      throw err;
+    }
   },
   switchPaymentMode: async (orderId: number, payment_mode: "PREPAID" | "COD") => {
     return apiClient<Order>(`/marketplace/student/orders/${orderId}/switch-payment-mode/`, {
@@ -623,7 +634,41 @@ export const marketplaceApi = {
       console.warn("Delivery profile endpoint unavailable, falling back to student profile:", primaryErr);
     }
 
-    // 2. Secondary fallback: student profile endpoint (/support/profile/)
+    // 2. Secondary fallback: check student's existing saved delivery addresses
+    try {
+      const addresses = await marketplaceApi.getDeliveryAddresses();
+      if (Array.isArray(addresses) && addresses.length > 0) {
+        const addr = addresses.find((a) => a.is_default) || addresses[0];
+        if (addr) {
+          const missing: string[] = [];
+          if (!addr.full_name) missing.push("full_name");
+          if (!addr.phone_number) missing.push("phone_number");
+          if (!addr.province) missing.push("province");
+          if (!addr.district) missing.push("district");
+          if (!addr.municipality) missing.push("municipality");
+          if (!addr.ward_number) missing.push("ward_number");
+          if (!addr.tole_area) missing.push("tole_area");
+
+          return {
+            full_name: addr.full_name || "",
+            phone_number: addr.phone_number || "",
+            province: addr.province || "",
+            district: addr.district || "",
+            municipality: addr.municipality || "",
+            ward_number: addr.ward_number || "",
+            tole_area: addr.tole_area || "",
+            street_landmark: addr.street_landmark || "",
+            delivery_note: addr.delivery_note || "",
+            missing_fields: missing,
+            is_profile_complete: missing.length === 0,
+          };
+        }
+      }
+    } catch (addrErr) {
+      console.warn("Saved addresses fallback unavailable:", addrErr);
+    }
+
+    // 3. Tertiary fallback: student profile endpoint (/support/profile/)
     try {
       const profile = await apiClient<any>("/support/profile/");
       const fullName =

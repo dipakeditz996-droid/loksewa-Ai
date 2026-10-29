@@ -863,6 +863,29 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
         municipality = (profile.permanent_local_level if profile else '') or ''
         province = get_nepal_province_for_district(district) if district else ''
 
+        ward_number = ''
+        tole_area = ''
+        street_landmark = ''
+        delivery_note = ''
+
+        # If student already has saved delivery addresses, use their most recent/default to complete missing info
+        saved_addr = DeliveryAddress.objects.filter(student=user).order_by('-is_default', '-created_at').first()
+        if saved_addr:
+            if not full_name:
+                full_name = saved_addr.full_name or full_name
+            if not phone_number:
+                phone_number = saved_addr.phone_number or ''
+            if not district:
+                district = saved_addr.district or ''
+            if not municipality:
+                municipality = saved_addr.municipality or ''
+            if not province:
+                province = saved_addr.province or get_nepal_province_for_district(district)
+            ward_number = saved_addr.ward_number or ''
+            tole_area = saved_addr.tole_area or ''
+            street_landmark = saved_addr.street_landmark or ''
+            delivery_note = saved_addr.delivery_note or ''
+
         missing_fields = []
         if not full_name:
             missing_fields.append('full_name')
@@ -874,7 +897,10 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
             missing_fields.append('district')
         if not municipality:
             missing_fields.append('municipality')
-        missing_fields.extend(['ward_number', 'tole_area'])
+        if not ward_number:
+            missing_fields.append('ward_number')
+        if not tole_area:
+            missing_fields.append('tole_area')
 
         return Response({
             'full_name': full_name,
@@ -882,10 +908,10 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
             'province': province,
             'district': district,
             'municipality': municipality,
-            'ward_number': '',
-            'tole_area': '',
-            'street_landmark': '',
-            'delivery_note': '',
+            'ward_number': ward_number,
+            'tole_area': tole_area,
+            'street_landmark': street_landmark,
+            'delivery_note': delivery_note,
             'missing_fields': missing_fields,
             'is_profile_complete': len(missing_fields) == 0,
         })
@@ -1017,6 +1043,13 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
     permission_classes = [permissions.IsAuthenticated]
     pagination_class = MarketplacePagination
+
+    def create(self, request, *args, **kwargs):
+        """Standard POST /orders/ delegates directly to the comprehensive checkout handler."""
+        return self.checkout(request)
+
+    def perform_create(self, serializer):
+        serializer.save(student=self.request.user)
 
     def get_queryset(self):
         return Order.objects.filter(student=self.request.user).prefetch_related(

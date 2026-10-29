@@ -92,7 +92,8 @@ class StudentSignupView(APIView):
 
     def post(self, request):
         t0 = time.perf_counter()
-        req_id = request.headers.get('X-Request-ID') or f"reg_{uuid.uuid4().hex[:8]}"
+        client_req_id = request.data.get('client_request_id') if isinstance(request.data, dict) else None
+        req_id = request.headers.get('X-Request-ID') or client_req_id or f"reg_{uuid.uuid4().hex[:8]}"
 
         username = request.data.get('username')
         email = (request.data.get('email') or '').strip()

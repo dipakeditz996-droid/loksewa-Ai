@@ -35,18 +35,19 @@ export const API_URL = getApiBaseUrl();
 
 function extractErrorMessage(data: any): string {
   if (!data) return "An API error occurred";
-  if (typeof data === "string") return data;
-  if (data.detail && typeof data.detail === "string") return data.detail;
-  if (data.error && typeof data.error === "string") return data.error;
-  if (data.message && typeof data.message === "string") return data.message;
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data.detail && typeof data.detail === "string" && data.detail.trim()) return data.detail.trim();
+  if (data.error && typeof data.error === "string" && data.error.trim()) return data.error.trim();
+  if (data.message && typeof data.message === "string" && data.message.trim()) return data.message.trim();
   if (typeof data === "object") {
     const parts: string[] = [];
     for (const [key, val] of Object.entries(data)) {
       const field = key === "non_field_errors" || key === "detail" ? "" : `${key.replace(/_/g, " ")}: `;
       if (Array.isArray(val)) {
-        parts.push(`${field}${val.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).join(", ")}`);
-      } else if (typeof val === "string") {
-        parts.push(`${field}${val}`);
+        const valStr = val.map(v => typeof v === "object" ? JSON.stringify(v) : String(v)).filter(Boolean).join(", ");
+        if (valStr.trim()) parts.push(`${field}${valStr.trim()}`);
+      } else if (typeof val === "string" && val.trim()) {
+        parts.push(`${field}${val.trim()}`);
       }
     }
     if (parts.length > 0) return parts.join(" | ");
@@ -297,7 +298,16 @@ async function executeRequest<T>(
     try {
       errorData = await response.json();
     } catch {
-      errorData = { detail: response.statusText };
+      const fallbackDetail = response.statusText || (
+        response.status === 500 ? "Internal Server Error" :
+        response.status === 502 ? "Bad Gateway" :
+        response.status === 503 ? "Service Unavailable" :
+        response.status === 504 ? "Gateway Timeout" :
+        response.status === 403 ? "Forbidden" :
+        response.status === 404 ? "Not Found" :
+        `HTTP ${response.status} Error`
+      );
+      errorData = { detail: `${fallbackDetail} (${response.status})` };
     }
     
     // Intercept package lock
@@ -382,7 +392,16 @@ export async function downloadFile(
     try {
       errorData = await response.json();
     } catch {
-      errorData = { detail: response.statusText };
+      const fallbackDetail = response.statusText || (
+        response.status === 500 ? "Internal Server Error" :
+        response.status === 502 ? "Bad Gateway" :
+        response.status === 503 ? "Service Unavailable" :
+        response.status === 504 ? "Gateway Timeout" :
+        response.status === 403 ? "Forbidden" :
+        response.status === 404 ? "Not Found" :
+        `HTTP ${response.status} Error`
+      );
+      errorData = { detail: `${fallbackDetail} (${response.status})` };
     }
     throw new ApiError(response.status, errorData);
   }

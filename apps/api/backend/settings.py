@@ -490,6 +490,8 @@ def _parse_origins(env_value):
 
 
 _default_origins = [
+    'https://www.hemrajkc.com.np',
+    'https://hemrajkc.com.np',
     'https://loksewa-ai-web-pigl-roan.vercel.app',
     'https://loksewa-ai-production.up.railway.app',
     'http://localhost:3000',
@@ -515,8 +517,10 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-request-id',
     'access-control-request-private-network',
 ]
+
 
 CSRF_TRUSTED_ORIGINS = _parse_origins(os.environ.get('CSRF_TRUSTED_ORIGINS', ''))
 for _d_origin in _default_origins:

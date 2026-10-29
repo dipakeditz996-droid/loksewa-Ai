@@ -278,9 +278,25 @@ function RegisterForm() {
     } catch (err: any) {
       const duration = (typeof performance !== "undefined" ? performance.now() : Date.now()) - tStart;
       console.warn(`[registration] req_id=${reqId} failed after ${duration.toFixed(0)}ms:`, err);
-      setError(err.message || err.error || err.detail || "Failed to create account. Please check your details.");
-      // Return to first step if account validation failed
-      if (err.missing_fields?.includes("email") || err.missing_fields?.includes("mobile")) {
+
+      const missingFields = err?.data?.missing_fields || err?.missing_fields || [];
+      if (err?.status === 0) {
+        setError("Unable to connect to the server. Please verify your internet connection and ensure cross-origin requests are allowed.");
+      } else if (err?.status >= 500) {
+        setError("The registration service encountered a temporary error. Please try again in a few moments.");
+      } else if (err?.status === 429) {
+        setError(err?.data?.error || err?.message || "Too many registration attempts. Please wait a moment.");
+      } else {
+        setError(err?.data?.error || err?.message || err?.data?.detail || "Failed to create account. Please check your details.");
+      }
+
+      // Return to first step if account validation failed on initial fields
+      if (
+        missingFields.includes("email") ||
+        missingFields.includes("mobile") ||
+        missingFields.includes("username") ||
+        missingFields.includes("password")
+      ) {
         setCurrentStep(0);
       }
     } finally {

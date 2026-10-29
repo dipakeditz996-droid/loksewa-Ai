@@ -214,7 +214,12 @@ export default function CheckoutPage() {
         setOrder(createdOrder);
         toast.success("Order confirmed. Please proceed to payment.");
       } catch (error: any) {
-        toast.error(error?.data?.detail || error?.message || "Failed to place order.");
+        const msg = 
+          (typeof error?.data?.detail === "string" && error.data.detail.trim()) ||
+          (typeof error?.message === "string" && error.message.trim() && error.message !== "An API error occurred" ? error.message.trim() : null) ||
+          (typeof error?.data === "string" && error.data.trim()) ||
+          "Failed to place order. Please try again.";
+        toast.error(msg);
       } finally {
         setSubmitting(false);
       }
@@ -232,7 +237,12 @@ export default function CheckoutPage() {
         setOrder(createdOrder);
         toast.success("Order confirmed. Please proceed to payment.");
       } catch (error: any) {
-        toast.error(error?.data?.detail || error?.message || "Failed to place order.");
+        const msg = 
+          (typeof error?.data?.detail === "string" && error.data.detail.trim()) ||
+          (typeof error?.message === "string" && error.message.trim() && error.message !== "An API error occurred" ? error.message.trim() : null) ||
+          (typeof error?.data === "string" && error.data.trim()) ||
+          "Failed to place order. Please try again.";
+        toast.error(msg);
       } finally {
         setSubmitting(false);
       }

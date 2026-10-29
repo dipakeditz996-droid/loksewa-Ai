@@ -49,13 +49,12 @@ export const authApi = {
    * verifyEmailOtp next, which is what actually logs the student in.
    */
   studentSignup: async (data: Record<string, string>, options?: { requestId?: string }) => {
-    const headers: Record<string, string> = {};
-    if (options?.requestId) {
-      headers["X-Request-ID"] = options.requestId;
-    }
+    // Keep client request id in payload to preserve logging and request correlation
+    // without triggering restrictive CORS preflight header blocks on cross-origin deployments.
+    const payload = options?.requestId ? { ...data, client_request_id: options.requestId } : data;
     return apiClient<{ id: number; username: string; email: string; pending_verification: true; detail: string }>(
       "/auth/signup/",
-      { method: "POST", body: JSON.stringify(data), headers }
+      { method: "POST", body: JSON.stringify(payload) }
     );
   },
 

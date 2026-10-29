@@ -239,7 +239,7 @@ export default function ProductDetailPage() {
 
             {product.features && product.features.length > 0 && (
               <div>
-                <h3 className="text-xl font-semibold mb-3">What's included</h3>
+                <h3 className="text-xl font-semibold mb-3">Features of Item</h3>
                 <ul className="space-y-2">
                   {product.features.map((feature, idx) => (
                     <li key={idx} className="flex items-start text-muted-foreground">

@@ -1,5 +1,8 @@
+import logging
 from core.validators import get_nepal_province_for_district
 from rest_framework import viewsets, permissions, status
+
+logger = logging.getLogger(__name__)
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -1017,29 +1020,27 @@ class OrderViewSet(viewsets.ModelViewSet):
     def _calculate_delivery_fee(self, delivery_address, items=None):
         regional_fee = Decimal('0.00')
         if delivery_address:
-            mun = getattr(delivery_address, 'municipality', '') or ''
-            dist = getattr(delivery_address, 'district', '') or ''
-            prov = getattr(delivery_address, 'province', '') or ''
+            mun = (getattr(delivery_address, 'municipality', '') or '').strip().lower()
+            dist = (getattr(delivery_address, 'district', '') or '').strip().lower()
+            prov = (getattr(delivery_address, 'province', '') or '').strip().lower()
             rules = DeliveryFeeRule.objects.filter(is_active=True).order_by('-priority', '-created_at')
             for rule in rules:
-                if (rule.municipality
-                        and rule.municipality.lower() == mun.lower()
-                        and rule.district.lower() == dist.lower()
-                        and rule.province.lower() == prov.lower()):
-                    regional_fee = rule.fee
-                    break
-                if (rule.district
-                        and rule.district.lower() == dist.lower()
-                        and rule.province.lower() == prov.lower()
-                        and not rule.municipality):
-                    regional_fee = rule.fee
-                    break
-                if (rule.province
-                        and rule.province.lower() == prov.lower()
-                        and not rule.district and not rule.municipality):
-                    regional_fee = rule.fee
-                    break
-                if not rule.province and not rule.district and not rule.municipality:
+                r_mun = (rule.municipality or '').strip().lower()
+                r_dist = (rule.district or '').strip().lower()
+                r_prov = (rule.province or '').strip().lower()
+                if r_mun and r_dist and r_prov:
+                    if r_mun == mun and r_dist == dist and r_prov == prov:
+                        regional_fee = rule.fee
+                        break
+                elif r_dist and r_prov and not r_mun:
+                    if r_dist == dist and r_prov == prov:
+                        regional_fee = rule.fee
+                        break
+                elif r_prov and not r_dist and not r_mun:
+                    if r_prov == prov:
+                        regional_fee = rule.fee
+                        break
+                elif not r_prov and not r_dist and not r_mun:
                     regional_fee = rule.fee
                     break
 
@@ -1313,13 +1314,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             for item in cart_items:
                 # Prevent self-purchase (double-check at checkout)
                 if item.product.seller and item.product.seller == request.user:
-                    raise ValidationError(f"You cannot purchase your own listing: {item.product.title}")
+                    raise ValidationError({"detail": f"You cannot purchase your own listing: {item.product.title}"})
                 # Stock check with lock
                 product = Product.objects.select_for_update().get(pk=item.product.pk)
                 if not product.is_published or product.listing_status not in ('ACTIVE',):
-                    raise ValidationError(f"{product.title} is no longer available.")
+                    raise ValidationError({"detail": f"{product.title} is no longer available."})
                 if product.stock < item.quantity:
-                    raise ValidationError(f"Not enough stock for {product.title}")
+                    raise ValidationError({"detail": f"Not enough stock for {product.title}"})
                 product.stock -= item.quantity
                 # Auto-mark as SOLD when stock reaches 0 (especially important for single-copy used books)
                 if product.stock == 0:
@@ -1400,13 +1401,16 @@ class OrderViewSet(viewsets.ModelViewSet):
             cart.items.all().delete()
 
         # Notify sellers that their book was purchased
-        seller_ids = set(
-            order.items.filter(product__seller__isnull=False)
-            .values_list('product__seller_id', flat=True)
-        )
-        from core.models import User as UserModel
-        for seller in UserModel.objects.filter(id__in=seller_ids):
-            NotificationService.notify_book_sold(seller, order)
+        try:
+            seller_ids = set(
+                order.items.filter(product__seller__isnull=False)
+                .values_list('product__seller_id', flat=True)
+            )
+            from core.models import User as UserModel
+            for seller in UserModel.objects.filter(id__in=seller_ids):
+                NotificationService.notify_book_sold(seller, order)
+        except Exception as notif_err:
+            logger.warning(f"Failed to notify seller for order {order.id}: {notif_err}")
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 

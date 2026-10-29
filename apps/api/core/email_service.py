@@ -1,3 +1,4 @@
+import html
 import logging
 
 import requests
@@ -96,53 +97,188 @@ LoksewaAI Team
 """
 
 
-_ACCOUNT_CREATED_HTML = """\
-<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1f2937;">
-  <h2 style="color:#4f46e5;margin:0 0 16px;">LoksewaAI</h2>
-  <p style="font-size:15px;line-height:1.5;margin:0 0 16px;">
-    An administrator created an account for you on LoksewaAI.
-  </p>
-  <div style="background:#f3f4f6;border-radius:8px;padding:16px 20px;margin:0 0 24px;">
-    <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">Username</p>
-    <p style="font-size:18px;font-weight:bold;color:#111827;margin:0;">{username}</p>
+def send_account_created_email(
+    to_email,
+    username,
+    password=None,
+    full_name='',
+    phone='',
+    package_names=None,
+    enrolled_courses=None,
+    target_exam=None,
+    expiry_date=None,
+    login_url=None,
+):
+    """Sends account credentials, temporary password, and access details to a student.
+    Ensures the login redirection points to the production login URL (https://hemrajkc.com/login).
+    Never raises, matching the best-effort email contract across this service.
+    """
+    if not login_url:
+        base_frontend = getattr(settings, 'FRONTEND_URL', 'https://hemrajkc.com') or 'https://hemrajkc.com'
+        base_frontend = str(base_frontend).strip().rstrip('/')
+        if not base_frontend or 'localhost' in base_frontend or '127.0.0.1' in base_frontend:
+            base_frontend = 'https://hemrajkc.com'
+        login_url = f'{base_frontend}/login'
+
+    if not login_url.startswith(('http://', 'https://')):
+        login_url = f'https://{login_url}'
+
+    display_name = (full_name or '').strip() or str(username)
+    escaped_display_name = html.escape(display_name)
+    escaped_username = html.escape(str(username))
+    escaped_email = html.escape(str(to_email))
+    escaped_password = html.escape(str(password)) if password else None
+    escaped_phone = html.escape(str(phone)) if phone else None
+    escaped_target_exam = html.escape(str(target_exam)) if target_exam else None
+    escaped_expiry = html.escape(str(expiry_date)) if expiry_date else None
+
+    # Account credentials rows
+    credentials_rows = [
+        f'<tr><td style="padding: 7px 0; color: #64748b; width: 140px; vertical-align: top;"><strong>Username:</strong></td>'
+        f'<td style="padding: 7px 0; color: #0f172a; font-weight: 600; font-size: 15px;">{escaped_username}</td></tr>',
+        f'<tr><td style="padding: 7px 0; color: #64748b; vertical-align: top;"><strong>Email:</strong></td>'
+        f'<td style="padding: 7px 0; color: #0f172a; font-size: 15px;">{escaped_email}</td></tr>',
+    ]
+
+    if escaped_password:
+        credentials_rows.append(
+            f'<tr><td style="padding: 7px 0; color: #64748b; vertical-align: top;"><strong>Password:</strong></td>'
+            f'<td style="padding: 7px 0; color: #4f46e5; font-family: Consolas, Monaco, monospace; font-weight: 700; font-size: 16px;">{escaped_password}</td></tr>'
+        )
+
+    if escaped_phone:
+        credentials_rows.append(
+            f'<tr><td style="padding: 7px 0; color: #64748b; vertical-align: top;"><strong>Phone:</strong></td>'
+            f'<td style="padding: 7px 0; color: #0f172a; font-size: 15px;">{escaped_phone}</td></tr>'
+        )
+
+    credentials_html = '\n      '.join(credentials_rows)
+
+    # Course & package enrollment rows
+    enrollment_rows = []
+    if package_names:
+        pkg_str = html.escape(', '.join(package_names) if isinstance(package_names, (list, tuple, set)) else str(package_names))
+        enrollment_rows.append(
+            f'<tr><td style="padding: 7px 0; color: #166534; width: 140px; vertical-align: top;"><strong>Package:</strong></td>'
+            f'<td style="padding: 7px 0; color: #14532d; font-weight: 600; font-size: 15px;">{pkg_str}</td></tr>'
+        )
+
+    if enrolled_courses:
+        crs_str = html.escape(', '.join(enrolled_courses) if isinstance(enrolled_courses, (list, tuple, set)) else str(enrolled_courses))
+        enrollment_rows.append(
+            f'<tr><td style="padding: 7px 0; color: #166534; vertical-align: top;"><strong>Enrolled Courses:</strong></td>'
+            f'<td style="padding: 7px 0; color: #14532d; font-size: 15px;">{crs_str}</td></tr>'
+        )
+
+    if escaped_target_exam:
+        enrollment_rows.append(
+            f'<tr><td style="padding: 7px 0; color: #166534; vertical-align: top;"><strong>Target Preparation:</strong></td>'
+            f'<td style="padding: 7px 0; color: #14532d; font-size: 15px;">{escaped_target_exam}</td></tr>'
+        )
+
+    if escaped_expiry:
+        enrollment_rows.append(
+            f'<tr><td style="padding: 7px 0; color: #166534; vertical-align: top;"><strong>Access Valid Until:</strong></td>'
+            f'<td style="padding: 7px 0; color: #14532d; font-size: 15px; font-weight: 600;">{escaped_expiry}</td></tr>'
+        )
+
+    if enrollment_rows:
+        enrollment_section_html = f"""\
+  <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 18px 20px; margin: 0 0 24px;">
+    <p style="margin: 0 0 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #15803d;">Enrolled Course / Package Access</p>
+    <table style="width: 100%; border-collapse: collapse;">
+      {chr(10).join(enrollment_rows)}
+    </table>
   </div>
-  <p style="font-size:13px;color:#6b7280;line-height:1.5;margin:0 0 20px;">
-    To set your own password, go to the login page and use "Forgot password?" -
-    we'll email you a verification code to confirm it's you.
+"""
+    else:
+        enrollment_section_html = ""
+
+    if password:
+        password_note = "Please log in using your temporary password and update it in your profile settings for security."
+    else:
+        password_note = 'To set your own password, go to the login page and use "Forgot password?" - we\'ll email you a verification code to confirm it\'s you.'
+
+    html_body = f"""\
+<div style="font-family: Arial, Helvetica, sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px; color: #1f2937; background: #ffffff;">
+  <div style="border-bottom: 2px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 24px;">
+    <h2 style="color: #4f46e5; margin: 0; font-size: 24px; font-weight: 700;">LoksewaAI</h2>
+  </div>
+
+  <p style="font-size: 16px; line-height: 1.5; margin: 0 0 12px; color: #111827;">
+    Hello <strong>{escaped_display_name}</strong>,
   </p>
-  <a href="{login_url}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:10px 20px;border-radius:6px;">
-    Go to Login
-  </a>
-  <p style="font-size:13px;color:#9ca3af;margin-top:32px;">LoksewaAI Team</p>
+  <p style="font-size: 15px; line-height: 1.5; margin: 0 0 20px; color: #4b5563;">
+    An administrator has created your student account on <strong>LoksewaAI</strong>. Below are your login credentials and account access details:
+  </p>
+
+  <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; margin: 0 0 24px;">
+    <p style="margin: 0 0 12px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #475569;">Account Credentials</p>
+    <table style="width: 100%; border-collapse: collapse;">
+      {credentials_html}
+    </table>
+  </div>
+
+  {enrollment_section_html}
+
+  <p style="font-size: 13px; color: #6b7280; line-height: 1.5; margin: 0 0 22px;">
+    {password_note}
+  </p>
+
+  <div style="text-align: center; margin: 0 0 24px;">
+    <a href="{login_url}" style="display: inline-block; background: #4f46e5; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 15px; padding: 12px 28px; border-radius: 6px;">
+      Go to Login
+    </a>
+  </div>
+
+  <p style="font-size: 12px; color: #94a3b8; line-height: 1.5; margin: 0 0 24px; text-align: center;">
+    Or open this link directly in your browser: <br/>
+    <a href="{login_url}" style="color: #4f46e5; word-break: break-all;">{login_url}</a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0 16px;" />
+  <p style="font-size: 12px; color: #9ca3af; margin: 0; text-align: center;">LoksewaAI Team</p>
 </div>
 """
 
-_ACCOUNT_CREATED_TEXT = """\
-LoksewaAI
+    text_lines = [
+        "LoksewaAI",
+        "",
+        f"Hello {display_name},",
+        "",
+        "An administrator has created your student account on LoksewaAI.",
+        "",
+        "--- ACCOUNT CREDENTIALS ---",
+        f"Username: {username}",
+        f"Email: {to_email}",
+    ]
+    if password:
+        text_lines.append(f"Password: {password}")
+    if phone:
+        text_lines.append(f"Phone: {phone}")
 
-An administrator created an account for you on LoksewaAI.
+    if package_names or enrolled_courses or target_exam or expiry_date:
+        text_lines.extend(["", "--- ENROLLED COURSE & PACKAGE ACCESS ---"])
+        if package_names:
+            p_str = ', '.join(package_names) if isinstance(package_names, (list, tuple, set)) else str(package_names)
+            text_lines.append(f"Package: {p_str}")
+        if enrolled_courses:
+            c_str = ', '.join(enrolled_courses) if isinstance(enrolled_courses, (list, tuple, set)) else str(enrolled_courses)
+            text_lines.append(f"Courses: {c_str}")
+        if target_exam:
+            text_lines.append(f"Target Preparation: {target_exam}")
+        if expiry_date:
+            text_lines.append(f"Access Valid Until: {expiry_date}")
 
-Username: {username}
-
-To set your own password, go to {login_url} and use "Forgot password?" -
-we'll email you a verification code to confirm it's you.
-
-LoksewaAI Team
-"""
-
-
-def send_account_created_email(to_email, username):
-    """Tells a student an administrator created their account. Deliberately
-    never includes the admin-set temporary password itself - instead points
-    at the existing self-service "Forgot password?" flow (core.views.
-    ForgotPasswordView / core.otp), which emails its own OTP to confirm the
-    student owns this address before letting them set a password. Never
-    raises, same as send_otp_email - a delivery failure here shouldn't block
-    account creation, which has already happened by the time this is called.
-    """
-    login_url = f'{settings.FRONTEND_URL.rstrip("/")}/login'
-    text_body = _ACCOUNT_CREATED_TEXT.format(username=username, login_url=login_url)
-    html_body = _ACCOUNT_CREATED_HTML.format(username=username, login_url=login_url)
+    text_lines.extend([
+        "",
+        password_note,
+        "",
+        f"Login Link: {login_url}",
+        "",
+        "LoksewaAI Team",
+    ])
+    text_body = "\n".join(text_lines)
 
     _send_email('Your LoksewaAI account has been created', text_body, html_body, to_email)
 

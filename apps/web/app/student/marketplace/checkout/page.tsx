@@ -134,15 +134,15 @@ export default function CheckoutPage() {
         setLoadingProfile(true);
         const profileData = await marketplaceApi.getProfileAddress();
         setExistingInfoForm(prev => ({
-          full_name: prev.full_name || profileData.full_name || "",
-          phone_number: prev.phone_number || profileData.phone_number || "",
-          province: prev.province || profileData.province || "",
-          district: prev.district || profileData.district || "",
-          municipality: prev.municipality || profileData.municipality || "",
-          ward_number: prev.ward_number || profileData.ward_number || "",
-          tole_area: prev.tole_area || profileData.tole_area || "",
-          street_landmark: prev.street_landmark || profileData.street_landmark || "",
-          delivery_note: prev.delivery_note || profileData.delivery_note || "",
+          full_name: profileData.full_name || prev.full_name || "",
+          phone_number: profileData.phone_number || prev.phone_number || "",
+          province: profileData.province || prev.province || "",
+          district: profileData.district || prev.district || "",
+          municipality: profileData.municipality || prev.municipality || "",
+          ward_number: profileData.ward_number || prev.ward_number || "",
+          tole_area: profileData.tole_area || prev.tole_area || "",
+          street_landmark: profileData.street_landmark || prev.street_landmark || "",
+          delivery_note: profileData.delivery_note || prev.delivery_note || "",
         }));
         setMissingProfileFields(profileData.missing_fields || []);
         
@@ -154,7 +154,7 @@ export default function CheckoutPage() {
         }
       } catch (err) {
         console.error("Failed to fetch profile address", err);
-        toast.error("Failed to load profile details");
+        toast.error("Could not auto-fill all profile details. Please complete your address below.");
       } finally {
         setLoadingProfile(false);
       }

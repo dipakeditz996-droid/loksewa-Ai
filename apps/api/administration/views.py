@@ -553,6 +553,15 @@ class AdminUsersView(APIView):
 
         user = User.objects.create_user(username=username, email=email, password=password, role=role)
 
+        if request.data.get('send_welcome_email'):
+            from core.email_service import send_account_created_email
+            send_account_created_email(
+                to_email=email,
+                username=username,
+                password=password,
+                full_name=(request.data.get('name') or '').strip(),
+            )
+
         # Only teacher accounts are worth flagging to the rest of the admin
         # team here - admin/super-admin creation is already covered by audit
         # logs elsewhere, and student accounts created this way are rare and
@@ -962,7 +971,37 @@ class AdminUsersView(APIView):
 
         if send_welcome_email:
             from core.email_service import send_account_created_email
-            send_account_created_email(email, username)
+            package_names = [cs['plan'].name for cs in created_subscriptions if cs.get('plan')] if created_subscriptions else []
+            enrolled_course_titles = [c.title for c in all_enrolled_courses if hasattr(c, 'title')] if all_enrolled_courses else []
+            if not enrolled_course_titles and course and hasattr(course, 'title'):
+                enrolled_course_titles = [course.title]
+
+            target_exam_parts = []
+            if exam_category and hasattr(exam_category, 'name'):
+                target_exam_parts.append(exam_category.name)
+            if student_target_position:
+                pos_name = getattr(student_target_position, 'name', None) or getattr(student_target_position, 'title', None)
+                if pos_name:
+                    target_exam_parts.append(str(pos_name))
+            target_exam_str = ' - '.join(target_exam_parts) if target_exam_parts else None
+
+            expiry_str = None
+            if max_profile_expiry:
+                expiry_str = max_profile_expiry.strftime('%Y-%m-%d')
+            elif created_subscriptions and created_subscriptions[0].get('expiry_date'):
+                expiry_str = created_subscriptions[0]['expiry_date'].strftime('%Y-%m-%d')
+
+            send_account_created_email(
+                to_email=email,
+                username=username,
+                password=password,
+                full_name=full_name,
+                phone=phone,
+                package_names=package_names,
+                enrolled_courses=enrolled_course_titles,
+                target_exam=target_exam_str,
+                expiry_date=expiry_str,
+            )
 
         return Response({
             "id": user.id,

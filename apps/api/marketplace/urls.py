@@ -70,5 +70,6 @@ urlpatterns = [
     path('admin/', include(admin_router.urls)),
     path('student/cart/items/<int:pk>/', CartItemDetailView.as_view(), name='student-cart-item-detail'),
     path('student/pricing-policy/', MarketplacePricingPolicyView.as_view(), name='student-pricing-policy'),
+    path('student/delivery-addresses/profile-address/', StudentDeliveryAddressViewSet.as_view({'get': 'profile_address'}), name='student-profile-address-direct'),
     path('student/', include(student_router.urls)),
 ]

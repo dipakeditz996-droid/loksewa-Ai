@@ -1310,7 +1310,7 @@ export default function UsersManagementPage() {
                   <Checkbox id="sendWelcomeEmail" checked={sendWelcomeEmail} onCheckedChange={(v) => setSendWelcomeEmail(v === true)} className="mt-0.5" />
                   <label htmlFor="sendWelcomeEmail" className="text-sm text-foreground cursor-pointer">
                     <span className="font-medium flex items-center gap-1.5"><Send className="w-3.5 h-3.5" /> Send account details to student</span>
-                    <span className="block text-xs text-muted-foreground mt-0.5">Emails the username and a login link. The password itself is never emailed - the student uses "Forgot password?" to set their own.</span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">Emails credentials (username, temporary password), enrolled package details, and login link to the student.</span>
                   </label>
                 </div>
               )}

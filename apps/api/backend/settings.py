@@ -490,6 +490,8 @@ def _parse_origins(env_value):
 
 
 _default_origins = [
+    'https://www.hemrajkc.com',
+    'https://hemrajkc.com',
     'https://www.hemrajkc.com.np',
     'https://hemrajkc.com.np',
     'https://loksewa-ai-web-pigl-roan.vercel.app',
@@ -577,7 +579,7 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 
 # Used to build the password-reset link emailed to the user (the API server
 # has no other way to know its own frontend's origin).
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://hemrajkc.com')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { getProvinceForDistrict } from "@/lib/constants/nepal-districts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -609,10 +610,91 @@ export const marketplaceApi = {
       body: JSON.stringify({ payment_mode }),
     });
   },
-  getProfileAddress: async () => {
-    return apiClient<ProfileAddressResponse>(
-      "/marketplace/student/delivery-addresses/profile-address/"
-    );
+  getProfileAddress: async (): Promise<ProfileAddressResponse> => {
+    // 1. Primary: dedicated delivery profile endpoint
+    try {
+      const res = await apiClient<ProfileAddressResponse>(
+        "/marketplace/student/delivery-addresses/profile-address/"
+      );
+      if (res && typeof res === "object") {
+        return res;
+      }
+    } catch (primaryErr) {
+      console.warn("Delivery profile endpoint unavailable, falling back to student profile:", primaryErr);
+    }
+
+    // 2. Secondary fallback: student profile endpoint (/support/profile/)
+    try {
+      const profile = await apiClient<any>("/support/profile/");
+      const fullName =
+        (typeof profile?.full_name === "string" && profile.full_name.trim()) ||
+        `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim() ||
+        (typeof profile?.username === "string" ? profile.username.trim() : "");
+      const phone = typeof profile?.phone === "string" ? profile.phone.trim() : "";
+      const district = typeof profile?.permanent_district === "string" ? profile.permanent_district.trim() : "";
+      const municipality = typeof profile?.permanent_local_level === "string" ? profile.permanent_local_level.trim() : "";
+      const province = getProvinceForDistrict(district);
+
+      const missing: string[] = [];
+      if (!fullName) missing.push("full_name");
+      if (!phone) missing.push("phone_number");
+      if (!province) missing.push("province");
+      if (!district) missing.push("district");
+      if (!municipality) missing.push("municipality");
+      missing.push("ward_number", "tole_area");
+
+      return {
+        full_name: fullName,
+        phone_number: phone,
+        province,
+        district,
+        municipality,
+        ward_number: "",
+        tole_area: "",
+        street_landmark: "",
+        delivery_note: "",
+        missing_fields: missing,
+        is_profile_complete: missing.length === 0,
+      };
+    } catch (fallbackErr) {
+      console.warn("Support profile endpoint unavailable, falling back to local cached session:", fallbackErr);
+    }
+
+    // 3. Final safety net: extract what we can from local session without throwing
+    let fallbackName = "";
+    if (typeof window !== "undefined") {
+      try {
+        const rawUser = localStorage.getItem("loksewa_auth_user");
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          fallbackName = (parsed?.name || parsed?.username || "").trim();
+        }
+      } catch {}
+    }
+
+    const missing = [
+      "full_name",
+      "phone_number",
+      "province",
+      "district",
+      "municipality",
+      "ward_number",
+      "tole_area",
+    ].filter((f) => f !== "full_name" || !fallbackName);
+
+    return {
+      full_name: fallbackName,
+      phone_number: "",
+      province: "",
+      district: "",
+      municipality: "",
+      ward_number: "",
+      tole_area: "",
+      street_landmark: "",
+      delivery_note: "",
+      missing_fields: missing,
+      is_profile_complete: false,
+    };
   },
 
   // Student - Delivery Addresses

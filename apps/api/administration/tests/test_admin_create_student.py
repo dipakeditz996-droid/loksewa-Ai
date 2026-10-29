@@ -8,6 +8,7 @@ username protection, course preference recorded as a pending
 CourseApplication (never an auto-enrollment), permission boundaries
 (teacher/student cannot create users), and that plain teacher/admin
 creation is unaffected."""
+from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -91,6 +92,33 @@ class AdminCreateStudentTests(APITestCase):
         log = AuditLog.objects.get(action='ADMIN_STUDENT_CREATED', entity_id=str(user.id))
         self.assertEqual(log.actor, self.admin)
         self.assertEqual(log.details.get('created_by'), 'admin1')
+
+    @patch('core.email_service.send_account_created_email')
+    def test_admin_created_student_with_welcome_email_passes_all_details(self, mock_send_email):
+        self.client.force_authenticate(user=self.admin)
+        payload = _student_payload(
+            username='binii_student',
+            email='binii@test.com',
+            password='TempPass123!@#',
+            name='Binii KC',
+            mobile='9812345678',
+            exam_category_id=self.category.id,
+            exam_position_id=self.service.id,
+            course_id=self.course.id,
+            send_welcome_email=True,
+        )
+        response = self.client.post(CREATE_URL, payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+
+        mock_send_email.assert_called_once()
+        kwargs = mock_send_email.call_args[1]
+        self.assertEqual(kwargs['to_email'], 'binii@test.com')
+        self.assertEqual(kwargs['username'], 'binii_student')
+        self.assertEqual(kwargs['password'], 'TempPass123!@#')
+        self.assertEqual(kwargs['full_name'], 'Binii KC')
+        self.assertEqual(kwargs['phone'], '9812345678')
+        self.assertIn('PSC Exams', kwargs['target_exam'])
+        self.assertIn('Computer Service Prep', kwargs['enrolled_courses'])
 
     def test_admin_created_student_without_course_has_no_application(self):
         self.client.force_authenticate(user=self.admin)

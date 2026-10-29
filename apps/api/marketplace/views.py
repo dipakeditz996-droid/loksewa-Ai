@@ -850,6 +850,12 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
         """
         user = request.user
         profile = getattr(user, 'student_profile', None)
+        if profile is None:
+            try:
+                from support.models import StudentProfile
+                profile = StudentProfile.objects.filter(user=user).first()
+            except Exception:
+                profile = None
 
         full_name = user.get_full_name() or user.username
         phone_number = (profile.phone if profile else '') or ''

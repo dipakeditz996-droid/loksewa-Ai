@@ -126,3 +126,18 @@ export const NEPAL_PROVINCES_DISTRICTS: ProvinceDistricts[] = [
 export const ALL_NEPAL_DISTRICTS: string[] = NEPAL_PROVINCES_DISTRICTS.flatMap(
   (p) => p.districts
 ).sort();
+
+/**
+ * Return the canonical province name for a given Nepal district (case-insensitive).
+ */
+export function getProvinceForDistrict(district?: string | null): string {
+  if (!district || typeof district !== "string") return "";
+  const dNorm = district.trim().toLowerCase();
+  for (const item of NEPAL_PROVINCES_DISTRICTS) {
+    if (item.districts.some((d) => d.toLowerCase() === dNorm)) {
+      return item.province;
+    }
+  }
+  return "";
+}
+

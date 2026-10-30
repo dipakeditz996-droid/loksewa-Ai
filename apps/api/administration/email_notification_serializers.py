@@ -14,6 +14,11 @@ class AdminEmailRecipientSerializer(serializers.ModelSerializer):
         required=False,
         default=list,
     )
+    subscribed_events = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        default=list,
+    )
 
     class Meta:
         model = AdminEmailRecipient
@@ -23,6 +28,7 @@ class AdminEmailRecipientSerializer(serializers.ModelSerializer):
             'name',
             'is_active',
             'event_categories',
+            'subscribed_events',
             'created_at',
             'updated_at',
         ]
@@ -55,6 +61,11 @@ class AdminEmailRecipientSerializer(serializers.ModelSerializer):
                 f"Invalid categories: {', '.join(invalid)}. Supported: {', '.join(sorted(VALID_EVENT_CATEGORIES))}."
             )
         return list(dict.fromkeys(value))  # deduplicate preserving order
+
+    def validate_subscribed_events(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("subscribed_events must be a list.")
+        return list(dict.fromkeys(value))
 
 
 class EmailDeliveryLogSerializer(serializers.ModelSerializer):

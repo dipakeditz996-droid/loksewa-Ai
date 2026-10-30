@@ -84,7 +84,7 @@ class NotificationService:
         preference_key = _STUDENT_PREFERENCE_KEY.get(notif_type)
         if preference_key:
             prefs, _ = NotificationPreference.objects.get_or_create(user=recipient)
-            if not getattr(prefs, preference_key, True):
+            if not prefs.is_in_app_enabled(preference_key):
                 return None
 
         return Notification.objects.create(
@@ -110,7 +110,7 @@ class NotificationService:
         prefs, _ = NotificationPreference.objects.get_or_create(user=recipient)
 
         # Check if in-app notification is enabled for this category
-        is_allowed = getattr(prefs, preference_key, True)
+        is_allowed = prefs.is_in_app_enabled(preference_key)
 
         if is_allowed:
             Notification.objects.create(
@@ -218,7 +218,7 @@ class NotificationService:
         cls._create_if_allowed(
             recipient=student,
             notif_type='payment',
-            preference_key='system_alerts_inapp',
+            preference_key='payment_submission',
             title=title,
             message=message,
             action_url=action_url,
@@ -253,7 +253,7 @@ class NotificationService:
         cls._create_if_allowed(
             recipient=student,
             notif_type='payment',
-            preference_key='system_alerts_inapp',
+            preference_key='payment_status',
             title=title,
             message=message,
             action_url=action_url,
@@ -273,7 +273,7 @@ class NotificationService:
         cls._create_if_allowed(
             recipient=student,
             notif_type='payment',
-            preference_key='system_alerts_inapp',
+            preference_key='payment_status',
             title=title,
             message=message,
             action_url=action_url,

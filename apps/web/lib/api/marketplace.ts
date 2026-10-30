@@ -92,6 +92,7 @@ export interface PaymentMethod {
   bank_name: string;
   branch: string;
   qr_image: string | null;
+  qr_image_direct?: string | null;
   instructions: string;
 }
 
@@ -258,8 +259,12 @@ export interface Order {
     | "SHIPPED"
     | "OUT_FOR_DELIVERY"
     | "DELIVERED"
+    | "ON_HOLD"
     | "CANCELLED"
     | "REFUNDED";
+  hold_reason?: string;
+  held_at?: string | null;
+  advance_forfeited?: boolean;
   payment_status?: "UNPAID" | "PARTIALLY_PAID" | "PAID" | "REFUNDED";
   payment_method_type?: "PREPAID" | "COD";
   payment_mode?: "PREPAID" | "COD";
@@ -530,7 +535,7 @@ export const marketplaceApi = {
   submitPayment: async (data: FormData) => {
     return apiClient<PaymentSubmission>(
       "/marketplace/student/payment-submissions/",
-      { method: "POST", body: data }
+      { method: "POST", body: data, timeoutMs: 90000 }
     );
   },
 
@@ -576,6 +581,12 @@ export const marketplaceApi = {
   cancelOrder: async (id: number) => {
     return apiClient<Order>(`/marketplace/student/orders/${id}/cancel/`, {
       method: "POST",
+    });
+  },
+  holdOrder: async (id: number, reason?: string) => {
+    return apiClient<Order>(`/marketplace/student/orders/${id}/hold/`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason || "" }),
     });
   },
   calculateFee: async (data: {
@@ -859,6 +870,24 @@ export const marketplaceApi = {
     return apiClient<Product>(`/marketplace/admin/products/${id}/`, {
       method: "PATCH",
       body: isFormData ? (data as FormData) : JSON.stringify(data),
+    });
+  },
+  adminDeleteProductImage: async (productId: number, imageId: number) => {
+    return apiClient<Product>(`/marketplace/admin/products/${productId}/delete-image/`, {
+      method: "POST",
+      body: JSON.stringify({ image_id: imageId }),
+    });
+  },
+  adminSetPrimaryProductImage: async (productId: number, imageId: number) => {
+    return apiClient<Product>(`/marketplace/admin/products/${productId}/set-primary-image/`, {
+      method: "POST",
+      body: JSON.stringify({ image_id: imageId }),
+    });
+  },
+  adminUploadProductImages: async (productId: number, formData: FormData) => {
+    return apiClient<Product>(`/marketplace/admin/products/${productId}/upload-images/`, {
+      method: "POST",
+      body: formData,
     });
   },
   adminDeleteProduct: async (id: number) => {

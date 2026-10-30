@@ -20,6 +20,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -81,7 +82,7 @@ export default function ProductDetailPage() {
         {/* Left Col: Image */}
         <div className="space-y-4">
           <div className="aspect-[4/5] sm:aspect-square w-full bg-slate-100/90 dark:bg-slate-900/50 rounded-2xl overflow-hidden relative border shadow-sm flex items-center justify-center p-6">
-            {product.cover_image ? (
+            {product.cover_image && !imageError ? (
               <>
                 <Image 
                   src={buildMediaUrl(product.cover_image)} 
@@ -89,6 +90,7 @@ export default function ProductDetailPage() {
                   fill
                   className="object-cover blur-2xl opacity-25 scale-125 pointer-events-none"
                   unoptimized
+                  onError={() => setImageError(true)}
                 />
                 <div className="relative z-10 h-full w-full flex items-center justify-center">
                   <Image 
@@ -98,6 +100,7 @@ export default function ProductDetailPage() {
                     height={420}
                     className="max-h-full max-w-full object-contain rounded-lg shadow-xl"
                     unoptimized
+                    onError={() => setImageError(true)}
                   />
                 </div>
               </>

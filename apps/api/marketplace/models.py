@@ -337,6 +337,7 @@ class Order(models.Model):
         ('SHIPPED', 'Shipped'),
         ('OUT_FOR_DELIVERY', 'Out for Delivery'),
         ('DELIVERED', 'Delivered'),
+        ('ON_HOLD', 'On Hold'),
         ('CANCELLED', 'Cancelled'),
         ('REFUNDED', 'Refunded'),
     )
@@ -377,6 +378,25 @@ class Order(models.Model):
     delivery_address_ref = models.ForeignKey(
         DeliveryAddress, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='orders'
+    )
+
+    # Hold / pause fields
+    hold_reason = models.TextField(
+        blank=True,
+        help_text="Customer-supplied reason for placing the order on hold.",
+    )
+    held_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Timestamp when the order was last put on hold.",
+    )
+    # Audit flag: set to True only when admin explicitly records advance forfeiture.
+    # Never auto-set by customer hold/cancel flows.
+    advance_forfeited = models.BooleanField(
+        default=False,
+        help_text=(
+            "Set True only by explicit admin action when the 15% COD advance "
+            "is officially forfeited. Never set automatically."
+        ),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

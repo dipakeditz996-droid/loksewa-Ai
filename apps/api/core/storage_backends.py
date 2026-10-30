@@ -160,6 +160,8 @@ class GoogleDriveStorage(Storage):
         raise FileNotFoundError(f'File "{name}" not found in Drive or local storage.')
 
     def url(self, name):
+        if not name:
+            return ''
         file_id = _parse_file_id(name)
         if file_id is not None:
             _, basename = _split_name(name)
@@ -169,15 +171,15 @@ class GoogleDriveStorage(Storage):
             else:
                 original_filename = basename.split('__', 1)[1] if '__' in basename else basename
             try:
-                return google_drive.get_file_url(file_id, filename=original_filename)
+                drive_url = google_drive.get_file_url(file_id, filename=original_filename)
+                if drive_url:
+                    return drive_url
             except Exception:
                 pass
-        if self._local_storage.exists(name):
-            try:
-                return self._local_storage.url(name)
-            except Exception:
-                return f'/media/{name}'
-        return ''
+        try:
+            return self._local_storage.url(name)
+        except Exception:
+            return f'/media/{name}'
 
     def get_available_name(self, name, max_length=None):
         return self._local_storage.get_available_name(name, max_length=max_length)

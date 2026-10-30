@@ -11,7 +11,7 @@ with a saved link can still fetch a payment screenshot the way they always
 could with a public-read S3 URL; per-file access control is a separate,
 larger feature, not something this endpoint changes either way.
 """
-from django.http import HttpResponse, HttpResponseNotFound, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseNotFound, HttpResponseForbidden, HttpResponseRedirect
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 from core import google_drive
@@ -144,14 +144,20 @@ def drive_media_proxy(request, file_id):
     try:
         meta = google_drive.get_file(file_id)
     except google_drive.GoogleDriveError:
+        if not is_protected:
+            return HttpResponseRedirect(f'https://lh3.googleusercontent.com/d/{file_id}')
         return HttpResponse('Could not reach Google Drive.', status=502)
 
     if meta is None:
+        if not is_protected:
+            return HttpResponseRedirect(f'https://lh3.googleusercontent.com/d/{file_id}')
         return HttpResponseNotFound('File not found.')
 
     try:
         content = google_drive.download_file(file_id)
     except google_drive.GoogleDriveError:
+        if not is_protected:
+            return HttpResponseRedirect(f'https://lh3.googleusercontent.com/d/{file_id}')
         return HttpResponse('Could not reach Google Drive.', status=502)
 
     from core.pdf_utils import resolve_file_display_info, inject_pdf_title, build_content_disposition

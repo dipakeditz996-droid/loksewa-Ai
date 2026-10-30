@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 
 from core.email_notification_service import EmailNotificationService
 from core.models import AdminEmailRecipient, AdminSettings, EmailDeliveryLog
+from core.notification_constants import ADMIN_NOTIFICATION_TAXONOMY
+from administration.models import AuditLog
 from .email_notification_serializers import (
     AdminEmailRecipientSerializer,
     EmailDeliveryLogSerializer,
@@ -33,6 +35,18 @@ class AdminEmailRecipientListView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         recipient = serializer.save()
+        AuditLog.objects.create(
+            actor=request.user,
+            action='ADMIN_EMAIL_RECIPIENT_CREATED',
+            entity_type='AdminEmailRecipient',
+            entity_id=str(recipient.id),
+            details={
+                'email': recipient.email,
+                'name': recipient.name,
+                'categories': recipient.event_categories,
+                'events': recipient.subscribed_events,
+            },
+        )
         return Response(AdminEmailRecipientSerializer(recipient).data, status=status.HTTP_201_CREATED)
 
 
@@ -63,13 +77,35 @@ class AdminEmailRecipientDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         updated = serializer.save()
+        AuditLog.objects.create(
+            actor=request.user,
+            action='ADMIN_EMAIL_RECIPIENT_UPDATED',
+            entity_type='AdminEmailRecipient',
+            entity_id=str(updated.id),
+            details={
+                'email': updated.email,
+                'name': updated.name,
+                'is_active': updated.is_active,
+                'categories': updated.event_categories,
+                'events': updated.subscribed_events,
+            },
+        )
         return Response(AdminEmailRecipientSerializer(updated).data)
 
     def delete(self, request, pk):
         recipient = self._get_object(pk)
         if not recipient:
             return Response({'error': 'Recipient not found.'}, status=status.HTTP_404_NOT_FOUND)
+        rec_id = recipient.id
+        rec_email = recipient.email
         recipient.delete()
+        AuditLog.objects.create(
+            actor=request.user,
+            action='ADMIN_EMAIL_RECIPIENT_DELETED',
+            entity_type='AdminEmailRecipient',
+            entity_id=str(rec_id),
+            details={'email': rec_email},
+        )
         return Response({'detail': 'Recipient removed successfully.'}, status=status.HTTP_200_OK)
 
 
@@ -192,3 +228,74 @@ class AdminEmailDeliveryHealthView(APIView):
             },
         })
 
+
+
+
+class AdminNotificationEventsView(APIView):
+    """GET /api/admin/notification-events/ - Retrieve admin event taxonomy and global enable/disable state.
+    PATCH /api/admin/notification-events/ - Toggle individual events or categories globally.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        admin_settings = AdminSettings.get_settings()
+        events_state = admin_settings.admin_notification_events or {}
+        
+        # Build enriched taxonomy with active boolean flags
+        taxonomy_data = []
+        for cat_id, cat_info in ADMIN_NOTIFICATION_TAXONOMY.items():
+            cat_key = f"category:{cat_id}"
+            cat_enabled = events_state.get(cat_key, True)
+            events_list = []
+            for ev in cat_info['events']:
+                ev_key = ev['key']
+                ev_enabled = events_state.get(ev_key, True)
+                events_list.append({
+                    'key': ev_key,
+                    'label': ev['label'],
+                    'enabled': ev_enabled and cat_enabled,
+                    'is_explicitly_disabled': not ev_enabled or not cat_enabled,
+                })
+            taxonomy_data.append({
+                'id': cat_id,
+                'label': cat_info['label'],
+                'description': cat_info['description'],
+                'category_enabled': cat_enabled,
+                'events': events_list,
+            })
+
+        return Response({
+            'notifications_enabled': admin_settings.notifications_enabled,
+            'enable_email_notifications': admin_settings.enable_email_notifications,
+            'enable_in_app_notifications': admin_settings.enable_in_app_notifications,
+            'events_state': events_state,
+            'categories': taxonomy_data,
+        })
+
+    def patch(self, request):
+        events_update = request.data.get('events')
+        if not isinstance(events_update, dict):
+            return Response({'error': "'events' object is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        admin_settings = AdminSettings.get_settings()
+        current_events = dict(admin_settings.admin_notification_events or {})
+
+        for k, v in events_update.items():
+            if isinstance(k, str) and isinstance(v, bool):
+                current_events[k] = v
+
+        admin_settings.admin_notification_events = current_events
+        admin_settings.save(update_fields=['admin_notification_events', 'updated_at'])
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action='ADMIN_NOTIFICATION_EVENTS_UPDATED',
+            entity_type='AdminSettings',
+            entity_id=str(admin_settings.id),
+            details={'updated_events': events_update},
+        )
+
+        return Response({
+            'message': 'Admin notification events updated successfully.',
+            'events_state': current_events,
+        })

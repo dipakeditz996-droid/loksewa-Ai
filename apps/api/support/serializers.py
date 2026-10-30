@@ -93,9 +93,49 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):
+    taxonomy = serializers.SerializerMethodField()
+
     class Meta:
         model = NotificationPreference
         exclude = ['id', 'user']
+
+    def get_taxonomy(self, obj):
+        from core.notification_constants import STUDENT_NOTIFICATION_TAXONOMY
+        categories = []
+        for cat_id, cat_info in STUDENT_NOTIFICATION_TAXONOMY.items():
+            ev_list = []
+            for ev in cat_info['events']:
+                ev_key = ev['key']
+                is_mand = ev['mandatory']
+                ev_list.append({
+                    'key': ev_key,
+                    'label': ev['label'],
+                    'description': ev['description'],
+                    'mandatory': is_mand,
+                    'in_app': obj.is_in_app_enabled(ev_key),
+                    'email': obj.is_email_enabled(ev_key),
+                })
+            categories.append({
+                'id': cat_id,
+                'title': cat_info['title'],
+                'icon': cat_info['icon'],
+                'description': cat_info['description'],
+                'events': ev_list,
+            })
+        return categories
+
+    def validate(self, attrs):
+        from core.notification_constants import MANDATORY_STUDENT_EVENTS
+        for m_key in MANDATORY_STUDENT_EVENTS:
+            inapp_attr = f"{m_key}_inapp"
+            email_attr = f"{m_key}_email"
+            if inapp_attr in attrs and attrs[inapp_attr] is False:
+                attrs[inapp_attr] = True
+            if email_attr in attrs and attrs[email_attr] is False:
+                attrs[email_attr] = True
+            if m_key in attrs and attrs[m_key] is False:
+                attrs[m_key] = True
+        return attrs
 
 
 class SupportTicketListSerializer(serializers.ModelSerializer):

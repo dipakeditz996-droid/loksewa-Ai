@@ -98,6 +98,62 @@ function mapProduct(p: PublicProduct, idx: number): Product {
   };
 }
 
+function ProductCardCover({
+  coverImage,
+  name,
+  category,
+  imageColor,
+}: {
+  coverImage: string | null;
+  name: string;
+  category: string;
+  imageColor: string;
+}) {
+  const [imageError, setImageError] = useState(false);
+
+  if (coverImage && !imageError) {
+    return (
+      <>
+        <img
+          src={coverImage}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-25 dark:opacity-20 pointer-events-none select-none"
+          onError={() => setImageError(true)}
+        />
+        <div className="relative z-10 h-full w-full flex items-center justify-center">
+          <img
+            src={coverImage}
+            alt={name}
+            onError={() => setImageError(true)}
+            className="max-h-full max-w-full object-contain rounded-[6px] shadow-[0_6px_16px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.6)] group-hover:scale-105 group-hover:shadow-[0_10px_25px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out"
+          />
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <div className={`relative z-10 w-32 h-44 rounded-[6px] bg-gradient-to-br ${imageColor} p-3 flex flex-col justify-between shadow-[0_6px_16px_rgba(0,0,0,0.18)] border-l-4 border-amber-400/80 group-hover:scale-105 transition-all duration-300`}>
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] font-black uppercase tracking-wider text-white/80">Loksewa</span>
+        <BookOpen className="w-3.5 h-3.5 text-white/80" />
+      </div>
+      <div>
+        <p className="text-[11px] font-bold text-white line-clamp-3 leading-tight mb-1">
+          {name}
+        </p>
+        <span className="text-[9px] text-white/70 font-medium">
+          {category}
+        </span>
+      </div>
+      <div className="text-[8px] text-white/50 uppercase tracking-widest font-mono">
+        Study Resource
+      </div>
+    </div>
+  );
+}
+
 export default function MarketplacePage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
@@ -448,41 +504,12 @@ export default function MarketplacePage() {
                       >
                         {/* Product Image Area */}
                         <div className="relative h-64 w-full bg-slate-100/90 dark:bg-slate-900/50 border-b border-slate-200/60 dark:border-white/5 flex items-center justify-center p-4 overflow-hidden">
-                          {product.coverImage ? (
-                            <>
-                              <img
-                                src={product.coverImage}
-                                alt=""
-                                aria-hidden="true"
-                                className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-25 dark:opacity-20 pointer-events-none select-none"
-                              />
-                              <div className="relative z-10 h-full w-full flex items-center justify-center">
-                                <img
-                                  src={product.coverImage}
-                                  alt={product.name}
-                                  className="max-h-full max-w-full object-contain rounded-[6px] shadow-[0_6px_16px_rgba(0,0,0,0.18)] dark:shadow-[0_8px_20px_rgba(0,0,0,0.6)] group-hover:scale-105 group-hover:shadow-[0_10px_25px_rgba(0,0,0,0.25)] transition-all duration-300 ease-out"
-                                />
-                              </div>
-                            </>
-                          ) : (
-                            <div className={`relative z-10 w-32 h-44 rounded-[6px] bg-gradient-to-br ${product.imageColor} p-3 flex flex-col justify-between shadow-[0_6px_16px_rgba(0,0,0,0.18)] border-l-4 border-amber-400/80 group-hover:scale-105 transition-all duration-300`}>
-                              <div className="flex items-center justify-between">
-                                <span className="text-[9px] font-black uppercase tracking-wider text-white/80">Loksewa</span>
-                                <BookOpen className="w-3.5 h-3.5 text-white/80" />
-                              </div>
-                              <div>
-                                <p className="text-[11px] font-bold text-white line-clamp-3 leading-tight mb-1">
-                                  {product.name}
-                                </p>
-                                <span className="text-[9px] text-white/70 font-medium">
-                                  {product.category}
-                                </span>
-                              </div>
-                              <div className="text-[8px] text-white/50 uppercase tracking-widest font-mono">
-                                Study Resource
-                              </div>
-                            </div>
-                          )}
+                          <ProductCardCover
+                            coverImage={product.coverImage}
+                            name={product.name}
+                            category={product.category}
+                            imageColor={product.imageColor}
+                          />
 
                           {/* Wishlist Button */}
                           <button

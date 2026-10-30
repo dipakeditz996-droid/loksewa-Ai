@@ -14,6 +14,21 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [selectedImgIndex, setSelectedImgIndex] = useState(0);
+
+  const imagesList = React.useMemo(() => {
+    if (!product) return [];
+    if (product.images && product.images.length > 0) {
+      return [...product.images].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+    }
+    if (product.cover_image) {
+      return [{ id: 0, product: product.id, image: product.cover_image, label: 'Cover', is_primary: true, created_at: '' }];
+    }
+    return [];
+  }, [product]);
+
+  const currentImageUrl = imagesList[selectedImgIndex]?.image || product?.cover_image;
 
   useEffect(() => {
     let mounted = true;
@@ -83,37 +98,73 @@ export default function ProductDetailPage() {
         </button>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Left: Image */}
-          <div className="rounded-2xl overflow-hidden bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 shadow-lg aspect-[4/5] sm:aspect-square flex items-center justify-center p-6 relative">
-            {product.cover_image ? (
-              <>
-                <img
-                  src={buildMediaUrl(product.cover_image)}
-                  alt=""
-                  aria-hidden="true"
-                  className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-25 scale-125 pointer-events-none select-none"
-                />
-                <div className="relative z-10 h-full w-full flex items-center justify-center">
+          {/* Left: Image Gallery */}
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl overflow-hidden bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 shadow-lg aspect-[4/5] sm:aspect-square flex items-center justify-center p-6 relative">
+              {currentImageUrl && !imageError ? (
+                <>
                   <img
-                    src={buildMediaUrl(product.cover_image)}
-                    alt={product.title}
-                    className="max-h-full max-w-full object-contain rounded-lg shadow-[0_12px_30px_rgba(0,0,0,0.25)] dark:shadow-[0_16px_36px_rgba(0,0,0,0.7)]"
+                    src={buildMediaUrl(currentImageUrl)}
+                    alt=""
+                    aria-hidden="true"
+                    onError={() => setImageError(true)}
+                    className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-25 scale-125 pointer-events-none select-none"
                   />
+                  <div className="relative z-10 h-full w-full flex items-center justify-center">
+                    <img
+                      src={buildMediaUrl(currentImageUrl)}
+                      alt={product.title}
+                      onError={() => setImageError(true)}
+                      className="max-h-full max-w-full object-contain rounded-lg shadow-[0_12px_30px_rgba(0,0,0,0.25)] dark:shadow-[0_16px_36px_rgba(0,0,0,0.7)] transition-all duration-300"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="w-48 h-64 rounded-lg bg-gradient-to-br from-[#163E6B] to-[#0A1118] p-5 flex flex-col justify-between shadow-2xl border-l-4 border-amber-400">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-white/80">Loksewa</span>
+                    <BookOpen className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white line-clamp-3 leading-snug mb-1">{product.title}</h3>
+                    <span className="text-xs text-white/70">{product.category}</span>
+                  </div>
+                  <div className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
+                    Official Resource
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className="w-48 h-64 rounded-lg bg-gradient-to-br from-[#163E6B] to-[#0A1118] p-5 flex flex-col justify-between shadow-2xl border-l-4 border-amber-400">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-white/80">Loksewa</span>
-                  <BookOpen className="w-5 h-5 text-amber-400" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white line-clamp-3 leading-snug mb-1">{product.title}</h3>
-                  <span className="text-xs text-white/70">{product.category}</span>
-                </div>
-                <div className="text-[10px] text-white/50 uppercase tracking-widest font-mono">
-                  Official Resource
-                </div>
+              )}
+            </div>
+
+            {/* Thumbnail Navigation Row */}
+            {imagesList.length > 1 && (
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
+                {imagesList.map((img, idx) => (
+                  <button
+                    key={img.id || idx}
+                    type="button"
+                    onClick={() => {
+                      setSelectedImgIndex(idx);
+                      setImageError(false);
+                    }}
+                    className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${
+                      selectedImgIndex === idx
+                        ? 'border-[#163E6B] dark:border-[#D4A72C] ring-2 ring-[#163E6B]/30 scale-105 shadow-md'
+                        : 'border-slate-200 dark:border-white/10 opacity-70 hover:opacity-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <img
+                      src={buildMediaUrl(img.image)}
+                      alt={`Thumbnail ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {img.is_primary && (
+                      <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-0.5">
+                        Cover
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
           </div>

@@ -21,6 +21,7 @@ urlpatterns = [
 
     # Notifications
     path('notifications/', NotificationPreferenceView.as_view(), name='student-notifications'),
+    path('notification-preferences/', NotificationPreferenceView.as_view(), name='student-notification-preferences'),
 
     # Help
     path('help/categories/', HelpCategoryView.as_view(), name='help-categories'),

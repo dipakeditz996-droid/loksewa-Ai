@@ -9,7 +9,18 @@ export function getApiBaseUrl(): string {
 
 export function getApiOrigin(): string {
   const apiUrl = getApiBaseUrl();
-  return apiUrl.replace(/\/api\/?$/, "");
+  let origin = apiUrl.replace(/\/api\/?$/, "");
+
+  // If running in browser on a production domain, but origin is still pointing to localhost,
+  // fall back to window.location.origin so browser requests don't fail to connect to localhost
+  if (typeof window !== "undefined") {
+    const isProdHost = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+    if (isProdHost && (origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes("0.0.0.0"))) {
+      origin = window.location.origin;
+    }
+  }
+
+  return origin;
 }
 
 export function buildApiUrl(path: string): string {
@@ -23,11 +34,59 @@ export function buildApiUrl(path: string): string {
   return `${base}${cleanPath}`;
 }
 
+export function getDriveFileId(path: string | null | undefined): string | null {
+  if (!path || typeof path !== "string") return null;
+  const proxyMatch = path.match(/\/api\/media\/drive\/([a-zA-Z0-9_-]+)/);
+  if (proxyMatch && proxyMatch[1]) return proxyMatch[1];
+  const nameMatch = path.match(/(?:^|\/)([a-zA-Z0-9_-]{15,})__[^\/]+$/);
+  if (nameMatch && nameMatch[1]) return nameMatch[1];
+  return null;
+}
+
+export function getMediaFallbackUrl(path: string | null | undefined): string | null {
+  const fileId = getDriveFileId(path);
+  return fileId ? `https://lh3.googleusercontent.com/d/${fileId}` : null;
+}
+
 export function buildMediaUrl(path: string | null | undefined): string {
-  if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
+  if (!path || typeof path !== "string") return "";
+  const trimmed = path.trim();
+  if (!trimmed) return "";
+
+  // Guard against Django build_absolute_uri('') returning API endpoint URLs as images
+  if (trimmed.includes("/marketplace/public/products") || trimmed.includes("/api/marketplace/")) {
+    return "";
+  }
+
+  // If path contains localhost/127.0.0.1 (common when backend was serialized with localhost origin),
+  // strip the localhost host/port and rebuild using the appropriate origin.
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(\/.*)?$/i.test(trimmed)) {
+    const clean = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?/i, "");
+    const origin = getApiOrigin();
+    const cleanPath = clean.startsWith("/") ? clean : `/${clean}`;
+    return `${origin}${cleanPath}`;
+  }
+
+  // If path is an absolute URL:
+  if (/^https?:\/\//i.test(trimmed)) {
+    // If the browser is on HTTPS and image has HTTP on current domain, upgrade to HTTPS to avoid Mixed Content
+    if (typeof window !== "undefined" && window.location.protocol === "https:" && trimmed.startsWith("http://")) {
+      try {
+        const parsed = new URL(trimmed);
+        if (
+          parsed.hostname === window.location.hostname ||
+          parsed.hostname.endsWith(window.location.hostname.replace(/^www\./, ""))
+        ) {
+          parsed.protocol = "https:";
+          return parsed.toString();
+        }
+      } catch {}
+    }
+    return trimmed;
+  }
+
   const origin = getApiOrigin();
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const cleanPath = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
   return `${origin}${cleanPath}`;
 }
 
@@ -216,7 +275,8 @@ async function executeRequest<T>(
     headers.set("Content-Type", "application/json");
   }
 
-  const timeoutMs = options.timeoutMs ?? 30000;
+  const defaultTimeout = (options.body instanceof FormData) ? 90000 : 30000;
+  const timeoutMs = options.timeoutMs ?? defaultTimeout;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let signal = options.signal;
 

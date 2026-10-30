@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { PaymentMethod } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { TrustModals } from "@/components/marketplace/trust-modals";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,9 @@ export default function StudentOrderDetailPage() {
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [holdModalOpen, setHoldModalOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState("");
+  const [holding, setHolding] = useState(false);
 
   // Payment recovery modal state
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
@@ -153,9 +157,36 @@ export default function StudentOrderDetailPage() {
       setPaymentModalOpen(false);
       fetchOrderData();
     } catch (err: any) {
-      toast.error(err?.data?.detail || err?.message || "Failed to submit payment proof.");
+      const detail = err?.data?.detail || err?.message || "";
+      if (
+        typeof detail === "string" &&
+        (detail.toLowerCase().includes("already have a pending payment") ||
+         detail.toLowerCase().includes("pending payment verification"))
+      ) {
+        toast.success("Payment proof submitted successfully! Awaiting admin verification.");
+        setPaymentModalOpen(false);
+        fetchOrderData();
+        return;
+      }
+      toast.error(detail || "Failed to submit payment proof.");
     } finally {
       setSubmittingPayment(false);
+    }
+  };
+
+  const handleHoldOrder = async () => {
+    if (!order) return;
+    setHolding(true);
+    try {
+      const updated = await marketplaceApi.holdOrder(order.id, holdReason);
+      setOrder(updated);
+      setHoldModalOpen(false);
+      setHoldReason("");
+      toast.success("Order placed on hold successfully.");
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.message || "Failed to put order on hold.");
+    } finally {
+      setHolding(false);
     }
   };
 
@@ -217,10 +248,51 @@ export default function StudentOrderDetailPage() {
               })}
             </p>
           </div>
-          <div className="inline-block px-5 py-2 rounded-full text-sm font-bold bg-[#163E6B]/10 text-[#163E6B] dark:bg-[#D4A72C]/10 dark:text-[#D4A72C] uppercase tracking-wide border border-[#163E6B]/20 dark:border-[#D4A72C]/20">
-            {order.status.replace(/_/g, " ")}
+          <div className="flex items-center gap-3">
+            {(order.status === 'CONFIRMED' || order.status === 'PROCESSING') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setHoldModalOpen(true)}
+                className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-600 dark:text-amber-400 font-bold text-xs"
+              >
+                Put Order on Hold
+              </Button>
+            )}
+            <div className="inline-block px-5 py-2 rounded-full text-sm font-bold bg-[#163E6B]/10 text-[#163E6B] dark:bg-[#D4A72C]/10 dark:text-[#D4A72C] uppercase tracking-wide border border-[#163E6B]/20 dark:border-[#D4A72C]/20">
+              {order.status.replace(/_/g, " ")}
+            </div>
           </div>
         </div>
+
+        {/* On Hold Order Banner */}
+        {order.status === 'ON_HOLD' && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border-2 border-amber-300 dark:border-amber-700/60 rounded-2xl p-6 mb-8">
+            <div className="flex items-start gap-4">
+              <Clock className="w-8 h-8 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-2 flex-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <h3 className="text-xl font-extrabold text-amber-900 dark:text-amber-200">
+                    Order is currently On Hold
+                  </h3>
+                  {order.held_at && (
+                    <span className="text-xs bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full font-bold self-start">
+                      Held on {new Date(order.held_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                {order.hold_reason && (
+                  <p className="text-sm text-amber-900 dark:text-amber-300 bg-amber-100/60 dark:bg-amber-900/30 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <strong>Hold Reason:</strong> {order.hold_reason}
+                  </p>
+                )}
+                <div className="text-xs text-amber-800 dark:text-amber-400 bg-amber-100/40 p-3 rounded-lg border border-amber-200/60 leading-relaxed">
+                  <strong>Strict Advance Policy:</strong> Per marketplace policy, the 15% COD advance payment (Rs. {order.cod_advance_paid || order.cod_advance_required}) is non-refundable once verified. Our administration will review your held order to reschedule dispatch or assist you with any requirements.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Payment Rejection Recovery Card */}
         {order.latest_payment_submission?.status === 'REJECTED' && order.can_retry_payment && (
@@ -644,7 +716,7 @@ export default function StudentOrderDetailPage() {
               const method = paymentMethods.find(m => m.id === selectedMethodId);
               if (!method) return null;
               const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:8000';
-              const qrSrc = method.qr_image ? (method.qr_image.startsWith('http') ? method.qr_image : `${baseUrl}${method.qr_image.startsWith('/') ? '' : '/'}${method.qr_image}`) : null;
+              const qrSrc = method.qr_image ? buildMediaUrl(method.qr_image) : null;
               const payable = order.is_cod ? order.cod_advance_required : (Number(order.total_amount) + Number(order.delivery_fee)).toFixed(2);
 
               return (
@@ -757,6 +829,56 @@ export default function StudentOrderDetailPage() {
           </form>
         </DialogContent>
       </Dialog>
+            {/* Hold Order Confirmation Dialog */}
+      <Dialog open={holdModalOpen} onOpenChange={setHoldModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              Put Order on Hold
+            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-600 dark:text-slate-300">
+              Temporarily pause processing of Order #ORD-{order?.id}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800/50 rounded-xl p-3 text-xs text-amber-900 dark:text-amber-300 space-y-1">
+              <p className="font-bold">⚠️ Non-Refundable Advance Rule</p>
+              <p>
+                Please note that the 15% COD advance payment is non-refundable when putting this order on hold or cancelling after payment verification.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="holdReasonInput" className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                Reason for Hold (Optional)
+              </Label>
+              <Textarea
+                id="holdReasonInput"
+                placeholder="e.g. Away from home for a few days, please delay delivery..."
+                value={holdReason}
+                onChange={(e) => setHoldReason(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="outline" onClick={() => setHoldModalOpen(false)} disabled={holding}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHoldOrder}
+              disabled={holding}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+            >
+              {holding ? "Placing on hold..." : "Confirm Put on Hold"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       </main>
       
       <TrustModals 

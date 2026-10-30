@@ -149,14 +149,14 @@ def send_account_created_email(
     login_url=None,
 ):
     """Sends account credentials, temporary password, and access details to a student.
-    Ensures the login redirection points to the production login URL (https://hemrajkc.com/login).
+    Ensures the login redirection points to the production login URL (https://www.hemrajkc.com.np/login).
     Never raises, matching the best-effort email contract across this service.
     """
     if not login_url:
-        base_frontend = getattr(settings, 'FRONTEND_URL', 'https://hemrajkc.com') or 'https://hemrajkc.com'
+        base_frontend = getattr(settings, 'FRONTEND_URL', 'https://www.hemrajkc.com.np') or 'https://www.hemrajkc.com.np'
         base_frontend = str(base_frontend).strip().rstrip('/')
         if not base_frontend or 'localhost' in base_frontend or '127.0.0.1' in base_frontend:
-            base_frontend = 'https://hemrajkc.com'
+            base_frontend = 'https://www.hemrajkc.com.np'
         login_url = f'{base_frontend}/login'
 
     if not login_url.startswith(('http://', 'https://')):

@@ -5,8 +5,30 @@ export interface AdminEmailRecipient {
   name: string;
   is_active: boolean;
   event_categories: string[];
+  subscribed_events: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminNotificationCategoryItem {
+  id: string;
+  label: string;
+  description: string;
+  category_enabled: boolean;
+  events: Array<{
+    key: string;
+    label: string;
+    enabled: boolean;
+    is_explicitly_disabled: boolean;
+  }>;
+}
+
+export interface AdminNotificationEventsResponse {
+  notifications_enabled: boolean;
+  enable_email_notifications: boolean;
+  enable_in_app_notifications: boolean;
+  events_state: Record<string, boolean>;
+  categories: AdminNotificationCategoryItem[];
 }
 
 export interface EmailDeliveryLog {
@@ -1437,6 +1459,7 @@ export const adminApi = {
     email: string;
     name?: string;
     event_categories?: string[];
+    subscribed_events?: string[];
   }): Promise<AdminEmailRecipient> => {
     return apiClient<AdminEmailRecipient>("/admin/email-recipients/", {
       method: "POST",
@@ -1446,12 +1469,28 @@ export const adminApi = {
 
   updateEmailRecipient: async (
     id: number,
-    data: Partial<{ name: string; is_active: boolean; event_categories: string[] }>
+    data: Partial<{ name: string; is_active: boolean; event_categories: string[]; subscribed_events: string[] }>
   ): Promise<AdminEmailRecipient> => {
     return apiClient<AdminEmailRecipient>(`/admin/email-recipients/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });
+  },
+
+  getNotificationEvents: async (): Promise<AdminNotificationEventsResponse> => {
+    return apiClient<AdminNotificationEventsResponse>("/admin/notification-events/");
+  },
+
+  updateNotificationEvents: async (
+    events: Record<string, boolean>
+  ): Promise<{ message: string; events_state: Record<string, boolean> }> => {
+    return apiClient<{ message: string; events_state: Record<string, boolean> }>(
+      "/admin/notification-events/",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ events }),
+      }
+    );
   },
 
   deleteEmailRecipient: async (id: number): Promise<{ detail: string }> => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image, { type ImageProps } from "next/image";
+import { getMediaFallbackUrl } from "@/lib/api/client";
 
 // Same problem as RetryImage (see that file), but for spots using next/image
 // with `fill` + `unoptimized` instead of a plain <img>. A freshly-uploaded
@@ -13,13 +14,17 @@ import Image, { type ImageProps } from "next/image";
 const FAST_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 const SLOW_RETRY_INTERVAL_MS = 60000;
 
-export function RetryNextImage({ onError, ...props }: ImageProps) {
+export function RetryNextImage({ onError, src, ...props }: ImageProps) {
   const [attempt, setAttempt] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [hasFallenBack, setHasFallenBack] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setAttempt(0);
-  }, [props.src]);
+    setCurrentSrc(src);
+    setHasFallenBack(false);
+  }, [src]);
 
   useEffect(() => {
     return () => {
@@ -27,15 +32,27 @@ export function RetryNextImage({ onError, ...props }: ImageProps) {
     };
   }, []);
 
+  const handleError = (e: any) => {
+    const srcStr = typeof currentSrc === "string" ? currentSrc : "";
+    const fallback = getMediaFallbackUrl(srcStr);
+
+    if (fallback && !hasFallenBack && fallback !== srcStr) {
+      setHasFallenBack(true);
+      setCurrentSrc(fallback as any);
+      return;
+    }
+
+    const delay = FAST_RETRY_DELAYS_MS[attempt] ?? SLOW_RETRY_INTERVAL_MS;
+    timeoutRef.current = setTimeout(() => setAttempt((a) => a + 1), delay);
+    onError?.(e);
+  };
+
   return (
     <Image
-      key={attempt}
+      key={`${attempt}-${hasFallenBack}`}
+      src={currentSrc}
       {...props}
-      onError={(e) => {
-        const delay = FAST_RETRY_DELAYS_MS[attempt] ?? SLOW_RETRY_INTERVAL_MS;
-        timeoutRef.current = setTimeout(() => setAttempt((a) => a + 1), delay);
-        onError?.(e);
-      }}
+      onError={handleError}
     />
   );
 }

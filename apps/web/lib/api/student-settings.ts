@@ -29,20 +29,83 @@ export interface StudentProfile {
   language: string;
 }
 
+export interface StudentTaxonomyEvent {
+  key: string;
+  label: string;
+  description: string;
+  mandatory: boolean;
+  in_app: boolean;
+  email: boolean;
+}
+
+export interface StudentTaxonomyCategory {
+  id: string;
+  title: string;
+  icon: string;
+  description: string;
+  events: StudentTaxonomyEvent[];
+}
+
 export interface NotificationPreferences {
-  exam_reminders: boolean;
-  exam_starting_soon: boolean;
-  exam_deadline: boolean;
-  result_published: boolean;
-  study_plan_reminders: boolean;
-  practice_reminders: boolean;
-  daily_progress: boolean;
-  ai_tutor_updates: boolean;
-  study_recommendations: boolean;
-  order_updates: boolean;
-  marketplace_notifications: boolean;
-  security_alerts: boolean;
-  account_notifications: boolean;
+  taxonomy?: StudentTaxonomyCategory[];
+
+  // Dual channel fields
+  exam_announcements_inapp?: boolean;
+  exam_announcements_email?: boolean;
+  study_material_updates_inapp?: boolean;
+  study_material_updates_email?: boolean;
+  exam_reminders_inapp?: boolean;
+  exam_reminders_email?: boolean;
+  result_published_inapp?: boolean;
+  result_published_email?: boolean;
+  learning_resources_inapp?: boolean;
+  learning_resources_email?: boolean;
+
+  subscription_expiry_inapp?: boolean;
+  subscription_expiry_email?: boolean;
+  payment_submission_inapp?: boolean;
+  payment_submission_email?: boolean;
+  payment_status_inapp?: boolean;
+  payment_status_email?: boolean;
+  subscription_status_inapp?: boolean;
+  subscription_status_email?: boolean;
+  plan_offers_inapp?: boolean;
+  plan_offers_email?: boolean;
+
+  order_confirmation_inapp?: boolean;
+  order_confirmation_email?: boolean;
+  order_payment_status_inapp?: boolean;
+  order_payment_status_email?: boolean;
+  order_delivery_updates_inapp?: boolean;
+  order_delivery_updates_email?: boolean;
+  order_cancellation_inapp?: boolean;
+  order_cancellation_email?: boolean;
+
+  security_alerts_inapp?: boolean;
+  security_alerts_email?: boolean;
+  platform_announcements_inapp?: boolean;
+  platform_announcements_email?: boolean;
+  feature_announcements_inapp?: boolean;
+  feature_announcements_email?: boolean;
+  maintenance_alerts_inapp?: boolean;
+  maintenance_alerts_email?: boolean;
+
+  // Legacy fields
+  exam_reminders?: boolean;
+  exam_starting_soon?: boolean;
+  exam_deadline?: boolean;
+  result_published?: boolean;
+  study_plan_reminders?: boolean;
+  practice_reminders?: boolean;
+  daily_progress?: boolean;
+  ai_tutor_updates?: boolean;
+  study_recommendations?: boolean;
+  order_updates?: boolean;
+  marketplace_notifications?: boolean;
+  security_alerts?: boolean;
+  account_notifications?: boolean;
+
+  [key: string]: any;
 }
 
 export const studentSettingsApi = {

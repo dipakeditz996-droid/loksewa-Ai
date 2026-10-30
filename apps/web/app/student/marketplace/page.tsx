@@ -12,6 +12,42 @@ import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+function StudentProductCoverImage({ coverImage, title }: { coverImage: string; title: string }) {
+  const [error, setError] = useState(false);
+  const mediaUrl = buildMediaUrl(coverImage);
+  if (!mediaUrl || error) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-primary/5 text-primary">
+        <ShoppingBag className="h-10 w-10 opacity-50" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Image
+        src={mediaUrl}
+        alt=""
+        fill
+        className="object-cover blur-xl opacity-25 scale-125 pointer-events-none"
+        unoptimized
+        onError={() => setError(true)}
+      />
+      <div className="relative z-10 h-full w-full flex items-center justify-center">
+        <Image
+          src={mediaUrl}
+          alt={title}
+          width={180}
+          height={240}
+          className="max-h-full max-w-full object-contain rounded-[4px] shadow-md group-hover:scale-105 transition-all duration-300"
+          unoptimized
+          onError={() => setError(true)}
+        />
+      </div>
+    </>
+  );
+}
+
 export default function MarketplacePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,25 +186,7 @@ export default function MarketplacePage() {
             <Card key={product.id} className="flex flex-col overflow-hidden hover:shadow-md transition-shadow">
               <div className="aspect-[4/3] w-full bg-slate-100/90 dark:bg-slate-900/50 relative flex items-center justify-center p-3 overflow-hidden">
                 {product.cover_image ? (
-                  <>
-                    <Image 
-                      src={buildMediaUrl(product.cover_image)} 
-                      alt=""
-                      fill
-                      className="object-cover blur-xl opacity-25 scale-125 pointer-events-none"
-                      unoptimized
-                    />
-                    <div className="relative z-10 h-full w-full flex items-center justify-center">
-                      <Image 
-                        src={buildMediaUrl(product.cover_image)} 
-                        alt={product.title}
-                        width={180}
-                        height={240}
-                        className="max-h-full max-w-full object-contain rounded-[4px] shadow-md group-hover:scale-105 transition-all duration-300"
-                        unoptimized
-                      />
-                    </div>
-                  </>
+                  <StudentProductCoverImage coverImage={product.cover_image} title={product.title} />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-primary/5 text-primary">
                     <ShoppingBag className="h-10 w-10 opacity-50" />

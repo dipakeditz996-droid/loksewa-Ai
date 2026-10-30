@@ -43,6 +43,16 @@ class User(AbstractUser):
     # Every new login rotates this key atomically, immediately invalidating old sessions.
     jwt_session_key = models.CharField(max_length=64, blank=True, null=True, db_index=True)
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"{self.username} ({self.role})"
 
@@ -85,6 +95,16 @@ class EmailOTP(models.Model):
     class Meta:
         indexes = [models.Index(fields=['email', 'purpose', 'is_used'])]
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"OTP for {self.email} ({self.purpose})"
 
@@ -97,6 +117,16 @@ class TwoFactorBackupCode(models.Model):
     code_hash = models.CharField(max_length=128)
     used_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
 
     def __str__(self):
         return f"Backup code for {self.user.username} ({'used' if self.used_at else 'unused'})"
@@ -128,6 +158,16 @@ class TeacherProfile(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
 
     def __str__(self):
         return f"Teacher Profile: {self.user.username}"
@@ -188,6 +228,16 @@ class Notification(models.Model):
             models.Index(fields=['recipient', 'is_read']),
         ]
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"{self.recipient.username} - {self.title}"
 
@@ -219,6 +269,16 @@ class StudentFeedback(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"Feedback for {self.student.username} at {self.created_at:%Y-%m-%d}"
 
@@ -248,6 +308,16 @@ class Testimonial(models.Model):
     class Meta:
         ordering = ['display_order', '-created_at']
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"{self.name} ({'published' if self.is_published else 'draft'})"
 
@@ -274,6 +344,16 @@ class WebsitePage(models.Model):
 
     class Meta:
         ordering = ['slug']
+
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
 
     def __str__(self):
         return f"{self.title} ({self.slug}, {self.status})"
@@ -324,6 +404,16 @@ class AdminNotification(models.Model):
             models.Index(fields=['type', '-created_at']),
         ]
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"{self.title} ({self.status})"
 
@@ -350,6 +440,11 @@ class AdminSettings(models.Model):
     enable_email_notifications = models.BooleanField(default=True)
     enable_in_app_notifications = models.BooleanField(default=True)
     enable_push_notifications = models.BooleanField(default=False)
+    admin_notification_events = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Granular event and category enabled/disabled state for admin notifications",
+    )
 
     # Security Settings
     password_min_length = models.IntegerField(default=8)
@@ -440,6 +535,18 @@ class AdminSettings(models.Model):
         except Exception:
             pass
 
+    def is_admin_event_enabled(self, category: str, event_key: str = None) -> bool:
+        """Determines if an administrative event is globally enabled."""
+        if not self.notifications_enabled or not self.enable_email_notifications:
+            return False
+        cfg = self.admin_notification_events or {}
+        cat_key = f"category:{category}"
+        if cat_key in cfg and not cfg[cat_key]:
+            return False
+        if event_key and event_key in cfg and not cfg[event_key]:
+            return False
+        return True
+
     @classmethod
     def is_study_plans_enabled(cls):
         """The Study Plans kill-switch, cached for a few seconds exactly like
@@ -504,6 +611,16 @@ class SocialAccount(models.Model):
     class Meta:
         unique_together = ('provider', 'provider_account_id')
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return f"{self.user.username} - {self.provider}"
 
@@ -524,6 +641,16 @@ class Position(models.Model):
             models.Index(fields=['is_active', 'order']),
         ]
 
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
+
     def __str__(self):
         return self.name
 
@@ -542,6 +669,16 @@ class Tag(models.Model):
         indexes = [
             models.Index(fields=['is_active']),
         ]
+
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
 
     def __str__(self):
         return self.name
@@ -576,6 +713,11 @@ class AdminEmailRecipient(models.Model):
         blank=True,
         help_text="List of categories this admin receives: registration, payment, marketplace, security, system"
     )
+    subscribed_events = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of specific event keys this admin receives. If empty, receives all events in assigned categories.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -584,6 +726,16 @@ class AdminEmailRecipient(models.Model):
         indexes = [
             models.Index(fields=['is_active', 'email']),
         ]
+
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
 
     def __str__(self):
         return f"{self.email} ({self.name or 'Admin'})"
@@ -638,6 +790,16 @@ class EmailDeliveryLog(models.Model):
             models.Index(fields=['idempotency_key']),
             models.Index(fields=['recipient_email', 'status']),
         ]
+
+    def is_subscribed_to(self, category: str, event_key: str = None) -> bool:
+        """Checks if this admin recipient is subscribed to a specific category and event."""
+        if not self.is_active:
+            return False
+        if self.event_categories and category not in self.event_categories:
+            return False
+        if self.subscribed_events and event_key and event_key not in self.subscribed_events:
+            return False
+        return True
 
     def __str__(self):
         return f"{self.recipient_email} - {self.subject} ({self.status})"

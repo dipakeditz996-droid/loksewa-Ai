@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getMediaFallbackUrl } from "@/lib/api/client";
 
 // A freshly-uploaded Google Drive-hosted image can fail to load for a
 // while after upload - confirmed against the real Drive account to
@@ -21,10 +22,14 @@ interface RetryImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>
 
 export function RetryImage({ src, fallback, className, onError, ...props }: RetryImageProps) {
   const [attempt, setAttempt] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [hasFallenBack, setHasFallenBack] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setAttempt(0);
+    setCurrentSrc(src);
+    setHasFallenBack(false);
   }, [src]);
 
   useEffect(() => {
@@ -33,20 +38,31 @@ export function RetryImage({ src, fallback, className, onError, ...props }: Retr
     };
   }, []);
 
-  if (!src) {
+  if (!currentSrc) {
     return <>{fallback ?? null}</>;
   }
 
+  const handleError = (e: any) => {
+    const srcStr = typeof currentSrc === "string" ? currentSrc : "";
+    const fallbackUrl = getMediaFallbackUrl(srcStr);
+
+    if (fallbackUrl && !hasFallenBack && fallbackUrl !== srcStr) {
+      setHasFallenBack(true);
+      setCurrentSrc(fallbackUrl);
+      return;
+    }
+
+    const delay = FAST_RETRY_DELAYS_MS[attempt] ?? SLOW_RETRY_INTERVAL_MS;
+    timeoutRef.current = setTimeout(() => setAttempt((a) => a + 1), delay);
+    onError?.(e);
+  };
+
   return (
     <img
-      key={attempt}
-      src={src}
+      key={`${attempt}-${hasFallenBack}`}
+      src={currentSrc}
       className={className}
-      onError={(e) => {
-        const delay = FAST_RETRY_DELAYS_MS[attempt] ?? SLOW_RETRY_INTERVAL_MS;
-        timeoutRef.current = setTimeout(() => setAttempt((a) => a + 1), delay);
-        onError?.(e);
-      }}
+      onError={handleError}
       {...props}
     />
   );

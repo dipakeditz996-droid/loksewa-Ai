@@ -107,6 +107,7 @@ export default function MarketplaceOrdersPage() {
       case "OUT_FOR_DELIVERY": return "bg-pink-100 text-pink-700 border-pink-200";
       case "DELIVERED": return "bg-green-100 text-green-700 border-green-200";
       case "CANCELLED":
+      case "ON_HOLD": return "bg-amber-100 text-amber-800 border-amber-300";
       case "REFUNDED": return "bg-red-100 text-red-700 border-red-200";
       default: return "bg-slate-100 text-slate-600 border-slate-200";
     }
@@ -114,7 +115,7 @@ export default function MarketplaceOrdersPage() {
 
   const statusOptions = [
     "PENDING_PAYMENT", "PAYMENT_SUBMITTED", "PAYMENT_VERIFICATION", 
-    "CONFIRMED", "PROCESSING", "SHIPPED", "OUT_FOR_DELIVERY", 
+    "CONFIRMED", "PROCESSING", "ON_HOLD", "SHIPPED", "OUT_FOR_DELIVERY", 
     "DELIVERED", "CANCELLED", "REFUNDED"
   ];
 
@@ -310,6 +311,27 @@ export default function MarketplaceOrdersPage() {
                   </Button>
                 </div>
                 
+                {viewOrder.status === 'ON_HOLD' && (
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 text-sm text-amber-900 space-y-1">
+                    <div className="font-bold flex items-center gap-2">
+                      <span>⚠️ Order is currently ON HOLD</span>
+                    </div>
+                    {viewOrder.held_at && (
+                      <p className="text-xs text-amber-800">
+                        Placed on hold on: {new Date(viewOrder.held_at).toLocaleString()}
+                      </p>
+                    )}
+                    {viewOrder.hold_reason && (
+                      <p className="text-xs text-amber-900 mt-1">
+                        <strong>Reason:</strong> {viewOrder.hold_reason}
+                      </p>
+                    )}
+                    <p className="text-xs text-amber-700 mt-1">
+                      Per policy, verified COD advances remain non-refundable. Admin may resume the order to PROCESSING or cancel it.
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <h4 className="font-semibold text-sm mb-2 flex items-center gap-2 text-slate-700">
                     <MapPin className="w-4 h-4" /> Shipping Address

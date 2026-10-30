@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { marketplaceApi, Cart, Order, PaymentMethod, ProfileAddressResponse } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
+import { RetryImage } from "@/components/ui/retry-image";
 import { ArrowLeft, ArrowRight, CheckCircle2, ImageIcon, UploadCloud, X, AlertCircle, UserCheck, MapPin } from "lucide-react";
 import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 
@@ -408,7 +410,7 @@ export default function CheckoutPage() {
                         {m.qr_image && (
                           <div className="shrink-0 mx-auto md:mx-0 text-center">
                             <div className="w-40 h-40 bg-white border border-slate-200 rounded-xl p-2 mb-2 overflow-hidden">
-                              <img src={m.qr_image} alt={`${m.display_name} QR`} className="w-full h-full object-contain" />
+                              <RetryImage src={buildMediaUrl(m.qr_image)} alt={`${m.display_name} QR`} className="w-full h-full object-contain" />
                             </div>
                             <p className="text-xs font-semibold text-slate-500">Scan to Pay</p>
                           </div>

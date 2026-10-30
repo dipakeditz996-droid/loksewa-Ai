@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { marketplaceApi, PaymentMethod } from "@/lib/api/marketplace";
 import { RetryImage } from "@/components/ui/retry-image";
+import { buildMediaUrl } from "@/lib/api/client";
 import { toast } from "sonner";
 
 const METHOD_TYPE_LABELS: Record<string, string> = {
@@ -277,7 +278,7 @@ export default function PaymentMethodsPage() {
             {method.qr_image ? (
               <div className="flex flex-col items-center">
                 <div className="w-32 h-32 bg-white rounded-lg p-2 border border-slate-200 shadow-sm mb-3">
-                  <RetryImage src={method.qr_image} alt="QR Code" className="w-full h-full object-contain" />
+                  <RetryImage src={buildMediaUrl(method.qr_image)} alt="QR Code" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex gap-2">
                   <Button

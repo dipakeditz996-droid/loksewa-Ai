@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { apiClient } from "@/lib/api/client";
+import { apiClient, buildMediaUrl } from "@/lib/api/client";
 import { subscriptionsApi, SubscriptionPlan, EffectiveEntitlements } from "@/lib/api/subscriptions";
 import { RetryImage } from "@/components/ui/retry-image";
 import Link from "next/link";
@@ -793,7 +793,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
                       <div className="w-48 h-48 bg-white p-2 rounded-[14px] border border-border shadow-md flex items-center justify-center shrink-0">
                         {selectedMethod.qr_image ? (
                           <RetryImage
-                            src={selectedMethod.qr_image}
+                            src={buildMediaUrl(selectedMethod.qr_image)}
                             alt={`${selectedMethod.display_name} QR`}
                             className="max-w-full max-h-full object-contain"
                           />

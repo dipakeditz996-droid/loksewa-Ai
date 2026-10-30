@@ -33,10 +33,13 @@ def _sanitize_error_text(text: str) -> str:
 
 
 def _get_base_frontend_url() -> str:
-    base = getattr(settings, 'FRONTEND_URL', 'https://hemrajkc.com') or 'https://hemrajkc.com'
+    base = getattr(settings, 'FRONTEND_URL', 'https://www.hemrajkc.com.np') or 'https://www.hemrajkc.com.np'
     base = str(base).strip().rstrip('/')
     if not base.startswith(('http://', 'https://')):
         base = f'https://{base}'
+    # Canonical domain requirement: ensure non-canonical variants map to canonical production domain
+    if base in ('https://hemrajkc.com', 'http://hemrajkc.com', 'https://hemrajkc.com.np', 'http://hemrajkc.com.np', 'https://www.hemrajkc.com', 'http://www.hemrajkc.com'):
+        base = 'https://www.hemrajkc.com.np'
     return base
 
 
@@ -171,7 +174,7 @@ def _render_base_email_text(
     lines.extend([
         "",
         "----------------------------------------",
-        "LoksewaAI Team — https://hemrajkc.com",
+        "LoksewaAI Team — https://www.hemrajkc.com.np",
     ])
     return "\n".join(lines)
 
@@ -334,6 +337,8 @@ class EmailNotificationService:
         idempotency_key: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         immediate: bool = False,
+        event_key: Optional[str] = None,
+        user: Optional[Any] = None,
     ) -> Optional[EmailDeliveryLog]:
         """Creates delivery log entry, verifies admin kill switches & idempotency,
         and dispatches email delivery.
@@ -349,6 +354,27 @@ class EmailNotificationService:
         if not admin_settings.notifications_enabled or not admin_settings.enable_email_notifications:
             logger.info("Email notifications globally disabled via AdminSettings; skipping email to %s", to_email)
             return None
+
+        # Check student email preferences for optional events
+        if recipient_role == 'student' and event_key:
+            from core.notification_constants import MANDATORY_STUDENT_EVENTS
+            if event_key not in MANDATORY_STUDENT_EVENTS:
+                target_user = user
+                if not target_user:
+                    from django.contrib.auth import get_user_model
+                    UserModel = get_user_model()
+                    sid = (metadata or {}).get('student_id')
+                    if sid:
+                        target_user = UserModel.objects.filter(id=sid).first()
+                    elif to_email:
+                        target_user = UserModel.objects.filter(email__iexact=to_email).first()
+
+                if target_user:
+                    from support.models import NotificationPreference
+                    prefs, _ = NotificationPreference.objects.get_or_create(user=target_user)
+                    if not prefs.is_email_enabled(event_key):
+                        logger.info("Student %s opted out of email for event '%s'; suppressing email delivery.", to_email, event_key)
+                        return None
 
         # Check idempotency deduplication
         if idempotency_key:
@@ -401,14 +427,20 @@ class EmailNotificationService:
         metadata: Optional[Dict[str, Any]] = None,
         badge_text: str = "Admin Notification",
         badge_color: str = "#4f46e5",
+        event_key: Optional[str] = None,
     ) -> List[EmailDeliveryLog]:
         """Dispatches categorized administrative email notifications to all
         configured and active AdminEmailRecipient addresses subscribed to the category.
         """
+        admin_settings = AdminSettings.get_settings()
+        if not admin_settings.is_admin_event_enabled(category, event_key):
+            logger.info("Admin email notification disabled via AdminSettings for category=%s event=%s", category, event_key)
+            return []
+
         recipients = AdminEmailRecipient.objects.filter(is_active=True)
         matching_recipients = [
             r for r in recipients
-            if not r.event_categories or category in r.event_categories
+            if r.is_subscribed_to(category, event_key)
         ]
 
         if not matching_recipients:
@@ -514,6 +546,8 @@ Start your exam preparation journey today by exploring our available mock examin
             template_name='student_welcome',
             idempotency_key=f"welcome:{student.id}",
             metadata={'student_id': student.id, 'username': student.username},
+            event_key='security_alerts',
+            user=student,
         )
 
     @classmethod
@@ -578,6 +612,8 @@ You will receive an email as soon as verification is complete.
             template_name='student_payment_submitted',
             idempotency_key=f"pay-sub:{student.id}:{transaction_id or title_ref}",
             metadata={'student_id': student.id, 'title': title_ref, 'amount': str(amount)},
+            event_key='payment_submission',
+            user=student,
         )
 
     @classmethod
@@ -655,6 +691,8 @@ Access your enrolled courses and tests from your student dashboard.
             template_name='student_payment_approved',
             idempotency_key=f"pay-app:{student.id}:{title_ref}:{receipt_number or ''}",
             metadata={'student_id': student.id, 'title': title_ref, 'receipt': receipt_number},
+            event_key='payment_status',
+            user=student,
         )
 
     @classmethod
@@ -690,7 +728,7 @@ We could not verify your payment proof for {title_ref}.
 Reason provided by administrator:
 {reason}
 
-You can resubmit your payment evidence from your purchases page at https://hemrajkc.com/student/purchases.
+You can resubmit your payment evidence from your purchases page at https://www.hemrajkc.com.np/student/purchases.
 """
 
         html_body = _render_base_email_html(
@@ -719,6 +757,8 @@ You can resubmit your payment evidence from your purchases page at https://hemra
             template_name='student_payment_rejected',
             idempotency_key=f"pay-rej:{student.id}:{title_ref}:{timezone.now().strftime('%Y%m%d%H%M')}",
             metadata={'student_id': student.id, 'title': title_ref, 'reason': reason},
+            event_key='payment_status',
+            user=student,
         )
 
     @classmethod
@@ -775,7 +815,7 @@ Total Amount: Rs. {order.total_amount}
 Payment Mode: {pay_mode_label}
 {f"COD Advance Required: Rs. {order.cod_advance_required}" if order.is_cod else ""}
 
-Track your order status at: https://hemrajkc.com/student/marketplace/orders
+Track your order status at: https://www.hemrajkc.com.np/student/marketplace/orders
 """
 
         html_body = _render_base_email_html(
@@ -836,7 +876,7 @@ Dear {name},
 The status of your order #{order.id} has changed to: {status_display}.
 {f"Note: {note}" if note else ""}
 
-Track your order at https://hemrajkc.com/student/marketplace/orders.
+Track your order at https://www.hemrajkc.com.np/student/marketplace/orders.
 """
 
         badge_color = "#16a34a" if new_status == 'DELIVERED' else ("#dc2626" if new_status == 'CANCELLED' else "#0284c7")

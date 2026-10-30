@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { subscriptionsApi, SubscriptionPlan } from "@/lib/api/subscriptions";
 import { marketplaceApi, PaymentMethod } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
+import { RetryImage } from "@/components/ui/retry-image";
 import Link from "next/link";
 import bgImage from "@/media/signup.webp";
 
@@ -478,8 +480,8 @@ export default function CheckoutPage() {
                         <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-3">
                           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
                             {selectedMethod.qr_image ? (
-                              <img
-                                src={selectedMethod.qr_image}
+                              <RetryImage
+                                src={buildMediaUrl(selectedMethod.qr_image)}
                                 alt={`${selectedMethod.display_name} QR`}
                                 className="w-28 h-28 rounded-xl bg-white object-contain p-2 shrink-0 shadow-sm"
                               />

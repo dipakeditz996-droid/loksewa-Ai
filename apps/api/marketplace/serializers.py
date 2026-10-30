@@ -302,6 +302,16 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
         read_only_fields = ('updated_at',)
 
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        qr = ret.get('qr_image')
+        if qr and instance.qr_image:
+            from core.storage_backends import _parse_file_id
+            file_id = _parse_file_id(instance.qr_image.name)
+            if file_id:
+                ret['qr_image_direct'] = f'https://lh3.googleusercontent.com/d/{file_id}'
+        return ret
+
 class StudentBasicSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -426,7 +436,13 @@ class PaymentSubmissionSerializer(serializers.ModelSerializer):
 
             try:
 
-                return prod.cover_image.url
+                u = prod.cover_image.url
+                if u:
+                    if 'localhost' in u or '127.0.0.1' in u:
+                        from urllib.parse import urlparse
+                        u = urlparse(u).path
+                    req = self.context.get('request')
+                    return req.build_absolute_uri(u) if req else u
 
             except Exception:
 
@@ -621,6 +637,8 @@ class OrderSerializer(serializers.ModelSerializer):
 
             'cod_remaining_balance', 'shipping_address_snapshot',
 
+            'hold_reason', 'held_at', 'advance_forfeited',
+
             'created_at', 'updated_at'
 
         )
@@ -667,7 +685,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def get_can_retry_payment(self, obj):
 
-        if obj.status in ['CANCELLED', 'REFUNDED', 'DELIVERED']:
+        if obj.status in ['CANCELLED', 'REFUNDED', 'DELIVERED', 'ON_HOLD']:
 
             return False
 
@@ -745,9 +763,10 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
 
             'cover_image': (
 
-                self.context['request'].build_absolute_uri(obj.product.cover_image.url)
-
-                if obj.product.cover_image else None
+                self.context['request'].build_absolute_uri(
+                    obj.product.cover_image.url.replace('http://localhost:8000', '').replace('http://127.0.0.1:8000', '')
+                )
+                if obj.product.cover_image and obj.product.cover_image.url else None
 
             ),
 

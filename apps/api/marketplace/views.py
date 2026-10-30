@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from core.validators import get_nepal_province_for_district
 from rest_framework import viewsets, permissions, status
 
@@ -107,10 +107,30 @@ class PublicProductListView(APIView):
         def _cover(p, req):
             # Prefer primary ProductImage, fall back to cover_image field
             primary = next((img for img in p.images.all() if img.is_primary), None)
+            if not primary and p.images.exists():
+                primary = p.images.first()
             if primary and primary.image:
-                return req.build_absolute_uri(primary.image.url)
+                try:
+                    img_url = primary.image.url
+                    if img_url:
+                        if 'localhost' in img_url or '127.0.0.1' in img_url:
+                            from urllib.parse import urlparse
+                            parsed = urlparse(img_url)
+                            img_url = parsed.path
+                        return req.build_absolute_uri(img_url)
+                except Exception:
+                    pass
             if p.cover_image:
-                return req.build_absolute_uri(p.cover_image.url)
+                try:
+                    img_url = p.cover_image.url
+                    if img_url:
+                        if 'localhost' in img_url or '127.0.0.1' in img_url:
+                            from urllib.parse import urlparse
+                            parsed = urlparse(img_url)
+                            img_url = parsed.path
+                        return req.build_absolute_uri(img_url)
+                except Exception:
+                    pass
             return None
 
         data = [{
@@ -168,7 +188,8 @@ class AdminProductViewSet(viewsets.ModelViewSet):
         status_val = serializer.validated_data.get('listing_status')
         if not status_val:
             status_val = 'ACTIVE' if is_published else 'DRAFT'
-        serializer.save(listing_status=status_val, is_published=is_published)
+        product = serializer.save(listing_status=status_val, is_published=is_published)
+        self._handle_admin_images(product)
 
     def perform_update(self, serializer):
         is_published = serializer.validated_data.get('is_published', serializer.instance.is_published)
@@ -179,9 +200,118 @@ class AdminProductViewSet(viewsets.ModelViewSet):
             elif serializer.instance.listing_status == 'ACTIVE':
                 status_val = 'DRAFT'
         if status_val:
-            serializer.save(listing_status=status_val, is_published=is_published)
+            product = serializer.save(listing_status=status_val, is_published=is_published)
         else:
-            serializer.save()
+            product = serializer.save()
+        self._handle_admin_images(product)
+
+    def _handle_admin_images(self, product):
+        """Process multiple uploaded images from admin request."""
+        request = self.request
+        uploaded = request.FILES.getlist('images')
+        labels = request.POST.getlist('image_labels')
+        primary_index = request.POST.get('primary_image_index')
+        try:
+            primary_index = int(primary_index) if primary_index is not None else None
+        except (ValueError, TypeError):
+            primary_index = None
+
+        existing_count = product.images.count()
+        if uploaded:
+            for i, img_file in enumerate(uploaded):
+                label = labels[i] if i < len(labels) else 'other'
+                is_primary = False
+                if primary_index is not None and i == primary_index:
+                    is_primary = True
+                elif existing_count == 0 and i == 0 and not product.cover_image:
+                    is_primary = True
+
+                if is_primary:
+                    product.images.update(is_primary=False)
+
+                pi = ProductImage.objects.create(
+                    product=product,
+                    image=img_file,
+                    label=label,
+                    is_primary=is_primary,
+                )
+                if is_primary:
+                    product.cover_image = pi.image
+                    product.save(update_fields=['cover_image'])
+
+        delete_ids = request.data.getlist('delete_image_ids') if hasattr(request.data, 'getlist') else request.data.get('delete_image_ids', [])
+        if delete_ids:
+            if isinstance(delete_ids, (str, int)):
+                delete_ids = [delete_ids]
+            product.images.filter(id__in=delete_ids).delete()
+
+    @action(detail=True, methods=['post'], url_path='delete-image')
+    def delete_image(self, request, pk=None):
+        """Admin deletes a specific ProductImage."""
+        product = self.get_object()
+        image_id = request.data.get('image_id')
+        if not image_id:
+            return Response({'detail': 'image_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        img = product.images.filter(pk=image_id).first()
+        if not img:
+            return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
+        was_primary = img.is_primary
+        img.delete()
+        if was_primary:
+            next_img = product.images.first()
+            if next_img:
+                next_img.is_primary = True
+                next_img.save(update_fields=['is_primary'])
+                product.cover_image = next_img.image
+                product.save(update_fields=['cover_image'])
+            else:
+                product.cover_image = None
+                product.save(update_fields=['cover_image'])
+        return Response(ProductSerializer(product, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='set-primary-image')
+    def set_primary_image(self, request, pk=None):
+        """Admin sets a specific ProductImage as primary."""
+        product = self.get_object()
+        image_id = request.data.get('image_id')
+        if not image_id:
+            return Response({'detail': 'image_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        img = product.images.filter(pk=image_id).first()
+        if not img:
+            return Response({'detail': 'Image not found.'}, status=status.HTTP_404_NOT_FOUND)
+        with transaction.atomic():
+            product.images.update(is_primary=False)
+            img.is_primary = True
+            img.save(update_fields=['is_primary'])
+            product.cover_image = img.image
+            product.save(update_fields=['cover_image'])
+        return Response(ProductSerializer(product, context={'request': request}).data)
+
+    @action(detail=True, methods=['post'], url_path='upload-images')
+    def upload_images(self, request, pk=None):
+        """Admin uploads multiple images to an existing product."""
+        product = self.get_object()
+        uploaded = request.FILES.getlist('images')
+        if not uploaded:
+            return Response({'detail': 'No images uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
+        labels = request.POST.getlist('image_labels')
+        make_first_primary = request.data.get('set_first_as_primary') in [True, 'true', '1']
+        for i, img_file in enumerate(uploaded):
+            label = labels[i] if i < len(labels) else 'other'
+            is_primary = False
+            if (make_first_primary and i == 0) or (product.images.count() == 0 and not product.cover_image):
+                product.images.update(is_primary=False)
+                is_primary = True
+            pi = ProductImage.objects.create(
+                product=product,
+                image=img_file,
+                label=label,
+                is_primary=is_primary,
+            )
+            if is_primary:
+                product.cover_image = pi.image
+                product.save(update_fields=['cover_image'])
+        return Response(ProductSerializer(product, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -389,6 +519,12 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                 from core.models import User as UserModel
                 for seller in UserModel.objects.filter(id__in=seller_ids):
                     NotificationService.notify_seller_payment_confirmed(seller, submission.order.id)
+            # Send admin order confirmation email (fires only after payment is verified)
+            try:
+                from core.email_notification_service import EmailNotificationService
+                EmailNotificationService.send_admin_marketplace_order_email(submission.order)
+            except Exception as _email_err:
+                logger.warning('Failed to send admin marketplace order email: %s', _email_err)
         elif new_status == 'REJECTED':
             NotificationService.notify_admins(
                 notif_type='payment',
@@ -1142,6 +1278,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         if order.student != request.user:
             raise PermissionDenied("You can only cancel your own orders.")
+        if order.payment_status in ['PARTIALLY_PAID', 'PAID']:
+            return Response(
+                {"detail": "This order cannot be cancelled directly because a payment has already been verified. "
+                           "Please contact support. Note: the 15% COD advance is non-refundable per marketplace policy."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if order.status != 'PENDING_PAYMENT':
             return Response(
                 {"detail": f"Order cannot be cancelled in status '{order.status}'. Only unpaid orders can be cancelled directly."},
@@ -1150,6 +1292,11 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             order = Order.objects.select_for_update().get(pk=order.pk)
+            if order.payment_status in ['PARTIALLY_PAID', 'PAID']:
+                return Response(
+                    {"detail": "Order payment has already been verified."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if order.status != 'PENDING_PAYMENT':
                 return Response({"detail": "Order status has changed."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1181,6 +1328,93 @@ class OrderViewSet(viewsets.ModelViewSet):
             student=order.student,
             order_id=order.id,
             status_display=status_display,
+            action_url='/student/marketplace/orders',
+        )
+
+        return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=['post'], url_path='hold')
+    def hold(self, request, pk=None):
+        """Allow a customer to put an eligible order on hold.
+
+        Eligible statuses: CONFIRMED, PROCESSING.
+        Important: the 15% COD advance is NON-REFUNDABLE. This is recorded in
+        the status history but the advance is never auto-deducted here. Any
+        exceptional refund requires an explicit admin-authorised action.
+        """
+        order = self.get_object()
+        if order.student != request.user:
+            raise PermissionDenied("You can only modify your own orders.")
+
+        # Only confirmed / processing orders can be held by the customer
+        if order.status not in ['CONFIRMED', 'PROCESSING']:
+            return Response(
+                {
+                    "detail": (
+                        f"Order cannot be put on hold in status '{order.status}'. "
+                        "Only confirmed or processing orders are eligible."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reason = (request.data.get('reason') or '').strip()
+
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            # Re-check inside the lock
+            if order.status not in ['CONFIRMED', 'PROCESSING']:
+                return Response(
+                    {"detail": "Order status has changed. Cannot place on hold."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            from django.utils import timezone as tz
+            old_status = order.status
+            order.status = 'ON_HOLD'
+            order.hold_reason = reason
+            order.held_at = tz.now()
+            order.save(update_fields=['status', 'hold_reason', 'held_at', 'updated_at'])
+
+            # Build history note including the non-refundable advance policy reminder
+            advance_note = ''
+            if order.is_cod and order.payment_status == 'PARTIALLY_PAID':
+                advance_note = (
+                    f" Note: the 15% COD advance (NPR {order.cod_advance_paid}) "
+                    "is non-refundable per marketplace policy."
+                )
+            history_note = f"Order placed on hold by customer.{' Reason: ' + reason if reason else ''}{advance_note}"
+
+            OrderStatusHistory.objects.create(
+                order=order,
+                previous_status=old_status,
+                new_status='ON_HOLD',
+                changed_by=request.user,
+                note=history_note,
+            )
+
+        # Notify admins about the hold
+        from core.notification_service import NotificationService
+        student_name = request.user.get_full_name() or request.user.username
+        NotificationService.notify_admins(
+            notif_type='order',
+            title='Order Placed On Hold by Customer',
+            message=(
+                f"{student_name} placed Order #{order.id} on hold."
+                + (f" Reason: {reason}" if reason else "")
+                + (
+                    f" COD advance (NPR {order.cod_advance_paid}) is non-refundable."
+                    if order.is_cod and order.payment_status == 'PARTIALLY_PAID'
+                    else ""
+                )
+            ),
+            action_url='/admin-dashboard/marketplace/orders',
+        )
+        # Notify the customer
+        NotificationService.notify_order_status(
+            student=order.student,
+            order_id=order.id,
+            status_display='On Hold',
             action_url='/student/marketplace/orders',
         )
 
@@ -1523,13 +1757,15 @@ class OrderViewSet(viewsets.ModelViewSet):
         except Exception as notif_err:
             logger.warning(f"Failed to notify seller for order {order.id}: {notif_err}")
 
-        # Centralized Email Notification dispatch
+        # Notify student that their order was placed (awaiting payment).
+        # Admin notification is NOT sent here — the order is PENDING_PAYMENT with no
+        # verified payment. Admin email fires in AdminPaymentSubmissionViewSet.review()
+        # only after the required advance/full payment is successfully verified.
         try:
             from core.email_notification_service import EmailNotificationService
             EmailNotificationService.send_student_order_created_email(order)
-            EmailNotificationService.send_admin_marketplace_order_email(order)
         except Exception as email_err:
-            logger.warning(f"Failed to dispatch order created emails for order #{order.id}: {email_err}")
+            logger.warning(f"Failed to dispatch order created email for order #{order.id}: {email_err}")
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 

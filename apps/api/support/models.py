@@ -178,6 +178,78 @@ class NotificationPreference(models.Model):
     # Teacher - System
     teacher_system_email = models.BooleanField(default=True)
 
+    # Dual-Channel Student Preferences (In-App and Email)
+    # Learning & Exams
+    exam_announcements_inapp = models.BooleanField(default=True)
+    exam_announcements_email = models.BooleanField(default=True)
+    study_material_updates_inapp = models.BooleanField(default=True)
+    study_material_updates_email = models.BooleanField(default=True)
+    exam_reminders_inapp = models.BooleanField(default=True)
+    exam_reminders_email = models.BooleanField(default=True)
+    result_published_inapp = models.BooleanField(default=True)
+    result_published_email = models.BooleanField(default=True)
+    learning_resources_inapp = models.BooleanField(default=True)
+    learning_resources_email = models.BooleanField(default=True)
+
+    # Subscription & Payments
+    subscription_expiry_inapp = models.BooleanField(default=True)
+    subscription_expiry_email = models.BooleanField(default=True)
+    payment_submission_inapp = models.BooleanField(default=True)
+    payment_submission_email = models.BooleanField(default=True)
+    payment_status_inapp = models.BooleanField(default=True)
+    payment_status_email = models.BooleanField(default=True)
+    subscription_status_inapp = models.BooleanField(default=True)
+    subscription_status_email = models.BooleanField(default=True)
+    plan_offers_inapp = models.BooleanField(default=True)
+    plan_offers_email = models.BooleanField(default=True)
+
+    # Marketplace
+    order_confirmation_inapp = models.BooleanField(default=True)
+    order_confirmation_email = models.BooleanField(default=True)
+    order_payment_status_inapp = models.BooleanField(default=True)
+    order_payment_status_email = models.BooleanField(default=True)
+    order_delivery_updates_inapp = models.BooleanField(default=True)
+    order_delivery_updates_email = models.BooleanField(default=True)
+    order_cancellation_inapp = models.BooleanField(default=True)
+    order_cancellation_email = models.BooleanField(default=True)
+
+    # Account & Platform
+    security_alerts_inapp = models.BooleanField(default=True)
+    security_alerts_email = models.BooleanField(default=True)
+    platform_announcements_inapp = models.BooleanField(default=True)
+    platform_announcements_email = models.BooleanField(default=True)
+    feature_announcements_inapp = models.BooleanField(default=True)
+    feature_announcements_email = models.BooleanField(default=True)
+    maintenance_alerts_inapp = models.BooleanField(default=True)
+    maintenance_alerts_email = models.BooleanField(default=True)
+
+    def is_in_app_enabled(self, event_key: str) -> bool:
+        """Checks if in-app notifications are enabled for this event."""
+        from core.notification_constants import MANDATORY_STUDENT_EVENTS
+        if event_key in MANDATORY_STUDENT_EVENTS:
+            return True
+        attr = f"{event_key}_inapp"
+        if hasattr(self, attr):
+            return getattr(self, attr, True)
+        return getattr(self, event_key, True)
+
+    def is_email_enabled(self, event_key: str) -> bool:
+        """Checks if email notifications are enabled for this event."""
+        from core.notification_constants import MANDATORY_STUDENT_EVENTS
+        if event_key in MANDATORY_STUDENT_EVENTS:
+            return True
+        attr = f"{event_key}_email"
+        if hasattr(self, attr):
+            return getattr(self, attr, True)
+        return True
+
+    def save(self, *args, **kwargs):
+        # Enforce server-side mandatory security notifications immunity
+        self.security_alerts_inapp = True
+        self.security_alerts_email = True
+        self.security_alerts = True
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Notifications: {self.user.username}"
 

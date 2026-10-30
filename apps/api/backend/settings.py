@@ -134,6 +134,11 @@ for _railway_host in ['.railway.app', '.up.railway.app', 'loksewa-ai-production.
     if _railway_host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_railway_host)
 
+# Permit production domains
+for _prod_host in ['hemrajkc.com.np', 'www.hemrajkc.com.np', 'hemrajkc.com', 'www.hemrajkc.com']:
+    if _prod_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_prod_host)
+
 _railway_public_domain = (os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').strip()
 if _railway_public_domain and _railway_public_domain not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_railway_public_domain)
@@ -596,7 +601,7 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 
 # Used to build the password-reset link emailed to the user (the API server
 # has no other way to know its own frontend's origin).
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://hemrajkc.com')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://www.hemrajkc.com.np')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -690,12 +695,14 @@ if GOOGLE_DRIVE_CLIENT_ID and GOOGLE_DRIVE_CLIENT_SECRET and GOOGLE_DRIVE_REFRES
 BACKEND_PUBLIC_URL = (
     os.environ.get('BACKEND_PUBLIC_URL')
     or os.environ.get('RENDER_EXTERNAL_URL')
-    or ('http://localhost:8000' if DEBUG else '')
+    or ''
 ).rstrip('/')
+
+# Respect reverse proxy SSL termination in production and staging
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # --- PRODUCTION SECURITY HARDENING ---
 if not DEBUG:
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True

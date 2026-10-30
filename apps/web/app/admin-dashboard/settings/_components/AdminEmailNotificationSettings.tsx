@@ -11,8 +11,11 @@ import {
   adminApi,
   AdminEmailRecipient,
   EmailDeliveryLog,
-  EmailDeliveryHealth
+  EmailDeliveryHealth,
+  AdminNotificationEventsResponse
 } from "@/lib/api/admin";
+import { SlidersHorizontal } from "lucide-react";
+import toast from "react-hot-toast";
 
 const CATEGORIES = [
   { id: "registration", label: "Registration", desc: "New student accounts and verifications" },
@@ -27,6 +30,8 @@ export default function AdminEmailNotificationSettings() {
   const [health, setHealth] = useState<EmailDeliveryHealth | null>(null);
   const [logs, setLogs] = useState<EmailDeliveryLog[]>([]);
   const [logsCount, setLogsCount] = useState(0);
+  const [eventsData, setEventsData] = useState<AdminNotificationEventsResponse | null>(null);
+  const [updatingEventKey, setUpdatingEventKey] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -55,8 +60,30 @@ export default function AdminEmailNotificationSettings() {
 
   const loadAll = async () => {
     setIsLoading(true);
-    await Promise.all([fetchRecipients(), fetchHealth(), fetchLogs()]);
+    await Promise.all([fetchRecipients(), fetchHealth(), fetchLogs(), fetchNotificationEvents()]);
     setIsLoading(false);
+  };
+
+  const fetchNotificationEvents = async () => {
+    try {
+      const res = await adminApi.getNotificationEvents();
+      setEventsData(res);
+    } catch (err) {
+      console.error("Failed to load admin notification events:", err);
+    }
+  };
+
+  const handleToggleEventState = async (key: string, nextVal: boolean) => {
+    setUpdatingEventKey(key);
+    try {
+      const res = await adminApi.updateNotificationEvents({ [key]: nextVal });
+      toast.success("Notification event rule updated.");
+      fetchNotificationEvents();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update notification event rule.");
+    } finally {
+      setUpdatingEventKey(null);
+    }
   };
 
   const fetchRecipients = async () => {
@@ -536,6 +563,107 @@ export default function AdminEmailNotificationSettings() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Administrative Notification Events & Category Controls Matrix */}
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <SlidersHorizontal className="w-4 h-4 text-indigo-500" />
+              Administrative Event & Category Notification Rules
+            </h4>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Control which system, payment, registration, and marketplace events dispatch administrative emails. Changes apply globally at dispatch time and are audited.
+            </p>
+          </div>
+        </div>
+
+        {eventsData && eventsData.categories && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {eventsData.categories.map((cat) => {
+              const catKey = `category:${cat.id}`;
+              const isCatEnabled = cat.category_enabled;
+
+              return (
+                <div
+                  key={cat.id}
+                  className="border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-slate-50/50 dark:bg-slate-800/40 space-y-3"
+                >
+                  {/* Category Bulk Header */}
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        {cat.label}
+                      </span>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                        {cat.description}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={updatingEventKey === catKey}
+                      onClick={() => handleToggleEventState(catKey, !isCatEnabled)}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition ${
+                        isCatEnabled
+                          ? "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 hover:bg-indigo-200"
+                          : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400 hover:bg-slate-300"
+                      }`}
+                    >
+                      {updatingEventKey === catKey ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : isCatEnabled ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <X className="w-3 h-3" />
+                      )}
+                      <span>{isCatEnabled ? "Category Enabled" : "Category Disabled"}</span>
+                    </button>
+                  </div>
+
+                  {/* Individual Event Switches */}
+                  <div className="space-y-2 pt-1">
+                    {cat.events.map((ev) => {
+                      const isEventActive = ev.enabled;
+                      const isBusy = updatingEventKey === ev.key;
+
+                      return (
+                        <div
+                          key={ev.key}
+                          className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-white dark:hover:bg-slate-800/80 transition text-xs"
+                        >
+                          <div className="pr-2">
+                            <span className="font-medium text-slate-700 dark:text-slate-300">
+                              {ev.label}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 font-mono">
+                              {ev.key}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => handleToggleEventState(ev.key, !isEventActive)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                              isEventActive ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-700"
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform ${
+                                isEventActive ? "translate-x-4" : "translate-x-1"
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Email Delivery Audit Logs View */}

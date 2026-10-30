@@ -58,7 +58,7 @@ export function MarketplaceSection({ products }: Props) {
                 
                 {/* Image placeholder (gradient) */}
                 <div className={`h-[170px] relative ${p.image || "bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900"} p-3 flex flex-col justify-between overflow-hidden`}>
-                  {p.cover_image && (
+                  {p.cover_image && buildMediaUrl(p.cover_image) && (
                     <>
                       <Image
                         src={buildMediaUrl(p.cover_image)}

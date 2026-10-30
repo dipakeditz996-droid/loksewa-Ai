@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { marketplaceApi, Cart, PaymentMethod, DeliveryAddress, Order, ProfileAddressResponse } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -319,7 +320,34 @@ export default function CheckoutPage() {
       setSuccess(true);
       toast.success("Your payment proof has been submitted and is pending verification.");
     } catch (error: any) {
-      toast.error(error?.data?.detail || error?.message || "An error occurred during submission. Please try again.");
+      const detail = error?.data?.detail || error?.message || "";
+      // If the backend already registered the payment submission (e.g. server succeeded right after a network glitch or on retry)
+      if (
+        typeof detail === "string" &&
+        (detail.toLowerCase().includes("already have a pending payment") ||
+         detail.toLowerCase().includes("pending payment verification"))
+      ) {
+        setSuccess(true);
+        toast.success("Your payment proof has been submitted and is pending verification.");
+        return;
+      }
+
+      // If the client timed out, check with the backend if the submission actually succeeded
+      if (typeof detail === "string" && (detail.toLowerCase().includes("timed out") || detail.toLowerCase().includes("timeout"))) {
+        try {
+          const orders = await marketplaceApi.getOrders();
+          const currentOrder = orders.find(o => o.id === order.id);
+          if (currentOrder && (currentOrder.status === 'PAYMENT_SUBMITTED' || currentOrder.status === 'PAYMENT_VERIFICATION')) {
+            setSuccess(true);
+            toast.success("Your payment proof has been submitted and is pending verification.");
+            return;
+          }
+        } catch {
+          // ignore verification check error
+        }
+      }
+
+      toast.error(detail || "An error occurred during submission. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -726,14 +754,24 @@ export default function CheckoutPage() {
                   <CardContent className="space-y-4">
                     <div className="flex flex-col sm:flex-row gap-6 items-center">
                       {selectedMethod.qr_image && (
-                        <div className="w-44 h-44 relative bg-white p-2 rounded-xl border shadow-sm shrink-0">
-                          <Image 
-                            src={selectedMethod.qr_image.startsWith('http') ? selectedMethod.qr_image : `${baseUrl}${selectedMethod.qr_image.startsWith('/') ? '' : '/'}${selectedMethod.qr_image}`} 
-                            alt="Payment QR" 
-                            fill 
-                            className="object-contain" 
-                            unoptimized
-                          />
+                        <div className="flex flex-col items-center gap-1.5 shrink-0">
+                          <div className="w-44 h-44 relative bg-white p-2 rounded-xl border shadow-sm">
+                            <Image 
+                              src={(selectedMethod as any).qr_image_direct || buildMediaUrl(selectedMethod.qr_image)} 
+                              alt={`${selectedMethod.display_name} Payment QR`} 
+                              fill 
+                              className="object-contain" 
+                              unoptimized
+                            />
+                          </div>
+                          <a
+                            href={(selectedMethod as any).qr_image_direct || buildMediaUrl(selectedMethod.qr_image)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-primary hover:underline font-medium"
+                          >
+                            Open QR in new tab
+                          </a>
                         </div>
                       )}
                       <div className="flex-1 space-y-3 w-full">

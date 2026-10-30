@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { marketplaceApi, Product, PaymentMethod } from "@/lib/api/marketplace";
+import { buildMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -202,7 +203,7 @@ export default function CheckoutPage() {
                     <div className="flex flex-col items-center p-4 bg-card border rounded-xl shadow-sm">
                       <div className="relative w-48 h-48 mb-2">
                         <Image
-                          src={selectedMethod.qr_image.startsWith('http') ? selectedMethod.qr_image : `${baseUrl}${selectedMethod.qr_image.startsWith('/') ? '' : '/'}${selectedMethod.qr_image}`}
+                          src={buildMediaUrl(selectedMethod.qr_image)}
                           alt={`QR for ${selectedMethod.display_name}`}
                           fill
                           className="object-contain"

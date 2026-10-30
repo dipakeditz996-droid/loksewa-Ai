@@ -35,6 +35,10 @@ _folder_cache_lock = threading.Lock()
 _credentials = None
 _credentials_lock = threading.Lock()
 
+# Cached Drive API service instance to prevent expensive discovery downloads on every call
+_service = None
+_service_lock = threading.Lock()
+
 
 class GoogleDriveError(Exception):
     """Raised for any Drive operation failure. Never carries secrets."""
@@ -109,9 +113,13 @@ def get_credentials(force_refresh=False):
         return _credentials
 
 
-def _get_service():
-    from googleapiclient.discovery import build
-    return build('drive', 'v3', credentials=get_credentials(), cache_discovery=False)
+def _get_service(force_refresh=False):
+    global _service
+    with _service_lock:
+        if _service is None or force_refresh:
+            from googleapiclient.discovery import build
+            _service = build('drive', 'v3', credentials=get_credentials(force_refresh=force_refresh), cache_discovery=False)
+        return _service
 
 
 def get_or_create_drive_folder(name, parent_id):
@@ -198,10 +206,25 @@ def upload_file(relative_path, file_obj, mime_type=None):
     if not hasattr(file_obj, 'read'):
         raise GoogleDriveError('upload_file requires a file-like object.')
 
+    file_size = None
+    if hasattr(file_obj, 'size'):
+        file_size = file_obj.size
+    elif hasattr(file_obj, 'seek') and hasattr(file_obj, 'tell'):
+        try:
+            curr = file_obj.tell()
+            file_obj.seek(0, os.SEEK_END)
+            file_size = file_obj.tell()
+            file_obj.seek(curr)
+        except Exception:
+            pass
+
+    # Use direct single-request upload for files <= 5MB to avoid multi-roundtrip resumable session overhead
+    use_resumable = bool(file_size and file_size > 5 * 1024 * 1024)
+
     media = MediaIoBaseUpload(
         file_obj,
         mimetype=mime_type or 'application/octet-stream',
-        resumable=True,
+        resumable=use_resumable,
         chunksize=5 * 1024 * 1024,  # 5MB chunks - avoids loading large files whole
     )
 
@@ -216,17 +239,18 @@ def upload_file(relative_path, file_obj, mime_type=None):
         _notify_storage_failure(f'Upload failed for "{filename}": {type(e).__name__}')
         raise GoogleDriveError(f'Upload to Google Drive failed for "{filename}".') from None
 
-    # Grant "anyone with the link can view" - matches this project's existing
-    # public-read S3/R2 behaviour (AWS_DEFAULT_ACL='public-read'), not a
-    # regression. Per-file private access control is a separate, larger
-    # feature - see the migration report for what that would require.
-    try:
-        service.permissions().create(
-            fileId=drive_file['id'],
-            body={'role': 'reader', 'type': 'anyone'},
-        ).execute()
-    except Exception as e:
-        logger.warning('Could not set public permission on Drive file %s: %s', drive_file['id'], type(e).__name__)
+    # Grant "anyone with the link can view" in a non-blocking thread so the upload HTTP response returns immediately
+    def _set_public_permission(fid):
+        try:
+            svc = _get_service()
+            svc.permissions().create(
+                fileId=fid,
+                body={'role': 'reader', 'type': 'anyone'},
+            ).execute()
+        except Exception as perm_err:
+            logger.warning('Could not set public permission on Drive file %s: %s', fid, type(perm_err).__name__)
+
+    threading.Thread(target=_set_public_permission, args=(drive_file['id'],), daemon=True).start()
 
     logger.info('Uploaded "%s" to Drive as %s (%s bytes)', filename, drive_file['id'], drive_file.get('size'))
     return drive_file

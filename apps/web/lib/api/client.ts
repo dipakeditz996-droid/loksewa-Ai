@@ -1,5 +1,19 @@
 export function getApiBaseUrl(): string {
-  let url = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+  let url = process.env.NEXT_PUBLIC_API_URL || "";
+
+  // If running in browser on a production domain, but API URL is unset or pointing to localhost,
+  // fall back to Railway production API so browser requests don't fail to connect to localhost
+  if (typeof window !== "undefined") {
+    const isProdHost = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+    if (isProdHost && (!url || url.includes("localhost") || url.includes("127.0.0.1") || url.includes("0.0.0.0"))) {
+      url = "https://loksewa-ai-production.up.railway.app/api";
+    }
+  }
+
+  if (!url) {
+    url = "http://localhost:8000/api";
+  }
+
   url = url.trim().replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(url)) {
     url = `https://${url}`;
@@ -9,18 +23,7 @@ export function getApiBaseUrl(): string {
 
 export function getApiOrigin(): string {
   const apiUrl = getApiBaseUrl();
-  let origin = apiUrl.replace(/\/api\/?$/, "");
-
-  // If running in browser on a production domain, but origin is still pointing to localhost,
-  // fall back to window.location.origin so browser requests don't fail to connect to localhost
-  if (typeof window !== "undefined") {
-    const isProdHost = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
-    if (isProdHost && (origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes("0.0.0.0"))) {
-      origin = window.location.origin;
-    }
-  }
-
-  return origin;
+  return apiUrl.replace(/\/api\/?$/, "");
 }
 
 export function buildApiUrl(path: string): string {
@@ -268,7 +271,7 @@ async function executeRequest<T>(
   endpoint: string,
   options: ApiClientOptions = {}
 ): Promise<T> {
-  const url = `${API_URL}${endpoint}`;
+  const url = `${getApiBaseUrl()}${endpoint}`;
   
   const token = getAuthToken();
   const headers = new Headers(options.headers || {});

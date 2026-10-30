@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 import uuid
 
@@ -228,9 +229,6 @@ class StudentSignupView(APIView):
                         status='pending'
                     )
 
-                # Auto-grant default Free Plan entitlement
-                from subscriptions.entitlements import EntitlementService
-                EntitlementService.ensure_free_plan_entitlement(user)
 
                 from administration.models import AuditLog
                 AuditLog.objects.create(
@@ -243,6 +241,27 @@ class StudentSignupView(APIView):
             return Response({'error': 'Registration failed due to an internal error. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         t_db = time.perf_counter()
+
+        # Asynchronously initialize free plan entitlement in background so HTTP response is fast;
+        # canonical activation is also guaranteed when the student verifies their OTP in VerifyEmailOTPView.
+        def _bg_init_entitlement(u_id):
+            from django.db import connection
+            connection.close()
+            try:
+                from core.models import User
+                from subscriptions.entitlements import EntitlementService
+                u = User.objects.filter(id=u_id).first()
+                if u:
+                    EntitlementService.ensure_free_plan_entitlement(u)
+            except Exception as err:
+                logger.warning("Background free plan entitlement initialization failed for user_id=%s: %s", u_id, err)
+            finally:
+                connection.close()
+
+        def _start_entitlement_thread():
+            threading.Thread(target=_bg_init_entitlement, args=(user.id,), daemon=True).start()
+
+        transaction.on_commit(_start_entitlement_thread)
 
         # Admin notifications are best-effort alerts and must not block
         # the response or roll back a successfully created account.

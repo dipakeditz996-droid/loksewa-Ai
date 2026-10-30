@@ -5,7 +5,7 @@ and auditable consumption tracking for LoksewaAI.
 
 import logging
 from datetime import timedelta
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
@@ -1121,6 +1121,63 @@ class EntitlementService:
         return ent
 
     @classmethod
+    def _grant_bulk_entitlements(cls, student: User, subscription: Optional[Subscription], items: List[Tuple[str, int, str]], reset_frequency: str = 'NEVER', admin_user: Optional[User] = None):
+        """
+        Bulk creates or updates student entitlements and records usage ledger entries
+        in just 2-3 queries, eliminating 50+ synchronous network roundtrips to the DB.
+        """
+        if not items:
+            return
+
+        features_dict = {}
+        for feat, total_allowed, reason in items:
+            features_dict[feat] = (total_allowed, reason)
+
+        features = list(features_dict.keys())
+        existing = {e.feature: e for e in StudentEntitlement.objects.filter(student=student, feature__in=features)}
+
+        to_create = []
+        to_update = []
+        ledger_entries = []
+
+        for feat, (total_allowed, reason) in features_dict.items():
+            if feat in existing:
+                ent = existing[feat]
+                ent.subscription = subscription
+                if total_allowed == -1 or ent.total_allowed == -1:
+                    ent.total_allowed = -1
+                else:
+                    ent.total_allowed = max(ent.total_allowed, total_allowed)
+                ent.reset_frequency = reset_frequency
+                to_update.append(ent)
+            else:
+                to_create.append(StudentEntitlement(
+                    student=student,
+                    subscription=subscription,
+                    feature=feat,
+                    total_allowed=total_allowed,
+                    consumed=0,
+                    reserved=0,
+                    reset_frequency=reset_frequency,
+                ))
+
+            ledger_entries.append(UsageLedger(
+                student=student,
+                subscription=subscription,
+                feature=feat,
+                event_type='GRANT',
+                amount=total_allowed,
+                reason=reason or f"Granted {feat} quota",
+                admin_user=admin_user,
+            ))
+
+        if to_create:
+            StudentEntitlement.objects.bulk_create(to_create, ignore_conflicts=True)
+        if to_update:
+            StudentEntitlement.objects.bulk_update(to_update, ['subscription', 'total_allowed', 'reset_frequency'])
+        if ledger_entries:
+            UsageLedger.objects.bulk_create(ledger_entries)
+    @classmethod
     def grant_plan_entitlements(cls, student: User, plan: SubscriptionPlan, subscription: Optional[Subscription] = None, admin_user: Optional[User] = None, reason: str = "") -> None:
         """
         Initializes or upgrades student's entitlements across ALL platform modules
@@ -1129,6 +1186,7 @@ class EntitlementService:
         with transaction.atomic():
             fl = plan.feature_limits or {}
             reset_freq = plan.reset_frequency
+            items: List[Tuple[str, int, str]] = []
 
             # 1. Objective Exam categories
             quotas = plan.exam_quotas or {}
@@ -1143,8 +1201,8 @@ class EntitlementService:
                     if not enabled:
                         attempts = 0
 
-                cls._grant_single_entitlement(student, subscription, key, attempts, reset_freq, admin_user, reason or f"Granted {plan.name} {cat} objective quota")
-                cls._grant_single_entitlement(student, subscription, legacy_key, attempts, reset_freq, admin_user, reason or f"Granted {plan.name} {cat} quota")
+                items.append((key, attempts, reason or f"Granted {plan.name} {cat} objective quota"))
+                items.append((legacy_key, attempts, reason or f"Granted {plan.name} {cat} quota"))
 
             # 1b. Total Objective Exam attempts
             tot_obj_key = "exam:objective:total"
@@ -1153,12 +1211,12 @@ class EntitlementService:
                 tot_obj_attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
             else:
                 tot_obj_attempts = -1 if plan.package_type == 'BUNDLE' else 25
-            cls._grant_single_entitlement(student, subscription, tot_obj_key, tot_obj_attempts, reset_freq, admin_user, reason or f"Granted {plan.name} total objective exam quota")
+            items.append((tot_obj_key, tot_obj_attempts, reason or f"Granted {plan.name} total objective exam quota"))
 
             # 1c. Free Mock Exams quota
             free_mock_attempts = getattr(plan, 'free_mock_attempts', 0)
             if free_mock_attempts != 0:
-                cls._grant_single_entitlement(student, subscription, "exam:free_mock", free_mock_attempts, reset_freq, admin_user, reason or f"Granted {plan.name} free mock quota")
+                items.append(("exam:free_mock", free_mock_attempts, reason or f"Granted {plan.name} free mock quota"))
 
             # 2. Subjective Exam categories
             for cat in ['past_year', 'model', 'live', 'topicwise']:
@@ -1168,7 +1226,7 @@ class EntitlementService:
                     attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else (int(cfg) if isinstance(cfg, (int, float)) else 0)
                 else:
                     attempts = -1 if plan.package_type == 'BUNDLE' else 5
-                cls._grant_single_entitlement(student, subscription, key, attempts, reset_freq, admin_user, reason or f"Granted {plan.name} {cat} subjective quota")
+                items.append((key, attempts, reason or f"Granted {plan.name} {cat} subjective quota"))
 
             # 2b. Total Subjective Exam attempts
             tot_subj_key = "exam:subjective:total"
@@ -1177,7 +1235,7 @@ class EntitlementService:
                 tot_subj_attempts = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
             else:
                 tot_subj_attempts = -1 if plan.package_type == 'BUNDLE' else 10
-            cls._grant_single_entitlement(student, subscription, tot_subj_key, tot_subj_attempts, reset_freq, admin_user, reason or f"Granted {plan.name} total subjective exam quota")
+            items.append((tot_subj_key, tot_subj_attempts, reason or f"Granted {plan.name} total subjective exam quota"))
 
             # 2c. Subjective Evaluation Checking requests
             eval_key = "evaluation:subjective"
@@ -1186,7 +1244,7 @@ class EntitlementService:
                 eval_quota = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
             else:
                 eval_quota = -1 if plan.package_type == 'BUNDLE' else 3
-            cls._grant_single_entitlement(student, subscription, eval_key, eval_quota, reset_freq, admin_user, reason or f"Granted {plan.name} subjective evaluation quota")
+            items.append((eval_key, eval_quota, reason or f"Granted {plan.name} subjective evaluation quota"))
 
             # 3. Games Quotas
             games_defaults = {'1v1': 10, 'survival': 10, 'weekly_quiz': 2, 'daily_drill': 30}
@@ -1197,45 +1255,48 @@ class EntitlementService:
                     g_quota = cfg.get('quota', 0) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
                 else:
                     g_quota = -1 if plan.package_type == 'BUNDLE' else def_q
-                cls._grant_single_entitlement(student, subscription, key, g_quota, reset_freq, admin_user, reason or f"Granted {plan.name} {g} game quota")
+                items.append((key, g_quota, reason or f"Granted {plan.name} {g} game quota"))
 
             # 4. AI Tutor credits
             ai_credits = plan.ai_credits
             if "ai_credits" in fl:
                 cfg = fl["ai_credits"]
                 ai_credits = cfg.get('quota', ai_credits) if isinstance(cfg, dict) else int(cfg)
-            cls._grant_single_entitlement(student, subscription, "ai_credits", ai_credits, reset_freq, admin_user, reason or f"Granted {plan.name} AI credits")
+            items.append(("ai_credits", ai_credits, reason or f"Granted {plan.name} AI credits"))
 
             if "ai:study_plan" in fl:
                 cfg = fl["ai:study_plan"]
                 sp_q = cfg.get('quota', 2) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
-                cls._grant_single_entitlement(student, subscription, "ai:study_plan", sp_q, reset_freq, admin_user, reason or f"Granted {plan.name} AI study plan quota")
+                items.append(("ai:study_plan", sp_q, reason or f"Granted {plan.name} AI study plan quota"))
 
             # 5. Practice questions
             prac_limit = plan.practice_question_limit
             if "practice_questions" in fl:
                 cfg = fl["practice_questions"]
                 prac_limit = cfg.get('quota', prac_limit) if isinstance(cfg, dict) else int(cfg)
-            cls._grant_single_entitlement(student, subscription, "practice_questions", prac_limit, reset_freq, admin_user, reason or f"Granted {plan.name} practice questions")
-            cls._grant_single_entitlement(student, subscription, "practice:questions", prac_limit, reset_freq, admin_user, reason or f"Granted {plan.name} practice questions")
+            items.append(("practice_questions", prac_limit, reason or f"Granted {plan.name} practice questions"))
+            items.append(("practice:questions", prac_limit, reason or f"Granted {plan.name} practice questions"))
 
             if "practice:sessions" in fl:
                 cfg = fl["practice:sessions"]
                 ps_q = cfg.get('quota', -1) if (isinstance(cfg, dict) and cfg.get('enabled', True)) else 0
-                cls._grant_single_entitlement(student, subscription, "practice:sessions", ps_q, reset_freq, admin_user, reason or f"Granted {plan.name} practice sessions quota")
+                items.append(("practice:sessions", ps_q, reason or f"Granted {plan.name} practice sessions quota"))
 
             # 6. Notes Downloads
             dl_quota = -1 if plan.can_download_notes else 0
             if "notes:downloads" in fl:
                 cfg = fl["notes:downloads"]
                 dl_quota = cfg.get('quota', dl_quota) if isinstance(cfg, dict) else int(cfg)
-            cls._grant_single_entitlement(student, subscription, "notes:downloads", dl_quota, reset_freq, admin_user, reason or f"Granted {plan.name} notes downloads")
+            items.append(("notes:downloads", dl_quota, reason or f"Granted {plan.name} notes downloads"))
 
             # 7. Learning Modules
             for mod in ['study_plans', 'analytics']:
                 mod_key = f"module:{mod}"
                 mod_en = 1 if (mod_key not in fl or (isinstance(fl[mod_key], dict) and fl[mod_key].get('enabled', True))) else 0
-                cls._grant_single_entitlement(student, subscription, mod_key, mod_en, reset_freq, admin_user, reason or f"Granted {plan.name} {mod} access")
+                items.append((mod_key, mod_en, reason or f"Granted {plan.name} {mod} access"))
+
+            # Execute all grants in bulk (2-3 SQL queries instead of 78+)
+            cls._grant_bulk_entitlements(student, subscription, items, reset_freq, admin_user)
 
             from courses.services.course_access_service import CourseAccessService
             CourseAccessService.clear_user_cache(student)

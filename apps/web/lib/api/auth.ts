@@ -54,7 +54,7 @@ export const authApi = {
     const payload = options?.requestId ? { ...data, client_request_id: options.requestId } : data;
     return apiClient<{ id: number; username: string; email: string; pending_verification: true; detail: string }>(
       "/auth/signup/",
-      { method: "POST", body: JSON.stringify(payload) }
+      { method: "POST", body: JSON.stringify(payload), timeoutMs: 60000 }
     );
   },
 

@@ -281,7 +281,11 @@ function RegisterForm() {
 
       const missingFields = err?.data?.missing_fields || err?.missing_fields || [];
       if (err?.status === 0) {
-        setError("Unable to connect to the server. Please verify your internet connection and ensure cross-origin requests are allowed.");
+        setError(
+          err?.data?.detail ||
+          err?.message ||
+          "Unable to connect to the server. Please verify your internet connection and ensure cross-origin requests are allowed."
+        );
       } else if (err?.status >= 500) {
         setError("The registration service encountered a temporary error. Please try again in a few moments.");
       } else if (err?.status === 429) {

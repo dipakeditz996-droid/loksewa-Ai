@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from core.validators import get_nepal_province_for_district
 from rest_framework import viewsets, permissions, status
 
@@ -590,7 +590,11 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
     ).prefetch_related(
         'items__product',
         'items__product__seller',
+        'items__product__images',
         'status_history',
+        'status_history__changed_by',
+        'payment_submissions',
+        'payment_submissions__payment_method',
     ).order_by('-created_at')
     serializer_class = OrderSerializer
     permission_classes = [IsAdminUser]

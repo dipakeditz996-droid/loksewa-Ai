@@ -15,7 +15,15 @@ import { toast } from "sonner";
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const productId = Number(params.productId);
+  const rawProductId = params?.productId as string | undefined;
+  const productId = Number(rawProductId);
+  const isValidProductId = Boolean(
+    rawProductId &&
+    rawProductId !== "null" &&
+    rawProductId !== "undefined" &&
+    !isNaN(productId) &&
+    productId > 0
+  );
   
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,10 +31,15 @@ export default function ProductDetailPage() {
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
+    if (!isValidProductId) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, [productId]);
+  }, [productId, isValidProductId]);
 
   const loadData = async () => {
+    if (!isValidProductId) return;
     try {
       setLoading(true);
       const prodData = await marketplaceApi.getProduct(productId);

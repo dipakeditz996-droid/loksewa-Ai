@@ -20,7 +20,15 @@ import { PageSkeleton, ButtonSpinner } from "@/components/ui/loading-states";
 export default function CheckoutPage() {
   const params = useParams();
   const router = useRouter();
-  const productId = Number(params.productId);
+  const rawProductId = params?.productId as string | undefined;
+  const productId = Number(rawProductId);
+  const isValidProductId = Boolean(
+    rawProductId &&
+    rawProductId !== "null" &&
+    rawProductId !== "undefined" &&
+    !isNaN(productId) &&
+    productId > 0
+  );
   
   const [product, setProduct] = useState<Product | null>(null);
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
@@ -35,10 +43,15 @@ export default function CheckoutPage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
+    if (!isValidProductId) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, [productId]);
+  }, [productId, isValidProductId]);
 
   const loadData = async () => {
+    if (!isValidProductId) return;
     try {
       setLoading(true);
       const [prodData, methData] = await Promise.all([
@@ -115,7 +128,34 @@ export default function CheckoutPage() {
     return <PageSkeleton layout="detail" className="max-w-6xl mx-auto py-8" />;
   }
 
-  if (!product) return null;
+  if (!isValidProductId || !product) {
+    return (
+      <div className="p-4 md:p-8 max-w-xl mx-auto my-12 text-center space-y-6">
+        <div className="w-16 h-16 bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto">
+          <AlertCircle className="h-8 w-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold tracking-tight">Checkout Item Not Found</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            {rawProductId === "null" || rawProductId === "undefined"
+              ? "No product ID was specified for this checkout. If you were looking to checkout items in your cart or resubmit payment for an order, please use the links below."
+              : "The product you are trying to checkout does not exist or is no longer available."}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+          <Button asChild variant="outline">
+            <Link href="/student/marketplace">Back to Marketplace</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/student/marketplace/orders">My Orders</Link>
+          </Button>
+          <Button asChild>
+            <Link href="/student/marketplace/cart">View Cart</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (success) {
     return (

@@ -648,54 +648,49 @@ class OrderSerializer(serializers.ModelSerializer):
         return (obj.total_amount + obj.delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     def get_latest_payment_submission(self, obj):
-
-        latest = obj.payment_submissions.order_by('-submitted_at').first()
+        submissions = getattr(obj, '_prefetched_objects_cache', {}).get('payment_submissions')
+        if submissions is not None:
+            sorted_submissions = sorted(
+                submissions,
+                key=lambda s: s.submitted_at or s.created_at if hasattr(s, 'created_at') else s.id,
+                reverse=True
+            )
+            latest = sorted_submissions[0] if sorted_submissions else None
+        else:
+            latest = obj.payment_submissions.select_related('payment_method').order_by('-submitted_at').first()
 
         if not latest:
-
             return None
 
         return {
-
             'id': latest.id,
-
             'status': latest.status,
-
             'rejection_reason': latest.rejection_reason,
-
             'transaction_id': latest.transaction_id,
-
             'expected_amount': str(latest.expected_amount),
-
             'submitted_amount': str(latest.submitted_amount),
-
             'is_cod_advance': latest.is_cod_advance,
-
             'attempt_number': latest.attempt_number,
-
             'submitted_at': latest.submitted_at.isoformat() if latest.submitted_at else None,
-
             'verified_at': latest.verified_at.isoformat() if latest.verified_at else None,
-
             'payment_method_id': latest.payment_method_id,
-
             'payment_method_name': latest.payment_method.display_name if latest.payment_method else None,
-
         }
 
     def get_can_retry_payment(self, obj):
-
         if obj.status in ['CANCELLED', 'REFUNDED', 'DELIVERED', 'ON_HOLD']:
-
             return False
 
         if obj.payment_status == 'PAID':
-
             return False
 
-        if obj.payment_submissions.filter(status='PENDING').exists():
-
-            return False
+        submissions = getattr(obj, '_prefetched_objects_cache', {}).get('payment_submissions')
+        if submissions is not None:
+            if any(s.status == 'PENDING' for s in submissions):
+                return False
+        else:
+            if obj.payment_submissions.filter(status='PENDING').exists():
+                return False
 
         return True
 

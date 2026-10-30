@@ -29,7 +29,15 @@ const STATUS_TIMELINE = [
 export default function StudentOrderDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const orderId = params.id as string;
+  const orderId = params?.id as string | undefined;
+  const numOrderId = Number(orderId);
+  const isValidOrderId = Boolean(
+    orderId &&
+    orderId !== "null" &&
+    orderId !== "undefined" &&
+    !isNaN(numOrderId) &&
+    numOrderId > 0
+  );
   const [order, setOrder] = useState<Order | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -57,7 +65,10 @@ export default function StudentOrderDetailPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchOrderData = () => {
-    if (!orderId) return;
+    if (!isValidOrderId) {
+      setLoading(false);
+      return;
+    }
     Promise.all([
       marketplaceApi.getOrder(Number(orderId)),
       marketplaceApi.getReviews(),

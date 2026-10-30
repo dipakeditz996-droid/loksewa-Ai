@@ -5,7 +5,7 @@ import { marketplaceApi, PaymentSubmission, Purchase } from "@/lib/api/marketpla
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ShoppingBag, CheckCircle, Clock, XCircle, Download, Lock } from "lucide-react";
+import { ArrowLeft, ShoppingBag, CheckCircle, Clock, XCircle, Download, Lock, Package } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
@@ -49,7 +49,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <Button variant="outline" size="icon" asChild>
             <Link href="/student/marketplace">
@@ -62,6 +62,12 @@ export default function PurchasesPage() {
               Manage your acquired materials and track payment statuses.
             </p>
           </div>
+        <Button asChild className="bg-[#163E6B] hover:bg-[#163E6B]/90 text-white font-semibold">
+          <Link href="/student/marketplace/orders">
+            <Package className="mr-2 h-4 w-4" />
+            Track My Orders
+          </Link>
+        </Button>
         </div>
       </div>
 
@@ -108,7 +114,7 @@ export default function PurchasesPage() {
                         </div>
                         
                         <Button asChild size="sm" className="w-full sm:w-auto" variant="outline">
-                          <Link href={`/student/marketplace/${purchase.product}`}>
+                          <Link href={purchase.product ? `/student/marketplace/${purchase.product}` : (purchase.product_details?.id ? `/student/marketplace/${purchase.product_details.id}` : "/student/marketplace")}>
                             View Details
                           </Link>
                         </Button>
@@ -143,7 +149,7 @@ export default function PurchasesPage() {
                             {getStatusIcon(sub.status)}
                           </div>
                           <div>
-                            <h4 className="font-semibold">{sub.product_details?.title}</h4>
+                            <h4 className="font-semibold">{sub.product_details?.title || (sub.order ? `Order #ORD-${sub.order}` : (sub.product_name || "Marketplace Item"))}</h4>
                             <p className="text-sm text-muted-foreground">
                               Transaction: <span className="font-mono">{sub.transaction_id}</span> • {format(new Date(sub.submitted_at), "MMM d, yyyy")}
                             </p>
@@ -162,24 +168,45 @@ export default function PurchasesPage() {
                       
                       {sub.status === 'REJECTED' && sub.rejection_reason && (
                         <div className="px-4 pb-4">
-                          <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 p-3 rounded-md border border-red-100 text-sm">
+                          <div className="bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 p-3 rounded-md border border-red-100 dark:border-red-900/40 text-sm">
                             <strong>Rejection Reason:</strong> {sub.rejection_reason}
-                            <div className="mt-2">
-                              <Button asChild size="sm" variant="outline" className="bg-card hover:bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/50">
-                                <Link href={`/student/marketplace/checkout/${sub.product}`}>
-                                  Resubmit Payment
-                                </Link>
-                              </Button>
+                            <div className="mt-2 flex items-center gap-2">
+                              {sub.order ? (
+                                <Button asChild size="sm" variant="outline" className="bg-card hover:bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/50 font-medium">
+                                  <Link href={`/student/marketplace/orders/${sub.order}`}>
+                                    Resubmit Payment on Order
+                                  </Link>
+                                </Button>
+                              ) : (sub.product || sub.product_id) ? (
+                                <Button asChild size="sm" variant="outline" className="bg-card hover:bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/50 font-medium">
+                                  <Link href={`/student/marketplace/checkout/${sub.product || sub.product_id}`}>
+                                    Resubmit Payment
+                                  </Link>
+                                </Button>
+                              ) : (
+                                <Button asChild size="sm" variant="outline" className="bg-card hover:bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/50 font-medium">
+                                  <Link href="/student/marketplace/orders">
+                                    View Orders
+                                  </Link>
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>
                       )}
                       
                       {sub.status === 'PENDING' && (
-                        <div className="px-4 pb-4">
-                          <div className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-200 p-3 rounded-md border border-yellow-100 text-sm">
+                        <div className="px-4 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div className="bg-yellow-50 dark:bg-yellow-950/30 text-yellow-800 dark:text-yellow-200 p-3 rounded-md border border-yellow-100 dark:border-yellow-900/40 text-sm flex-1">
                             Your payment is being reviewed by the administrator. Access will be granted automatically upon approval.
                           </div>
+                          {sub.order && (
+                            <Button asChild size="sm" variant="outline" className="shrink-0">
+                              <Link href={`/student/marketplace/orders/${sub.order}`}>
+                                Track Order Details
+                              </Link>
+                            </Button>
+                          )}
                         </div>
                       )}
                     </CardContent>

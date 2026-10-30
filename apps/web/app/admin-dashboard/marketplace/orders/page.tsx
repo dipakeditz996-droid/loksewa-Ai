@@ -36,7 +36,7 @@ export default function MarketplaceOrdersPage() {
   const fetchOrders = async () => {
     try {
       const data = await marketplaceApi.adminGetOrders();
-      setOrders(data);
+      setOrders(Array.isArray(data) ? data : ((data as any)?.results || []));
     } catch (error) {
       console.error("Failed to fetch orders:", error);
     } finally {

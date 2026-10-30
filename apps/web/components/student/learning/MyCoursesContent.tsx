@@ -42,7 +42,7 @@ export function MyCoursesContent() {
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
           <Button asChild className="w-full sm:w-auto justify-center bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white font-bold rounded-[12px] shadow-[0_4px_14px_rgba(212,167,44,0.3)] text-xs sm:text-sm h-10 px-4">
-            <Link href="/student/onboarding/preparation">
+            <Link href="/student/buy-course">
               <GraduationCap className="w-4 h-4 mr-2 shrink-0" />
               Buy Another Course
             </Link>

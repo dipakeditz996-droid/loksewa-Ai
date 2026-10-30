@@ -775,9 +775,9 @@ function RegisterForm() {
                           type="button"
                           variant="outline"
                           onClick={() => setCurrentStep((s) => s - 1)}
-                          className="flex-1 h-[46px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]"
+                          className="flex-1 h-[46px] border-white/20 bg-white/10 hover:bg-white/20 text-white hover:text-white focus:text-white active:text-white font-semibold rounded-[10px] transition-all shadow-sm"
                         >
-                          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                          <ArrowLeft className="h-4 w-4 mr-2 text-white" /> Back
                         </Button>
                         <Button
                           type="button"
@@ -917,9 +917,9 @@ function RegisterForm() {
                           type="button"
                           variant="outline"
                           onClick={() => setCurrentStep((s) => s - 1)}
-                          className="flex-1 h-[46px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]"
+                          className="flex-1 h-[46px] border-white/20 bg-white/10 hover:bg-white/20 text-white hover:text-white focus:text-white active:text-white font-semibold rounded-[10px] transition-all shadow-sm"
                         >
-                          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                          <ArrowLeft className="h-4 w-4 mr-2 text-white" /> Back
                         </Button>
                         <Button
                           type="button"
@@ -981,9 +981,9 @@ function RegisterForm() {
                           type="button"
                           variant="outline"
                           onClick={() => setCurrentStep((s) => s - 1)}
-                          className="flex-1 h-[46px] border-white/20 bg-transparent text-white hover:bg-white/5 rounded-[10px]"
+                          className="flex-1 h-[46px] border-white/20 bg-white/10 hover:bg-white/20 text-white hover:text-white focus:text-white active:text-white font-semibold rounded-[10px] transition-all shadow-sm"
                         >
-                          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                          <ArrowLeft className="h-4 w-4 mr-2 text-white" /> Back
                         </Button>
                         <Button
                           type="button"

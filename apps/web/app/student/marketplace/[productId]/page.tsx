@@ -29,6 +29,20 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [selectedImgIndex, setSelectedImgIndex] = useState(0);
+
+  const imagesList = React.useMemo(() => {
+    if (!product) return [];
+    if (product.images && product.images.length > 0) {
+      return [...product.images].sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0));
+    }
+    if (product.cover_image) {
+      return [{ id: 0, product: product.id, image: product.cover_image, label: 'Cover', is_primary: true, created_at: '' }];
+    }
+    return [];
+  }, [product]);
+
+  const currentImageUrl = imagesList[selectedImgIndex]?.image || product?.cover_image;
 
   useEffect(() => {
     if (!isValidProductId) {
@@ -95,10 +109,10 @@ export default function ProductDetailPage() {
         {/* Left Col: Image */}
         <div className="space-y-4">
           <div className="aspect-[4/5] sm:aspect-square w-full bg-slate-100/90 dark:bg-slate-900/50 rounded-2xl overflow-hidden relative border shadow-sm flex items-center justify-center p-6">
-            {product.cover_image && !imageError ? (
+            {currentImageUrl && !imageError ? (
               <>
                 <Image 
-                  src={buildMediaUrl(product.cover_image)} 
+                  src={buildMediaUrl(currentImageUrl)} 
                   alt=""
                   fill
                   className="object-cover blur-2xl opacity-25 scale-125 pointer-events-none"
@@ -107,7 +121,7 @@ export default function ProductDetailPage() {
                 />
                 <div className="relative z-10 h-full w-full flex items-center justify-center">
                   <Image 
-                    src={buildMediaUrl(product.cover_image)} 
+                    src={buildMediaUrl(currentImageUrl)} 
                     alt={product.title}
                     width={320}
                     height={420}
@@ -123,6 +137,38 @@ export default function ProductDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Thumbnail Gallery */}
+          {imagesList.length > 1 && (
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
+              {imagesList.map((img, idx) => (
+                <button
+                  key={img.id || idx}
+                  type="button"
+                  onClick={() => {
+                    setSelectedImgIndex(idx);
+                    setImageError(false);
+                  }}
+                  className={`relative w-16 h-16 rounded-xl overflow-hidden border-2 shrink-0 transition-all ${
+                    selectedImgIndex === idx
+                      ? 'border-primary ring-2 ring-primary/30 scale-105 shadow-md'
+                      : 'border-muted opacity-70 hover:opacity-100'
+                  }`}
+                >
+                  <img
+                    src={buildMediaUrl(img.image)}
+                    alt={img.label || `Thumbnail ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                  {img.is_primary && (
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-0.5">
+                      Cover
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right Col: Details */}

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { RetryImage } from "@/components/ui/retry-image";
 import { marketplaceApi, Product } from "@/lib/api/marketplace";
 import { buildMediaUrl } from "@/lib/api/client";
 import { ArrowLeft, Loader2, ShoppingCart, Tag, MapPin, User, BookOpen } from "lucide-react";
@@ -103,15 +104,14 @@ export default function ProductDetailPage() {
             <div className="rounded-2xl overflow-hidden bg-slate-100/90 dark:bg-slate-900/50 border border-slate-200 dark:border-white/10 shadow-lg aspect-[4/5] sm:aspect-square flex items-center justify-center p-6 relative">
               {currentImageUrl && !imageError ? (
                 <>
-                  <img
+                  <RetryImage
                     src={buildMediaUrl(currentImageUrl)}
                     alt=""
                     aria-hidden="true"
-                    onError={() => setImageError(true)}
                     className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-25 scale-125 pointer-events-none select-none"
                   />
                   <div className="relative z-10 h-full w-full flex items-center justify-center">
-                    <img
+                    <RetryImage
                       src={buildMediaUrl(currentImageUrl)}
                       alt={product.title}
                       onError={() => setImageError(true)}
@@ -153,10 +153,15 @@ export default function ProductDetailPage() {
                         : 'border-slate-200 dark:border-white/10 opacity-70 hover:opacity-100 hover:border-slate-300'
                     }`}
                   >
-                    <img
+                    <RetryImage
                       src={buildMediaUrl(img.image)}
-                      alt={`Thumbnail ${idx + 1}`}
+                      alt={img.label || `Thumbnail ${idx + 1}`}
                       className="w-full h-full object-cover"
+                      fallback={
+                        <div className="w-full h-full bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                          <BookOpen className="w-5 h-5 text-slate-500" />
+                        </div>
+                      }
                     />
                     {img.is_primary && (
                       <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[8px] font-bold text-center py-0.5">

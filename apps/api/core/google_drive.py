@@ -35,9 +35,9 @@ _folder_cache_lock = threading.Lock()
 _credentials = None
 _credentials_lock = threading.Lock()
 
-# Cached Drive API service instance to prevent expensive discovery downloads on every call
-_service = None
-_service_lock = threading.Lock()
+# Cached Drive API service instance per-thread to prevent multi-threaded SSL/socket
+# corruption (googleapiclient discovery build objects are not thread-safe)
+_thread_local = threading.local()
 
 
 class GoogleDriveError(Exception):
@@ -114,12 +114,12 @@ def get_credentials(force_refresh=False):
 
 
 def _get_service(force_refresh=False):
-    global _service
-    with _service_lock:
-        if _service is None or force_refresh:
-            from googleapiclient.discovery import build
-            _service = build('drive', 'v3', credentials=get_credentials(force_refresh=force_refresh), cache_discovery=False)
-        return _service
+    service = getattr(_thread_local, 'service', None)
+    if service is None or force_refresh:
+        from googleapiclient.discovery import build
+        service = build('drive', 'v3', credentials=get_credentials(force_refresh=force_refresh), cache_discovery=False)
+        _thread_local.service = service
+    return service
 
 
 def get_or_create_drive_folder(name, parent_id):
@@ -221,23 +221,35 @@ def upload_file(relative_path, file_obj, mime_type=None):
     # Use direct single-request upload for files <= 5MB to avoid multi-roundtrip resumable session overhead
     use_resumable = bool(file_size and file_size > 5 * 1024 * 1024)
 
-    media = MediaIoBaseUpload(
-        file_obj,
-        mimetype=mime_type or 'application/octet-stream',
-        resumable=use_resumable,
-        chunksize=5 * 1024 * 1024,  # 5MB chunks - avoids loading large files whole
-    )
+    drive_file = None
+    for attempt in range(2):
+        if attempt > 0:
+            if hasattr(file_obj, 'seek'):
+                file_obj.seek(0)
+            service = _get_service(force_refresh=True)
 
-    try:
-        drive_file = service.files().create(
-            body={'name': filename, 'parents': [parent_id]},
-            media_body=media,
-            fields='id, name, mimeType, size, webViewLink, webContentLink',
-        ).execute()
-    except Exception as e:
-        logger.error('Google Drive upload failed for "%s": %s', filename, type(e).__name__)
-        _notify_storage_failure(f'Upload failed for "{filename}": {type(e).__name__}')
-        raise GoogleDriveError(f'Upload to Google Drive failed for "{filename}".') from None
+        media = MediaIoBaseUpload(
+            file_obj,
+            mimetype=mime_type or 'application/octet-stream',
+            resumable=use_resumable,
+            chunksize=5 * 1024 * 1024,  # 5MB chunks - avoids loading large files whole
+        )
+
+        try:
+            drive_file = service.files().create(
+                body={'name': filename, 'parents': [parent_id]},
+                media_body=media,
+                fields='id, name, mimeType, size, webViewLink, webContentLink',
+            ).execute()
+            break
+        except Exception as e:
+            err_str = str(e).lower()
+            if attempt == 0 and ('ssl' in err_str or 'connection' in err_str or 'broken pipe' in err_str):
+                logger.warning('Transient network/SSL error during Drive upload of "%s" (%s); retrying...', filename, type(e).__name__)
+                continue
+            logger.error('Google Drive upload failed for "%s": %s', filename, type(e).__name__)
+            _notify_storage_failure(f'Upload failed for "{filename}": {type(e).__name__}')
+            raise GoogleDriveError(f'Upload to Google Drive failed for "{filename}".') from None
 
     # Grant "anyone with the link can view" in a non-blocking thread so the upload HTTP response returns immediately
     def _set_public_permission(fid):

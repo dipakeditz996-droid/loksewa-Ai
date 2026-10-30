@@ -15,6 +15,7 @@ import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { getProvinceForDistrict } from "@/lib/constants/nepal-districts";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -133,12 +134,16 @@ export default function CheckoutPage() {
       try {
         setLoadingProfile(true);
         const profileData = await marketplaceApi.getProfileAddress();
+        const dist = profileData.district || existingInfoForm.district || "";
+        const prov = profileData.province || (dist ? getProvinceForDistrict(dist) : "") || existingInfoForm.province || "";
+        const mun = profileData.municipality || existingInfoForm.municipality || "";
+
         setExistingInfoForm(prev => ({
           full_name: profileData.full_name || prev.full_name || "",
           phone_number: profileData.phone_number || prev.phone_number || "",
-          province: profileData.province || prev.province || "",
-          district: profileData.district || prev.district || "",
-          municipality: profileData.municipality || prev.municipality || "",
+          province: prov || prev.province || "",
+          district: dist || prev.district || "",
+          municipality: mun || prev.municipality || "",
           ward_number: profileData.ward_number || prev.ward_number || "",
           tole_area: profileData.tole_area || prev.tole_area || "",
           street_landmark: profileData.street_landmark || prev.street_landmark || "",
@@ -146,9 +151,6 @@ export default function CheckoutPage() {
         }));
         setMissingProfileFields(profileData.missing_fields || []);
         
-        const prov = profileData.province || existingInfoForm.province;
-        const dist = profileData.district || existingInfoForm.district;
-        const mun = profileData.municipality || existingInfoForm.municipality;
         if (prov || dist || mun) {
           fetchDeliveryFeeForLocation(prov, dist, mun);
         }
@@ -167,6 +169,12 @@ export default function CheckoutPage() {
 
   const handleExistingInfoFieldChange = (field: keyof DeliveryAddress, val: string) => {
     const updated = { ...existingInfoForm, [field]: val };
+    if (field === 'district' && val.trim() && !updated.province?.trim()) {
+      const derived = getProvinceForDistrict(val.trim());
+      if (derived) {
+        updated.province = derived;
+      }
+    }
     setExistingInfoForm(updated);
     if (field === 'province' || field === 'district' || field === 'municipality') {
       fetchDeliveryFeeForLocation(updated.province, updated.district, updated.municipality);
@@ -214,6 +222,15 @@ export default function CheckoutPage() {
         setSubmitting(true);
         const createdOrder = await marketplaceApi.createOrder({
           delivery_address: existingInfoForm,
+          shipping_address: [
+            existingInfoForm.full_name,
+            existingInfoForm.phone_number,
+            `${existingInfoForm.province || ''}, ${existingInfoForm.district || ''}, ${existingInfoForm.municipality || ''}-${existingInfoForm.ward_number || ''}`,
+            existingInfoForm.tole_area,
+            existingInfoForm.street_landmark ? `Landmark: ${existingInfoForm.street_landmark}` : '',
+            existingInfoForm.delivery_note ? `Note: ${existingInfoForm.delivery_note}` : ''
+          ].filter(Boolean).join('\n'),
+          contact_number: existingInfoForm.phone_number,
           save_to_addresses: saveToAddresses,
           payment_mode: paymentMode,
         });

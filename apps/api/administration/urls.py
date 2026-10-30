@@ -16,6 +16,13 @@ from .registration_views import (
     AdminResendRegistrationOTPView,
     AdminGenerateRecoveryCodeView,
 )
+from .email_notification_views import (
+    AdminEmailRecipientListView,
+    AdminEmailRecipientDetailView,
+    AdminSendTestEmailView,
+    AdminEmailDeliveryLogsView,
+    AdminEmailDeliveryHealthView,
+)
 from .self_service_views import AdminChangePasswordView
 from .views import (
     AdminDashboardStatsView,
@@ -246,6 +253,12 @@ urlpatterns = [
     path('pdf-branding/jobs/', AdminPdfBrandingJobsListView.as_view(), name='admin-pdf-branding-jobs-list'),
     path('pdf-branding/jobs/<int:pk>/', AdminPdfBrandingJobDetailView.as_view(), name='admin-pdf-branding-job-detail'),
     path('settings/', AdminSettingsView.as_view(), name='admin-settings'),
+    # Email Notification Management & Delivery Logs
+    path('email-recipients/', AdminEmailRecipientListView.as_view(), name='admin-email-recipients-list'),
+    path('email-recipients/<int:pk>/', AdminEmailRecipientDetailView.as_view(), name='admin-email-recipients-detail'),
+    path('email-recipients/test-email/', AdminSendTestEmailView.as_view(), name='admin-email-send-test'),
+    path('email-delivery-logs/', AdminEmailDeliveryLogsView.as_view(), name='admin-email-delivery-logs'),
+    path('email-delivery-logs/health/', AdminEmailDeliveryHealthView.as_view(), name='admin-email-delivery-health'),
     path('change-password/', AdminChangePasswordView.as_view(), name='admin-change-password'),
     # Storage health check
     path('storage/health/', AdminStorageHealthView.as_view(), name='admin-storage-health'),

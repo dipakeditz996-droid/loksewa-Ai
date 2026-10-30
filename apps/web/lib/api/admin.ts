@@ -1,3 +1,55 @@
+
+export interface AdminEmailRecipient {
+  id: number;
+  email: string;
+  name: string;
+  is_active: boolean;
+  event_categories: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailDeliveryLog {
+  id: number;
+  event_category: string;
+  recipient_email: string;
+  recipient_role: string;
+  subject: string;
+  template_name: string;
+  status: 'queued' | 'sent' | 'failed' | 'retrying';
+  idempotency_key: string | null;
+  attempts: number;
+  max_attempts: number;
+  error_message: string;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface EmailDeliveryHealth {
+  health: {
+    total_dispatched: number;
+    sent: number;
+    failed: number;
+    retrying: number;
+    queued: number;
+    success_rate_percent: number;
+  };
+  provider: {
+    type: string;
+    host: string;
+    port: number | null;
+    user: string;
+    from_email: string;
+    configured: boolean;
+  };
+  configuration: {
+    email_notifications_enabled: boolean;
+    active_admin_recipients: number;
+  };
+}
+
 import { apiClient } from "./client";
 
 // ===== TYPES =====
@@ -1375,5 +1427,71 @@ export const adminApi = {
 
   deleteTag: async (id: number): Promise<void> => {
     return apiClient<void>(`/admin/syllabus/tags/${id}/`, { method: "DELETE" });
+  },
+
+  getEmailRecipients: async (): Promise<{ recipients: AdminEmailRecipient[] }> => {
+    return apiClient<{ recipients: AdminEmailRecipient[] }>("/admin/email-recipients/");
+  },
+
+  createEmailRecipient: async (data: {
+    email: string;
+    name?: string;
+    event_categories?: string[];
+  }): Promise<AdminEmailRecipient> => {
+    return apiClient<AdminEmailRecipient>("/admin/email-recipients/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateEmailRecipient: async (
+    id: number,
+    data: Partial<{ name: string; is_active: boolean; event_categories: string[] }>
+  ): Promise<AdminEmailRecipient> => {
+    return apiClient<AdminEmailRecipient>(`/admin/email-recipients/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteEmailRecipient: async (id: number): Promise<{ detail: string }> => {
+    return apiClient<{ detail: string }>(`/admin/email-recipients/${id}/`, {
+      method: "DELETE",
+    });
+  },
+
+  sendTestEmail: async (
+    data: { recipient_email?: string; recipient_id?: number }
+  ): Promise<{ success: boolean; message: string; log_id?: number }> => {
+    return apiClient<{ success: boolean; message: string; log_id?: number }>(
+      "/admin/email-recipients/test-email/",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  },
+
+  getEmailDeliveryLogs: async (params?: {
+    category?: string;
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ count: number; limit: number; offset: number; results: EmailDeliveryLog[] }> => {
+    const query = new URLSearchParams();
+    if (params?.category) query.set("category", params.category);
+    if (params?.status) query.set("status", params.status);
+    if (params?.search) query.set("search", params.search);
+    if (params?.limit !== undefined) query.set("limit", String(params.limit));
+    if (params?.offset !== undefined) query.set("offset", String(params.offset));
+    const qs = query.toString();
+    return apiClient<{ count: number; limit: number; offset: number; results: EmailDeliveryLog[] }>(
+      `/admin/email-delivery-logs/${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  getEmailDeliveryHealth: async (): Promise<EmailDeliveryHealth> => {
+    return apiClient<EmailDeliveryHealth>("/admin/email-delivery-logs/health/");
   },
 };

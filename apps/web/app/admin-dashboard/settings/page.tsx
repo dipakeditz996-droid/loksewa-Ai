@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { adminApi, AdminSettingsData } from "@/lib/api/admin";
 import { twoFactorApi } from "@/lib/api/auth";
+import AdminEmailNotificationSettings from "./_components/AdminEmailNotificationSettings";
+
 
 type TabType = "platform" | "email" | "notifications" | "security" | "features";
 
@@ -342,6 +344,9 @@ export default function SettingsPage() {
                     className="w-full"
                   />
                 </div>
+
+                {/* Centralized Email Notification Management, Recipients & Delivery Logs */}
+                <AdminEmailNotificationSettings />
               </div>
             )}
 

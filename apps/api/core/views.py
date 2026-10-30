@@ -348,6 +348,12 @@ class VerifyEmailOTPView(APIView):
             entity_type='User', entity_id=str(user.id), details={'email': email},
         )
 
+        try:
+            from .email_notification_service import EmailNotificationService
+            EmailNotificationService.send_student_welcome_email(user)
+        except Exception as wel_err:
+            logger.warning("Failed to send welcome email for user_id=%s: %s", user.id, wel_err)
+
         # Ensure free plan entitlement is active
         from subscriptions.entitlements import EntitlementService
         EntitlementService.ensure_free_plan_entitlement(user)
@@ -443,6 +449,9 @@ class UserMeView(APIView):
             'role': user.role,
             'is_active': user.is_active,
             'avatar': user.avatar,
+            'phone': getattr(getattr(user, 'student_profile', None), 'phone', '') or '',
+            'permanent_district': getattr(getattr(user, 'student_profile', None), 'permanent_district', '') or '',
+            'permanent_local_level': getattr(getattr(user, 'student_profile', None), 'permanent_local_level', '') or '',
         })
 
 

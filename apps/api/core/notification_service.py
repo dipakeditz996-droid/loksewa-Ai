@@ -460,6 +460,9 @@ class NotificationService:
                     'security': 'security',
                     'account': 'security',
                     'system': 'system',
+                    'new_registration': 'registration',
+                    'registration': 'registration',
+                    'course_application': 'payment',
                 }
                 email_cat = cat_map.get(notif_type, 'system')
                 idemp_prefix = f"admin-notif:{notif_type}:{title}:{timezone.now().strftime('%Y%m%d%H%M')}" if dedupe_minutes else None

@@ -1,5 +1,6 @@
 import html
 import logging
+import sys
 import re
 import threading
 import time
@@ -261,17 +262,18 @@ def process_email_delivery(log_id: int) -> bool:
             log.error_message = sanitized_err
             log.save(update_fields=['status', 'error_message', 'updated_at'])
 
-            # Retry after delay if in thread
-            def _retry_thread(retry_log_id):
-                time.sleep(2)
-                from django.db import connection
-                connection.close()
-                try:
-                    process_email_delivery(retry_log_id)
-                finally:
+            # Retry after delay if in thread (skip thread spawn during test execution)
+            if 'test' not in sys.argv and not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                def _retry_thread(retry_log_id):
+                    time.sleep(2)
+                    from django.db import connection
                     connection.close()
+                    try:
+                        process_email_delivery(retry_log_id)
+                    finally:
+                        connection.close()
 
-            threading.Thread(target=_retry_thread, args=(log.id,), daemon=True).start()
+                threading.Thread(target=_retry_thread, args=(log.id,), daemon=True).start()
             return False
 
 
@@ -279,7 +281,7 @@ def _dispatch_email_log(log_id: int) -> None:
     """Dispatches processing of an EmailDeliveryLog either synchronously,
     via Celery worker, or via daemon thread fallback.
     """
-    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False) or 'test' in sys.argv:
         process_email_delivery(log_id)
         return
 
@@ -377,7 +379,7 @@ class EmailNotificationService:
             metadata=meta_dict,
         )
 
-        if immediate or getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+        if immediate or getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False) or 'test' in sys.argv:
             process_email_delivery(log.id)
             log.refresh_from_db()
         else:
@@ -731,7 +733,8 @@ You can resubmit your payment evidence from your purchases page at https://hemra
         items_rows = []
         for it in items:
             p_title = html.escape(it.product.title if it.product else 'Marketplace Product')
-            items_rows.append(f"<tr><td style='padding: 6px 0; color: #334155;'>{p_title} &times; {it.quantity}</td><td style='padding: 6px 0; text-align: right; font-weight: 600;'>Rs. {it.price_at_order * it.quantity}</td></tr>")
+            p_price = getattr(it, 'price', None) or getattr(it, 'price_at_order', 0)
+            items_rows.append(f"<tr><td style='padding: 6px 0; color: #334155;'>{p_title} &times; {it.quantity}</td><td style='padding: 6px 0; text-align: right; font-weight: 600;'>Rs. {p_price * it.quantity}</td></tr>")
 
         items_markup = "\n".join(items_rows) if items_rows else "<tr><td colspan='2' style='padding: 6px 0;'>Order details recorded.</td></tr>"
 

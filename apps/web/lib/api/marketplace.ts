@@ -600,17 +600,35 @@ export const marketplaceApi = {
     is_default?: boolean;
     payment_mode?: "PREPAID" | "COD";
   }) => {
+    const payload = { ...data };
+    if (data.delivery_address) {
+      const a = data.delivery_address;
+      if (!payload.contact_number && a.phone_number) {
+        payload.contact_number = a.phone_number;
+      }
+      if (!payload.shipping_address) {
+        payload.shipping_address = [
+          a.full_name,
+          a.phone_number,
+          `${a.province || ''}, ${a.district || ''}, ${a.municipality || ''}-${a.ward_number || ''}`,
+          a.tole_area,
+          a.street_landmark ? `Landmark: ${a.street_landmark}` : '',
+          a.delivery_note ? `Note: ${a.delivery_note}` : ''
+        ].filter(Boolean).join('\n');
+      }
+    }
+
     try {
       return await apiClient<Order>("/marketplace/student/orders/checkout/", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
     } catch (err: any) {
       // If /checkout/ fails or returns 404/500, fallback to standard /orders/
       if (err?.status === 404 || err?.status === 500) {
         return apiClient<Order>("/marketplace/student/orders/", {
           method: "POST",
-          body: JSON.stringify(data),
+          body: JSON.stringify(payload),
         });
       }
       throw err;
@@ -681,6 +699,7 @@ export const marketplaceApi = {
           const user = JSON.parse(stored);
           const fullName =
             (typeof user?.full_name === "string" && user.full_name.trim()) ||
+            (typeof user?.name === "string" && user.name.trim()) ||
             `${user?.first_name || ""} ${user?.last_name || ""}`.trim() ||
             (typeof user?.username === "string" ? user.username.trim() : "");
           const phone = typeof user?.phone === "string" ? user.phone.trim() : "";

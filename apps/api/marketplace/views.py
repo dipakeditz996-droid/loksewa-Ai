@@ -1252,6 +1252,29 @@ class OrderViewSet(viewsets.ModelViewSet):
         shipping_address_raw = request.data.get('shipping_address')
         contact_number_raw = request.data.get('contact_number')
 
+        # Automatically deserialize JSON string if passed as stringified JSON
+        if isinstance(delivery_address_data, str) and delivery_address_data.strip():
+            try:
+                import json
+                delivery_address_data = json.loads(delivery_address_data)
+            except Exception:
+                pass
+
+        # If address fields are passed directly in request.data, assemble delivery_address_data
+        if (not delivery_address_data or not isinstance(delivery_address_data, dict)) and isinstance(request.data, dict):
+            if any(k in request.data for k in ('district', 'province', 'municipality', 'tole_area', 'ward_number')):
+                delivery_address_data = {
+                    k: request.data.get(k)
+                    for k in ('full_name', 'phone_number', 'province', 'district', 'municipality', 'ward_number', 'tole_area', 'street_landmark', 'delivery_note')
+                    if k in request.data
+                }
+
+        if delivery_address_id is not None:
+            try:
+                delivery_address_id = int(delivery_address_id)
+            except (ValueError, TypeError):
+                delivery_address_id = None
+
         delivery_address = None
         shipping_address_snapshot = {}
         delivery_fee = Decimal('0.00')
@@ -1342,13 +1365,53 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         else:
             if not shipping_address_raw or not contact_number_raw:
-                return Response({"detail": "Delivery address or shipping details are required"}, status=status.HTTP_400_BAD_REQUEST)
-            shipping_address_str = shipping_address_raw
-            contact_number_str = contact_number_raw
-            shipping_address_snapshot = {
-                'shipping_address': shipping_address_raw,
-                'contact_number': contact_number_raw
-            }
+                # Automatic fallback to student's saved delivery addresses or registration profile
+                saved_fallback = DeliveryAddress.objects.filter(student=request.user).order_by('-is_default', '-created_at').first()
+                if saved_fallback:
+                    delivery_address = saved_fallback
+                    contact_number_str = saved_fallback.phone_number
+                    shipping_address_str = (
+                        f"{saved_fallback.full_name}\n{saved_fallback.phone_number}\n"
+                        f"{saved_fallback.province}, {saved_fallback.district}, "
+                        f"{saved_fallback.municipality}-{saved_fallback.ward_number}\n"
+                        f"{saved_fallback.tole_area}"
+                    )
+                    shipping_address_snapshot = {
+                        'full_name': saved_fallback.full_name,
+                        'phone_number': saved_fallback.phone_number,
+                        'province': saved_fallback.province,
+                        'district': saved_fallback.district,
+                        'municipality': saved_fallback.municipality,
+                        'ward_number': saved_fallback.ward_number,
+                        'tole_area': saved_fallback.tole_area,
+                    }
+                else:
+                    prof = getattr(request.user, 'student_profile', None)
+                    phone_val = (prof.phone if prof else '') or ''
+                    dist_val = (prof.permanent_district if prof else '') or ''
+                    mun_val = (prof.permanent_local_level if prof else '') or ''
+                    prov_val = get_nepal_province_for_district(dist_val) if dist_val else ''
+                    name_val = (request.user.get_full_name() or request.user.username or '').strip()
+
+                    if phone_val and (dist_val or mun_val):
+                        contact_number_str = phone_val
+                        shipping_address_str = f"{name_val}\n{phone_val}\n{prov_val}, {dist_val}, {mun_val}".strip()
+                        shipping_address_snapshot = {
+                            'full_name': name_val,
+                            'phone_number': phone_val,
+                            'province': prov_val,
+                            'district': dist_val,
+                            'municipality': mun_val,
+                        }
+                    else:
+                        return Response({"detail": "Delivery address or shipping details are required. Please complete your delivery address."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                shipping_address_str = shipping_address_raw
+                contact_number_str = contact_number_raw
+                shipping_address_snapshot = {
+                    'shipping_address': shipping_address_raw,
+                    'contact_number': contact_number_raw
+                }
 
         from core.notification_service import NotificationService
 
@@ -1459,6 +1522,14 @@ class OrderViewSet(viewsets.ModelViewSet):
                 NotificationService.notify_book_sold(seller, order)
         except Exception as notif_err:
             logger.warning(f"Failed to notify seller for order {order.id}: {notif_err}")
+
+        # Centralized Email Notification dispatch
+        try:
+            from core.email_notification_service import EmailNotificationService
+            EmailNotificationService.send_student_order_created_email(order)
+            EmailNotificationService.send_admin_marketplace_order_email(order)
+        except Exception as email_err:
+            logger.warning(f"Failed to dispatch order created emails for order #{order.id}: {email_err}")
 
         return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
 

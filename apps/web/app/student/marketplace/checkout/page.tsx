@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus, UserCheck, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
+import { RetryImage } from "@/components/ui/retry-image";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -755,17 +756,15 @@ export default function CheckoutPage() {
                     <div className="flex flex-col sm:flex-row gap-6 items-center">
                       {selectedMethod.qr_image && (
                         <div className="flex flex-col items-center gap-1.5 shrink-0">
-                          <div className="w-44 h-44 relative bg-white p-2 rounded-xl border shadow-sm">
-                            <Image 
-                              src={(selectedMethod as any).qr_image_direct || buildMediaUrl(selectedMethod.qr_image)} 
+                          <div className="w-44 h-44 relative bg-white p-2 rounded-xl border shadow-sm flex items-center justify-center overflow-hidden">
+                            <RetryImage 
+                              src={buildMediaUrl(selectedMethod.qr_image) || (selectedMethod as any).qr_image_direct} 
                               alt={`${selectedMethod.display_name} Payment QR`} 
-                              fill 
-                              className="object-contain" 
-                              unoptimized
+                              className="w-full h-full object-contain" 
                             />
                           </div>
                           <a
-                            href={(selectedMethod as any).qr_image_direct || buildMediaUrl(selectedMethod.qr_image)}
+                            href={buildMediaUrl(selectedMethod.qr_image) || (selectedMethod as any).qr_image_direct}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-[11px] text-primary hover:underline font-medium"

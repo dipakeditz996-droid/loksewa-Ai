@@ -62,6 +62,7 @@ export function RetryImage({ src, fallback, className, onError, ...props }: Retr
       key={`${attempt}-${hasFallenBack}`}
       src={currentSrc}
       className={className}
+      referrerPolicy="no-referrer"
       onError={handleError}
       {...props}
     />

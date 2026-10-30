@@ -49,6 +49,7 @@ export function RetryNextImage({ onError, src, ...props }: ImageProps) {
 
   return (
     <Image
+      referrerPolicy="no-referrer"
       key={`${attempt}-${hasFallenBack}`}
       src={currentSrc}
       {...props}

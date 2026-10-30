@@ -38,6 +38,8 @@ export function getDriveFileId(path: string | null | undefined): string | null {
   if (!path || typeof path !== "string") return null;
   const proxyMatch = path.match(/\/api\/media\/drive\/([a-zA-Z0-9_-]+)/);
   if (proxyMatch && proxyMatch[1]) return proxyMatch[1];
+  const directMatch = path.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/);
+  if (directMatch && directMatch[1]) return directMatch[1];
   const nameMatch = path.match(/(?:^|\/)([a-zA-Z0-9_-]{15,})__[^\/]+$/);
   if (nameMatch && nameMatch[1]) return nameMatch[1];
   return null;
@@ -45,7 +47,11 @@ export function getDriveFileId(path: string | null | undefined): string | null {
 
 export function getMediaFallbackUrl(path: string | null | undefined): string | null {
   const fileId = getDriveFileId(path);
-  return fileId ? `https://lh3.googleusercontent.com/d/${fileId}` : null;
+  if (!fileId) return null;
+  if (path && (path.includes("googleusercontent.com") || path.includes("/d/"))) {
+    return `${getApiOrigin()}/api/media/drive/${fileId}/`;
+  }
+  return `https://lh3.googleusercontent.com/d/${fileId}`;
 }
 
 export function buildMediaUrl(path: string | null | undefined): string {

@@ -2876,7 +2876,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                     })
                 except Exception as err:
                     logger.warning("NCM rate calculation error: %s", err)
-                    if fallback_allowed:
+                    is_auth_error = "401" in str(err) or "Invalid token" in str(err)
+                    if fallback_allowed or is_auth_error:
                         fallback_fee = self._calculate_delivery_fee(delivery_address, items=items)
                         return Response({
                             "delivery_fee": fallback_fee,
@@ -3356,7 +3357,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                         fee_source = 'ncm'
                     except NCMError as err:
                         logger.warning("NCM rate calculation error at checkout: %s", err)
-                        if fallback_allowed:
+                        is_auth_error = "401" in str(err) or "Invalid token" in str(err)
+                        if fallback_allowed or is_auth_error:
                             delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
                             fee_source = 'rule_fallback'
                             fallback_applied = True

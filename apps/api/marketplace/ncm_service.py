@@ -1349,6 +1349,59 @@ class NCMService:
         }
 
     # --------------------------------------------------------------------------
+    # 5b. RECONCILE BY VENDOR REFERENCE (GET /v1/order?vref_id=...)
+    # --------------------------------------------------------------------------
+
+    def lookup_order_by_vref(self, vref_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Attempt to look up an existing order in NCM using vendor reference ID (vref_id).
+        Used during timeout reconciliation to prevent duplicate shipments.
+        Queries GET /v1/order?vref_id=<vref_id> or GET /v1/order?ref=<vref_id>.
+        Returns sanitized dict with orderid/delivery_charge/cod_charge if found, else None.
+        """
+        clean_ref = str(vref_id or "").strip()
+        if not clean_ref:
+            return None
+
+        for param_key in ["vref_id", "ref", "order_ref"]:
+            try:
+                response = self._execute_request(
+                    method="GET",
+                    endpoint="v1/order",
+                    params={param_key: clean_ref},
+                    allow_retries=False,
+                )
+                try:
+                    data = response.json()
+                except ValueError:
+                    continue
+
+                target_dict = None
+                if isinstance(data, dict):
+                    if data.get("orderid") or data.get("order_id"):
+                        target_dict = data
+                    elif isinstance(data.get("data"), dict) and (data["data"].get("orderid") or data["data"].get("order_id")):
+                        target_dict = data["data"]
+                elif isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                    if data[0].get("orderid") or data[0].get("order_id"):
+                        target_dict = data[0]
+
+                if target_dict:
+                    orderid = target_dict.get("orderid") or target_dict.get("order_id")
+                    logger.info("Successfully reconciled order by %s=%s -> NCM Order ID %s", param_key, clean_ref, orderid)
+                    return {
+                        "orderid": str(orderid),
+                        "delivery_charge": float(target_dict.get("delivery_charge", 0.0)),
+                        "cod_charge": float(target_dict.get("cod_charge", 0.0)),
+                        "delivery_type": target_dict.get("delivery_type", "Door2Door"),
+                        "raw_response": target_dict,
+                    }
+            except Exception as exc:
+                logger.debug("NCM lookup by %s=%s returned error: %s", param_key, clean_ref, exc)
+
+        return None
+
+    # --------------------------------------------------------------------------
     # 6. BULK ORDER STATUSES (POST /v1/orders/statuses)
     # --------------------------------------------------------------------------
 

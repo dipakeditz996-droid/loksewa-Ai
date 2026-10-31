@@ -126,7 +126,9 @@ export default function CourierSettingsPage() {
       const updated = await marketplaceApi.adminGetCourierSettings();
       setConfig(updated);
     } catch (err: any) {
-      toast.error(err.message || "Failed to test connection");
+      const msg = err?.data?.error || err?.data?.detail || err?.message || "Failed to test connection";
+      toast.error(msg);
+      marketplaceApi.adminGetCourierSettings().then(setConfig).catch(() => {});
     } finally {
       setTesting(false);
     }

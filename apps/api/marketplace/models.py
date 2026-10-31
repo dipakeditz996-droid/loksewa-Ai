@@ -370,6 +370,42 @@ class Order(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
+    # NCM Courier Automatic Dispatch tracking fields (Phase 13)
+    NCM_DISPATCH_STATUS_CHOICES = (
+        ('NOT_REQUESTED', 'Not Requested'),
+        ('QUEUED', 'Queued for Dispatch'),
+        ('CREATING', 'Creating Shipment in NCM'),
+        ('CREATED', 'Created in NCM'),
+        ('FAILED', 'Dispatch Failed'),
+        ('MANUAL_REVIEW_REQUIRED', 'Manual Review Required'),
+    )
+
+    ncm_dispatch_status = models.CharField(
+        max_length=30,
+        choices=NCM_DISPATCH_STATUS_CHOICES,
+        default='NOT_REQUESTED',
+        db_index=True,
+        help_text="Current state of automatic or manual NCM courier dispatch.",
+    )
+    ncm_dispatch_attempts = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of attempts made to dispatch to NCM.",
+    )
+    ncm_dispatch_last_error = models.TextField(
+        blank=True,
+        help_text="Last error encountered during NCM dispatch.",
+    )
+    ncm_dispatch_next_retry = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the next automated retry should run.",
+    )
+    ncm_dispatch_last_attempt_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of the most recent dispatch attempt.",
+    )
+
     # Store a snapshot of the shipping address as text and structured JSON
     shipping_address = models.TextField(blank=True)
     contact_number = models.CharField(max_length=20, blank=True)
@@ -518,14 +554,23 @@ class CourierShipment(models.Model):
 
     STATUS_MAPPING = {
         'order created': 'PROCESSING',
+        'order accepted': 'PROCESSING',
+        'accepted': 'PROCESSING',
+        'processing': 'PROCESSING',
         'pickup pending': 'PROCESSING',
         'pickup complete': 'SHIPPED',
+        'picked up': 'SHIPPED',
         'in transit': 'SHIPPED',
         'dispatched': 'SHIPPED',
+        'arrived at hub': 'SHIPPED',
+        'at hub': 'SHIPPED',
         'out for delivery': 'OUT_FOR_DELIVERY',
         'delivered': 'DELIVERED',
+        'delivery failed': 'ON_HOLD',
+        'returned': 'ON_HOLD',
         'return': 'ON_HOLD',
         'cancelled': 'CANCELLED',
+        'canceled': 'CANCELLED',
     }
 
     order = models.OneToOneField(

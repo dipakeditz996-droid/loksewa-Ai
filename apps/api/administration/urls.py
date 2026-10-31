@@ -9,8 +9,14 @@ from .pdf_branding_views import (
     AdminPdfBrandingJobDetailView,
     AdminPdfBrandingJobsListView,
 )
-from django.urls import path, include
+from django.urls import path, re_path, include
 from rest_framework.routers import DefaultRouter
+from marketplace.views import (
+    AdminNCMConfigurationView,
+    AdminNCMTestConnectionView,
+    AdminNCMBranchesView,
+    AdminCourierOverviewView,
+)
 from .registration_views import (
     AdminPendingVerificationsView,
     AdminResendRegistrationOTPView,
@@ -290,5 +296,10 @@ urlpatterns = [
     # AI options
     path('questions/<int:pk>/generate-options/', AIGenerateOptionsView.as_view(), name='admin-generate-options'),
     path('questions/<int:pk>/approve-options/', AIApproveOptionsView.as_view(), name='admin-approve-options'),
+    # Courier alias routes
+    re_path(r'^courier/settings/?$', AdminNCMConfigurationView.as_view(), name='admin-courier-settings-alias'),
+    re_path(r'^courier/test-connection/?$', AdminNCMTestConnectionView.as_view(), name='admin-courier-test-alias'),
+    re_path(r'^courier/branches/?$', AdminNCMBranchesView.as_view(), name='admin-courier-branches-alias'),
+    re_path(r'^courier/overview/?$', AdminCourierOverviewView.as_view(), name='admin-courier-overview-alias'),
     path('', include(router.urls)),
 ]

@@ -652,6 +652,10 @@ class OrderSerializer(serializers.ModelSerializer):
 
             'hold_reason', 'held_at', 'advance_forfeited',
 
+            'ncm_dispatch_status', 'ncm_dispatch_attempts',
+            'ncm_dispatch_last_error', 'ncm_dispatch_next_retry',
+            'ncm_dispatch_last_attempt_at',
+
             'created_at', 'updated_at'
 
         )

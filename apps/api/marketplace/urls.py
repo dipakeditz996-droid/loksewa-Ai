@@ -1,4 +1,4 @@
-from django.urls import path, include
+from django.urls import path, re_path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     # Admin
@@ -81,12 +81,12 @@ urlpatterns = [
     path('public/products/', PublicProductListView.as_view(), name='public-products'),
     path('webhooks/ncm/', NCMWebhookView.as_view(), name='ncm-webhook'),
     path('admin/settings/', AdminMarketplaceSettingsView.as_view(), name='admin-marketplace-settings'),
-    path('admin/courier/settings/', AdminNCMConfigurationView.as_view(), name='admin-ncm-configuration'),
-    path('admin/courier/test-connection/', AdminNCMTestConnectionView.as_view(), name='admin-ncm-test-connection'),
-    path('admin/courier/branches/', AdminNCMBranchesView.as_view(), name='admin-ncm-branches'),
-    path('admin/courier/webhook-management/', AdminNCMWebhookManagementView.as_view(), name='admin-ncm-webhook-management'),
-    path('admin/courier/overview/', AdminCourierOverviewView.as_view(), name='admin-courier-overview'),
-    path('admin/courier/sync/', AdminCourierSyncTriggerView.as_view(), name='admin-courier-sync-trigger'),
+    re_path(r'^admin/courier/settings/?$', AdminNCMConfigurationView.as_view(), name='admin-ncm-configuration'),
+    re_path(r'^admin/courier/test-connection/?$', AdminNCMTestConnectionView.as_view(), name='admin-ncm-test-connection'),
+    re_path(r'^admin/courier/branches/?$', AdminNCMBranchesView.as_view(), name='admin-ncm-branches'),
+    re_path(r'^admin/courier/webhook-management/?$', AdminNCMWebhookManagementView.as_view(), name='admin-ncm-webhook-management'),
+    re_path(r'^admin/courier/overview/?$', AdminCourierOverviewView.as_view(), name='admin-courier-overview'),
+    re_path(r'^admin/courier/sync/?$', AdminCourierSyncTriggerView.as_view(), name='admin-courier-sync-trigger'),
     path('admin/', include(admin_router.urls)),
     path('student/cart/items/<int:pk>/', CartItemDetailView.as_view(), name='student-cart-item-detail'),
     path('student/pricing-policy/', MarketplacePricingPolicyView.as_view(), name='student-pricing-policy'),

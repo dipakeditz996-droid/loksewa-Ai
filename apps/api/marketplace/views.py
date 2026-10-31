@@ -503,7 +503,9 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                             Decimal('0.00'),
                             (final_tot - order.cod_advance_paid).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                         )
-                        order.save(update_fields=['status', 'payment_status', 'cod_advance_paid', 'cod_remaining_balance', 'updated_at'])
+                        order.ncm_dispatch_status = 'QUEUED'
+                        order.ncm_dispatch_last_error = ''
+                        order.save(update_fields=['status', 'payment_status', 'cod_advance_paid', 'cod_remaining_balance', 'ncm_dispatch_status', 'ncm_dispatch_last_error', 'updated_at'])
                         OrderStatusHistory.objects.create(
                             order=order,
                             previous_status=old_order_status,
@@ -514,7 +516,9 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                     else:
                         order.status = 'CONFIRMED'
                         order.payment_status = 'PAID'
-                        order.save(update_fields=['status', 'payment_status', 'updated_at'])
+                        order.ncm_dispatch_status = 'QUEUED'
+                        order.ncm_dispatch_last_error = ''
+                        order.save(update_fields=['status', 'payment_status', 'ncm_dispatch_status', 'ncm_dispatch_last_error', 'updated_at'])
                         OrderStatusHistory.objects.create(
                             order=order,
                             previous_status=old_order_status,
@@ -522,6 +526,11 @@ class AdminPaymentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
                             changed_by=request.user,
                             note='Full payment approved by admin',
                         )
+
+                    # Trigger automatic NCM courier dispatch strictly post-commit!
+                    from marketplace.dispatch_service import trigger_ncm_auto_dispatch
+                    target_order_pk = order.pk
+                    transaction.on_commit(lambda order_pk=target_order_pk: trigger_ncm_auto_dispatch(order_pk))
                 elif submission.product:
                     Purchase.objects.update_or_create(
                         student=submission.student,
@@ -977,11 +986,14 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
                 )
 
             # Move order status to PROCESSING or SHIPPED
+            order.ncm_dispatch_status = 'CREATED'
+            order.ncm_dispatch_last_error = ''
+            order.ncm_dispatch_next_retry = None
             old_status = order.status
             new_status = 'PROCESSING'
             if old_status != new_status:
                 order.status = new_status
-                order.save(update_fields=['status', 'updated_at'])
+                order.save(update_fields=['ncm_dispatch_status', 'ncm_dispatch_last_error', 'ncm_dispatch_next_retry', 'status', 'updated_at'])
 
                 OrderStatusHistory.objects.create(
                     order=order,
@@ -992,6 +1004,132 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
                 )
 
                 order.items.exclude(fulfillment_status='PROCESSING').update(fulfillment_status='PROCESSING')
+            else:
+                order.save(update_fields=['ncm_dispatch_status', 'ncm_dispatch_last_error', 'ncm_dispatch_next_retry', 'updated_at'])
+
+        # Send notification to student
+        from core.notification_service import NotificationService
+        NotificationService._create_if_allowed(
+            recipient=order.student,
+            notif_type='marketplace',
+            preference_key='marketplace_order_status_inapp',
+            title='Order Dispatched via Courier',
+            message=f"Your order #{order.id} has been dispatched via Nepal Can Move (Tracking ID: {ncm_order_id}).",
+            action_url=f"/student/marketplace/orders/{order.id}",
+        )
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='retry-dispatch')
+    def retry_dispatch(self, request, pk=None):
+        """
+        Admin action to retry failed or queued NCM courier dispatch.
+        Guaranteed idempotent.
+        """
+        order = self.get_object()
+        if hasattr(order, 'courier_shipment') and order.courier_shipment:
+            return Response(
+                {"detail": f"Shipment already exists for Order #{order.id} (NCM Order ID: {order.courier_shipment.ncm_order_id})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from marketplace.dispatch_service import execute_ncm_dispatch
+        res = execute_ncm_dispatch(order.id, force_retry=True, admin_user=request.user)
+        order.refresh_from_db()
+
+        if res.get("status") in ["CREATED", "ALREADY_DISPATCHED"]:
+            return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {
+                    "detail": res.get("error") or "Failed to dispatch NCM shipment.",
+                    "status": res.get("status"),
+                    "order": OrderSerializer(order).data,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @action(detail=True, methods=['post'], url_path='reconcile-dispatch')
+    def reconcile_dispatch(self, request, pk=None):
+        """
+        Admin action to reconcile an order in MANUAL_REVIEW_REQUIRED or ambiguous timeout state.
+        Queries NCM with vref_id (or optional admin supplied ncm_order_id).
+        If confirmed, creates/links CourierShipment and transitions order to PROCESSING.
+        """
+        order = self.get_object()
+        if hasattr(order, 'courier_shipment') and order.courier_shipment:
+            return Response(
+                {"detail": f"Shipment already exists for Order #{order.id} (NCM Order ID: {order.courier_shipment.ncm_order_id})."},
+                status=status.HTTP_200_OK,
+            )
+
+        service = NCMService()
+        if not service.is_configured():
+            return Response({"detail": "NCM service not configured."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        manual_ncm_id = request.data.get('ncm_order_id')
+        reconciled = None
+
+        if manual_ncm_id:
+            try:
+                details = service.get_order_details(str(manual_ncm_id).strip())
+                inner = details.get('data') or details
+                if inner and (inner.get('orderid') or inner.get('order_id') or inner.get('id')):
+                    reconciled = inner
+            except Exception as exc:
+                return Response(
+                    {"detail": f"Failed to verify NCM order ID '{manual_ncm_id}': {exc}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            reconciled = service.lookup_order_by_vref(f"ORD-{order.id}")
+
+        if reconciled and (reconciled.get("orderid") or reconciled.get("order_id") or reconciled.get("id")):
+            from marketplace.dispatch_service import _persist_successful_ncm_shipment
+            ncm_oid = str(reconciled.get("orderid") or reconciled.get("order_id") or reconciled.get("id"))
+            snapshot = order.shipping_address_snapshot or {}
+            valid_branch = (snapshot.get('ncm_destination_branch') or 'Kathmandu').strip()
+            del_type = (snapshot.get('ncm_delivery_type') or 'Door2Door').strip()
+
+            api_res = {
+                "success": True,
+                "ncm_order_id": ncm_oid,
+                "tracking_id": str(reconciled.get("tracking_id") or ncm_oid),
+                "delivery_charge": float(reconciled.get("delivery_charge", 0.0)),
+                "cod_charge": float(reconciled.get("cod_charge", order.cod_remaining_balance if order.is_cod else 0.0)),
+                "raw_response": reconciled,
+            }
+            _persist_successful_ncm_shipment(
+                api_res=api_res,
+                valid_branch=valid_branch,
+                delivery_type=del_type,
+                package_description="Loksewa Study Material",
+                weight=1.0,
+                service=service,
+                order_id=order.id,
+                admin_user=request.user,
+                is_reconciled=True,
+            )
+            order.refresh_from_db()
+            return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
+        else:
+            # Not found in NCM: admin can safely reset status to FAILED to allow re-dispatch
+            reset = request.data.get('reset_to_failed', False)
+            if reset:
+                with transaction.atomic():
+                    order = Order.objects.select_for_update().get(pk=order.pk)
+                    order.ncm_dispatch_status = 'FAILED'
+                    order.ncm_dispatch_last_error = f"Reconciled by admin {request.user.username}: No shipment found in NCM portal."
+                    order.save(update_fields=['ncm_dispatch_status', 'ncm_dispatch_last_error'])
+                return Response(OrderSerializer(order).data, status=status.HTTP_200_OK)
+
+            return Response(
+                {
+                    "detail": f"No existing NCM shipment found for ORD-{order.id}. If you verified on the NCM portal that no shipment exists, submit with reset_to_failed=true to allow retrying.",
+                    "reconciled": False,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         # Send notification to student
         from core.notification_service import NotificationService

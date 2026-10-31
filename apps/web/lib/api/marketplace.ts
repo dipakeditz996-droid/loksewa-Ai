@@ -493,6 +493,17 @@ export interface Order {
   delivery_address_details?: DeliveryAddress;
   items: OrderItem[];
   status_history?: OrderStatusHistory[];
+  ncm_dispatch_status?:
+    | "NOT_REQUESTED"
+    | "QUEUED"
+    | "CREATING"
+    | "CREATED"
+    | "FAILED"
+    | "MANUAL_REVIEW_REQUIRED";
+  ncm_dispatch_attempts?: number;
+  ncm_dispatch_last_error?: string;
+  ncm_dispatch_next_retry?: string | null;
+  ncm_dispatch_last_attempt_at?: string | null;
   courier_shipment?: CourierShipment | null;
   latest_payment_submission?: {
     id: number;
@@ -1280,6 +1291,20 @@ export const marketplaceApi = {
   adminSyncCourier: async (orderId: number) => {
     return apiClient<Order>(`/marketplace/admin/orders/${orderId}/sync-courier/`, {
       method: "POST",
+    });
+  },
+  adminRetryDispatch: async (orderId: number) => {
+    return apiClient<Order>(`/marketplace/admin/orders/${orderId}/retry-dispatch/`, {
+      method: "POST",
+    });
+  },
+  adminReconcileDispatch: async (
+    orderId: number,
+    data?: { ncm_order_id?: string; reset_to_failed?: boolean }
+  ) => {
+    return apiClient<Order>(`/marketplace/admin/orders/${orderId}/reconcile-dispatch/`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
     });
   },
 

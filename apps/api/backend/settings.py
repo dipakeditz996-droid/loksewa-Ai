@@ -134,6 +134,11 @@ for _railway_host in ['.railway.app', '.up.railway.app', 'loksewa-ai-production.
     if _railway_host not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_railway_host)
 
+# Automatically permit Render platform domains if running on Render
+for _render_host in ['.onrender.com']:
+    if _render_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_render_host)
+
 # Permit production domains
 for _prod_host in ['hemrajkc.com.np', 'www.hemrajkc.com.np', 'hemrajkc.com', 'www.hemrajkc.com']:
     if _prod_host not in ALLOWED_HOSTS:
@@ -541,7 +546,7 @@ for _d_origin in _default_origins:
     if _d_origin not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_d_origin)
 
-for _d_wildcard in ['https://*.railway.app', 'https://*.up.railway.app', 'https://*.vercel.app']:
+for _d_wildcard in ['https://*.onrender.com', 'https://*.railway.app', 'https://*.up.railway.app', 'https://*.vercel.app']:
     if _d_wildcard not in CSRF_TRUSTED_ORIGINS:
         CSRF_TRUSTED_ORIGINS.append(_d_wildcard)
 

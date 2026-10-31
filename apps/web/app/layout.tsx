@@ -15,9 +15,14 @@ const OsDndGuideModal = dynamic(
   () => import("@/components/student/focus/OsDndGuideModal").then((m) => m.OsDndGuideModal)
 );
 
-const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL
-  ? new URL(process.env.NEXT_PUBLIC_API_URL).origin
-  : "https://loksewa-ai-production.up.railway.app";
+let API_ORIGIN: string | undefined = undefined;
+try {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    API_ORIGIN = new URL(process.env.NEXT_PUBLIC_API_URL).origin;
+  }
+} catch {
+  API_ORIGIN = undefined;
+}
 
 const inter = Inter({
   subsets: ["latin"],
@@ -49,7 +54,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   // Hoist dns-prefetch directly into document head without opening an unused TCP/TLS socket on static pages
-  prefetchDNS(API_ORIGIN);
+  if (API_ORIGIN) prefetchDNS(API_ORIGIN);
 
   return (
     <html lang="en" suppressHydrationWarning>

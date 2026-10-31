@@ -1,12 +1,14 @@
 export function getApiBaseUrl(): string {
   let url = process.env.NEXT_PUBLIC_API_URL || "";
 
-  // If running in browser on a production domain, but API URL is unset or pointing to localhost,
-  // fall back to Railway production API so browser requests don't fail to connect to localhost
+  // In browser on a production domain, ensure NEXT_PUBLIC_API_URL is configured
   if (typeof window !== "undefined") {
     const isProdHost = window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
     if (isProdHost && (!url || url.includes("localhost") || url.includes("127.0.0.1") || url.includes("0.0.0.0"))) {
-      url = "https://loksewa-ai-production.up.railway.app/api";
+      console.error(
+        "[API Configuration Error] NEXT_PUBLIC_API_URL is missing or pointing to localhost in production.\n" +
+        "Configure NEXT_PUBLIC_API_URL in your Vercel Project Settings with your Render backend URL (e.g. https://<service-name>.onrender.com/api)."
+      );
     }
   }
 

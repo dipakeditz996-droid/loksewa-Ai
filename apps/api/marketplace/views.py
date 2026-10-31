@@ -1072,20 +1072,34 @@ class NCMWebhookView(APIView):
             )
 
         expected_secret = getattr(settings, 'NCM_WEBHOOK_SECRET', '').strip()
+        effective_token = config.get_effective_token()
+
         if expected_secret:
             provided_secret = (
                 request.headers.get('X-NCM-Webhook-Secret') or
                 request.META.get('HTTP_X_NCM_WEBHOOK_SECRET') or
                 request.headers.get('X-Webhook-Secret') or
                 request.META.get('HTTP_X_WEBHOOK_SECRET') or
+                request.headers.get('X-Api-Token') or
+                request.META.get('HTTP_X_API_TOKEN') or
                 request.query_params.get('secret') or
+                request.query_params.get('token') or
+                request.query_params.get('key') or
                 ''
             )
             auth_header = request.headers.get('Authorization') or request.META.get('HTTP_AUTHORIZATION', '')
-            if not provided_secret and auth_header.startswith('Bearer '):
-                provided_secret = auth_header.split(' ', 1)[1].strip()
+            if not provided_secret and auth_header:
+                for prefix in ('Bearer ', 'Token '):
+                    if auth_header.startswith(prefix):
+                        provided_secret = auth_header.split(prefix, 1)[1].strip()
+                        break
+                if not provided_secret:
+                    provided_secret = auth_header.strip()
 
-            if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
+            is_valid_secret = bool(expected_secret and provided_secret and hmac.compare_digest(provided_secret, expected_secret))
+            is_valid_token = bool(effective_token and provided_secret and hmac.compare_digest(provided_secret, effective_token))
+
+            if not (is_valid_secret or is_valid_token):
                 logger.warning("Unauthorized NCM webhook call attempted")
                 return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -1100,6 +1114,38 @@ class NCMWebhookView(APIView):
 
         event_name = str(payload.get('event') or payload.get('status') or payload.get('courier_status') or 'status_update')
 
+        ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+        if ip and ',' in ip:
+            ip = ip.split(',')[0].strip()
+
+        # Handle NCM diagnostic / test ping events
+        is_test_ping = (
+            (not ncm_order_id and not tracking_id and not vref_id)
+            or str(payload.get('test') or '').lower() in ['true', '1', 'yes']
+            or event_name.lower() in ['test', 'ping', 'webhook_test', 'test_connection']
+            or ncm_order_id.lower() in ['test', 'ping', '0']
+        )
+        if is_test_ping:
+            NCMWebhookEvent.objects.create(
+                ip_address=ip[:50],
+                event_type='test_ping',
+                ncm_order_id=ncm_order_id[:100],
+                tracking_id=tracking_id[:100],
+                payload=payload,
+                is_success=True,
+                status_code=200,
+                error_message="",
+            )
+            config.last_webhook_received_at = timezone.now()
+            config.last_webhook_event = 'test_ping'
+            config.last_webhook_error = ''
+            config.webhook_registered = True
+            config.save(update_fields=['last_webhook_received_at', 'last_webhook_event', 'last_webhook_error', 'webhook_registered'])
+            return Response({
+                'status': 'ok',
+                'message': 'NCM Webhook test received and verified successfully.'
+            }, status=status.HTTP_200_OK)
+
         shipment = None
         if ncm_order_id:
             shipment = CourierShipment.objects.filter(ncm_order_id=ncm_order_id).first()
@@ -1107,10 +1153,6 @@ class NCMWebhookView(APIView):
             shipment = CourierShipment.objects.filter(tracking_id=tracking_id).first()
         if not shipment and vref_id:
             shipment = CourierShipment.objects.filter(vref_id=vref_id).first()
-
-        ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
-        if ip and ',' in ip:
-            ip = ip.split(',')[0].strip()
 
         if not shipment:
             logger.warning(

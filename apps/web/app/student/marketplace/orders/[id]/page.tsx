@@ -470,6 +470,67 @@ export default function StudentOrderDetailPage() {
           </div>
         )}
 
+        {/* Preparing Courier Shipment Card (Payment Approved, Courier Pending / In Progress) */}
+        {!order.courier_shipment && 
+         (order.status === 'CONFIRMED' || order.status === 'PROCESSING') &&
+         (order.payment_status === 'PARTIALLY_PAID' || order.payment_status === 'PAID') && (
+          <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-white dark:from-indigo-950/30 dark:via-slate-900/40 dark:to-slate-900/20 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-2xl p-6 mb-8 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-100 dark:border-indigo-900/50 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-xs">
+                  <Truck className="w-6 h-6 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                      Payment Verified — Preparing Courier Shipment
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Preparing Shipment
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Your {order.is_cod ? '15% COD advance' : 'payment'} is verified by our administration. Your package is being assigned to Nepal Can Move (NCM). Tracking code will appear here once accepted.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Shipment Progress Steps */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 text-xs">
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 p-3 rounded-xl border border-emerald-200 dark:border-emerald-800/50">
+                <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold mb-1">
+                  <CheckCircle2 className="w-4 h-4" /> 1. Payment Verified
+                </div>
+                <span className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                  {order.is_cod ? '15% Advance verified' : '100% Paid'}
+                </span>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-xl border border-blue-200 dark:border-blue-800/50">
+                <div className="flex items-center gap-1.5 text-blue-700 dark:text-blue-400 font-bold mb-1">
+                  <RefreshCw className="w-4 h-4 animate-spin" /> 2. Preparing Courier
+                </div>
+                <span className="text-[11px] text-blue-800 dark:text-blue-300">
+                  {order.ncm_dispatch_status === 'CREATING' ? 'Connecting to NCM...' : 'Queued for NCM'}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/20 p-3 rounded-xl border border-slate-200 dark:border-slate-700/40 text-slate-400">
+                <div className="font-bold mb-1">3. Waybill Generated</div>
+                <span className="text-[11px]">Pending NCM acceptance</span>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-800/20 p-3 rounded-xl border border-slate-200 dark:border-slate-700/40 text-slate-400">
+                <div className="font-bold mb-1">4. Delivery</div>
+                <span className="text-[11px]">
+                  {order.is_cod ? `Collect Rs. ${order.cod_remaining_balance}` : 'Prepaid delivery'}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* NCM Courier Shipment & Tracking Banner */}
         {order.courier_shipment && (
           <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-white dark:from-indigo-950/30 dark:via-slate-900/40 dark:to-slate-900/20 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-2xl p-6 mb-8 shadow-sm">

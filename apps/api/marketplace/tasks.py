@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
     bind=True,
     max_retries=3,
     default_retry_delay=60,
+    ignore_result=True,
     name='marketplace.tasks.dispatch_order_courier_shipment'
 )
 def dispatch_order_courier_shipment_task(self, order_id: int):
@@ -22,3 +23,4 @@ def dispatch_order_courier_shipment_task(self, order_id: int):
     from marketplace.dispatch_service import execute_ncm_dispatch
     logger.info("Executing Celery NCM courier dispatch task for Order #%s", order_id)
     return execute_ncm_dispatch(order_id, celery_task=self)
+

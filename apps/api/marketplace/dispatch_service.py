@@ -509,3 +509,4 @@ def trigger_ncm_auto_dispatch(order_id: int) -> None:
             name=f"NCMAutoDispatch-Order-{order_id}",
         )
         thread.start()
+

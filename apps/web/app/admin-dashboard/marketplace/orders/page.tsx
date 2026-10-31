@@ -36,6 +36,9 @@ export default function MarketplaceOrdersPage() {
 
   const [dispatching, setDispatching] = useState(false);
   const [syncingCourier, setSyncingCourier] = useState(false);
+  const [retryingDispatch, setRetryingDispatch] = useState(false);
+  const [reconcilingDispatch, setReconcilingDispatch] = useState(false);
+  const [manualNcmOrderId, setManualNcmOrderId] = useState("");
   const [dispatchForm, setDispatchForm] = useState({
     destination_branch: "",
     origin_branch: "Kathmandu",
@@ -102,6 +105,40 @@ export default function MarketplaceOrdersPage() {
       toast.error(err?.data?.error || err?.data?.detail || err?.message || "Failed to synchronize courier status.");
     } finally {
       setSyncingCourier(false);
+    }
+  };
+
+  const handleRetryDispatch = async () => {
+    if (!viewOrder) return;
+    try {
+      setRetryingDispatch(true);
+      const updated = await marketplaceApi.adminRetryDispatch(viewOrder.id);
+      toast.success("Dispatch retry executed successfully!");
+      setViewOrder(updated);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.data?.error || err?.message || "Failed to retry dispatch.");
+    } finally {
+      setRetryingDispatch(false);
+    }
+  };
+
+  const handleReconcileDispatch = async (resetToFailed = false) => {
+    if (!viewOrder) return;
+    try {
+      setReconcilingDispatch(true);
+      const updated = await marketplaceApi.adminReconcileDispatch(viewOrder.id, {
+        ncm_order_id: manualNcmOrderId.trim() || undefined,
+        reset_to_failed: resetToFailed,
+      });
+      toast.success(resetToFailed ? "Order dispatch state reset to FAILED for safe re-dispatch." : "Order reconciled with NCM shipment!");
+      setViewOrder(updated);
+      setManualNcmOrderId("");
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(err?.data?.detail || err?.data?.error || err?.message || "Reconciliation failed.");
+    } finally {
+      setReconcilingDispatch(false);
     }
   };
 
@@ -503,6 +540,161 @@ export default function MarketplaceOrdersPage() {
                     </Button>
                   )}
                 </div>
+
+                {/* Dispatch & Payment Status Badges */}
+                <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2.5 rounded-lg border text-xs">
+                  <span className="font-semibold text-slate-500">Dispatch Status:</span>
+                  {viewOrder.courier_shipment || viewOrder.ncm_dispatch_status === 'CREATED' ? (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      CREATED
+                    </span>
+                  ) : viewOrder.ncm_dispatch_status === 'QUEUED' ? (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> QUEUED FOR DISPATCH
+                    </span>
+                  ) : viewOrder.ncm_dispatch_status === 'CREATING' ? (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> CREATING IN NCM...
+                    </span>
+                  ) : viewOrder.ncm_dispatch_status === 'FAILED' ? (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                      DISPATCH FAILED
+                    </span>
+                  ) : viewOrder.ncm_dispatch_status === 'MANUAL_REVIEW_REQUIRED' ? (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                      MANUAL REVIEW REQUIRED
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                      NOT REQUESTED
+                    </span>
+                  )}
+
+                  <span className="text-slate-300">|</span>
+                  <span className="font-semibold text-slate-500">Payment:</span>
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-bold border ${
+                    viewOrder.payment_status === 'PAID'
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      : viewOrder.payment_status === 'PARTIALLY_PAID'
+                      ? 'bg-amber-100 text-amber-800 border-amber-200'
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}>
+                    {viewOrder.payment_status || 'UNPAID'} {viewOrder.is_cod ? '(15% Advance Verified)' : '(100% Prepaid Verified)'}
+                  </span>
+                </div>
+
+                {/* Ambiguous Timeout / Manual Review Card */}
+                {viewOrder.ncm_dispatch_status === 'MANUAL_REVIEW_REQUIRED' && !viewOrder.courier_shipment && (
+                  <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-lg text-xs text-amber-950 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <strong className="text-amber-900 font-bold">Ambiguous Network Timeout (Duplicate Protection Active)</strong>
+                        <p className="text-amber-800 leading-relaxed">
+                          The request to NCM timed out after submission. To prevent creating duplicate real shipments, blind retry has been suspended.
+                        </p>
+                        <p className="text-[11px] font-mono text-amber-800 bg-amber-100/60 p-1.5 rounded border border-amber-200">
+                          {viewOrder.ncm_dispatch_last_error}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-amber-200">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleReconcileDispatch(false)}
+                        disabled={reconcilingDispatch}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-7 flex items-center gap-1 font-semibold"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${reconcilingDispatch ? 'animate-spin' : ''}`} />
+                        Reconcile with NCM
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          placeholder="NCM Order ID (optional)"
+                          value={manualNcmOrderId}
+                          onChange={(e) => setManualNcmOrderId(e.target.value)}
+                          className="h-7 text-xs w-44 bg-white"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReconcileDispatch(false)}
+                          disabled={reconcilingDispatch || !manualNcmOrderId.trim()}
+                          className="text-xs h-7 bg-white font-semibold"
+                        >
+                          Link ID
+                        </Button>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleReconcileDispatch(true)}
+                        disabled={reconcilingDispatch}
+                        className="text-[11px] text-amber-800 hover:text-amber-950 underline h-7 ml-auto"
+                      >
+                        Reset to Failed (No shipment in NCM)
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Failed Dispatch Card */}
+                {viewOrder.ncm_dispatch_status === 'FAILED' && !viewOrder.courier_shipment && (
+                  <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-900 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <strong className="text-rose-800">Automatic Courier Dispatch Failed</strong>
+                        <p className="mt-0.5 text-rose-700">
+                          {viewOrder.ncm_dispatch_last_error || "An error occurred while communicating with Nepal Can Move."}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleRetryDispatch}
+                        disabled={retryingDispatch}
+                        className="bg-rose-600 hover:bg-rose-700 text-white text-xs h-7 shrink-0 flex items-center gap-1 font-semibold"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${retryingDispatch ? 'animate-spin' : ''}`} />
+                        Retry Dispatch
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-4 text-[11px] text-rose-600 border-t border-rose-200/60 pt-1.5">
+                      <span>Attempts: <strong>{viewOrder.ncm_dispatch_attempts || 1}</strong></span>
+                      {viewOrder.ncm_dispatch_next_retry && (
+                        <span>Next Auto-Retry: <strong>{new Date(viewOrder.ncm_dispatch_next_retry).toLocaleTimeString()}</strong></span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Queued / Creating Banner */}
+                {(viewOrder.ncm_dispatch_status === 'QUEUED' || viewOrder.ncm_dispatch_status === 'CREATING') && !viewOrder.courier_shipment && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+                      <div>
+                        <strong>Automatic courier dispatch in progress.</strong>
+                        <p className="text-[11px] text-blue-700 mt-0.5">
+                          Payment is verified. The background worker is connecting to NCM API to generate tracking code.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRetryDispatch}
+                      disabled={retryingDispatch}
+                      className="text-xs h-7 bg-white font-semibold"
+                    >
+                      Dispatch Now
+                    </Button>
+                  </div>
+                )}
 
                 {viewOrder.courier_shipment ? (
                   <div className="space-y-4">

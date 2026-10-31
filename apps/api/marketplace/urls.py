@@ -32,6 +32,8 @@ from .views import (
     StudentPayoutViewSet,
     # Public
     PublicProductListView,
+    # Webhooks
+    NCMWebhookView,
 )
 
 # Admin routers
@@ -66,6 +68,7 @@ student_router.register(r'payouts', StudentPayoutViewSet, basename='student-payo
 
 urlpatterns = [
     path('public/products/', PublicProductListView.as_view(), name='public-products'),
+    path('webhooks/ncm/', NCMWebhookView.as_view(), name='ncm-webhook'),
     path('admin/settings/', AdminMarketplaceSettingsView.as_view(), name='admin-marketplace-settings'),
     path('admin/', include(admin_router.urls)),
     path('student/cart/items/<int:pk>/', CartItemDetailView.as_view(), name='student-cart-item-detail'),

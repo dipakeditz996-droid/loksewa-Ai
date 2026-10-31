@@ -1,4 +1,5 @@
 import logging
+import hmac
 from core.validators import get_nepal_province_for_district
 from rest_framework import viewsets, permissions, status
 
@@ -10,8 +11,13 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 from django.db import transaction
 from decimal import Decimal, ROUND_HALF_UP
+from django.conf import settings
 from rest_framework.pagination import PageNumberPagination
 from core.pagination import StandardResultsSetPagination
+from .ncm_service import (
+    NCMService, NCMError, NCMConfigurationError,
+    NCMConnectionError, NCMAPIError, NCMValidationError,
+)
 
 class MarketplacePagination(PageNumberPagination):
     page_size = 20
@@ -28,7 +34,7 @@ from .models import (
     Product, PaymentMethod, PaymentSubmission, Purchase,
     Cart, CartItem, Order, OrderItem, DeliveryAddress, DeliveryFeeRule,
     OrderStatusHistory, MarketplaceSettings, MarketplaceListingReport,
-    ProductImage, Review, Dispute, DisputeEvidence,
+    ProductImage, Review, Dispute, DisputeEvidence, CourierShipment,
 )
 from .serializers import (
     ProductSerializer, SellerListingSerializer,
@@ -81,6 +87,52 @@ class IsAdminUserOrReadOnly(permissions.BasePermission):
 def _marketplace_enabled():
     from core.models import AdminSettings
     return AdminSettings.get_settings().enable_marketplace
+
+
+def _validate_ncm_branch(branch_name_or_code, service):
+    """Validate branch name or code against active NCM branches. Returns canonical branch name or None."""
+    if not branch_name_or_code:
+        return None
+    target = str(branch_name_or_code).strip().lower()
+    try:
+        branches = service.get_branches()
+        for b in branches:
+            name = str(b.get('name') or '').strip()
+            code = str(b.get('code') or b.get('pk') or b.get('id') or '').strip().lower()
+            if name.lower() == target or code == target:
+                return name
+        return None
+    except Exception as e:
+        logger.warning("Error validating NCM branch %s: %s", branch_name_or_code, e)
+        return None
+
+
+def _resolve_branch_from_address(address, service):
+    """Match address district/municipality to an active NCM branch if possible."""
+    if not address:
+        return None
+    dist = str(getattr(address, 'district', '') or '').strip().lower()
+    mun = str(getattr(address, 'municipality', '') or '').strip().lower()
+    if not dist and not mun:
+        return None
+
+    try:
+        branches = service.get_branches()
+        if mun:
+            for b in branches:
+                name = str(b.get('name') or '').strip().lower()
+                if name == mun:
+                    return str(b.get('name')).strip()
+        if dist:
+            for b in branches:
+                name = str(b.get('name') or '').strip().lower()
+                b_dist = str(b.get('district_name') or b.get('district') or '').strip().lower()
+                if name == dist or b_dist == dist:
+                    return str(b.get('name')).strip()
+        return None
+    except Exception as e:
+        logger.warning("Error resolving NCM branch from address: %s", e)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -587,6 +639,7 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Order.objects.all().select_related(
         'student',
         'delivery_address_ref',
+        'courier_shipment',
     ).prefetch_related(
         'items__product',
         'items__product__seller',
@@ -722,6 +775,357 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
 
         item.save(update_fields=update_fields)
         return Response(OrderSerializer(order).data)
+
+    @action(detail=True, methods=['post'], url_path='dispatch-ncm')
+    def dispatch_ncm(self, request, pk=None):
+        """
+        Admin action to create a Nepal Can Move (NCM) courier shipment for an eligible order.
+        Strict verification:
+        1. Order must be CONFIRMED or PROCESSING.
+        2. If COD: order.payment_status must be PARTIALLY_PAID (15% advance verified).
+        3. If PREPAID: order.payment_status must be PAID (full payment verified).
+        4. Idempotency: cannot dispatch if courier_shipment already exists.
+        5. Validates destination branch and customer shipping details.
+        6. Passes remaining 85% balance to NCM as cod_charge (0 for prepaid).
+        """
+        order = self.get_object()
+
+        # 1. Status verification
+        if order.status not in ['CONFIRMED', 'PROCESSING']:
+            return Response(
+                {"detail": f"Order #{order.id} is in status '{order.status}'. Only CONFIRMED or PROCESSING orders can be dispatched."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 2. Payment verification
+        if order.is_cod:
+            if order.payment_status != 'PARTIALLY_PAID':
+                return Response(
+                    {"detail": f"Cannot dispatch COD order #{order.id} with payment status '{order.payment_status}'. The 15% advance payment must be verified first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            if order.payment_status != 'PAID':
+                return Response(
+                    {"detail": f"Cannot dispatch prepaid order #{order.id} with payment status '{order.payment_status}'. Full payment must be verified first."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # 3. Idempotency check: prevent duplicate shipment
+        if hasattr(order, 'courier_shipment') and order.courier_shipment:
+            return Response(
+                {"detail": f"Shipment has already been created for Order #{order.id} (NCM Order ID: {order.courier_shipment.ncm_order_id}). Duplicate creation prevented."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # 4. Resolve delivery details from request or snapshot
+        snapshot = order.shipping_address_snapshot or {}
+        dest_branch = (request.data.get('destination_branch') or snapshot.get('ncm_destination_branch') or '').strip()
+        if not dest_branch:
+            return Response(
+                {"detail": "Destination branch is required to create courier shipment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = NCMService()
+        if not service.is_configured():
+            return Response(
+                {"detail": "Nepal Can Move courier service is not configured (missing API token or base URL)."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        # Validate destination branch against active branches
+        valid_branch = _validate_ncm_branch(dest_branch, service)
+        if not valid_branch:
+            return Response(
+                {"detail": f"'{dest_branch}' is not a recognized NCM branch."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        name = (request.data.get('name') or snapshot.get('full_name') or order.student.get_full_name() or order.student.username).strip()
+        phone = (request.data.get('phone') or snapshot.get('phone_number') or order.contact_number).strip()
+        phone2 = (request.data.get('phone2') or snapshot.get('phone2') or '').strip()
+        instruction = (request.data.get('instruction') or snapshot.get('delivery_note') or '').strip()
+        delivery_type = (request.data.get('delivery_type') or snapshot.get('ncm_delivery_type') or 'Door2Door').strip()
+
+        # Build address string
+        address = (
+            request.data.get('address')
+            or ", ".join(filter(None, [
+                snapshot.get('tole_area'),
+                f"Ward {snapshot.get('ward_number')}" if snapshot.get('ward_number') else "",
+                snapshot.get('municipality'),
+                snapshot.get('district'),
+                snapshot.get('province'),
+            ]))
+            or order.shipping_address
+        ).strip()
+
+        if not name or not phone or not address:
+            return Response(
+                {"detail": "Customer name, phone number, and address are required for courier dispatch."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Package description
+        items = list(order.items.select_related('product').all())
+        desc_parts = [f"{it.quantity}x {it.product.title}" for it in items[:3]]
+        if len(items) > 3:
+            desc_parts.append(f"+{len(items)-3} more items")
+        package_description = request.data.get('package_description') or ", ".join(desc_parts)
+
+        # Weight
+        try:
+            weight = float(request.data.get('weight') or '1.0')
+            if weight <= 0:
+                weight = 1.0
+        except (ValueError, TypeError):
+            weight = 1.0
+
+        # COD Charge:
+        # STRICT RULE: 15% advance was paid; NCM must collect remaining 85% balance.
+        # For prepaid, NCM must collect 0.00.
+        if order.is_cod:
+            cod_charge = float(order.cod_remaining_balance)
+        else:
+            cod_charge = 0.0
+
+        ncm_payload = {
+            "name": name,
+            "phone": phone,
+            "phone2": phone2,
+            "cod_charge": cod_charge,
+            "address": address,
+            "fbranch": service.default_origin_branch,
+            "branch": valid_branch,
+            "package": package_description[:250],
+            "vref_id": f"ORD-{order.id}",
+            "instruction": instruction[:250],
+            "delivery_type": delivery_type,
+            "weight": weight,
+        }
+
+        try:
+            api_res = service.create_order(ncm_payload)
+        except NCMConnectionError as exc:
+            logger.error("NCM shipment creation failed with connection error: %s (ambiguous=%s)", exc, exc.is_ambiguous)
+            return Response(
+                {"detail": f"Failed to connect to NCM courier API: {str(exc)}. If this was a timeout, check the courier portal before retrying to prevent duplicate shipments."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except NCMError as exc:
+            logger.error("NCM shipment creation API error: %s", exc)
+            return Response(
+                {"detail": f"NCM courier returned an error: {str(exc)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ncm_order_id = api_res["ncm_order_id"]
+        delivery_charge = Decimal(str(api_res.get("delivery_charge", 0.0)))
+        quoted_charge = Decimal(str(order.delivery_fee or "0.00"))
+
+        with transaction.atomic():
+            # Check duplicate again inside transaction with lock
+            order = Order.objects.select_for_update().get(pk=order.pk)
+            if hasattr(order, 'courier_shipment') and order.courier_shipment:
+                return Response(
+                    {"detail": f"Shipment already exists for order #{order.id}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            shipment = CourierShipment.objects.create(
+                order=order,
+                provider='NCM',
+                ncm_order_id=ncm_order_id,
+                tracking_id=ncm_order_id,
+                vref_id=f"ORD-{order.id}",
+                origin_branch=service.default_origin_branch,
+                destination_branch=valid_branch,
+                delivery_type=delivery_type,
+                package_description=package_description[:255],
+                weight=Decimal(str(weight)),
+                quoted_charge=quoted_charge,
+                actual_charge=delivery_charge,
+                cod_charge=Decimal(str(cod_charge)),
+                courier_status='Order Created',
+                status_history=[{
+                    'timestamp': timezone.now().isoformat(),
+                    'status': 'Order Created',
+                    'note': f'Created by admin {request.user.username}',
+                }],
+                raw_response=api_res.get('raw_response', {}),
+                last_synced_at=timezone.now(),
+            )
+
+            # Move order status to PROCESSING or SHIPPED
+            old_status = order.status
+            new_status = 'PROCESSING'
+            if old_status != new_status:
+                order.status = new_status
+                order.save(update_fields=['status', 'updated_at'])
+
+                OrderStatusHistory.objects.create(
+                    order=order,
+                    previous_status=old_status,
+                    new_status=new_status,
+                    changed_by=request.user,
+                    note=f"Dispatched via NCM Courier (Shipment ID: {ncm_order_id}, Branch: {valid_branch})",
+                )
+
+                order.items.exclude(fulfillment_status='PROCESSING').update(fulfillment_status='PROCESSING')
+
+        # Send notification to student
+        from core.notification_service import NotificationService
+        NotificationService._create_if_allowed(
+            recipient=order.student,
+            notif_type='marketplace',
+            preference_key='marketplace_order_status_inapp',
+            title='Order Dispatched via Courier',
+            message=f"Your order #{order.id} has been dispatched via Nepal Can Move (Tracking ID: {ncm_order_id}).",
+            action_url=f"/student/marketplace/orders/{order.id}",
+        )
+
+        return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='sync-courier')
+    def sync_courier(self, request, pk=None):
+        """
+        Synchronize courier tracking status from NCM for this order's shipment.
+        Updates CourierShipment without bypassing payment rules.
+        """
+        order = self.get_object()
+        if not hasattr(order, 'courier_shipment') or not order.courier_shipment:
+            return Response(
+                {"detail": "No courier shipment found for this order."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        shipment = order.courier_shipment
+        service = NCMService()
+        if not service.is_configured():
+            return Response(
+                {"detail": "Nepal Can Move courier service is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            track_res = service.track_order(shipment.ncm_order_id)
+        except NCMError as exc:
+            return Response(
+                {"detail": f"Failed to sync courier tracking: {str(exc)}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+
+        data = track_res.get('data') or {}
+        new_courier_status = ""
+        history_list = []
+        if isinstance(data, dict):
+            new_courier_status = str(data.get('status') or data.get('current_status') or shipment.courier_status)
+            if 'history' in data and isinstance(data['history'], list):
+                history_list = data['history']
+        elif isinstance(data, list):
+            history_list = data
+            if data:
+                new_courier_status = str(data[-1].get('status') or shipment.courier_status)
+
+        shipment.apply_status_update(
+            new_courier_status=new_courier_status,
+            history_list=history_list,
+            changed_by=request.user,
+            source="admin_courier_sync"
+        )
+        order.refresh_from_db()
+        return Response(OrderSerializer(order).data)
+
+
+class NCMWebhookView(APIView):
+    """
+    Webhook endpoint to receive status and tracking updates from Nepal Can Move (NCM).
+    Endpoint: POST /api/marketplace/webhooks/ncm/
+    Authentication: Validated via NCM_WEBHOOK_SECRET in header or query parameter if configured.
+    """
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        expected_secret = getattr(settings, 'NCM_WEBHOOK_SECRET', '').strip()
+        if expected_secret:
+            provided_secret = (
+                request.headers.get('X-NCM-Webhook-Secret') or
+                request.META.get('HTTP_X_NCM_WEBHOOK_SECRET') or
+                request.headers.get('X-Webhook-Secret') or
+                request.META.get('HTTP_X_WEBHOOK_SECRET') or
+                request.query_params.get('secret') or
+                ''
+            )
+            auth_header = request.headers.get('Authorization') or request.META.get('HTTP_AUTHORIZATION', '')
+            if not provided_secret and auth_header.startswith('Bearer '):
+                provided_secret = auth_header.split(' ', 1)[1].strip()
+
+            if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
+                logger.warning("Unauthorized NCM webhook call attempted")
+                return Response({'error': 'Unauthorized'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        payload = request.data
+        if not isinstance(payload, dict):
+            return Response({'error': 'Invalid payload format: expected JSON object'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Identifier resolution: ncm_order_id, tracking_id, or vref_id
+        ncm_order_id = str(payload.get('order_id') or payload.get('ncm_order_id') or payload.get('orderid') or '').strip()
+        tracking_id = str(payload.get('tracking_id') or payload.get('trackingid') or payload.get('track_id') or '').strip()
+        vref_id = str(payload.get('vref_id') or payload.get('ref_id') or payload.get('reference_id') or '').strip()
+
+        shipment = None
+        if ncm_order_id:
+            shipment = CourierShipment.objects.filter(ncm_order_id=ncm_order_id).first()
+        if not shipment and tracking_id:
+            shipment = CourierShipment.objects.filter(tracking_id=tracking_id).first()
+        if not shipment and vref_id:
+            shipment = CourierShipment.objects.filter(vref_id=vref_id).first()
+
+        if not shipment:
+            logger.warning(
+                "NCM Webhook received update for unknown shipment: ncm_order_id=%s, tracking_id=%s, vref_id=%s",
+                ncm_order_id, tracking_id, vref_id
+            )
+            return Response({'error': 'Shipment not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Status and event extraction
+        new_status = payload.get('status') or payload.get('state') or payload.get('courier_status')
+        history_entry = payload.get('history') or payload.get('event')
+
+        history_list = None
+        if isinstance(history_entry, list):
+            history_list = history_entry
+        elif isinstance(history_entry, dict):
+            existing_history = list(shipment.status_history or [])
+            existing_history.append(history_entry)
+            history_list = existing_history
+        elif new_status:
+            existing_history = list(shipment.status_history or [])
+            existing_history.append({
+                'status': new_status,
+                'timestamp': timezone.now().isoformat(),
+                'source': 'webhook',
+                'remarks': payload.get('remarks') or payload.get('comments') or '',
+            })
+            history_list = existing_history
+
+        status_changed = shipment.apply_status_update(
+            new_courier_status=str(new_status) if new_status else None,
+            history_list=history_list,
+            tracking_id=tracking_id or None,
+            source="ncm_webhook"
+        )
+
+        return Response({
+            'status': 'success',
+            'order_id': shipment.order_id,
+            'ncm_order_id': shipment.ncm_order_id,
+            'courier_status': shipment.courier_status,
+            'order_status': shipment.order.status,
+            'order_status_updated': status_changed,
+        }, status=status.HTTP_200_OK)
 
 
 class AdminDeliveryFeeRuleViewSet(viewsets.ModelViewSet):
@@ -1241,6 +1645,129 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         return max(regional_fee, product_fee)
 
+    def _validate_ncm_branch(self, branch_name_or_code, service):
+        """Validate branch name or code against active NCM branches. Returns canonical branch name or None."""
+        if not branch_name_or_code:
+            return None
+        target = str(branch_name_or_code).strip().lower()
+        try:
+            branches = service.get_branches()
+            for b in branches:
+                name = str(b.get('name') or '').strip()
+                code = str(b.get('code') or b.get('pk') or b.get('id') or '').strip().lower()
+                if name.lower() == target or code == target:
+                    return name
+            return None
+        except Exception as e:
+            logger.warning("Error validating NCM branch %s: %s", branch_name_or_code, e)
+            return None
+
+    def _resolve_branch_from_address(self, address, service):
+        """Match address district/municipality to an active NCM branch if possible."""
+        if not address:
+            return None
+        dist = str(getattr(address, 'district', '') or '').strip().lower()
+        mun = str(getattr(address, 'municipality', '') or '').strip().lower()
+        if not dist and not mun:
+            return None
+
+        try:
+            branches = service.get_branches()
+            # 1. Exact municipality match
+            if mun:
+                for b in branches:
+                    name = str(b.get('name') or '').strip().lower()
+                    if name == mun:
+                        return str(b.get('name')).strip()
+            # 2. Exact district match
+            if dist:
+                for b in branches:
+                    name = str(b.get('name') or '').strip().lower()
+                    b_dist = str(b.get('district_name') or b.get('district') or '').strip().lower()
+                    if name == dist or b_dist == dist:
+                        return str(b.get('name')).strip()
+            return None
+        except Exception as e:
+            logger.warning("Error resolving NCM branch from address: %s", e)
+            return None
+
+    @action(detail=False, methods=['get'], url_path='ncm-branches')
+    def ncm_branches(self, request):
+        """
+        Return list of valid, active NCM branches.
+        Optionally accepts ?district=... and ?municipality=... to return recommended/suggested branches.
+        """
+        service = NCMService()
+        fallback_enabled = getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+
+        if not service.is_configured():
+            return Response({
+                "enabled": False,
+                "branches": [],
+                "suggested_branches": [],
+                "message": "NCM courier service is not configured.",
+                "fallback_enabled": fallback_enabled,
+            })
+
+        try:
+            raw_branches = service.get_branches()
+        except NCMError as e:
+            logger.warning("Failed to fetch NCM branches: %s", e)
+            return Response({
+                "enabled": False,
+                "branches": [],
+                "suggested_branches": [],
+                "error": str(e),
+                "fallback_enabled": fallback_enabled,
+            }, status=status.HTTP_503_SERVICE_UNAVAILABLE if not fallback_enabled else status.HTTP_200_OK)
+
+        formatted = []
+        for b in raw_branches:
+            name = (b.get('name') or '').strip()
+            if not name:
+                continue
+            formatted.append({
+                "code": str(b.get('code') or b.get('pk') or b.get('id') or name),
+                "name": name,
+                "district_name": (b.get('district_name') or b.get('district') or '').strip(),
+                "province_name": (b.get('province_name') or b.get('province') or '').strip(),
+                "areas_covered": b.get('areas_covered') or b.get('coverage') or [],
+            })
+
+        # Match suggestions if district/municipality provided
+        q_district = (request.query_params.get('district') or '').strip().lower()
+        q_municipality = (request.query_params.get('municipality') or '').strip().lower()
+        suggested = []
+
+        if q_district or q_municipality:
+            for b in formatted:
+                b_name = b['name'].lower()
+                b_dist = b['district_name'].lower()
+                b_areas = [str(a).lower() for a in b['areas_covered']] if isinstance(b['areas_covered'], list) else []
+
+                score = 0
+                if q_municipality and (q_municipality == b_name or q_municipality in b_name or any(q_municipality in a for a in b_areas)):
+                    score += 10
+                if q_district and (q_district == b_dist or q_district in b_dist or q_district in b_name):
+                    score += 5
+
+                if score > 0:
+                    suggested.append((score, b))
+
+            suggested.sort(key=lambda x: x[0], reverse=True)
+
+        suggested_branches = [item[1] for item in suggested]
+        auto_selected = suggested_branches[0]['name'] if suggested_branches else None
+
+        return Response({
+            "enabled": True,
+            "branches": formatted,
+            "suggested_branches": suggested_branches,
+            "auto_selected": auto_selected,
+            "origin_branch": service.default_origin_branch,
+            "fallback_enabled": fallback_enabled,
+        })
+
     @action(detail=False, methods=['post'])
     def calculate_fee(self, request):
         delivery_address_id = request.data.get('delivery_address_id')
@@ -1248,6 +1775,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         province = request.data.get('province')
         district = request.data.get('district')
         municipality = request.data.get('municipality')
+        destination_branch = request.data.get('destination_branch')
+        delivery_type = request.data.get('delivery_type') or 'Door2Door'
 
         delivery_address = None
         if delivery_address_id:
@@ -1273,8 +1802,79 @@ class OrderViewSet(viewsets.ModelViewSet):
             except Product.DoesNotExist:
                 pass
 
-        fee = self._calculate_delivery_fee(delivery_address, items=items)
-        return Response({"delivery_fee": fee})
+        fallback_allowed = getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+        service = NCMService()
+
+        # If NCM is configured, attempt live courier rate
+        if service.is_configured():
+            target_branch = destination_branch
+            if not target_branch and delivery_address:
+                target_branch = self._resolve_branch_from_address(delivery_address, service)
+
+            if target_branch:
+                canonical_branch = self._validate_ncm_branch(target_branch, service)
+                if not canonical_branch:
+                    return Response(
+                        {"detail": f"Destination branch '{target_branch}' is not a valid NCM branch."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                try:
+                    rate_res = service.calculate_rate(
+                        destination_branch=canonical_branch,
+                        source_branch=service.default_origin_branch,
+                        delivery_type=delivery_type,
+                    )
+                    return Response({
+                        "delivery_fee": rate_res["charge"],
+                        "fee_source": "ncm",
+                        "destination_branch": canonical_branch,
+                        "delivery_type": delivery_type,
+                        "fallback_applied": False,
+                    })
+                except NCMError as err:
+                    logger.warning("NCM rate calculation error: %s", err)
+                    if fallback_allowed:
+                        fallback_fee = self._calculate_delivery_fee(delivery_address, items=items)
+                        return Response({
+                            "delivery_fee": fallback_fee,
+                            "fee_source": "rule_fallback",
+                            "destination_branch": canonical_branch,
+                            "delivery_type": delivery_type,
+                            "fallback_applied": True,
+                            "fallback_reason": str(err),
+                        })
+                    return Response(
+                        {"detail": f"Courier delivery rate calculation failed: {str(err)}", "fee_source": "ncm_error"},
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
+            else:
+                # No branch specified or matched
+                if fallback_allowed:
+                    fee = self._calculate_delivery_fee(delivery_address, items=items)
+                    return Response({
+                        "delivery_fee": fee,
+                        "fee_source": "rule_fallback",
+                        "fallback_applied": True,
+                        "fallback_reason": "Destination branch not selected",
+                    })
+                return Response(
+                    {"detail": "Please select a destination courier branch to calculate delivery fee.", "fee_source": "requires_branch"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            # NCM not configured
+            if fallback_allowed or settings.TESTING:
+                fee = self._calculate_delivery_fee(delivery_address, items=items)
+                return Response({
+                    "delivery_fee": fee,
+                    "fee_source": "rule_fallback",
+                    "fallback_applied": True,
+                })
+            return Response(
+                {"detail": "Courier delivery service is currently unavailable."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
@@ -1678,7 +2278,59 @@ class OrderViewSet(viewsets.ModelViewSet):
                 product.save(update_fields=['stock', 'listing_status', 'is_published'])
 
             total_amount = sum(item.product.final_price * item.quantity for item in cart_items)
-            delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
+            
+            # --- SERVER-SIDE DELIVERY FEE & NCM REVALIDATION ---
+            destination_branch_req = request.data.get('destination_branch')
+            delivery_type_req = str(request.data.get('delivery_type') or 'Door2Door').strip()
+            fallback_allowed = getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+
+            service = NCMService()
+            delivery_fee = Decimal('0.00')
+            fee_source = 'ncm'
+            fallback_applied = False
+            validated_branch_name = None
+
+            if service.is_configured():
+                target_branch = destination_branch_req
+                if not target_branch and delivery_address:
+                    target_branch = self._resolve_branch_from_address(delivery_address, service)
+
+                if target_branch:
+                    validated_branch_name = self._validate_ncm_branch(target_branch, service)
+                    if not validated_branch_name:
+                        raise ValidationError({"detail": f"Destination branch '{target_branch}' is not a valid NCM branch."})
+
+                    try:
+                        rate_res = service.calculate_rate(
+                            destination_branch=validated_branch_name,
+                            source_branch=service.default_origin_branch,
+                            delivery_type=delivery_type_req,
+                        )
+                        delivery_fee = Decimal(str(rate_res["charge"])).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        fee_source = 'ncm'
+                    except NCMError as err:
+                        logger.warning("NCM rate calculation error at checkout: %s", err)
+                        if fallback_allowed:
+                            delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
+                            fee_source = 'rule_fallback'
+                            fallback_applied = True
+                        else:
+                            raise ValidationError({"detail": f"Courier delivery rate calculation failed: {str(err)}. Please try again."})
+                else:
+                    if fallback_allowed:
+                        delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
+                        fee_source = 'rule_fallback'
+                        fallback_applied = True
+                    else:
+                        raise ValidationError({"detail": "Please select an eligible courier destination branch for delivery."})
+            else:
+                if fallback_allowed or settings.TESTING:
+                    delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
+                    fee_source = 'rule_fallback'
+                    fallback_applied = True
+                else:
+                    raise ValidationError({"detail": "Courier delivery service is currently unavailable."})
+
             final_total = (total_amount + delivery_fee).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
             payment_mode = str(request.data.get('payment_mode') or 'PREPAID').upper().strip()
@@ -1696,6 +2348,13 @@ class OrderViewSet(viewsets.ModelViewSet):
                 cod_advance_paid = Decimal('0.00')
                 cod_remaining_balance = Decimal('0.00')
                 payment_method_type = 'PREPAID'
+
+            # Update shipping snapshot with verified courier details
+            shipping_address_snapshot['ncm_destination_branch'] = validated_branch_name or ''
+            shipping_address_snapshot['ncm_delivery_type'] = delivery_type_req
+            shipping_address_snapshot['delivery_fee_source'] = fee_source
+            shipping_address_snapshot['delivery_fee_quoted'] = float(delivery_fee)
+            shipping_address_snapshot['fallback_applied'] = fallback_applied
 
             order = Order.objects.create(
                 student=request.user,

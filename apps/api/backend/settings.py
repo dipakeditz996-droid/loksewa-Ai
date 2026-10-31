@@ -288,7 +288,7 @@ if _active_db_url:
         _active_db_url = urlunsplit(_parts._replace(query=urlencode(_query)))
 
     _conn_max_age_env = os.environ.get('DJANGO_CONN_MAX_AGE') or os.environ.get('CONN_MAX_AGE')
-    _conn_max_age = int(_conn_max_age_env) if _conn_max_age_env else (60 if _is_pooled else 600)
+    _conn_max_age = int(_conn_max_age_env) if _conn_max_age_env else (0 if _is_pooled else 600)
 
     _conn_health_checks = _env_bool('DJANGO_CONN_HEALTH_CHECKS', True)
 
@@ -304,6 +304,13 @@ if _active_db_url:
     }
     if _is_pooled:
         DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
+    if _is_postgres:
+        _opts = DATABASES['default'].setdefault('OPTIONS', {})
+        _opts.setdefault('connect_timeout', 15)
+        _opts.setdefault('keepalives', 1)
+        _opts.setdefault('keepalives_idle', 30)
+        _opts.setdefault('keepalives_interval', 10)
+        _opts.setdefault('keepalives_count', 5)
 else:
     if not DEBUG and 'test' not in sys.argv:
         raise RuntimeError(
@@ -744,6 +751,22 @@ R2_BACKUP_PREFIX = os.environ.get('R2_BACKUP_PREFIX', 'loksewaai/backups/databas
 BACKUP_RETENTION_DAYS = int(os.environ.get('BACKUP_RETENTION_DAYS', '30') or '30')
 BACKUP_SCHEDULE_TIME = os.environ.get('BACKUP_SCHEDULE_TIME', '02:00')
 BACKUP_KEEP_LOCAL_COPY = os.environ.get('BACKUP_KEEP_LOCAL_COPY', 'true').lower() in ('1', 'true', 'yes')
+
+# --- NEPAL CAN MOVE (NCM) COURIER CONFIGURATION ---
+NCM_API_TOKEN = os.environ.get('NCM_API_TOKEN', '').strip()
+NCM_ENVIRONMENT = os.environ.get('NCM_ENVIRONMENT', 'demo').strip().lower()
+NCM_BASE_URL = os.environ.get('NCM_BASE_URL', '').strip()
+if not NCM_BASE_URL:
+    if NCM_ENVIRONMENT == 'production':
+        NCM_BASE_URL = 'https://portal.nepalcanmove.com/api/'
+    else:
+        NCM_BASE_URL = 'https://demo.nepalcanmove.com/api/'
+if NCM_BASE_URL and not NCM_BASE_URL.endswith('/'):
+    NCM_BASE_URL += '/'
+
+NCM_DEFAULT_ORIGIN_BRANCH = os.environ.get('NCM_DEFAULT_ORIGIN_BRANCH', 'Kathmandu').strip()
+NCM_WEBHOOK_SECRET = os.environ.get('NCM_WEBHOOK_SECRET', '').strip()
+NCM_FALLBACK_TO_LOCAL_RULES = _env_bool('NCM_FALLBACK_TO_LOCAL_RULES', default=False)
 
 # --- LOGGING ---
 # Without this, Django falls back to its bare-bones default: console-only

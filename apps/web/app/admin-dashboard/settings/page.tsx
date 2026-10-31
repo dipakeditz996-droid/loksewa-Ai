@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { adminApi, AdminSettingsData } from "@/lib/api/admin";
 import { twoFactorApi } from "@/lib/api/auth";
 import AdminEmailNotificationSettings from "./_components/AdminEmailNotificationSettings";
+import StudentEmailNotificationSettings from "./_components/StudentEmailNotificationSettings";
+import SendTestEmailCard from "./_components/SendTestEmailCard";
 
 
-type TabType = "platform" | "email" | "notifications" | "security" | "features";
+type TabType = "platform" | "email" | "admin_notifications" | "student_notifications" | "in_app_notifications" | "security" | "features";
 
 interface FormData {
   platform: AdminSettingsData["platform"];
@@ -95,7 +97,7 @@ export default function SettingsPage() {
         dataToSend.platform = formData.platform;
       } else if (activeTab === "email") {
         dataToSend.email = formData.email;
-      } else if (activeTab === "notifications") {
+      } else if (activeTab === "in_app_notifications") {
         dataToSend.notifications = formData.notifications;
       } else if (activeTab === "security") {
         dataToSend.security = formData.security;
@@ -114,7 +116,7 @@ export default function SettingsPage() {
     }
   };
 
-  const updateFormData = (category: TabType, key: string, value: any) => {
+  const updateFormData = (category: keyof FormData, key: string, value: any) => {
     setFormData(prev => ({
       ...prev,
       [category]: {
@@ -126,8 +128,10 @@ export default function SettingsPage() {
 
   const tabs: Array<{ id: TabType; label: string; icon: React.ReactNode }> = [
     { id: "platform", label: "Platform", icon: <Server className="w-4 h-4" /> },
-    { id: "email", label: "Email", icon: <Mail className="w-4 h-4" /> },
-    { id: "notifications", label: "Notifications", icon: <Bell className="w-4 h-4" /> },
+    { id: "email", label: "Email Provider", icon: <Mail className="w-4 h-4" /> },
+    { id: "admin_notifications", label: "Admin Notifications", icon: <Mail className="w-4 h-4" /> },
+    { id: "student_notifications", label: "Student Notifications", icon: <Bell className="w-4 h-4" /> },
+    { id: "in_app_notifications", label: "In-App Notifications", icon: <Bell className="w-4 h-4" /> },
     { id: "security", label: "Security", icon: <Shield className="w-4 h-4" /> },
     { id: "features", label: "Features", icon: <Zap className="w-4 h-4" /> },
   ];
@@ -274,13 +278,30 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {/* Email Settings */}
+            {/* Email Provider Configuration */}
             {activeTab === "email" && (
-              <div className="space-y-5">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-blue-500" />
-                  Email Settings
-                </h2>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Mail className="w-5 h-5 text-blue-500" />
+                    Email Provider Configuration
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Configure your outbound SMTP relay parameters or Resend HTTPS credentials.
+                  </p>
+                </div>
+
+                {/* Server Environment Secrets Protection Note */}
+                <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 text-xs text-blue-900 dark:text-blue-300 space-y-1.5">
+                  <div className="font-semibold flex items-center gap-1.5 text-blue-950 dark:text-blue-200">
+                    <Server className="w-4 h-4 text-blue-600" />
+                    Server-Side Provider Secrets Protection
+                  </div>
+                  <p className="leading-relaxed">
+                    For security, SMTP passwords and Resend API keys are never stored in database tables, shown in frontend forms, or sent over client-side JavaScript.
+                    Configure them directly on Render using environment variables: <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">EMAIL_HOST_PASSWORD</code> or <code className="font-mono bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded">RESEND_API_KEY</code>.
+                  </p>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -291,7 +312,7 @@ export default function SettingsPage() {
                       value={formData.email.smtpHost}
                       onChange={(e) => updateFormData("email", "smtpHost", e.target.value)}
                       placeholder="smtp.gmail.com"
-                      className="w-full"
+                      className="w-full text-xs"
                     />
                   </div>
                   <div>
@@ -303,55 +324,68 @@ export default function SettingsPage() {
                       value={formData.email.smtpPort || ""}
                       onChange={(e) => updateFormData("email", "smtpPort", parseInt(e.target.value))}
                       placeholder="587"
-                      className="w-full"
+                      className="w-full text-xs"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    SMTP Username/Email
+                    SMTP Username / Email
                   </label>
                   <Input
                     value={formData.email.smtpUser}
                     onChange={(e) => updateFormData("email", "smtpUser", e.target.value)}
                     placeholder="your-email@gmail.com"
-                    className="w-full"
+                    className="w-full text-xs"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    From Address
-                  </label>
-                  <Input
-                    type="email"
-                    value={formData.email.fromAddress}
-                    onChange={(e) => updateFormData("email", "fromAddress", e.target.value)}
-                    placeholder="noreply@loksewa.com"
-                    className="w-full"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Default From Address
+                    </label>
+                    <Input
+                      type="email"
+                      value={formData.email.fromAddress}
+                      onChange={(e) => updateFormData("email", "fromAddress", e.target.value)}
+                      placeholder="noreply@loksewa.com"
+                      className="w-full text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      From Display Name
+                    </label>
+                    <Input
+                      value={formData.email.fromName}
+                      onChange={(e) => updateFormData("email", "fromName", e.target.value)}
+                      placeholder="Loksewa Support"
+                      className="w-full text-xs"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    From Name
-                  </label>
-                  <Input
-                    value={formData.email.fromName}
-                    onChange={(e) => updateFormData("email", "fromName", e.target.value)}
-                    placeholder="Loksewa Support"
-                    className="w-full"
-                  />
+                {/* Dedicated Provider Connection Test */}
+                <div className="pt-2">
+                  <SendTestEmailCard />
                 </div>
-
-                {/* Centralized Email Notification Management, Recipients & Delivery Logs */}
-                <AdminEmailNotificationSettings />
               </div>
             )}
 
-            {/* Notification Settings */}
-            {activeTab === "notifications" && (
+            {/* Admin Email Notifications */}
+            {activeTab === "admin_notifications" && (
+              <AdminEmailNotificationSettings />
+            )}
+
+            {/* Student Email Notifications */}
+            {activeTab === "student_notifications" && (
+              <StudentEmailNotificationSettings />
+            )}
+
+            {/* In-App Notification Settings */}
+            {activeTab === "in_app_notifications" && (
               <div className="space-y-5">
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                   <Bell className="w-5 h-5 text-blue-500" />

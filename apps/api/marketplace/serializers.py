@@ -12,7 +12,7 @@ from .models import (
 
     OrderStatusHistory, MarketplaceSettings, MarketplaceListingReport,
 
-    Review, Dispute, DisputeEvidence, PayoutAccount, SellerPayout,
+    Review, Dispute, DisputeEvidence, PayoutAccount, SellerPayout, CourierShipment,
 
 )
 
@@ -606,6 +606,15 @@ class OrderStatusHistorySerializer(serializers.ModelSerializer):
 
         return "System"
 
+
+class CourierShipmentSerializer(serializers.ModelSerializer):
+    mapped_status = serializers.CharField(source='get_mapped_order_status', read_only=True)
+
+    class Meta:
+        model = CourierShipment
+        fields = '__all__'
+
+
 class OrderSerializer(serializers.ModelSerializer):
 
     items = OrderItemSerializer(many=True, read_only=True)
@@ -613,6 +622,8 @@ class OrderSerializer(serializers.ModelSerializer):
     delivery_address_details = DeliveryAddressSerializer(source='delivery_address_ref', read_only=True)
 
     status_history = OrderStatusHistorySerializer(many=True, read_only=True)
+
+    courier_shipment = CourierShipmentSerializer(read_only=True)
 
     payment_mode = serializers.CharField(source='payment_method_type', read_only=True)
     final_total = serializers.SerializerMethodField()

@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 
-from .models import AdminEmailRecipient, AdminSettings, EmailDeliveryLog
+from .models import AdminEmailRecipient, AdminSettings, EmailDeliveryLog, StudentEmailTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -491,6 +491,68 @@ class EmailNotificationService:
     # =========================================================================
 
     @classmethod
+    def _resolve_student_template(
+        cls,
+        event_key: str,
+        context: Dict[str, Any],
+        default_subject: str,
+        default_headline: str,
+        default_content_html: str,
+        default_content_text: str,
+        action_button_label: Optional[str] = None,
+        action_button_url: Optional[str] = None,
+        badge_text: Optional[str] = None,
+        badge_color: str = "#4f46e5",
+    ) -> Optional[Dict[str, str]]:
+        """Resolves student email copy from StudentEmailTemplate.
+        Checks if event is enabled. If disabled, returns None to suppress delivery.
+        Otherwise substitutes variables and wraps in branded base HTML layout.
+        """
+        try:
+            from .models import StudentEmailTemplate
+            if not StudentEmailTemplate.is_event_enabled(event_key):
+                logger.info("Student email event '%s' is disabled via StudentEmailTemplate; suppressing send.", event_key)
+                return None
+
+            tpl = StudentEmailTemplate.get_template(event_key)
+            if tpl:
+                rendered = tpl.render(context)
+                subject = rendered.get('subject') or default_subject
+                content_html = rendered.get('body_html') or default_content_html
+                content_text = rendered.get('body_text') or default_content_text
+            else:
+                subject = default_subject
+                content_html = default_content_html
+                content_text = default_content_text
+        except Exception as e:
+            logger.warning("Error resolving StudentEmailTemplate for event '%s': %s", event_key, e)
+            subject = default_subject
+            content_html = default_content_html
+            content_text = default_content_text
+
+        html_body = _render_base_email_html(
+            title=subject,
+            headline=default_headline,
+            content_html=content_html,
+            action_button_label=action_button_label,
+            action_button_url=action_button_url,
+            badge_text=badge_text,
+            badge_color=badge_color,
+        )
+        text_body = _render_base_email_text(
+            headline=default_headline,
+            content_text=content_text,
+            action_button_label=action_button_label,
+            action_button_url=action_button_url,
+        )
+
+        return {
+            'subject': subject,
+            'html_body': html_body,
+            'text_body': text_body,
+        }
+
+    @classmethod
     def send_student_welcome_email(cls, student) -> Optional[EmailDeliveryLog]:
         """Sends a welcome & email verification confirmation email to a registered student."""
         name = student.get_full_name() or student.username
@@ -520,27 +582,26 @@ Email: {student.email}
 Start your exam preparation journey today by exploring our available mock examinations and study plans.
 """
 
-        html_body = _render_base_email_html(
-            title=subject,
-            headline=headline,
-            content_html=content_html,
+        resolved = cls._resolve_student_template(
+            event_key='welcome_email',
+            context={'student_name': name, 'email': student.email, 'login_url': f"{_get_base_frontend_url()}/auth/login"},
+            default_subject=subject,
+            default_headline=headline,
+            default_content_html=content_html,
+            default_content_text=content_text,
             action_button_label="Go to Student Dashboard",
             action_button_url="/student",
             badge_text="Account Verified",
             badge_color="#16a34a",
         )
-        text_body = _render_base_email_text(
-            headline=headline,
-            content_text=content_text,
-            action_button_label="Go to Student Dashboard",
-            action_button_url="/student",
-        )
+        if not resolved:
+            return None
 
         return cls.send(
             to_email=student.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
             event_category='registration',
             recipient_role='student',
             template_name='student_welcome',
@@ -586,27 +647,26 @@ Status: Pending Verification
 You will receive an email as soon as verification is complete.
 """
 
-        html_body = _render_base_email_html(
-            title=subject,
-            headline=headline,
-            content_html=content_html,
+        resolved = cls._resolve_student_template(
+            event_key='payment_submitted',
+            context={'student_name': name, 'title_ref': title_ref, 'amount': str(amount), 'transaction_id': str(transaction_id or '')},
+            default_subject=subject,
+            default_headline=headline,
+            default_content_html=content_html,
+            default_content_text=content_text,
             action_button_label="View Purchase Status",
             action_button_url="/student/purchases",
             badge_text="Payment Submitted",
             badge_color="#d97706",
         )
-        text_body = _render_base_email_text(
-            headline=headline,
-            content_text=content_text,
-            action_button_label="View Purchase Status",
-            action_button_url="/student/purchases",
-        )
+        if not resolved:
+            return None
 
         return cls.send(
             to_email=student.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
             event_category='payment',
             recipient_role='student',
             template_name='student_payment_submitted',
@@ -665,27 +725,26 @@ Great news! Your payment for {title_ref} has been verified and your subscription
 Access your enrolled courses and tests from your student dashboard.
 """
 
-        html_body = _render_base_email_html(
-            title=subject,
-            headline=headline,
-            content_html=content_html,
+        resolved = cls._resolve_student_template(
+            event_key='payment_approved',
+            context={'student_name': name, 'title_ref': title_ref, 'amount': str(amount or ''), 'receipt_number': str(receipt_number or ''), 'action_url': f"{_get_base_frontend_url()}/student/purchases"},
+            default_subject=subject,
+            default_headline=headline,
+            default_content_html=content_html,
+            default_content_text=content_text,
             action_button_label="Access My Courses & Exams",
             action_button_url="/student/purchases",
             badge_text="Payment Approved",
             badge_color="#16a34a",
         )
-        text_body = _render_base_email_text(
-            headline=headline,
-            content_text=content_text,
-            action_button_label="Access My Courses & Exams",
-            action_button_url="/student/purchases",
-        )
+        if not resolved:
+            return None
 
         return cls.send(
             to_email=student.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
             event_category='payment',
             recipient_role='student',
             template_name='student_payment_approved',
@@ -731,27 +790,26 @@ Reason provided by administrator:
 You can resubmit your payment evidence from your purchases page at https://www.hemrajkc.com.np/student/purchases.
 """
 
-        html_body = _render_base_email_html(
-            title=subject,
-            headline=headline,
-            content_html=content_html,
+        resolved = cls._resolve_student_template(
+            event_key='payment_rejected',
+            context={'student_name': name, 'title_ref': title_ref, 'reason': str(reason or ''), 'action_url': f"{_get_base_frontend_url()}/student/purchases"},
+            default_subject=subject,
+            default_headline=headline,
+            default_content_html=content_html,
+            default_content_text=content_text,
             action_button_label="Resubmit Payment Proof",
             action_button_url="/student/purchases",
             badge_text="Verification Failed",
             badge_color="#dc2626",
         )
-        text_body = _render_base_email_text(
-            headline=headline,
-            content_text=content_text,
-            action_button_label="Resubmit Payment Proof",
-            action_button_url="/student/purchases",
-        )
+        if not resolved:
+            return None
 
         return cls.send(
             to_email=student.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
             event_category='payment',
             recipient_role='student',
             template_name='student_payment_rejected',
@@ -818,27 +876,26 @@ Payment Mode: {pay_mode_label}
 Track your order status at: https://www.hemrajkc.com.np/student/marketplace/orders
 """
 
-        html_body = _render_base_email_html(
-            title=subject,
-            headline=headline,
-            content_html=content_html,
+        resolved = cls._resolve_student_template(
+            event_key='order_confirmation',
+            context={'student_name': name, 'order_id': str(order.id), 'total_amount': str(order.total_amount), 'items_summary': f"Order #{order.id}", 'tracking_url': f"{_get_base_frontend_url()}/student/marketplace/orders"},
+            default_subject=subject,
+            default_headline=headline,
+            default_content_html=content_html,
+            default_content_text=content_text,
             action_button_label="Track My Order",
             action_button_url="/student/marketplace/orders",
             badge_text="Order Placed",
             badge_color="#4f46e5",
         )
-        text_body = _render_base_email_text(
-            headline=headline,
-            content_text=content_text,
-            action_button_label="Track My Order",
-            action_button_url="/student/marketplace/orders",
-        )
+        if not resolved:
+            return None
 
         return cls.send(
             to_email=student.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
             event_category='marketplace',
             recipient_role='student',
             template_name='marketplace_order_created',
@@ -880,33 +937,378 @@ Track your order at https://www.hemrajkc.com.np/student/marketplace/orders.
 """
 
         badge_color = "#16a34a" if new_status == 'DELIVERED' else ("#dc2626" if new_status == 'CANCELLED' else "#0284c7")
+        status_key_map = {
+            'processing': 'order_processing',
+            'shipped': 'order_dispatched',
+            'out_for_delivery': 'delivery_status_update',
+            'delivered': 'order_delivered',
+            'cancelled': 'order_cancelled',
+        }
+        event_key = status_key_map.get(str(new_status).lower(), 'delivery_status_update')
 
-        html_body = _render_base_email_html(
-            title=subject,
-            headline=headline,
-            content_html=content_html,
+        resolved = cls._resolve_student_template(
+            event_key=event_key,
+            context={
+                'student_name': name,
+                'order_id': str(order.id),
+                'status_message': f"Order #{order.id} is now {status_display}. {note or ''}".strip(),
+                'carrier_name': getattr(order, 'courier_partner', 'Courier Partner') or 'Courier Partner',
+                'tracking_number': getattr(order, 'tracking_number', 'N/A') or 'N/A',
+                'reason': note or 'Status updated',
+                'support_url': f"{_get_base_frontend_url()}/support",
+                'tracking_url': f"{_get_base_frontend_url()}/student/marketplace/orders",
+            },
+            default_subject=subject,
+            default_headline=headline,
+            default_content_html=content_html,
+            default_content_text=content_text,
             action_button_label="View Order Details",
             action_button_url="/student/marketplace/orders",
             badge_text=f"Status: {status_display}",
             badge_color=badge_color,
         )
-        text_body = _render_base_email_text(
-            headline=headline,
-            content_text=content_text,
-            action_button_label="View Order Details",
-            action_button_url="/student/marketplace/orders",
-        )
+        if not resolved:
+            return None
 
         return cls.send(
             to_email=student.email,
-            subject=subject,
-            html_body=html_body,
-            text_body=text_body,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
             event_category='marketplace',
             recipient_role='student',
             template_name='marketplace_order_status',
             idempotency_key=f"order-status:{order.id}:{new_status}",
             metadata={'order_id': order.id, 'new_status': new_status},
+        )
+
+    # =========================================================================
+    @classmethod
+    def send_student_subscription_activated_email(
+        cls, student, plan_name: str, expiry_date: Optional[str] = None, action_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student that their subscription plan has been activated."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'plan_name': plan_name,
+            'expiry_date': str(expiry_date or 'Ongoing'),
+            'action_url': action_url or f"{_get_base_frontend_url()}/student/exams",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='subscription_activated',
+            context=context,
+            default_subject="Your Subscription is Now Active",
+            default_headline="Subscription Activated",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>Your subscription for <strong>{html.escape(plan_name)}</strong> is now active until <strong>{html.escape(str(expiry_date or 'Active'))}</strong>.</p>",
+            default_content_text=f"Hello {name},\n\nYour subscription for {plan_name} is now active.",
+            action_button_label="Start Practicing",
+            action_button_url=action_url or "/student/exams",
+            badge_text="Subscription Active",
+            badge_color="#16a34a",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='payment',
+            recipient_role='student',
+            template_name='subscription_activated',
+            idempotency_key=f"sub-act:{student.id}:{plan_name}",
+            metadata={'student_id': student.id, 'plan_name': plan_name},
+            event_key='subscription_status',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_subscription_expiry_reminder_email(
+        cls, student, plan_name: str, days_left: int, expiry_date: Optional[str] = None, renewal_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student that their subscription will expire soon."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'plan_name': plan_name,
+            'days_left': str(days_left),
+            'expiry_date': str(expiry_date or 'Soon'),
+            'renewal_url': renewal_url or f"{_get_base_frontend_url()}/student/pricing",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='subscription_expiry_reminder',
+            context=context,
+            default_subject=f"Your Subscription Expires in {days_left} Days",
+            default_headline="Subscription Expiring Soon",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>Your subscription to <strong>{html.escape(plan_name)}</strong> expires in {days_left} days.</p>",
+            default_content_text=f"Hello {name},\n\nYour subscription to {plan_name} expires in {days_left} days.",
+            action_button_label="Renew Access",
+            action_button_url=renewal_url or "/student/pricing",
+            badge_text="Expiry Reminder",
+            badge_color="#d97706",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='payment',
+            recipient_role='student',
+            template_name='subscription_expiry_reminder',
+            idempotency_key=f"sub-rem:{student.id}:{plan_name}:{days_left}",
+            metadata={'student_id': student.id, 'plan_name': plan_name, 'days_left': days_left},
+            event_key='subscription_expiry',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_subscription_expired_email(
+        cls, student, plan_name: str, renewal_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student that their subscription has expired."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'plan_name': plan_name,
+            'renewal_url': renewal_url or f"{_get_base_frontend_url()}/student/pricing",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='subscription_expired',
+            context=context,
+            default_subject="Your LoksewaAI Subscription Has Expired",
+            default_headline="Subscription Expired",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>Your subscription for <strong>{html.escape(plan_name)}</strong> has expired. Renew your plan to restore full access.</p>",
+            default_content_text=f"Hello {name},\n\nYour subscription for {plan_name} has expired. Renew at {renewal_url or '/student/pricing'}.",
+            action_button_label="Renew Plan",
+            action_button_url=renewal_url or "/student/pricing",
+            badge_text="Expired",
+            badge_color="#dc2626",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='payment',
+            recipient_role='student',
+            template_name='subscription_expired',
+            idempotency_key=f"sub-exp:{student.id}:{plan_name}",
+            metadata={'student_id': student.id, 'plan_name': plan_name},
+            event_key='subscription_status',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_course_access_email(
+        cls, student, course_title: str, course_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student that new course or study plan access has been granted."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'course_title': course_title,
+            'course_url': course_url or f"{_get_base_frontend_url()}/student/courses",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='course_access',
+            context=context,
+            default_subject=f"Access Granted: {course_title}",
+            default_headline="New Course Access Activated",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>You have been enrolled in <strong>{html.escape(course_title)}</strong>. Your course materials and lectures are ready.</p>",
+            default_content_text=f"Hello {name},\n\nYou now have access to {course_title}.\n\nOpen course: {course_url or '/student/courses'}",
+            action_button_label="Go to Course",
+            action_button_url=course_url or "/student/courses",
+            badge_text="Course Access",
+            badge_color="#4f46e5",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='learning',
+            recipient_role='student',
+            template_name='course_access',
+            idempotency_key=f"course-acc:{student.id}:{course_title}",
+            metadata={'student_id': student.id, 'course_title': course_title},
+            event_key='study_material_updates',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_exam_announcement_email(
+        cls, student, exam_title: str, exam_date: Optional[str] = None, action_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student of a new mock examination announcement."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'exam_title': exam_title,
+            'exam_date': str(exam_date or 'See schedule'),
+            'action_url': action_url or f"{_get_base_frontend_url()}/student/exams",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='exam_announcement',
+            context=context,
+            default_subject=f"New Exam Available: {exam_title}",
+            default_headline="New Exam Announced",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>A new examination, <strong>{html.escape(exam_title)}</strong>, is now available. Scheduled date: {html.escape(str(exam_date or 'Self-paced'))}.</p>",
+            default_content_text=f"Hello {name},\n\nNew exam announced: {exam_title} ({exam_date or 'Self-paced'}).",
+            action_button_label="View Exam Details",
+            action_button_url=action_url or "/student/exams",
+            badge_text="Exam Announcement",
+            badge_color="#4f46e5",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='learning',
+            recipient_role='student',
+            template_name='exam_announcement',
+            idempotency_key=f"exam-ann:{student.id}:{exam_title}",
+            metadata={'student_id': student.id, 'exam_title': exam_title},
+            event_key='exam_announcements',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_exam_reminder_email(
+        cls, student, exam_title: str, start_time: Optional[str] = None, action_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student of an approaching exam start time."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'exam_title': exam_title,
+            'start_time': str(start_time or 'Soon'),
+            'action_url': action_url or f"{_get_base_frontend_url()}/student/exams",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='exam_reminder',
+            context=context,
+            default_subject=f"Reminder: {exam_title} Starts Soon",
+            default_headline="Upcoming Exam Reminder",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>This is a reminder that <strong>{html.escape(exam_title)}</strong> starts in <strong>{html.escape(str(start_time or 'shortly'))}</strong>.</p>",
+            default_content_text=f"Hello {name},\n\nReminder: {exam_title} starts in {start_time or 'shortly'}.",
+            action_button_label="Go to Exam Hall",
+            action_button_url=action_url or "/student/exams",
+            badge_text="Exam Reminder",
+            badge_color="#d97706",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='learning',
+            recipient_role='student',
+            template_name='exam_reminder',
+            idempotency_key=f"exam-rem:{student.id}:{exam_title}",
+            metadata={'student_id': student.id, 'exam_title': exam_title},
+            event_key='exam_reminders',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_result_published_email(
+        cls, student, exam_title: str, score: Optional[str] = None, rank: Optional[str] = None, result_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Informs the student that their examination results are ready."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'exam_title': exam_title,
+            'score': str(score or 'Published'),
+            'rank': str(rank or 'Available on scorecard'),
+            'result_url': result_url or f"{_get_base_frontend_url()}/student/exams",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='result_published',
+            context=context,
+            default_subject=f"Results Published: {exam_title}",
+            default_headline="Exam Results Published",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p>Results for <strong>{html.escape(exam_title)}</strong> are available. Score: <strong>{html.escape(str(score or 'Published'))}</strong>.</p>",
+            default_content_text=f"Hello {name},\n\nResults for {exam_title} are published! Score: {score or 'Available on scorecard'}.",
+            action_button_label="View Detailed Scorecard",
+            action_button_url=result_url or "/student/exams",
+            badge_text="Result Published",
+            badge_color="#16a34a",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='learning',
+            recipient_role='student',
+            template_name='result_published',
+            idempotency_key=f"result-pub:{student.id}:{exam_title}",
+            metadata={'student_id': student.id, 'exam_title': exam_title, 'score': str(score)},
+            event_key='result_published',
+            user=student,
+        )
+
+    @classmethod
+    def send_student_announcement_email(
+        cls, student, announcement_title: str, announcement_content: str, action_url: Optional[str] = None
+    ) -> Optional[EmailDeliveryLog]:
+        """Broadcasts an academic or administrative announcement to an enrolled student."""
+        name = student.get_full_name() or student.username
+        context = {
+            'student_name': name,
+            'announcement_title': announcement_title,
+            'announcement_content': announcement_content,
+            'action_url': action_url or f"{_get_base_frontend_url()}/student",
+        }
+        resolved = cls._resolve_student_template(
+            event_key='student_announcement',
+            context=context,
+            default_subject=f"Announcement: {announcement_title}",
+            default_headline="LoksewaAI Academic Notice",
+            default_content_html=f"<p>Hello {html.escape(name)},</p><p><strong>{html.escape(announcement_title)}</strong></p><p>{html.escape(announcement_content)}</p>",
+            default_content_text=f"Hello {name},\n\nAnnouncement: {announcement_title}\n\n{announcement_content}",
+            action_button_label="Read More on Dashboard",
+            action_button_url=action_url or "/student",
+            badge_text="Announcement",
+            badge_color="#4f46e5",
+        )
+        if not resolved:
+            return None
+
+        return cls.send(
+            to_email=student.email,
+            subject=resolved['subject'],
+            html_body=resolved['html_body'],
+            text_body=resolved['text_body'],
+            event_category='announcement',
+            recipient_role='student',
+            template_name='student_announcement',
+            idempotency_key=f"ann-std:{student.id}:{announcement_title[:30]}",
+            metadata={'student_id': student.id, 'title': announcement_title},
+            event_key='platform_announcements',
+            user=student,
         )
 
     # =========================================================================

@@ -247,6 +247,66 @@ export interface DeliveryFeeRule {
   updated_at: string;
 }
 
+export interface NCMBranch {
+  code: string;
+  name: string;
+  district_name: string;
+  province_name: string;
+  areas_covered: string[];
+}
+
+export interface NCMBranchesResponse {
+  enabled: boolean;
+  branches: NCMBranch[];
+  suggested_branches: NCMBranch[];
+  auto_selected: string | null;
+  origin_branch: string;
+  fallback_enabled: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface DeliveryFeeResponse {
+  delivery_fee: number;
+  fee_source?: "ncm" | "rule_fallback" | "ncm_error" | "requires_branch";
+  destination_branch?: string;
+  delivery_type?: string;
+  fallback_applied?: boolean;
+  fallback_reason?: string;
+  detail?: string;
+}
+
+export interface CourierShipment {
+  id: number;
+  order: number;
+  provider: string;
+  ncm_order_id: string;
+  tracking_id: string;
+  vref_id: string;
+  origin_branch: string;
+  destination_branch: string;
+  delivery_type: string;
+  package_description: string;
+  weight: string;
+  quoted_charge: string;
+  actual_charge: string;
+  cod_charge: string;
+  courier_status: string;
+  status_history: Array<{
+    status?: string;
+    state?: string;
+    timestamp?: string;
+    time?: string;
+    comments?: string;
+    remarks?: string;
+    location?: string;
+    [key: string]: any;
+  }>;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Order {
   id: number;
   student: number;
@@ -283,6 +343,7 @@ export interface Order {
   delivery_address_details?: DeliveryAddress;
   items: OrderItem[];
   status_history?: OrderStatusHistory[];
+  courier_shipment?: CourierShipment | null;
   latest_payment_submission?: {
     id: number;
     status: "PENDING" | "APPROVED" | "REJECTED";
@@ -589,14 +650,23 @@ export const marketplaceApi = {
       body: JSON.stringify({ reason: reason || "" }),
     });
   },
+  getNCMBranches: async (params?: { district?: string; municipality?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.district) q.append("district", params.district);
+    if (params?.municipality) q.append("municipality", params.municipality);
+    const qs = q.toString() ? `?${q.toString()}` : "";
+    return apiClient<NCMBranchesResponse>(`/marketplace/student/orders/ncm-branches/${qs}`);
+  },
   calculateFee: async (data: {
     delivery_address_id?: number;
     product_id?: number;
     province?: string;
     district?: string;
     municipality?: string;
+    destination_branch?: string;
+    delivery_type?: string;
   }) => {
-    return apiClient<{ delivery_fee: string | number }>(
+    return apiClient<DeliveryFeeResponse>(
       "/marketplace/student/orders/calculate_fee/",
       { method: "POST", body: JSON.stringify(data) }
     );
@@ -606,6 +676,8 @@ export const marketplaceApi = {
     delivery_address?: Partial<DeliveryAddress>;
     shipping_address?: string;
     contact_number?: string;
+    destination_branch?: string;
+    delivery_type?: string;
     note?: string;
     save_to_addresses?: boolean;
     is_default?: boolean;
@@ -1024,6 +1096,27 @@ export const marketplaceApi = {
     return apiClient<Order>(`/marketplace/admin/orders/${orderId}/update_item_status/`, {
       method: "POST",
       body: JSON.stringify({ item_id: itemId, fulfillment_status, payout_status }),
+    });
+  },
+  adminDispatchNCM: async (
+    orderId: number,
+    data?: {
+      destination_branch?: string;
+      origin_branch?: string;
+      package_description?: string;
+      weight?: number;
+      delivery_type?: string;
+      special_instruction?: string;
+    }
+  ) => {
+    return apiClient<Order>(`/marketplace/admin/orders/${orderId}/dispatch-ncm/`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    });
+  },
+  adminSyncCourier: async (orderId: number) => {
+    return apiClient<Order>(`/marketplace/admin/orders/${orderId}/sync-courier/`, {
+      method: "POST",
     });
   },
 

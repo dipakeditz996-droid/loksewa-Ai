@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { marketplaceApi, Cart, PaymentMethod, DeliveryAddress, Order, ProfileAddressResponse } from "@/lib/api/marketplace";
+import { marketplaceApi, Cart, PaymentMethod, DeliveryAddress, Order, ProfileAddressResponse, NCMBranch } from "@/lib/api/marketplace";
 import { buildMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus, UserCheck, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus, UserCheck, ShieldCheck, Truck, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { RetryImage } from "@/components/ui/retry-image";
@@ -26,6 +26,17 @@ export default function CheckoutPage() {
   const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [calculatedFee, setCalculatedFee] = useState<number | null>(null);
+
+  // NCM Courier Logistics states
+  const [ncmEnabled, setNcmEnabled] = useState(false);
+  const [ncmBranches, setNcmBranches] = useState<NCMBranch[]>([]);
+  const [suggestedBranches, setSuggestedBranches] = useState<NCMBranch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [deliveryType, setDeliveryType] = useState<string>("Door2Door");
+  const [feeSource, setFeeSource] = useState<string>("ncm");
+  const [fallbackApplied, setFallbackApplied] = useState<boolean>(false);
+  const [calculatingFee, setCalculatingFee] = useState<boolean>(false);
+  const [feeError, setFeeError] = useState<string | null>(null);
   
   // "Use my existing info" state
   const [useExistingInfo, setUseExistingInfo] = useState(false);
@@ -84,7 +95,7 @@ export default function CheckoutPage() {
         const defaultAddr = addressData.find(a => a.is_default);
         const addrId = defaultAddr ? defaultAddr.id : (addressData[0]?.id ?? 0);
         setSelectedAddressId(addrId);
-        fetchDeliveryFee(addrId);
+        fetchDeliveryFeeAndBranches({ addressId: addrId, existingAddresses: addressData });
       } else {
         // If student has no saved addresses, default to prefilling profile info
         handleToggleUseExistingInfo(true);
@@ -106,28 +117,104 @@ export default function CheckoutPage() {
     }
   };
 
-  const fetchDeliveryFee = async (addressId: number) => {
+  const fetchDeliveryFeeAndBranches = async (options: {
+    addressId?: number | null;
+    province?: string;
+    district?: string;
+    municipality?: string;
+    overrideBranch?: string;
+    overrideDeliveryType?: string;
+    existingAddresses?: DeliveryAddress[];
+  }) => {
     try {
-      const res = await marketplaceApi.calculateFee({ delivery_address_id: addressId });
-      setCalculatedFee(Number(res.delivery_fee));
-    } catch (err) {
-      console.error("Failed to calculate fee", err);
-      setCalculatedFee(0);
+      setCalculatingFee(true);
+      setFeeError(null);
+
+      // Resolve address components
+      let prov = options.province || "";
+      let dist = options.district || "";
+      let mun = options.municipality || "";
+
+      const addrList = options.existingAddresses || addresses;
+      if (options.addressId && addrList.length > 0) {
+        const found = addrList.find(a => a.id === options.addressId);
+        if (found) {
+          prov = found.province || "";
+          dist = found.district || "";
+          mun = found.municipality || "";
+        }
+      }
+
+      // Query NCM branches and location suggestions
+      let targetBranch = options.overrideBranch !== undefined ? options.overrideBranch : selectedBranch;
+      try {
+        const branchRes = await marketplaceApi.getNCMBranches({ district: dist, municipality: mun });
+        setNcmEnabled(branchRes.enabled);
+        setNcmBranches(branchRes.branches || []);
+        setSuggestedBranches(branchRes.suggested_branches || []);
+
+        if (options.overrideBranch === undefined) {
+          if (branchRes.auto_selected) {
+            targetBranch = branchRes.auto_selected;
+            setSelectedBranch(branchRes.auto_selected);
+          } else if (branchRes.suggested_branches && branchRes.suggested_branches.length > 0 && branchRes.suggested_branches[0]) {
+            targetBranch = branchRes.suggested_branches[0].name;
+            setSelectedBranch(targetBranch);
+          } else if (branchRes.branches && branchRes.branches.length > 0 && branchRes.branches[0] && !targetBranch) {
+            targetBranch = branchRes.branches[0].name;
+            setSelectedBranch(targetBranch);
+          }
+        }
+      } catch (branchErr) {
+        console.warn("Could not retrieve NCM branches:", branchErr);
+      }
+
+      const activeDeliveryType = options.overrideDeliveryType || deliveryType;
+
+      // Calculate live delivery fee
+      const feeRes = await marketplaceApi.calculateFee({
+        delivery_address_id: options.addressId || undefined,
+        province: prov || undefined,
+        district: dist || undefined,
+        municipality: mun || undefined,
+        destination_branch: targetBranch || undefined,
+        delivery_type: activeDeliveryType,
+      });
+
+      setCalculatedFee(Number(feeRes.delivery_fee));
+      setFeeSource(feeRes.fee_source || "ncm");
+      setFallbackApplied(Boolean(feeRes.fallback_applied));
+      setFeeError(null);
+    } catch (err: any) {
+      console.error("Failed to calculate delivery fee", err);
+      const msg = err?.data?.detail || err?.message || "Delivery rate calculation unavailable for this destination.";
+      setFeeError(msg);
+      setCalculatedFee(null);
+    } finally {
+      setCalculatingFee(false);
     }
   };
 
-  const fetchDeliveryFeeForLocation = async (province?: string, district?: string, municipality?: string) => {
-    try {
-      const res = await marketplaceApi.calculateFee({
-        province: province || "",
-        district: district || "",
-        municipality: municipality || "",
-      });
-      setCalculatedFee(Number(res.delivery_fee));
-    } catch (err) {
-      console.error("Failed to calculate location fee", err);
-      setCalculatedFee(0);
-    }
+  const handleBranchChange = (branchName: string) => {
+    setSelectedBranch(branchName);
+    fetchDeliveryFeeAndBranches({
+      addressId: useExistingInfo ? null : selectedAddressId,
+      province: useExistingInfo ? existingInfoForm.province : undefined,
+      district: useExistingInfo ? existingInfoForm.district : undefined,
+      municipality: useExistingInfo ? existingInfoForm.municipality : undefined,
+      overrideBranch: branchName,
+    });
+  };
+
+  const handleDeliveryTypeChange = (type: string) => {
+    setDeliveryType(type);
+    fetchDeliveryFeeAndBranches({
+      addressId: useExistingInfo ? null : selectedAddressId,
+      province: useExistingInfo ? existingInfoForm.province : undefined,
+      district: useExistingInfo ? existingInfoForm.district : undefined,
+      municipality: useExistingInfo ? existingInfoForm.municipality : undefined,
+      overrideDeliveryType: type,
+    });
   };
 
   const handleToggleUseExistingInfo = async (checked: boolean) => {
@@ -153,9 +240,7 @@ export default function CheckoutPage() {
         }));
         setMissingProfileFields(profileData.missing_fields || []);
         
-        if (prov || dist || mun) {
-          fetchDeliveryFeeForLocation(prov, dist, mun);
-        }
+        fetchDeliveryFeeAndBranches({ province: prov, district: dist, municipality: mun });
       } catch (err) {
         console.error("Failed to fetch profile address", err);
         toast.error("Could not auto-fill all profile details. Please complete your address below.");
@@ -164,7 +249,7 @@ export default function CheckoutPage() {
       }
     } else {
       if (selectedAddressId) {
-        fetchDeliveryFee(selectedAddressId);
+        fetchDeliveryFeeAndBranches({ addressId: selectedAddressId });
       }
     }
   };
@@ -179,23 +264,28 @@ export default function CheckoutPage() {
     }
     setExistingInfoForm(updated);
     if (field === 'province' || field === 'district' || field === 'municipality') {
-      fetchDeliveryFeeForLocation(updated.province, updated.district, updated.municipality);
+      fetchDeliveryFeeAndBranches({
+        province: updated.province,
+        district: updated.district,
+        municipality: updated.municipality,
+      });
     }
   };
 
   const handleAddressSelection = (val: string) => {
     const id = Number(val);
     setSelectedAddressId(id);
-    fetchDeliveryFee(id);
+    fetchDeliveryFeeAndBranches({ addressId: id });
   };
 
   const handleCreateAddress = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const created = await marketplaceApi.createDeliveryAddress(newAddress);
-      setAddresses([created, ...addresses]);
+      const updatedList = [created, ...addresses];
+      setAddresses(updatedList);
       setSelectedAddressId(created.id);
-      fetchDeliveryFee(created.id);
+      fetchDeliveryFeeAndBranches({ addressId: created.id, existingAddresses: updatedList });
       setIsAddressModalOpen(false);
       toast.success("Address added successfully");
     } catch (error: any) {
@@ -207,6 +297,11 @@ export default function CheckoutPage() {
     if (!cart || !cart.items || cart.items.length === 0) {
       toast.error("Your cart is empty. Please add items to your cart before proceeding.");
       router.push("/student/marketplace/cart");
+      return;
+    }
+
+    if (feeError && !fallbackApplied) {
+      toast.error("Delivery rate calculation failed: " + feeError + ". Please select a valid courier hub.");
       return;
     }
 
@@ -233,6 +328,8 @@ export default function CheckoutPage() {
             existingInfoForm.delivery_note ? `Note: ${existingInfoForm.delivery_note}` : ''
           ].filter(Boolean).join('\n'),
           contact_number: existingInfoForm.phone_number,
+          destination_branch: selectedBranch || undefined,
+          delivery_type: deliveryType,
           save_to_addresses: saveToAddresses,
           payment_mode: paymentMode,
         });
@@ -257,6 +354,8 @@ export default function CheckoutPage() {
         setSubmitting(true);
         const createdOrder = await marketplaceApi.createOrder({ 
           delivery_address_id: selectedAddressId,
+          destination_branch: selectedBranch || undefined,
+          delivery_type: deliveryType,
           payment_mode: paymentMode,
         });
         setOrder(createdOrder);
@@ -659,6 +758,121 @@ export default function CheckoutPage() {
                     </Dialog>
                   </>
                 )}
+
+                {/* NCM Courier Logistics & Destination Hub */}
+                <div className="pt-4 border-t space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Truck className="w-4 h-4 text-primary" />
+                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
+                        Courier Logistics & Destination Hub
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                      Official Partner: Nepal Can Move
+                    </span>
+                  </div>
+
+                  {ncmEnabled ? (
+                    <div className="p-4 rounded-xl border bg-slate-50 dark:bg-white/[0.02] space-y-3">
+                      {/* Recommended branch chips based on location */}
+                      {suggestedBranches.length > 0 && (
+                        <div className="space-y-1.5">
+                          <span className="text-xs font-medium text-muted-foreground">
+                            Recommended Hubs for Your Location:
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {suggestedBranches.map((b) => (
+                              <button
+                                type="button"
+                                key={b.code}
+                                onClick={() => handleBranchChange(b.name)}
+                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-all ${
+                                  selectedBranch === b.name
+                                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                    : "bg-background hover:bg-muted text-foreground border-slate-200 dark:border-white/10"
+                                }`}
+                              >
+                                📍 {b.name} ({b.district_name})
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Select all branches & delivery type */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Delivery Branch Hub <span className="text-red-500">*</span></Label>
+                          <select
+                            value={selectedBranch}
+                            onChange={(e) => handleBranchChange(e.target.value)}
+                            className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-hidden focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="">-- Choose Courier Destination Branch --</option>
+                            {ncmBranches.map((b) => (
+                              <option key={b.code} value={b.name}>
+                                {b.name} ({b.district_name}{b.province_name ? ` - ${b.province_name}` : ""})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Delivery Method</Label>
+                          <select
+                            value={deliveryType}
+                            onChange={(e) => handleDeliveryTypeChange(e.target.value)}
+                            className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-hidden focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="Door2Door">Door-to-Door Delivery (Standard)</option>
+                            <option value="Branch2Door">Hub-to-Door Delivery</option>
+                            <option value="Branch2Branch">Branch Pickup (Hold at NCM Hub)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Live Fee Status Banner */}
+                      <div className="pt-2 border-t text-xs">
+                        {calculatingFee ? (
+                          <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Calculating live delivery charge from Nepal Can Move...
+                          </div>
+                        ) : feeError ? (
+                          <div className="p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <span>{feeError}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleBranchChange(selectedBranch)}
+                                className="ml-2 font-semibold underline text-red-800 dark:text-red-200"
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between text-muted-foreground">
+                            <span className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                              {fallbackApplied ? "Standard regional rate active" : "Live courier rate confirmed"}
+                            </span>
+                            <span className="font-semibold text-foreground">
+                              Quoted Delivery: Rs. {calculatedFee !== null ? calculatedFee.toFixed(2) : "0.00"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-muted/60 rounded-xl text-xs text-muted-foreground">
+                      Courier routing active: delivery will be handled via verified regional transport rules.
+                    </div>
+                  )}
+                </div>
+
                 {/* Payment Mode Selection: Prepaid vs COD */}
                 <div className="pt-4 border-t space-y-3">
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -970,10 +1184,24 @@ export default function CheckoutPage() {
                   <span className="font-medium">Rs. {subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm items-center">
-                  <span className="text-muted-foreground">Delivery Fee</span>
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    Delivery Fee
+                    {feeSource === "ncm" && !fallbackApplied && calculatedFee !== null && (
+                      <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold">
+                        NCM Live
+                      </span>
+                    )}
+                    {fallbackApplied && calculatedFee !== null && (
+                      <span className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded font-semibold">
+                        Standard Rate
+                      </span>
+                    )}
+                  </span>
                   <span>
-                    {calculatedFee === null && !order ? (
-                      <span className="text-muted-foreground italic">Calculating...</span>
+                    {calculatingFee ? (
+                      <span className="text-muted-foreground italic text-xs animate-pulse">Calculating...</span>
+                    ) : feeError && !fallbackApplied ? (
+                      <span className="text-red-500 text-xs font-semibold">Unavailable</span>
                     ) : currentDeliveryFee === 0 ? (
                       <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Free delivery</span>
                     ) : (
@@ -1041,6 +1269,12 @@ export default function CheckoutPage() {
                     {'street_landmark' in activeSnapshot && activeSnapshot.street_landmark && (
                       <p className="text-muted-foreground italic">
                         Landmark: {activeSnapshot.street_landmark}
+                      </p>
+                    )}
+                    {(selectedBranch || (activeSnapshot as any)?.ncm_destination_branch) && (
+                      <p className="text-primary font-medium flex items-center gap-1 pt-1.5 border-t mt-1">
+                        <Truck className="w-3.5 h-3.5 shrink-0" />
+                        Courier Hub: {selectedBranch || (activeSnapshot as any)?.ncm_destination_branch} ({deliveryType || (activeSnapshot as any)?.ncm_delivery_type || "Door2Door"})
                       </p>
                     )}
                   </div>

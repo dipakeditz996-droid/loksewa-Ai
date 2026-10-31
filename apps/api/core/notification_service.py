@@ -322,6 +322,17 @@ class NotificationService:
             )
             if result:
                 sent += 1
+                try:
+                    from .email_notification_service import EmailNotificationService
+                    exp_str = timezone.localtime(subscription.expiry_date).strftime("%B %d, %Y")
+                    EmailNotificationService.send_student_subscription_expiry_reminder_email(
+                        student=subscription.student,
+                        plan_name=subscription.plan.name,
+                        days_left=days_ahead,
+                        expiry_date=exp_str,
+                    )
+                except Exception as e:
+                    logger.debug("Failed sending subscription expiry email: %s", e)
         return sent
 
     @classmethod
@@ -356,6 +367,14 @@ class NotificationService:
             )
             if result:
                 sent += 1
+                try:
+                    from .email_notification_service import EmailNotificationService
+                    EmailNotificationService.send_student_subscription_expired_email(
+                        student=subscription.student,
+                        plan_name=subscription.plan.name,
+                    )
+                except Exception as e:
+                    logger.debug("Failed sending subscription expired email: %s", e)
         return sent
 
     @classmethod
@@ -593,6 +612,20 @@ class NotificationService:
             if sid not in already and sid not in opted_out
         ]
         Notification.objects.bulk_create(rows, batch_size=500)
+        if event_type == 'published':
+            try:
+                from .email_notification_service import EmailNotificationService
+                students_to_email = User.objects.filter(id__in=[r.recipient_id for r in rows[:50]])
+                exam_date_str = timezone.localtime(examination.start_time).strftime("%B %d, %Y at %I:%M %p") if examination.start_time else "Self-paced"
+                for st in students_to_email:
+                    EmailNotificationService.send_student_exam_announcement_email(
+                        student=st,
+                        exam_title=examination.title,
+                        exam_date=exam_date_str,
+                        action_url=f"/student/exams/{examination.id}",
+                    )
+            except Exception as e:
+                logger.debug("Failed sending exam announcement emails: %s", e)
         return len(rows)
 
     @classmethod
@@ -672,7 +705,7 @@ class NotificationService:
         if attempt.passed:
             message += ' Congratulations, you passed!'
 
-        return cls._student_notify_once(
+        notif = cls._student_notify_once(
             recipient=attempt.student,
             notif_type='result',
             related_id=f'result:{attempt.id}',
@@ -681,6 +714,19 @@ class NotificationService:
             action_url=f'/student/exams/{examination.id}/result/{attempt.id}',
             priority='important',
         )
+        if notif:
+            try:
+                from .email_notification_service import EmailNotificationService
+                score_str = f"{attempt.score} / {examination.total_marks}" if examination.total_marks else str(attempt.score)
+                EmailNotificationService.send_student_result_published_email(
+                    student=attempt.student,
+                    exam_title=examination.title,
+                    score=f"{score_str} ({attempt.percentage}%)",
+                    result_url=f"/student/exams/{examination.id}/result/{attempt.id}",
+                )
+            except Exception as e:
+                logger.debug("Failed sending student result published email: %s", e)
+        return notif
 
     @classmethod
     def notify_subjective_evaluated(cls, evaluation):
@@ -870,6 +916,20 @@ class NotificationService:
             if sid not in already and sid not in opted_out
         ]
         Notification.objects.bulk_create(rows, batch_size=500)
+        if event_type == 'published':
+            try:
+                from .email_notification_service import EmailNotificationService
+                students_to_email = User.objects.filter(id__in=[r.recipient_id for r in rows[:50]])
+                exam_date_str = timezone.localtime(examination.start_time).strftime("%B %d, %Y at %I:%M %p") if examination.start_time else "Self-paced"
+                for st in students_to_email:
+                    EmailNotificationService.send_student_exam_announcement_email(
+                        student=st,
+                        exam_title=examination.title,
+                        exam_date=exam_date_str,
+                        action_url=f"/student/exams/{examination.id}",
+                    )
+            except Exception as e:
+                logger.debug("Failed sending exam announcement emails: %s", e)
         return len(rows)
 
     @classmethod

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search, Filter, ShoppingCart, CheckCircle2,
-  MoreHorizontal, Eye, Box, MapPin, Loader2, ArrowRight, CreditCard, ExternalLink
+  MoreHorizontal, Eye, Box, MapPin, Loader2, ArrowRight, CreditCard, ExternalLink,
+  Truck, RefreshCw, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,77 @@ export default function MarketplaceOrdersPage() {
   const [viewOrder, setViewOrder] = useState<Order | null>(null);
   const [newStatus, setNewStatus] = useState<string>("");
   const [statusNote, setStatusNote] = useState<string>("");
+
+  const [dispatching, setDispatching] = useState(false);
+  const [syncingCourier, setSyncingCourier] = useState(false);
+  const [dispatchForm, setDispatchForm] = useState({
+    destination_branch: "",
+    origin_branch: "Kathmandu",
+    weight: 1.0,
+    package_description: "",
+    delivery_type: "Door2Door",
+    special_instruction: "",
+  });
+
+  useEffect(() => {
+    if (viewOrder) {
+      const snap = viewOrder.shipping_address_snapshot || {};
+      const desc = viewOrder.items
+        ?.map((i) => `${i.quantity}x ${i.product_details?.title || i.snapshot_product_name || 'Book'}`)
+        .join(", ") || "Marketplace Books";
+      setDispatchForm({
+        destination_branch: snap.ncm_branch || snap.district || "",
+        origin_branch: "Kathmandu",
+        weight: 1.0,
+        package_description: desc,
+        delivery_type: snap.ncm_delivery_type || "Door2Door",
+        special_instruction: "",
+      });
+    }
+  }, [viewOrder]);
+
+  const handleDispatchNCM = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!viewOrder) return;
+    if (!dispatchForm.destination_branch.trim()) {
+      toast.error("Please specify a valid NCM destination branch.");
+      return;
+    }
+
+    try {
+      setDispatching(true);
+      const updatedOrder = await marketplaceApi.adminDispatchNCM(viewOrder.id, {
+        destination_branch: dispatchForm.destination_branch.trim(),
+        origin_branch: dispatchForm.origin_branch.trim(),
+        package_description: dispatchForm.package_description.trim(),
+        weight: Number(dispatchForm.weight) || 1.0,
+        delivery_type: dispatchForm.delivery_type,
+        special_instruction: dispatchForm.special_instruction.trim(),
+      });
+      toast.success("Shipment successfully created with Nepal Can Move!");
+      setViewOrder(updatedOrder);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.data?.detail || err?.message || "Failed to dispatch NCM shipment.");
+    } finally {
+      setDispatching(false);
+    }
+  };
+
+  const handleSyncCourier = async () => {
+    if (!viewOrder) return;
+    try {
+      setSyncingCourier(true);
+      const updatedOrder = await marketplaceApi.adminSyncCourier(viewOrder.id);
+      toast.success("Courier tracking status refreshed!");
+      setViewOrder(updatedOrder);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(err?.data?.error || err?.data?.detail || err?.message || "Failed to synchronize courier status.");
+    } finally {
+      setSyncingCourier(false);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -409,6 +481,218 @@ export default function MarketplaceOrdersPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              {/* Nepal Can Move (NCM) Courier & Dispatch Card */}
+              <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-5 h-5 text-indigo-600" />
+                    <h4 className="font-bold text-slate-800">Nepal Can Move (NCM) Courier</h4>
+                  </div>
+                  {viewOrder.courier_shipment && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncCourier}
+                      disabled={syncingCourier}
+                      className="text-xs h-8 flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${syncingCourier ? "animate-spin" : ""}`} />
+                      Sync Courier Status
+                    </Button>
+                  )}
+                </div>
+
+                {viewOrder.courier_shipment ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-lg border text-xs">
+                      <div>
+                        <span className="text-slate-400 block font-medium">NCM Order ID</span>
+                        <span className="font-mono font-bold text-slate-800 text-sm">
+                          #{viewOrder.courier_shipment.ncm_order_id}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Tracking Code</span>
+                        <span className="font-mono font-bold text-indigo-600 text-sm">
+                          {viewOrder.courier_shipment.tracking_id || "Pending"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Courier Status</span>
+                        <span className="inline-block mt-0.5 px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                          {viewOrder.courier_shipment.courier_status}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-medium">Route</span>
+                        <span className="font-semibold text-slate-700">
+                          {viewOrder.courier_shipment.origin_branch} → {viewOrder.courier_shipment.destination_branch}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3.5 rounded-lg border">
+                      <div>
+                        <span className="text-slate-400 block">COD Collection Amount</span>
+                        <span className="font-extrabold text-amber-700 text-sm">
+                          Rs. {viewOrder.courier_shipment.cod_charge}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          {viewOrder.is_cod ? "(Remaining 85% Balance)" : "(Prepaid Order - No COD)"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Delivery Charge (Quoted / Actual)</span>
+                        <span className="font-semibold text-slate-700">
+                          Rs. {viewOrder.courier_shipment.quoted_charge} / Rs. {viewOrder.courier_shipment.actual_charge || viewOrder.courier_shipment.quoted_charge}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          {viewOrder.courier_shipment.delivery_type} ({viewOrder.courier_shipment.weight} kg)
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Last Synced</span>
+                        <span className="text-slate-600 font-medium">
+                          {viewOrder.courier_shipment.last_synced_at
+                            ? new Date(viewOrder.courier_shipment.last_synced_at).toLocaleString()
+                            : "Just dispatched"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {viewOrder.courier_shipment.status_history && viewOrder.courier_shipment.status_history.length > 0 && (
+                      <div className="border rounded-lg p-3 bg-white space-y-2">
+                        <span className="text-xs font-bold text-slate-600 block">Courier Milestones</span>
+                        <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                          {viewOrder.courier_shipment.status_history.map((event: any, i: number) => (
+                            <div key={i} className="text-xs flex justify-between items-start border-b pb-1 last:border-b-0">
+                              <div>
+                                <span className="font-semibold text-slate-800">{event.status || event.state || "Update"}</span>
+                                {event.remarks && <p className="text-[11px] text-slate-500">{event.remarks}</p>}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {event.timestamp || event.time || ""}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    {/* Check eligibility */}
+                    {(viewOrder.status === 'CONFIRMED' || viewOrder.status === 'PROCESSING') &&
+                     (!viewOrder.is_cod || viewOrder.payment_status === 'PARTIALLY_PAID') ? (
+                      <form onSubmit={handleDispatchNCM} className="space-y-3">
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
+                          <div>
+                            <strong>Order is verified and eligible for dispatch.</strong>
+                            <p className="mt-0.5">
+                              {viewOrder.is_cod
+                                ? `NCM will collect remaining 85% COD: Rs. ${viewOrder.cod_remaining_balance} from recipient.`
+                                : "Order is 100% prepaid online. NCM COD collection will be Rs. 0.00."}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600">Destination Branch *</label>
+                            <Input
+                              placeholder="e.g. Pokhara, Biratnagar..."
+                              value={dispatchForm.destination_branch}
+                              onChange={(e) => setDispatchForm({ ...dispatchForm, destination_branch: e.target.value })}
+                              required
+                              className="h-8 text-xs bg-white"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600">Origin Branch</label>
+                            <Input
+                              placeholder="Kathmandu"
+                              value={dispatchForm.origin_branch}
+                              onChange={(e) => setDispatchForm({ ...dispatchForm, origin_branch: e.target.value })}
+                              className="h-8 text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600">Package Weight (kg)</label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              min="0.1"
+                              value={dispatchForm.weight}
+                              onChange={(e) => setDispatchForm({ ...dispatchForm, weight: parseFloat(e.target.value) || 1.0 })}
+                              className="h-8 text-xs bg-white"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600">Delivery Type</label>
+                            <Select
+                              value={dispatchForm.delivery_type}
+                              onValueChange={(val) => setDispatchForm({ ...dispatchForm, delivery_type: val })}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-white">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Door2Door" className="text-xs">Door2Door (Standard)</SelectItem>
+                                <SelectItem value="Branch2Branch" className="text-xs">Branch2Branch (Hub pickup)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-600">Package Description</label>
+                            <Input
+                              placeholder="Items summary"
+                              value={dispatchForm.package_description}
+                              onChange={(e) => setDispatchForm({ ...dispatchForm, package_description: e.target.value })}
+                              className="h-8 text-xs bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold text-slate-600">Special Instructions (Optional)</label>
+                          <Input
+                            placeholder="e.g. Call before delivery, handle books with care"
+                            value={dispatchForm.special_instruction}
+                            onChange={(e) => setDispatchForm({ ...dispatchForm, special_instruction: e.target.value })}
+                            className="h-8 text-xs bg-white"
+                          />
+                        </div>
+
+                        <Button
+                          type="submit"
+                          disabled={dispatching}
+                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs h-9 mt-2 flex items-center justify-center gap-2"
+                        >
+                          {dispatching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Truck className="w-4 h-4" />}
+                          Dispatch via Nepal Can Move (NCM)
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                        <div>
+                          <strong>Courier dispatch locked.</strong>
+                          <p className="mt-0.5">
+                            Order must be CONFIRMED or PROCESSING, with verified payment
+                            {viewOrder.is_cod ? " (15% advance verified)" : " (full payment verified)"}
+                            before a courier dispatch can be created.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="bg-white rounded-xl border p-5 shadow-sm space-y-4">

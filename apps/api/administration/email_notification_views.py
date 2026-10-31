@@ -1,18 +1,25 @@
 import logging
 from django.conf import settings
-from django.db.models import Q
+from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.email_notification_service import EmailNotificationService
-from core.models import AdminEmailRecipient, AdminSettings, EmailDeliveryLog
+from core.email_notification_service import (
+    EmailNotificationService,
+    _render_base_email_html,
+    _render_base_email_text,
+)
+from core.models import AdminEmailRecipient, AdminSettings, EmailDeliveryLog, StudentEmailTemplate
+from core.student_email_defaults import STUDENT_EMAIL_NOTIFICATION_DEFAULTS
 from core.notification_constants import ADMIN_NOTIFICATION_TAXONOMY
 from administration.models import AuditLog
 from .email_notification_serializers import (
     AdminEmailRecipientSerializer,
     EmailDeliveryLogSerializer,
     SendTestEmailSerializer,
+    StudentEmailTemplateSerializer,
+    StudentEmailTemplatePreviewSerializer,
 )
 from .permissions import IsAdminUser
 
@@ -184,11 +191,18 @@ class AdminEmailDeliveryHealthView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        total = EmailDeliveryLog.objects.count()
-        sent = EmailDeliveryLog.objects.filter(status='sent').count()
-        failed = EmailDeliveryLog.objects.filter(status='failed').count()
-        retrying = EmailDeliveryLog.objects.filter(status='retrying').count()
-        queued = EmailDeliveryLog.objects.filter(status='queued').count()
+        counts = EmailDeliveryLog.objects.aggregate(
+            total=Count('id'),
+            sent=Count('id', filter=Q(status='sent')),
+            failed=Count('id', filter=Q(status='failed')),
+            retrying=Count('id', filter=Q(status='retrying')),
+            queued=Count('id', filter=Q(status='queued')),
+        )
+        total = counts['total'] or 0
+        sent = counts['sent'] or 0
+        failed = counts['failed'] or 0
+        retrying = counts['retrying'] or 0
+        queued = counts['queued'] or 0
 
         resolved = sent + failed
         success_rate = round((sent / resolved * 100.0), 1) if resolved > 0 else 100.0
@@ -298,4 +312,168 @@ class AdminNotificationEventsView(APIView):
         return Response({
             'message': 'Admin notification events updated successfully.',
             'events_state': current_events,
+        })
+
+
+
+class StudentEmailTemplateListView(APIView):
+    """GET /api/admin/student-email-notifications/ - List all student notification templates."""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        StudentEmailTemplate.ensure_defaults()
+        category = (request.query_params.get('category') or '').strip().lower()
+
+        qs = StudentEmailTemplate.objects.all().select_related('updated_by')
+        if category:
+            qs = qs.filter(category=category)
+
+        serializer = StudentEmailTemplateSerializer(qs, many=True)
+
+        categories = [
+            {'id': 'account', 'label': 'Account & Security', 'description': 'Registration, OTP, password recovery, and security alerts.'},
+            {'id': 'payment', 'label': 'Payments & Subscriptions', 'description': 'Payment proofs, approval/rejection, and subscription lifecycle.'},
+            {'id': 'marketplace', 'label': 'Marketplace & Orders', 'description': 'Physical books, orders, dispatch, and delivery tracking.'},
+            {'id': 'learning', 'label': 'Learning & Exams', 'description': 'Course access, exam announcements, reminders, and result scorecards.'},
+        ]
+
+        return Response({
+            'categories': categories,
+            'templates': serializer.data,
+        })
+
+
+class StudentEmailTemplateDetailView(APIView):
+    """GET /api/admin/student-email-notifications/<event_key>/ - Retrieve single template.
+    PATCH /api/admin/student-email-notifications/<event_key>/ - Update subject, body, or active status.
+    """
+    permission_classes = [IsAdminUser]
+
+    def _get_object(self, event_key):
+        return StudentEmailTemplate.get_template(event_key)
+
+    def get(self, request, event_key):
+        tpl = self._get_object(event_key)
+        if not tpl:
+            return Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(StudentEmailTemplateSerializer(tpl).data)
+
+    def patch(self, request, event_key):
+        tpl = self._get_object(event_key)
+        if not tpl:
+            return Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = StudentEmailTemplateSerializer(tpl, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        updated = serializer.save(updated_by=request.user)
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action='STUDENT_EMAIL_TEMPLATE_UPDATED',
+            entity_type='StudentEmailTemplate',
+            entity_id=str(updated.id),
+            details={
+                'event_key': updated.event_key,
+                'name': updated.name,
+                'is_enabled': updated.is_enabled,
+                'subject': updated.subject,
+            },
+        )
+
+        return Response(StudentEmailTemplateSerializer(updated).data)
+
+
+class StudentEmailTemplatePreviewView(APIView):
+    """POST /api/admin/student-email-notifications/<event_key>/preview/ - Live preview of rendered template."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, event_key):
+        tpl = StudentEmailTemplate.get_template(event_key)
+        if not tpl:
+            return Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = StudentEmailTemplatePreviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        subject_template = data.get('subject') or tpl.subject
+        html_template = data.get('body_html') or tpl.body_html
+        text_template = data.get('body_text') or tpl.body_text or ''
+
+        context = dict(tpl.sample_context or {})
+        if data.get('context'):
+            context.update(data['context'])
+
+        # Substitute variables
+        rendered_subject = subject_template
+        rendered_content_html = html_template
+        rendered_content_text = text_template
+
+        for k, v in context.items():
+            pattern = f"{{{{{k}}}}}"
+            str_v = str(v) if v is not None else ''
+            rendered_subject = rendered_subject.replace(pattern, str_v)
+            rendered_content_html = rendered_content_html.replace(pattern, str_v)
+            rendered_content_text = rendered_content_text.replace(pattern, str_v)
+
+        rendered_html = _render_base_email_html(
+            title=rendered_subject,
+            headline=tpl.name,
+            content_html=rendered_content_html,
+            action_button_label="Open Dashboard",
+            action_button_url="/student",
+            badge_text=tpl.get_category_display() if hasattr(tpl, 'get_category_display') else tpl.category,
+            badge_color="#4f46e5",
+        )
+        rendered_text = _render_base_email_text(
+            headline=tpl.name,
+            content_text=rendered_content_text,
+            action_button_label="Open Dashboard",
+            action_button_url="/student",
+        )
+
+        return Response({
+            'event_key': tpl.event_key,
+            'name': tpl.name,
+            'subject': rendered_subject,
+            'rendered_html': rendered_html,
+            'rendered_text': rendered_text,
+            'context_used': context,
+        })
+
+
+class StudentEmailTemplateResetView(APIView):
+    """POST /api/admin/student-email-notifications/<event_key>/reset/ - Reset template to system defaults."""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, event_key):
+        tpl = StudentEmailTemplate.get_template(event_key)
+        if not tpl:
+            return Response({'error': 'Template not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        default_item = next((d for d in STUDENT_EMAIL_NOTIFICATION_DEFAULTS if d['event_key'] == event_key), None)
+        if not default_item:
+            return Response({'error': 'Default template definition not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        tpl.subject = default_item['subject']
+        tpl.body_html = default_item['body_html']
+        tpl.body_text = default_item.get('body_text', '')
+        tpl.is_enabled = default_item.get('is_enabled', True)
+        tpl.updated_by = request.user
+        tpl.save(update_fields=['subject', 'body_html', 'body_text', 'is_enabled', 'updated_by', 'updated_at'])
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action='STUDENT_EMAIL_TEMPLATE_RESET',
+            entity_type='StudentEmailTemplate',
+            entity_id=str(tpl.id),
+            details={'event_key': tpl.event_key},
+        )
+
+        return Response({
+            'message': f"Template for '{tpl.name}' reset to system default.",
+            'template': StudentEmailTemplateSerializer(tpl).data,
         })

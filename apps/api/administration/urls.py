@@ -23,6 +23,10 @@ from .email_notification_views import (
     AdminEmailDeliveryLogsView,
     AdminEmailDeliveryHealthView,
     AdminNotificationEventsView,
+    StudentEmailTemplateListView,
+    StudentEmailTemplateDetailView,
+    StudentEmailTemplatePreviewView,
+    StudentEmailTemplateResetView,
 )
 from .self_service_views import AdminChangePasswordView
 from .views import (
@@ -261,6 +265,11 @@ urlpatterns = [
     path('notification-events/', AdminNotificationEventsView.as_view(), name='admin-notification-events'),
     path('email-delivery-logs/', AdminEmailDeliveryLogsView.as_view(), name='admin-email-delivery-logs'),
     path('email-delivery-logs/health/', AdminEmailDeliveryHealthView.as_view(), name='admin-email-delivery-health'),
+    # Student Email Notification Management
+    path('student-email-notifications/', StudentEmailTemplateListView.as_view(), name='admin-student-email-notifications-list'),
+    path('student-email-notifications/<str:event_key>/', StudentEmailTemplateDetailView.as_view(), name='admin-student-email-notifications-detail'),
+    path('student-email-notifications/<str:event_key>/preview/', StudentEmailTemplatePreviewView.as_view(), name='admin-student-email-notifications-preview'),
+    path('student-email-notifications/<str:event_key>/reset/', StudentEmailTemplateResetView.as_view(), name='admin-student-email-notifications-reset'),
     path('change-password/', AdminChangePasswordView.as_view(), name='admin-change-password'),
     # Storage health check
     path('storage/health/', AdminStorageHealthView.as_view(), name='admin-storage-health'),

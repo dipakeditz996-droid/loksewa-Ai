@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { marketplaceApi, Order, Review, Dispute } from "@/lib/api/marketplace";
-import { Loader2, Package, ArrowLeft, CheckCircle2, Clock, Truck, FileText, CheckCircle, MapPin, Box, Star, AlertTriangle, MessageSquare, XCircle, RefreshCw, CreditCard, UploadCloud, Info, X, ShieldCheck } from "lucide-react";
+import { Loader2, Package, ArrowLeft, CheckCircle2, Clock, Truck, FileText, CheckCircle, MapPin, Box, Star, AlertTriangle, MessageSquare, XCircle, RefreshCw, CreditCard, UploadCloud, Info, X, ShieldCheck, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -467,6 +467,98 @@ export default function StudentOrderDetailPage() {
         {(order.status === 'CANCELLED' || order.status === 'REFUNDED') && (
           <div className="bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/20 rounded-2xl p-6 mb-8 font-semibold">
              This order has been {order.status.toLowerCase()}.
+          </div>
+        )}
+
+        {/* NCM Courier Shipment & Tracking Banner */}
+        {order.courier_shipment && (
+          <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-white dark:from-indigo-950/30 dark:via-slate-900/40 dark:to-slate-900/20 border-2 border-indigo-200 dark:border-indigo-800/50 rounded-2xl p-6 mb-8 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-indigo-100 dark:border-indigo-900/50 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-indigo-600 text-white rounded-xl shadow-xs">
+                  <Truck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">
+                      Dispatched via Nepal Can Move (NCM)
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800">
+                      {order.courier_shipment.courier_status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Waybill / Order ID: <strong className="font-mono text-slate-700 dark:text-slate-200">#{order.courier_shipment.ncm_order_id}</strong>
+                    {order.courier_shipment.tracking_id && (
+                      <> • Tracking Code: <strong className="font-mono text-indigo-600 dark:text-indigo-400">{order.courier_shipment.tracking_id}</strong></>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {order.courier_shipment.tracking_id && (
+                <a
+                  href={`https://nepalcanmove.com/track?tracking_id=${encodeURIComponent(order.courier_shipment.tracking_id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
+                >
+                  Track on NCM Portal
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 text-xs">
+              <div className="bg-white/80 dark:bg-white/5 p-3 rounded-xl border border-indigo-100/60 dark:border-indigo-900/40">
+                <span className="text-slate-400 block font-medium">Delivery Route</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">
+                  {order.courier_shipment.origin_branch} → {order.courier_shipment.destination_branch}
+                </span>
+                <span className="text-[10px] text-slate-500">{order.courier_shipment.delivery_type}</span>
+              </div>
+
+              <div className="bg-white/80 dark:bg-white/5 p-3 rounded-xl border border-indigo-100/60 dark:border-indigo-900/40">
+                <span className="text-slate-400 block font-medium">Amount Due on Delivery</span>
+                <span className="font-extrabold text-amber-700 dark:text-amber-400 mt-0.5 block text-sm">
+                  Rs. {order.courier_shipment.cod_charge}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {order.is_cod ? "Remaining 85% payable to courier agent" : "Fully prepaid online"}
+                </span>
+              </div>
+
+              <div className="bg-white/80 dark:bg-white/5 p-3 rounded-xl border border-indigo-100/60 dark:border-indigo-900/40">
+                <span className="text-slate-400 block font-medium">Last Tracking Update</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300 mt-0.5 block">
+                  {order.courier_shipment.last_synced_at
+                    ? new Date(order.courier_shipment.last_synced_at).toLocaleString()
+                    : "In transit"}
+                </span>
+                <span className="text-[10px] text-slate-500">Auto-synchronized</span>
+              </div>
+            </div>
+
+            {order.courier_shipment.status_history && order.courier_shipment.status_history.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-indigo-100/80 dark:border-indigo-900/40">
+                <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">Courier Transit History</h5>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {order.courier_shipment.status_history.map((ev: any, idx: number) => (
+                    <div key={idx} className="flex justify-between items-center text-xs py-1 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{ev.status || ev.state || "Milestone"}</span>
+                        {ev.location && <span className="text-slate-500 text-[11px]">({ev.location})</span>}
+                        {ev.remarks && <span className="text-slate-400 text-[11px]">— {ev.remarks}</span>}
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {ev.timestamp || ev.time || ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

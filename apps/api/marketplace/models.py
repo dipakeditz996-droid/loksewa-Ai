@@ -1,6 +1,8 @@
 from decimal import Decimal, ROUND_HALF_UP
 # pyrefly: ignore [missing-import]
-from django.db import models
+from django.db import models, transaction
+# pyrefly: ignore [missing-import]
+from django.utils import timezone
 # pyrefly: ignore [missing-import]
 from django.core.validators import MinValueValidator, MaxValueValidator
 from core.models import User
@@ -502,6 +504,190 @@ class OrderStatusHistory(models.Model):
 
     def __str__(self):
         return f"Order #{self.order.id} status changed to {self.new_status}"
+
+
+class CourierShipment(models.Model):
+    """
+    Dedicated model for third-party courier dispatches and tracking.
+    Separates external courier status and lifecycle from internal Loksewa order statuses.
+    """
+    PROVIDER_CHOICES = (
+        ('NCM', 'Nepal Can Move'),
+    )
+
+    STATUS_MAPPING = {
+        'order created': 'PROCESSING',
+        'pickup pending': 'PROCESSING',
+        'pickup complete': 'SHIPPED',
+        'in transit': 'SHIPPED',
+        'dispatched': 'SHIPPED',
+        'out for delivery': 'OUT_FOR_DELIVERY',
+        'delivered': 'DELIVERED',
+        'return': 'ON_HOLD',
+        'cancelled': 'CANCELLED',
+    }
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='courier_shipment',
+        help_text="The marketplace order associated with this shipment."
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=PROVIDER_CHOICES,
+        default='NCM'
+    )
+    ncm_order_id = models.CharField(
+        max_length=50,
+        unique=True,
+        db_index=True,
+        help_text="External courier order identifier returned by provider."
+    )
+    tracking_id = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+        help_text="Customer-facing courier tracking number or code."
+    )
+    vref_id = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Vendor reference ID (e.g. Loksewa order reference)."
+    )
+    origin_branch = models.CharField(
+        max_length=100,
+        default="Kathmandu",
+        help_text="Origin merchant hub where package is dispatched from."
+    )
+    destination_branch = models.CharField(
+        max_length=100,
+        help_text="Destination courier hub handling local delivery."
+    )
+    delivery_type = models.CharField(
+        max_length=50,
+        default="Door2Door"
+    )
+    package_description = models.CharField(
+        max_length=255,
+        blank=True
+    )
+    weight = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal('1.00'),
+        help_text="Package weight in kg."
+    )
+    quoted_charge = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Quoted delivery charge from rate calculation."
+    )
+    actual_charge = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Actual delivery charge invoiced by courier provider."
+    )
+    cod_charge = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Amount courier must collect on delivery (order.cod_remaining_balance for COD, 0 for Prepaid)."
+    )
+    courier_status = models.CharField(
+        max_length=100,
+        default="Order Created",
+        help_text="Raw status string directly from courier provider."
+    )
+    status_history = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Audit log of provider milestone events and timestamps."
+    )
+    raw_response = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Raw provider response payload from shipment creation."
+    )
+    last_synced_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last timestamp when tracking status was synchronized."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['provider', 'ncm_order_id']),
+            models.Index(fields=['tracking_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.provider} Shipment #{self.ncm_order_id} for Order #{self.order_id}"
+
+    def get_mapped_order_status(self):
+        """Returns the internal order status corresponding to the provider status, or None."""
+        if not self.courier_status:
+            return None
+        cleaned = self.courier_status.strip().lower()
+        for key, val in self.STATUS_MAPPING.items():
+            if key in cleaned:
+                return val
+        return None
+
+    def apply_status_update(self, new_courier_status=None, history_list=None, tracking_id=None, changed_by=None, source="courier_sync"):
+        """
+        Updates courier status, tracking history, and orchestrates internal order state transitions.
+        Strictly preserves the 15% advance / 85% COD payment rule:
+        Delivered status does NOT mark an unverified COD order as PAID (requires admin remittance verification).
+        """
+        with transaction.atomic():
+            shipment = CourierShipment.objects.select_for_update().get(pk=self.pk)
+            order = shipment.order
+
+            if new_courier_status:
+                shipment.courier_status = new_courier_status
+            if tracking_id:
+                shipment.tracking_id = tracking_id
+            if history_list is not None:
+                shipment.status_history = history_list
+            shipment.last_synced_at = timezone.now()
+            shipment.save(update_fields=['courier_status', 'tracking_id', 'status_history', 'last_synced_at', 'updated_at'])
+
+            mapped_status = shipment.get_mapped_order_status()
+            status_changed = False
+            if mapped_status and mapped_status != order.status:
+                valid_milestone_progression = {
+                    'CONFIRMED': ['PROCESSING', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+                    'PROCESSING': ['SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+                    'SHIPPED': ['OUT_FOR_DELIVERY', 'DELIVERED'],
+                    'OUT_FOR_DELIVERY': ['DELIVERED'],
+                }
+                if mapped_status in valid_milestone_progression.get(order.status, []):
+                    old_st = order.status
+                    order.status = mapped_status
+                    order.save(update_fields=['status', 'updated_at'])
+
+                    OrderStatusHistory.objects.create(
+                        order=order,
+                        previous_status=old_st,
+                        new_status=mapped_status,
+                        changed_by=changed_by,
+                        note=f"Status updated via {source}: {shipment.courier_status}",
+                    )
+                    order.items.exclude(fulfillment_status=mapped_status).update(fulfillment_status=mapped_status)
+
+                    if mapped_status == 'DELIVERED':
+                        order.items.filter(product__seller__isnull=False, payout_status='PENDING').update(payout_status='ELIGIBLE')
+                        # Strict rule: For COD orders, payment_status remains PARTIALLY_PAID until admin confirms remittance!
+                    status_changed = True
+
+            self.refresh_from_db()
+            return status_changed
 
 
 # ---------------------------------------------------------------------------

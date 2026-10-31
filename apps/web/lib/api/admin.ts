@@ -1,4 +1,43 @@
 
+
+export interface StudentEmailTemplate {
+  id: number;
+  event_key: string;
+  category: "account" | "payment" | "marketplace" | "learning";
+  name: string;
+  description: string;
+  is_enabled: boolean;
+  is_mandatory: boolean;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  available_placeholders: string[];
+  sample_context: Record<string, string>;
+  updated_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudentEmailTemplateCategory {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export interface StudentEmailTemplatesResponse {
+  categories: StudentEmailTemplateCategory[];
+  templates: StudentEmailTemplate[];
+}
+
+export interface StudentEmailPreviewResponse {
+  event_key: string;
+  name: string;
+  subject: string;
+  rendered_html: string;
+  rendered_text: string;
+  context_used: Record<string, string>;
+}
+
 export interface AdminEmailRecipient {
   id: number;
   email: string;
@@ -1469,7 +1508,7 @@ export const adminApi = {
 
   updateEmailRecipient: async (
     id: number,
-    data: Partial<{ name: string; is_active: boolean; event_categories: string[]; subscribed_events: string[] }>
+    data: Partial<{ email: string; name: string; is_active: boolean; event_categories: string[]; subscribed_events: string[] }>
   ): Promise<AdminEmailRecipient> => {
     return apiClient<AdminEmailRecipient>(`/admin/email-recipients/${id}/`, {
       method: "PATCH",
@@ -1526,11 +1565,46 @@ export const adminApi = {
     if (params?.offset !== undefined) query.set("offset", String(params.offset));
     const qs = query.toString();
     return apiClient<{ count: number; limit: number; offset: number; results: EmailDeliveryLog[] }>(
-      `/admin/email-delivery-logs/${qs ? `?${qs}` : ""}`
+      `/admin/email-delivery-logs/${qs ? `?${qs}` : ""}`,
+      { timeoutMs: 45000 }
     );
   },
 
   getEmailDeliveryHealth: async (): Promise<EmailDeliveryHealth> => {
-    return apiClient<EmailDeliveryHealth>("/admin/email-delivery-logs/health/");
+    return apiClient<EmailDeliveryHealth>("/admin/email-delivery-logs/health/", { timeoutMs: 45000 });
+  },
+
+  getStudentEmailTemplates: async (category?: string): Promise<StudentEmailTemplatesResponse> => {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+    return apiClient<StudentEmailTemplatesResponse>(`/admin/student-email-notifications/${qs}`);
+  },
+
+  updateStudentEmailTemplate: async (
+    eventKey: string,
+    data: Partial<{ is_enabled: boolean; subject: string; body_html: string; body_text: string }>
+  ): Promise<StudentEmailTemplate> => {
+    return apiClient<StudentEmailTemplate>(`/admin/student-email-notifications/${eventKey}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  previewStudentEmailTemplate: async (
+    eventKey: string,
+    data?: { subject?: string; body_html?: string; context?: Record<string, any> }
+  ): Promise<StudentEmailPreviewResponse> => {
+    return apiClient<StudentEmailPreviewResponse>(`/admin/student-email-notifications/${eventKey}/preview/`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  resetStudentEmailTemplate: async (
+    eventKey: string
+  ): Promise<{ message: string; template: StudentEmailTemplate }> => {
+    return apiClient<{ message: string; template: StudentEmailTemplate }>(
+      `/admin/student-email-notifications/${eventKey}/reset/`,
+      { method: "POST" }
+    );
   },
 };

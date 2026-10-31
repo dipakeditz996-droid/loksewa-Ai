@@ -804,3 +804,109 @@ class EmailDeliveryLog(models.Model):
     def __str__(self):
         return f"{self.recipient_email} - {self.subject} ({self.status})"
 
+
+
+class StudentEmailTemplate(models.Model):
+    """
+    Configurable email templates and event toggles for student notifications.
+    Allows administrators to control which events dispatch emails to students,
+    customize email subjects and body templates, and preview rendered emails.
+    Mandatory security and authentication events cannot be disabled.
+    """
+    CATEGORY_CHOICES = (
+        ('account', 'Account & Security'),
+        ('payment', 'Payments & Subscriptions'),
+        ('marketplace', 'Marketplace & Orders'),
+        ('learning', 'Learning & Exams'),
+    )
+
+    event_key = models.CharField(max_length=64, unique=True, db_index=True)
+    category = models.CharField(max_length=32, choices=CATEGORY_CHOICES, db_index=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    is_enabled = models.BooleanField(default=True)
+    is_mandatory = models.BooleanField(default=False)
+    subject = models.CharField(max_length=255)
+    body_html = models.TextField(help_text="Custom HTML body content with {{placeholder}} variables")
+    body_text = models.TextField(blank=True, default='', help_text="Plain text body content with {{placeholder}} variables")
+    available_placeholders = models.JSONField(default=list, blank=True)
+    sample_context = models.JSONField(default=dict, blank=True)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='student_email_template_updates'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['category', 'id']
+        indexes = [
+            models.Index(fields=['category', 'is_enabled']),
+        ]
+
+    def render(self, context: dict = None) -> dict:
+        """Renders subject, body_html, and body_text by substituting {{placeholder}} variables."""
+        ctx = dict(context or {})
+        subj = self.subject
+        b_html = self.body_html
+        b_text = self.body_text or ''
+
+        for key, val in ctx.items():
+            pattern = f"{{{{{key}}}}}"
+            str_val = str(val) if val is not None else ''
+            subj = subj.replace(pattern, str_val)
+            b_html = b_html.replace(pattern, str_val)
+            b_text = b_text.replace(pattern, str_val)
+
+        return {
+            'subject': subj,
+            'body_html': b_html,
+            'body_text': b_text,
+        }
+
+    @classmethod
+    def ensure_defaults(cls):
+        """Populates any missing default student email templates."""
+        from .student_email_defaults import STUDENT_EMAIL_NOTIFICATION_DEFAULTS
+        existing_keys = set(cls.objects.values_list('event_key', flat=True))
+        to_create = []
+        for item in STUDENT_EMAIL_NOTIFICATION_DEFAULTS:
+            if item['event_key'] not in existing_keys:
+                to_create.append(cls(
+                    event_key=item['event_key'],
+                    category=item['category'],
+                    name=item['name'],
+                    description=item.get('description', ''),
+                    is_enabled=item.get('is_enabled', True),
+                    is_mandatory=item.get('is_mandatory', False),
+                    subject=item['subject'],
+                    body_html=item['body_html'],
+                    body_text=item.get('body_text', ''),
+                    available_placeholders=item.get('available_placeholders', []),
+                    sample_context=item.get('sample_context', {}),
+                ))
+        if to_create:
+            cls.objects.bulk_create(to_create)
+
+    @classmethod
+    def get_template(cls, event_key: str):
+        """Gets template for event_key, seeding defaults if needed."""
+        tpl = cls.objects.filter(event_key=event_key).first()
+        if not tpl:
+            cls.ensure_defaults()
+            tpl = cls.objects.filter(event_key=event_key).first()
+        return tpl
+
+    @classmethod
+    def is_event_enabled(cls, event_key: str) -> bool:
+        """Returns True if the event notification is enabled. Mandatory events always return True."""
+        tpl = cls.get_template(event_key)
+        if not tpl:
+            return True
+        if tpl.is_mandatory:
+            return True
+        return tpl.is_enabled
+
+    def __str__(self):
+        status = 'Active' if self.is_enabled else 'Disabled'
+        return f'[{self.category}] {self.name} ({status})'

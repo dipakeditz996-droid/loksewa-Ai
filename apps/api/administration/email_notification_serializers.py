@@ -2,7 +2,7 @@ import re
 from rest_framework import serializers
 from django.core.validators import validate_email as django_validate_email
 from django.core.exceptions import ValidationError as DjangoValidationError
-from core.models import AdminEmailRecipient, EmailDeliveryLog
+from core.models import AdminEmailRecipient, EmailDeliveryLog, StudentEmailTemplate
 
 
 VALID_EVENT_CATEGORIES = {'registration', 'payment', 'marketplace', 'security', 'system'}
@@ -105,3 +105,69 @@ class EmailDeliveryLogSerializer(serializers.ModelSerializer):
 class SendTestEmailSerializer(serializers.Serializer):
     recipient_email = serializers.EmailField(required=True)
 
+
+
+
+class StudentEmailTemplateSerializer(serializers.ModelSerializer):
+    updated_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StudentEmailTemplate
+        fields = [
+            'id',
+            'event_key',
+            'category',
+            'name',
+            'description',
+            'is_enabled',
+            'is_mandatory',
+            'subject',
+            'body_html',
+            'body_text',
+            'available_placeholders',
+            'sample_context',
+            'updated_by_name',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'event_key',
+            'category',
+            'is_mandatory',
+            'available_placeholders',
+            'sample_context',
+            'updated_by_name',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_updated_by_name(self, obj):
+        if obj.updated_by:
+            return obj.updated_by.get_full_name() or obj.updated_by.username
+        return None
+
+    def validate(self, attrs):
+        instance = getattr(self, 'instance', None)
+        is_mandatory = instance.is_mandatory if instance else False
+        is_enabled = attrs.get('is_enabled')
+
+        if is_mandatory and is_enabled is False:
+            raise serializers.ValidationError({
+                'is_enabled': "Mandatory authentication and security notifications cannot be disabled to protect essential account functionality."
+            })
+
+        if 'subject' in attrs and not (attrs['subject'] or '').strip():
+            raise serializers.ValidationError({'subject': "Subject cannot be empty."})
+
+        if 'body_html' in attrs and not (attrs['body_html'] or '').strip():
+            raise serializers.ValidationError({'body_html': "Template body content cannot be empty."})
+
+        return attrs
+
+
+class StudentEmailTemplatePreviewSerializer(serializers.Serializer):
+    subject = serializers.CharField(required=False, allow_blank=True)
+    body_html = serializers.CharField(required=False, allow_blank=True)
+    body_text = serializers.CharField(required=False, allow_blank=True)
+    context = serializers.DictField(required=False, default=dict)

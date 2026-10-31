@@ -804,6 +804,7 @@ export const marketplaceApi = {
     district?: string;
     municipality?: string;
     province?: string;
+    tole?: string;
     latitude?: number;
     longitude?: number;
     allow_nearby?: boolean;
@@ -812,6 +813,7 @@ export const marketplaceApi = {
     if (params?.district) q.append("district", params.district);
     if (params?.municipality) q.append("municipality", params.municipality);
     if (params?.province) q.append("province", params.province);
+    if (params?.tole) q.append("tole", params.tole);
     if (params?.latitude !== undefined && params?.latitude !== null) q.append("latitude", String(params.latitude));
     if (params?.longitude !== undefined && params?.longitude !== null) q.append("longitude", String(params.longitude));
     if (params?.allow_nearby) q.append("allow_nearby", "true");

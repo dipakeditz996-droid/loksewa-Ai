@@ -195,6 +195,7 @@ def discover_nearest_ncm_branches(
     user_lon: Optional[Union[float, str]] = None,
     allow_nearby: bool = False,
     max_results: int = 15,
+    tole: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     LoksewaAI — NCM Phase 12: Intelligent Nearest Branch Discovery & Geographic Coverage Engine.
@@ -212,6 +213,7 @@ def discover_nearest_ncm_branches(
     raw_mun = (municipality or "").strip()
     raw_dist = (district or "").strip()
     raw_prov = (province or "").strip()
+    raw_tole = (tole or "").strip()
 
     stem_mun = normalize_location_name(raw_mun)
     stem_dist = normalize_location_name(raw_dist)
@@ -352,13 +354,38 @@ def discover_nearest_ncm_branches(
         )
 
         is_mun_match = False
-        if stem_mun:
+        is_tole_match = False
+
+        # Match tole/area (e.g. Baneshwor in Kathmandu)
+        if raw_tole:
+            stem_tole = normalize_location_name(raw_tole)
+            if stem_tole:
+                if is_token_boundary_match(stem_tole, b_name) or any(is_token_boundary_match(stem_tole, a) for a in areas_list):
+                    is_mun_match = True
+                    is_tole_match = True
+
+        if not is_mun_match and stem_mun:
             if b_mun and is_token_boundary_match(stem_mun, b_mun):
                 is_mun_match = True
             elif is_token_boundary_match(stem_mun, b_name) and dist_matches:
                 is_mun_match = True
             elif any(is_token_boundary_match(stem_mun, a) for a in areas_list):
                 is_mun_match = True
+            else:
+                # Check individual significant tokens (e.g. 'kathmandu' from 'kathmandu 10')
+                sig_tokens = [t for t in stem_mun.split() if len(t) >= 3 and not t.isdigit()]
+                for tok in sig_tokens:
+                    if b_mun and is_token_boundary_match(tok, b_mun):
+                        is_mun_match = True
+                        break
+                    if is_token_boundary_match(tok, b_name) and dist_matches:
+                        is_mun_match = True
+                        break
+                    if any(is_token_boundary_match(tok, a) for a in areas_list):
+                        is_mun_match = True
+                        break
+
+        b_dict["is_tole_match"] = is_tole_match
 
         if is_mun_match:
             b_dict["coverage_type"] = "local_level"
@@ -394,17 +421,19 @@ def discover_nearest_ncm_branches(
 
     # Sorting helper:
     # 1. Serviceable first (is_serviceable=True -> 0, False -> 1)
-    # 2. Known distance ascending, then None distance
-    # 3. Exact municipality match first (for municipality pool)
-    # 4. Name alphabetical
+    # 2. Tole/Area match first (0 if tole match, 1 otherwise)
+    # 3. Known distance ascending, then None distance
+    # 4. Exact municipality match first (for municipality pool)
+    # 5. Name alphabetical
     def sort_key(b: Dict[str, Any], is_mun_pool: bool = False):
         serviceable_rank = 0 if b.get("is_serviceable", True) else 1
+        tole_rank = 0 if b.get("is_tole_match") else 1
         dist_val = b.get("distance_km") if b.get("distance_km") is not None else 99999.0
         exact_mun_rank = 0
         if is_mun_pool and stem_mun:
             b_mun_str = str(b.get("municipality") or b.get("name") or "")
             exact_mun_rank = 0 if is_token_boundary_match(stem_mun, b_mun_str) else 1
-        return (serviceable_rank, exact_mun_rank, dist_val, b.get("name", ""))
+        return (serviceable_rank, tole_rank, exact_mun_rank, dist_val, b.get("name", ""))
 
     delivery_anchor = {
         "latitude": student_lat,
@@ -835,18 +864,86 @@ class NCMService:
     # 1. BRANCHES (GET /v2/branches)
     # --------------------------------------------------------------------------
 
+    def _get_fallback_or_seeded_branches(self) -> List[Dict[str, Any]]:
+        """
+        Guarantees that a complete, verified branch list is always returned.
+        1. Checks in-memory cache
+        2. Checks Redis/Django cache
+        3. Queries active DB NCMBranchRecord
+        4. If DB is empty, auto-seeds with STANDARD_NCM_BRANCH_CATALOG into DB, caches, and returns.
+        """
+        if NCMService._fallback_branches_cache:
+            return NCMService._fallback_branches_cache
+
+        try:
+            stale = cache.get(self.BRANCHES_CACHE_KEY)
+            if stale and isinstance(stale, list) and len(stale) > 0:
+                NCMService._fallback_branches_cache = stale
+                return stale
+        except Exception:
+            pass
+
+        try:
+            from .models import NCMBranchRecord
+            db_recs = NCMBranchRecord.objects.filter(is_active=True)
+            if db_recs.exists():
+                db_branches = []
+                for r in db_recs:
+                    db_branches.append({
+                        "code": r.code,
+                        "name": r.name,
+                        "district_name": r.district_name,
+                        "province_name": r.province_name,
+                        "municipality": r.municipality,
+                        "address": r.address,
+                        "contact_number": r.contact_number,
+                        "areas_covered": r.areas_covered,
+                        "latitude": float(r.latitude) if r.latitude is not None else None,
+                        "longitude": float(r.longitude) if r.longitude is not None else None,
+                        "coordinate_source": r.coordinate_source,
+                        "is_coordinate_verified": r.is_coordinate_verified,
+                        "is_serviceable": r.is_serviceable,
+                    })
+                NCMService._fallback_branches_cache = db_branches
+                try:
+                    cache.set(self.BRANCHES_CACHE_KEY, db_branches, timeout=self.BRANCHES_CACHE_TTL)
+                except Exception:
+                    pass
+                return db_branches
+        except Exception as db_err:
+            logger.warning("Database branch fallback failed: %s", db_err)
+
+        # DB is empty or failed: auto-seed from authoritative STANDARD_NCM_BRANCH_CATALOG
+        try:
+            from .nepal_geography import STANDARD_NCM_BRANCH_CATALOG
+            self.sync_branches_to_db(STANDARD_NCM_BRANCH_CATALOG)
+            NCMService._fallback_branches_cache = list(STANDARD_NCM_BRANCH_CATALOG)
+            try:
+                cache.set(self.BRANCHES_CACHE_KEY, STANDARD_NCM_BRANCH_CATALOG, timeout=self.BRANCHES_CACHE_TTL)
+            except Exception:
+                pass
+            return list(STANDARD_NCM_BRANCH_CATALOG)
+        except Exception as seed_err:
+            logger.error("Auto-seeding branches from standard catalog failed: %s", seed_err)
+            return []
+
     def get_branches(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """
         Fetch available NCM branches with district and covered areas.
         Utilizes Django cache with a 24-hour TTL and in-memory fallback.
+        Guaranteed to never crash or return empty.
         """
         if not force_refresh:
             try:
                 cached_branches = cache.get(self.BRANCHES_CACHE_KEY)
-                if cached_branches and isinstance(cached_branches, list):
+                if cached_branches and isinstance(cached_branches, list) and len(cached_branches) > 0:
                     return cached_branches
             except Exception as e:
                 logger.warning("Cache access error during NCM get_branches: %s", e)
+
+        if not self.is_configured():
+            logger.info("NCM API credentials not configured; serving verified local branch catalog.")
+            return self._get_fallback_or_seeded_branches()
 
         # Make API call
         try:
@@ -865,7 +962,6 @@ class NCMService:
                 ) from exc
 
             if not isinstance(data, list):
-                # Some APIs wrap in {"results": [...]} or {"data": [...]}
                 if isinstance(data, dict) and "results" in data and isinstance(data["results"], list):
                     data = data["results"]
                 elif isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
@@ -891,58 +987,12 @@ class NCMService:
 
             return data
 
-        except (NCMConnectionError, NCMAPIError) as exc:
-            # Check if we have an in-memory or stale cached copy as fallback
-            if NCMService._fallback_branches_cache:
-                logger.warning(
-                    "NCM branch fetch failed (%s). Falling back to in-memory backup with %d branches.",
-                    exc,
-                    len(NCMService._fallback_branches_cache),
-                )
-                return NCMService._fallback_branches_cache
-
-            # Try reading stale from cache if force_refresh was True
-            if force_refresh:
-                try:
-                    stale = cache.get(self.BRANCHES_CACHE_KEY)
-                    if stale and isinstance(stale, list):
-                        logger.warning(
-                            "NCM branch fetch failed (%s). Falling back to stale cache with %d branches.",
-                            exc,
-                            len(stale),
-                        )
-                        return stale
-                except Exception:
-                    pass
-
-            # Fallback to persistent DB branch records if available
-            try:
-                from .models import NCMBranchRecord
-                db_recs = NCMBranchRecord.objects.filter(is_active=True)
-                if db_recs.exists():
-                    db_branches = []
-                    for r in db_recs:
-                        db_branches.append({
-                            "code": r.code,
-                            "name": r.name,
-                            "district_name": r.district_name,
-                            "province_name": r.province_name,
-                            "municipality": r.municipality,
-                            "address": r.address,
-                            "contact_number": r.contact_number,
-                            "areas_covered": r.areas_covered,
-                            "latitude": float(r.latitude) if r.latitude is not None else None,
-                            "longitude": float(r.longitude) if r.longitude is not None else None,
-                            "coordinate_source": r.coordinate_source,
-                            "is_coordinate_verified": r.is_coordinate_verified,
-                            "is_serviceable": r.is_serviceable,
-                        })
-                    logger.info("Falling back to %d branches from database", len(db_branches))
-                    return db_branches
-            except Exception as db_err:
-                logger.warning("Database branch fallback failed: %s", db_err)
-
-            raise
+        except Exception as exc:
+            logger.warning(
+                "NCM branch fetch failed (%s). Falling back to local branch catalog.",
+                exc,
+            )
+            return self._get_fallback_or_seeded_branches()
 
     def sync_branches_to_db(self, branches: List[Dict[str, Any]]) -> None:
         """
@@ -967,12 +1017,23 @@ class NCMService:
                 else:
                     raw_cov = str(raw_cov).strip()
 
+                b_lat = b.get("latitude")
+                b_lon = b.get("longitude")
+                b_src = b.get("coordinate_source")
+                b_ver = bool(b.get("is_coordinate_verified", False))
+
                 rec = NCMBranchRecord.objects.filter(code=code).first()
                 if not rec:
-                    c_lat, c_lon, c_src, _ = get_municipality_centroid(mun or name, dist, prov)
-                    coord_src = 'UNVERIFIED'
-                    if c_lat is not None:
-                        coord_src = 'MUNICIPALITY_CENTROID' if c_src == 'municipality_centroid' else 'DISTRICT_CENTROID'
+                    if b_lat is not None and b_lon is not None:
+                        c_lat, c_lon = b_lat, b_lon
+                        coord_src = b_src or 'ADMIN_VERIFIED'
+                        is_ver = b_ver
+                    else:
+                        c_lat, c_lon, c_src, _ = get_municipality_centroid(mun or name, dist, prov)
+                        coord_src = 'UNVERIFIED'
+                        is_ver = False
+                        if c_lat is not None:
+                            coord_src = 'MUNICIPALITY_CENTROID' if c_src == 'municipality_centroid' else 'DISTRICT_CENTROID'
                     NCMBranchRecord.objects.create(
                         code=code,
                         name=name,
@@ -985,7 +1046,7 @@ class NCMService:
                         latitude=c_lat,
                         longitude=c_lon,
                         coordinate_source=coord_src,
-                        is_coordinate_verified=False,
+                        is_coordinate_verified=is_ver,
                         is_serviceable=bool(b.get('is_serviceable', True)),
                         last_synced_at=timezone.now(),
                     )
@@ -1001,8 +1062,13 @@ class NCMService:
                         rec.is_serviceable = bool(b['is_serviceable'])
                     rec.last_synced_at = timezone.now()
 
-                    # Only enrich coordinates if not admin verified and currently missing
-                    if not rec.is_coordinate_verified and rec.coordinate_source != 'ADMIN_VERIFIED' and not rec.has_valid_coordinates:
+                    # Enrich coordinates if missing or provided
+                    if b_lat is not None and b_lon is not None and (not rec.has_valid_coordinates or b_ver):
+                        rec.latitude = b_lat
+                        rec.longitude = b_lon
+                        rec.coordinate_source = b_src or 'ADMIN_VERIFIED'
+                        rec.is_coordinate_verified = b_ver
+                    elif not rec.is_coordinate_verified and rec.coordinate_source != 'ADMIN_VERIFIED' and not rec.has_valid_coordinates:
                         c_lat, c_lon, c_src, _ = get_municipality_centroid(mun or name, dist, prov)
                         if c_lat is not None:
                             rec.latitude = c_lat

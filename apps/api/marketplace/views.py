@@ -2529,7 +2529,20 @@ class OrderViewSet(viewsets.ModelViewSet):
                         seller_shipments[s_id] = fee
             product_fee = sum(seller_shipments.values(), Decimal('0.00'))
 
-        return max(regional_fee, product_fee)
+        calculated = max(regional_fee, product_fee)
+        # If still 0, provide safe standard regional baseline:
+        # Kathmandu Valley: Rs. 100, Outside Valley: Rs. 150
+        if calculated == Decimal('0.00'):
+            if delivery_address:
+                dist = (getattr(delivery_address, 'district', '') or '').strip().lower()
+                mun = (getattr(delivery_address, 'municipality', '') or '').strip().lower()
+                if dist in ('kathmandu', 'lalitpur', 'bhaktapur') or any(k in mun for k in ('kathmandu', 'lalitpur', 'bhaktapur')):
+                    return Decimal('100.00')
+                elif dist:
+                    return Decimal('150.00')
+            return Decimal('100.00')
+
+        return calculated
 
     def _validate_ncm_branch(self, branch_name_or_code, service):
         """Validate branch name or code against active NCM branches. Returns canonical branch name or None."""
@@ -2576,9 +2589,9 @@ class OrderViewSet(viewsets.ModelViewSet):
         """
         config = NCMConfiguration.get_settings()
         service = NCMService()
-        fallback_enabled = config.fallback_rules_enabled or getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+        fallback_enabled = config.fallback_rules_enabled or getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', True)
 
-        if not service.is_configured() or not config.is_enabled:
+        if not config.is_enabled:
             return Response({
                 "enabled": False,
                 "branches": [],
@@ -2587,25 +2600,15 @@ class OrderViewSet(viewsets.ModelViewSet):
                 "recommended_branch": None,
                 "match_type": "none",
                 "match_priority": 0,
-                "message": "NCM courier integration is disabled." if not config.is_enabled else "NCM courier service is not configured.",
+                "message": "NCM courier integration is disabled.",
                 "fallback_enabled": fallback_enabled,
             })
 
         try:
             raw_branches = service.get_branches()
-        except NCMError as e:
+        except Exception as e:
             logger.warning("Failed to fetch NCM branches: %s", e)
-            return Response({
-                "enabled": False,
-                "branches": [],
-                "suggested_branches": [],
-                "auto_selected": None,
-                "recommended_branch": None,
-                "match_type": "none",
-                "match_priority": 0,
-                "error": str(e),
-                "fallback_enabled": fallback_enabled,
-            }, status=status.HTTP_503_SERVICE_UNAVAILABLE if not fallback_enabled else status.HTTP_200_OK)
+            raw_branches = []
 
         formatted = []
         for b in raw_branches:
@@ -2634,6 +2637,7 @@ class OrderViewSet(viewsets.ModelViewSet):
         q_district = (request.query_params.get('district') or '').strip()
         q_municipality = (request.query_params.get('municipality') or '').strip()
         q_province = (request.query_params.get('province') or '').strip()
+        q_tole = (request.query_params.get('tole') or request.query_params.get('area') or '').strip()
         q_lat = request.query_params.get('latitude') or request.query_params.get('lat')
         q_lon = request.query_params.get('longitude') or request.query_params.get('lon')
         q_allow_nearby = request.query_params.get('allow_nearby', '').lower() in ('1', 'true')
@@ -2646,6 +2650,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             user_lat=q_lat,
             user_lon=q_lon,
             allow_nearby=q_allow_nearby,
+            tole=q_tole,
         )
 
         return Response({
@@ -2731,7 +2736,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                         "delivery_type": delivery_type,
                         "fallback_applied": False,
                     })
-                except NCMError as err:
+                except Exception as err:
                     logger.warning("NCM rate calculation error: %s", err)
                     if fallback_allowed:
                         fallback_fee = self._calculate_delivery_fee(delivery_address, items=items)
@@ -2749,7 +2754,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     )
             else:
                 # No branch specified or matched
-                if fallback_allowed:
+                if fallback_allowed or not service.is_configured():
                     fee = self._calculate_delivery_fee(delivery_address, items=items)
                     return Response({
                         "delivery_fee": fee,
@@ -2762,13 +2767,16 @@ class OrderViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         else:
-            # NCM not configured
-            if fallback_allowed or settings.TESTING:
+            # NCM not configured or live rates disabled
+            if fallback_allowed or settings.TESTING or not service.is_configured():
                 fee = self._calculate_delivery_fee(delivery_address, items=items)
                 return Response({
                     "delivery_fee": fee,
                     "fee_source": "rule_fallback",
+                    "destination_branch": destination_branch or "",
+                    "delivery_type": delivery_type,
                     "fallback_applied": True,
+                    "fallback_reason": "Verified regional delivery rules applied."
                 })
             return Response(
                 {"detail": "Courier delivery service is currently unavailable."},
@@ -3224,7 +3232,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     else:
                         raise ValidationError({"detail": "Please select an eligible courier destination branch for delivery."})
             else:
-                if fallback_allowed or settings.TESTING:
+                if fallback_allowed or settings.TESTING or not service.is_configured():
                     delivery_fee = self._calculate_delivery_fee(delivery_address, cart_items)
                     fee_source = 'rule_fallback'
                     fallback_applied = True

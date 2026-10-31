@@ -22,6 +22,13 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from .nepal_geography import (
+    calculate_haversine_distance,
+    get_municipality_centroid,
+    DISTRICT_CENTROIDS,
+    find_local_level_match,
+)
+
 logger = logging.getLogger("marketplace.ncm_service")
 
 # --- CUSTOM EXCEPTIONS ---
@@ -116,6 +123,431 @@ RATE_DELIVERY_TYPE_MAP = {
     "branch2branch": "B2B",
     "b2b": "B2B",
 }
+
+
+# --------------------------------------------------------------------------
+# Location Normalization & Strict Prioritized Matching Engine
+# --------------------------------------------------------------------------
+
+ADMIN_SUFFIX_PATTERN = re.compile(
+    r'\b('
+    r'sub[\s\-]metropolitan\s+city|sub[\s\-]metropolis|sub[\s\-]metro|'
+    r'metropolitan\s+city|metropolis|metro|'
+    r'upamahanagarpalika|upa[\s\-]mahanagarpalika|upamahanagar\s+palika|'
+    r'mahanagarpalika|mahanagar\s+palika|'
+    r'rural\s+municipality|rural[\s\-]municipality|'
+    r'gaunpalika|gaun\s+palika|gaumpalika|gaum\s+palika|'
+    r'municipality|'
+    r'nagarpalika|nagar\s+palika|'
+    r'r\.m\.|rm|vdc|n\.p\.|np|m\.p\.|mp'
+    r')\b',
+    re.IGNORECASE
+)
+
+PUNCTUATION_PATTERN = re.compile(r'[\.,/\\()\[\]{}\-_:;!@#$%^&*~`+=|<>?]')
+
+
+def normalize_location_name(text: Optional[str]) -> str:
+    """
+    Normalize district, municipality, or covered area names for accurate matching:
+    - Lowercases and trims
+    - Replaces punctuation with single spaces
+    - Removes common administrative suffixes (Metropolitan City, Gaunpalika, etc.)
+    - Collapses consecutive whitespace to a single space
+    """
+    if not text:
+        return ""
+    cleaned = PUNCTUATION_PATTERN.sub(" ", str(text).lower())
+    cleaned = ADMIN_SUFFIX_PATTERN.sub(" ", cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
+
+def is_token_boundary_match(query: Optional[str], target: Optional[str]) -> bool:
+    """
+    Check if normalized location stems match bidirectionally:
+    1. Exact equality (e.g. 'kathmandu' == 'kathmandu')
+    2. query as whole word in target (e.g. 'pokhara' in 'pokhara lekhnath')
+    3. target as whole word in query (e.g. 'pokhara lekhnath' contains whole token 'pokhara')
+    Strictly avoids false positives (e.g. 'ilam' does NOT match 'milam').
+    """
+    norm_q = normalize_location_name(query)
+    norm_t = normalize_location_name(target)
+    if not norm_q or not norm_t:
+        return False
+    if norm_q == norm_t:
+        return True
+    # Whole-word token match q in t
+    if re.search(r'\b' + re.escape(norm_q) + r'\b', norm_t):
+        return True
+    # Whole-word token match t in q (e.g. branch is 'Pokhara', user typed 'Pokhara Lekhnath')
+    if re.search(r'\b' + re.escape(norm_t) + r'\b', norm_q):
+        return True
+    return False
+
+
+def discover_nearest_ncm_branches(
+    branches: List[Dict[str, Any]],
+    municipality: Optional[str] = None,
+    district: Optional[str] = None,
+    province: Optional[str] = None,
+    user_lat: Optional[Union[float, str]] = None,
+    user_lon: Optional[Union[float, str]] = None,
+    allow_nearby: bool = False,
+    max_results: int = 15,
+) -> Dict[str, Any]:
+    """
+    LoksewaAI — NCM Phase 12: Intelligent Nearest Branch Discovery & Geographic Coverage Engine.
+
+    Ranks nearby branches by:
+    1. Geographic distance (Haversine formula, strictly labeled 'Approx. distance').
+    2. Delivery coverage (Exact local-level > District hub > Cross-district nearby).
+    3. Live serviceability (Serviceable branches strictly outrank unserviceable ones).
+
+    Search Priority:
+    Priority 1: Municipality / Local Level matches
+    Priority 2: District Hub fallback (ONLY when Priority 1 yields zero matches)
+    Priority 3: Cross-District Nearby discovery (within 85km, ONLY when Priority 1 & 2 yield zero matches)
+    """
+    raw_mun = (municipality or "").strip()
+    raw_dist = (district or "").strip()
+    raw_prov = (province or "").strip()
+
+    stem_mun = normalize_location_name(raw_mun)
+    stem_dist = normalize_location_name(raw_dist)
+
+    # 1. Resolve student delivery anchor coordinates
+    student_lat: Optional[float] = None
+    student_lon: Optional[float] = None
+    anchor_source = "unresolved"
+    anchor_info: Optional[Dict[str, Any]] = None
+
+    if user_lat is not None and user_lon is not None:
+        try:
+            f_lat = float(user_lat)
+            f_lon = float(user_lon)
+            if -90.0 <= f_lat <= 90.0 and -180.0 <= f_lon <= 180.0:
+                student_lat, student_lon = f_lat, f_lon
+                anchor_source = "client_provided"
+                anchor_info = {"lat": f_lat, "lon": f_lon, "source": "client_provided"}
+        except (ValueError, TypeError):
+            pass
+
+    if student_lat is None:
+        c_lat, c_lon, c_source, c_info = get_municipality_centroid(raw_mun, raw_dist, raw_prov)
+        if c_lat is not None and c_lon is not None:
+            student_lat, student_lon = c_lat, c_lon
+            anchor_source = c_source
+            anchor_info = c_info
+
+    # 2. Lookup DB branch records to enrich missing coordinates/provenance
+    db_branch_map: Dict[str, Any] = {}
+    try:
+        from .models import NCMBranchRecord
+        records = NCMBranchRecord.objects.filter(is_active=True)
+        for rec in records:
+            if rec.code:
+                db_branch_map[rec.code.strip().lower()] = rec
+            if rec.name:
+                db_branch_map[rec.name.strip().lower()] = rec
+    except Exception as e:
+        logger.debug("Database branch lookup skipped: %s", e)
+
+    # 3. Process and enrich each branch
+    processed_branches: List[Dict[str, Any]] = []
+
+    for b in branches:
+        b_dict = dict(b)
+        b_name = str(b_dict.get("name") or "").strip()
+        b_code = str(b_dict.get("code") or b_dict.get("pk") or b_dict.get("id") or b_name).strip()
+        b_mun = str(b_dict.get("municipality") or b_dict.get("local_level") or "").strip()
+        b_dist = str(b_dict.get("district_name") or b_dict.get("district") or "").strip()
+        b_prov = str(b_dict.get("province_name") or b_dict.get("province") or "").strip()
+
+        # Parse areas covered
+        raw_areas = b_dict.get("areas_covered") or b_dict.get("coverage") or b_dict.get("covered_areas") or []
+        if isinstance(raw_areas, str):
+            areas_list = [a.strip() for a in raw_areas.replace('\n', ',').split(",") if a.strip()]
+        elif isinstance(raw_areas, list):
+            areas_list = [str(a).strip() for a in raw_areas if str(a).strip()]
+        else:
+            areas_list = []
+        b_dict["areas_covered"] = areas_list
+
+        # Coordinate resolution & provenance
+        b_lat: Optional[float] = None
+        b_lon: Optional[float] = None
+        coord_source = "UNVERIFIED"
+        is_coord_verified = False
+        is_serviceable = b_dict.get("is_serviceable", True)
+
+        # Check if coordinates in branch dict
+        if b_dict.get("latitude") is not None and b_dict.get("longitude") is not None:
+            try:
+                b_lat = float(b_dict["latitude"])
+                b_lon = float(b_dict["longitude"])
+                coord_source = str(b_dict.get("coordinate_source") or "API")
+                is_coord_verified = bool(b_dict.get("is_coordinate_verified", False))
+            except (ValueError, TypeError):
+                b_lat, b_lon = None, None
+
+        # If not, check database record
+        if b_lat is None:
+            db_rec = db_branch_map.get(b_code.lower()) or db_branch_map.get(b_name.lower())
+            if db_rec and db_rec.has_valid_coordinates:
+                b_lat = float(db_rec.latitude)
+                b_lon = float(db_rec.longitude)
+                coord_source = db_rec.coordinate_source
+                is_coord_verified = db_rec.is_coordinate_verified
+                is_serviceable = db_rec.is_serviceable
+
+        # If still not found, try municipality/name centroid lookup
+        if b_lat is None:
+            m_lat, m_lon, m_source, _ = get_municipality_centroid(b_mun or b_name, b_dist, b_prov)
+            if m_lat is not None and m_lon is not None:
+                b_lat = m_lat
+                b_lon = m_lon
+                coord_source = "MUNICIPALITY_CENTROID" if m_source == "municipality_centroid" else "DISTRICT_CENTROID"
+                is_coord_verified = False
+
+        b_dict["latitude"] = b_lat
+        b_dict["longitude"] = b_lon
+        b_dict["coordinate_source"] = coord_source
+        b_dict["is_coordinate_verified"] = is_coord_verified
+        b_dict["is_serviceable"] = is_serviceable
+        b_dict["serviceability_status"] = "VERIFIED_SERVICEABLE" if is_serviceable else "UNSERVICEABLE"
+
+        # Calculate distance
+        if student_lat is not None and b_lat is not None:
+            raw_dist_km = calculate_haversine_distance(student_lat, student_lon, b_lat, b_lon)
+            if raw_dist_km is not None:
+                approx_dist = round(raw_dist_km, 1)
+                b_dict["approx_distance_km"] = approx_dist
+                b_dict["distance_km"] = raw_dist_km
+                b_dict["distance_label"] = f"~{approx_dist} km (Approx. distance)"
+                if raw_dist_km <= 35.0:
+                    b_dict["radius_zone"] = "primary"
+                elif raw_dist_km <= 85.0:
+                    b_dict["radius_zone"] = "extended"
+                elif raw_dist_km <= 250.0:
+                    b_dict["radius_zone"] = "regional"
+                else:
+                    b_dict["radius_zone"] = "far"
+            else:
+                b_dict["approx_distance_km"] = None
+                b_dict["distance_km"] = None
+                b_dict["distance_label"] = "Approx. distance unavailable"
+                b_dict["radius_zone"] = "unknown"
+        else:
+            b_dict["approx_distance_km"] = None
+            b_dict["distance_km"] = None
+            b_dict["distance_label"] = "Approx. distance unavailable"
+            b_dict["radius_zone"] = "unknown"
+
+        # Check coverage
+        dist_matches = (
+            not stem_dist
+            or is_token_boundary_match(stem_dist, b_dist)
+            or is_token_boundary_match(stem_dist, b_name)
+        )
+
+        is_mun_match = False
+        if stem_mun:
+            if b_mun and is_token_boundary_match(stem_mun, b_mun):
+                is_mun_match = True
+            elif is_token_boundary_match(stem_mun, b_name) and dist_matches:
+                is_mun_match = True
+            elif any(is_token_boundary_match(stem_mun, a) for a in areas_list):
+                is_mun_match = True
+
+        if is_mun_match:
+            b_dict["coverage_type"] = "local_level"
+            b_dict["coverage_label"] = "Direct Local Coverage"
+            b_dict["match_type"] = "municipality"
+            b_dict["match_label"] = "Matches Your Municipality"
+            b_dict["match_priority"] = 1
+        elif stem_dist and (is_token_boundary_match(stem_dist, b_dist) or is_token_boundary_match(stem_dist, b_name)):
+            b_dict["coverage_type"] = "district"
+            b_dict["coverage_label"] = "Serves Your District"
+            b_dict["match_type"] = "district"
+            b_dict["match_label"] = "Serves Your District"
+            b_dict["match_priority"] = 2
+        elif b_dict.get("distance_km") is not None and b_dict["distance_km"] <= 85.0:
+            b_dict["coverage_type"] = "cross_district_nearby"
+            b_dict["coverage_label"] = "Nearby Neighboring District"
+            b_dict["match_type"] = "nearby"
+            b_dict["match_label"] = "Nearby Neighboring District"
+            b_dict["match_priority"] = 3
+        else:
+            b_dict["coverage_type"] = "regional"
+            b_dict["coverage_label"] = "Regional Branch"
+            b_dict["match_type"] = "regional"
+            b_dict["match_label"] = "Regional Branch"
+            b_dict["match_priority"] = 4
+
+        processed_branches.append(b_dict)
+
+    # 4. Filter candidates according to strict search priority
+    mun_matches = [b for b in processed_branches if b["coverage_type"] == "local_level"]
+    dist_matches = [b for b in processed_branches if b["coverage_type"] == "district"]
+    nearby_matches = [b for b in processed_branches if b["coverage_type"] == "cross_district_nearby"]
+
+    # Sorting helper:
+    # 1. Serviceable first (is_serviceable=True -> 0, False -> 1)
+    # 2. Known distance ascending, then None distance
+    # 3. Exact municipality match first (for municipality pool)
+    # 4. Name alphabetical
+    def sort_key(b: Dict[str, Any], is_mun_pool: bool = False):
+        serviceable_rank = 0 if b.get("is_serviceable", True) else 1
+        dist_val = b.get("distance_km") if b.get("distance_km") is not None else 99999.0
+        exact_mun_rank = 0
+        if is_mun_pool and stem_mun:
+            b_mun_str = str(b.get("municipality") or b.get("name") or "")
+            exact_mun_rank = 0 if is_token_boundary_match(stem_mun, b_mun_str) else 1
+        return (serviceable_rank, exact_mun_rank, dist_val, b.get("name", ""))
+
+    delivery_anchor = {
+        "latitude": student_lat,
+        "longitude": student_lon,
+        "source": anchor_source,
+        "municipality": raw_mun,
+        "district": raw_dist,
+        "province": raw_prov,
+    }
+
+    # Priority 1: Local Level
+    if mun_matches:
+        mun_matches.sort(key=lambda b: sort_key(b, is_mun_pool=True))
+        # Select first serviceable candidate as recommended
+        recommended = None
+        for b in mun_matches:
+            if b.get("is_serviceable", True):
+                recommended = b
+                break
+        if not recommended and mun_matches:
+            # If all are unserviceable, do not recommend unserviceable
+            recommended = None
+
+        for idx, b in enumerate(mun_matches):
+            b["is_recommended"] = (recommended is not None and b.get("code") == recommended.get("code"))
+
+        auto_selected = recommended["name"] if recommended else None
+
+        return {
+            "match_priority": 1,
+            "match_type": "municipality",
+            "message": f"Found {len(mun_matches)} NCM branch(es) serving your local level.",
+            "search_municipality": raw_mun,
+            "search_district": raw_dist,
+            "recommended_branch": recommended,
+            "suggested_branches": mun_matches[:max_results],
+            "auto_selected": auto_selected,
+            "delivery_anchor": delivery_anchor,
+        }
+
+    # Priority 2: District Hub Fallback
+    if dist_matches:
+        dist_matches.sort(key=lambda b: sort_key(b, is_mun_pool=False))
+        recommended = None
+        for b in dist_matches:
+            if b.get("is_serviceable", True):
+                recommended = b
+                break
+
+        for idx, b in enumerate(dist_matches):
+            b["is_recommended"] = (recommended is not None and b.get("code") == recommended.get("code"))
+
+        auto_selected = recommended["name"] if recommended else None
+
+        return {
+            "match_priority": 2,
+            "match_type": "district",
+            "message": "No NCM branch was found for your local level. Here are the available NCM branches serving your district.",
+            "search_municipality": raw_mun,
+            "search_district": raw_dist,
+            "recommended_branch": recommended,
+            "suggested_branches": dist_matches[:max_results],
+            "auto_selected": auto_selected,
+            "delivery_anchor": delivery_anchor,
+        }
+
+    # Priority 3: Cross-District Nearby Discovery
+    if nearby_matches:
+        nearby_matches.sort(key=lambda b: sort_key(b, is_mun_pool=False))
+        recommended = None
+        for b in nearby_matches:
+            if b.get("is_serviceable", True):
+                recommended = b
+                break
+
+        for idx, b in enumerate(nearby_matches):
+            b["is_recommended"] = (recommended is not None and b.get("code") == recommended.get("code"))
+
+        auto_selected = recommended["name"] if recommended else None
+
+        if allow_nearby:
+            return {
+                "match_priority": 3,
+                "match_type": "nearby",
+                "message": "No NCM branch was found for your local level or district. Showing nearest available NCM branches in neighboring districts.",
+                "search_municipality": raw_mun,
+                "search_district": raw_dist,
+                "recommended_branch": recommended,
+                "suggested_branches": nearby_matches[:max_results],
+                "nearby_branches": nearby_matches[:max_results],
+                "auto_selected": auto_selected,
+                "delivery_anchor": delivery_anchor,
+            }
+        else:
+            # Without allow_nearby flag, honor strict district boundary
+            return {
+                "match_priority": 0,
+                "match_type": "none",
+                "message": "No NCM branch was found for your local level or district. Courier delivery is currently unavailable for this location.",
+                "search_municipality": raw_mun,
+                "search_district": raw_dist,
+                "recommended_branch": None,
+                "suggested_branches": [],
+                "nearby_branches": nearby_matches[:max_results],
+                "auto_selected": None,
+                "delivery_anchor": delivery_anchor,
+            }
+
+    # No Match
+    return {
+        "match_priority": 0,
+        "match_type": "none",
+        "message": "No NCM branch was found for your local level or district. Courier delivery is currently unavailable for this location.",
+        "search_municipality": raw_mun,
+        "search_district": raw_dist,
+        "recommended_branch": None,
+        "suggested_branches": [],
+        "nearby_branches": [],
+        "auto_selected": None,
+        "delivery_anchor": delivery_anchor,
+    }
+
+
+def match_ncm_branches_for_location(
+    branches: List[Dict[str, Any]],
+    municipality: Optional[str] = None,
+    district: Optional[str] = None,
+    province: Optional[str] = None,
+    user_lat: Optional[Union[float, str]] = None,
+    user_lon: Optional[Union[float, str]] = None,
+) -> Dict[str, Any]:
+    """
+    Backward-compatible entry point delegating to discover_nearest_ncm_branches.
+    """
+    return discover_nearest_ncm_branches(
+        branches=branches,
+        municipality=municipality,
+        district=district,
+        province=province,
+        user_lat=user_lat,
+        user_lon=user_lon,
+    )
+
 
 
 class NCMService:
@@ -453,6 +885,10 @@ class NCMService:
 
             NCMService._fallback_branches_cache = data
             logger.info("Successfully fetched and cached %d NCM branches", len(data))
+
+            # Synchronize to persistent database models
+            self.sync_branches_to_db(data)
+
             return data
 
         except (NCMConnectionError, NCMAPIError) as exc:
@@ -479,7 +915,103 @@ class NCMService:
                 except Exception:
                     pass
 
+            # Fallback to persistent DB branch records if available
+            try:
+                from .models import NCMBranchRecord
+                db_recs = NCMBranchRecord.objects.filter(is_active=True)
+                if db_recs.exists():
+                    db_branches = []
+                    for r in db_recs:
+                        db_branches.append({
+                            "code": r.code,
+                            "name": r.name,
+                            "district_name": r.district_name,
+                            "province_name": r.province_name,
+                            "municipality": r.municipality,
+                            "address": r.address,
+                            "contact_number": r.contact_number,
+                            "areas_covered": r.areas_covered,
+                            "latitude": float(r.latitude) if r.latitude is not None else None,
+                            "longitude": float(r.longitude) if r.longitude is not None else None,
+                            "coordinate_source": r.coordinate_source,
+                            "is_coordinate_verified": r.is_coordinate_verified,
+                            "is_serviceable": r.is_serviceable,
+                        })
+                    logger.info("Falling back to %d branches from database", len(db_branches))
+                    return db_branches
+            except Exception as db_err:
+                logger.warning("Database branch fallback failed: %s", db_err)
+
             raise
+
+    def sync_branches_to_db(self, branches: List[Dict[str, Any]]) -> None:
+        """
+        Synchronizes branch records from NCM API into persistent NCMBranchRecord models.
+        Preserves admin-verified coordinates without overwriting them.
+        """
+        try:
+            from .models import NCMBranchRecord
+            for b in branches:
+                name = str(b.get("name") or "").strip()
+                if not name:
+                    continue
+                code = str(b.get("code") or b.get("pk") or b.get("id") or name).strip()
+                dist = str(b.get("district_name") or b.get("district") or "").strip()
+                prov = str(b.get("province_name") or b.get("province") or "").strip()
+                mun = str(b.get("municipality") or b.get("local_level") or "").strip()
+                addr = str(b.get("address") or b.get("location") or "").strip()
+                contact = str(b.get("contact_number") or b.get("phone") or b.get("contact") or "").strip()
+                raw_cov = b.get("areas_covered") or b.get("coverage") or b.get("covered_areas") or ""
+                if isinstance(raw_cov, list):
+                    raw_cov = ", ".join(str(x).strip() for x in raw_cov if str(x).strip())
+                else:
+                    raw_cov = str(raw_cov).strip()
+
+                rec = NCMBranchRecord.objects.filter(code=code).first()
+                if not rec:
+                    c_lat, c_lon, c_src, _ = get_municipality_centroid(mun or name, dist, prov)
+                    coord_src = 'UNVERIFIED'
+                    if c_lat is not None:
+                        coord_src = 'MUNICIPALITY_CENTROID' if c_src == 'municipality_centroid' else 'DISTRICT_CENTROID'
+                    NCMBranchRecord.objects.create(
+                        code=code,
+                        name=name,
+                        district_name=dist,
+                        province_name=prov,
+                        municipality=mun,
+                        address=addr,
+                        contact_number=contact,
+                        areas_covered=raw_cov,
+                        latitude=c_lat,
+                        longitude=c_lon,
+                        coordinate_source=coord_src,
+                        is_coordinate_verified=False,
+                        is_serviceable=bool(b.get('is_serviceable', True)),
+                        last_synced_at=timezone.now(),
+                    )
+                else:
+                    rec.name = name
+                    rec.district_name = dist
+                    rec.province_name = prov
+                    rec.municipality = mun
+                    rec.address = addr
+                    rec.contact_number = contact
+                    rec.areas_covered = raw_cov
+                    if 'is_serviceable' in b:
+                        rec.is_serviceable = bool(b['is_serviceable'])
+                    rec.last_synced_at = timezone.now()
+
+                    # Only enrich coordinates if not admin verified and currently missing
+                    if not rec.is_coordinate_verified and rec.coordinate_source != 'ADMIN_VERIFIED' and not rec.has_valid_coordinates:
+                        c_lat, c_lon, c_src, _ = get_municipality_centroid(mun or name, dist, prov)
+                        if c_lat is not None:
+                            rec.latitude = c_lat
+                            rec.longitude = c_lon
+                            rec.coordinate_source = 'MUNICIPALITY_CENTROID' if c_src == 'municipality_centroid' else 'DISTRICT_CENTROID'
+                    rec.save()
+        except Exception as e:
+            logger.warning("Failed to synchronize NCM branches to DB: %s", e)
+
 
     # --------------------------------------------------------------------------
     # 2. RATE CALCULATION (GET /v1/shipping-rate)

@@ -101,7 +101,10 @@ class NCMCheckoutIntegrationTests(TestCase):
                 "name": "Kathmandu",
                 "district_name": "Kathmandu",
                 "province_name": "Bagmati",
+                "municipality": "Kathmandu Metropolitan City",
                 "areas_covered": ["Baneshwor", "Koteshwor"],
+                "address": "New Road, Kathmandu",
+                "contact_number": "01-4222222",
             },
             {
                 "pk": 2,
@@ -109,7 +112,10 @@ class NCMCheckoutIntegrationTests(TestCase):
                 "name": "Pokhara",
                 "district_name": "Kaski",
                 "province_name": "Gandaki",
+                "municipality": "Pokhara Lekhnath",
                 "areas_covered": ["Lakeside", "Mahendrapool", "Srijana Chowk"],
+                "address": "Prithvi Chowk, Pokhara",
+                "contact_number": "061-522222",
             },
             {
                 "pk": 3,
@@ -117,7 +123,39 @@ class NCMCheckoutIntegrationTests(TestCase):
                 "name": "Biratnagar",
                 "district_name": "Morang",
                 "province_name": "Koshi",
+                "municipality": "Biratnagar Metropolitan City",
                 "areas_covered": ["Traffic Chowk"],
+                "address": "Main Road, Biratnagar",
+                "contact_number": "021-422222",
+            },
+            {
+                "pk": 4,
+                "code": "TMG",
+                "name": "Tamghas",
+                "district_name": "Gulmi",
+                "province_name": "Lumbini",
+                "municipality": "Resunga Municipality",
+                "areas_covered": ["Tamghas Bazar"],
+                "address": "Tamghas, Gulmi",
+                "contact_number": "079-520111",
+            },
+            {
+                "pk": 5,
+                "code": "MIL",
+                "name": "Milam Hub",
+                "district_name": "Doti",
+                "province_name": "Sudurpashchim",
+                "municipality": "Milam Gaunpalika",
+                "areas_covered": ["Milam Bazar"],
+            },
+            {
+                "pk": 6,
+                "code": "KTM2",
+                "name": "Kathmandu Central Hub",
+                "district_name": "Kathmandu",
+                "province_name": "Bagmati",
+                "municipality": "Kathmandu",
+                "areas_covered": ["Thamel", "Baneshwor"],
             },
         ]
 
@@ -125,12 +163,12 @@ class NCMCheckoutIntegrationTests(TestCase):
         cache.clear()
         NCMService._fallback_branches_cache = None
 
-    # --- 1. BRANCH LISTING & SUGGESTION MATCHING ---
+    # --- 1. LOCAL-LEVEL-FIRST SEARCH & SUGGESTION MATCHING ---
 
     @override_settings(NCM_API_TOKEN="mock_token_123")
     @patch.object(NCMService, "get_branches")
     def test_ncm_branches_endpoint_with_suggestion(self, mock_get_branches):
-        """Test GET ncm-branches returns branches and automatically scores matching district/municipality."""
+        """Test GET ncm-branches returns branches and automatically matches municipality."""
         mock_get_branches.return_value = self.mock_branches
 
         url = "/api/marketplace/student/orders/ncm-branches/?district=Kaski&municipality=Pokhara"
@@ -139,10 +177,136 @@ class NCMCheckoutIntegrationTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertTrue(data["enabled"])
-        self.assertEqual(len(data["branches"]), 3)
+        self.assertEqual(len(data["branches"]), 6)
         self.assertEqual(data["auto_selected"], "Pokhara")
+        self.assertEqual(data["match_type"], "municipality")
+        self.assertEqual(data["match_priority"], 1)
         self.assertEqual(len(data["suggested_branches"]), 1)
         self.assertEqual(data["suggested_branches"][0]["name"], "Pokhara")
+        self.assertEqual(data["suggested_branches"][0]["match_label"], "Matches Your Municipality")
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_exact_municipality_match(self, mock_get_branches):
+        """Priority 1: Exact municipality match identifies local-level branch and ignores unrelated branches."""
+        mock_get_branches.return_value = self.mock_branches
+
+        # Test with normalized administrative suffix 'Pokhara Lekhnath Metropolitan City'
+        url = "/api/marketplace/student/orders/ncm-branches/?district=Kaski&municipality=Pokhara+Lekhnath+Metropolitan+City"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["match_type"], "municipality")
+        self.assertEqual(data["match_priority"], 1)
+        self.assertEqual(data["auto_selected"], "Pokhara")
+        self.assertEqual(data["suggested_branches"][0]["name"], "Pokhara")
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_covered_area_municipality_match(self, mock_get_branches):
+        """Priority 1: Matches covered-area when student local level is in branch areas_covered."""
+        mock_get_branches.return_value = self.mock_branches
+
+        # Srijana Chowk is in Pokhara's areas_covered
+        url = "/api/marketplace/student/orders/ncm-branches/?district=Kaski&municipality=Srijana+Chowk"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["match_type"], "municipality")
+        self.assertEqual(data["match_priority"], 1)
+        self.assertEqual(data["auto_selected"], "Pokhara")
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_multiple_branches_serving_one_municipality(self, mock_get_branches):
+        """When multiple branches serve a local level, return all of them with the top one recommended."""
+        mock_get_branches.return_value = self.mock_branches
+
+        url = "/api/marketplace/student/orders/ncm-branches/?district=Kathmandu&municipality=Kathmandu+Metropolitan+City"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["match_type"], "municipality")
+        self.assertEqual(len(data["suggested_branches"]), 2)
+        # First branch is flagged as recommended
+        self.assertTrue(data["suggested_branches"][0]["is_recommended"])
+        self.assertEqual(data["auto_selected"], data["suggested_branches"][0]["name"])
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_district_fallback_when_municipality_has_no_match(self, mock_get_branches):
+        """
+        Priority 2: Only when municipality returns zero matches, fall back to district branches.
+        Must show the exact required notice.
+        """
+        mock_get_branches.return_value = self.mock_branches
+
+        # Chhatrakot is a municipality in Gulmi, but no NCM branch is named Chhatrakot
+        url = "/api/marketplace/student/orders/ncm-branches/?district=Gulmi&municipality=Chhatrakot"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["match_type"], "district")
+        self.assertEqual(data["match_priority"], 2)
+        self.assertEqual(data["auto_selected"], "Tamghas")
+        self.assertEqual(len(data["suggested_branches"]), 1)
+        self.assertEqual(data["suggested_branches"][0]["name"], "Tamghas")
+        self.assertEqual(data["suggested_branches"][0]["match_label"], "Serves Your District")
+        self.assertEqual(
+            data["message"],
+            "No NCM branch was found for your local level. Here are the available NCM branches serving your district."
+        )
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_no_district_match_returns_unavailable(self, mock_get_branches):
+        """When neither municipality nor district has any branch, return honest unavailable status."""
+        mock_get_branches.return_value = self.mock_branches
+
+        url = "/api/marketplace/student/orders/ncm-branches/?district=Manang&municipality=Chame"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["match_type"], "none")
+        self.assertEqual(data["match_priority"], 0)
+        self.assertIsNone(data["auto_selected"])
+        self.assertEqual(len(data["suggested_branches"]), 0)
+        self.assertIn("No NCM branch was found for your local level or district", data["message"])
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_similar_names_no_false_matches(self, mock_get_branches):
+        """Ensure token boundary normalization prevents false positive substring matches ('Ilam' vs 'Milam Hub')."""
+        mock_get_branches.return_value = self.mock_branches
+
+        url = "/api/marketplace/student/orders/ncm-branches/?district=Ilam&municipality=Ilam+Municipality"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        # Must not match 'Milam Hub' in Doti
+        self.assertEqual(data["match_type"], "none")
+        self.assertIsNone(data["auto_selected"])
+        self.assertEqual(len(data["suggested_branches"]), 0)
+
+    @override_settings(NCM_API_TOKEN="mock_token_123")
+    @patch.object(NCMService, "get_branches")
+    def test_municipality_and_district_changes(self, mock_get_branches):
+        """Changing municipality or district updates recommendations dynamically."""
+        mock_get_branches.return_value = self.mock_branches
+
+        # First query: Kaski / Pokhara
+        resp1 = self.client.get("/api/marketplace/student/orders/ncm-branches/?district=Kaski&municipality=Pokhara")
+        self.assertEqual(resp1.json()["auto_selected"], "Pokhara")
+
+        # Second query: Morang / Biratnagar
+        resp2 = self.client.get("/api/marketplace/student/orders/ncm-branches/?district=Morang&municipality=Biratnagar")
+        self.assertEqual(resp2.json()["auto_selected"], "Biratnagar")
 
     # --- 2. LIVE DELIVERY RATE CALCULATION ---
 

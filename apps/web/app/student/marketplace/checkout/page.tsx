@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus, UserCheck, ShieldCheck, Truck, RefreshCw } from "lucide-react";
+import { ArrowLeft, Upload, Info, AlertCircle, CheckCircle2, MapPin, Plus, UserCheck, ShieldCheck, Truck, RefreshCw, Building2, Phone, ChevronDown, ChevronUp, Star, Compass, Navigation, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { RetryNextImage as Image } from "@/components/ui/retry-next-image";
 import { RetryImage } from "@/components/ui/retry-image";
@@ -37,6 +37,12 @@ export default function CheckoutPage() {
   const [fallbackApplied, setFallbackApplied] = useState<boolean>(false);
   const [calculatingFee, setCalculatingFee] = useState<boolean>(false);
   const [feeError, setFeeError] = useState<string | null>(null);
+  const [branchMatchType, setBranchMatchType] = useState<"municipality" | "district" | "nearby" | "none" | null>(null);
+  const [branchMatchMessage, setBranchMatchMessage] = useState<string>("");
+  const [nearbyBranches, setNearbyBranches] = useState<NCMBranch[]>([]);
+  const [allowNearby, setAllowNearby] = useState<boolean>(false);
+  const [deliveryAnchor, setDeliveryAnchor] = useState<any>(null);
+  const [showAllBranches, setShowAllBranches] = useState<boolean>(false);
   
   // "Use my existing info" state
   const [useExistingInfo, setUseExistingInfo] = useState(false);
@@ -125,15 +131,16 @@ export default function CheckoutPage() {
     overrideBranch?: string;
     overrideDeliveryType?: string;
     existingAddresses?: DeliveryAddress[];
+    allowNearby?: boolean;
   }) => {
     try {
       setCalculatingFee(true);
       setFeeError(null);
 
       // Resolve address components
-      let prov = options.province || "";
-      let dist = options.district || "";
-      let mun = options.municipality || "";
+      let prov = options.province !== undefined ? options.province : (useExistingInfo ? (existingInfoForm.province || "") : "");
+      let dist = options.district !== undefined ? options.district : (useExistingInfo ? (existingInfoForm.district || "") : "");
+      let mun = options.municipality !== undefined ? options.municipality : (useExistingInfo ? (existingInfoForm.municipality || "") : "");
 
       const addrList = options.existingAddresses || addresses;
       if (options.addressId && addrList.length > 0) {
@@ -145,24 +152,36 @@ export default function CheckoutPage() {
         }
       }
 
-      // Query NCM branches and location suggestions
+      // Query NCM branches and location suggestions using Phase 12 nearest branch engine
       let targetBranch = options.overrideBranch !== undefined ? options.overrideBranch : selectedBranch;
+      const isNearbyAllowed = options.allowNearby !== undefined ? options.allowNearby : allowNearby;
       try {
-        const branchRes = await marketplaceApi.getNCMBranches({ district: dist, municipality: mun });
+        const branchRes = await marketplaceApi.getNCMBranches({
+          district: dist,
+          municipality: mun,
+          province: prov,
+          allow_nearby: isNearbyAllowed,
+        });
         setNcmEnabled(branchRes.enabled);
         setNcmBranches(branchRes.branches || []);
-        setSuggestedBranches(branchRes.suggested_branches || []);
+        const suggestions = branchRes.suggested_branches || [];
+        setSuggestedBranches(suggestions);
+        setNearbyBranches(branchRes.nearby_branches || []);
+        setDeliveryAnchor(branchRes.delivery_anchor || null);
+        setBranchMatchType((branchRes.match_type as any) || (suggestions.length > 0 ? "municipality" : "none"));
+        setBranchMatchMessage(branchRes.message || "");
 
         if (options.overrideBranch === undefined) {
           if (branchRes.auto_selected) {
             targetBranch = branchRes.auto_selected;
             setSelectedBranch(branchRes.auto_selected);
-          } else if (branchRes.suggested_branches && branchRes.suggested_branches.length > 0 && branchRes.suggested_branches[0]) {
-            targetBranch = branchRes.suggested_branches[0].name;
+          } else if (suggestions.length > 0 && suggestions[0]) {
+            targetBranch = suggestions[0].name;
             setSelectedBranch(targetBranch);
-          } else if (branchRes.branches && branchRes.branches.length > 0 && branchRes.branches[0] && !targetBranch) {
-            targetBranch = branchRes.branches[0].name;
-            setSelectedBranch(targetBranch);
+          } else {
+            // No branch for this location
+            targetBranch = "";
+            setSelectedBranch("");
           }
         }
       } catch (branchErr) {
@@ -171,13 +190,34 @@ export default function CheckoutPage() {
 
       const activeDeliveryType = options.overrideDeliveryType || deliveryType;
 
+      if (!targetBranch) {
+        // If no target branch could be selected (e.g. no branch in district)
+        if (fallbackApplied || !dist) {
+          const feeRes = await marketplaceApi.calculateFee({
+            delivery_address_id: options.addressId || undefined,
+            province: prov || undefined,
+            district: dist || undefined,
+            municipality: mun || undefined,
+            delivery_type: activeDeliveryType,
+          });
+          setCalculatedFee(Number(feeRes.delivery_fee));
+          setFeeSource(feeRes.fee_source || "rule_fallback");
+          setFallbackApplied(Boolean(feeRes.fallback_applied));
+          setFeeError(null);
+        } else {
+          setCalculatedFee(null);
+          setFeeError("No eligible NCM courier branch available for this location.");
+        }
+        return;
+      }
+
       // Calculate live delivery fee
       const feeRes = await marketplaceApi.calculateFee({
         delivery_address_id: options.addressId || undefined,
         province: prov || undefined,
         district: dist || undefined,
         municipality: mun || undefined,
-        destination_branch: targetBranch || undefined,
+        destination_branch: targetBranch,
         delivery_type: activeDeliveryType,
       });
 
@@ -240,7 +280,8 @@ export default function CheckoutPage() {
         }));
         setMissingProfileFields(profileData.missing_fields || []);
         
-        fetchDeliveryFeeAndBranches({ province: prov, district: dist, municipality: mun });
+        setSelectedBranch(""); // Reset branch on profile address toggle
+        fetchDeliveryFeeAndBranches({ province: prov, district: dist, municipality: mun, overrideBranch: "" });
       } catch (err) {
         console.error("Failed to fetch profile address", err);
         toast.error("Could not auto-fill all profile details. Please complete your address below.");
@@ -249,7 +290,8 @@ export default function CheckoutPage() {
       }
     } else {
       if (selectedAddressId) {
-        fetchDeliveryFeeAndBranches({ addressId: selectedAddressId });
+        setSelectedBranch(""); // Reset branch on saved address toggle
+        fetchDeliveryFeeAndBranches({ addressId: selectedAddressId, overrideBranch: "" });
       }
     }
   };
@@ -263,7 +305,18 @@ export default function CheckoutPage() {
       }
     }
     setExistingInfoForm(updated);
-    if (field === 'province' || field === 'district' || field === 'municipality') {
+
+    if (field === 'district') {
+      // Clear old branch selection when district changes!
+      setSelectedBranch("");
+      fetchDeliveryFeeAndBranches({
+        province: updated.province,
+        district: updated.district,
+        municipality: updated.municipality,
+        overrideBranch: "",
+      });
+    } else if (field === 'municipality' || field === 'province') {
+      // Re-evaluate recommendations when local level changes
       fetchDeliveryFeeAndBranches({
         province: updated.province,
         district: updated.district,
@@ -275,7 +328,8 @@ export default function CheckoutPage() {
   const handleAddressSelection = (val: string) => {
     const id = Number(val);
     setSelectedAddressId(id);
-    fetchDeliveryFeeAndBranches({ addressId: id });
+    setSelectedBranch(""); // Clear old branch selection when switching saved addresses
+    fetchDeliveryFeeAndBranches({ addressId: id, overrideBranch: "" });
   };
 
   const handleCreateAddress = async (e: React.FormEvent) => {
@@ -494,6 +548,13 @@ export default function CheckoutPage() {
 
   // Address used snapshot display
   const activeSnapshot = order?.shipping_address_snapshot || (useExistingInfo ? existingInfoForm : addresses.find(a => a.id === selectedAddressId));
+
+  const currentDistrict = useExistingInfo
+    ? (existingInfoForm.district || "")
+    : (addresses.find(a => a.id === selectedAddressId)?.district || "");
+  const currentMunicipality = useExistingInfo
+    ? (existingInfoForm.municipality || "")
+    : (addresses.find(a => a.id === selectedAddressId)?.municipality || "");
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6">
@@ -759,65 +820,295 @@ export default function CheckoutPage() {
                   </>
                 )}
 
-                {/* NCM Courier Logistics & Destination Hub */}
-                <div className="pt-4 border-t space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-primary" />
-                      <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
-                        Courier Logistics & Destination Hub
-                      </span>
+                {/* NCM Courier Logistics & Destination Hub: Choose Your Nearest NCM Office */}
+                <div className="pt-4 border-t space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-foreground">
+                          Choose Your Nearest NCM Office
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          Official Courier Delivery Partner: Nepal Can Move (NCM)
+                        </p>
+                      </div>
                     </div>
-                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                      Official Partner: Nepal Can Move
-                    </span>
+                    {currentDistrict && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-300">
+                        <MapPin className="w-3 h-3 text-primary shrink-0" />
+                        <span className="truncate max-w-[200px]">
+                          {currentMunicipality ? `${currentMunicipality}, ` : ""}{currentDistrict}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {ncmEnabled ? (
-                    <div className="p-4 rounded-xl border bg-slate-50 dark:bg-white/[0.02] space-y-3">
-                      {/* Recommended branch chips based on location */}
-                      {suggestedBranches.length > 0 && (
-                        <div className="space-y-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">
-                            Recommended Hubs for Your Location:
-                          </span>
-                          <div className="flex flex-wrap gap-2">
-                            {suggestedBranches.map((b) => (
-                              <button
-                                type="button"
-                                key={b.code}
-                                onClick={() => handleBranchChange(b.name)}
-                                className={`text-xs px-2.5 py-1 rounded-lg border font-medium transition-all ${
-                                  selectedBranch === b.name
-                                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                                    : "bg-background hover:bg-muted text-foreground border-slate-200 dark:border-white/10"
-                                }`}
-                              >
-                                📍 {b.name} ({b.district_name})
-                              </button>
-                            ))}
+                    <div className="space-y-4">
+                      {/* Priority Coverage Status Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-slate-50 dark:bg-white/[0.03] border text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground">Coverage Status:</span>
+                          {branchMatchType === "municipality" ? (
+                            <span className="px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                              Direct Local Coverage ({suggestedBranches.length} office{suggestedBranches.length !== 1 ? "s" : ""})
+                            </span>
+                          ) : branchMatchType === "district" ? (
+                            <span className="px-2 py-0.5 rounded-full font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1">
+                              <Info className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                              District Fallback ({suggestedBranches.length} office{suggestedBranches.length !== 1 ? "s" : ""})
+                            </span>
+                          ) : branchMatchType === "nearby" ? (
+                            <span className="px-2 py-0.5 rounded-full font-semibold bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 flex items-center gap-1">
+                              <Compass className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                              Nearby Neighboring District ({suggestedBranches.length} office{suggestedBranches.length !== 1 ? "s" : ""})
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 text-red-600 dark:text-red-400" />
+                              No Local Hub Found
+                            </span>
+                          )}
+                        </div>
+
+                        {selectedBranch && (
+                          <div className="text-muted-foreground flex items-center gap-1">
+                            <span>Selected:</span>
+                            <span className="font-bold text-foreground bg-primary/10 text-primary px-2 py-0.5 rounded">
+                              {selectedBranch}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Priority 2 Fallback Message */}
+                      {branchMatchType === "district" && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-amber-900 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                          <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                          <div>
+                            <span className="font-bold">District Delivery Notice: </span>
+                            No NCM branch was found for your local level{currentMunicipality ? ` (${currentMunicipality})` : ""}. Here are the available NCM branches serving your district{currentDistrict ? ` (${currentDistrict})` : ""}.
                           </div>
                         </div>
                       )}
 
-                      {/* Select all branches & delivery type */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <div className="space-y-1">
-                          <Label className="text-xs font-medium">Delivery Branch Hub <span className="text-red-500">*</span></Label>
-                          <select
-                            value={selectedBranch}
-                            onChange={(e) => handleBranchChange(e.target.value)}
-                            className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-hidden focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="">-- Choose Courier Destination Branch --</option>
-                            {ncmBranches.map((b) => (
-                              <option key={b.code} value={b.name}>
-                                {b.name} ({b.district_name}{b.province_name ? ` - ${b.province_name}` : ""})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      {/* No Match Error Banner & Neighboring District CTA */}
+                      {branchMatchType === "none" && currentDistrict && (
+                        <div className="space-y-3">
+                          <div className="p-3.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl text-red-900 dark:text-red-200 text-xs flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                            <div>
+                              <span className="font-bold">Courier Delivery Unavailable: </span>
+                              No NCM branch was found for your local level or district. Please check your shipping address or explore nearest branches in neighboring districts.
+                            </div>
+                          </div>
 
+                          {nearbyBranches.length > 0 && !allowNearby && (
+                            <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl text-xs space-y-2">
+                              <div className="flex items-start gap-2 text-blue-900 dark:text-blue-200">
+                                <Compass className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-bold">Neighboring District Discovery: </span>
+                                  We discovered {nearbyBranches.length} NCM branch(es) located in adjacent districts. You can explore and select a nearby branch for pickup or delivery.
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => {
+                                  setAllowNearby(true);
+                                  fetchDeliveryFeeAndBranches({ allowNearby: true });
+                                }}
+                                className="inline-flex items-center gap-1.5 h-8 text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 dark:bg-white/10 dark:text-blue-300 dark:hover:bg-white/20 border border-blue-200 dark:border-blue-800"
+                              >
+                                <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                                Explore {nearbyBranches.length} Nearest Neighboring Office{nearbyBranches.length !== 1 ? "s" : ""}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Interactive Branch Cards List */}
+                      {suggestedBranches.length > 0 && (
+                        <div className="space-y-2.5">
+                          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                            <span>
+                              {branchMatchType === "municipality"
+                                ? "Recommended Hubs for Your Local Level"
+                                : branchMatchType === "nearby"
+                                ? "Nearest Neighboring District Hubs"
+                                : "Available Hubs Serving Your District"}
+                            </span>
+                            <span className="text-[11px] font-normal lowercase text-muted-foreground">
+                              Select preferred office
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2.5">
+                            {suggestedBranches.map((b) => {
+                              const isSelected = selectedBranch === b.name;
+                              return (
+                                <div
+                                  key={b.code}
+                                  onClick={() => handleBranchChange(b.name)}
+                                  className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                                    isSelected
+                                      ? "border-primary bg-primary/5 shadow-xs"
+                                      : "border-slate-200 dark:border-white/10 hover:border-primary/40 bg-card"
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                      <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                        isSelected ? "border-primary bg-primary" : "border-slate-400"
+                                      }`}>
+                                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                      </div>
+
+                                      <div className="space-y-1.5 flex-1 min-w-0">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                          <span className="font-bold text-sm text-foreground">
+                                            {b.name}
+                                          </span>
+                                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted text-muted-foreground">
+                                            {b.code}
+                                          </span>
+
+                                          {/* Recommended badge */}
+                                          {b.is_recommended && (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1">
+                                              <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />
+                                              Best Match
+                                            </span>
+                                          )}
+
+                                          {/* Distance badge (Strictly Approx. distance) */}
+                                          {b.approx_distance_km != null && (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 flex items-center gap-1">
+                                              <Navigation className="w-2.5 h-2.5 text-indigo-600 dark:text-indigo-400" />
+                                              {b.distance_label || `~${b.approx_distance_km} km (Approx. distance)`}
+                                            </span>
+                                          )}
+
+                                          {/* Match / Coverage type */}
+                                          {b.coverage_type === "local_level" || b.match_type === "municipality" ? (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 flex items-center gap-1">
+                                              <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                              Direct Local Coverage
+                                            </span>
+                                          ) : b.coverage_type === "cross_district_nearby" || b.match_type === "nearby" ? (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 flex items-center gap-1">
+                                              <Compass className="w-2.5 h-2.5 text-blue-600" />
+                                              Nearby Neighboring District
+                                            </span>
+                                          ) : (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 flex items-center gap-1">
+                                              <Info className="w-2.5 h-2.5 text-amber-600" />
+                                              Serves Your District
+                                            </span>
+                                          )}
+
+                                          {/* Serviceability badge */}
+                                          {b.is_serviceable === false && (
+                                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 flex items-center gap-1">
+                                              <AlertTriangle className="w-2.5 h-2.5 text-rose-600" />
+                                              Suspended / Inactive
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <p className="text-xs text-muted-foreground flex items-center gap-1.5 truncate">
+                                          <Building2 className="w-3 h-3 text-muted-foreground shrink-0" />
+                                          <span>{b.district_name}{b.province_name ? `, ${b.province_name}` : ""}</span>
+                                          {b.address && <span>• {b.address}</span>}
+                                        </p>
+
+                                        {b.contact_number && (
+                                          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                            <Phone className="w-3 h-3 text-muted-foreground shrink-0" />
+                                            <span>{b.contact_number}</span>
+                                          </p>
+                                        )}
+
+                                        {b.areas_covered && b.areas_covered.length > 0 && (
+                                          <div className="pt-1 flex flex-wrap items-center gap-1">
+                                            <span className="text-[10px] text-muted-foreground font-medium">Covered Areas:</span>
+                                            {b.areas_covered.slice(0, 5).map((area, i) => (
+                                              <span
+                                                key={i}
+                                                className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300"
+                                              >
+                                                {area}
+                                              </span>
+                                            ))}
+                                            {b.areas_covered.length > 5 && (
+                                              <span className="text-[10px] text-muted-foreground">
+                                                +{b.areas_covered.length - 5} more
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <Button
+                                      type="button"
+                                      variant={isSelected ? "default" : "outline"}
+                                      size="sm"
+                                      className="h-8 text-xs shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleBranchChange(b.name);
+                                      }}
+                                    >
+                                      {isSelected ? "Selected" : "Select Branch"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Collapsible: Browse all branches */}
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowAllBranches(!showAllBranches)}
+                          className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
+                        >
+                          {showAllBranches ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          {showAllBranches ? "Hide complete branch list" : "Looking for another branch? Browse all branches"}
+                        </button>
+
+                        {showAllBranches && (
+                          <div className="mt-2.5 p-3 rounded-xl border bg-slate-50 dark:bg-white/[0.02] space-y-2 text-xs">
+                            <Label className="text-xs font-medium">All Available NCM Branches ({ncmBranches.length}):</Label>
+                            <select
+                              value={selectedBranch}
+                              onChange={(e) => handleBranchChange(e.target.value)}
+                              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-hidden focus:ring-2 focus:ring-ring"
+                            >
+                              <option value="">-- Choose Courier Destination Branch --</option>
+                              {ncmBranches.map((b) => (
+                                <option key={b.code} value={b.name}>
+                                  {b.name} ({b.district_name}{b.province_name ? ` - ${b.province_name}` : ""})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Delivery Method Selector */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm pt-2">
                         <div className="space-y-1">
                           <Label className="text-xs font-medium">Delivery Method</Label>
                           <select
@@ -830,36 +1121,46 @@ export default function CheckoutPage() {
                             <option value="Branch2Branch">Branch Pickup (Hold at NCM Hub)</option>
                           </select>
                         </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-medium">Dispatch Origin Hub</Label>
+                          <div className="h-9 px-3 rounded-md border border-input bg-muted/40 text-sm flex items-center text-muted-foreground">
+                            Kathmandu Central Hub (Official)
+                          </div>
+                        </div>
                       </div>
 
                       {/* Live Fee Status Banner */}
                       <div className="pt-2 border-t text-xs">
                         {calculatingFee ? (
-                          <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <div className="flex items-center gap-2 text-muted-foreground animate-pulse p-2.5 rounded-lg bg-muted/40">
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
                             Calculating live delivery charge from Nepal Can Move...
                           </div>
                         ) : feeError ? (
-                          <div className="p-2.5 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 flex items-start gap-2">
+                          <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 flex items-start gap-2">
                             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                             <div className="flex-1">
                               <span>{feeError}</span>
-                              <button
-                                type="button"
-                                onClick={() => handleBranchChange(selectedBranch)}
-                                className="ml-2 font-semibold underline text-red-800 dark:text-red-200"
-                              >
-                                Retry
-                              </button>
+                              {selectedBranch && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleBranchChange(selectedBranch)}
+                                  className="ml-2 font-semibold underline text-red-800 dark:text-red-200"
+                                >
+                                  Retry
+                                </button>
+                              )}
                             </div>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between text-muted-foreground">
+                          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.03] border text-muted-foreground">
                             <span className="flex items-center gap-1.5">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
                               {fallbackApplied ? "Standard regional rate active" : "Live courier rate confirmed"}
+                              {selectedBranch && <span className="font-semibold text-foreground">({selectedBranch})</span>}
                             </span>
-                            <span className="font-semibold text-foreground">
+                            <span className="font-bold text-foreground text-sm">
                               Quoted Delivery: Rs. {calculatedFee !== null ? calculatedFee.toFixed(2) : "0.00"}
                             </span>
                           </div>

@@ -27,9 +27,15 @@ import {
   Check,
   Send,
   Eye,
-  Sliders
+  Sliders,
+  MapPin,
+  Compass,
+  Edit2,
+  Search,
+  Navigation,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function CourierSettingsPage() {
   const [config, setConfig] = useState<NCMConfiguration | null>(null);
@@ -41,6 +47,19 @@ export default function CourierSettingsPage() {
   const [testing, setTesting] = useState(false);
   const [refreshingBranches, setRefreshingBranches] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+
+  // Branch coordinate editing state
+  const [editingBranch, setEditingBranch] = useState<NCMBranch | null>(null);
+  const [editLat, setEditLat] = useState<string>("");
+  const [editLon, setEditLon] = useState<string>("");
+  const [editSource, setEditSource] = useState<string>("ADMIN_VERIFIED");
+  const [editVerified, setEditVerified] = useState<boolean>(true);
+  const [editServiceable, setEditServiceable] = useState<boolean>(true);
+  const [editNotes, setEditNotes] = useState<string>("");
+  const [editReason, setEditReason] = useState<string>("");
+  const [savingBranch, setSavingBranch] = useState<boolean>(false);
+  const [branchSearch, setBranchSearch] = useState<string>("");
+  const [branchFilter, setBranchFilter] = useState<string>("all");
 
   // Form State
   const [isEnabled, setIsEnabled] = useState(true);
@@ -124,6 +143,42 @@ export default function CourierSettingsPage() {
       toast.error(err.message || "Failed to refresh branches");
     } finally {
       setRefreshingBranches(false);
+    }
+  };
+
+  const handleOpenEditBranch = (b: NCMBranch) => {
+    setEditingBranch(b);
+    setEditLat(b.latitude !== undefined && b.latitude !== null ? String(b.latitude) : "");
+    setEditLon(b.longitude !== undefined && b.longitude !== null ? String(b.longitude) : "");
+    setEditSource(b.coordinate_source || "ADMIN_VERIFIED");
+    setEditVerified(Boolean(b.is_coordinate_verified));
+    setEditServiceable(b.is_serviceable !== false);
+    setEditNotes(b.serviceability_notes || "");
+    setEditReason("");
+  };
+
+  const handleSaveBranchCoordinates = async () => {
+    if (!editingBranch) return;
+    try {
+      setSavingBranch(true);
+      await marketplaceApi.adminUpdateCourierBranchCoordinates({
+        id: editingBranch.id,
+        code: editingBranch.code,
+        latitude: editLat.trim() ? parseFloat(editLat.trim()) : null,
+        longitude: editLon.trim() ? parseFloat(editLon.trim()) : null,
+        coordinate_source: editSource,
+        is_coordinate_verified: editVerified,
+        is_serviceable: editServiceable,
+        serviceability_notes: editNotes,
+        reason: editReason || "Admin coordinate review",
+      });
+      toast.success(`Updated coordinates and serviceability for ${editingBranch.name}`);
+      setEditingBranch(null);
+      loadData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update branch coordinates");
+    } finally {
+      setSavingBranch(false);
     }
   };
 
@@ -367,12 +422,12 @@ export default function CourierSettingsPage() {
             </div>
           </div>
 
-          {/* Card B: Branch Configuration */}
+          {/* Card B: Branch Configuration & Geographic Directory */}
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Server className="w-4 h-4 text-[#D4A72C]" />
-                <h3 className="font-bold text-slate-900 text-sm">B. Default Dispatch Origin Branch</h3>
+                <h3 className="font-bold text-slate-900 text-sm">B. Default Origin Branch & Geographic Directory</h3>
               </div>
               <button
                 onClick={handleRefreshBranches}
@@ -384,7 +439,7 @@ export default function CourierSettingsPage() {
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Default Origin Hub
@@ -413,6 +468,122 @@ export default function CourierSettingsPage() {
                 <p className="text-[11px] text-slate-400 mt-1">
                   Packages dispatched from LoksewaAI will be handed to this courier hub branch.
                 </p>
+              </div>
+
+              {/* Geographic Nearest Branch Directory & Coordinate Review */}
+              <div className="pt-3 border-t border-slate-100 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Compass className="w-3.5 h-3.5 text-[#0B2545]" />
+                    <span className="text-xs font-bold text-slate-800">Branch Coordinates & Serviceability Review</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={branchSearch}
+                        onChange={(e) => setBranchSearch(e.target.value)}
+                        placeholder="Search branches..."
+                        className="pl-8 pr-2.5 py-1 text-xs rounded-md border border-slate-200 w-36 sm:w-44 focus:outline-none focus:ring-1 focus:ring-[#D4A72C]"
+                      />
+                    </div>
+                    <select
+                      value={branchFilter}
+                      onChange={(e) => setBranchFilter(e.target.value)}
+                      className="text-xs rounded-md border border-slate-200 px-2 py-1 bg-white focus:outline-none"
+                    >
+                      <option value="all">All ({branches.length})</option>
+                      <option value="verified">Verified Coordinates</option>
+                      <option value="missing">Missing Coordinates</option>
+                      <option value="suspended">Suspended Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Branches Preview Table */}
+                <div className="border border-slate-200 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+                  <table className="w-full text-[11px] text-left">
+                    <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3 py-2">Branch / Code</th>
+                        <th className="px-3 py-2">District / Province</th>
+                        <th className="px-3 py-2">Coordinates</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {branches
+                        .filter((b) => {
+                          const matchSearch =
+                            !branchSearch.trim() ||
+                            b.name.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                            b.code.toLowerCase().includes(branchSearch.toLowerCase()) ||
+                            b.district_name.toLowerCase().includes(branchSearch.toLowerCase());
+                          if (!matchSearch) return false;
+                          if (branchFilter === "verified") return Boolean(b.is_coordinate_verified);
+                          if (branchFilter === "missing") return b.latitude == null || b.longitude == null;
+                          if (branchFilter === "suspended") return b.is_serviceable === false;
+                          return true;
+                        })
+                        .slice(0, 50)
+                        .map((b) => (
+                          <tr key={b.code} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="px-3 py-2 font-medium text-slate-800">
+                              <div>{b.name}</div>
+                              <span className="text-[10px] font-mono text-slate-400">{b.code}</span>
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              <div>{b.district_name}</div>
+                              <span className="text-[10px] text-slate-400">{b.province_name}</span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {b.latitude != null && b.longitude != null ? (
+                                <div className="space-y-0.5">
+                                  <span className="font-mono text-[10px] text-slate-700">
+                                    {Number(b.latitude).toFixed(4)}, {Number(b.longitude).toFixed(4)}
+                                  </span>
+                                  <div>
+                                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
+                                      b.is_coordinate_verified
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-slate-100 text-slate-600"
+                                    }`}>
+                                      {b.coordinate_source || "UNVERIFIED"}
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-rose-600 font-semibold text-[10px]">No Coordinates</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {b.is_serviceable === false ? (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-rose-100 text-rose-700">
+                                  Suspended
+                                </span>
+                              ) : (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold bg-emerald-100 text-emerald-700">
+                                  Active
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditBranch(b)}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold rounded bg-[#0B2545]/10 text-[#0B2545] hover:bg-[#0B2545]/20 transition-colors"
+                              >
+                                <Edit2 className="w-2.5 h-2.5" />
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
@@ -658,6 +829,137 @@ export default function CourierSettingsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Branch Coordinates & Status Edit Dialog */}
+      {editingBranch && (
+        <Dialog open={Boolean(editingBranch)} onOpenChange={(open) => !open && setEditingBranch(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-[#D4A72C]" />
+                Review Coordinates: {editingBranch.name}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-2 text-xs">
+              <div className="p-3 bg-slate-50 rounded-lg space-y-1">
+                <div className="font-semibold text-slate-800">
+                  {editingBranch.name} ({editingBranch.code})
+                </div>
+                <div className="text-slate-500">
+                  {editingBranch.district_name}, {editingBranch.province_name}
+                </div>
+                {editingBranch.address && (
+                  <div className="text-slate-400 text-[11px]">{editingBranch.address}</div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Latitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={editLat}
+                    onChange={(e) => setEditLat(e.target.value)}
+                    placeholder="e.g. 27.7172"
+                    className="w-full text-xs font-mono rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Longitude</label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    value={editLon}
+                    onChange={(e) => setEditLon(e.target.value)}
+                    placeholder="e.g. 85.3240"
+                    className="w-full text-xs font-mono rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Coordinate Source</label>
+                <select
+                  value={editSource}
+                  onChange={(e) => setEditSource(e.target.value)}
+                  className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                >
+                  <option value="ADMIN_VERIFIED">Admin Verified (GPS / Physical Visit)</option>
+                  <option value="GEOCODED">Geocoded Address / Place</option>
+                  <option value="API">NCM API Direct</option>
+                  <option value="MUNICIPALITY_CENTROID">Municipality Centroid Fallback</option>
+                  <option value="DISTRICT_CENTROID">District Centroid Fallback</option>
+                  <option value="UNVERIFIED">Unverified / Approximate</option>
+                </select>
+              </div>
+
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={editVerified}
+                    onChange={(e) => setEditVerified(e.target.checked)}
+                    className="rounded text-[#0B2545] focus:ring-[#D4A72C] w-4 h-4"
+                  />
+                  Mark coordinates as verified
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={editServiceable}
+                    onChange={(e) => setEditServiceable(e.target.checked)}
+                    className="rounded text-[#0B2545] focus:ring-[#D4A72C] w-4 h-4"
+                  />
+                  Active & Serviceable for dispatch
+                </label>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Serviceability Notes</label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="e.g. Road open, regular daily dispatches"
+                  className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Audit Reason</label>
+                <input
+                  type="text"
+                  value={editReason}
+                  onChange={(e) => setEditReason(e.target.value)}
+                  placeholder="e.g. Verified coordinates during hub inspection"
+                  className="w-full text-xs rounded-lg border border-slate-300 px-3 py-2 bg-white"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingBranch(null)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBranchCoordinates}
+                  disabled={savingBranch}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0B2545] text-white hover:bg-[#133966] disabled:opacity-50"
+                >
+                  {savingBranch ? "Saving..." : "Save Coordinates"}
+                </button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

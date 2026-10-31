@@ -248,21 +248,59 @@ export interface DeliveryFeeRule {
 }
 
 export interface NCMBranch {
+  id?: number;
   code: string;
   name: string;
   district_name: string;
   province_name: string;
+  municipality?: string;
+  address?: string;
+  contact_number?: string;
   areas_covered: string[];
+  areas_covered_list?: string[];
+  match_type?: "municipality" | "district" | "nearby" | "regional" | null;
+  match_label?: string;
+  is_recommended?: boolean;
+  approx_distance_km?: number | null;
+  distance_km?: number | null;
+  distance_label?: string;
+  radius_zone?: "primary" | "extended" | "regional" | "far" | "unknown";
+  coverage_type?: "local_level" | "district" | "cross_district_nearby" | "regional";
+  coverage_label?: string;
+  is_serviceable?: boolean;
+  serviceability_status?: "VERIFIED_SERVICEABLE" | "UNSERVICEABLE";
+  coordinate_source?: string;
+  is_coordinate_verified?: boolean;
+  coordinate_verified_at?: string | null;
+  verified_by_username?: string;
+  serviceability_notes?: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface NCMBranchesResponse {
   enabled: boolean;
   branches: NCMBranch[];
   suggested_branches: NCMBranch[];
+  nearby_branches?: NCMBranch[];
   auto_selected: string | null;
   origin_branch: string;
   fallback_enabled: boolean;
+  match_type?: "municipality" | "district" | "nearby" | "none";
+  match_priority?: number;
   message?: string;
+  search_municipality?: string;
+  search_district?: string;
+  search_province?: string;
+  delivery_anchor?: {
+    latitude?: number | null;
+    longitude?: number | null;
+    source?: string;
+    municipality?: string;
+    district?: string;
+    province?: string;
+  } | null;
+  recommended_branch?: NCMBranch | null;
   error?: string;
 }
 
@@ -762,10 +800,21 @@ export const marketplaceApi = {
       body: JSON.stringify({ reason: reason || "" }),
     });
   },
-  getNCMBranches: async (params?: { district?: string; municipality?: string }) => {
+  getNCMBranches: async (params?: {
+    district?: string;
+    municipality?: string;
+    province?: string;
+    latitude?: number;
+    longitude?: number;
+    allow_nearby?: boolean;
+  }) => {
     const q = new URLSearchParams();
     if (params?.district) q.append("district", params.district);
     if (params?.municipality) q.append("municipality", params.municipality);
+    if (params?.province) q.append("province", params.province);
+    if (params?.latitude !== undefined && params?.latitude !== null) q.append("latitude", String(params.latitude));
+    if (params?.longitude !== undefined && params?.longitude !== null) q.append("longitude", String(params.longitude));
+    if (params?.allow_nearby) q.append("allow_nearby", "true");
     const qs = q.toString() ? `?${q.toString()}` : "";
     return apiClient<NCMBranchesResponse>(`/marketplace/student/orders/ncm-branches/${qs}`);
   },
@@ -1388,9 +1437,15 @@ export const marketplaceApi = {
     });
   },
 
-  adminGetCourierBranches: async () => {
+  adminGetCourierBranches: async (params?: { search?: string; status?: string; coord_status?: string; force_refresh?: boolean }) => {
+    const sp = new URLSearchParams();
+    if (params?.search) sp.set("search", params.search);
+    if (params?.status) sp.set("status", params.status);
+    if (params?.coord_status) sp.set("coord_status", params.coord_status);
+    if (params?.force_refresh) sp.set("force_refresh", "true");
+    const qs = sp.toString();
     return apiClient<{ count: number; branches: NCMBranch[]; cached: boolean }>(
-      "/marketplace/admin/courier/branches/"
+      `/marketplace/admin/courier/branches/${qs ? `?${qs}` : ""}`
     );
   },
 
@@ -1399,6 +1454,23 @@ export const marketplaceApi = {
       "/marketplace/admin/courier/branches/",
       { method: "POST" }
     );
+  },
+
+  adminUpdateCourierBranchCoordinates: async (data: {
+    id?: number;
+    code?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    coordinate_source?: string;
+    is_coordinate_verified?: boolean;
+    is_serviceable?: boolean;
+    serviceability_notes?: string;
+    reason?: string;
+  }) => {
+    return apiClient<NCMBranch>("/marketplace/admin/courier/branches/", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
   },
 
   adminGetNCMWebhookManagement: async () => {

@@ -14,6 +14,7 @@ from .models import (
 
     Review, Dispute, DisputeEvidence, PayoutAccount, SellerPayout, CourierShipment,
     NCMConfiguration, NCMWebhookEvent, CourierSyncLog, CODRemittance,
+    NCMBranchRecord, NCMBranchCoordinateAuditLog,
 
 )
 
@@ -1200,5 +1201,78 @@ class CODRemittanceSerializer(serializers.ModelSerializer):
         if obj.verified_by:
             return obj.verified_by.get_full_name() or obj.verified_by.username
         return ""
+
+
+class NCMBranchCoordinateAuditLogSerializer(serializers.ModelSerializer):
+    changed_by_username = serializers.CharField(source='changed_by.username', read_only=True)
+
+    class Meta:
+        model = NCMBranchCoordinateAuditLog
+        fields = (
+            'id',
+            'branch',
+            'changed_by',
+            'changed_by_username',
+            'previous_latitude',
+            'previous_longitude',
+            'new_latitude',
+            'new_longitude',
+            'previous_source',
+            'new_source',
+            'reason',
+            'created_at',
+        )
+        read_only_fields = fields
+
+
+class NCMBranchRecordSerializer(serializers.ModelSerializer):
+    verified_by_username = serializers.CharField(source='verified_by.username', read_only=True)
+    coordinate_logs = NCMBranchCoordinateAuditLogSerializer(many=True, read_only=True)
+    areas_covered_list = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NCMBranchRecord
+        fields = (
+            'id',
+            'code',
+            'name',
+            'district_name',
+            'province_name',
+            'municipality',
+            'address',
+            'contact_number',
+            'areas_covered',
+            'areas_covered_list',
+            'latitude',
+            'longitude',
+            'coordinate_source',
+            'is_coordinate_verified',
+            'coordinate_verified_at',
+            'verified_by',
+            'verified_by_username',
+            'is_active',
+            'is_serviceable',
+            'serviceability_notes',
+            'last_synced_at',
+            'coordinate_logs',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = (
+            'id',
+            'code',
+            'created_at',
+            'updated_at',
+            'coordinate_verified_at',
+            'verified_by',
+            'verified_by_username',
+            'last_synced_at',
+        )
+
+    def get_areas_covered_list(self, obj) -> list:
+        if not obj.areas_covered:
+            return []
+        return [a.strip() for a in obj.areas_covered.replace('\n', ',').split(',') if a.strip()]
+
 
 

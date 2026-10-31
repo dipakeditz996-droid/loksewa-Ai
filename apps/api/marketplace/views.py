@@ -19,6 +19,8 @@ from core.pagination import StandardResultsSetPagination
 from .ncm_service import (
     NCMService, NCMError, NCMConfigurationError,
     NCMConnectionError, NCMAPIError, NCMValidationError,
+    match_ncm_branches_for_location, normalize_location_name,
+    discover_nearest_ncm_branches,
 )
 
 class MarketplacePagination(PageNumberPagination):
@@ -38,6 +40,7 @@ from .models import (
     OrderStatusHistory, MarketplaceSettings, MarketplaceListingReport,
     ProductImage, Review, Dispute, DisputeEvidence, CourierShipment,
     NCMConfiguration, NCMWebhookEvent, CourierSyncLog, CODRemittance,
+    NCMBranchRecord, NCMBranchCoordinateAuditLog,
 )
 from .serializers import (
     ProductSerializer, SellerListingSerializer,
@@ -51,6 +54,7 @@ from .serializers import (
     SellerSaleSerializer,
     ReviewSerializer, DisputeSerializer, DisputeEvidenceSerializer,
     NCMConfigurationSerializer, NCMWebhookEventSerializer, CourierSyncLogSerializer, CODRemittanceSerializer,
+    NCMBranchRecordSerializer, NCMBranchCoordinateAuditLogSerializer,
 )
 
 
@@ -1395,18 +1399,54 @@ class AdminNCMTestConnectionView(APIView):
 
 class AdminNCMBranchesView(APIView):
     """
-    Lists available NCM branches and allows refreshing branch cache.
+    Lists available NCM branches, allows refreshing branch cache,
+    and enables admin review & updating of branch coordinates and serviceability.
     """
     permission_classes = [IsAdminUser]
 
     def get(self, request):
         service = NCMService()
+        force_refresh = request.query_params.get('force_refresh', '').lower() in ('1', 'true')
         try:
-            branches = service.get_branches(force_refresh=False)
+            branches = service.get_branches(force_refresh=force_refresh)
+            service.sync_branches_to_db(branches)
+
+            records = NCMBranchRecord.objects.all()
+            search = (request.query_params.get('search') or '').strip()
+            if search:
+                records = records.filter(
+                    Q(name__icontains=search) |
+                    Q(code__icontains=search) |
+                    Q(district_name__icontains=search) |
+                    Q(municipality__icontains=search)
+                )
+
+            status_filter = (request.query_params.get('status') or '').lower()
+            if status_filter == 'serviceable':
+                records = records.filter(is_serviceable=True)
+            elif status_filter == 'unserviceable':
+                records = records.filter(is_serviceable=False)
+
+            coord_filter = (request.query_params.get('coord_status') or '').lower()
+            if coord_filter == 'verified':
+                records = records.filter(is_coordinate_verified=True)
+            elif coord_filter == 'unverified':
+                records = records.filter(is_coordinate_verified=False)
+            elif coord_filter == 'missing':
+                records = records.filter(Q(latitude__isnull=True) | Q(longitude__isnull=True))
+
+            if records.exists() or (search or status_filter or coord_filter):
+                serializer = NCMBranchRecordSerializer(records, many=True)
+                branch_data = serializer.data
+                count = records.count()
+            else:
+                branch_data = branches
+                count = len(branches)
+
             return Response({
-                'count': len(branches),
-                'branches': branches,
-                'cached': True,
+                'count': count,
+                'branches': branch_data,
+                'cached': not force_refresh,
             })
         except Exception as e:
             return Response(
@@ -1415,13 +1455,22 @@ class AdminNCMBranchesView(APIView):
             )
 
     def post(self, request):
-        """Force refresh branches cache from live NCM API."""
+        """Force refresh branches cache from live NCM API and sync to DB."""
         service = NCMService()
         try:
             branches = service.get_branches(force_refresh=True)
+            service.sync_branches_to_db(branches)
+            records = NCMBranchRecord.objects.all()
+            if records.exists():
+                serializer = NCMBranchRecordSerializer(records, many=True)
+                branch_data = serializer.data
+                count = records.count()
+            else:
+                branch_data = branches
+                count = len(branches)
             return Response({
-                'count': len(branches),
-                'branches': branches,
+                'count': count,
+                'branches': branch_data,
                 'refreshed': True,
                 'cached': False,
             })
@@ -1430,6 +1479,93 @@ class AdminNCMBranchesView(APIView):
                 {'detail': f"Failed to refresh NCM branches: {str(e)}"},
                 status=status.HTTP_502_BAD_GATEWAY
             )
+
+    def patch(self, request):
+        """
+        Admin review & edit coordinates and serviceability for a specific NCM branch.
+        Records audit trail in NCMBranchCoordinateAuditLog.
+        """
+        branch_id = request.data.get('id')
+        branch_code = request.data.get('code')
+
+        record = None
+        if branch_id:
+            record = NCMBranchRecord.objects.filter(id=branch_id).first()
+        elif branch_code:
+            record = NCMBranchRecord.objects.filter(code=branch_code).first()
+
+        if not record:
+            return Response({'detail': "Branch not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        prev_lat = record.latitude
+        prev_lon = record.longitude
+        prev_src = record.coordinate_source
+
+        new_lat = request.data.get('latitude')
+        new_lon = request.data.get('longitude')
+        new_source = request.data.get('coordinate_source')
+        is_verified = request.data.get('is_coordinate_verified')
+        is_serviceable = request.data.get('is_serviceable')
+        serviceability_notes = request.data.get('serviceability_notes')
+        reason = request.data.get('reason', 'Admin coordinate review')
+
+        with transaction.atomic():
+            if new_lat is not None:
+                record.latitude = Decimal(str(new_lat)) if str(new_lat).strip() != '' else None
+            if new_lon is not None:
+                record.longitude = Decimal(str(new_lon)) if str(new_lon).strip() != '' else None
+            if new_source is not None:
+                record.coordinate_source = str(new_source).strip()
+            if is_verified is not None:
+                record.is_coordinate_verified = bool(is_verified)
+                if record.is_coordinate_verified:
+                    record.coordinate_verified_at = timezone.now()
+                    record.verified_by = request.user
+                else:
+                    record.coordinate_verified_at = None
+                    record.verified_by = None
+            if is_serviceable is not None:
+                record.is_serviceable = bool(is_serviceable)
+            if serviceability_notes is not None:
+                record.serviceability_notes = str(serviceability_notes).strip()
+
+            record.save()
+
+            if (new_lat is not None and prev_lat != record.latitude) or (new_lon is not None and prev_lon != record.longitude) or (new_source and prev_src != record.coordinate_source) or is_verified is not None:
+                NCMBranchCoordinateAuditLog.objects.create(
+                    branch=record,
+                    changed_by=request.user,
+                    previous_latitude=prev_lat,
+                    previous_longitude=prev_lon,
+                    new_latitude=record.latitude,
+                    new_longitude=record.longitude,
+                    previous_source=prev_src,
+                    new_source=record.coordinate_source,
+                    reason=str(reason).strip(),
+                )
+
+            try:
+                from administration.models import AuditLog
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action='UPDATE_NCM_BRANCH_COORDINATES',
+                    entity_type='NCMBranchRecord',
+                    entity_id=str(record.id),
+                    details={
+                        'branch_code': record.code,
+                        'name': record.name,
+                        'latitude': float(record.latitude) if record.latitude else None,
+                        'longitude': float(record.longitude) if record.longitude else None,
+                        'source': record.coordinate_source,
+                        'verified': record.is_coordinate_verified,
+                        'serviceable': record.is_serviceable,
+                    }
+                )
+            except Exception:
+                pass
+
+        return Response(NCMBranchRecordSerializer(record).data)
+
 
 
 class AdminNCMWebhookManagementView(APIView):
@@ -2413,30 +2549,18 @@ class OrderViewSet(viewsets.ModelViewSet):
             return None
 
     def _resolve_branch_from_address(self, address, service):
-        """Match address district/municipality to an active NCM branch if possible."""
+        """Match address district/municipality to an active NCM branch using strict local-level-first priority."""
         if not address:
             return None
-        dist = str(getattr(address, 'district', '') or '').strip().lower()
-        mun = str(getattr(address, 'municipality', '') or '').strip().lower()
+        dist = str(getattr(address, 'district', '') or '').strip()
+        mun = str(getattr(address, 'municipality', '') or '').strip()
         if not dist and not mun:
             return None
 
         try:
             branches = service.get_branches()
-            # 1. Exact municipality match
-            if mun:
-                for b in branches:
-                    name = str(b.get('name') or '').strip().lower()
-                    if name == mun:
-                        return str(b.get('name')).strip()
-            # 2. Exact district match
-            if dist:
-                for b in branches:
-                    name = str(b.get('name') or '').strip().lower()
-                    b_dist = str(b.get('district_name') or b.get('district') or '').strip().lower()
-                    if name == dist or b_dist == dist:
-                        return str(b.get('name')).strip()
-            return None
+            match_res = match_ncm_branches_for_location(branches, municipality=mun, district=dist)
+            return match_res.get("auto_selected")
         except Exception as e:
             logger.warning("Error resolving NCM branch from address: %s", e)
             return None
@@ -2445,7 +2569,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     def ncm_branches(self, request):
         """
         Return list of valid, active NCM branches.
-        Optionally accepts ?district=... and ?municipality=... to return recommended/suggested branches.
+        Optionally accepts ?district=... and ?municipality=... to return recommended/suggested branches
+        using strict local-level-first search priority:
+        Priority 1: Municipality / Local Level (municipality field, branch name, covered areas)
+        Priority 2: District fallback (ONLY when Priority 1 yields zero matches)
         """
         config = NCMConfiguration.get_settings()
         service = NCMService()
@@ -2456,6 +2583,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                 "enabled": False,
                 "branches": [],
                 "suggested_branches": [],
+                "auto_selected": None,
+                "recommended_branch": None,
+                "match_type": "none",
+                "match_priority": 0,
                 "message": "NCM courier integration is disabled." if not config.is_enabled else "NCM courier service is not configured.",
                 "fallback_enabled": fallback_enabled,
             })
@@ -2468,6 +2599,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                 "enabled": False,
                 "branches": [],
                 "suggested_branches": [],
+                "auto_selected": None,
+                "recommended_branch": None,
+                "match_type": "none",
+                "match_priority": 0,
                 "error": str(e),
                 "fallback_enabled": fallback_enabled,
             }, status=status.HTTP_503_SERVICE_UNAVAILABLE if not fallback_enabled else status.HTTP_200_OK)
@@ -2477,44 +2612,56 @@ class OrderViewSet(viewsets.ModelViewSet):
             name = (b.get('name') or '').strip()
             if not name:
                 continue
+            raw_areas = b.get('areas_covered') or b.get('coverage') or b.get('covered_areas') or []
+            if isinstance(raw_areas, str):
+                areas_list = [a.strip() for a in raw_areas.split(',') if a.strip()]
+            elif isinstance(raw_areas, list):
+                areas_list = [str(a).strip() for a in raw_areas if str(a).strip()]
+            else:
+                areas_list = []
+
             formatted.append({
                 "code": str(b.get('code') or b.get('pk') or b.get('id') or name),
                 "name": name,
                 "district_name": (b.get('district_name') or b.get('district') or '').strip(),
                 "province_name": (b.get('province_name') or b.get('province') or '').strip(),
-                "areas_covered": b.get('areas_covered') or b.get('coverage') or [],
+                "municipality": (b.get('municipality') or b.get('local_level') or '').strip(),
+                "address": (b.get('address') or b.get('location') or '').strip(),
+                "contact_number": (b.get('contact_number') or b.get('phone') or b.get('contact') or '').strip(),
+                "areas_covered": areas_list,
             })
 
-        # Match suggestions if district/municipality provided
-        q_district = (request.query_params.get('district') or '').strip().lower()
-        q_municipality = (request.query_params.get('municipality') or '').strip().lower()
-        suggested = []
+        q_district = (request.query_params.get('district') or '').strip()
+        q_municipality = (request.query_params.get('municipality') or '').strip()
+        q_province = (request.query_params.get('province') or '').strip()
+        q_lat = request.query_params.get('latitude') or request.query_params.get('lat')
+        q_lon = request.query_params.get('longitude') or request.query_params.get('lon')
+        q_allow_nearby = request.query_params.get('allow_nearby', '').lower() in ('1', 'true')
 
-        if q_district or q_municipality:
-            for b in formatted:
-                b_name = b['name'].lower()
-                b_dist = b['district_name'].lower()
-                b_areas = [str(a).lower() for a in b['areas_covered']] if isinstance(b['areas_covered'], list) else []
-
-                score = 0
-                if q_municipality and (q_municipality == b_name or q_municipality in b_name or any(q_municipality in a for a in b_areas)):
-                    score += 10
-                if q_district and (q_district == b_dist or q_district in b_dist or q_district in b_name):
-                    score += 5
-
-                if score > 0:
-                    suggested.append((score, b))
-
-            suggested.sort(key=lambda x: x[0], reverse=True)
-
-        suggested_branches = [item[1] for item in suggested]
-        auto_selected = suggested_branches[0]['name'] if suggested_branches else None
+        match_res = discover_nearest_ncm_branches(
+            formatted,
+            municipality=q_municipality,
+            district=q_district,
+            province=q_province,
+            user_lat=q_lat,
+            user_lon=q_lon,
+            allow_nearby=q_allow_nearby,
+        )
 
         return Response({
             "enabled": True,
             "branches": formatted,
-            "suggested_branches": suggested_branches,
-            "auto_selected": auto_selected,
+            "suggested_branches": match_res["suggested_branches"],
+            "nearby_branches": match_res.get("nearby_branches", []),
+            "auto_selected": match_res["auto_selected"],
+            "recommended_branch": match_res["recommended_branch"],
+            "match_type": match_res["match_type"],
+            "match_priority": match_res["match_priority"],
+            "message": match_res["message"],
+            "search_municipality": match_res["search_municipality"],
+            "search_district": match_res["search_district"],
+            "search_province": q_province,
+            "delivery_anchor": match_res.get("delivery_anchor"),
             "origin_branch": service.default_origin_branch,
             "fallback_enabled": fallback_enabled,
         })

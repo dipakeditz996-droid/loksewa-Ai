@@ -1248,3 +1248,90 @@ class CODRemittance(models.Model):
             self.refresh_from_db()
             return remittance
 
+
+class NCMBranchRecord(models.Model):
+    """
+    Persistent database representation of Nepal Can Move (NCM) branches.
+    Enriched with geographic coordinates, coordinate verification provenance,
+    local-level coverage metadata, and serviceability status.
+    """
+    COORDINATE_SOURCES = (
+        ('API', 'NCM API Direct'),
+        ('ADMIN_VERIFIED', 'Admin Verified'),
+        ('GEOCODED', 'Geocoded Address / Place'),
+        ('MUNICIPALITY_CENTROID', 'Municipality Centroid Fallback'),
+        ('DISTRICT_CENTROID', 'District Centroid Fallback'),
+        ('UNVERIFIED', 'Unverified / Unknown'),
+    )
+
+    code = models.CharField(max_length=100, unique=True, db_index=True)
+    name = models.CharField(max_length=255, db_index=True)
+    district_name = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    province_name = models.CharField(max_length=100, blank=True, default='', db_index=True)
+    municipality = models.CharField(max_length=150, blank=True, default='', db_index=True)
+    address = models.TextField(blank=True, default='')
+    contact_number = models.CharField(max_length=100, blank=True, default='')
+    areas_covered = models.TextField(blank=True, default='', help_text="Comma-separated or newline-separated coverage list")
+    
+    # Geographic coordinates (WGS-84)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    coordinate_source = models.CharField(max_length=30, choices=COORDINATE_SOURCES, default='UNVERIFIED')
+    is_coordinate_verified = models.BooleanField(default=False, db_index=True)
+    coordinate_verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_ncm_branches'
+    )
+
+    # Operational status
+    is_active = models.BooleanField(default=True, db_index=True)
+    is_serviceable = models.BooleanField(default=True, help_text="Can deliveries be dispatched to this branch?")
+    serviceability_notes = models.TextField(blank=True, default='')
+
+    # Metadata & sync tracking
+    raw_metadata = models.JSONField(default=dict, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['district_name', 'name']
+        indexes = [
+            models.Index(fields=['district_name', 'is_active']),
+            models.Index(fields=['is_serviceable', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.code}) - {self.district_name or 'Unknown District'}"
+
+    @property
+    def has_valid_coordinates(self) -> bool:
+        return self.latitude is not None and self.longitude is not None
+
+
+class NCMBranchCoordinateAuditLog(models.Model):
+    """
+    Audit log tracking modifications to NCM branch coordinates and verification status.
+    """
+    branch = models.ForeignKey(NCMBranchRecord, on_delete=models.CASCADE, related_name='coordinate_logs')
+    changed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    previous_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    previous_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    new_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    new_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    previous_source = models.CharField(max_length=50, blank=True, default='')
+    new_source = models.CharField(max_length=50, blank=True, default='')
+    reason = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Coordinate change for {self.branch.name} at {self.created_at}"
+
+

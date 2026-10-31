@@ -1,6 +1,7 @@
 import logging
+from django.utils import timezone
 from django.core.management.base import BaseCommand
-from marketplace.models import CourierShipment
+from marketplace.models import CourierShipment, NCMConfiguration, CourierSyncLog
 from marketplace.ncm_service import NCMService, NCMError
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,23 @@ class Command(BaseCommand):
             default=None,
             help='Specific order ID to synchronize.'
         )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Force synchronization even if auto-sync is disabled in configuration.'
+        )
 
     def handle(self, *args, **options):
         limit = options.get('limit')
         order_id = options.get('order_id')
+        force = options.get('force')
+
+        config = NCMConfiguration.get_settings()
+        if not config.auto_sync_enabled and not force and not order_id:
+            self.stdout.write(
+                self.style.WARNING("NCM auto-synchronization is paused in admin configuration. Exiting (use --force to bypass).")
+            )
+            return
 
         qs = CourierShipment.objects.filter(provider='NCM').select_related('order')
         if order_id:
@@ -44,6 +58,7 @@ class Command(BaseCommand):
         synced_count = 0
         transitioned_count = 0
         error_count = 0
+        error_details = []
 
         for shipment in shipments:
             try:
@@ -53,16 +68,21 @@ class Command(BaseCommand):
                 tracking_id = None
 
                 if isinstance(tracking_data, dict):
-                    new_courier_status = (
-                        tracking_data.get('status') or
-                        tracking_data.get('state') or
-                        tracking_data.get('courier_status')
-                    )
-                    tracking_id = (
-                        tracking_data.get('tracking_id') or
-                        tracking_data.get('trackingid')
-                    )
-                    history_list = tracking_data.get('history') or tracking_data.get('timeline')
+                    inner = tracking_data.get('data') or tracking_data
+                    if isinstance(inner, dict):
+                        new_courier_status = (
+                            inner.get('status') or
+                            inner.get('state') or
+                            inner.get('courier_status')
+                        )
+                        tracking_id = (
+                            inner.get('tracking_id') or
+                            inner.get('trackingid')
+                        )
+                        history_list = inner.get('history') or inner.get('timeline')
+                    elif isinstance(inner, list) and inner:
+                        history_list = inner
+                        new_courier_status = str(inner[-1].get('status') or shipment.courier_status)
                 elif isinstance(tracking_data, list):
                     history_list = tracking_data
                     if tracking_data:
@@ -89,15 +109,42 @@ class Command(BaseCommand):
                     )
             except NCMError as e:
                 error_count += 1
+                error_details.append({
+                    'ncm_order_id': shipment.ncm_order_id,
+                    'order_id': shipment.order_id,
+                    'error': str(e),
+                })
                 self.stderr.write(
                     self.style.WARNING(f"Failed to track NCM shipment #{shipment.ncm_order_id} (Order #{shipment.order_id}): {e}")
                 )
             except Exception as e:
                 error_count += 1
+                error_details.append({
+                    'ncm_order_id': shipment.ncm_order_id,
+                    'order_id': shipment.order_id,
+                    'error': str(e),
+                })
                 logger.exception("Unexpected error syncing NCM shipment #%s", shipment.ncm_order_id)
                 self.stderr.write(
                     self.style.ERROR(f"Unexpected error syncing shipment #{shipment.ncm_order_id}: {e}")
                 )
+
+        sync_status = 'SUCCESS'
+        if error_count > 0:
+            sync_status = 'PARTIAL' if synced_count > 0 else 'FAILED'
+
+        CourierSyncLog.objects.create(
+            trigger_type='cron',
+            shipments_checked=len(shipments),
+            shipments_updated=transitioned_count,
+            errors_count=error_count,
+            error_details=error_details[:20],
+            status=sync_status,
+        )
+
+        config.last_sync_at = timezone.now()
+        config.last_sync_status = sync_status
+        config.save(update_fields=['last_sync_at', 'last_sync_status'])
 
         self.stdout.write(
             self.style.SUCCESS(

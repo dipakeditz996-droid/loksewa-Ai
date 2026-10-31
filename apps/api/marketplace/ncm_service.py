@@ -20,6 +20,7 @@ import time
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from django.utils import timezone
 
 logger = logging.getLogger("marketplace.ncm_service")
 
@@ -138,20 +139,31 @@ class NCMService:
         timeout: Optional[Union[float, tuple]] = None,
         session: Optional[requests.Session] = None,
     ):
-        self.api_token = (
-            api_token
-            if api_token is not None
-            else getattr(settings, "NCM_API_TOKEN", "")
-        ).strip()
+        config = None
+        try:
+            from .models import NCMConfiguration
+            config = NCMConfiguration.get_settings()
+        except Exception:
+            config = None
 
-        raw_base = (
-            base_url
-            if base_url is not None
-            else getattr(settings, "NCM_BASE_URL", "")
-        ).strip()
+        if api_token is not None:
+            self.api_token = api_token.strip()
+        elif config and config.get_effective_token():
+            self.api_token = config.get_effective_token().strip()
+        else:
+            self.api_token = getattr(settings, "NCM_API_TOKEN", "").strip()
+
+        if base_url is not None:
+            raw_base = base_url.strip()
+        elif config and config.get_effective_base_url():
+            raw_base = config.get_effective_base_url().strip()
+        else:
+            raw_base = getattr(settings, "NCM_BASE_URL", "").strip()
 
         if not raw_base:
             env = getattr(settings, "NCM_ENVIRONMENT", "demo").lower()
+            if config:
+                env = config.environment.lower()
             if env == "production":
                 raw_base = "https://portal.nepalcanmove.com/api/"
             else:
@@ -161,11 +173,14 @@ class NCMService:
             raw_base += "/"
         self.base_url = raw_base
 
-        self.default_origin_branch = (
-            default_origin_branch
-            if default_origin_branch is not None
-            else getattr(settings, "NCM_DEFAULT_ORIGIN_BRANCH", "Kathmandu")
-        ).strip()
+        if default_origin_branch is not None:
+            self.default_origin_branch = default_origin_branch.strip()
+        elif config and config.default_origin_branch:
+            self.default_origin_branch = config.default_origin_branch.strip()
+        else:
+            self.default_origin_branch = (
+                getattr(settings, "NCM_DEFAULT_ORIGIN_BRANCH", "Kathmandu")
+            ).strip()
 
         self.timeout = (
             timeout
@@ -174,6 +189,70 @@ class NCMService:
         )
 
         self._session = session or requests.Session()
+
+    def test_connection(self) -> Dict[str, Any]:
+        """
+        Diagnostic check to test NCM API connectivity and authentication.
+        Performs a safe, read-only GET request to list branches.
+        NEVER creates a shipment.
+        Measures round-trip response time and updates NCMConfiguration telemetry.
+        """
+        start_time = time.perf_counter()
+        config = None
+        try:
+            from .models import NCMConfiguration
+            config = NCMConfiguration.get_settings()
+        except Exception:
+            pass
+
+        if not self.api_token:
+            error_msg = "API Token is not configured. Please set NCM_API_TOKEN in environment or configuration."
+            if config:
+                config.connection_status = "error"
+                config.last_connection_tested_at = timezone.now()
+                config.last_connection_latency_ms = None
+                config.last_connection_error = error_msg
+                config.save(update_fields=["connection_status", "last_connection_tested_at", "last_connection_latency_ms", "last_connection_error"])
+            return {
+                "success": False,
+                "error": error_msg,
+                "latency_ms": None,
+                "environment": config.environment if config else "unknown",
+            }
+
+        try:
+            branches = self.get_branches(force_refresh=True)
+            latency_ms = int((time.perf_counter() - start_time) * 1000)
+            if config:
+                config.connection_status = "connected"
+                config.last_connection_tested_at = timezone.now()
+                config.last_connection_latency_ms = latency_ms
+                config.last_connection_error = ""
+                config.save(update_fields=["connection_status", "last_connection_tested_at", "last_connection_latency_ms", "last_connection_error"])
+            return {
+                "success": True,
+                "latency_ms": latency_ms,
+                "branch_count": len(branches),
+                "environment": config.environment if config else "demo",
+                "base_url": self.base_url,
+                "default_origin_branch": self.default_origin_branch,
+            }
+        except Exception as exc:
+            latency_ms = int((time.perf_counter() - start_time) * 1000)
+            safe_error = str(exc)
+            if config:
+                config.connection_status = "error"
+                config.last_connection_tested_at = timezone.now()
+                config.last_connection_latency_ms = latency_ms
+                config.last_connection_error = safe_error
+                config.save(update_fields=["connection_status", "last_connection_tested_at", "last_connection_latency_ms", "last_connection_error"])
+            return {
+                "success": False,
+                "error": safe_error,
+                "latency_ms": latency_ms,
+                "environment": config.environment if config else "unknown",
+                "base_url": self.base_url,
+            }
 
     def is_configured(self) -> bool:
         """Check if NCM service has valid API credentials configured."""

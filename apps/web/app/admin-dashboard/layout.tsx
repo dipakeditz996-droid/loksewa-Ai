@@ -50,6 +50,9 @@ import {
   HardDrive,
   Flag,
   FileCheck,
+  Truck,
+  RefreshCw,
+  Banknote,
 } from "lucide-react";
 
 
@@ -123,6 +126,16 @@ const SIDEBAR_NAV: NavSection[] = [
       { title: "Packages", href: "/admin-dashboard/packages", icon: Package },
       { title: "Evaluations", href: "/admin-dashboard/evaluations", icon: ClipboardCheck },
       { title: "Games", href: "/admin-dashboard/games", icon: Gamepad2 },
+    ],
+  },
+  {
+    title: "Delivery & Courier",
+    items: [
+      { title: "Courier Overview", href: "/admin-dashboard/courier/overview", icon: Truck as any },
+      { title: "Nepal Can Move Settings", href: "/admin-dashboard/courier/settings", icon: Settings as any },
+      { title: "Shipments", href: "/admin-dashboard/courier/shipments", icon: Package as any },
+      { title: "Tracking & Synchronization", href: "/admin-dashboard/courier/tracking", icon: RefreshCw as any },
+      { title: "COD Remittance", href: "/admin-dashboard/courier/cod-remittance", icon: Banknote as any },
     ],
   },
   {

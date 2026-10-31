@@ -13,6 +13,15 @@ from .views import (
     AdminReviewViewSet,
     AdminDisputeViewSet,
     AdminPayoutViewSet,
+    # Admin Courier & NCM Management
+    AdminNCMConfigurationView,
+    AdminNCMTestConnectionView,
+    AdminNCMBranchesView,
+    AdminNCMWebhookManagementView,
+    AdminCourierOverviewView,
+    AdminCourierShipmentViewSet,
+    AdminCourierSyncTriggerView,
+    AdminCODRemittanceViewSet,
     # Student
     StudentProductViewSet,
     StudentPaymentMethodViewSet,
@@ -48,6 +57,8 @@ admin_router.register(r'listing-reports', AdminListingReportViewSet, basename='a
 admin_router.register(r'reviews', AdminReviewViewSet, basename='admin-reviews')
 admin_router.register(r'disputes', AdminDisputeViewSet, basename='admin-disputes')
 admin_router.register(r'payouts', AdminPayoutViewSet, basename='admin-payouts')
+admin_router.register(r'courier/shipments', AdminCourierShipmentViewSet, basename='admin-courier-shipments')
+admin_router.register(r'courier/cod-remittance', AdminCODRemittanceViewSet, basename='admin-cod-remittance')
 
 # Student routers
 student_router = DefaultRouter()
@@ -70,6 +81,12 @@ urlpatterns = [
     path('public/products/', PublicProductListView.as_view(), name='public-products'),
     path('webhooks/ncm/', NCMWebhookView.as_view(), name='ncm-webhook'),
     path('admin/settings/', AdminMarketplaceSettingsView.as_view(), name='admin-marketplace-settings'),
+    path('admin/courier/settings/', AdminNCMConfigurationView.as_view(), name='admin-ncm-configuration'),
+    path('admin/courier/test-connection/', AdminNCMTestConnectionView.as_view(), name='admin-ncm-test-connection'),
+    path('admin/courier/branches/', AdminNCMBranchesView.as_view(), name='admin-ncm-branches'),
+    path('admin/courier/webhook-management/', AdminNCMWebhookManagementView.as_view(), name='admin-ncm-webhook-management'),
+    path('admin/courier/overview/', AdminCourierOverviewView.as_view(), name='admin-courier-overview'),
+    path('admin/courier/sync/', AdminCourierSyncTriggerView.as_view(), name='admin-courier-sync-trigger'),
     path('admin/', include(admin_router.urls)),
     path('student/cart/items/<int:pk>/', CartItemDetailView.as_view(), name='student-cart-item-detail'),
     path('student/pricing-policy/', MarketplacePricingPolicyView.as_view(), name='student-pricing-policy'),

@@ -9,7 +9,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
+from django.urls import reverse
 from django.db import transaction
+from django.db.models import Sum, Q, Count
 from decimal import Decimal, ROUND_HALF_UP
 from django.conf import settings
 from rest_framework.pagination import PageNumberPagination
@@ -35,6 +37,7 @@ from .models import (
     Cart, CartItem, Order, OrderItem, DeliveryAddress, DeliveryFeeRule,
     OrderStatusHistory, MarketplaceSettings, MarketplaceListingReport,
     ProductImage, Review, Dispute, DisputeEvidence, CourierShipment,
+    NCMConfiguration, NCMWebhookEvent, CourierSyncLog, CODRemittance,
 )
 from .serializers import (
     ProductSerializer, SellerListingSerializer,
@@ -42,11 +45,12 @@ from .serializers import (
     PaymentSubmissionSerializer, PaymentSubmissionAdminReviewSerializer,
     PurchaseSerializer,
     CartSerializer, CartItemSerializer,
-    OrderSerializer,
+    OrderSerializer, CourierShipmentSerializer,
     DeliveryAddressSerializer, DeliveryFeeRuleSerializer,
     MarketplaceSettingsSerializer, MarketplacePricingPolicySerializer, MarketplaceListingReportSerializer,
     SellerSaleSerializer,
     ReviewSerializer, DisputeSerializer, DisputeEvidenceSerializer,
+    NCMConfigurationSerializer, NCMWebhookEventSerializer, CourierSyncLogSerializer, CODRemittanceSerializer,
 )
 
 
@@ -957,6 +961,17 @@ class AdminOrderViewSet(viewsets.ReadOnlyModelViewSet):
                 last_synced_at=timezone.now(),
             )
 
+            # Automatically initialize COD Remittance record if order has Cash on Delivery
+            if order.is_cod:
+                CODRemittance.objects.get_or_create(
+                    order=order,
+                    defaults={
+                        'courier_shipment': shipment,
+                        'expected_amount': order.cod_remaining_balance,
+                        'status': 'PENDING',
+                    }
+                )
+
             # Move order status to PROCESSING or SHIPPED
             old_status = order.status
             new_status = 'PROCESSING'
@@ -1048,6 +1063,14 @@ class NCMWebhookView(APIView):
     authentication_classes = []
 
     def post(self, request):
+        config = NCMConfiguration.get_settings()
+        if not config.webhook_enabled:
+            logger.warning("NCM Webhook rejected: webhook processing is disabled in configuration.")
+            return Response(
+                {'error': 'Webhook processing is currently disabled in courier configuration.'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
         expected_secret = getattr(settings, 'NCM_WEBHOOK_SECRET', '').strip()
         if expected_secret:
             provided_secret = (
@@ -1075,6 +1098,8 @@ class NCMWebhookView(APIView):
         tracking_id = str(payload.get('tracking_id') or payload.get('trackingid') or payload.get('track_id') or '').strip()
         vref_id = str(payload.get('vref_id') or payload.get('ref_id') or payload.get('reference_id') or '').strip()
 
+        event_name = str(payload.get('event') or payload.get('status') or payload.get('courier_status') or 'status_update')
+
         shipment = None
         if ncm_order_id:
             shipment = CourierShipment.objects.filter(ncm_order_id=ncm_order_id).first()
@@ -1083,11 +1108,29 @@ class NCMWebhookView(APIView):
         if not shipment and vref_id:
             shipment = CourierShipment.objects.filter(vref_id=vref_id).first()
 
+        ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', ''))
+        if ip and ',' in ip:
+            ip = ip.split(',')[0].strip()
+
         if not shipment:
             logger.warning(
                 "NCM Webhook received update for unknown shipment: ncm_order_id=%s, tracking_id=%s, vref_id=%s",
                 ncm_order_id, tracking_id, vref_id
             )
+            NCMWebhookEvent.objects.create(
+                ip_address=ip[:50],
+                event_type=event_name[:100],
+                ncm_order_id=ncm_order_id[:100],
+                tracking_id=tracking_id[:100],
+                payload=payload,
+                is_success=False,
+                status_code=404,
+                error_message="Shipment not found",
+            )
+            config.last_webhook_received_at = timezone.now()
+            config.last_webhook_event = event_name[:100]
+            config.last_webhook_error = f"Shipment not found (NCM #{ncm_order_id})"
+            config.save(update_fields=['last_webhook_received_at', 'last_webhook_event', 'last_webhook_error'])
             return Response({'error': 'Shipment not found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Status and event extraction
@@ -1117,6 +1160,20 @@ class NCMWebhookView(APIView):
             tracking_id=tracking_id or None,
             source="ncm_webhook"
         )
+
+        NCMWebhookEvent.objects.create(
+            ip_address=ip[:50],
+            event_type=event_name[:100],
+            ncm_order_id=shipment.ncm_order_id,
+            tracking_id=shipment.tracking_id,
+            payload=payload,
+            is_success=True,
+            status_code=200,
+        )
+        config.last_webhook_received_at = timezone.now()
+        config.last_webhook_event = event_name[:100]
+        config.last_webhook_error = ""
+        config.save(update_fields=['last_webhook_received_at', 'last_webhook_event', 'last_webhook_error'])
 
         return Response({
             'status': 'success',
@@ -1168,6 +1225,657 @@ class AdminListingReportViewSet(viewsets.ReadOnlyModelViewSet):
         report.admin_response = admin_response
         report.save(update_fields=['status', 'admin_response', 'updated_at'])
         return Response(MarketplaceListingReportSerializer(report).data)
+
+
+# ---------------------------------------------------------------------------
+# Admin — Nepal Can Move (NCM) Courier Configuration & Management
+# ---------------------------------------------------------------------------
+
+class AdminNCMConfigurationView(APIView):
+    """
+    Manage Nepal Can Move (NCM) courier integration configuration.
+    Enforces admin permissions, credential masking, and explicit production confirmation.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        config = NCMConfiguration.get_settings()
+        serializer = NCMConfigurationSerializer(config, context={'request': request})
+        data = serializer.data
+
+        # Add deployment environment metadata
+        render_token = getattr(settings, 'NCM_API_TOKEN', '').strip()
+        render_secret = getattr(settings, 'NCM_WEBHOOK_SECRET', '').strip()
+
+        # Webhook URL
+        try:
+            webhook_url = request.build_absolute_uri(reverse('ncm-webhook'))
+        except Exception:
+            webhook_url = "/api/marketplace/webhooks/ncm/"
+
+        data['render_env_status'] = {
+            'token_in_env': bool(render_token),
+            'token_masked': f"{render_token[:4]}****{render_token[-4:]}" if len(render_token) > 8 else ('****' if render_token else ''),
+            'webhook_secret_in_env': bool(render_secret),
+            'webhook_secret_status': 'Configured in Environment' if render_secret else 'Not Configured',
+        }
+        data['webhook_endpoint_url'] = webhook_url
+        data['fallback_pricing_source'] = "Admin Delivery Fee Rules"
+
+        return Response(data)
+
+    def patch(self, request):
+        config = NCMConfiguration.get_settings()
+        target_env = request.data.get('environment')
+
+        # Safety Guard: Switching from demo to production requires explicit confirmation
+        if target_env == 'production' and config.environment != 'production':
+            if not request.data.get('confirm_production'):
+                return Response(
+                    {
+                        "detail": "Switching to Live Production environment requires explicit confirmation. Please confirm that you intend to use Live NCM credentials."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Validate origin branch if being changed
+        new_branch = request.data.get('default_origin_branch')
+        if new_branch:
+            service = NCMService()
+            valid_branch = _validate_ncm_branch(new_branch, service)
+            if not valid_branch:
+                # If unable to validate due to network, allow known major hubs
+                if new_branch.lower() not in ['kathmandu', 'pokhara', 'biratnagar', 'butwal', 'lalitpur', 'bhaktapur']:
+                    return Response(
+                        {"detail": f"'{new_branch}' is not a verified active NCM origin branch."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+        serializer = NCMConfigurationSerializer(
+            config,
+            data=request.data,
+            partial=True,
+            context={'request': request}
+        )
+        if serializer.is_valid():
+            saved_config = serializer.save()
+
+            # Record security & audit log
+            try:
+                from administration.models import AuditLog
+                safe_details = {k: v for k, v in request.data.items() if k not in ['new_api_token']}
+                if 'new_api_token' in request.data:
+                    safe_details['token_updated'] = True
+                AuditLog.objects.create(
+                    actor=request.user,
+                    action='UPDATE_NCM_CONFIGURATION',
+                    entity_type='NCMConfiguration',
+                    entity_id=str(saved_config.id),
+                    details=safe_details
+                )
+            except Exception as e:
+                logger.warning("Failed to record AuditLog for NCM config update: %s", e)
+
+            return Response(NCMConfigurationSerializer(saved_config, context={'request': request}).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminNCMTestConnectionView(APIView):
+    """
+    Diagnostic endpoint to test NCM API connectivity and authentication.
+    Strictly read-only: checks /v2/branches. Never creates a shipment.
+    """
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        service = NCMService()
+        result = service.test_connection()
+
+        try:
+            from administration.models import AuditLog
+            AuditLog.objects.create(
+                actor=request.user,
+                action='TEST_NCM_CONNECTION',
+                entity_type='NCMConfiguration',
+                entity_id='1',
+                details={
+                    'success': result.get('success'),
+                    'latency_ms': result.get('latency_ms'),
+                    'environment': result.get('environment'),
+                }
+            )
+        except Exception:
+            pass
+
+        status_code = status.HTTP_200_OK if result.get('success') else status.HTTP_502_BAD_GATEWAY
+        return Response(result, status=status_code)
+
+
+class AdminNCMBranchesView(APIView):
+    """
+    Lists available NCM branches and allows refreshing branch cache.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        service = NCMService()
+        try:
+            branches = service.get_branches(force_refresh=False)
+            return Response({
+                'count': len(branches),
+                'branches': branches,
+                'cached': True,
+            })
+        except Exception as e:
+            return Response(
+                {'detail': f"Failed to fetch NCM branches: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+    def post(self, request):
+        """Force refresh branches cache from live NCM API."""
+        service = NCMService()
+        try:
+            branches = service.get_branches(force_refresh=True)
+            return Response({
+                'count': len(branches),
+                'branches': branches,
+                'refreshed': True,
+                'cached': False,
+            })
+        except Exception as e:
+            return Response(
+                {'detail': f"Failed to refresh NCM branches: {str(e)}"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+
+class AdminNCMWebhookManagementView(APIView):
+    """
+    Manages webhook status, registration, and inspection of recent events.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        config = NCMConfiguration.get_settings()
+        try:
+            webhook_url = request.build_absolute_uri(reverse('ncm-webhook'))
+        except Exception:
+            webhook_url = "/api/marketplace/webhooks/ncm/"
+
+        secret = getattr(settings, 'NCM_WEBHOOK_SECRET', '').strip()
+        recent_events = NCMWebhookEvent.objects.order_by('-received_at')[:15]
+
+        return Response({
+            'webhook_endpoint_url': webhook_url,
+            'webhook_secret_configured': bool(secret),
+            'webhook_secret_status': 'Configured in Environment' if secret else 'Missing (NCM_WEBHOOK_SECRET not set)',
+            'webhook_enabled': config.webhook_enabled,
+            'webhook_registered': config.webhook_registered,
+            'last_webhook_received_at': config.last_webhook_received_at,
+            'last_webhook_event': config.last_webhook_event,
+            'last_webhook_error': config.last_webhook_error,
+            'recent_events': NCMWebhookEventSerializer(recent_events, many=True).data,
+        })
+
+    def post(self, request):
+        action_name = request.data.get('action')
+        config = NCMConfiguration.get_settings()
+
+        if action_name == 'toggle_enabled':
+            config.webhook_enabled = not config.webhook_enabled
+            config.save(update_fields=['webhook_enabled'])
+            return Response({
+                'webhook_enabled': config.webhook_enabled,
+                'detail': f"Webhook processing {'enabled' if config.webhook_enabled else 'disabled'}.",
+            })
+
+        elif action_name == 'toggle_registered':
+            config.webhook_registered = not config.webhook_registered
+            config.save(update_fields=['webhook_registered'])
+            return Response({
+                'webhook_registered': config.webhook_registered,
+                'detail': f"Webhook registration status updated to {'Registered' if config.webhook_registered else 'Unregistered'}.",
+            })
+
+        return Response(
+            {'detail': f"Unknown action '{action_name}'. Supported actions: toggle_enabled, toggle_registered."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class AdminCourierOverviewView(APIView):
+    """
+    Aggregated metrics and intelligence for delivery & courier operations.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        config = NCMConfiguration.get_settings()
+
+        shipments_qs = CourierShipment.objects.filter(provider='NCM')
+        total_shipments = shipments_qs.count()
+
+        pending_pickup = shipments_qs.filter(
+            courier_status__in=['Order Created', 'order created', 'Pickup Pending', 'pickup pending']
+        ).count()
+
+        in_transit = shipments_qs.filter(
+            courier_status__in=['Pickup Complete', 'pickup complete', 'In Transit', 'in transit', 'Dispatched', 'dispatched']
+        ).count()
+
+        out_for_delivery = shipments_qs.filter(
+            courier_status__in=['Out for Delivery', 'out for delivery']
+        ).count()
+
+        delivered = shipments_qs.filter(
+            courier_status__in=['Delivered', 'delivered']
+        ).count()
+
+        returned = shipments_qs.filter(
+            courier_status__in=['Return', 'return', 'Cancelled', 'cancelled']
+        ).count()
+
+        # Ensure COD orders with shipments have a CODRemittance row
+        cod_orders_with_shipment = Order.objects.filter(
+            is_cod=True,
+            courier_shipment__isnull=False,
+            cod_remittance__isnull=True
+        ).select_related('courier_shipment')
+
+        for ord_obj in cod_orders_with_shipment:
+            CODRemittance.objects.get_or_create(
+                order=ord_obj,
+                defaults={
+                    'courier_shipment': ord_obj.courier_shipment,
+                    'expected_amount': ord_obj.cod_remaining_balance,
+                    'status': 'VERIFIED' if ord_obj.payment_status == 'PAID' else 'PENDING',
+                }
+            )
+
+        # COD Remittance Metrics
+        pending_remittances = CODRemittance.objects.filter(status='PENDING')
+        remittance_pending_count = pending_remittances.count()
+        remittance_pending_amount = pending_remittances.aggregate(tot=Sum('expected_amount'))['tot'] or Decimal('0.00')
+
+        verified_remittances = CODRemittance.objects.filter(status='VERIFIED')
+        remittance_verified_count = verified_remittances.count()
+        remittance_verified_amount = verified_remittances.aggregate(tot=Sum('remitted_amount'))['tot'] or Decimal('0.00')
+
+        discrepancy_count = CODRemittance.objects.filter(status='DISCREPANCY').count()
+
+        # Sync Metrics
+        failed_sync_count = CourierSyncLog.objects.filter(status='FAILED').count()
+        last_sync_log = CourierSyncLog.objects.order_by('-synced_at').first()
+
+        # Recent shipments
+        recent_shipments = shipments_qs.select_related('order', 'order__student')[:6]
+
+        return Response({
+            'metrics': {
+                'total_shipments': total_shipments,
+                'pending_pickup': pending_pickup,
+                'in_transit': in_transit,
+                'out_for_delivery': out_for_delivery,
+                'delivered': delivered,
+                'returned': returned,
+                'failed_sync_count': failed_sync_count,
+                'remittance_pending_count': remittance_pending_count,
+                'remittance_pending_amount': float(remittance_pending_amount),
+                'remittance_verified_count': remittance_verified_count,
+                'remittance_verified_amount': float(remittance_verified_amount),
+                'remittance_discrepancy_count': discrepancy_count,
+            },
+            'configuration': {
+                'is_enabled': config.is_enabled,
+                'environment': config.environment,
+                'connection_status': config.connection_status,
+                'last_connection_tested_at': config.last_connection_tested_at,
+                'last_connection_latency_ms': config.last_connection_latency_ms,
+                'default_origin_branch': config.default_origin_branch,
+                'live_rates_enabled': config.live_rates_enabled,
+                'fallback_rules_enabled': config.fallback_rules_enabled,
+                'auto_sync_enabled': config.auto_sync_enabled,
+                'webhook_enabled': config.webhook_enabled,
+                'webhook_registered': config.webhook_registered,
+                'last_sync_at': config.last_sync_at,
+                'token_source': config.get_token_source(),
+                'masked_token': config.get_masked_token(),
+            },
+            'scheduler': {
+                'render_cron_job_command': 'python manage.py sync_ncm_shipments --limit 50',
+                'celery_worker_present': True,
+                'auto_sync_active': config.auto_sync_enabled,
+                'last_sync': CourierSyncLogSerializer(last_sync_log).data if last_sync_log else None,
+            },
+            'recent_shipments': CourierShipmentSerializer(recent_shipments, many=True).data,
+        })
+
+
+class AdminCourierShipmentViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Admin management viewset to view, filter, search, and inspect courier shipments.
+    """
+    queryset = CourierShipment.objects.select_related('order', 'order__student').order_by('-created_at')
+    serializer_class = CourierShipmentSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = MarketplacePagination
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        params = self.request.query_params
+
+        # Status filter
+        status_filter = params.get('status')
+        if status_filter:
+            status_clean = status_filter.strip().lower()
+            if status_clean == 'pending_pickup':
+                qs = qs.filter(courier_status__in=['Order Created', 'order created', 'Pickup Pending', 'pickup pending'])
+            elif status_clean == 'in_transit':
+                qs = qs.filter(courier_status__in=['Pickup Complete', 'pickup complete', 'In Transit', 'in transit', 'Dispatched', 'dispatched'])
+            elif status_clean == 'out_for_delivery':
+                qs = qs.filter(courier_status__in=['Out for Delivery', 'out for delivery'])
+            elif status_clean == 'delivered':
+                qs = qs.filter(courier_status__in=['Delivered', 'delivered'])
+            elif status_clean == 'returned':
+                qs = qs.filter(courier_status__in=['Return', 'return', 'Cancelled', 'cancelled'])
+            else:
+                qs = qs.filter(courier_status__iexact=status_filter.strip())
+
+        # Branch filter
+        branch = params.get('destination_branch')
+        if branch:
+            qs = qs.filter(destination_branch__iexact=branch.strip())
+
+        # Search query
+        search = params.get('search')
+        if search:
+            q = search.strip()
+            qs = qs.filter(
+                Q(ncm_order_id__icontains=q) |
+                Q(tracking_id__icontains=q) |
+                Q(vref_id__icontains=q) |
+                Q(destination_branch__icontains=q) |
+                Q(order__id__icontains=q) |
+                Q(order__student__username__icontains=q) |
+                Q(order__student__first_name__icontains=q) |
+                Q(order__student__last_name__icontains=q)
+            )
+
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='sync')
+    def sync_tracking(self, request, pk=None):
+        """Sync tracking status from NCM for this shipment."""
+        shipment = self.get_object()
+        service = NCMService()
+        if not service.is_configured():
+            return Response(
+                {"detail": "NCM courier service is not configured."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        try:
+            track_res = service.track_order(shipment.ncm_order_id)
+        except NCMError as exc:
+            return Response(
+                {"detail": f"Failed to sync courier tracking: {str(exc)}"},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
+        data = track_res.get('data') or {}
+        new_courier_status = ""
+        history_list = []
+        if isinstance(data, dict):
+            new_courier_status = str(data.get('status') or data.get('current_status') or shipment.courier_status)
+            if 'history' in data and isinstance(data['history'], list):
+                history_list = data['history']
+        elif isinstance(data, list):
+            history_list = data
+            if data:
+                new_courier_status = str(data[-1].get('status') or shipment.courier_status)
+
+        shipment.apply_status_update(
+            new_courier_status=new_courier_status,
+            history_list=history_list,
+            changed_by=request.user,
+            source="admin_shipment_sync"
+        )
+        shipment.refresh_from_db()
+        return Response(CourierShipmentSerializer(shipment).data)
+
+
+class AdminCourierSyncTriggerView(APIView):
+    """
+    Trigger manual batch synchronization of active NCM shipments and inspect sync logs.
+    """
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        logs = CourierSyncLog.objects.order_by('-synced_at')[:20]
+        return Response(CourierSyncLogSerializer(logs, many=True).data)
+
+    def post(self, request):
+        limit = int(request.data.get('limit', 50))
+        config = NCMConfiguration.get_settings()
+        service = NCMService()
+
+        if not service.is_configured():
+            return Response(
+                {"detail": "NCM Courier service is not configured with valid credentials."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        active_shipments = list(
+            CourierShipment.objects.filter(provider='NCM')
+            .exclude(order__status__in=['DELIVERED', 'CANCELLED', 'REFUNDED'])
+            .order_by('last_synced_at')[:limit]
+        )
+
+        checked_count = len(active_shipments)
+        updated_count = 0
+        error_count = 0
+        error_details = []
+
+        for shipment in active_shipments:
+            try:
+                tracking_data = service.track_order(shipment.ncm_order_id)
+                new_status = None
+                history = None
+                track_id = None
+
+                if isinstance(tracking_data, dict):
+                    inner = tracking_data.get('data') or tracking_data
+                    if isinstance(inner, dict):
+                        new_status = inner.get('status') or inner.get('state') or inner.get('courier_status')
+                        track_id = inner.get('tracking_id') or inner.get('trackingid')
+                        history = inner.get('history') or inner.get('timeline')
+                    elif isinstance(inner, list) and inner:
+                        history = inner
+                        new_status = inner[-1].get('status')
+
+                changed = shipment.apply_status_update(
+                    new_courier_status=str(new_status) if new_status else None,
+                    history_list=history,
+                    tracking_id=str(track_id) if track_id else None,
+                    changed_by=request.user,
+                    source="admin_manual_batch_sync"
+                )
+                if changed:
+                    updated_count += 1
+            except Exception as e:
+                error_count += 1
+                error_details.append({
+                    'ncm_order_id': shipment.ncm_order_id,
+                    'order_id': shipment.order_id,
+                    'error': str(e),
+                })
+
+        sync_status = 'SUCCESS'
+        if error_count > 0:
+            sync_status = 'PARTIAL' if updated_count > 0 or checked_count > error_count else 'FAILED'
+
+        sync_log = CourierSyncLog.objects.create(
+            synced_by=request.user,
+            trigger_type='manual',
+            shipments_checked=checked_count,
+            shipments_updated=updated_count,
+            errors_count=error_count,
+            error_details=error_details[:20],
+            status=sync_status,
+        )
+
+        config.last_sync_at = timezone.now()
+        config.last_sync_status = sync_status
+        config.save(update_fields=['last_sync_at', 'last_sync_status'])
+
+        return Response({
+            'success': True,
+            'status': sync_status,
+            'shipments_checked': checked_count,
+            'shipments_updated': updated_count,
+            'errors_count': error_count,
+            'log_id': sync_log.id,
+            'timestamp': sync_log.synced_at,
+        })
+
+
+class AdminCODRemittanceViewSet(viewsets.ModelViewSet):
+    """
+    Safe admin management of Cash on Delivery (COD) collection and courier remittance.
+    Ensures that Delivered NCM status NEVER automatically marks payment as PAID.
+    Requires explicit admin verification to settle the remaining 85% COD balance.
+    """
+    queryset = CODRemittance.objects.select_related(
+        'order', 'order__student', 'courier_shipment', 'verified_by'
+    ).order_by('-created_at')
+    serializer_class = CODRemittanceSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = MarketplacePagination
+
+    def get_queryset(self):
+        # Auto-create CODRemittance records for any COD orders with courier shipments that lack one
+        cod_orders_with_shipment = Order.objects.filter(
+            is_cod=True,
+            courier_shipment__isnull=False,
+            cod_remittance__isnull=True
+        ).select_related('courier_shipment')
+
+        for ord_obj in cod_orders_with_shipment:
+            CODRemittance.objects.get_or_create(
+                order=ord_obj,
+                defaults={
+                    'courier_shipment': ord_obj.courier_shipment,
+                    'expected_amount': ord_obj.cod_remaining_balance,
+                    'status': 'VERIFIED' if ord_obj.payment_status == 'PAID' else 'PENDING',
+                }
+            )
+
+        qs = super().get_queryset()
+        params = self.request.query_params
+
+        status_param = params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param.strip().upper())
+
+        order_id = params.get('order_id')
+        if order_id:
+            qs = qs.filter(order_id=order_id)
+
+        search = params.get('search')
+        if search:
+            q = search.strip()
+            qs = qs.filter(
+                Q(order__id__icontains=q) |
+                Q(reference_number__icontains=q) |
+                Q(courier_shipment__ncm_order_id__icontains=q) |
+                Q(courier_shipment__tracking_id__icontains=q) |
+                Q(order__student__username__icontains=q) |
+                Q(order__student__first_name__icontains=q) |
+                Q(order__student__last_name__icontains=q)
+            )
+
+        return qs
+
+    @action(detail=True, methods=['post'], url_path='verify')
+    def verify_remittance(self, request, pk=None):
+        """
+        Verify that courier has remitted the remaining COD funds to LoksewaAI.
+        Transitions order.payment_status to PAID and sets cod_remaining_balance to 0.
+        Prevents duplicate remittance verification.
+        """
+        remittance = self.get_object()
+
+        if remittance.status == 'VERIFIED':
+            return Response(
+                {"detail": f"Remittance for Order #{remittance.order_id} has already been verified and settled."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        raw_amount = request.data.get('remitted_amount')
+        remitted_amount = None
+        if raw_amount is not None:
+            try:
+                remitted_amount = Decimal(str(raw_amount))
+                if remitted_amount < 0:
+                    return Response({"detail": "Remitted amount cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception:
+                return Response({"detail": f"Invalid remitted amount: {raw_amount}"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            remitted_amount = remittance.expected_amount
+
+        ref_number = (request.data.get('reference_number') or '').strip()
+        notes = (request.data.get('notes') or '').strip()
+
+        try:
+            settled = remittance.verify_and_settle(
+                verified_by=request.user,
+                remitted_amount=remitted_amount,
+                reference_number=ref_number,
+                notes=notes
+            )
+            return Response(CODRemittanceSerializer(settled).data, status=status.HTTP_200_OK)
+        except Exception as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='mark-discrepancy')
+    def mark_discrepancy(self, request, pk=None):
+        """Flag a financial discrepancy between courier collection and expected remittance."""
+        remittance = self.get_object()
+        reason = (request.data.get('discrepancy_reason') or '').strip()
+        if not reason:
+            return Response({"detail": "Discrepancy reason is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        courier_amount = request.data.get('courier_reported_amount')
+        if courier_amount is not None:
+            try:
+                remittance.courier_reported_amount = Decimal(str(courier_amount))
+            except Exception:
+                pass
+
+        remittance.status = 'DISCREPANCY'
+        remittance.discrepancy_reason = reason
+        remittance.notes = (request.data.get('notes') or remittance.notes or '').strip()
+        remittance.save(update_fields=['status', 'discrepancy_reason', 'courier_reported_amount', 'notes', 'updated_at'])
+
+        try:
+            from administration.models import AuditLog
+            AuditLog.objects.create(
+                actor=request.user,
+                action='FLAG_COD_DISCREPANCY',
+                entity_type='Order',
+                entity_id=str(remittance.order_id),
+                details={
+                    'remittance_id': remittance.id,
+                    'reason': reason,
+                    'expected': float(remittance.expected_amount),
+                    'courier_reported': float(remittance.courier_reported_amount) if remittance.courier_reported_amount else None,
+                }
+            )
+        except Exception:
+            pass
+
+        return Response(CODRemittanceSerializer(remittance).data)
 
 
 # ---------------------------------------------------------------------------
@@ -1697,15 +2405,16 @@ class OrderViewSet(viewsets.ModelViewSet):
         Return list of valid, active NCM branches.
         Optionally accepts ?district=... and ?municipality=... to return recommended/suggested branches.
         """
+        config = NCMConfiguration.get_settings()
         service = NCMService()
-        fallback_enabled = getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+        fallback_enabled = config.fallback_rules_enabled or getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
 
-        if not service.is_configured():
+        if not service.is_configured() or not config.is_enabled:
             return Response({
                 "enabled": False,
                 "branches": [],
                 "suggested_branches": [],
-                "message": "NCM courier service is not configured.",
+                "message": "NCM courier integration is disabled." if not config.is_enabled else "NCM courier service is not configured.",
                 "fallback_enabled": fallback_enabled,
             })
 
@@ -1802,11 +2511,12 @@ class OrderViewSet(viewsets.ModelViewSet):
             except Product.DoesNotExist:
                 pass
 
-        fallback_allowed = getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+        config = NCMConfiguration.get_settings()
+        fallback_allowed = config.fallback_rules_enabled or getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
         service = NCMService()
 
-        # If NCM is configured, attempt live courier rate
-        if service.is_configured():
+        # If NCM is configured and enabled, attempt live courier rate
+        if service.is_configured() and config.is_enabled and config.live_rates_enabled:
             target_branch = destination_branch
             if not target_branch and delivery_address:
                 target_branch = self._resolve_branch_from_address(delivery_address, service)
@@ -2282,7 +2992,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             # --- SERVER-SIDE DELIVERY FEE & NCM REVALIDATION ---
             destination_branch_req = request.data.get('destination_branch')
             delivery_type_req = str(request.data.get('delivery_type') or 'Door2Door').strip()
-            fallback_allowed = getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
+            config = NCMConfiguration.get_settings()
+            fallback_allowed = config.fallback_rules_enabled or getattr(settings, 'NCM_FALLBACK_TO_LOCAL_RULES', False)
 
             service = NCMService()
             delivery_fee = Decimal('0.00')
@@ -2290,7 +3001,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             fallback_applied = False
             validated_branch_name = None
 
-            if service.is_configured():
+            if service.is_configured() and config.is_enabled and config.live_rates_enabled:
                 target_branch = destination_branch_req
                 if not target_branch and delivery_address:
                     target_branch = self._resolve_branch_from_address(delivery_address, service)

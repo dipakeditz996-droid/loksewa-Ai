@@ -13,6 +13,7 @@ from .models import (
     OrderStatusHistory, MarketplaceSettings, MarketplaceListingReport,
 
     Review, Dispute, DisputeEvidence, PayoutAccount, SellerPayout, CourierShipment,
+    NCMConfiguration, NCMWebhookEvent, CourierSyncLog, CODRemittance,
 
 )
 
@@ -1001,4 +1002,203 @@ class SellerBalanceSerializer(serializers.Serializer):
     available_balance = serializers.DecimalField(max_digits=10, decimal_places=2)
 
     minimum_payout_amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+# ---------------------------------------------------------------------------
+# Nepal Can Move (NCM) Admin Configuration & Courier Serializers
+# ---------------------------------------------------------------------------
+
+class NCMConfigurationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for NCM integration configuration.
+    Strictly prevents exposing sensitive API tokens or secrets in responses.
+    """
+    masked_token = serializers.CharField(source='get_masked_token', read_only=True)
+    token_source = serializers.CharField(source='get_token_source', read_only=True)
+    effective_base_url = serializers.CharField(source='get_effective_base_url', read_only=True)
+    has_token = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
+
+    # Allow setting a new token without ever returning it back in GET
+    new_api_token = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        help_text="Provide a new API token to override environment variable. Will be stored securely."
+    )
+
+    class Meta:
+        model = NCMConfiguration
+        fields = (
+            'id',
+            'is_enabled',
+            'environment',
+            'custom_base_url',
+            'effective_base_url',
+            'masked_token',
+            'token_source',
+            'has_token',
+            'new_api_token',
+            'default_origin_branch',
+            'live_rates_enabled',
+            'fallback_rules_enabled',
+            'auto_sync_enabled',
+            'webhook_enabled',
+            'webhook_registered',
+            'connection_status',
+            'last_connection_tested_at',
+            'last_connection_latency_ms',
+            'last_connection_error',
+            'last_sync_at',
+            'last_sync_status',
+            'last_webhook_received_at',
+            'last_webhook_event',
+            'last_webhook_error',
+            'updated_at',
+            'updated_by_name',
+        )
+        read_only_fields = (
+            'id',
+            'effective_base_url',
+            'masked_token',
+            'token_source',
+            'has_token',
+            'connection_status',
+            'last_connection_tested_at',
+            'last_connection_latency_ms',
+            'last_connection_error',
+            'last_sync_at',
+            'last_sync_status',
+            'last_webhook_received_at',
+            'last_webhook_event',
+            'last_webhook_error',
+            'updated_at',
+            'updated_by_name',
+        )
+
+    def get_has_token(self, obj) -> bool:
+        return bool(obj.get_effective_token())
+
+    def get_updated_by_name(self, obj) -> str:
+        if obj.updated_by:
+            return obj.updated_by.get_full_name() or obj.updated_by.username
+        return "System"
+
+    def update(self, instance, validated_data):
+        new_token = validated_data.pop('new_api_token', None)
+        if new_token is not None:
+            clean_token = new_token.strip()
+            instance.custom_api_token = clean_token
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            instance.updated_by = request.user
+
+        instance.save()
+        return instance
+
+
+class NCMWebhookEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NCMWebhookEvent
+        fields = '__all__'
+
+
+class CourierSyncLogSerializer(serializers.ModelSerializer):
+    synced_by_username = serializers.CharField(source='synced_by.username', read_only=True)
+
+    class Meta:
+        model = CourierSyncLog
+        fields = '__all__'
+
+
+class CODRemittanceSerializer(serializers.ModelSerializer):
+    order_id = serializers.IntegerField(source='order.id', read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
+    courier_tracking_id = serializers.SerializerMethodField()
+    courier_status = serializers.SerializerMethodField()
+    order_status = serializers.CharField(source='order.status', read_only=True)
+    order_payment_status = serializers.CharField(source='order.payment_status', read_only=True)
+    order_total = serializers.DecimalField(source='order.final_total', max_digits=10, decimal_places=2, read_only=True)
+    advance_paid = serializers.DecimalField(source='order.cod_advance_paid', max_digits=10, decimal_places=2, read_only=True)
+    remaining_balance = serializers.DecimalField(source='order.cod_remaining_balance', max_digits=10, decimal_places=2, read_only=True)
+    verified_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CODRemittance
+        fields = (
+            'id',
+            'order_id',
+            'customer_name',
+            'customer_phone',
+            'courier_tracking_id',
+            'courier_status',
+            'order_status',
+            'order_payment_status',
+            'order_total',
+            'advance_paid',
+            'remaining_balance',
+            'expected_amount',
+            'courier_reported_amount',
+            'remitted_amount',
+            'status',
+            'reference_number',
+            'notes',
+            'discrepancy_reason',
+            'verified_at',
+            'verified_by_name',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = (
+            'id',
+            'order_id',
+            'customer_name',
+            'customer_phone',
+            'courier_tracking_id',
+            'courier_status',
+            'order_status',
+            'order_payment_status',
+            'order_total',
+            'advance_paid',
+            'remaining_balance',
+            'verified_at',
+            'verified_by_name',
+            'created_at',
+            'updated_at',
+        )
+
+    def get_customer_name(self, obj) -> str:
+        order = obj.order
+        snapshot = order.shipping_address_snapshot or {}
+        return snapshot.get('full_name') or order.student.get_full_name() or order.student.username
+
+    def get_customer_phone(self, obj) -> str:
+        order = obj.order
+        snapshot = order.shipping_address_snapshot or {}
+        return snapshot.get('phone_number') or order.contact_number or ""
+
+    def get_courier_tracking_id(self, obj) -> str:
+        if obj.courier_shipment:
+            return obj.courier_shipment.tracking_id or obj.courier_shipment.ncm_order_id
+        if hasattr(obj.order, 'courier_shipment') and obj.order.courier_shipment:
+            return obj.order.courier_shipment.tracking_id or obj.order.courier_shipment.ncm_order_id
+        return ""
+
+    def get_courier_status(self, obj) -> str:
+        if obj.courier_shipment:
+            return obj.courier_shipment.courier_status
+        if hasattr(obj.order, 'courier_shipment') and obj.order.courier_shipment:
+            return obj.order.courier_shipment.courier_status
+        return "Not Dispatched"
+
+    def get_verified_by_name(self, obj) -> str:
+        if obj.verified_by:
+            return obj.verified_by.get_full_name() or obj.verified_by.username
+        return ""
+
 

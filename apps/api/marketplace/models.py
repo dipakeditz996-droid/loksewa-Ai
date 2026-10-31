@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from django.conf import settings
 # pyrefly: ignore [missing-import]
 from django.db import models, transaction
 # pyrefly: ignore [missing-import]
@@ -925,3 +926,325 @@ class SellerPayout(models.Model):
 
     def __str__(self):
         return f"Payout #{self.id} for {self.seller.username} - {self.status}"
+
+
+# ---------------------------------------------------------------------------
+# Nepal Can Move (NCM) Admin Configuration & COD Remittance Management
+# ---------------------------------------------------------------------------
+
+class NCMConfiguration(models.Model):
+    """
+    Singleton configuration model for Nepal Can Move (NCM) courier integration.
+    Allows administrators to configure integration toggles, default origin branch,
+    live rates, fallback delivery rules, auto-sync, and connection diagnostics
+    dynamically without redeploying.
+    Deployment-level credentials default to Render environment variables.
+    """
+    ENVIRONMENT_CHOICES = (
+        ('demo', 'Demo / Sandbox'),
+        ('production', 'Production (Live)'),
+    )
+
+    is_enabled = models.BooleanField(
+        default=True,
+        help_text="Master toggle to enable or disable NCM courier integration."
+    )
+    environment = models.CharField(
+        max_length=20,
+        choices=ENVIRONMENT_CHOICES,
+        default='demo',
+        help_text="Active NCM API environment."
+    )
+    custom_base_url = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional custom API base URL override. If blank, standard demo/production URLs are used."
+    )
+    custom_api_token = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional API token override. If blank, settings.NCM_API_TOKEN is used."
+    )
+    default_origin_branch = models.CharField(
+        max_length=100,
+        default='Kathmandu',
+        help_text="Default dispatch origin hub branch name (e.g. Kathmandu)."
+    )
+    live_rates_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable real-time dynamic shipping rate calculation via NCM API."
+    )
+    fallback_rules_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable fallback to local delivery fee rules if NCM API is temporarily unavailable."
+    )
+    auto_sync_enabled = models.BooleanField(
+        default=True,
+        help_text="Enable automated tracking status synchronization."
+    )
+    webhook_enabled = models.BooleanField(
+        default=True,
+        help_text="Allow incoming webhook status updates from NCM."
+    )
+    webhook_registered = models.BooleanField(
+        default=False,
+        help_text="Indicates whether the webhook URL is registered with NCM."
+    )
+
+    # Diagnostics and Health tracking
+    connection_status = models.CharField(
+        max_length=50,
+        default='untested',
+        help_text="Current connection health: connected, error, or untested."
+    )
+    last_connection_tested_at = models.DateTimeField(null=True, blank=True)
+    last_connection_latency_ms = models.IntegerField(null=True, blank=True)
+    last_connection_error = models.TextField(blank=True)
+
+    # Sync and Webhook telemetry
+    last_sync_at = models.DateTimeField(null=True, blank=True)
+    last_sync_status = models.CharField(max_length=50, blank=True)
+    last_webhook_received_at = models.DateTimeField(null=True, blank=True)
+    last_webhook_event = models.CharField(max_length=100, blank=True)
+    last_webhook_error = models.TextField(blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ncm_config_updates'
+    )
+
+    class Meta:
+        verbose_name = "Nepal Can Move Configuration"
+        verbose_name_plural = "Nepal Can Move Configuration"
+
+    def __str__(self):
+        return f"NCM Configuration ({self.environment}) - {'Enabled' if self.is_enabled else 'Disabled'}"
+
+    @classmethod
+    def get_settings(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def get_effective_base_url(self):
+        if self.custom_base_url:
+            url = self.custom_base_url.strip()
+        elif getattr(settings, 'NCM_BASE_URL', ''):
+            url = getattr(settings, 'NCM_BASE_URL', '').strip()
+        elif self.environment == 'production':
+            url = 'https://portal.nepalcanmove.com/api/'
+        else:
+            url = 'https://demo.nepalcanmove.com/api/'
+        if not url.endswith('/'):
+            url += '/'
+        return url
+
+    def get_effective_token(self):
+        if self.custom_api_token:
+            return self.custom_api_token.strip()
+        return getattr(settings, 'NCM_API_TOKEN', '').strip()
+
+    def get_masked_token(self):
+        token = self.get_effective_token()
+        if not token:
+            return ''
+        if len(token) <= 8:
+            return '****'
+        return f"{token[:4]}****{token[-4:]}"
+
+    def get_token_source(self):
+        if self.custom_api_token:
+            return 'database'
+        if getattr(settings, 'NCM_API_TOKEN', ''):
+            return 'environment'
+        return 'not_configured'
+
+
+class NCMWebhookEvent(models.Model):
+    """
+    Audit log of webhook payloads received from Nepal Can Move.
+    Provides diagnostic history and verification traces.
+    """
+    received_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    ip_address = models.CharField(max_length=50, blank=True)
+    event_type = models.CharField(max_length=100, blank=True)
+    ncm_order_id = models.CharField(max_length=100, blank=True, db_index=True)
+    tracking_id = models.CharField(max_length=100, blank=True, db_index=True)
+    payload = models.JSONField(default=dict, blank=True)
+    is_success = models.BooleanField(default=True)
+    status_code = models.IntegerField(default=200)
+    error_message = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-received_at']
+
+    def __str__(self):
+        return f"Webhook {self.event_type} - {self.ncm_order_id} at {self.received_at}"
+
+
+class CourierSyncLog(models.Model):
+    """
+    Audit log of courier tracking synchronization runs.
+    """
+    synced_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    synced_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    trigger_type = models.CharField(max_length=50, default='manual')  # manual, celery_beat, cron
+    shipments_checked = models.PositiveIntegerField(default=0)
+    shipments_updated = models.PositiveIntegerField(default=0)
+    errors_count = models.PositiveIntegerField(default=0)
+    error_details = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, default='SUCCESS')  # SUCCESS, PARTIAL, FAILED
+
+    class Meta:
+        ordering = ['-synced_at']
+
+    def __str__(self):
+        return f"Sync ({self.trigger_type}) at {self.synced_at} - {self.status}"
+
+
+class CODRemittance(models.Model):
+    """
+    Financial remittance record for Cash on Delivery (COD) courier shipments.
+    Ensures safe, verified settlement of the remaining 85% COD balance collected by NCM.
+
+    STRICT BUSINESS & ACCOUNTING RULES:
+    1. A delivered NCM shipment does NOT mark an order as PAID.
+    2. An order is only settled when an authorized administrator verifies actual courier deposit.
+    3. OneToOneField prevents duplicate remittance records per order.
+    4. Settlement transitions order.payment_status to PAID and cod_remaining_balance to 0.
+    """
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending Courier Remittance'),
+        ('VERIFIED', 'Remittance Verified & Settled'),
+        ('DISCREPANCY', 'Amount Discrepancy Flagged'),
+        ('REJECTED', 'Remittance Rejected'),
+    )
+
+    order = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='cod_remittance',
+        help_text="Marketplace order for which COD was collected."
+    )
+    courier_shipment = models.ForeignKey(
+        CourierShipment,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cod_remittances',
+        help_text="Associated NCM courier shipment."
+    )
+    expected_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Expected COD amount to be collected (Order.cod_remaining_balance)."
+    )
+    courier_reported_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Amount courier claims to have collected."
+    )
+    remitted_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Actual net funds deposited/remitted to bank account."
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='PENDING',
+        db_index=True
+    )
+    reference_number = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Courier deposit slip / bank reference / statement voucher number."
+    )
+    notes = models.TextField(blank=True)
+    discrepancy_reason = models.TextField(blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='verified_cod_remittances'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"COD Remittance for Order #{self.order_id} - {self.status} (NPR {self.expected_amount})"
+
+    def verify_and_settle(self, verified_by, remitted_amount=None, reference_number='', notes=''):
+        """
+        Safely records courier remittance, verifies payment, and marks order as fully PAID.
+        Prevents duplicate verification.
+        """
+        from rest_framework.exceptions import ValidationError as DRFValidationError
+        with transaction.atomic():
+            remittance = CODRemittance.objects.select_for_update().get(pk=self.pk)
+            if remittance.status == 'VERIFIED':
+                raise DRFValidationError("This COD remittance has already been verified and settled.")
+
+            order = Order.objects.select_for_update().get(pk=remittance.order_id)
+            if not order.is_cod:
+                raise DRFValidationError("Order is not a Cash on Delivery (COD) order.")
+
+            actual_remitted = Decimal(str(remitted_amount if remitted_amount is not None else remittance.expected_amount))
+            if actual_remitted < 0:
+                raise DRFValidationError("Remitted amount cannot be negative.")
+
+            remittance.remitted_amount = actual_remitted
+            remittance.reference_number = (reference_number or '').strip()
+            remittance.notes = (notes or '').strip()
+            remittance.status = 'VERIFIED'
+            remittance.verified_by = verified_by
+            remittance.verified_at = timezone.now()
+            remittance.save()
+
+            # Settle remaining COD balance on order
+            old_payment_status = order.payment_status
+            order.cod_remaining_balance = Decimal('0.00')
+            order.payment_status = 'PAID'
+            order.save(update_fields=['cod_remaining_balance', 'payment_status', 'updated_at'])
+
+            OrderStatusHistory.objects.create(
+                order=order,
+                previous_status=order.status,
+                new_status=order.status,
+                changed_by=verified_by,
+                note=f"COD Remittance verified (NPR {actual_remitted}, Ref: {remittance.reference_number or 'N/A'}). Payment status transitioned from {old_payment_status} to PAID.",
+            )
+
+            # Audit log
+            try:
+                from administration.models import AuditLog
+                AuditLog.objects.create(
+                    actor=verified_by,
+                    action='VERIFY_COD_REMITTANCE',
+                    entity_type='Order',
+                    entity_id=str(order.id),
+                    details={
+                        'remittance_id': remittance.id,
+                        'expected_amount': float(remittance.expected_amount),
+                        'remitted_amount': float(actual_remitted),
+                        'reference_number': remittance.reference_number,
+                    }
+                )
+            except Exception:
+                pass
+
+            self.refresh_from_db()
+            return remittance
+

@@ -307,6 +307,118 @@ export interface CourierShipment {
   updated_at: string;
 }
 
+export interface NCMConfiguration {
+  id: number;
+  is_enabled: boolean;
+  environment: "demo" | "production";
+  custom_base_url: string;
+  effective_base_url: string;
+  masked_token: string;
+  token_source: "database" | "environment" | "not_configured";
+  has_token: boolean;
+  new_api_token?: string;
+  default_origin_branch: string;
+  live_rates_enabled: boolean;
+  fallback_rules_enabled: boolean;
+  auto_sync_enabled: boolean;
+  webhook_enabled: boolean;
+  webhook_registered: boolean;
+  connection_status: "connected" | "error" | "untested";
+  last_connection_tested_at: string | null;
+  last_connection_latency_ms: number | null;
+  last_connection_error: string;
+  last_sync_at: string | null;
+  last_sync_status: string;
+  last_webhook_received_at: string | null;
+  last_webhook_event: string;
+  last_webhook_error: string;
+  updated_at: string;
+  updated_by_name: string;
+  render_env_status?: {
+    token_in_env: boolean;
+    token_masked: string;
+    webhook_secret_in_env: boolean;
+    webhook_secret_status: string;
+  };
+  webhook_endpoint_url?: string;
+  fallback_pricing_source?: string;
+}
+
+export interface NCMWebhookEvent {
+  id: number;
+  received_at: string;
+  ip_address: string;
+  event_type: string;
+  ncm_order_id: string;
+  tracking_id: string;
+  payload: any;
+  is_success: boolean;
+  status_code: number;
+  error_message: string;
+}
+
+export interface CourierSyncLog {
+  id: number;
+  synced_at: string;
+  synced_by_username: string | null;
+  trigger_type: string;
+  shipments_checked: number;
+  shipments_updated: number;
+  errors_count: number;
+  error_details: any[];
+  status: "SUCCESS" | "PARTIAL" | "FAILED";
+}
+
+export interface CODRemittance {
+  id: number;
+  order_id: number;
+  customer_name: string;
+  customer_phone: string;
+  courier_tracking_id: string;
+  courier_status: string;
+  order_status: string;
+  order_payment_status: string;
+  order_total: string;
+  advance_paid: string;
+  remaining_balance: string;
+  expected_amount: string;
+  courier_reported_amount: string | null;
+  remitted_amount: string | null;
+  status: "PENDING" | "VERIFIED" | "DISCREPANCY" | "REJECTED";
+  reference_number: string;
+  notes: string;
+  discrepancy_reason: string;
+  verified_at: string | null;
+  verified_by_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CourierOverviewData {
+  metrics: {
+    total_shipments: number;
+    pending_pickup: number;
+    in_transit: number;
+    out_for_delivery: number;
+    delivered: number;
+    returned: number;
+    failed_sync_count: number;
+    remittance_pending_count: number;
+    remittance_pending_amount: number;
+    remittance_verified_count: number;
+    remittance_verified_amount: number;
+    remittance_discrepancy_count: number;
+  };
+  configuration: Partial<NCMConfiguration>;
+  scheduler: {
+    render_cron_job_command: string;
+    celery_worker_present: boolean;
+    auto_sync_active: boolean;
+    last_sync: CourierSyncLog | null;
+  };
+  recent_shipments: CourierShipment[];
+}
+
 export interface Order {
   id: number;
   student: number;
@@ -1245,6 +1357,163 @@ export const marketplaceApi = {
       method: "POST",
       body: JSON.stringify({ status, admin_note, rejection_reason, transaction_reference }),
     });
+  },
+
+  // -------------------------------------------------------------------------
+  // Admin — Nepal Can Move & Courier Operations (Phase 10)
+  // -------------------------------------------------------------------------
+
+  adminGetCourierSettings: async () => {
+    return apiClient<NCMConfiguration>("/marketplace/admin/courier/settings/");
+  },
+
+  adminUpdateCourierSettings: async (data: Partial<NCMConfiguration> & { confirm_production?: boolean }) => {
+    return apiClient<NCMConfiguration>("/marketplace/admin/courier/settings/", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  adminTestNCMConnection: async () => {
+    return apiClient<{
+      success: boolean;
+      latency_ms: number | null;
+      branch_count?: number;
+      environment: string;
+      error?: string;
+      base_url?: string;
+      default_origin_branch?: string;
+    }>("/marketplace/admin/courier/test-connection/", {
+      method: "POST",
+    });
+  },
+
+  adminGetCourierBranches: async () => {
+    return apiClient<{ count: number; branches: NCMBranch[]; cached: boolean }>(
+      "/marketplace/admin/courier/branches/"
+    );
+  },
+
+  adminRefreshCourierBranches: async () => {
+    return apiClient<{ count: number; branches: NCMBranch[]; refreshed: boolean; cached: boolean }>(
+      "/marketplace/admin/courier/branches/",
+      { method: "POST" }
+    );
+  },
+
+  adminGetNCMWebhookManagement: async () => {
+    return apiClient<{
+      webhook_endpoint_url: string;
+      webhook_secret_configured: boolean;
+      webhook_secret_status: string;
+      webhook_enabled: boolean;
+      webhook_registered: boolean;
+      last_webhook_received_at: string | null;
+      last_webhook_event: string;
+      last_webhook_error: string;
+      recent_events: NCMWebhookEvent[];
+    }>("/marketplace/admin/courier/webhook-management/");
+  },
+
+  adminActionNCMWebhook: async (action: "toggle_enabled" | "toggle_registered") => {
+    return apiClient<any>("/marketplace/admin/courier/webhook-management/", {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+  },
+
+  adminGetCourierOverview: async () => {
+    return apiClient<CourierOverviewData>("/marketplace/admin/courier/overview/");
+  },
+
+  adminGetCourierShipments: async (params?: {
+    status?: string;
+    destination_branch?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.append("status", params.status);
+    if (params?.destination_branch) q.append("destination_branch", params.destination_branch);
+    if (params?.search) q.append("search", params.search);
+    if (params?.page) q.append("page", String(params.page));
+    if (params?.page_size) q.append("page_size", String(params.page_size));
+    const qs = q.toString() ? `?${q.toString()}` : "";
+    return apiClient<{ count?: number; results?: CourierShipment[] } | CourierShipment[]>(
+      `/marketplace/admin/courier/shipments/${qs}`
+    );
+  },
+
+  adminGetCourierShipmentDetail: async (id: number) => {
+    return apiClient<CourierShipment>(`/marketplace/admin/courier/shipments/${id}/`);
+  },
+
+  adminSyncShipment: async (id: number) => {
+    return apiClient<CourierShipment>(`/marketplace/admin/courier/shipments/${id}/sync/`, {
+      method: "POST",
+    });
+  },
+
+  adminTriggerCourierSync: async (limit: number = 50) => {
+    return apiClient<{
+      success: boolean;
+      status: string;
+      shipments_checked: number;
+      shipments_updated: number;
+      errors_count: number;
+      log_id: number;
+      timestamp: string;
+    }>("/marketplace/admin/courier/sync/", {
+      method: "POST",
+      body: JSON.stringify({ limit }),
+    });
+  },
+
+  adminGetCourierSyncLogs: async () => {
+    return apiClient<CourierSyncLog[]>("/marketplace/admin/courier/sync/");
+  },
+
+  adminGetCODRemittances: async (params?: {
+    status?: string;
+    order_id?: number | string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.append("status", params.status);
+    if (params?.order_id) q.append("order_id", String(params.order_id));
+    if (params?.search) q.append("search", params.search);
+    if (params?.page) q.append("page", String(params.page));
+    if (params?.page_size) q.append("page_size", String(params.page_size));
+    const qs = q.toString() ? `?${q.toString()}` : "";
+    return apiClient<{ count?: number; results?: CODRemittance[] } | CODRemittance[]>(
+      `/marketplace/admin/courier/cod-remittance/${qs}`
+    );
+  },
+
+  adminVerifyCODRemittance: async (
+    id: number,
+    data: { remitted_amount?: number | string; reference_number?: string; notes?: string }
+  ) => {
+    return apiClient<CODRemittance>(`/marketplace/admin/courier/cod-remittance/${id}/verify/`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  adminFlagCODRemittanceDiscrepancy: async (
+    id: number,
+    data: { discrepancy_reason: string; courier_reported_amount?: number | string; notes?: string }
+  ) => {
+    return apiClient<CODRemittance>(
+      `/marketplace/admin/courier/cod-remittance/${id}/mark-discrepancy/`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
   },
 
 };

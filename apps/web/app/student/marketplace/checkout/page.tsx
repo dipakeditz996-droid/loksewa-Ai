@@ -351,7 +351,7 @@ export default function CheckoutPage() {
 
     if (useExistingInfo) {
       const required: (keyof DeliveryAddress)[] = [
-        'full_name', 'phone_number', 'province', 'district', 'municipality', 'ward_number', 'tole_area'
+        'full_name', 'phone_number', 'province', 'district', 'municipality'
       ];
       const missing = required.filter(f => !String(existingInfoForm[f] || '').trim());
       if (missing.length > 0) {
@@ -366,8 +366,8 @@ export default function CheckoutPage() {
           shipping_address: [
             existingInfoForm.full_name,
             existingInfoForm.phone_number,
-            `${existingInfoForm.province || ''}, ${existingInfoForm.district || ''}, ${existingInfoForm.municipality || ''}-${existingInfoForm.ward_number || ''}`,
-            existingInfoForm.tole_area,
+            `${existingInfoForm.province || ''}, ${existingInfoForm.district || ''}, ${existingInfoForm.municipality || ''}${existingInfoForm.ward_number ? `-${existingInfoForm.ward_number}` : ''}`,
+            existingInfoForm.tole_area || '',
             existingInfoForm.street_landmark ? `Landmark: ${existingInfoForm.street_landmark}` : '',
             existingInfoForm.delivery_note ? `Note: ${existingInfoForm.delivery_note}` : ''
           ].filter(Boolean).join('\n'),
@@ -607,11 +607,11 @@ export default function CheckoutPage() {
                         </div>
                       ) : (
                         <>
-                          {missingProfileFields.length > 0 && (
+                          {missingProfileFields.filter(f => f !== 'ward_number' && f !== 'tole_area').length > 0 && (
                             <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5">
                               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                               <div>
-                                <span className="font-semibold">Review your delivery address:</span> We prefilled details from your profile. Please complete the missing delivery fields (e.g. Ward Number and Tole/Area) below.
+                                <span className="font-semibold">Review your delivery address:</span> We prefilled details from your profile. Please complete any missing delivery fields below.
                               </div>
                             </div>
                           )}
@@ -667,26 +667,6 @@ export default function CheckoutPage() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                            <div className="space-y-1">
-                              <Label className="text-xs font-medium">Ward Number <span className="text-red-500">*</span></Label>
-                              <Input
-                                value={existingInfoForm.ward_number || ""}
-                                onChange={(e) => handleExistingInfoFieldChange("ward_number", e.target.value)}
-                                placeholder="e.g. 10"
-                                className={!existingInfoForm.ward_number?.trim() ? "border-amber-400" : ""}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs font-medium">Tole / Area / Street <span className="text-red-500">*</span></Label>
-                              <Input
-                                value={existingInfoForm.tole_area || ""}
-                                onChange={(e) => handleExistingInfoFieldChange("tole_area", e.target.value)}
-                                placeholder="e.g. Baneshwor"
-                                className={!existingInfoForm.tole_area?.trim() ? "border-amber-400" : ""}
-                              />
-                            </div>
-                          </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                             <div className="space-y-1">
@@ -781,19 +761,9 @@ export default function CheckoutPage() {
                               <Input required value={newAddress.district} onChange={e => setNewAddress({...newAddress, district: e.target.value})} />
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label>Municipality/VDC *</Label>
-                              <Input required value={newAddress.municipality} onChange={e => setNewAddress({...newAddress, municipality: e.target.value})} />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Ward No. *</Label>
-                              <Input required value={newAddress.ward_number} onChange={e => setNewAddress({...newAddress, ward_number: e.target.value})} />
-                            </div>
-                          </div>
                           <div className="space-y-2">
-                            <Label>Tole/Area *</Label>
-                            <Input required value={newAddress.tole_area} onChange={e => setNewAddress({...newAddress, tole_area: e.target.value})} />
+                            <Label>Municipality/VDC *</Label>
+                            <Input required value={newAddress.municipality} onChange={e => setNewAddress({...newAddress, municipality: e.target.value})} />
                           </div>
                           <div className="space-y-2">
                             <Label>Street/Landmark (Optional)</Label>

@@ -2509,10 +2509,6 @@ class StudentDeliveryAddressViewSet(viewsets.ModelViewSet):
             missing_fields.append('district')
         if not municipality:
             missing_fields.append('municipality')
-        if not ward_number:
-            missing_fields.append('ward_number')
-        if not tole_area:
-            missing_fields.append('tole_area')
 
         return Response({
             'full_name': full_name,
@@ -3245,7 +3241,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             contact_number_str = delivery_address.phone_number
 
         elif delivery_address_data and isinstance(delivery_address_data, dict):
-            required_fields = ['full_name', 'phone_number', 'province', 'district', 'municipality', 'ward_number', 'tole_area']
+            required_fields = ['full_name', 'phone_number', 'province', 'district', 'municipality']
             missing = [f for f in required_fields if not str(delivery_address_data.get(f) or '').strip()]
             if missing:
                 return Response(
@@ -3262,8 +3258,8 @@ class OrderViewSet(viewsets.ModelViewSet):
                     province=delivery_address_data['province'].strip(),
                     district=delivery_address_data['district'].strip(),
                     municipality=delivery_address_data['municipality'].strip(),
-                    ward_number=str(delivery_address_data['ward_number']).strip(),
-                    tole_area=delivery_address_data['tole_area'].strip(),
+                    ward_number=str(delivery_address_data.get('ward_number') or '').strip(),
+                    tole_area=str(delivery_address_data.get('tole_area') or '').strip(),
                     street_landmark=(delivery_address_data.get('street_landmark') or '').strip(),
                     delivery_note=(delivery_address_data.get('delivery_note') or '').strip(),
                     is_default=bool(request.data.get('is_default', False))
@@ -3281,16 +3277,18 @@ class OrderViewSet(viewsets.ModelViewSet):
                 'province': delivery_address_data['province'].strip(),
                 'district': delivery_address_data['district'].strip(),
                 'municipality': delivery_address_data['municipality'].strip(),
-                'ward_number': str(delivery_address_data['ward_number']).strip(),
-                'tole_area': delivery_address_data['tole_area'].strip(),
+                'ward_number': str(delivery_address_data.get('ward_number') or '').strip(),
+                'tole_area': str(delivery_address_data.get('tole_area') or '').strip(),
                 'street_landmark': (delivery_address_data.get('street_landmark') or '').strip(),
                 'delivery_note': (delivery_address_data.get('delivery_note') or '').strip(),
             }
+            ward_str = f"-{shipping_address_snapshot['ward_number']}" if shipping_address_snapshot['ward_number'] else ""
+            tole_str = f"{shipping_address_snapshot['tole_area']}\n" if shipping_address_snapshot['tole_area'] else ""
             shipping_address_str = (
                 f"{shipping_address_snapshot['full_name']}\n{shipping_address_snapshot['phone_number']}\n"
                 f"{shipping_address_snapshot['province']}, {shipping_address_snapshot['district']}, "
-                f"{shipping_address_snapshot['municipality']}-{shipping_address_snapshot['ward_number']}\n"
-                f"{shipping_address_snapshot['tole_area']}"
+                f"{shipping_address_snapshot['municipality']}{ward_str}\n"
+                f"{tole_str}".rstrip()
             )
             if shipping_address_snapshot['street_landmark']:
                 shipping_address_str += f"\nLandmark: {shipping_address_snapshot['street_landmark']}"

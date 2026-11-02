@@ -930,7 +930,6 @@ export const marketplaceApi = {
       if (!province) missing.push("province");
       if (!district) missing.push("district");
       if (!municipality) missing.push("municipality");
-      missing.push("ward_number", "tole_area");
 
       return {
         full_name: fullName,
@@ -971,7 +970,6 @@ export const marketplaceApi = {
           if (!province) missing.push("province");
           if (!district) missing.push("district");
           if (!municipality) missing.push("municipality");
-          missing.push("ward_number", "tole_area");
 
           return {
             full_name: fullName,
@@ -1002,7 +1000,7 @@ export const marketplaceApi = {
       tole_area: "",
       street_landmark: "",
       delivery_note: "",
-      missing_fields: ["full_name", "phone_number", "province", "district", "municipality", "ward_number", "tole_area"],
+      missing_fields: ["full_name", "phone_number", "province", "district", "municipality"],
       is_profile_complete: false,
     };
   },

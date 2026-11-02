@@ -156,10 +156,10 @@ class CheckoutAndDeliveryFeeTests(APITestCase):
         self.assertEqual(data['municipality'], 'Kathmandu Metropolitan')
         # Province automatically resolved from district
         self.assertEqual(data['province'], 'Bagmati Province')
-        # Missing fields should flag ward_number and tole_area
-        self.assertIn('ward_number', data['missing_fields'])
-        self.assertIn('tole_area', data['missing_fields'])
-        self.assertFalse(data['is_profile_complete'])
+        # Missing fields should not include ward_number or tole_area
+        self.assertNotIn('ward_number', data['missing_fields'])
+        self.assertNotIn('tole_area', data['missing_fields'])
+        self.assertTrue(data['is_profile_complete'])
 
     # 4. Student isolation: Student 1 cannot get Student 2's profile info
     def test_student_isolation_profile_and_addresses(self):

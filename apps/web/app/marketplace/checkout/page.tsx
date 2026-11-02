@@ -287,7 +287,7 @@ export default function CheckoutPage() {
                     <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
                       <div>
-                        Profile partially prefilled. Please review and ensure your street/ward details are complete below.
+                        Profile partially prefilled. Please review and ensure your delivery details are complete below.
                       </div>
                     </div>
                   )}

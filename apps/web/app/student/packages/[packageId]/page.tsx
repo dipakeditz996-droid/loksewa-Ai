@@ -6,3 +6,4 @@ export default function PackageDetailPage({ params }: { params: Promise<{ packag
   const mappedParams = params.then((p) => ({ planId: p.packageId }));
   return <StudentPlanDetailPage params={mappedParams} />;
 }
+

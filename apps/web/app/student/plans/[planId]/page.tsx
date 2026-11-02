@@ -77,3 +77,4 @@ export default function StudentPlanDetailPage({ params }: PageProps) {
     </div>
   );
 }
+

@@ -3,19 +3,22 @@
 import { useState, useEffect } from "react";
 import { 
   Check, Zap, AlertCircle, GraduationCap, ArrowRight, Layers, RefreshCw, 
-  Sparkles, FileText, Bot, HelpCircle, Table as TableIcon, LayoutGrid, X
+  Sparkles, FileText, Bot, HelpCircle, Table as TableIcon, LayoutGrid, X, Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { subscriptionsApi, SubscriptionPlan, AvailablePlansResponse } from "@/lib/api/subscriptions";
+import { StudentPackageDetailView } from "@/components/packages/StudentPackageDetailView";
 
 export default function StudentPlansPage() {
   const router = useRouter();
   const [data, setData] = useState<AvailablePlansResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showComparison, setShowComparison] = useState(false);
+  const [detailPlan, setDetailPlan] = useState<SubscriptionPlan | null>(null);
 
   useEffect(() => {
     fetchPlans();
@@ -316,13 +319,24 @@ export default function StudentPlansPage() {
                   <td className="py-4 px-6 font-bold text-foreground">Action</td>
                   {plans.map((p) => (
                     <td key={p.id} className="py-4 px-6 text-center">
-                      <Button
-                        size="sm"
-                        onClick={() => router.push(`/student/plans/${p.id}/checkout`)}
-                        className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]/90 font-bold rounded-xl px-5"
-                      >
-                        Choose Plan
-                      </Button>
+                      <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDetailPlan(p)}
+                          className="h-8 rounded-xl px-3 text-xs font-semibold gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Details</span>
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => router.push(`/student/plans/${p.id}/checkout`)}
+                          className="h-8 bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]/90 font-bold rounded-xl px-4 text-xs"
+                        >
+                          Choose Plan
+                        </Button>
+                      </div>
                     </td>
                   ))}
                 </tr>
@@ -497,11 +511,11 @@ export default function StudentPlansPage() {
 
                   </div>
 
-                  {/* Action Button */}
-                  <div className="pt-4">
+                  {/* Action Buttons */}
+                  <div className="pt-4 space-y-2">
                     <Button
                       onClick={() => router.push(`/student/plans/${plan.id}/checkout`)}
-                      className={`w-full h-12 text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
+                      className={`w-full h-11 text-sm font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
                         isHighlighted
                           ? "bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118]"
                           : "bg-primary text-primary-foreground hover:bg-primary/90"
@@ -510,6 +524,19 @@ export default function StudentPlansPage() {
                       <span>Select Package</span>
                       <ArrowRight className="w-4 h-4" />
                     </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setDetailPlan(plan)}
+                      className={`w-full h-9 text-xs font-semibold rounded-xl border transition-colors flex items-center justify-center gap-1.5 ${
+                        isHighlighted
+                          ? "border-white/20 bg-white/5 text-white hover:bg-white/10"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>View Full Package Details</span>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -517,6 +544,23 @@ export default function StudentPlansPage() {
           })}
         </div>
       )}
+
+      {/* Complete Student Package Details Modal Dialog */}
+      <Dialog open={Boolean(detailPlan)} onOpenChange={(open) => !open && setDetailPlan(null)}>
+        <DialogContent className="max-w-4xl p-0 bg-transparent border-none shadow-none overflow-y-auto max-h-[92vh]">
+          {detailPlan && (
+            <StudentPackageDetailView
+              plan={detailPlan}
+              onSelect={() => {
+                const id = detailPlan.id;
+                setDetailPlan(null);
+                router.push(`/student/plans/${id}/checkout`);
+              }}
+              onClose={() => setDetailPlan(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

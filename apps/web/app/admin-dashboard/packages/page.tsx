@@ -57,10 +57,13 @@ import {
   SubscriptionPlanInput,
   PackageSubscriber,
   PackageUsageStats,
+  PackageExamAccessConfig,
 } from "@/lib/api/subscriptions";
 import { publicApi, PublicCourse } from "@/lib/api/public-api";
 import { adminSyllabusApi, AdminExamCategory, AdminPosition } from "@/lib/api/admin-syllabus";
 import { adminExamApi } from "@/lib/api/admin-exams";
+import { AdminExamAccessCard } from "@/components/packages/AdminExamAccessCard";
+import { StudentPackageDetailView } from "@/components/packages/StudentPackageDetailView";
 
 export interface PlatformFeatureItem {
   key: string;
@@ -127,6 +130,179 @@ const DEFAULT_FEATURE_LIMITS: Record<string, { enabled: boolean; quota: number; 
   ])
 );
 
+export const DEFAULT_EXAM_ACCESS_CONFIGS: PackageExamAccessConfig[] = [
+  {
+    exam_type: "mock",
+    exam_type_label: "Mock Exams",
+    description: "Full-length simulated mock tests designed to replicate official PSC conditions.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 10,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "live",
+    exam_type_label: "Live Scheduled Exams",
+    description: "Time-bound examinations held synchronously on specific dates and countdown windows.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 5,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "practice",
+    exam_type_label: "Practice Exams",
+    description: "Untimed or flexible practice tests designed for self-paced learning and revision.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 15,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "model",
+    exam_type_label: "Model Exams",
+    description: "Curated model test papers based on the official Loksewa syllabus and mark scheme.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 10,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "past_year",
+    exam_type_label: "Past Question Papers",
+    description: "Actual historical questions and sets from previous Loksewa PSC examinations.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 10,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "subject",
+    exam_type_label: "Subjectwise Tests",
+    description: "Focused assessments targeted to individual syllabus subjects.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 20,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "topicwise",
+    exam_type_label: "Topicwise Tests",
+    description: "Granular micro-tests covering specific syllabus chapters and topics.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: -1,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+  {
+    exam_type: "subjective",
+    exam_type_label: "Subjective Exams",
+    description: "Written and descriptive answer examinations requiring manual or AI paper checking.",
+    is_enabled: true,
+    access_mode: "ANY",
+    total_attempts: 5,
+    attempts_per_exam: null,
+    selected_exam_ids: [],
+  },
+];
+
+export function normalizeExamAccessConfigs(plan?: Partial<SubscriptionPlan>): PackageExamAccessConfig[] {
+  const existingMap = new Map<string, PackageExamAccessConfig>();
+  if (plan?.exam_access_configs && Array.isArray(plan.exam_access_configs)) {
+    for (const c of plan.exam_access_configs) {
+      existingMap.set(c.exam_type, c);
+    }
+  }
+
+  const legacyQuotas = plan?.exam_quotas || {};
+  const freeMockIds = plan?.free_mock_exams || [];
+  const freeMockAttempts = plan?.free_mock_attempts ?? 0;
+
+  return DEFAULT_EXAM_ACCESS_CONFIGS.map((def) => {
+    const existing = existingMap.get(def.exam_type);
+    if (existing) {
+      return {
+        ...def,
+        ...existing,
+        selected_exam_ids: existing.selected_exam_ids || existing.selected_exams?.map((e: any) => e.id) || [],
+      };
+    }
+
+    // Synthesize from legacy fields
+    let is_enabled = def.is_enabled;
+    let total_attempts = def.total_attempts;
+    let access_mode: "ANY" | "SPECIFIC" = "ANY";
+    let selected_exam_ids: number[] = [];
+
+    if (def.exam_type === "mock" && freeMockIds.length > 0) {
+      access_mode = "SPECIFIC";
+      selected_exam_ids = freeMockIds;
+      total_attempts = freeMockAttempts !== 0 ? freeMockAttempts : def.total_attempts;
+    } else if (legacyQuotas && legacyQuotas[def.exam_type]) {
+      const q = legacyQuotas[def.exam_type];
+      if (q) {
+        is_enabled = q.enabled ?? true;
+        total_attempts = q.attempts ?? def.total_attempts;
+      }
+    }
+
+    return {
+      ...def,
+      is_enabled,
+      access_mode,
+      total_attempts,
+      selected_exam_ids,
+    };
+  });
+}
+
+export function synthesizePlanFromForm(formState: any, allExams: any[] = [], courses: any[] = []): SubscriptionPlan {
+  const courseMap = new Map(courses.map((c) => [c.id, c]));
+  const examMap = new Map(allExams.map((e) => [e.id, e]));
+
+  const configsWithObjs = (formState.exam_access_configs || DEFAULT_EXAM_ACCESS_CONFIGS).map((cfg: any) => {
+    const ids = cfg.selected_exam_ids || [];
+    const selected_exams = ids.map((id: number) => {
+      const found = examMap.get(id);
+      return found || { id, title: `Exam #${id}`, exam_type: cfg.exam_type };
+    });
+    return {
+      ...cfg,
+      selected_exams_count: ids.length,
+      selected_exams,
+    };
+  });
+
+  const targetCourse = formState.course ? courseMap.get(formState.course) : null;
+  const eligibleCoursesDetails = (formState.eligible_courses || []).map((id: number) => {
+    return courseMap.get(id) || { id, title: `Course #${id}` };
+  });
+
+  return {
+    ...formState,
+    id: formState.id || 999999,
+    course_details: targetCourse ? {
+      id: targetCourse.id,
+      title: targetCourse.title,
+      exam: targetCourse.exam_name || null,
+      level: targetCourse.level_name || null,
+      category: targetCourse.category_name || null,
+      hierarchy_path: targetCourse.hierarchy_path || targetCourse.title,
+    } : null,
+    eligible_courses_details: eligibleCoursesDetails,
+    exam_access_configs: configsWithObjs,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 const EMPTY_FORM: SubscriptionPlanInput = {
   name: "",
   slug: "",
@@ -154,6 +330,7 @@ const EMPTY_FORM: SubscriptionPlanInput = {
     live: { enabled: true, attempts: 2 },
     topicwise: { enabled: true, attempts: -1 },
   },
+  exam_access_configs: DEFAULT_EXAM_ACCESS_CONFIGS,
   free_mock_exams: [],
   free_mock_attempts: 0,
   notes_access_type: "COURSE_NOTES",
@@ -320,7 +497,7 @@ export default function AdminPackagesPage() {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, exam_access_configs: DEFAULT_EXAM_ACCESS_CONFIGS });
     setActiveTab("basic");
     setDialogOpen(true);
   };
@@ -347,6 +524,7 @@ export default function AdminPackagesPage() {
       eligible_courses: plan.eligible_courses || [],
       allowed_preparation_count: plan.allowed_preparation_count || 1,
       is_flexible: plan.is_flexible || false,
+      exam_access_configs: normalizeExamAccessConfigs(plan),
       exam_quotas: plan.exam_quotas || {
         past_year: { enabled: true, attempts: 10 },
         model: { enabled: true, attempts: 5 },
@@ -1402,139 +1580,41 @@ export default function AdminPackagesPage() {
               </div>
             )}
 
-            {/* TAB 4: EXAM QUOTAS & MOCKS */}
+            {/* TAB 4: UNIVERSAL EXAM ENTITLEMENTS & MOCKS */}
             {activeTab === "exams" && (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-500">
-                  Configure attempt allowances per examination category. Enter <strong>-1</strong> for Unlimited attempts.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { key: "model", label: "Model Mock Exams" },
-                    { key: "past_year", label: "Past Year Question Exams" },
-                    { key: "live", label: "Live Scheduled Exams" },
-                    { key: "topicwise", label: "Topicwise Tests" },
-                  ].map((cat) => {
-                    const quota = form.exam_quotas?.[cat.key] || { enabled: true, attempts: 5 };
-                    return (
-                      <div key={cat.key} className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/40 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-xs font-bold text-slate-800">{cat.label}</Label>
-                          <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={quota.enabled ?? true}
-                              onChange={(e) => {
-                                const nextQuotas = { ...form.exam_quotas };
-                                nextQuotas[cat.key] = { ...quota, enabled: e.target.checked };
-                                setForm({ ...form, exam_quotas: nextQuotas });
-                              }}
-                              className="rounded border-slate-300 text-[#0B2545]"
-                            />
-                            <span>Enabled</span>
-                          </label>
-                        </div>
-
-                        {quota.enabled && (
-                          <div className="flex items-center gap-2 pt-1">
-                            <Input
-                              type="number"
-                              value={quota.attempts}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                const nextQuotas = { ...form.exam_quotas };
-                                nextQuotas[cat.key] = { ...quota, attempts: isNaN(val) ? 0 : val };
-                                setForm({ ...form, exam_quotas: nextQuotas });
-                              }}
-                              className="h-8 text-xs font-semibold max-w-[120px]"
-                            />
-                            <span className="text-[11px] text-slate-400">
-                              {quota.attempts === -1 ? "(Unlimited)" : "attempts"}
-                            </span>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const nextQuotas = { ...form.exam_quotas };
-                                nextQuotas[cat.key] = { ...quota, attempts: -1 };
-                                setForm({ ...form, exam_quotas: nextQuotas });
-                              }}
-                              className="h-8 text-[11px] px-2 ml-auto"
-                            >
-                              Set Unlimited
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+              <div className="space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-blue-600" /> Universal Exam Access Configuration
+                    </h4>
+                    <p className="text-[11px] text-blue-800/80">
+                      Configure independent access modes (Any Available vs Specific Selected) and attempt allowances across all 8 examination categories.
+                    </p>
+                  </div>
+                  <Badge className="bg-[#0B2545] text-white text-xs font-semibold px-2.5 py-1">
+                    {(form.exam_access_configs || DEFAULT_EXAM_ACCESS_CONFIGS).filter((c) => c.is_enabled).length} of 8 Categories Enabled
+                  </Badge>
                 </div>
 
-                {/* Free Mock Tests Included */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-amber-50/30 space-y-3">
-                  <h4 className="font-semibold text-xs text-amber-900 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-amber-600" /> Free Mock Exam Allowance
-                  </h4>
-                  <p className="text-[11px] text-amber-800/80">
-                    Number of included mock exams that can be taken free of charge under this package (-1 for unlimited).
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <Input
-                      type="number"
-                      value={form.free_mock_attempts || 0}
-                      onChange={(e) => setForm({ ...form, free_mock_attempts: parseInt(e.target.value) || 0 })}
-                      className="h-8 text-xs max-w-[140px]"
+                {/* 8 Universal Exam Category Cards */}
+                <div className="space-y-3.5">
+                  {(form.exam_access_configs || DEFAULT_EXAM_ACCESS_CONFIGS).map((cfg: PackageExamAccessConfig) => (
+                    <AdminExamAccessCard
+                      key={cfg.exam_type}
+                      config={cfg}
+                      allExams={availableExams}
+                      onChange={(updated) => {
+                        const current = form.exam_access_configs || DEFAULT_EXAM_ACCESS_CONFIGS;
+                        const next = current.map((c) => (c.exam_type === updated.exam_type ? updated : c));
+                        setForm({ ...form, exam_access_configs: next });
+                      }}
                     />
-                    <span className="text-xs text-slate-500">free attempts included</span>
-                  </div>
-
-                  {/* Selective Free Mock Tests Picker */}
-                  <div className="pt-2 border-t border-amber-200/60 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs font-semibold text-amber-950">
-                        Designated Free Mock Tests (Optional):
-                      </Label>
-                      <span className="text-[10px] text-amber-800 font-medium">
-                        {(form.free_mock_exams?.length || 0) === 0 ? "All mock tests eligible" : `${form.free_mock_exams?.length} specific tests selected`}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-amber-700">
-                      Leave empty to allow students to take any published Mock Exam up to the quota limit. Or select specific Mock Exams to restrict free attempts.
-                    </p>
-                    <div className="max-h-36 overflow-y-auto border border-amber-200 rounded-lg p-2 space-y-1 bg-white">
-                      {availableExams.length === 0 ? (
-                        <span className="text-xs text-slate-400 p-1 block">No examinations found.</span>
-                      ) : (
-                        availableExams.map((exam: any) => {
-                          const isSelected = form.free_mock_exams?.includes(exam.id);
-                          return (
-                            <div
-                              key={exam.id}
-                              onClick={() => {
-                                const cur = form.free_mock_exams || [];
-                                const next = isSelected ? cur.filter((id: number) => id !== exam.id) : [...cur, exam.id];
-                                setForm({ ...form, free_mock_exams: next });
-                              }}
-                              className={`flex items-center justify-between p-2 rounded cursor-pointer text-xs transition-colors ${
-                                isSelected
-                                  ? "bg-amber-100 text-amber-950 font-semibold border border-amber-300"
-                                  : "hover:bg-slate-50 border border-transparent text-slate-700"
-                              }`}
-                            >
-                              <span className="truncate pr-2">{exam.title}</span>
-                              {isSelected && <Check className="w-3.5 h-3.5 text-amber-700 shrink-0" />}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
                 {/* Practice Questions Limit */}
-                <div className="p-4 rounded-xl border border-slate-200 space-y-2">
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-xs text-slate-800 flex items-center gap-1.5">
                       <Target className="w-4 h-4 text-[#0B2545]" /> Practice Questions Engine
@@ -1555,7 +1635,7 @@ export default function AdminPackagesPage() {
                         type="number"
                         value={form.practice_question_limit ?? -1}
                         onChange={(e) => setForm({ ...form, practice_question_limit: parseInt(e.target.value) || 0 })}
-                        className="h-8 text-xs max-w-[140px]"
+                        className="h-8 text-xs max-w-[140px] bg-white"
                       />
                       <span className="text-xs text-slate-500">
                         {form.practice_question_limit === -1 ? "(Unlimited Questions)" : "questions quota"}
@@ -1857,16 +1937,31 @@ export default function AdminPackagesPage() {
           </div>
 
           {/* Modal Footer */}
-          <DialogFooter className="px-6 py-3 border-t border-slate-200 bg-slate-50/70 shrink-0 flex items-center justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setDialogOpen(false)}
-              className="text-xs"
-            >
-              Cancel
-            </Button>
+          <DialogFooter className="px-6 py-3 border-t border-slate-200 bg-slate-50/70 shrink-0 flex items-center justify-between sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDialogOpen(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const synth = synthesizePlanFromForm(form, availableExams, courses);
+                  setPreviewPlan(synth);
+                }}
+                className="text-xs border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 font-medium"
+              >
+                <Eye className="w-3.5 h-3.5 text-slate-600" />
+                Preview Package Details
+              </Button>
+            </div>
             <Button
               type="button"
               size="sm"
@@ -2035,71 +2130,36 @@ export default function AdminPackagesPage() {
 
       {/* Student Package Preview Modal */}
       <Dialog open={Boolean(previewPlan)} onOpenChange={(open) => !open && setPreviewPlan(null)}>
-        <DialogContent className="max-w-md p-6 rounded-[24px] border border-border shadow-2xl bg-card">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
-              <Eye className="w-4 h-4 text-[#D4A72C]" /> Student Package Preview
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Live representation of how this package appears to students on the pricing &amp; plans page.
-            </DialogDescription>
-          </DialogHeader>
-
-          {previewPlan && (
-            <div className="bg-[#0F1822] text-white rounded-[22px] p-6 border-2 border-[#D4A72C] shadow-xl space-y-5 my-2">
-              <div className="flex items-center justify-between">
-                <Badge className="bg-[#D4A72C]/20 text-[#D4A72C] text-[10px] font-bold uppercase tracking-wider">
-                  {previewPlan.package_type} PACKAGE
-                </Badge>
-                <span className="text-xs text-white/70">
-                  {previewPlan.has_expiry !== false && previewPlan.duration ? `${previewPlan.duration} ${previewPlan.duration_unit}` : "Lifetime Quota"}
-                </span>
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-white">{previewPlan.name}</h3>
-                <p className="text-xs text-white/70 mt-1 line-clamp-2">
-                  {previewPlan.description || "Comprehensive Loksewa preparation with dedicated study features."}
-                </p>
-              </div>
-              <div className="py-2 border-y border-white/10 flex items-baseline gap-2">
-                <span className="text-3xl font-black text-white">Rs. {previewPlan.price}</span>
-                {previewPlan.is_default_free && (
-                  <span className="text-xs font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
-                    Default Free Plan
-                  </span>
-                )}
-              </div>
-              <div className="space-y-2 text-xs text-white/90">
-                <div className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-[#D4A72C]" />
-                  <span>Model Mock Exams: <strong>{previewPlan.exam_quotas?.model?.attempts === -1 ? "Unlimited" : previewPlan.exam_quotas?.model?.attempts ?? 0} attempts</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Free Mock Tests: <strong>{previewPlan.free_mock_attempts ?? 0} free attempts</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-purple-400" />
-                  <span>AI Tutor: <strong>{previewPlan.ai_tutor_enabled ? `${previewPlan.ai_credits ?? 0} credits` : "Disabled"}</strong></span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Check className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Study Notes: <strong>{previewPlan.notes_access_type}</strong></span>
-                </div>
-              </div>
+        <DialogContent className="max-w-4xl w-[94vw] max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white text-slate-900 shadow-2xl rounded-2xl border border-slate-200">
+          <DialogHeader className="px-6 py-3.5 border-b border-slate-200 bg-slate-50/90 flex flex-row items-center justify-between space-y-0 shrink-0">
+            <div>
+              <DialogTitle className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[#0B2545]" /> Package Details — Live Student Preview
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500 mt-0.5">
+                Exact view students see when clicking &quot;View Details&quot; or opening the package link.
+              </DialogDescription>
             </div>
-          )}
-
-          <DialogFooter>
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => setPreviewPlan(null)}
-              className="w-full text-xs rounded-xl h-10"
+              className="h-8 text-xs text-slate-600 hover:text-slate-900"
             >
               Close Preview
             </Button>
-          </DialogFooter>
+          </DialogHeader>
+
+          <div className="overflow-y-auto p-4 sm:p-6 flex-1 bg-slate-50/40">
+            {previewPlan && (
+              <StudentPackageDetailView
+                plan={previewPlan}
+                isPreview={true}
+                onClose={() => setPreviewPlan(null)}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -698,3 +698,4 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
     </div>
   );
 }
+

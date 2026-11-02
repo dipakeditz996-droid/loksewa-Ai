@@ -241,3 +241,4 @@ def serialize_plan_exam_access(plan) -> List[Dict[str, Any]]:
             })
 
     return result
+

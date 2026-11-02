@@ -629,6 +629,85 @@ class EntitlementService:
                     "upgrade_url": "/student/plans", "feature": "course_access"
                 }
 
+        # 3.5. Universal Package Exam Access Check
+        if plan:
+            from .universal_exam_access import resolve_exam_type, matches_exam_type, EXAM_TYPE_LABELS
+            primary_type = resolve_exam_type(examination)
+            cfg = plan.get_exam_access_config(primary_type)
+            if not cfg and primary_type != 'mock' and matches_exam_type(examination, 'mock'):
+                cfg = plan.get_exam_access_config('mock')
+
+            if cfg:
+                type_label = EXAM_TYPE_LABELS.get(cfg.exam_type, cfg.exam_type.replace('_', ' ').title())
+                # Rule 1: Disabled check
+                if not cfg.is_enabled:
+                    return False, f"Access to {type_label} is not included in your preparation package.", {
+                        "feature": f"exam:{cfg.exam_type}",
+                        "remaining": 0,
+                        "upgrade_url": "/student/plans"
+                    }
+                # Rule 3: Specific Selected Exams check
+                if cfg.access_mode == 'SPECIFIC':
+                    if not cfg.selected_exams.filter(id=examination.id).exists():
+                        return False, f"This specific exam is not included in your preparation package.", {
+                            "feature": f"exam:{cfg.exam_type}:specific",
+                            "remaining": 0,
+                            "upgrade_url": "/student/plans"
+                        }
+                    # Attempts per exam limit check
+                    if cfg.attempts_per_exam and cfg.attempts_per_exam > 0:
+                        from exams.models import ExaminationAttempt
+                        prior_attempts = ExaminationAttempt.objects.filter(
+                            examination=examination, student=user
+                        ).count()
+                        if prior_attempts >= cfg.attempts_per_exam:
+                            return False, f"Maximum attempts reached for this exam ({cfg.attempts_per_exam} allowed).", {
+                                "feature": f"exam:{cfg.exam_type}:per_exam",
+                                "remaining": 0,
+                                "total_allowed": cfg.attempts_per_exam,
+                                "upgrade_url": "/student/plans"
+                            }
+                # Rule 5: Unlimited attempts
+                if cfg.total_attempts == -1:
+                    return True, "Unlimited attempts available.", {"is_unlimited": True, "remaining": -1}
+                elif cfg.total_attempts == 0:
+                    return False, f"Attempt quota for {type_label} has been exhausted.", {
+                        "feature": f"exam:{cfg.exam_type}",
+                        "remaining": 0,
+                        "total_allowed": 0,
+                        "upgrade_url": "/student/plans"
+                    }
+
+                # Rule 4: Check student entitlement quota balance
+                feature_key = f"exam:{cfg.exam_type}"
+                ent = StudentEntitlement.objects.filter(student=user, feature=feature_key).first()
+                if not ent:
+                    legacy_key = f"exam:objective:{cfg.exam_type}" if not getattr(examination, 'exam_type', None) == 'subjective' else f"exam:subjective:{cfg.exam_type}"
+                    ent = StudentEntitlement.objects.filter(student=user, feature=legacy_key).first()
+                if not ent:
+                    ent, _ = StudentEntitlement.objects.get_or_create(
+                        student=user,
+                        feature=feature_key,
+                        defaults={
+                            'subscription': active_sub,
+                            'total_allowed': cfg.total_attempts,
+                            'consumed': 0,
+                            'reserved': 0,
+                        }
+                    )
+                if not ent.is_unlimited and ent.remaining <= 0:
+                    return False, f"Attempt quota for {type_label} has been exhausted. Upgrade your package to unlock more attempts.", {
+                        "feature": feature_key,
+                        "remaining": 0,
+                        "total_allowed": ent.total_allowed,
+                        "upgrade_url": "/student/plans"
+                    }
+                return True, "Attempt quota available.", {
+                    "is_unlimited": False,
+                    "remaining": ent.remaining,
+                    "total_allowed": ent.total_allowed
+                }
+
         # 4. Resolve Objective vs Subjective Category & Overall Quotas
         is_subj = getattr(examination, 'exam_type', None) == 'subjective'
         cat = examination.effective_category or ('model' if is_subj else 'mock')
@@ -728,6 +807,98 @@ class EntitlementService:
 
         active_sub = cls.get_active_subscription(user)
         plan = active_sub.plan if active_sub else None
+
+        # Universal Exam Access Check & Reservation
+        if plan:
+            from .universal_exam_access import resolve_exam_type, matches_exam_type, EXAM_TYPE_LABELS
+            primary_type = resolve_exam_type(examination)
+            cfg = plan.get_exam_access_config(primary_type)
+            if not cfg and primary_type != 'mock' and matches_exam_type(examination, 'mock'):
+                cfg = plan.get_exam_access_config('mock')
+
+            if cfg:
+                type_label = EXAM_TYPE_LABELS.get(cfg.exam_type, cfg.exam_type.replace('_', ' ').title())
+                if not cfg.is_enabled:
+                    return False, f"Access to {type_label} is not included in your preparation package.", {
+                        "feature": f"exam:{cfg.exam_type}",
+                        "remaining": 0,
+                        "upgrade_url": "/student/plans"
+                    }
+                if cfg.access_mode == 'SPECIFIC':
+                    if not cfg.selected_exams.filter(id=examination.id).exists():
+                        return False, f"This specific exam is not included in your preparation package.", {
+                            "feature": f"exam:{cfg.exam_type}:specific",
+                            "remaining": 0,
+                            "upgrade_url": "/student/plans"
+                        }
+                    if cfg.attempts_per_exam and cfg.attempts_per_exam > 0:
+                        from exams.models import ExaminationAttempt
+                        prior_attempts = ExaminationAttempt.objects.filter(
+                            examination=examination, student=user
+                        ).count()
+                        if prior_attempts >= cfg.attempts_per_exam:
+                            return False, f"Maximum attempts reached for this exam ({cfg.attempts_per_exam} allowed).", {
+                                "feature": f"exam:{cfg.exam_type}:per_exam",
+                                "remaining": 0,
+                                "total_allowed": cfg.attempts_per_exam,
+                                "upgrade_url": "/student/plans"
+                            }
+                if cfg.total_attempts == -1:
+                    return True, "Exempt from quota consumption (unlimited).", {"is_unlimited": True, "remaining": -1}
+                elif cfg.total_attempts == 0:
+                    return False, f"Attempt quota for {type_label} has been exhausted.", {
+                        "feature": f"exam:{cfg.exam_type}",
+                        "remaining": 0,
+                        "total_allowed": 0,
+                        "upgrade_url": "/student/plans"
+                    }
+
+                feature_key = f"exam:{cfg.exam_type}"
+                with transaction.atomic():
+                    ent = (
+                        StudentEntitlement.objects
+                        .select_for_update()
+                        .filter(student=user, feature=feature_key)
+                        .first()
+                    )
+                    if not ent:
+                        legacy_key = f"exam:objective:{cfg.exam_type}" if not getattr(examination, 'exam_type', None) == 'subjective' else f"exam:subjective:{cfg.exam_type}"
+                        ent = StudentEntitlement.objects.select_for_update().filter(student=user, feature=legacy_key).first()
+                    if not ent:
+                        ent, _ = StudentEntitlement.objects.get_or_create(
+                            student=user,
+                            feature=feature_key,
+                            defaults={
+                                'subscription': active_sub,
+                                'total_allowed': cfg.total_attempts,
+                                'consumed': 0,
+                                'reserved': 0,
+                            }
+                        )
+                    if not ent.is_unlimited and ent.remaining <= 0:
+                        return False, f"Attempt quota for {type_label} has been exhausted.", {
+                            "feature": feature_key,
+                            "remaining": 0,
+                            "total_allowed": ent.total_allowed,
+                            "upgrade_url": "/student/plans"
+                        }
+                    if not ent.is_unlimited:
+                        StudentEntitlement.objects.filter(pk=ent.pk).update(reserved=F('reserved') + 1)
+                        ent.refresh_from_db()
+                        UsageLedger.objects.create(
+                            student=user,
+                            subscription=active_sub,
+                            feature=feature_key,
+                            event_type='RESERVE',
+                            amount=1,
+                            reference_id=str(attempt_id or examination.id),
+                            reason=f"Reserved attempt for {examination.title}"
+                        )
+                    return True, "Attempt reserved successfully.", {
+                        "is_unlimited": ent.is_unlimited,
+                        "remaining": ent.remaining,
+                        "total_allowed": ent.total_allowed
+                    }
 
         is_free_mock = bool(plan and plan.free_mock_exams.filter(id=examination.id).exists())
         if is_free_mock and plan.free_mock_attempts == -1:
@@ -1188,7 +1359,14 @@ class EntitlementService:
             reset_freq = plan.reset_frequency
             items: List[Tuple[str, int, str]] = []
 
-            # 1. Objective Exam categories
+            # 1. Universal Package Exam Access configurations
+            if hasattr(plan, 'exam_access_configs') and plan.exam_access_configs.exists():
+                for access_cfg in plan.exam_access_configs.all():
+                    attempts = access_cfg.total_attempts if access_cfg.is_enabled else 0
+                    items.append((f"exam:{access_cfg.exam_type}", attempts, reason or f"Granted {plan.name} {access_cfg.exam_type} quota"))
+                    items.append((f"exam:objective:{access_cfg.exam_type}", attempts, reason or f"Granted {plan.name} {access_cfg.exam_type} objective quota"))
+
+            # 1a. Objective Exam categories (legacy / fallback)
             quotas = plan.exam_quotas or {}
             for cat in ['past_year', 'model', 'live', 'topicwise']:
                 key = f"exam:objective:{cat}"

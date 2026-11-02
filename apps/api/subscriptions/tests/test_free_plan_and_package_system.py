@@ -250,6 +250,35 @@ class FreePlanAndPackageSystemTests(TestCase):
         clone = SubscriptionPlan.objects.get(id=clone_id)
         self.assertFalse(clone.is_default_free)
 
+    def test_create_package_with_empty_slug_does_not_conflict(self):
+        """Creating multiple packages with empty slug string does not trigger integrity error."""
+        self.client.force_authenticate(user=self.admin_user)
+        payload1 = {
+            "name": "Custom Package 1",
+            "slug": "",
+            "description": "Desc 1",
+            "price": "500.00",
+            "package_type": "ALL_ACCESS",
+            "status": "ACTIVE",
+            "is_published": True,
+        }
+        res1 = self.client.post("/api/subscriptions/plans/", payload1, format="json")
+        self.assertEqual(res1.status_code, status.HTTP_201_CREATED, res1.data)
+        self.assertIsNone(SubscriptionPlan.objects.get(id=res1.data["id"]).slug)
+
+        payload2 = {
+            "name": "Custom Package 2",
+            "slug": "",
+            "description": "Desc 2",
+            "price": "600.00",
+            "package_type": "ALL_ACCESS",
+            "status": "ACTIVE",
+            "is_published": True,
+        }
+        res2 = self.client.post("/api/subscriptions/plans/", payload2, format="json")
+        self.assertEqual(res2.status_code, status.HTTP_201_CREATED, res2.data)
+        self.assertIsNone(SubscriptionPlan.objects.get(id=res2.data["id"]).slug)
+
     def test_free_mock_exam_access_and_quota_consumption(self):
         """Enforces mock exam quota tracking and reservation."""
         EntitlementService.ensure_free_plan_entitlement(self.student)

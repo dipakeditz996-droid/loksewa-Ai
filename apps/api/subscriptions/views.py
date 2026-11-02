@@ -47,7 +47,9 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
             'course', 'course__exam', 'course__exam__parent', 'course__exam__category'
         ).prefetch_related(
             'eligible_courses', 'eligible_courses__exam', 'eligible_courses__exam__parent', 'eligible_courses__exam__category',
-            'free_mock_exams'
+            'free_mock_exams',
+            'exam_access_configs',
+            'exam_access_configs__selected_exams',
         ).order_by('display_order')
         user = self.request.user
         if not (user and user.is_authenticated and user.role in ('admin', 'super-admin')):
@@ -203,6 +205,9 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
                 'eligible_courses__exam',
                 'eligible_courses__exam__parent',
                 'eligible_courses__exam__category',
+                'free_mock_exams',
+                'exam_access_configs',
+                'exam_access_configs__selected_exams',
             )
             .order_by('display_order')
         )

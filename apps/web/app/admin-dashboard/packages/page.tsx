@@ -550,13 +550,19 @@ export default function AdminPackagesPage() {
       form.eligible_courses = [];
     }
 
+    const payload: SubscriptionPlanInput = {
+      ...form,
+      slug: form.slug?.trim() ? form.slug.trim() : null,
+      original_price: form.original_price && String(form.original_price).trim() ? form.original_price : null,
+    };
+
     setSaving(true);
     try {
       if (editingId) {
-        await subscriptionsApi.adminUpdatePlan(editingId, form);
+        await subscriptionsApi.adminUpdatePlan(editingId, payload);
         toast.success("Package updated successfully.");
       } else {
-        await subscriptionsApi.adminCreatePlan(form);
+        await subscriptionsApi.adminCreatePlan(payload);
         toast.success("Package created successfully.");
       }
       setDialogOpen(false);

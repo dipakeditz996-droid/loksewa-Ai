@@ -171,6 +171,40 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             Q(exam_type='subjective') & (Q(question_paper_pdf__isnull=True) | Q(question_paper_pdf=''))
         )
 
+        if user.role == 'student':
+            from subscriptions.entitlements import EntitlementService
+            from subscriptions.access import has_admin_granted_access
+            if not has_admin_granted_access(user):
+                active_sub = EntitlementService.get_active_subscription(user)
+                if active_sub and active_sub.plan:
+                    plan = active_sub.plan
+                    configs = list(plan.exam_access_configs.prefetch_related('selected_exams').all())
+                    for cfg in configs:
+                        if cfg.exam_type == 'subjective':
+                            type_q = Q(exam_type='subjective')
+                        elif cfg.exam_type == 'live':
+                            type_q = Q(objective_category='live') | Q(start_time__isnull=False)
+                        elif cfg.exam_type == 'topicwise':
+                            type_q = Q(objective_category='topicwise') | Q(topic__isnull=False)
+                        elif cfg.exam_type == 'subject':
+                            type_q = Q(exam_type='subject', topic__isnull=True)
+                        elif cfg.exam_type == 'practice':
+                            type_q = Q(exam_type='practice')
+                        elif cfg.exam_type == 'past_year':
+                            type_q = Q(objective_category='past_year')
+                        elif cfg.exam_type == 'model':
+                            type_q = Q(objective_category='model')
+                        elif cfg.exam_type == 'mock':
+                            type_q = Q(exam_type='mock')
+                        else:
+                            type_q = Q()
+
+                        if not cfg.is_enabled:
+                            base_qs = base_qs.exclude(type_q & ~Q(is_free=True))
+                        elif cfg.access_mode == 'SPECIFIC':
+                            selected_ids = list(cfg.selected_exams.values_list('id', flat=True))
+                            base_qs = base_qs.exclude(type_q & ~Q(is_free=True) & ~Q(id__in=selected_ids))
+
         if self.action == 'list':
             base_qs = base_qs.exclude(exam_type='custom').exclude(objective_category='custom')
             if self.request.query_params.get('topicwise', '').lower() in ('1', 'true', 'yes'):
@@ -201,6 +235,13 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
                     {'detail': 'You do not have access to this course examination.'},
                     status=status.HTTP_403_FORBIDDEN
                 )
+            from subscriptions.entitlements import EntitlementService
+            allowed, reason, quota_info = EntitlementService.check_exam_access(user, examination)
+            if not allowed:
+                return Response(
+                    {'detail': reason, **quota_info},
+                    status=status.HTTP_403_FORBIDDEN
+                )
         serializer = self.get_serializer(examination)
         resp_data = serializer.data
         if use_cache and user.is_authenticated and exam_id:
@@ -221,6 +262,13 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             if not is_examination_authorized_for_student(user, examination):
                 return Response(
                     {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            from subscriptions.entitlements import EntitlementService
+            allowed, reason, quota_info = EntitlementService.check_exam_access(user, examination)
+            if not allowed:
+                return Response(
+                    {'detail': reason, **quota_info},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -352,6 +400,13 @@ class StudentExaminationViewSet(viewsets.ReadOnlyModelViewSet):
             if not is_examination_authorized_for_student(user, examination):
                 return Response(
                     {'detail': 'You do not have access to this course examination.'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            from subscriptions.entitlements import EntitlementService
+            allowed, reason, quota_info = EntitlementService.check_exam_access(user, examination)
+            if not allowed:
+                return Response(
+                    {'detail': reason, **quota_info},
                     status=status.HTTP_403_FORBIDDEN
                 )
 

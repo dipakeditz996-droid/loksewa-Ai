@@ -219,6 +219,14 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
         remaining = self.get_attempts_remaining(obj)
         if remaining is not None and remaining <= 0:
             return 'You have used all of your attempts for this exam.'
+
+        # Check package entitlements and quotas
+        if user and getattr(user, 'role', None) == 'student':
+            from subscriptions.entitlements import EntitlementService
+            allowed, reason, _ = EntitlementService.check_exam_access(user, obj)
+            if not allowed:
+                return reason
+
         return None
 
 class StudentSecureQuestionSerializer(serializers.ModelSerializer):

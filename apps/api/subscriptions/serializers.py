@@ -13,10 +13,21 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
     eligible_courses_details = serializers.SerializerMethodField(read_only=True)
     course_details = serializers.SerializerMethodField(read_only=True)
     is_free = serializers.BooleanField(read_only=True)
+    exam_access_configs = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = SubscriptionPlan
         fields = '__all__'
+
+    def get_exam_access_configs(self, obj):
+        from .universal_exam_access import serialize_plan_exam_access
+        return serialize_plan_exam_access(obj)
+
+    def validate_slug(self, value):
+        if value is None:
+            return None
+        stripped = str(value).strip()
+        return stripped if stripped else None
 
     def _format_course_detail(self, course):
         if not course:
@@ -61,6 +72,11 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
         return self._format_course_detail(obj.course)
 
     def validate(self, data):
+        if 'slug' in data:
+            slug_val = data.get('slug')
+            if slug_val is not None and not str(slug_val).strip():
+                data['slug'] = None
+
         if (
             self.instance
             and self.instance.status == 'ARCHIVED'
@@ -105,7 +121,8 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
                 })
             node = exam
             while node:
-                if node.status != 'active' or not node.category.is_active:
+                cat_active = node.category.is_active if getattr(node, 'category', None) else True
+                if node.status != 'active' or not cat_active:
                     raise serializers.ValidationError({
                         'eligible_courses': 'Coming Soon or inactive academic nodes cannot be included in packages.'
                     })
@@ -128,7 +145,138 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
             data['course'] = None
             data['eligible_courses'] = []
 
+        exam_configs_raw = self.initial_data.get('exam_access_configs')
+        if exam_configs_raw is not None and isinstance(exam_configs_raw, list):
+            from .universal_exam_access import validate_exam_for_type, SUPPORTED_EXAM_TYPES, EXAM_TYPE_LABELS
+            from exams.models import Examination
+            for item in exam_configs_raw:
+                if not isinstance(item, dict):
+                    continue
+                etype = item.get('exam_type')
+                if etype and etype not in SUPPORTED_EXAM_TYPES:
+                    raise serializers.ValidationError({
+                        'exam_access_configs': f"Unsupported exam type: '{etype}'"
+                    })
+                access_mode = item.get('access_mode', 'ANY')
+                if access_mode not in ('ANY', 'SPECIFIC'):
+                    raise serializers.ValidationError({
+                        'exam_access_configs': f"Invalid access mode '{access_mode}' for exam type '{etype}'"
+                    })
+                if access_mode == 'SPECIFIC':
+                    selected_ids = item.get('selected_exam_ids')
+                    if selected_ids is None and item.get('selected_exams'):
+                        selected_ids = [
+                            e['id'] if isinstance(e, dict) else e for e in item.get('selected_exams', [])
+                        ]
+                    if selected_ids:
+                        exams = Examination.objects.filter(id__in=selected_ids)
+                        for ex in exams:
+                            if not validate_exam_for_type(ex, etype):
+                                label = EXAM_TYPE_LABELS.get(etype, etype)
+                                raise serializers.ValidationError({
+                                    'exam_access_configs': f"Exam '{ex.title}' does not belong to the '{label}' category."
+                                })
+
         return data
+
+    def _save_exam_access_configs(self, plan, configs_data):
+        from .models import PackageExamAccess
+        from exams.models import Examination
+        from .universal_exam_access import SUPPORTED_EXAM_TYPES
+
+        if configs_data is not None and isinstance(configs_data, list):
+            quotas_dict = dict(plan.exam_quotas or {})
+            for item in configs_data:
+                if not isinstance(item, dict):
+                    continue
+                etype = item.get('exam_type')
+                if not etype or etype not in SUPPORTED_EXAM_TYPES:
+                    continue
+
+                is_enabled = bool(item.get('is_enabled', True))
+                access_mode = item.get('access_mode', 'ANY')
+                try:
+                    total_attempts = int(item.get('total_attempts', -1))
+                except (ValueError, TypeError):
+                    total_attempts = -1
+
+                attempts_per_exam = item.get('attempts_per_exam')
+                if attempts_per_exam is not None and attempts_per_exam != '':
+                    try:
+                        attempts_per_exam = int(attempts_per_exam)
+                    except (ValueError, TypeError):
+                        attempts_per_exam = None
+                else:
+                    attempts_per_exam = None
+
+                selected_ids = item.get('selected_exam_ids')
+                if selected_ids is None and item.get('selected_exams'):
+                    selected_ids = [
+                        e['id'] if isinstance(e, dict) else e for e in item.get('selected_exams', [])
+                    ]
+
+                access_obj, _ = PackageExamAccess.objects.update_or_create(
+                    plan=plan,
+                    exam_type=etype,
+                    defaults={
+                        'is_enabled': is_enabled,
+                        'access_mode': access_mode,
+                        'total_attempts': total_attempts,
+                        'attempts_per_exam': attempts_per_exam,
+                    }
+                )
+
+                if access_mode == 'SPECIFIC' and selected_ids:
+                    exams = Examination.objects.filter(id__in=selected_ids)
+                    access_obj.selected_exams.set(exams)
+                else:
+                    access_obj.selected_exams.clear()
+
+                quotas_dict[etype] = {
+                    'enabled': is_enabled,
+                    'attempts': total_attempts,
+                    'mode': access_mode,
+                }
+
+                if etype == 'mock':
+                    if access_mode == 'SPECIFIC' and selected_ids:
+                        plan.free_mock_exams.set(Examination.objects.filter(id__in=selected_ids))
+                        plan.free_mock_attempts = total_attempts
+                    elif access_mode == 'ANY':
+                        plan.free_mock_exams.clear()
+                        plan.free_mock_attempts = total_attempts
+
+            plan.exam_quotas = quotas_dict
+            plan.save(update_fields=['exam_quotas', 'free_mock_attempts'])
+        elif plan.exam_quotas:
+            # Sync from plan.exam_quotas if configs_data was not explicitly sent
+            quotas = plan.exam_quotas
+            for etype, q in quotas.items():
+                if etype in SUPPORTED_EXAM_TYPES:
+                    enabled = q.get('enabled', True) if isinstance(q, dict) else (q != 0)
+                    attempts = q.get('attempts', -1) if isinstance(q, dict) else int(q)
+                    mode = q.get('mode', 'ANY') if isinstance(q, dict) else 'ANY'
+                    PackageExamAccess.objects.update_or_create(
+                        plan=plan,
+                        exam_type=etype,
+                        defaults={
+                            'is_enabled': enabled,
+                            'access_mode': mode,
+                            'total_attempts': attempts,
+                        }
+                    )
+
+    def create(self, validated_data):
+        plan = super().create(validated_data)
+        configs_data = self.initial_data.get('exam_access_configs')
+        self._save_exam_access_configs(plan, configs_data)
+        return plan
+
+    def update(self, instance, validated_data):
+        plan = super().update(instance, validated_data)
+        configs_data = self.initial_data.get('exam_access_configs')
+        self._save_exam_access_configs(plan, configs_data)
+        return plan
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

@@ -163,6 +163,8 @@ class SubscriptionPlan(models.Model):
     def clean(self):
         from django.core.exceptions import ValidationError
         super().clean()
+        if not self.slug or not str(self.slug).strip():
+            self.slug = None
         if self.is_default_free:
             if self.price > 0:
                 raise ValidationError({'price': 'The default Free Plan must have a price of Rs. 0.00.'})
@@ -172,6 +174,8 @@ class SubscriptionPlan(models.Model):
                 raise ValidationError({'is_published': 'The default Free Plan must be published.'})
 
     def save(self, *args, **kwargs):
+        if not self.slug or not str(self.slug).strip():
+            self.slug = None
         if self.is_default_free:
             # Atomically ensure only one plan is marked as default free
             SubscriptionPlan.objects.exclude(pk=self.pk).filter(is_default_free=True).update(is_default_free=False)
@@ -179,6 +183,77 @@ class SubscriptionPlan(models.Model):
 
     def __str__(self):
         return f"{self.name} - {self.price}"
+
+    def get_exam_access_config(self, exam_type: str):
+        """
+        Returns the PackageExamAccess config for a given exam_type.
+        """
+        if hasattr(self, '_prefetched_exam_configs'):
+            return self._prefetched_exam_configs.get(exam_type)
+        return self.exam_access_configs.filter(exam_type=exam_type).first()
+
+
+class PackageExamAccess(models.Model):
+    ACCESS_MODE_CHOICES = (
+        ('ANY', 'Any Available Exams'),
+        ('SPECIFIC', 'Specific Selected Exams'),
+    )
+
+    SUPPORTED_EXAM_TYPES = [
+        ('mock', 'Mock Exams'),
+        ('live', 'Live Scheduled Exams'),
+        ('practice', 'Practice Exams'),
+        ('model', 'Model Exams'),
+        ('past_year', 'Past Question Papers'),
+        ('subject', 'Subjectwise Tests'),
+        ('topicwise', 'Topicwise Tests'),
+        ('subjective', 'Subjective Exams'),
+    ]
+
+    plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.CASCADE,
+        related_name='exam_access_configs',
+        help_text="The subscription plan this exam entitlement belongs to."
+    )
+    exam_type = models.CharField(
+        max_length=50,
+        db_index=True,
+        help_text="Exam category/type (e.g., mock, live, practice, model, past_year, subject, topicwise, subjective)."
+    )
+    is_enabled = models.BooleanField(
+        default=True,
+        help_text="Whether students with this package can access this exam type."
+    )
+    access_mode = models.CharField(
+        max_length=20,
+        choices=ACCESS_MODE_CHOICES,
+        default='ANY',
+        help_text="ANY for any published exam in this category, SPECIFIC for only selected exams."
+    )
+    total_attempts = models.IntegerField(
+        default=-1,
+        help_text="Total attempts allowed for this exam type. -1 indicates Unlimited."
+    )
+    attempts_per_exam = models.IntegerField(
+        null=True, blank=True,
+        help_text="Optional max attempts per individual exam. Null or -1 for unlimited."
+    )
+    selected_exams = models.ManyToManyField(
+        'exams.Examination',
+        blank=True,
+        related_name='package_access_configs',
+        help_text="Specific examinations accessible under this package when access_mode is SPECIFIC."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('plan', 'exam_type')
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.plan.name} - {self.exam_type} ({self.access_mode}: {'Unlimited' if self.total_attempts == -1 else self.total_attempts})"
 
 
 class Subscription(models.Model):

@@ -1,5 +1,29 @@
 import { apiClient } from "./client";
 
+export interface PackageExamAccessConfig {
+  id?: number | null;
+  exam_type: string;
+  exam_type_label: string;
+  description?: string;
+  is_enabled: boolean;
+  access_mode: "ANY" | "SPECIFIC";
+  total_attempts: number; // -1 for unlimited
+  attempts_per_exam?: number | null;
+  selected_exams_count?: number;
+  selected_exam_ids?: number[];
+  selected_exams?: {
+    id: number;
+    title: string;
+    exam_type: string;
+    objective_category?: string;
+    total_questions?: number;
+    total_marks?: number;
+    time_limit?: number;
+    status?: string;
+    is_published?: boolean;
+  }[];
+}
+
 export interface SubscriptionPlan {
   id: number;
   name: string;
@@ -44,7 +68,8 @@ export interface SubscriptionPlan {
   }[];
   is_flexible: boolean;
   allowed_preparation_count: number;
-  exam_quotas?: Record<string, { enabled?: boolean; attempts?: number }>;
+  exam_quotas?: Record<string, { enabled?: boolean; attempts?: number; mode?: "ANY" | "SPECIFIC" }>;
+  exam_access_configs?: PackageExamAccessConfig[];
   feature_limits?: Record<string, {
     enabled?: boolean;
     quota?: number;

@@ -341,8 +341,11 @@ export const subscriptionsApi = {
     apiClient<SubscriptionPlan>("/subscriptions/plans/", { method: "POST", body: JSON.stringify(data) }),
   adminUpdatePlan: (id: number, data: Partial<SubscriptionPlanInput>): Promise<SubscriptionPlan> =>
     apiClient<SubscriptionPlan>(`/subscriptions/plans/${id}/`, { method: "PATCH", body: JSON.stringify(data) }),
-  adminDeletePlan: (id: number): Promise<{ deleted: boolean; archived: boolean; message: string }> =>
-    apiClient<{ deleted: boolean; archived: boolean; message: string }>(`/subscriptions/plans/${id}/`, { method: "DELETE" }),
+  adminDeletePlan: (id: number, permanent = true): Promise<{ deleted: boolean; archived: boolean; message: string }> =>
+    apiClient<{ deleted: boolean; archived: boolean; message: string }>(
+      `/subscriptions/plans/${id}/${permanent ? "?permanent=true" : ""}`,
+      { method: "DELETE" }
+    ),
   duplicatePlan: (id: number): Promise<SubscriptionPlan> =>
     apiClient<SubscriptionPlan>(`/subscriptions/plans/${id}/duplicate/`, { method: "POST" }),
   toggleStatus: (id: number, status?: string): Promise<{ status: string; is_published: boolean }> =>

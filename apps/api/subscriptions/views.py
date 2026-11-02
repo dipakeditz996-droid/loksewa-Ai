@@ -113,9 +113,27 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         has_history = any(dependencies.values())
         from administration.cache_service import AdminCacheService
         AdminCacheService.invalidate_packages()
-        if not has_history:
+
+        is_permanent = (
+            request.query_params.get('permanent', '').lower() in ('1', 'true', 'yes')
+            or request.query_params.get('force', '').lower() in ('1', 'true', 'yes')
+        )
+
+        if not has_history or is_permanent:
             plan_name = plan.name
-            plan.delete()
+            with transaction.atomic():
+                SubscriptionCourseSelection.objects.filter(
+                    Q(payment__plan=plan) | Q(subscription__plan=plan)
+                ).delete()
+                CourseApplication.objects.filter(subscription_payment__plan=plan).delete()
+                subs = list(Subscription.objects.filter(plan=plan))
+                sub_ids = [s.id for s in subs]
+                StudentEntitlement.objects.filter(subscription_id__in=sub_ids).delete()
+                UsageLedger.objects.filter(subscription_id__in=sub_ids).delete()
+                SubscriptionPayment.objects.filter(plan=plan).delete()
+                Subscription.objects.filter(plan=plan).delete()
+                plan.delete()
+
             return Response({
                 'deleted': True,
                 'archived': False,

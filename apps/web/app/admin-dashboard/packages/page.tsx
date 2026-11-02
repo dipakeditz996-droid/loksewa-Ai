@@ -784,8 +784,8 @@ export default function AdminPackagesPage() {
     if (!planPendingDelete) return;
     setDeletingPlanId(planPendingDelete.id);
     try {
-      const result = await subscriptionsApi.adminDeletePlan(planPendingDelete.id);
-      toast.success(result.archived ? "Package archived safely." : "Package deleted.");
+      const result = await subscriptionsApi.adminDeletePlan(planPendingDelete.id, true);
+      toast.success(result.message || "Package deleted permanently.");
       setPlanPendingDelete(null);
       load();
     } catch (err: unknown) {
@@ -2097,11 +2097,11 @@ export default function AdminPackagesPage() {
         <DialogContent className="max-w-md p-6 bg-white text-slate-900 rounded-xl border border-slate-200 shadow-xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2 text-rose-700">
-              <AlertCircle className="w-5 h-5 text-rose-600" /> Archive / Delete Package
+              <AlertCircle className="w-5 h-5 text-rose-600" /> Delete Package Permanently
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600 mt-2">
-              Are you sure you want to delete <strong>{planPendingDelete?.name}</strong>?
-              If this package has historical student purchases, it will be safely archived to preserve student subscriptions and audit ledgers.
+              Are you sure you want to completely delete <strong>{planPendingDelete?.name}</strong>?
+              This will permanently remove the package without archiving it.
             </DialogDescription>
           </DialogHeader>
 

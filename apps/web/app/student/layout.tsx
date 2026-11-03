@@ -9,13 +9,30 @@ import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { FocusAwareToaster } from "@/components/student/focus/FocusAwareToaster";
 import { useFocusMode } from "@/contexts/FocusModeContext";
 import { StudentContextProvider, useStudentContext } from "@/contexts/StudentContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 function StudentLayoutContent({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { examFocus, examSession } = useFocusMode();
   const pathname = usePathname();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { subscription } = useStudentContext();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && mounted) {
+      if (!user) {
+        router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+      } else if (user.role !== "student" && user.role !== "admin" && user.role !== "super-admin") {
+        router.replace(`/${user.role === "teacher" ? "teacher" : ""}`);
+      }
+    }
+  }, [user, authLoading, mounted, router, pathname]);
 
   const attemptPath = examSession
     ? `/student/exams/${examSession.examinationId ?? ""}/attempt/${examSession.attemptId}`
@@ -48,6 +65,21 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
       router.replace("/student");
     }
   }, [pathname, isLocked, isExemptPath, router]);
+
+  if (!mounted || authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading student portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   if (isLocked && !isExemptPath) {
     return <div className="min-h-screen bg-muted/20" />;
@@ -97,4 +129,3 @@ export default function StudentLayout({
     </StudentContextProvider>
   );
 }
-

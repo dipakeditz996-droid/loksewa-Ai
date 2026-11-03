@@ -45,6 +45,7 @@ import {
 import { publicApi } from "@/lib/api/public-api";
 import { studentSettingsApi } from "@/lib/api/student-settings";
 import { useStudentContext } from "@/contexts/StudentContext";
+import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
 
 interface HierarchyCourseNode {
@@ -75,6 +76,7 @@ interface HierarchyCategoryNode {
 
 export function MyCoursesContent() {
   const queryClient = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
   const { activeCourse, selectCourse, isSwitching } = useStudentContext();
 
   // Active view filters (category & level)
@@ -97,6 +99,7 @@ export function MyCoursesContent() {
     data,
     isLoading,
     isError,
+    error,
     refetch,
   } = useQuery<MyLearningData>({
     queryKey: ["my-learning-data", filterCategoryId, filterLevelId, searchQuery],
@@ -106,6 +109,7 @@ export function MyCoursesContent() {
         level_id: filterLevelId ?? undefined,
         search: searchQuery.trim() || undefined,
       }),
+    enabled: !!user,
     staleTime: 60 * 1000,
   });
 
@@ -513,7 +517,7 @@ export function MyCoursesContent() {
       </div>
 
       {/* Loading State */}
-      {isLoading && (
+      {(isLoading || authLoading) && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
             <div key={i} className="bg-card rounded-[24px] border border-border p-5 animate-pulse space-y-4">
@@ -526,12 +530,30 @@ export function MyCoursesContent() {
         </div>
       )}
 
+      {/* Unauthenticated State */}
+      {!authLoading && !user && (
+        <div className="bg-card border border-border rounded-[24px] p-8 text-center max-w-lg mx-auto shadow-sm">
+          <BookOpen className="w-12 h-12 text-[#D4A72C] mx-auto mb-3" />
+          <h3 className="text-lg font-bold text-foreground">Sign In to View Your Learning</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Please log in with your student account to view enrolled preparation courses and explore study materials.
+          </p>
+          <Link href="/login?redirect=/student/learning">
+            <Button className="mt-4 bg-[#0B2545] hover:bg-[#163E6B] text-white font-bold h-9 text-xs rounded-xl">
+              Sign In Now
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {/* Error State */}
-      {isError && (
+      {!authLoading && user && isError && (
         <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 p-8 rounded-[20px] text-center">
           <Trophy className="w-12 h-12 text-red-300 mx-auto mb-3" />
           <h3 className="text-lg font-bold">Failed to load courses</h3>
-          <p className="mt-1 text-xs">An error occurred while fetching your course catalog. Please refresh.</p>
+          <p className="mt-1 text-xs">
+            {error instanceof Error ? error.message : "An error occurred while fetching your course catalog. Please refresh."}
+          </p>
           <Button onClick={() => refetch()} className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold h-9 text-xs rounded-xl">
             <RefreshCw className="w-4 h-4 mr-2" /> Try Again
           </Button>
@@ -539,7 +561,7 @@ export function MyCoursesContent() {
       )}
 
       {/* Primary Courses Grid */}
-      {!isLoading && !isError && (
+      {!isLoading && !authLoading && user && !isError && (
         <>
           {data?.courses && data.courses.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

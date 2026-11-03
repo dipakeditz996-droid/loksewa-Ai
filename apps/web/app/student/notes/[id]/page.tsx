@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle, Loader2, FileText } from 'lucide-react';
+import { ChevronLeft, Bookmark, BookOpen, Clock, Download, CheckCircle, Loader2, FileText, Lock, Coins, Sparkles } from 'lucide-react';
 import { notesApi, StudyMaterial } from '@/lib/api/notes';
+import { walletApi, ContentAccessEvaluation } from '@/lib/api/wallet';
+import { ContentUnlockModal } from '@/components/student/wallet/ContentUnlockModal';
 import { FirstPartyPdfViewer } from '@/components/common/FirstPartyPdfViewer';
 import { toast } from 'sonner';
 
@@ -14,23 +16,37 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   const [bookmarking, setBookmarking] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [accessEvaluation, setAccessEvaluation] = useState<ContentAccessEvaluation | null>(null);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchMaterial = async () => {
+  const fetchMaterial = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await notesApi.getMaterial(resolvedParams.id);
+      setMaterial(data);
+      setAccessEvaluation(null);
+    } catch (err: unknown) {
+      console.error('Failed to fetch material', err);
       try {
-        const data = await notesApi.getMaterial(resolvedParams.id);
-        setMaterial(data);
-      } catch (err: unknown) {
-        console.error('Failed to fetch material', err);
+        const evalRes = await walletApi.checkContentAccess("STUDY_MATERIAL", Number(resolvedParams.id));
+        setAccessEvaluation(evalRes);
+        if (!evalRes.has_access && evalRes.can_purchase_with_coins) {
+          setIsUnlockModalOpen(true);
+        }
+      } catch (evalErr) {
+        console.warn('Failed to check content access', evalErr);
         const errorObj = err as { data?: { detail?: string }; message?: string };
         toast.error(errorObj?.data?.detail || errorObj?.message || "Could not load material. Please try again.");
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchMaterial();
+    } finally {
+      setLoading(false);
+    }
   }, [resolvedParams.id]);
+
+  useEffect(() => {
+    fetchMaterial();
+  }, [fetchMaterial]);
 
   useEffect(() => {
     let active = true;
@@ -138,6 +154,61 @@ export default function NoteDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   if (!material) {
+    if (accessEvaluation && !accessEvaluation.has_access) {
+      return (
+        <div className="max-w-xl mx-auto py-16 px-4 text-center space-y-6">
+          <div className="w-16 h-16 bg-amber-500/10 text-[#D4A72C] rounded-2xl flex items-center justify-center mx-auto border border-amber-500/20">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-foreground dark:text-white">
+              {accessEvaluation.can_purchase_with_coins ? "Premium Study Material" : "Subscription Required"}
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              {accessEvaluation.reason || "You need an active subscription or coin entitlement to read this study note."}
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            {accessEvaluation.can_purchase_with_coins ? (
+              <button
+                onClick={() => setIsUnlockModalOpen(true)}
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#D4A72C] to-[#E5B83E] hover:from-[#C29624] hover:to-[#D4A72C] text-[#0B2545] font-black text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <Coins className="w-4 h-4" />
+                Unlock for {accessEvaluation.pricing?.coin_price ?? 0} Coins
+              </button>
+            ) : (
+              <Link
+                href="/student/packages"
+                className="w-full sm:w-auto px-6 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                View Course Packages
+              </Link>
+            )}
+            <Link
+              href="/student/notes"
+              className="w-full sm:w-auto px-5 py-2.5 border border-border text-xs font-semibold rounded-xl hover:bg-muted text-muted-foreground transition-all"
+            >
+              Back to Notes
+            </Link>
+          </div>
+
+          <ContentUnlockModal
+            isOpen={isUnlockModalOpen}
+            onClose={() => setIsUnlockModalOpen(false)}
+            contentType="STUDY_MATERIAL"
+            contentId={Number(resolvedParams.id)}
+            contentTitle="Study Note"
+            onUnlocked={() => {
+              fetchMaterial();
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 text-center">
         <h2 className="text-2xl font-bold text-foreground dark:text-white">Material not found</h2>

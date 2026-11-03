@@ -24,7 +24,9 @@ import {
   PenTool,
   CreditCard,
   Award,
-  Flag
+  Flag,
+  Coins,
+  Wallet
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -173,6 +175,12 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
       label: "Games", 
       icon: Gamepad2,
       isActive: (p) => p === "/student/games" || p.startsWith("/student/games/")
+    },
+    { 
+      href: "/student/wallet", 
+      label: "Coin Wallet", 
+      icon: Coins,
+      isActive: (p) => p === "/student/wallet" || p.startsWith("/student/wallet/")
     },
   ];
 

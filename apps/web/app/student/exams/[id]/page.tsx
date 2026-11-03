@@ -6,7 +6,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { studentExamsApi } from "@/lib/api/student-exams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { ArrowLeft, Clock, Target, Play, ShieldAlert, FileText, CheckCircle2, BookOpenCheck, Eye, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, Target, Play, ShieldAlert, FileText, CheckCircle2, BookOpenCheck, Eye, Loader2, Lock, Coins, Sparkles } from "lucide-react";
+import { walletApi, ContentAccessEvaluation } from "@/lib/api/wallet";
+import { ContentUnlockModal } from "@/components/student/wallet/ContentUnlockModal";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -42,11 +44,27 @@ export default function ExamDetailsPage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [loadingQuestionPaper, setLoadingQuestionPaper] = useState(false);
 
-  const { data: exam, isLoading, error } = useQuery({
+  const { data: exam, isLoading, error, refetch: refetchExam } = useQuery({
     queryKey: ['student-exam', examId],
     queryFn: () => studentExamsApi.getExamDetails(examId),
     staleTime: 60 * 1000,
   });
+
+  const [accessEvaluation, setAccessEvaluation] = useState<ContentAccessEvaluation | null>(null);
+  const [isUnlockModalOpen, setIsUnlockModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (error) {
+      walletApi.checkContentAccess("EXAMINATION", examId)
+        .then((res) => {
+          setAccessEvaluation(res);
+          if (!res.has_access && res.can_purchase_with_coins) {
+            setIsUnlockModalOpen(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [error, examId]);
 
   const requiresAdminRequest = exam?.exam_type !== "subjective" && Boolean(exam?.requires_admin_request);
   const {
@@ -140,6 +158,66 @@ export default function ExamDetailsPage() {
   }
 
   if (error || !exam) {
+    if (accessEvaluation && !accessEvaluation.has_access) {
+      return (
+        <div className="max-w-xl mx-auto py-16 px-4 text-center space-y-6">
+          <div className="w-16 h-16 bg-amber-500/10 text-[#D4A72C] rounded-2xl flex items-center justify-center mx-auto border border-amber-500/20">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-foreground dark:text-white">
+              {accessEvaluation.can_purchase_with_coins ? "Premium Examination" : "Subscription Required"}
+            </h2>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              {accessEvaluation.reason || "You need an active subscription package or coin entitlement to take this exam."}
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            {accessEvaluation.can_purchase_with_coins ? (
+              <Button
+                onClick={() => setIsUnlockModalOpen(true)}
+                className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#D4A72C] to-[#E5B83E] hover:from-[#C29624] hover:to-[#D4A72C] text-[#0B2545] font-black text-sm rounded-xl shadow-md transition-all gap-2"
+              >
+                <Coins className="w-4 h-4" />
+                Unlock for {accessEvaluation.pricing?.coin_price ?? 0} Coins
+              </Button>
+            ) : (
+              <Button
+                asChild
+                className="w-full sm:w-auto px-6 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:opacity-90 transition-all gap-2"
+              >
+                <Link href="/student/packages">
+                  <Sparkles className="w-4 h-4" />
+                  View Course Packages
+                </Link>
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              asChild
+              className="w-full sm:w-auto px-5 py-2.5 text-xs font-semibold rounded-xl"
+            >
+              <Link href="/student/exams">
+                Back to Exams
+              </Link>
+            </Button>
+          </div>
+
+          <ContentUnlockModal
+            isOpen={isUnlockModalOpen}
+            onClose={() => setIsUnlockModalOpen(false)}
+            contentType="EXAMINATION"
+            contentId={examId}
+            contentTitle="Examination Access"
+            onUnlocked={() => {
+              refetchExam();
+            }}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="p-8 max-w-4xl mx-auto">
         <Alert variant="destructive">

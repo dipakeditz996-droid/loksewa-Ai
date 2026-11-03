@@ -53,6 +53,8 @@ import {
   Truck,
   RefreshCw,
   Banknote,
+  Coins,
+  Wallet,
 } from "lucide-react";
 
 
@@ -124,6 +126,7 @@ const SIDEBAR_NAV: NavSection[] = [
       { title: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },
       { title: "Trust & Safety", href: "/admin-dashboard/marketplace/trust", icon: ShieldCheck },
       { title: "Packages", href: "/admin-dashboard/packages", icon: Package },
+      { title: "Coin Wallet", href: "/admin-dashboard/wallet", icon: Coins as any },
       { title: "Evaluations", href: "/admin-dashboard/evaluations", icon: ClipboardCheck },
       { title: "Games", href: "/admin-dashboard/games", icon: Gamepad2 },
     ],

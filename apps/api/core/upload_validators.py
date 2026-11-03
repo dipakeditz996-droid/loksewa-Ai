@@ -61,6 +61,7 @@ def validate_receipt_file(file):
     Validates payment receipts across supported formats:
     Images: JPEG, JPG, PNG, WebP
     Documents: PDF bank receipts
+    Enforces strict magic byte / file signature validation and PIL verification.
     """
     name = (getattr(file, 'name', '') or '').lower()
     allowed_exts = ('.jpg', '.jpeg', '.png', '.webp', '.pdf')
@@ -72,22 +73,40 @@ def validate_receipt_file(file):
     if file.size <= 5:
         raise ValidationError("The uploaded receipt file is empty or invalid.")
 
-    if name.endswith('.pdf'):
-        current_position = file.tell() if hasattr(file, 'tell') else None
-        header = file.read(5)
+    if file.size > 10 * 1024 * 1024:
+        raise ValidationError("File too large - maximum receipt size is 10MB.")
+
+    current_position = file.tell() if hasattr(file, 'tell') else None
+    try:
+        header = file.read(16)
+    finally:
         if current_position is not None:
             file.seek(current_position)
-        if header != b'%PDF-':
-            raise ValidationError("The uploaded PDF is corrupted or invalid.")
+
+    if name.endswith('.pdf'):
+        if not header.startswith(b'%PDF-'):
+            raise ValidationError("The uploaded PDF is corrupted or invalid (invalid PDF header).")
+    elif name.endswith(('.jpg', '.jpeg')):
+        if not header.startswith(b'\xff\xd8\xff'):
+            raise ValidationError("Invalid JPEG file signature.")
+    elif name.endswith('.png'):
+        if not header.startswith(b'\x89PNG\r\n\x1a\n'):
+            raise ValidationError("Invalid PNG file signature.")
+    elif name.endswith('.webp'):
+        if not (header.startswith(b'RIFF') and header[8:12] == b'WEBP'):
+            raise ValidationError("Invalid WebP file signature.")
     else:
-        # Image header verification
+        raise ValidationError("Unsupported receipt format.")
+
+    # Structural image verification with PIL for image formats
+    if not name.endswith('.pdf'):
         try:
             from PIL import Image
-            current_position = file.tell() if hasattr(file, 'tell') else None
+            cur_pos = file.tell() if hasattr(file, 'tell') else None
             with Image.open(file) as img:
                 img.verify()
-            if current_position is not None:
-                file.seek(current_position)
+            if cur_pos is not None:
+                file.seek(cur_pos)
         except Exception as exc:
             raise ValidationError(f"Receipt image is corrupted or invalid: {exc}")
 

@@ -227,6 +227,25 @@ class PublicCourseListView(APIView):
         if exam_id:
             courses_qs = courses_qs.filter(exam_id=exam_id)
 
+        # Optional filter: ?category_id=<id> scopes to courses under an ExamCategory
+        category_id = request.query_params.get('category_id') or request.query_params.get('category')
+        if category_id:
+            courses_qs = courses_qs.filter(exam__category_id=category_id)
+
+        # Optional filter: ?level_id=<id> scopes to courses under a parent Level
+        level_id = request.query_params.get('level_id') or request.query_params.get('level')
+        if level_id:
+            courses_qs = courses_qs.filter(Q(exam__parent_id=level_id) | Q(exam_id=level_id))
+
+        # Optional search
+        search_query = request.query_params.get('search')
+        if search_query:
+            courses_qs = courses_qs.filter(
+                Q(title__icontains=search_query) |
+                Q(description__icontains=search_query) |
+                Q(exam__name__icontains=search_query)
+            )
+
         # Optional filter: ?status=published|coming_soon restricts to one status.
         status_filter = request.query_params.get('status')
         if status_filter in ('published', 'coming_soon'):
@@ -290,15 +309,29 @@ class PublicCourseListView(APIView):
 
             # Build exam context including level/category for frontend hierarchy display
             exam_data = None
+            category_id = None
+            category_name = None
+            level_id = None
+            level_name = None
             if c.exam:
+                category_id = c.exam.category_id
+                category_name = c.exam.category.name if c.exam.category else None
+                level_id = c.exam.parent_id if c.exam.parent_id else c.exam.id
+                level_name = c.exam.parent.name if c.exam.parent else c.exam.name
                 exam_data = {
                     'id': c.exam.id,
                     'title': c.exam.name,
+                    'status': c.exam.status,
+                    'is_active': c.exam.is_active,
+                    'order': c.exam.order,
                     'parent_id': c.exam.parent_id,
                     'parent_name': c.exam.parent.name if c.exam.parent else None,
-                    'category_id': c.exam.category_id,
-                    'category_name': c.exam.category.name if c.exam.category else None,
+                    'category_id': category_id,
+                    'category_name': category_name,
                 }
+
+            hierarchy_parts = [p for p in (category_name, level_name if level_name != c.title else None, c.title) if p]
+            hierarchy_path = " › ".join(hierarchy_parts) if hierarchy_parts else c.title
 
             data.append({
                 'id': c.id,
@@ -311,11 +344,19 @@ class PublicCourseListView(APIView):
                 'subject_count': subject_count,
                 'enrolled_count': c.enrolled_count,
                 'exam': exam_data,
+                'category_id': category_id,
+                'category_name': category_name,
+                'level_id': level_id,
+                'level_name': level_name,
+                'hierarchy_path': hierarchy_path,
+                'order': c.exam.order if c.exam else 0,
                 'featured': c.featured,
                 'status': c.status,
                 'is_coming_soon': is_coming_soon,
                 'starting_price': plans[0]['price'] if plans else None,
                 'plans': plans,
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+                'updated_at': c.updated_at.isoformat() if c.updated_at else None,
             })
 
         return Response(data)
@@ -345,6 +386,9 @@ class ProgressiveHierarchyAPIView(APIView):
         ).order_by('order', 'id')
 
         all_exams = list(Exam.objects.filter(is_active=True).order_by('order', 'id'))
+
+        from courses.services.course_sync_service import ensure_courses_for_exams
+        ensure_courses_for_exams(all_exams)
 
         # Include published AND coming_soon courses in the tree.
         # Archived / draft courses are excluded.
@@ -511,38 +555,234 @@ class StudentEnrollmentView(APIView):
 
 class MyCoursesListView(APIView):
     """
-    GET /api/courses/my-courses/
-    Returns a list of all active courses the student is enrolled in, 
-    including calculated real progress based on UserTopicProgress.
+    GET /api/courses/my-courses/ and /api/courses/my-learning/
+    Returns student courses tailored to their registration Exam Category and Level by default.
+    Supports query parameters:
+      - category_id: Override or filter by exam category
+      - level_id: Override or filter by level (Exam with parent=None)
+      - search: Filter by keyword in course title
+      - format=structured: Return dictionary with registered hierarchy metadata,
+        level courses, and other enrolled courses.
+        Without format=structured, returns combined list of courses maintaining
+        backward compatibility with MyCourse[] while adding access fields:
+        access_state ('enrolled', 'active_subscription', 'free_trial', 'coin_unlocked', 'locked'),
+        has_access, is_registered_prep, and is_active_context.
     """
-    permission_classes = [IsAuthenticated, HasActiveSubscription]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = request.user
         from django.core.cache import cache
+        from django.utils import timezone
         from courses.services.course_access_service import CourseAccessService
-        from exams.models import UserTopicProgress, Topic
-        from .models import Enrollment
-        from django.db.models import Count
+        from courses.services.course_sync_service import ensure_courses_for_exams
+        from exams.models import UserTopicProgress, Topic, ExamCategory, Exam
+        from .models import Course, Enrollment
+        from django.db.models import Count, Q
 
-        # Versioned cache key tied to student's dashboard/progress version
+        # Resolve student registration preferences from StudentProfile
+        from support.models import StudentProfile
+        profile = StudentProfile.objects.filter(user=user).select_related(
+            'target_category', 'target_position', 'target_course', 'target_course__exam'
+        ).first()
+        reg_category = profile.target_category if profile else None
+        reg_position = profile.target_position if profile else None
+        reg_level = None
+
+        if reg_position:
+            curr = reg_position
+            while curr.parent_id:
+                curr = curr.parent
+            reg_level = curr
+            if not reg_category and curr.category:
+                reg_category = curr.category
+        elif profile and profile.target_course and profile.target_course.exam:
+            curr = profile.target_course.exam
+            while curr.parent_id:
+                curr = curr.parent
+            reg_level = curr
+            if not reg_category and curr.category:
+                reg_category = curr.category
+
+        active_course = profile.target_course if profile else None
+
+        # Query parameter filters
+        category_id_param = request.query_params.get('category_id')
+        level_id_param = request.query_params.get('level_id')
+        search_param = request.query_params.get('search', '').strip()
+        is_structured = (
+            request.query_params.get('view_mode') == 'structured'
+            or request.query_params.get('structured') == 'true'
+            or request.query_params.get('format') == 'structured'
+            or request.headers.get('X-Requested-Format') == 'structured'
+            or request.path.rstrip('/').endswith('my-learning')
+        )
+
+        target_category = None
+        target_level = None
+
+        if category_id_param:
+            try:
+                target_category = ExamCategory.objects.filter(id=category_id_param, is_active=True).first()
+            except (ValueError, TypeError):
+                pass
+
+        if level_id_param:
+            try:
+                target_level = Exam.objects.filter(id=level_id_param, is_active=True).first()
+                if target_level and not target_category and target_level.category:
+                    target_category = target_level.category
+            except (ValueError, TypeError):
+                pass
+
+        # If no explicit query parameters, use student's registered hierarchy
+        if not category_id_param and not level_id_param:
+            target_category = reg_category
+            target_level = reg_level
+
+        # Versioned cache key
+        from django.conf import settings
+        is_testing = getattr(settings, 'TESTING', False)
+
         dash_ver = cache.get(f'dashboard_version:{user.id}') or 1
-        cache_key = f'my_courses_v2:{user.id}:{dash_ver}'
+        cat_key = target_category.id if target_category else 0
+        lvl_key = target_level.id if target_level else 0
+        cache_key = f'my_learning_v4:{user.id}:{dash_ver}:{cat_key}:{lvl_key}:{search_param}:{int(is_structured)}'
+        if not is_testing:
+            try:
+                cached_data = cache.get(cache_key)
+                if cached_data is not None:
+                    res = Response(cached_data)
+                    res['X-Registered-Category-Id'] = str(reg_category.id) if reg_category else ''
+                    res['X-Registered-Level-Id'] = str(reg_level.id) if reg_level else ''
+                    res['X-Is-Preference-Set'] = 'true' if (reg_category and reg_level) else 'false'
+                    return res
+            except Exception:
+                pass
+
+        # Fetch courses matching the target hierarchy level
+        matching_courses_qs = Course.objects.none()
+        if target_level:
+            descendant_exam_ids = {target_level.id}
+            child_ids = set(Exam.objects.filter(parent=target_level, is_active=True).values_list('id', flat=True))
+            descendant_exam_ids.update(child_ids)
+            if child_ids:
+                grandchild_ids = set(Exam.objects.filter(parent_id__in=child_ids, is_active=True).values_list('id', flat=True))
+                descendant_exam_ids.update(grandchild_ids)
+
+            # Ensure canonical courses exist for all preparation exams in hierarchy
+            ensure_courses_for_exams(Exam.objects.filter(id__in=descendant_exam_ids, is_active=True))
+
+            matching_courses_qs = Course.objects.filter(
+                status='published', exam_id__in=descendant_exam_ids
+            ).select_related('exam', 'exam__category', 'exam__parent')
+        elif target_category:
+            matching_courses_qs = Course.objects.filter(
+                status='published', exam__category=target_category
+            ).select_related('exam', 'exam__category', 'exam__parent')
+
+        if search_param:
+            matching_courses_qs = matching_courses_qs.filter(title__icontains=search_param)
+
+        now = timezone.now()
+
+        # 1. Active unexpired enrollments
+        enrollments_by_course = {
+            e.course_id: e for e in Enrollment.objects.filter(student=user, status='active').filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+            )
+        }
+
+        # 2. Active subscriptions and their covered course IDs
+        sub_unlocked_courses = {}  # course_id -> is_free_trial (bool)
         try:
-            cached_data = cache.get(cache_key)
-            if cached_data is not None:
-                return Response(cached_data)
+            from subscriptions.models import Subscription, SubscriptionCourseSelection
+            active_subs = list(
+                Subscription.objects.filter(
+                    Q(expiry_date__isnull=True) | Q(expiry_date__gt=now),
+                    student=user, status='ACTIVE'
+                ).select_related('plan', 'plan__course').prefetch_related('plan__eligible_courses')
+            )
+            sub_ids = [s.id for s in active_subs]
+            payment_ids = [s.payment_id for s in active_subs if getattr(s, 'payment_id', None)]
+
+            for s in active_subs:
+                plan = s.plan
+                if not plan:
+                    continue
+                is_free = bool(getattr(plan, 'is_default_free', False) or float(plan.price or 0) == 0)
+                pkg_type = getattr(plan, 'package_type', 'SINGLE')
+                access_type = getattr(plan, 'course_access_type', None)
+
+                if pkg_type == 'ALL_ACCESS' or access_type == 'ALL_ACCESS':
+                    for cid in Course.objects.filter(status='published').values_list('id', flat=True):
+                        sub_unlocked_courses[cid] = is_free
+                elif pkg_type == 'BUNDLE':
+                    for c in plan.eligible_courses.filter(status='published'):
+                        if c.id not in sub_unlocked_courses or (not is_free and sub_unlocked_courses[c.id]):
+                            sub_unlocked_courses[c.id] = is_free
+                elif pkg_type == 'SINGLE':
+                    if plan.course_id and plan.course and plan.course.status == 'published':
+                        if plan.course_id not in sub_unlocked_courses or (not is_free and sub_unlocked_courses[plan.course_id]):
+                            sub_unlocked_courses[plan.course_id] = is_free
+                    else:
+                        el = list(plan.eligible_courses.filter(status='published'))
+                        if len(el) == 1:
+                            sub_unlocked_courses[el[0].id] = is_free
+
+            if sub_ids or payment_ids:
+                sel_q = Q(subscription_id__in=sub_ids)
+                if payment_ids:
+                    sel_q |= Q(payment_id__in=payment_ids)
+                selections = SubscriptionCourseSelection.objects.filter(
+                    sel_q, course__status='published'
+                ).values_list('course_id', flat=True)
+                for cid in selections:
+                    if cid not in sub_unlocked_courses:
+                        sub_unlocked_courses[cid] = False
         except Exception:
             pass
 
-        auth_courses = CourseAccessService.get_accessible_courses(user).select_related('exam')
+        # 3. Coin entitlements
+        coin_entitled_course_ids = set()
+        try:
+            from wallet.models import ContentEntitlement
+            coin_entitled_course_ids = set(
+                ContentEntitlement.objects.filter(
+                    user=user,
+                    content_type='COURSE',
+                    status='ACTIVE'
+                ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now)).values_list('content_id', flat=True)
+            )
+        except Exception:
+            pass
 
-        enrollments_by_course = {
-            e.course_id: e for e in Enrollment.objects.filter(student=user, status='active')
-        }
+        # 4. Admin-granted access
+        admin_access = False
+        try:
+            from subscriptions.access import has_admin_granted_access
+            admin_access = has_admin_granted_access(user)
+        except Exception:
+            pass
 
-        # Batch-calculate topic counts and user completion per exam in at most 2 queries total
-        exam_ids = [c.exam_id for c in auth_courses if c.exam_id]
+        authorized_course_ids = set(enrollments_by_course.keys()) | set(sub_unlocked_courses.keys()) | coin_entitled_course_ids
+        if admin_access:
+            authorized_course_ids.update(Course.objects.filter(status='published').values_list('id', flat=True))
+
+        matching_course_ids = set(matching_courses_qs.values_list('id', flat=True))
+        other_course_ids = authorized_course_ids - matching_course_ids
+        other_enrolled_courses_qs = Course.objects.filter(
+            id__in=other_course_ids, status='published'
+        ).select_related('exam', 'exam__category', 'exam__parent')
+        if search_param:
+            other_enrolled_courses_qs = other_enrolled_courses_qs.filter(title__icontains=search_param)
+
+        # Progress calculation batch across both lists
+        all_target_courses = list(matching_courses_qs)
+        all_other_courses = list(other_enrolled_courses_qs)
+        combined_courses = all_target_courses + all_other_courses
+
+        exam_ids = [c.exam_id for c in combined_courses if c.exam_id]
         exam_topic_counts = {}
         exam_completed_counts = {}
 
@@ -567,8 +807,7 @@ class MyCoursesListView(APIView):
             for row in completed_aggregates:
                 exam_completed_counts[row['topic__chapter__subject__paper__exam_id']] = row['completed']
 
-        data = []
-        for course in auth_courses:
+        def serialize_item(course, is_reg_prep=True):
             en = enrollments_by_course.get(course.id)
             thumbnail_url = None
             if course.thumbnail:
@@ -577,20 +816,52 @@ class MyCoursesListView(APIView):
                 except Exception:
                     pass
 
+            if course.id in enrollments_by_course:
+                access_state = 'enrolled'
+                has_access = True
+            elif course.id in coin_entitled_course_ids:
+                access_state = 'coin_unlocked'
+                has_access = True
+            elif course.id in sub_unlocked_courses:
+                has_access = True
+                access_state = 'free_trial' if sub_unlocked_courses[course.id] else 'active_subscription'
+            elif admin_access:
+                has_access = True
+                access_state = 'active_subscription'
+            else:
+                access_state = 'locked'
+                has_access = False
+
             total_topics = exam_topic_counts.get(course.exam_id, 0) if course.exam_id else 0
             completed_in_course = exam_completed_counts.get(course.exam_id, 0) if course.exam_id else 0
             progress_percentage = int((completed_in_course / total_topics) * 100) if total_topics > 0 else 0
 
-            data.append({
+            category_info = None
+            level_info = None
+            if course.exam:
+                if course.exam.category:
+                    category_info = {'id': course.exam.category.id, 'name': course.exam.category.name}
+                if course.exam.parent:
+                    level_info = {'id': course.exam.parent.id, 'name': course.exam.parent.name}
+                else:
+                    level_info = {'id': course.exam.id, 'name': course.exam.name}
+
+            return {
                 'enrollment_id': en.id if en else course.id,
                 'enrolled_at': en.enrolled_at if en else course.created_at,
                 'expires_at': en.expires_at if en else None,
+                'access_state': access_state,
+                'has_access': has_access,
+                'is_registered_prep': is_reg_prep,
+                'is_active_context': bool(active_course and active_course.id == course.id),
                 'course': {
                     'id': course.id,
                     'title': course.title,
                     'slug': course.slug,
                     'short_description': course.short_description,
                     'thumbnail': thumbnail_url,
+                    'category': category_info,
+                    'level': level_info,
                     'exam': {'id': course.exam.id, 'title': getattr(course.exam, 'name', getattr(course.exam, 'title', ''))} if course.exam else None,
                 },
                 'progress': {
@@ -598,14 +869,35 @@ class MyCoursesListView(APIView):
                     'completed_topics': completed_in_course,
                     'percentage': progress_percentage
                 }
-            })
+            }
+
+        primary_items = [serialize_item(c, is_reg_prep=True) for c in all_target_courses]
+        other_items = [serialize_item(c, is_reg_prep=False) for c in all_other_courses]
+
+        if is_structured:
+            data = {
+                'registered_category': {'id': reg_category.id, 'name': reg_category.name} if reg_category else None,
+                'registered_level': {'id': reg_level.id, 'name': reg_level.name} if reg_level else None,
+                'selected_category': {'id': target_category.id, 'name': target_category.name} if target_category else None,
+                'selected_level': {'id': target_level.id, 'name': target_level.name} if target_level else None,
+                'is_preference_set': bool(reg_category and reg_level),
+                'active_course_id': active_course.id if active_course else None,
+                'courses': primary_items,
+                'other_enrolled_courses': other_items,
+            }
+        else:
+            data = primary_items + other_items
 
         try:
             cache.set(cache_key, data, 300)
         except Exception:
             pass
 
-        return Response(data)
+        res = Response(data)
+        res['X-Registered-Category-Id'] = str(reg_category.id) if reg_category else ''
+        res['X-Registered-Level-Id'] = str(reg_level.id) if reg_level else ''
+        res['X-Is-Preference-Set'] = 'true' if (reg_category and reg_level) else 'false'
+        return res
 
 
 

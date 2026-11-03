@@ -27,6 +27,7 @@ urlpatterns = [
     # Student authenticated
     path('courses/my-enrollment/', StudentEnrollmentView.as_view(), name='my-enrollment'),
     path('courses/my-courses/', MyCoursesListView.as_view(), name='my-courses'),
+    path('courses/my-learning/', MyCoursesListView.as_view(), name='my-learning'),
     path('courses/apply/', StudentCourseApplicationView.as_view(), name='course-apply'),
 
     # Course detail by ID or Slug

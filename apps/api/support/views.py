@@ -421,15 +421,12 @@ class StudentSelectCourseView(APIView):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Update StudentProfile.target_course
+        # Update StudentProfile.target_course (active course context only)
+        # Registration preferences (target_position and target_category) must be preserved.
         profile = getattr(user, 'student_profile', None)
         if profile:
             profile.target_course = course
-            if course.exam_id:
-                profile.target_position = course.exam
-                if course.exam.category_id:
-                    profile.target_category = course.exam.category
-            profile.save(update_fields=['target_course', 'target_position', 'target_category'])
+            profile.save(update_fields=['target_course'])
 
         invalidate_student_course_context(user.id)
         data = get_student_course_context(user)

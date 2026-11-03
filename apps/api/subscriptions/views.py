@@ -187,6 +187,9 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
                 if tp:
                     target_position = tp
                     target_category = tp.category
+                    tc = Course.objects.filter(exam=tp).first()
+                    if tc:
+                        target_course = tc
             except (ValueError, TypeError):
                 pass
 

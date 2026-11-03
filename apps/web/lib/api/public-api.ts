@@ -38,16 +38,27 @@ export interface PublicCourse {
   exam: {
     id: number;
     title: string;
+    status?: string;
+    is_active?: boolean;
+    order?: number;
     parent_id: number | null;
     parent_name: string | null;
     category_id: number | null;
     category_name: string | null;
   } | null;
+  category_id?: number | null;
+  category_name?: string | null;
+  level_id?: number | null;
+  level_name?: string | null;
+  hierarchy_path?: string | null;
+  order?: number;
   featured: boolean;
   status: string;
   is_coming_soon: boolean;
   starting_price: string | null;
   plans: PublicCoursePlan[];
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 // ── Notes preview (real, public) ─────────────────────────────────────────────
@@ -237,9 +248,16 @@ async function safeGet<T>(endpoint: string, revalidate = 300): Promise<T | null>
 }
 
 export const publicApi = {
-  /** Get published, open-for-enrollment courses (real Course model). */
-  getCourses: (): Promise<PublicCourse[] | null> =>
-    safeGet<PublicCourse[]>("/courses/public/"),
+  /** Get published, open-for-enrollment courses (real Course model) with optional hierarchy filters. */
+  getCourses: (params?: { category_id?: number; level_id?: number; status?: string; search?: string }): Promise<PublicCourse[] | null> => {
+    const query = new URLSearchParams();
+    if (params?.category_id) query.set("category_id", String(params.category_id));
+    if (params?.level_id) query.set("level_id", String(params.level_id));
+    if (params?.status) query.set("status", params.status);
+    if (params?.search) query.set("search", params.search);
+    const qs = query.toString() ? `?${query.toString()}` : "";
+    return safeGet<PublicCourse[]>(`/courses/public/${qs}`);
+  },
 
   /** Get published free study materials. Pass a higher `limit` for full listing pages. */
   getNotesMaterials: (limit = 6): Promise<PublicNote[] | null> =>

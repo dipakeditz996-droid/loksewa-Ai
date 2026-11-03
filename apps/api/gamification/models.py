@@ -9,6 +9,8 @@ class GamificationProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='gamification_profile')
     referral_code = models.CharField(max_length=20, unique=True, default=generate_referral_code)
     xp = models.IntegerField(default=0)
+    redeemable_xp = models.IntegerField(default=0, help_text="XP currently available for coin conversion")
+    converted_xp = models.IntegerField(default=0, help_text="Total XP converted to coins")
     coins = models.IntegerField(default=0)
     level = models.IntegerField(default=1)
     

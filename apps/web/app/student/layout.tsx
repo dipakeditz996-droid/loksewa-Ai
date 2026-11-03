@@ -36,6 +36,7 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/student/packages") ||
     pathname.startsWith("/student/plans") ||
     pathname.startsWith("/student/checkout") ||
+    pathname.startsWith("/student/wallet") ||
     pathname.startsWith("/student/onboarding");
 
   useEffect(() => {

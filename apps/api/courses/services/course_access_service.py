@@ -416,6 +416,21 @@ class CourseAccessService:
         if allow_public_free:
             q |= Q(course__isnull=True, access_type='free', status='published')
 
+        entitled_material_ids = []
+        try:
+            from wallet.models import ContentEntitlement
+            entitled_material_ids = list(
+                ContentEntitlement.objects.filter(
+                    user=user,
+                    content_type='STUDY_MATERIAL',
+                    status='ACTIVE'
+                ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())).values_list('content_id', flat=True)
+            )
+            if entitled_material_ids:
+                q |= Q(id__in=entitled_material_ids)
+        except Exception:
+            pass
+
         qs = queryset.filter(q)
 
         # Enforce subscription package for premium materials
@@ -423,7 +438,10 @@ class CourseAccessService:
         from subscriptions.access import has_active_subscription
         if AdminSettings.get_settings().enforce_subscription_access:
             if not has_active_subscription(user):
-                qs = qs.filter(access_type='free')
+                if entitled_material_ids:
+                    qs = qs.filter(Q(access_type='free') | Q(id__in=entitled_material_ids))
+                else:
+                    qs = qs.filter(access_type='free')
 
         return qs
 
@@ -437,6 +455,19 @@ class CourseAccessService:
 
         if note.status != 'published':
             return False
+
+        # Check active coin entitlement first
+        try:
+            from wallet.models import ContentEntitlement
+            if ContentEntitlement.objects.filter(
+                user=user,
+                content_type='STUDY_MATERIAL',
+                content_id=note.id,
+                status='ACTIVE'
+            ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())).exists():
+                return True
+        except Exception:
+            pass
 
         # If note is tied directly to a course
         if note.course_id:
@@ -501,6 +532,20 @@ class CourseAccessService:
         if auth_exam_scope:
             q |= Q(course__isnull=True, exam_id__in=auth_exam_scope)
 
+        try:
+            from wallet.models import ContentEntitlement
+            entitled_exam_ids = list(
+                ContentEntitlement.objects.filter(
+                    user=user,
+                    content_type='EXAMINATION',
+                    status='ACTIVE'
+                ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())).values_list('content_id', flat=True)
+            )
+            if entitled_exam_ids:
+                q |= Q(id__in=entitled_exam_ids)
+        except Exception:
+            pass
+
         return queryset.filter(q)
 
     @classmethod
@@ -512,6 +557,19 @@ class CourseAccessService:
             return True
         if getattr(user, 'role', None) != 'student':
             return False
+
+        # Check active coin entitlement first
+        try:
+            from wallet.models import ContentEntitlement
+            if ContentEntitlement.objects.filter(
+                user=user,
+                content_type='EXAMINATION',
+                content_id=examination.id,
+                status='ACTIVE'
+            ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())).exists():
+                return True
+        except Exception:
+            pass
 
         auth_courses = cls.get_accessible_courses(user)
         cached_ids = getattr(user, '_accessible_course_ids_cache', None)

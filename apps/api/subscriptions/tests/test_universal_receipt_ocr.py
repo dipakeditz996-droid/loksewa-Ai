@@ -238,7 +238,7 @@ class UniversalNepalBankReceiptOCRTests(TestCase):
             "Receiver's Name\n***** PANDEY\n"
             "Payment Attribute\nKMBLNPKA:2690351219000001\n"
             "Service Name\nFonepay Interbank\n"
-            "Date/Time\n" + timezone.now().strftime("%d %b %Y, 10:00 AM") + "\n"
+            "Date/Time\n" + timezone.localdate().strftime("%d %b %Y, 10:00 AM") + "\n"
         )
         vdata = parser.parse(receipt_text, self.bank_method)
 
@@ -250,7 +250,7 @@ class UniversalNepalBankReceiptOCRTests(TestCase):
                 ocr_engine_name="rapidocr_test",
                 detected_amounts=[Decimal("150.00")],
                 detected_txns=["232992986"],
-                detected_dates=[timezone.now().date()],
+                detected_dates=[timezone.localdate()],
                 detected_times=["10:00 AM"],
             )
 

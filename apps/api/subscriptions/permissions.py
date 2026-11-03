@@ -31,4 +31,23 @@ class HasActiveSubscription(BasePermission):
         if has_admin_granted_access(request.user):
             return True
 
-        return has_active_subscription(request.user)
+        if has_active_subscription(request.user):
+            return True
+
+        # Check if student holds an active coin entitlement for the specific requested examination or material
+        pk = getattr(view, 'kwargs', {}).get('pk')
+        if pk:
+            try:
+                from wallet.models import ContentEntitlement
+                from django.db.models import Q
+                from django.utils import timezone
+                now = timezone.now()
+                return ContentEntitlement.objects.filter(
+                    user=request.user,
+                    content_id=pk,
+                    status='ACTIVE'
+                ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now)).exists()
+            except Exception:
+                pass
+
+        return False

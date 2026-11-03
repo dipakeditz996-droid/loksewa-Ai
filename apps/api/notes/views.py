@@ -67,6 +67,10 @@ class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
 
         user = self.request.user
 
+        # For single-object actions, allow detail view so object-level permission check returns 403 instead of 404
+        if self.action in ('retrieve', 'download'):
+            return queryset
+
         # 1. Authoritative course-level and academic-scope filtering via CourseAccessService
         queryset = CourseAccessService.filter_notes_queryset(user, queryset, allow_public_free=False)
 

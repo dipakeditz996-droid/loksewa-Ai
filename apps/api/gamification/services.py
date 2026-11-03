@@ -27,6 +27,7 @@ def award_xp(user, amount, reason):
     # 2. Update user profile XP
     profile = get_or_create_profile(user)
     profile.xp += amount
+    profile.redeemable_xp += amount
     
     # 3. Calculate new level
     settings = ReferralSetting.get_settings()
@@ -44,12 +45,24 @@ def award_xp(user, amount, reason):
         new_level = profile.level
         transaction.on_commit(lambda: NotificationService.notify_level_up(user, new_level))
 
-def award_coins(user, amount):
+def award_coins(user, amount, reason="Gamification reward"):
     if amount <= 0:
         return
-    profile = get_or_create_profile(user)
-    profile.coins += amount
-    profile.save()
+    try:
+        from wallet.services import WalletService
+        # Ensure any legacy unmigrated coins are safely migrated first
+        WalletService.migrate_legacy_coins(user)
+        WalletService.credit_wallet(
+            user=user,
+            amount=amount,
+            reference_type='REWARD',
+            description=reason
+        )
+    except Exception as e:
+        # Fallback to local profile update if wallet service is unavailable
+        profile = get_or_create_profile(user)
+        profile.coins += amount
+        profile.save()
     invalidate_student_referral_cache(user.id)
 
 def process_referral_action(user, action_type):

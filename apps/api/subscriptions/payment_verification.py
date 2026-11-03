@@ -1242,74 +1242,409 @@ def _check_receiver_match(
 def _is_resubmission_match(payment, other_payment) -> bool:
     """
     Determines if `other_payment` is a prior unapproved attempt for the same student
-    and plan, meaning `payment` is a legitimate resubmission of that attempt.
+    and plan/top-up, meaning `payment` is a legitimate resubmission of that attempt.
 
     Rules:
     - Never allow cross-student reuse (prevent fraudulent reuse of another user's receipt).
-    - Never allow cross-plan reuse (prevent purchasing package B using receipt from package A).
-    - Never allow reuse if prior payment was already APPROVED or subscription is active
-      (prevent claiming duplicate course access or double credit).
-    - Allow ONLY when the prior payment is for the SAME student, SAME plan, and was NOT approved
+    - Never allow cross-plan/cross-service reuse (prevent purchasing package B using receipt from package A).
+    - Never allow cross-model reuse (e.g. top-up receipt reused for course subscription).
+    - Never allow reuse if prior payment was already APPROVED or subscription is active or coins credited.
+    - Allow ONLY when the prior payment is for the SAME student, SAME item/plan/topup, and was NOT approved
       (e.g., REJECTED, PENDING superseded, or VERIFICATION_FAILED).
     """
     if not payment or not other_payment:
         return False
 
-    # 1. Must be exact same student
-    if getattr(other_payment, "student_id", None) != getattr(payment, "student_id", None):
+    # 1. Model types must match exactly
+    if payment.__class__.__name__ != other_payment.__class__.__name__:
         return False
 
-    # 2. Must be exact same plan
-    if getattr(other_payment, "plan_id", None) != getattr(payment, "plan_id", None):
+    # 2. Must be exact same student / user
+    payment_uid = getattr(payment, "student_id", None) or getattr(payment, "user_id", None)
+    other_uid = getattr(other_payment, "student_id", None) or getattr(other_payment, "user_id", None)
+    if payment_uid is None or other_uid is None or payment_uid != other_uid:
         return False
 
-    # 3. If prior payment was already approved or has an active subscription, duplicate reuse is forbidden!
-    if other_payment.status == "APPROVED" or getattr(other_payment, "subscription_id", None) is not None:
-        return False
+    # 3. For SubscriptionPayment: must be exact same plan and not approved
+    if payment.__class__.__name__ == "SubscriptionPayment":
+        if getattr(other_payment, "plan_id", None) != getattr(payment, "plan_id", None):
+            return False
+        if other_payment.status == "APPROVED" or getattr(other_payment, "subscription_id", None) is not None:
+            return False
+        return True
 
-    # 4. Same student, same plan, and prior payment was NOT approved -> legitimate resubmission!
-    return True
+    # 4. For CoinTopUp: must not be already verified / credited
+    if payment.__class__.__name__ == "CoinTopUp":
+        if other_payment.status == "VERIFIED" or getattr(other_payment, "wallet_transaction_id", None) is not None:
+            return False
+        return True
+
+    # 5. For marketplace PaymentSubmission: must not be already approved
+    if payment.__class__.__name__ == "PaymentSubmission":
+        if other_payment.status == "APPROVED":
+            return False
+        return True
+
+    return False
 
 
 def _check_duplicates(payment, image_hash: str, transaction_ids: List[str]) -> Tuple[str, List[str], bool]:
-    from .models import SubscriptionPayment
-
     warnings = []
     duplicate = "PASS"
     resubmission_detected = False
 
-    for txn_id in transaction_ids:
-        if txn_id and txn_id.strip():
-            matching_txns = SubscriptionPayment.objects.exclude(id=payment.id).filter(
-                transaction_id__iexact=txn_id.strip(),
-            )
-            for dup_txn in matching_txns:
+    cleaned_txns = [t.strip() for t in transaction_ids if t and t.strip()]
+
+    # 1. SubscriptionPayment duplicate checks
+    try:
+        from .models import SubscriptionPayment
+        for txn_id in cleaned_txns:
+            sub_query = SubscriptionPayment.objects.filter(transaction_id__iexact=txn_id)
+            if payment.__class__.__name__ == "SubscriptionPayment":
+                sub_query = sub_query.exclude(id=payment.id)
+            for dup_txn in sub_query:
                 if _is_resubmission_match(payment, dup_txn):
                     resubmission_detected = True
                     logger.info(
-                        "Transaction ID '%s' in Payment #%s matches unapproved Payment #%s for the same student and plan — allowed as resubmission.",
-                        txn_id, payment.id, dup_txn.id,
+                        "Transaction ID '%s' in %s #%s matches unapproved Payment #%s for the same student — allowed as resubmission.",
+                        txn_id, payment.__class__.__name__, payment.id, dup_txn.id,
                     )
                 else:
                     duplicate = "FAIL"
                     warnings.append(f"Transaction ID '{txn_id}' already used in Payment #{dup_txn.id}.")
 
-    if image_hash:
-        matching_imgs = SubscriptionPayment.objects.exclude(id=payment.id).filter(
-            verification_result__image_hash=image_hash,
-        )
-        for dup_img in matching_imgs:
-            if _is_resubmission_match(payment, dup_img):
-                resubmission_detected = True
-                logger.info(
-                    "Receipt image in Payment #%s matches unapproved Payment #%s for the same student and plan — allowed as resubmission.",
-                    payment.id, dup_img.id,
-                )
-            else:
-                duplicate = "FAIL"
-                warnings.append(f"Receipt image identical to Payment #{dup_img.id}.")
+        if image_hash:
+            sub_img_query = SubscriptionPayment.objects.filter(verification_result__image_hash=image_hash)
+            if payment.__class__.__name__ == "SubscriptionPayment":
+                sub_img_query = sub_img_query.exclude(id=payment.id)
+            for dup_img in sub_img_query:
+                if _is_resubmission_match(payment, dup_img):
+                    resubmission_detected = True
+                else:
+                    duplicate = "FAIL"
+                    warnings.append(f"Receipt image identical to Payment #{dup_img.id}.")
+    except Exception as exc:
+        logger.debug("SubscriptionPayment duplicate check skipped: %s", exc)
+
+    # 2. Marketplace PaymentSubmission duplicate checks
+    try:
+        from marketplace.models import PaymentSubmission
+        for txn_id in cleaned_txns:
+            m_query = PaymentSubmission.objects.filter(transaction_id__iexact=txn_id)
+            if payment.__class__.__name__ == "PaymentSubmission":
+                m_query = m_query.exclude(id=payment.id)
+            for dup_m in m_query:
+                if _is_resubmission_match(payment, dup_m):
+                    resubmission_detected = True
+                else:
+                    duplicate = "FAIL"
+                    warnings.append(f"Transaction reference '{txn_id}' already used in Marketplace Payment #{dup_m.id}.")
+    except Exception as exc:
+        logger.debug("Marketplace duplicate check skipped: %s", exc)
+
+    # 3. CoinTopUp duplicate checks
+    try:
+        from wallet.models import CoinTopUp
+        for txn_id in cleaned_txns:
+            topup_query = CoinTopUp.objects.filter(payment_reference__iexact=txn_id)
+            if payment.__class__.__name__ == "CoinTopUp":
+                topup_query = topup_query.exclude(id=payment.id)
+            for dup_topup in topup_query:
+                if _is_resubmission_match(payment, dup_topup):
+                    resubmission_detected = True
+                    logger.info(
+                        "Transaction reference '%s' in %s #%s matches unapproved TopUp #%s for the same user — allowed as resubmission.",
+                        txn_id, payment.__class__.__name__, payment.id, dup_topup.id,
+                    )
+                else:
+                    duplicate = "FAIL"
+                    if dup_topup.status == "VERIFIED" or getattr(dup_topup, "wallet_transaction_id", None) is not None:
+                        warnings.append(f"Transaction reference '{txn_id}' has already been credited to Coin Top-up #{dup_topup.id}.")
+                    else:
+                        warnings.append(f"Transaction reference '{txn_id}' already used in Coin Top-up #{dup_topup.id}.")
+
+        if image_hash:
+            topup_img_query = CoinTopUp.objects.filter(verification_result__image_hash=image_hash)
+            if payment.__class__.__name__ == "CoinTopUp":
+                topup_img_query = topup_img_query.exclude(id=payment.id)
+            for dup_t_img in topup_img_query:
+                if _is_resubmission_match(payment, dup_t_img):
+                    resubmission_detected = True
+                else:
+                    duplicate = "FAIL"
+                    if dup_t_img.status == "VERIFIED" or getattr(dup_t_img, "wallet_transaction_id", None) is not None:
+                        warnings.append(f"Receipt image has already been verified and credited in Coin Top-up #{dup_t_img.id}.")
+                    else:
+                        warnings.append(f"Receipt image identical to Coin Top-up #{dup_t_img.id}.")
+    except Exception as exc:
+        logger.debug("CoinTopUp duplicate check skipped: %s", exc)
 
     return duplicate, warnings, resubmission_detected
+
+
+# ---------------------------------------------------------------------------
+# Authoritative Payment Verifier (Direct Provider Settlement Inquiries)
+# ---------------------------------------------------------------------------
+
+class AuthoritativePaymentVerifier:
+    """
+    Authoritative Payment Confirmation Verifier.
+    Independently verifies transaction settlement status, exact amount,
+    and recipient matching against official payment provider APIs (eSewa / Khalti).
+
+    - eSewa: Queries the official eSewa status endpoint with merchant credentials,
+      verifying status == 'COMPLETE', amount, and transaction_uuid/ref_id.
+    - Khalti: Queries the official Khalti lookup endpoint with secret key,
+      verifying status == 'Completed' and amount (paisa).
+    - Bank, Fonepay, ConnectIPS, Generic:
+      No public settlement lookup API exists for third-party screenshot vouchers in Nepal.
+      Always returns confirmed=False, requiring manual admin review.
+    """
+
+    @classmethod
+    def verify_settlement(
+        cls,
+        provider: str,
+        transaction_id: str,
+        expected_amount: Decimal,
+        payment_method=None
+    ) -> Dict[str, Any]:
+        """
+        Main authoritative verification entrypoint.
+        """
+        provider_norm = (provider or "").upper()
+
+        if provider_norm in ("ESEWA", "E-SEWA"):
+            return cls._verify_esewa(transaction_id, expected_amount, payment_method)
+        elif provider_norm in ("KHALTI",):
+            return cls._verify_khalti(transaction_id, expected_amount, payment_method)
+        elif provider_norm in ("BANK", "FONEPAY", "CONNECTIPS"):
+            return {
+                "provider": provider,
+                "confirmed": False,
+                "status": "NO_API_AVAILABLE",
+                "reference": transaction_id,
+                "verified_amount": None,
+                "message": (
+                    f"Authoritative settlement lookup is not supported for {provider} screenshots. "
+                    "Manual administrator bank statement review is required."
+                ),
+                "raw_response": None,
+            }
+        else:
+            return {
+                "provider": provider or "UNKNOWN",
+                "confirmed": False,
+                "status": "UNSUPPORTED_PROVIDER",
+                "reference": transaction_id,
+                "verified_amount": None,
+                "message": "Generic or unverified payment provider receipts require administrator review.",
+                "raw_response": None,
+            }
+
+    @classmethod
+    def _verify_esewa(
+        cls,
+        transaction_id: str,
+        expected_amount: Decimal,
+        payment_method=None
+    ) -> Dict[str, Any]:
+        import requests
+        from django.conf import settings
+
+        if not transaction_id:
+            return {
+                "provider": "eSewa",
+                "confirmed": False,
+                "status": "MISSING_TRANSACTION_ID",
+                "reference": "",
+                "verified_amount": None,
+                "message": "Transaction ID is missing; cannot perform authoritative eSewa verification.",
+                "raw_response": None,
+            }
+
+        product_code = getattr(settings, 'ESEWA_MERCHANT_CODE', '') or getattr(settings, 'ESEWA_PRODUCT_CODE', '')
+        if not product_code and payment_method:
+            product_code = getattr(payment_method, 'account_number', '') or getattr(payment_method, 'merchant_code', '')
+        if not product_code:
+            product_code = "EPAYTEST"
+
+        status_url = getattr(
+            settings,
+            'ESEWA_STATUS_URL',
+            'https://epay.esewa.com.np/api/epay/transaction/status/'
+        )
+
+        try:
+            params = {
+                'product_code': product_code,
+                'total_amount': str(expected_amount),
+                'transaction_uuid': transaction_id,
+            }
+            response = requests.get(status_url, params=params, timeout=5)
+            if response.status_code == 200:
+                data = response.json() if response.content else {}
+                status_val = (data.get('status') or '').upper()
+                total_amt = data.get('total_amount')
+                ref_id = data.get('ref_id') or data.get('transaction_uuid')
+
+                if status_val in ('COMPLETE', 'SUCCESS', 'COMPLETED'):
+                    if total_amt is not None and Decimal(str(total_amt)) == expected_amount:
+                        return {
+                            "provider": "eSewa",
+                            "confirmed": True,
+                            "status": "CONFIRMED",
+                            "reference": str(ref_id or transaction_id),
+                            "verified_amount": str(expected_amount),
+                            "message": f"eSewa settlement confirmed authoritatively by provider API (Ref: {ref_id}).",
+                            "raw_response": data,
+                        }
+                    else:
+                        return {
+                            "provider": "eSewa",
+                            "confirmed": False,
+                            "status": "AMOUNT_MISMATCH",
+                            "reference": str(ref_id or transaction_id),
+                            "verified_amount": str(total_amt) if total_amt else None,
+                            "message": f"eSewa API returned amount NPR {total_amt}, expected NPR {expected_amount}.",
+                            "raw_response": data,
+                        }
+                else:
+                    return {
+                        "provider": "eSewa",
+                        "confirmed": False,
+                        "status": status_val or "NOT_FOUND",
+                        "reference": transaction_id,
+                        "verified_amount": None,
+                        "message": f"eSewa API transaction status is '{status_val or 'NOT_FOUND'}'.",
+                        "raw_response": data,
+                    }
+            else:
+                return {
+                    "provider": "eSewa",
+                    "confirmed": False,
+                    "status": f"HTTP_{response.status_code}",
+                    "reference": transaction_id,
+                    "verified_amount": None,
+                    "message": f"eSewa status inquiry returned HTTP {response.status_code}.",
+                    "raw_response": None,
+                }
+        except Exception as exc:
+            return {
+                "provider": "eSewa",
+                "confirmed": False,
+                "status": "API_ERROR",
+                "reference": transaction_id,
+                "verified_amount": None,
+                "message": f"eSewa verification inquiry failed: {exc}",
+                "raw_response": None,
+            }
+
+    @classmethod
+    def _verify_khalti(
+        cls,
+        transaction_id: str,
+        expected_amount: Decimal,
+        payment_method=None
+    ) -> Dict[str, Any]:
+        import requests
+        from django.conf import settings
+
+        if not transaction_id:
+            return {
+                "provider": "Khalti",
+                "confirmed": False,
+                "status": "MISSING_TRANSACTION_ID",
+                "reference": "",
+                "verified_amount": None,
+                "message": "Transaction ID is missing; cannot perform authoritative Khalti verification.",
+                "raw_response": None,
+            }
+
+        secret_key = getattr(settings, 'KHALTI_SECRET_KEY', '')
+        if not secret_key:
+            return {
+                "provider": "Khalti",
+                "confirmed": False,
+                "status": "CREDENTIALS_UNAVAILABLE",
+                "reference": transaction_id,
+                "verified_amount": None,
+                "message": "Khalti merchant secret key is not configured; authoritative lookup unavailable.",
+                "raw_response": None,
+            }
+
+        lookup_url = getattr(
+            settings,
+            'KHALTI_LOOKUP_URL',
+            'https://khalti.com/api/v2/epayment/lookup/'
+        )
+
+        headers = {
+            'Authorization': f'Key {secret_key}',
+            'Content-Type': 'application/json',
+        }
+
+        try:
+            payload = {'pidx': transaction_id}
+            response = requests.post(lookup_url, json=payload, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json() if response.content else {}
+                status_val = (data.get('status') or '').capitalize()
+                total_paisa = data.get('total_amount')
+                expected_paisa = int(expected_amount * 100)
+
+                if status_val in ('Completed', 'Success'):
+                    if total_paisa is not None and int(total_paisa) == expected_paisa:
+                        return {
+                            "provider": "Khalti",
+                            "confirmed": True,
+                            "status": "CONFIRMED",
+                            "reference": str(data.get('transaction_id') or transaction_id),
+                            "verified_amount": str(expected_amount),
+                            "message": f"Khalti settlement confirmed authoritatively by provider API (Txn: {transaction_id}).",
+                            "raw_response": data,
+                        }
+                    else:
+                        ret_npr = str(Decimal(str(total_paisa / 100))) if total_paisa is not None else None
+                        return {
+                            "provider": "Khalti",
+                            "confirmed": False,
+                            "status": "AMOUNT_MISMATCH",
+                            "reference": transaction_id,
+                            "verified_amount": ret_npr,
+                            "message": f"Khalti API returned NPR {ret_npr}, expected NPR {expected_amount}.",
+                            "raw_response": data,
+                        }
+                else:
+                    return {
+                        "provider": "Khalti",
+                        "confirmed": False,
+                        "status": status_val or "NOT_FOUND",
+                        "reference": transaction_id,
+                        "verified_amount": None,
+                        "message": f"Khalti API transaction status is '{status_val or 'NOT_FOUND'}'.",
+                        "raw_response": data,
+                    }
+            else:
+                return {
+                    "provider": "Khalti",
+                    "confirmed": False,
+                    "status": f"HTTP_{response.status_code}",
+                    "reference": transaction_id,
+                    "verified_amount": None,
+                    "message": f"Khalti lookup returned HTTP {response.status_code}.",
+                    "raw_response": None,
+                }
+        except Exception as exc:
+            return {
+                "provider": "Khalti",
+                "confirmed": False,
+                "status": "API_ERROR",
+                "reference": transaction_id,
+                "verified_amount": None,
+                "message": f"Khalti verification inquiry failed: {exc}",
+                "raw_response": None,
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -1333,6 +1668,7 @@ class CommonPaymentVerificationEngine:
         detected_txns: List[str],
         detected_dates: List[date],
         detected_times: List[str],
+        require_authoritative: Optional[bool] = None,
     ) -> Dict[str, Any]:
         # 1. Payment Completion Status
         status_result = vdata.status
@@ -1352,12 +1688,17 @@ class CommonPaymentVerificationEngine:
             )
 
         # 2. Authoritative Amount Check
-        # Authoritative amount comes from plan price
-        expected_amount = Decimal(str(payment.plan.price)) if getattr(payment, "plan", None) else Decimal(str(payment.amount))
+        if getattr(payment, "plan", None) and hasattr(payment.plan, "price"):
+            expected_amount = Decimal(str(payment.plan.price))
+        elif hasattr(payment, "amount_npr") and payment.amount_npr is not None:
+            expected_amount = Decimal(str(payment.amount_npr))
+        else:
+            expected_amount = Decimal(str(getattr(payment, "amount", "0")))
         amount_status, det_amount = _check_amount(detected_amounts, expected_amount)
 
         # 3. Transaction ID Check
-        txn_status, det_txn = _check_txn(vdata.raw_ocr_text, detected_txns, payment.transaction_id)
+        txn_id = getattr(payment, "transaction_id", None) or getattr(payment, "payment_reference", "")
+        txn_status, det_txn = _check_txn(vdata.raw_ocr_text, detected_txns, txn_id)
 
         # 4. Transaction Date Check (Calendar date in Asia/Kathmandu)
         expected_date = get_expected_payment_date(payment)
@@ -1376,10 +1717,24 @@ class CommonPaymentVerificationEngine:
         )
 
         # 6. Global Duplicate Check
-        all_candidate_txns = list({payment.transaction_id} | set(detected_txns))
+        all_candidate_txns = list({txn_id} | set(detected_txns))
         duplicate_status, dup_warnings, is_resubmission = _check_duplicates(payment, image_hash, all_candidate_txns)
 
-        provider_status = "PASS" if vdata.provider != "UNKNOWN" else "UNKNOWN"
+        # Provider verification & mismatch check
+        expected_provider = getattr(payment_method, "method_type", "") if payment_method else ""
+        provider_mismatch = False
+        if expected_provider and vdata.provider != "UNKNOWN":
+            exp_u = expected_provider.upper()
+            det_u = vdata.provider.upper()
+            if exp_u in ("ESEWA", "KHALTI") and exp_u != det_u:
+                provider_mismatch = True
+            elif exp_u == "BANK" and det_u in ("ESEWA", "KHALTI"):
+                provider_mismatch = True
+
+        provider_status = "PASS" if (vdata.provider != "UNKNOWN" and not provider_mismatch) else ("FAIL" if provider_mismatch else "UNKNOWN")
+
+        # Safe confidence threshold: at least 0.85
+        safe_confidence = float(vdata.ocr_confidence or 0.0) >= 0.85
 
         # 7. Verification Decision Rules
         # Auto-verification is allowed when all configured required checks pass:
@@ -1390,6 +1745,7 @@ class CommonPaymentVerificationEngine:
         # - Receiver/merchant matches configured payment method
         # - Provider identified
         # - Duplicate check passed
+        # - OCR confidence meets safe threshold
         can_auto_verify = (
             status_result == "PASS"
             and amount_status == "PASS"
@@ -1398,12 +1754,36 @@ class CommonPaymentVerificationEngine:
             and receiver_status == "PASS"
             and provider_status == "PASS"
             and duplicate_status == "PASS"
+            and safe_confidence
         )
+
+        # Check whether authoritative settlement lookup is required.
+        # For CoinTopUp submissions (or when require_authoritative is set), OCR alone is NEVER enough to auto-credit.
+        is_coin_topup = (
+            payment.__class__.__name__ == 'CoinTopUp'
+            or hasattr(payment, 'coins_expected')
+            or hasattr(payment, 'coin_package')
+            or getattr(payment, 'require_authoritative_confirmation', False)
+        )
+        needs_authoritative = require_authoritative if require_authoritative is not None else is_coin_topup
+
+        auth_result = None
+        if needs_authoritative:
+            auth_result = AuthoritativePaymentVerifier.verify_settlement(
+                provider=vdata.provider,
+                transaction_id=det_txn or txn_id,
+                expected_amount=expected_amount,
+                payment_method=payment_method
+            )
+            if not auth_result.get("confirmed"):
+                can_auto_verify = False
 
         failure_reasons: List[str] = []
         if can_auto_verify:
             outcome = "AUTO_VERIFIED"
             notes = "Receipt verified successfully. Amount, Transaction ID, and payment details verified."
+            if auth_result and auth_result.get("confirmed"):
+                notes += f" Authoritative settlement confirmed: {auth_result.get('message', '')}"
         else:
             outcome = "NEEDS_ADMIN_REVIEW"
             if duplicate_status == "FAIL":
@@ -1415,9 +1795,9 @@ class CommonPaymentVerificationEngine:
             elif amount_status == "UNKNOWN":
                 failure_reasons.append(f"Expected amount NPR {expected_amount} not detected on receipt.")
             if txn_status == "FAIL":
-                failure_reasons.append(f"Transaction ID mismatch: expected '{payment.transaction_id}', detected '{det_txn}' on receipt.")
+                failure_reasons.append(f"Transaction ID mismatch: expected '{txn_id}', detected '{det_txn}' on receipt.")
             elif txn_status == "UNKNOWN":
-                failure_reasons.append(f"Transaction ID '{payment.transaction_id}' not found on receipt.")
+                failure_reasons.append(f"Transaction ID '{txn_id}' not found on receipt.")
             if date_status == "FAIL":
                 failure_reasons.append(f"Receipt date issue: {det_date}.")
             elif date_status == "UNKNOWN":
@@ -1426,8 +1806,18 @@ class CommonPaymentVerificationEngine:
                 failure_reasons.append("Receiver merchant or account details mismatch.")
             elif receiver_status == "UNKNOWN":
                 failure_reasons.append("Receiver details could not be verified against configured payment method.")
-            if provider_status == "UNKNOWN" and not failure_reasons:
+            if provider_mismatch:
+                failure_reasons.append(f"Provider mismatch: expected {expected_provider} but detected {vdata.provider} on receipt.")
+            elif provider_status == "UNKNOWN" and not failure_reasons:
                 failure_reasons.append("Payment provider or receipt format could not be identified.")
+            if not safe_confidence:
+                failure_reasons.append(f"OCR confidence score ({vdata.ocr_confidence:.2f}) is below safe threshold (0.85).")
+
+            # Authoritative settlement failure reason
+            if needs_authoritative and auth_result and not auth_result.get("confirmed"):
+                auth_msg = auth_result.get("message")
+                if auth_msg and auth_msg not in failure_reasons:
+                    failure_reasons.append(auth_msg)
 
             if not failure_reasons:
                 failure_reasons.append("Receipt details require manual administrator review.")
@@ -1470,6 +1860,9 @@ class CommonPaymentVerificationEngine:
             "notes": notes,
             "extracted_text_preview": vdata.raw_ocr_text[:800],
             "verification_data": vdata.to_dict(),
+            "ocr_confidence": float(vdata.ocr_confidence or 0.0),
+            "provider_verification_result": auth_result,
+            "authoritative_confirmed": auth_result.get("confirmed", False) if auth_result else False,
         }
 
     def _build_result(self, outcome, vdata, image_hash, ocr_engine, status_result, amount_status, txn_status, receiver_status, date_status, failure_reasons, notes):
@@ -1506,6 +1899,9 @@ class CommonPaymentVerificationEngine:
             "notes": notes,
             "extracted_text_preview": vdata.raw_ocr_text[:800],
             "verification_data": vdata.to_dict(),
+            "ocr_confidence": float(vdata.ocr_confidence or 0.0),
+            "provider_verification_result": None,
+            "authoritative_confirmed": False,
         }
 
 
@@ -1521,7 +1917,7 @@ class PaymentProofVerificationService:
     Verifies with Common Verification Engine.
     """
 
-    def verify(self, payment) -> Dict[str, Any]:
+    def verify(self, payment, require_authoritative: Optional[bool] = None) -> Dict[str, Any]:
         image_bytes = self._read_screenshot(payment)
         if image_bytes is None:
             return self._fallback_result(
@@ -1533,11 +1929,12 @@ class PaymentProofVerificationService:
         image_hash = hashlib.sha256(image_bytes).hexdigest()
 
         # Initial duplicate check on student's submitted transaction ID
+        submitted_txn = getattr(payment, "transaction_id", None) or getattr(payment, "payment_reference", "")
         duplicate_status, dup_warnings, is_init_resub = _check_duplicates(
-            payment, image_hash, [payment.transaction_id]
+            payment, image_hash, [submitted_txn]
         )
         if duplicate_status == "FAIL":
-            is_dup_txn = any("Transaction ID" in w for w in dup_warnings)
+            is_dup_txn = any("Transaction" in w for w in dup_warnings)
             is_dup_img = any("Receipt image" in w for w in dup_warnings)
             return self._fallback_result(
                 "Duplicate transaction detected.",
@@ -1549,7 +1946,8 @@ class PaymentProofVerificationService:
             )
 
         # Document / Screenshot validation & extraction (PDF or Image)
-        file_name = getattr(payment.screenshot, "name", "")
+        img_field = getattr(payment, "screenshot", None) or getattr(payment, "receipt_image", None)
+        file_name = getattr(img_field, "name", "")
         valid_doc, doc_err, image, digital_text, doc_type = _extract_document_or_image_content(
             image_bytes, filename=file_name
         )
@@ -1605,12 +2003,15 @@ class PaymentProofVerificationService:
             detected_txns=detected_txns,
             detected_dates=detected_dates,
             detected_times=detected_times,
+            require_authoritative=require_authoritative,
         )
 
     @staticmethod
     def _read_screenshot(payment) -> Optional[bytes]:
         try:
-            image_file = payment.screenshot
+            image_file = getattr(payment, "screenshot", None) or getattr(payment, "receipt_image", None)
+            if not image_file:
+                return None
             image_file.open("rb")
             try:
                 return image_file.read()
@@ -1657,4 +2058,7 @@ class PaymentProofVerificationService:
             "notes": notes if "Payment sent for Admin approval" in notes else f"Payment sent for Admin approval: {notes}",
             "extracted_text_preview": "",
             "verification_data": None,
+            "ocr_confidence": 0.0,
+            "provider_verification_result": None,
+            "authoritative_confirmed": False,
         }

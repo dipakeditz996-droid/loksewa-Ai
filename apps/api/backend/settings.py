@@ -191,6 +191,7 @@ INSTALLED_APPS = [
     'courses',
     'community',
     'storages',
+    'wallet',
 ]
 
 MIDDLEWARE = [

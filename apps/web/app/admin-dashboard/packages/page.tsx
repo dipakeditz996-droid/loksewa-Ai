@@ -380,9 +380,10 @@ function getCourseLevel(
 export default function AdminPackagesPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [courses, setCourses] = useState<PublicCourse[]>([]);
+  const [categories, setCategories] = useState<AdminExamCategory[]>([]);
   const [academicExams, setAcademicExams] = useState<AdminPosition[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
-  
+
   // Package CRUD & Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -443,6 +444,7 @@ export default function AdminPackagesPage() {
     const { planData, coursesData, categoriesData, examsData, allExamsData } = pageData;
     setPlans([...planData].sort((a, b) => a.display_order - b.display_order));
     if (coursesData) setCourses(coursesData);
+    if (categoriesData) setCategories(categoriesData);
     setAcademicExams(examsData);
     if (allExamsData && allExamsData.results) {
       setAvailableExams(allExamsData.results);
@@ -479,6 +481,56 @@ export default function AdminPackagesPage() {
     [academicExams]
   );
 
+  const availableLevels = useMemo(() => {
+    const rootPositions = academicExams.filter((p) => p.parent === null && p.is_active);
+    if (selectedCategory === "ALL") {
+      return rootPositions;
+    }
+    return rootPositions.filter((p) => {
+      if (p.category !== null && String(p.category) === String(selectedCategory)) return true;
+      if (p.category_name && p.category_name.toLowerCase() === selectedCategory.toLowerCase()) return true;
+      return false;
+    });
+  }, [academicExams, selectedCategory]);
+
+  const handleCategoryChange = (val: string) => {
+    setSelectedCategory(val);
+    setSelectedLevel("ALL");
+  };
+
+  const filteredCoursesForModal = useMemo(() => {
+    return courses.filter((c) => {
+      // Category filter
+      if (selectedCategory !== "ALL") {
+        const matchCatId = c.category_id && String(c.category_id) === String(selectedCategory);
+        const matchCatName = c.category_name && c.category_name.toLowerCase() === selectedCategory.toLowerCase();
+        const examObj = c.exam ? academicExamById.get(c.exam.id) : null;
+        const examCatMatch = examObj && (String(examObj.category) === String(selectedCategory) || (examObj.category_name && examObj.category_name.toLowerCase() === selectedCategory.toLowerCase()));
+        if (!matchCatId && !matchCatName && !examCatMatch) return false;
+      }
+
+      // Level filter
+      if (selectedLevel !== "ALL") {
+        const matchLevelId = c.level_id && String(c.level_id) === String(selectedLevel);
+        const matchLevelName = c.level_name && c.level_name.toLowerCase() === selectedLevel.toLowerCase();
+        const examObj = c.exam ? academicExamById.get(c.exam.id) : null;
+        const examParentMatch = examObj && examObj.parent && (String(examObj.parent) === String(selectedLevel) || (examObj.parent_name && examObj.parent_name.toLowerCase() === selectedLevel.toLowerCase()));
+        if (!matchLevelId && !matchLevelName && !examParentMatch) return false;
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = c.title.toLowerCase().includes(q);
+        const matchPath = c.hierarchy_path?.toLowerCase().includes(q);
+        const matchExam = c.exam?.title.toLowerCase().includes(q);
+        if (!matchTitle && !matchPath && !matchExam) return false;
+      }
+
+      return true;
+    });
+  }, [courses, selectedCategory, selectedLevel, searchQuery, academicExamById]);
+
   const filteredPlans = useMemo(() => {
     return plans.filter((p) => {
       if (statusFilter !== "ALL" && p.status !== statusFilter) return false;
@@ -498,12 +550,38 @@ export default function AdminPackagesPage() {
   const openCreate = () => {
     setEditingId(null);
     setForm({ ...EMPTY_FORM, exam_access_configs: DEFAULT_EXAM_ACCESS_CONFIGS });
+    setSelectedCategory("ALL");
+    setSelectedLevel("ALL");
+    setSearchQuery("");
     setActiveTab("basic");
     setDialogOpen(true);
   };
 
   const openEdit = (plan: SubscriptionPlan) => {
     setEditingId(plan.id);
+    const targetCourseId = plan.course || (plan.eligible_courses && plan.eligible_courses.length > 0 ? plan.eligible_courses[0] : null);
+    const matchedCourse = targetCourseId ? courses.find((c) => c.id === targetCourseId) : null;
+    if (matchedCourse) {
+      if (matchedCourse.category_id) {
+        setSelectedCategory(String(matchedCourse.category_id));
+      } else if (matchedCourse.category_name) {
+        setSelectedCategory(matchedCourse.category_name);
+      } else {
+        setSelectedCategory("ALL");
+      }
+      if (matchedCourse.level_id) {
+        setSelectedLevel(String(matchedCourse.level_id));
+      } else if (matchedCourse.level_name) {
+        setSelectedLevel(matchedCourse.level_name);
+      } else {
+        setSelectedLevel("ALL");
+      }
+    } else {
+      setSelectedCategory("ALL");
+      setSelectedLevel("ALL");
+    }
+    setSearchQuery("");
+
     setForm({
       name: plan.name,
       slug: plan.slug || "",
@@ -944,10 +1022,23 @@ export default function AdminPackagesPage() {
                               )}
                             </div>
                             <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{plan.description || "No description configured."}</p>
-                            <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 font-medium">
+                            <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-500 font-medium flex-wrap">
                               <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
                                 {plan.package_type.replace("_", " ")}
                               </span>
+                              {plan.course_details ? (
+                                <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 max-w-[220px] truncate" title={plan.course_details.hierarchy_path || plan.course_details.title}>
+                                  📚 {plan.course_details.title}
+                                </span>
+                              ) : plan.eligible_courses_details && plan.eligible_courses_details.length > 0 ? (
+                                <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200" title={plan.eligible_courses_details.map(c => c.title).join(", ")}>
+                                  📚 {plan.eligible_courses_details.length} courses
+                                </span>
+                              ) : plan.package_type === "ALL_ACCESS" ? (
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  🌐 All Access
+                                </span>
+                              ) : null}
                               {plan.slug && <span className="text-slate-400">slug: {plan.slug}</span>}
                             </div>
                           </div>
@@ -1025,8 +1116,8 @@ export default function AdminPackagesPage() {
                             plan.status === "ACTIVE"
                               ? "bg-emerald-100 text-emerald-800 border-none font-medium hover:bg-emerald-200"
                               : plan.status === "ARCHIVED"
-                              ? "bg-slate-200 text-slate-600 border-none font-medium"
-                              : "bg-slate-100 text-slate-500 border-none font-medium"
+                                ? "bg-slate-200 text-slate-600 border-none font-medium"
+                                : "bg-slate-100 text-slate-500 border-none font-medium"
                           }
                         >
                           {plan.status === "ACTIVE" ? "Published" : plan.status === "ARCHIVED" ? "Archived" : "Draft"}
@@ -1207,11 +1298,10 @@ export default function AdminPackagesPage() {
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id as any)}
-                className={`py-2.5 px-3 border-b-2 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === t.id
+                className={`py-2.5 px-3 border-b-2 font-medium transition-colors whitespace-nowrap ${activeTab === t.id
                     ? "border-[#0B2545] text-[#0B2545] font-bold"
                     : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
+                  }`}
               >
                 {t.label}
               </button>
@@ -1423,7 +1513,7 @@ export default function AdminPackagesPage() {
                         onChange={(e) => setForm({ ...form, has_expiry: e.target.checked })}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:width-5 after:transition-all peer-checked:bg-[#0B2545]"></div>
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0B2545]"></div>
                     </label>
                   </div>
 
@@ -1502,7 +1592,7 @@ export default function AdminPackagesPage() {
 
             {/* TAB 3: COURSE ACCESS */}
             {activeTab === "courses" && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold text-slate-700">Package Preparation Type</Label>
                   <Select
@@ -1513,7 +1603,7 @@ export default function AdminPackagesPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SINGLE">Single Preparation (grants 1 course)</SelectItem>
+                      <SelectItem value="SINGLE">Single Preparation (grants 1 specific course)</SelectItem>
                       <SelectItem value="MULTI">Multi Preparation (student selects up to N preparations)</SelectItem>
                       <SelectItem value="BUNDLE">Curated Course Bundle (grants all selected courses)</SelectItem>
                       <SelectItem value="ALL_ACCESS">All Access (grants all platform preparations)</SelectItem>
@@ -1522,7 +1612,7 @@ export default function AdminPackagesPage() {
                 </div>
 
                 {form.package_type === "MULTI" && (
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 p-3 rounded-lg bg-slate-50 border border-slate-200">
                     <Label className="text-xs font-semibold text-slate-700">
                       Allowed Preparation Choices Count
                     </Label>
@@ -1530,50 +1620,215 @@ export default function AdminPackagesPage() {
                       type="number"
                       value={form.allowed_preparation_count}
                       onChange={(e) => setForm({ ...form, allowed_preparation_count: parseInt(e.target.value) || 1 })}
-                      className="h-9 text-xs max-w-xs"
+                      className="h-9 text-xs max-w-xs bg-white"
                       min={1}
                     />
+                    <p className="text-[11px] text-slate-500">
+                      Student will be prompted to choose up to this many courses from the eligible list during onboarding.
+                    </p>
                   </div>
                 )}
 
-                {form.package_type !== "ALL_ACCESS" && (
-                  <div className="space-y-2 pt-2 border-t border-slate-100">
-                    <div className="flex items-center justify-between">
+                {form.package_type === "ALL_ACCESS" ? (
+                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/60 text-emerald-900 space-y-1">
+                    <div className="font-bold text-xs flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-emerald-600" /> All-Access Platform Package
+                    </div>
+                    <p className="text-xs text-emerald-800">
+                      Subscribers to this package automatically gain access to all active and published preparation courses across the entire platform. No individual course binding is required.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-2 border-t border-slate-100">
+                    {/* Selected Course Display for SINGLE */}
+                    {form.package_type === "SINGLE" && form.course && (
+                      <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-blue-600" /> Selected Course (Canonical Record)
+                          </div>
+                          <div className="text-sm font-bold text-slate-900">
+                            {courses.find((c) => c.id === form.course)?.title || `Course #${form.course}`}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-600">
+                            <span className="font-mono bg-white px-1.5 py-0.5 rounded border border-blue-200 text-blue-800 text-[10px] font-semibold">
+                              Course ID: #{form.course}
+                            </span>
+                            {courses.find((c) => c.id === form.course)?.hierarchy_path && (
+                              <span className="text-slate-600">
+                                {courses.find((c) => c.id === form.course)?.hierarchy_path}
+                              </span>
+                            )}
+                            <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-50 border-emerald-200">
+                              {courses.find((c) => c.id === form.course)?.status || "published"}
+                            </Badge>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setForm({ ...form, course: null, eligible_courses: [] })}
+                          className="text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8 shrink-0"
+                        >
+                          Change
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Selected Courses Chips for MULTI / BUNDLE */}
+                    {(form.package_type === "MULTI" || form.package_type === "BUNDLE") && form.eligible_courses.length > 0 && (
+                      <div className="p-3 bg-purple-50/60 border border-purple-200 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-purple-950 flex items-center gap-1.5">
+                            <Layers className="w-3.5 h-3.5 text-purple-600" /> Selected Eligible Courses ({form.eligible_courses.length})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setForm({ ...form, eligible_courses: [] })}
+                            className="text-[11px] text-rose-600 hover:underline font-medium"
+                          >
+                            Clear All
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pt-1">
+                          {form.eligible_courses.map((id) => {
+                            const c = courses.find((item) => item.id === id);
+                            return (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-purple-200 text-xs text-slate-800 shadow-2xs"
+                              >
+                                <span className="font-semibold">{c?.title || `Course #${id}`}</span>
+                                <span className="text-[10px] text-purple-700 font-mono">#{id}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setForm({
+                                      ...form,
+                                      eligible_courses: form.eligible_courses.filter((cid) => cid !== id),
+                                    });
+                                  }}
+                                  className="text-slate-400 hover:text-rose-600 ml-0.5"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cascading Filter Controls: Category → Level → Search */}
+                    <div className="space-y-1.5">
                       <Label className="text-xs font-semibold text-slate-700">
-                        {form.package_type === "SINGLE" ? "Select Associated Course:" : "Eligible Preparation Courses:"}
+                        {form.package_type === "SINGLE" ? "Filter & Select Course:" : "Filter & Select Eligible Courses:"}
                       </Label>
-                      <span className="text-[11px] text-slate-400 font-medium">
-                        Selected: {form.eligible_courses.length}
-                      </span>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                            <SelectTrigger className="h-9 text-xs bg-white">
+                              <SelectValue placeholder="All Categories" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ALL">All Categories</SelectItem>
+                              {categories.map((cat) => (
+                                <SelectItem key={cat.id} value={String(cat.id)}>
+                                  {cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <Select value={selectedLevel} onValueChange={(val) => setSelectedLevel(val)}>
+                            <SelectTrigger className="h-9 text-xs bg-white">
+                              <SelectValue placeholder="All Levels" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ALL">All Levels</SelectItem>
+                              {availableLevels.map((lvl) => (
+                                <SelectItem key={lvl.id} value={String(lvl.id)}>
+                                  {lvl.name} {selectedCategory === "ALL" && lvl.category_name ? `(${lvl.category_name})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            placeholder="Search courses..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="h-9 pl-8 text-xs bg-white"
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-2 space-y-1.5 bg-slate-50/30">
-                      {courses.map((c) => {
-                        const isSelected = form.eligible_courses.includes(c.id) || form.course === c.id;
-                        return (
-                          <div
-                            key={c.id}
-                            onClick={() => {
-                              if (form.package_type === "SINGLE") {
-                                setForm({ ...form, course: c.id, eligible_courses: [c.id] });
-                              } else {
-                                const next = isSelected
-                                  ? form.eligible_courses.filter((id) => id !== c.id)
-                                  : [...form.eligible_courses, c.id];
-                                setForm({ ...form, eligible_courses: next });
-                              }
-                            }}
-                            className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors text-xs ${
-                              isSelected
-                                ? "bg-[#0B2545]/10 border border-[#0B2545]/30 text-[#0B2545] font-semibold"
-                                : "hover:bg-slate-100 border border-transparent text-slate-700"
-                            }`}
-                          >
-                            <span>{c.title}</span>
-                            {isSelected && <Check className="w-4 h-4 text-[#0B2545]" />}
-                          </div>
-                        );
-                      })}
+                    {/* Course Selection Cards */}
+                    <div className="max-h-72 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1.5 bg-slate-50/40">
+                      {filteredCoursesForModal.length === 0 ? (
+                        <div className="text-center py-8 text-xs text-slate-400 space-y-1">
+                          <AlertCircle className="w-5 h-5 mx-auto text-slate-300" />
+                          <div>No courses found matching selected filters.</div>
+                        </div>
+                      ) : (
+                        filteredCoursesForModal.map((c) => {
+                          const isSelected = form.package_type === "SINGLE"
+                            ? form.course === c.id
+                            : form.eligible_courses.includes(c.id);
+
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                if (form.package_type === "SINGLE") {
+                                  setForm({ ...form, course: c.id, eligible_courses: [c.id] });
+                                } else {
+                                  const next = isSelected
+                                    ? form.eligible_courses.filter((id) => id !== c.id)
+                                    : [...form.eligible_courses, c.id];
+                                  setForm({ ...form, eligible_courses: next });
+                                }
+                              }}
+                              className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-all ${isSelected
+                                  ? "bg-[#0B2545]/10 border-[#0B2545] text-[#0B2545] shadow-2xs font-semibold"
+                                  : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                                }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                {form.package_type !== "SINGLE" && (
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    readOnly
+                                    className="rounded border-slate-300 text-[#0B2545] shrink-0"
+                                  />
+                                )}
+                                <div className="min-w-0">
+                                  <div className="text-xs truncate">{c.title}</div>
+                                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 font-normal">
+                                    <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">ID: #{c.id}</span>
+                                    {c.hierarchy_path && <span className="truncate">{c.hierarchy_path}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <Badge variant="outline" className={`text-[10px] capitalize ${c.status === 'published' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-slate-500'}`}>
+                                  {c.status}
+                                </Badge>
+                                {isSelected && form.package_type === "SINGLE" && <Check className="w-4 h-4 text-[#0B2545]" />}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
                 )}
@@ -1773,11 +2028,10 @@ export default function AdminPackagesPage() {
                       key={cat.id}
                       type="button"
                       onClick={() => setLimitCategoryFilter(cat.id)}
-                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${
-                        limitCategoryFilter === cat.id
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors ${limitCategoryFilter === cat.id
                           ? "bg-[#0B2545] text-white font-bold"
                           : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
+                        }`}
                     >
                       {cat.label}
                     </button>
@@ -1804,11 +2058,10 @@ export default function AdminPackagesPage() {
                       return (
                         <div
                           key={feat.key}
-                          className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
-                            isEnabled
+                          className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${isEnabled
                               ? "border-slate-200 bg-white shadow-sm"
                               : "border-slate-200/60 bg-slate-50/50 opacity-60"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
@@ -1887,9 +2140,8 @@ export default function AdminPackagesPage() {
                                       };
                                       setForm({ ...form, feature_limits: updated });
                                     }}
-                                    className={`h-7 text-[11px] px-2 ${
-                                      quotaVal === -1 ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold" : ""
-                                    }`}
+                                    className={`h-7 text-[11px] px-2 ${quotaVal === -1 ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold" : ""
+                                      }`}
                                   >
                                     Set Unlimited (-1)
                                   </Button>

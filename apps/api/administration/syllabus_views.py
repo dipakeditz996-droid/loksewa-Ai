@@ -489,6 +489,16 @@ class ExamCategoryViewSet(BaseSyllabusViewSet):
 class ExamViewSet(BaseSyllabusViewSet):
     serializer_class = ExamSerializer
     
+    def perform_create(self, serializer):
+        from courses.services.course_sync_service import sync_course_for_exam
+        exam = serializer.save()
+        sync_course_for_exam(exam, create_if_missing=True)
+
+    def perform_update(self, serializer):
+        from courses.services.course_sync_service import sync_course_for_exam
+        exam = serializer.save()
+        sync_course_for_exam(exam, create_if_missing=True)
+
     def get_queryset(self):
         from django.db.models import Count, Q
         queryset = Exam.objects.select_related('category', 'parent').annotate(

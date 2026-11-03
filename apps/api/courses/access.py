@@ -267,6 +267,20 @@ def get_authorized_examination_filter(user, target_course=None):
     q |= Q(course__isnull=True, exam__isnull=True, status__in=['published', 'live'])
     if auth_exam_scope:
         q |= Q(course__isnull=True, exam_id__in=auth_exam_scope)
+
+    try:
+        from wallet.models import ContentEntitlement
+        entitled_exam_ids = list(
+            ContentEntitlement.objects.filter(
+                user=user,
+                content_type='EXAMINATION',
+                status='ACTIVE'
+            ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())).values_list('content_id', flat=True)
+        )
+        if entitled_exam_ids:
+            q |= Q(id__in=entitled_exam_ids)
+    except Exception:
+        pass
     return q
 
 

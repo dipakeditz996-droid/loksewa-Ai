@@ -77,6 +77,7 @@ urlpatterns = [
     path('api/student/', include('support.student_urls')),
     path('api/subscriptions/', include('subscriptions.urls')),
     path('api/gamification/', include('gamification.urls')),
+    path('api/wallet/', include('wallet.urls')),
     path('api/', include('courses.urls')),
     path('api/community/', include('community.urls')),
     path('api/notifications/', include('core.notification_urls')),

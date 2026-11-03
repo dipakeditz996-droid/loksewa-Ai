@@ -199,8 +199,14 @@ export default function BuyCoursePreparationPage() {
     }
 
     if (hasCourses || !hasChildren) {
-      // Navigate to plans with this exam's id
-      router.push(`/student/buy-course/plans?exam_id=${exam.id}&exam_name=${encodeURIComponent(exam.name)}`);
+      const singleCourse = (exam.courses ?? []).length === 1 ? exam.courses![0] : null;
+      const courseQuery = singleCourse
+        ? `&course_id=${singleCourse.id}&course_name=${encodeURIComponent(singleCourse.title)}`
+        : "";
+      // Navigate to plans with this exam's id and course context
+      router.push(
+        `/student/buy-course/plans?exam_id=${exam.id}&exam_name=${encodeURIComponent(exam.name)}${courseQuery}`
+      );
     }
   };
 

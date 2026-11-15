@@ -69,32 +69,32 @@ export const QuickActionsWidget = memo(function QuickActionsWidget({
           <Link
             key={i}
             href={action.href}
-            className="flex flex-col items-center justify-center p-4 bg-card rounded-xl border hover:border-[#D4A72C] hover:shadow-md transition-all group text-center gap-2"
+            className="flex flex-col items-center justify-center p-4 bg-card rounded-xl border hover:border-[#2563EB] hover:shadow-md transition-all group text-center gap-2"
           >
-            <div className="p-3 rounded-full bg-muted group-hover:bg-[#D4A72C]/10 transition-colors">
+            <div className="p-3 rounded-full bg-muted group-hover:bg-[#2563EB]/10 transition-colors">
               {action.icon === "target" && (
-                <Target className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <Target className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "file-text" && (
-                <FileText className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <FileText className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "book-open" && (
-                <BookOpen className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <BookOpen className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "message-square" && (
-                <MessageSquare className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <MessageSquare className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "calendar" && (
-                <Calendar className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <Calendar className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "shopping-bag" && (
-                <ShoppingBag className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <ShoppingBag className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "check-circle" && (
-                <CheckCircle2 className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <CheckCircle2 className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
               {action.icon === "gift" && (
-                <Gift className="w-5 h-5 text-blue-600 group-hover:text-[#D4A72C]" />
+                <Gift className="w-5 h-5 text-blue-600 group-hover:text-[#2563EB]" />
               )}
             </div>
             <span className="text-[13px] font-semibold text-foreground flex items-center gap-1.5">
@@ -129,17 +129,17 @@ export const ContinueStudyWidget = memo(function ContinueStudyWidget({
 }: ContinueStudyWidgetProps) {
   if (data?.continueLearning) {
     return (
-      <section className="relative overflow-hidden bg-gradient-to-r from-[#0B2545] via-[#0E3259] to-[#163E6B] text-white rounded-[16px] shadow-lg border border-[#163E6B] group/widget">
+      <section className="relative overflow-hidden bg-gradient-to-r from-[#102D40] via-[#174A68] to-[#102D40] text-white rounded-[16px] shadow-lg border border-[#174A68] group/widget">
         {dragHandle}
         <div className="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-[#163E6B]/50 to-transparent pointer-events-none"></div>
-        <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#D4A72C] opacity-10 blur-[60px] pointer-events-none"></div>
+        <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-[#2563EB] opacity-10 blur-[60px] pointer-events-none"></div>
         <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 z-10">
           <div className="flex items-start gap-5">
-            <div className="bg-[#0B2545] border border-[#163E6B] p-3.5 rounded-[12px] hidden sm:flex shrink-0">
-              <BookOpen className="h-7 w-7 text-[#D4A72C]" strokeWidth={1.5} />
+            <div className="bg-[#102D40] border border-[#174A68] p-3.5 rounded-[12px] hidden sm:flex shrink-0">
+              <BookOpen className="h-7 w-7 text-[#2563EB] dark:text-[#60A5FA]" strokeWidth={1.5} />
             </div>
             <div>
-              <div className="text-[12px] font-bold text-[#D4A72C] uppercase tracking-widest mb-1">
+              <div className="text-[12px] font-bold text-[#2563EB] dark:text-[#60A5FA] uppercase tracking-widest mb-1">
                 Unfinished {data.continueLearning.type === "practice" ? "Practice" : "Exam"}
               </div>
               <h3 className="font-bold text-[20px] text-white tracking-tight">
@@ -149,7 +149,7 @@ export const ContinueStudyWidget = memo(function ContinueStudyWidget({
                 <Progress
                   value={data.continueLearning.progress}
                   className="w-48 h-1.5 bg-card/20"
-                  indicatorClassName="bg-[#D4A72C]"
+                  indicatorClassName="bg-[#2563EB]"
                 />
                 <span className="text-[13px] font-bold text-white">
                   {data.continueLearning.progress}%
@@ -158,7 +158,7 @@ export const ContinueStudyWidget = memo(function ContinueStudyWidget({
             </div>
           </div>
           <Button
-            className="bg-[#D4A72C] hover:bg-[#b08b25] text-slate-950 font-bold px-8 h-12 rounded-xl shrink-0 shadow-md transition-all hover:scale-[1.02]"
+            className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold px-8 h-12 rounded-xl shrink-0 shadow-md transition-all hover:scale-[1.02]"
             asChild
           >
             <Link href={data.continueLearning.url}>
@@ -203,18 +203,18 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
   return (
     <section
       data-focus-hide
-      className="bg-gradient-to-r from-[#0B2545] to-[#163E6B] rounded-[16px] shadow-lg border border-[#163E6B] overflow-hidden text-white group/widget"
+      className="bg-gradient-to-r from-[#102D40] to-[#174A68] rounded-[16px] shadow-lg border border-[#174A68] overflow-hidden text-white group/widget"
     >
       {dragHandle}
       <div className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
         <div className="flex-1 space-y-3">
           <div className="flex items-center gap-2">
-            <Gift className="w-6 h-6 text-[#D4A72C]" />
+            <Gift className="w-6 h-6 text-[#2563EB] dark:text-[#60A5FA]" />
             <h2 className="text-xl md:text-2xl font-bold tracking-tight">Invite Friends & Earn</h2>
           </div>
           <p className="text-slate-300 text-sm">
             Earn{" "}
-            <span className="font-bold text-[#D4A72C]">
+            <span className="font-bold text-[#2563EB] dark:text-[#60A5FA]">
               {referralData.settings.referrer_xp_reward} XP
             </span>{" "}
             for every friend who joins LoksewaAI and completes registration.
@@ -265,7 +265,7 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
             />
             <p className="text-[10px] text-slate-300 mt-2">
               {Math.max(10 - referralData.stats.successful_referrals, 0)} more referrals to unlock:{" "}
-              <strong className="text-[#D4A72C]">Referral Champion (+500 XP)</strong>
+              <strong className="text-[#2563EB] dark:text-[#60A5FA]">Referral Champion (+500 XP)</strong>
             </p>
           </div>
         </div>
@@ -320,7 +320,7 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
                 <Share2 className="w-4 h-4" />
               </Button>
               <Button
-                className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-white flex-1 h-9 px-2"
+                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white flex-1 h-9 px-2"
                 asChild
               >
                 <Link href="/student/referrals">
@@ -395,7 +395,7 @@ export const ReferralsListWidget = memo(function ReferralsListWidget({
                   >
                     {item.status}
                   </span>
-                  <span className="text-xs font-bold text-[#D4A72C] w-14 text-right">
+                  <span className="text-xs font-bold text-[#2563EB] dark:text-[#60A5FA] w-14 text-right">
                     {item.reward_amount > 0 ? `+${item.reward_amount} XP` : "—"}
                   </span>
                 </div>
@@ -500,7 +500,7 @@ export const YourProgressWidget = memo(function YourProgressWidget({
                   100
                 )}
                 className="h-2 bg-muted/80"
-                indicatorClassName="bg-[#D4A72C]"
+                indicatorClassName="bg-[#2563EB]"
               />
             </div>
             <div>

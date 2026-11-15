@@ -855,7 +855,7 @@ export default function NotesPage() {
             Unlock This Study Material
           </DialogTitle>
           <DialogDescription className="text-slate-500 font-[500] text-base mb-8">
-            Access premium study materials, expert notes, and continue your structured preparation with LoksewaAI.
+            Access premium study materials, expert notes, and continue your structured preparation with NES Mastery.
           </DialogDescription>
           <div className="flex flex-col gap-3">
             <Link href="/courses" className="w-full">

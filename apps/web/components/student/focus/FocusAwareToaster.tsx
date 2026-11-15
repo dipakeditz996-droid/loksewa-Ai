@@ -26,7 +26,7 @@ export function FocusAwareToaster() {
           borderRadius: "12px",
           border: "1px solid #E2E8F0",
           background: "#FFFFFF",
-          color: "#0B2545",
+          color: "#102D40",
           fontSize: "13px",
           fontWeight: 500,
           boxShadow: isFocusActive

@@ -81,7 +81,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
             Get dedicated Mock Exam attempts, subjective checking, multiplayer quiz battles, AI Tutor credits, and study materials.
           </p>
         </div>
-        <Button asChild className="bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]/90 font-bold h-10 px-5 rounded-xl shrink-0">
+        <Button asChild className="bg-[#2563EB] text-white hover:bg-[#1D4ED8] font-bold h-10 px-5 rounded-xl shrink-0">
           <Link href="/student/plans">
             View Packages <ArrowUpRight className="w-4 h-4 ml-1" />
           </Link>
@@ -168,13 +168,13 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
           <Progress
             value={pct}
             className={`h-1.5 ${isExhausted ? "bg-rose-500/20" : "bg-muted"}`}
-            indicatorClassName={isExhausted ? "bg-rose-500" : "bg-[#D4A72C]"}
+            indicatorClassName={isExhausted ? "bg-rose-500" : "bg-[#2563EB]"}
           />
           {isExhausted && (
             <div className="pt-0.5 flex justify-end">
               <Link
                 href="/student/plans"
-                className="text-[10px] text-[#D4A72C] hover:underline font-bold flex items-center gap-0.5"
+                className="text-[10px] text-[#2563EB] dark:text-[#60A5FA] hover:underline font-bold flex items-center gap-0.5"
               >
                 Upgrade quota &rarr;
               </Link>
@@ -194,7 +194,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
       {/* Top Bar: Plan info & Expiry status */}
       <div className="p-5 md:p-6 bg-gradient-to-r from-card via-muted/20 to-card border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start md:items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-[#D4A72C]/10 border border-[#D4A72C]/20 flex items-center justify-center shrink-0 text-[#D4A72C]">
+          <div className="w-11 h-11 rounded-xl bg-[#2563EB]/10 border border-[#2563EB]/20 flex items-center justify-center shrink-0 text-[#2563EB] dark:text-[#60A5FA]">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
@@ -203,7 +203,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
                 {plan.name}
               </h2>
               {plan.badge && plan.badge !== "NONE" && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#D4A72C]/20 text-[#D4A72C] border border-[#D4A72C]/30">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#2563EB]/20 text-[#2563EB] dark:text-[#60A5FA] border border-[#2563EB]/30">
                   {plan.badge.replace("_", " ")}
                 </span>
               )}
@@ -254,7 +254,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
       {isFreePlan && (
         <div className="mx-5 md:mx-6 mt-4 p-3.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-[#D4A72C] shrink-0" />
+            <Sparkles className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
             <div>
               <span className="text-xs font-bold text-foreground block">Free Plan Active</span>
               <span className="text-[11px] text-muted-foreground">
@@ -262,7 +262,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
               </span>
             </div>
           </div>
-          <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs h-8 rounded-lg shrink-0">
+          <Button asChild size="sm" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs h-8 rounded-lg shrink-0">
             <Link href="/student/plans">Upgrade to Premium</Link>
           </Button>
         </div>
@@ -283,7 +283,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
               onClick={() => setActiveCategory(cat.id as any)}
               className={`pb-2.5 px-3 border-b-2 font-medium transition-colors flex items-center whitespace-nowrap ${
                 activeCategory === cat.id
-                  ? "border-[#D4A72C] text-[#D4A72C] font-bold"
+                  ? "border-[#2563EB] text-[#2563EB] dark:text-[#60A5FA] font-bold"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -301,7 +301,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
             {objMap.free_mock && objMap.free_mock.enabled && (
               renderQuotaCard("Free Mock Exams", objMap.free_mock, <Layers className="w-4 h-4 text-emerald-500" />)
             )}
-            {renderQuotaCard("Model Mock Exams", objMap.model, <Layers className="w-4 h-4 text-[#D4A72C]" />)}
+            {renderQuotaCard("Model Mock Exams", objMap.model, <Layers className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />)}
             {renderQuotaCard("Past Year Questions", objMap.past_year, <FileText className="w-4 h-4 text-indigo-500" />)}
             {renderQuotaCard("Live Scheduled Exams", objMap.live, <Clock className="w-4 h-4 text-amber-500" />)}
             {renderQuotaCard("Topicwise Tests", objMap.topicwise, <Target className="w-4 h-4 text-blue-500" />)}
@@ -392,7 +392,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
                 <div className="p-3.5 bg-card rounded-xl border border-border/70 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-foreground">Practice Bank</span>
-                    <HelpCircle className="w-4 h-4 text-[#D4A72C]" />
+                    <HelpCircle className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
                   </div>
                   <div className="mt-2.5">
                     <div className="text-base font-extrabold text-emerald-500">Unlimited</div>
@@ -405,7 +405,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
                 <div className="p-3.5 bg-card rounded-xl border border-border/70 flex flex-col justify-between">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-foreground">Practice Bank</span>
-                    <HelpCircle className="w-4 h-4 text-[#D4A72C]" />
+                    <HelpCircle className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
                   </div>
                   <div className="mt-2.5 space-y-1.5">
                     <div className="flex items-baseline justify-between">
@@ -419,7 +419,7 @@ export function StudentEntitlementsUsageWidget({ enabled = true }: { enabled?: b
                     <Progress 
                       value={practice.total_allowed > 0 ? (practice.consumed / practice.total_allowed) * 100 : 0} 
                       className="h-1.5 bg-muted" 
-                      indicatorClassName="bg-[#D4A72C]" 
+                      indicatorClassName="bg-[#2563EB]" 
                     />
                   </div>
                 </div>

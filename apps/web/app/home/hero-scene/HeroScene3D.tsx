@@ -4,11 +4,11 @@ import { useEffect, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { DoubleSide, MathUtils, type Group, type DirectionalLight } from "three";
 
-const NAVY_DEEP = "#0B2545";
-const NAVY_MID = "#163E6C";
-const GOLD = "#D4A72C";
-const GOLD_LIGHT = "#E6BA3D";
-const PAGE = "#F4F1E8";
+const NAVY_DEEP = "#102D40";
+const NAVY_MID = "#174A68";
+const GOLD = "#2563EB";
+const GOLD_LIGHT = "#60A5FA";
+const PAGE = "#F5F8FC";
 
 /** A single flat "book" — a thin box, optionally with a thin lighter "pages" inset. */
 function Book({

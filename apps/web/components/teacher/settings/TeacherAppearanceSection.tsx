@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -47,7 +47,7 @@ export function TeacherAppearanceSection() {
       <Card className="bg-card border-border shadow-sm rounded-2xl overflow-hidden">
         <CardHeader className="bg-muted/50 border-b border-border">
           <CardTitle className="text-lg font-bold text-foreground">Appearance</CardTitle>
-          <CardDescription>Customize how LoksewaAI looks on your device.</CardDescription>
+          <CardDescription>Customize how NES Mastery looks on your device.</CardDescription>
         </CardHeader>
         <CardContent className="p-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">

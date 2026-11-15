@@ -37,7 +37,7 @@ export function CourseSwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 px-3 rounded-full border-[#D4A72C]/40 bg-[#D4A72C]/10 hover:bg-[#D4A72C]/20 text-[#D4A72C] text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+          className="h-8 px-3 rounded-full border-[#2563EB]/40 bg-[#2563EB]/10 hover:bg-[#2563EB]/20 text-[#2563EB] dark:text-[#60A5FA] text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Choose a Course</span>
@@ -76,9 +76,9 @@ export function CourseSwitcher() {
           title={activeCourse?.title || "Switch Course"}
         >
           {isSwitching ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4A72C] shrink-0" />
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
           ) : (
-            <GraduationCap className="w-3.5 h-3.5 text-[#D4A72C] shrink-0" />
+            <GraduationCap className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA] shrink-0" />
           )}
           <span className="truncate text-foreground font-semibold">
             {activeCourse?.title || "Select Course"}
@@ -107,7 +107,7 @@ export function CourseSwitcher() {
                 className={cn(
                   "flex items-start gap-2.5 p-2.5 rounded-xl cursor-pointer transition-colors focus:bg-accent",
                   isActive
-                    ? "bg-[#D4A72C]/10 text-foreground font-semibold border border-[#D4A72C]/30"
+                    ? "bg-[#2563EB]/10 text-foreground font-semibold border border-[#2563EB]/30"
                     : "hover:bg-muted/70 text-foreground"
                 )}
               >
@@ -115,7 +115,7 @@ export function CourseSwitcher() {
                   <BookOpen className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className={cn("text-xs leading-snug line-clamp-2", isActive && "font-bold text-[#D4A72C]")}>
+                  <div className={cn("text-xs leading-snug line-clamp-2", isActive && "font-bold text-[#2563EB] dark:text-[#60A5FA]")}>
                     {course.title}
                   </div>
                   {(course.category_name || course.level_name) && (
@@ -126,7 +126,7 @@ export function CourseSwitcher() {
                 </div>
                 {isActive && (
                   <div className="shrink-0 mt-1">
-                    <Check className="w-4 h-4 text-[#D4A72C]" />
+                    <Check className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
                   </div>
                 )}
               </DropdownMenuItem>

@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
             <BookOpen className="h-5 w-5 text-white" strokeWidth={1.5} />
           </div>
           <span className="font-[800] text-[20px] tracking-tight text-white leading-none">
-            Loksewa<span className="text-[#D4A72C]">AI</span>
+            NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>
           </span>
         </Link>
 
@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
                   </div>
                 )}
                 <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                     <KeyRound className="h-4 w-4" strokeWidth={1.5} />
                   </div>
                   <Input
@@ -97,11 +97,11 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                     placeholder="6-digit code"
                     required
-                    className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-[0.3em] focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
+                    className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white tracking-[0.3em] focus:bg-white/5 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] transition-all placeholder:text-white/40 placeholder:tracking-normal"
                   />
                 </div>
                 <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                     <Lock className="h-4 w-4" strokeWidth={1.5} />
                   </div>
                   <Input
@@ -110,7 +110,7 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="New Password"
                     required
-                    className="h-[48px] w-full pl-11 pr-12 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
+                    className="h-[48px] w-full pl-11 pr-12 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] transition-all placeholder:text-white/40"
                   />
                   <button
                     type="button"
@@ -121,7 +121,7 @@ export default function ForgotPasswordPage() {
                   </button>
                 </div>
                 <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                     <Lock className="h-4 w-4" strokeWidth={1.5} />
                   </div>
                   <Input
@@ -130,13 +130,13 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm New Password"
                     required
-                    className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
+                    className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] transition-all placeholder:text-white/40"
                   />
                 </div>
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] border-none"
+                  className="w-full h-[48px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] border-none"
                 >
                   {isLoading ? "Resetting..." : "Reset Password"}
                 </Button>
@@ -162,7 +162,7 @@ export default function ForgotPasswordPage() {
                   </div>
                 )}
                 <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                     <Mail className="h-4 w-4" strokeWidth={1.5} />
                   </div>
                   <Input
@@ -171,13 +171,13 @@ export default function ForgotPasswordPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Email Address"
                     required
-                    className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] transition-all placeholder:text-white/40"
+                    className="h-[48px] w-full pl-11 bg-transparent border-white/20 text-[13px] text-white focus:bg-white/5 focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] transition-all placeholder:text-white/40"
                   />
                 </div>
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full h-[48px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] border-none"
+                  className="w-full h-[48px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white hover:opacity-90 text-white text-[15px] font-bold rounded-[10px] border-none"
                 >
                   {isLoading ? "Sending..." : "Send Verification Code"}
                 </Button>

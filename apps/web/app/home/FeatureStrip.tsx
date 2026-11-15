@@ -22,9 +22,9 @@ const features = [
     icon: BarChart2,
     title: "Smart Analytics",
     sub: "Track Progress",
-    color: "text-[#D4A72C]",
-    bg: "bg-[#D4A72C]/10",
-    border: "border-[#D4A72C]/20",
+    color: "text-[#2563EB]",
+    bg: "bg-[#2563EB]/10",
+    border: "border-[#2563EB]/20",
   },
   {
     icon: FileText,

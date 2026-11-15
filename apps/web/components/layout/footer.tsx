@@ -47,10 +47,10 @@ const trustBadges = [
 ];
 
 const socialLinks = [
-  { icon: Globe, label: "Facebook", href: "https://facebook.com/loksewaai" },
-  { icon: Share2, label: "Instagram", href: "https://instagram.com/loksewaai" },
-  { icon: MessageCircle, label: "YouTube", href: "https://youtube.com/@loksewaai" },
-  { icon: Users, label: "LinkedIn", href: "https://linkedin.com/company/loksewaai" },
+  { icon: Globe, label: "Facebook", href: "https://facebook.com/nesmastery" },
+  { icon: Share2, label: "Instagram", href: "https://instagram.com/nesmastery" },
+  { icon: MessageCircle, label: "YouTube", href: "https://youtube.com/@nesmastery" },
+  { icon: Users, label: "LinkedIn", href: "https://linkedin.com/company/nesmastery" },
 ];
 
 export function Footer() {
@@ -58,16 +58,16 @@ export function Footer() {
     <footer className="relative overflow-hidden bg-slate-50 dark:bg-[#020610] border-t border-slate-200 dark:border-white/[0.06]">
 
       {/* Top accent line */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#D4A72C]/40 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#2563EB]/40 to-transparent" />
 
       {/* ── Background atmosphere ─────────────── */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {/* Neural grid */}
         <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-60" />
         {/* Gold glow (dark mode) */}
-        <div className="absolute top-[-10%] left-[10%] w-[600px] h-[600px] bg-[#D4A72C]/[0.04] dark:bg-[#D4A72C]/[0.07] rounded-full blur-[150px] pointer-events-none" />
+        <div className="absolute top-[-10%] left-[10%] w-[600px] h-[600px] bg-[#2563EB]/[0.04] dark:bg-[#2563EB]/[0.07] rounded-full blur-[150px] pointer-events-none" />
         {/* Blue glow (dark mode) */}
-        <div className="absolute bottom-[-10%] right-[-5%] w-[700px] h-[700px] bg-blue-500/[0.02] dark:bg-[#163E6B]/[0.2] rounded-full blur-[150px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[700px] h-[700px] bg-blue-500/[0.02] dark:bg-[#174A68]/[0.2] rounded-full blur-[150px] pointer-events-none" />
       </div>
 
       <div className="relative z-10">
@@ -80,16 +80,16 @@ export function Footer() {
             <div className="lg:col-span-2">
               {/* Logo */}
               <Link href="/" className="flex items-center gap-2.5 group mb-5 w-fit">
-                <div className="p-1.5 rounded-[8px] bg-[#0B2545] dark:bg-white/5 group-hover:scale-105 transition-transform">
-                  <BookOpen className="h-5 w-5 text-[#D4A72C]" strokeWidth={2.5} />
+                <div className="p-1.5 rounded-[8px] bg-[#174A68] dark:bg-[#102D40] border border-[#2563EB]/30 group-hover:scale-105 transition-transform">
+                  <BookOpen className="h-5 w-5 text-[#60A5FA]" strokeWidth={2.5} />
                 </div>
                 <span className="font-[800] text-[20px] tracking-tight text-slate-900 dark:text-white">
-                  Loksewa<span className="text-[#D4A72C]">AI</span>
+                  NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>
                 </span>
               </Link>
 
               <p className="text-[14px] text-slate-500 dark:text-slate-400 leading-[1.7] mb-6 max-w-[280px]">
-                Nepal&apos;s most intelligent Loksewa preparation platform. AI-powered learning, personalized practice, real exam success.
+                Nepal&apos;s premier engineering entrance and license examination preparation platform. Expert curriculum, topic drills, and proven success.
               </p>
 
               {/* Social links */}
@@ -101,7 +101,7 @@ export function Footer() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={label}
-                    className="w-8 h-8 rounded-[8px] flex items-center justify-center border border-slate-200 dark:border-white/8 text-slate-500 dark:text-slate-400 hover:text-[#D4A72C] dark:hover:text-[#D4A72C] hover:border-[#D4A72C]/30 dark:hover:border-[#D4A72C]/20 hover:bg-[#D4A72C]/5 dark:hover:bg-[#D4A72C]/5 transition-all"
+                    className="w-8 h-8 rounded-[8px] flex items-center justify-center border border-slate-200 dark:border-white/8 text-slate-500 dark:text-slate-400 hover:text-[#2563EB] dark:hover:text-[#60A5FA] hover:border-[#2563EB]/30 dark:hover:border-[#60A5FA]/20 hover:bg-[#2563EB]/5 dark:hover:bg-[#2563EB]/5 transition-all"
                   >
                     <Icon className="w-3.5 h-3.5" />
                   </a>
@@ -112,11 +112,11 @@ export function Footer() {
               <div className="card-hover bg-white dark:bg-[#0A1520] border border-slate-200 dark:border-white/8 rounded-[14px] p-4">
                 <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Need Help?</div>
                 <a
-                  href="mailto:support@loksewaai.com"
-                  className="flex items-center gap-2 text-[13px] font-[600] text-[#D4A72C] hover:text-[#C29322] transition-colors group"
+                  href="mailto:support@nesmastery.com"
+                  className="flex items-center gap-2 text-[13px] font-[600] text-[#2563EB] hover:text-[#1D4ED8] dark:text-[#60A5FA] transition-colors group"
                 >
                   <Mail className="w-3.5 h-3.5" />
-                  support@loksewaai.com
+                  support@nesmastery.com
                   <ArrowRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
                 </a>
               </div>
@@ -199,7 +199,7 @@ export function Footer() {
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
               {trustBadges.map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-2 text-[12px] font-[600] text-slate-700 dark:text-slate-300">
-                  <Icon className="w-3.5 h-3.5 text-[#D4A72C]" />
+                  <Icon className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
                   {label}
                 </div>
               ))}
@@ -211,7 +211,7 @@ export function Footer() {
         <div className="border-t border-slate-200 dark:border-white/[0.05]">
           <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
             <p className="text-[12.5px] text-slate-600 dark:text-slate-400">
-              © 2026 LoksewaAI. All rights reserved.
+              © 2026 NES Mastery. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
               <Link href="/privacy" className="text-[12.5px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">Privacy</Link>

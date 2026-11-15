@@ -55,14 +55,14 @@ function MyLearningTabs() {
           value="courses" 
           className="flex items-center justify-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm w-full sm:w-auto"
         >
-          <BookOpen className="w-4 h-4 text-[#D4A72C]" />
+          <BookOpen className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
           Courses
         </TabsTrigger>
         <TabsTrigger 
           value="purchases" 
           className="flex items-center justify-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all data-[state=active]:bg-card data-[state=active]:text-primary dark:data-[state=active]:text-foreground data-[state=active]:shadow-sm w-full sm:w-auto"
         >
-          <CreditCard className="w-4 h-4 text-[#D4A72C]" />
+          <CreditCard className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
           Purchases & Subscriptions
         </TabsTrigger>
       </TabsList>
@@ -84,8 +84,8 @@ export default function MyLearningPage() {
       {/* Immediate layout shell: zero network delay, zero layout shift */}
       <div>
         <div className="flex items-center gap-2 mb-2">
-          <span className="bg-[#D4A72C]/10 text-[#D4A72C] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
-            <BookOpen className="w-3.5 h-3.5" />
+          <span className="bg-[#174A68]/10 text-[#174A68] dark:bg-[#174A68]/30 dark:text-[#60A5FA] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1.5">
+            <BookOpen className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" />
             Learning Hub
           </span>
         </div>

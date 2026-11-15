@@ -670,9 +670,6 @@ class MyCoursesListView(APIView):
                 grandchild_ids = set(Exam.objects.filter(parent_id__in=child_ids, is_active=True).values_list('id', flat=True))
                 descendant_exam_ids.update(grandchild_ids)
 
-            # Ensure canonical courses exist for all preparation exams in hierarchy
-            ensure_courses_for_exams(Exam.objects.filter(id__in=descendant_exam_ids, is_active=True))
-
             matching_courses_qs = Course.objects.filter(
                 status='published', exam_id__in=descendant_exam_ids
             ).select_related('exam', 'exam__category', 'exam__parent')
@@ -695,6 +692,8 @@ class MyCoursesListView(APIView):
 
         # 2. Active subscriptions and their covered course IDs
         sub_unlocked_courses = {}  # course_id -> is_free_trial (bool)
+        has_all_access_sub = False
+        all_access_is_free = False
         try:
             from subscriptions.models import Subscription, SubscriptionCourseSelection
             active_subs = list(
@@ -715,8 +714,8 @@ class MyCoursesListView(APIView):
                 access_type = getattr(plan, 'course_access_type', None)
 
                 if pkg_type == 'ALL_ACCESS' or access_type == 'ALL_ACCESS':
-                    for cid in Course.objects.filter(status='published').values_list('id', flat=True):
-                        sub_unlocked_courses[cid] = is_free
+                    has_all_access_sub = True
+                    all_access_is_free = is_free
                 elif pkg_type == 'BUNDLE':
                     for c in plan.eligible_courses.filter(status='published'):
                         if c.id not in sub_unlocked_courses or (not is_free and sub_unlocked_courses[c.id]):
@@ -766,7 +765,7 @@ class MyCoursesListView(APIView):
             pass
 
         authorized_course_ids = set(enrollments_by_course.keys()) | set(sub_unlocked_courses.keys()) | coin_entitled_course_ids
-        if admin_access:
+        if admin_access or has_all_access_sub:
             authorized_course_ids.update(Course.objects.filter(status='published').values_list('id', flat=True))
 
         matching_course_ids = set(matching_courses_qs.values_list('id', flat=True))
@@ -787,25 +786,58 @@ class MyCoursesListView(APIView):
         exam_completed_counts = {}
 
         if exam_ids:
-            topic_aggregates = (
-                Topic.objects.filter(chapter__subject__paper__exam_id__in=exam_ids)
-                .values('chapter__subject__paper__exam_id')
-                .annotate(total=Count('id'))
-            )
-            for row in topic_aggregates:
-                exam_topic_counts[row['chapter__subject__paper__exam_id']] = row['total']
+            missing_topic_exam_ids = []
+            for eid in exam_ids:
+                cached_count = cache.get(f'exam_total_topics:{eid}')
+                if cached_count is not None:
+                    exam_topic_counts[eid] = cached_count
+                else:
+                    missing_topic_exam_ids.append(eid)
 
-            completed_aggregates = (
-                UserTopicProgress.objects.filter(
-                    user=user,
-                    status='completed',
-                    topic__chapter__subject__paper__exam_id__in=exam_ids,
+            if missing_topic_exam_ids:
+                topic_aggregates = (
+                    Topic.objects.filter(chapter__subject__paper__exam_id__in=missing_topic_exam_ids)
+                    .values('chapter__subject__paper__exam_id')
+                    .annotate(total=Count('id'))
                 )
-                .values('topic__chapter__subject__paper__exam_id')
-                .annotate(completed=Count('id'))
-            )
-            for row in completed_aggregates:
-                exam_completed_counts[row['topic__chapter__subject__paper__exam_id']] = row['completed']
+                for row in topic_aggregates:
+                    eid = row['chapter__subject__paper__exam_id']
+                    exam_topic_counts[eid] = row['total']
+                    try:
+                        cache.set(f'exam_total_topics:{eid}', row['total'], 3600)
+                    except Exception:
+                        pass
+                for eid in missing_topic_exam_ids:
+                    if eid not in exam_topic_counts:
+                        exam_topic_counts[eid] = 0
+                        try:
+                            cache.set(f'exam_total_topics:{eid}', 0, 3600)
+                        except Exception:
+                            pass
+
+            # Only query user completed topics for exams the student has accessed/enrolled
+            accessible_exam_ids = [
+                c.exam_id for c in combined_courses
+                if c.exam_id and (
+                    c.id in enrollments_by_course or
+                    c.id in sub_unlocked_courses or
+                    c.id in coin_entitled_course_ids or
+                    has_all_access_sub or
+                    admin_access
+                )
+            ]
+            if accessible_exam_ids:
+                completed_aggregates = (
+                    UserTopicProgress.objects.filter(
+                        user=user,
+                        status='completed',
+                        topic__chapter__subject__paper__exam_id__in=accessible_exam_ids,
+                    )
+                    .values('topic__chapter__subject__paper__exam_id')
+                    .annotate(completed=Count('id'))
+                )
+                for row in completed_aggregates:
+                    exam_completed_counts[row['topic__chapter__subject__paper__exam_id']] = row['completed']
 
         def serialize_item(course, is_reg_prep=True):
             en = enrollments_by_course.get(course.id)
@@ -825,6 +857,9 @@ class MyCoursesListView(APIView):
             elif course.id in sub_unlocked_courses:
                 has_access = True
                 access_state = 'free_trial' if sub_unlocked_courses[course.id] else 'active_subscription'
+            elif has_all_access_sub:
+                has_access = True
+                access_state = 'free_trial' if all_access_is_free else 'active_subscription'
             elif admin_access:
                 has_access = True
                 access_state = 'active_subscription'

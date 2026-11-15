@@ -142,7 +142,7 @@ export function LoksewaExamCountdown({
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-foreground">Next Official Loksewa Exam</h2>
+              <h2 className="text-sm font-bold text-foreground">Next Official Examination</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {data?.message || "No exam schedule configured for this course yet."}
               </p>
@@ -154,17 +154,17 @@ export function LoksewaExamCountdown({
   }
 
   return (
-    <Card className={`relative overflow-hidden bg-gradient-to-br from-[#0B2545] to-[#133E6D] text-white border-none shadow-md ${className}`}>
+    <Card className={`relative overflow-hidden bg-gradient-to-br from-[#102D40] to-[#174A68] text-white border-none shadow-md ${className}`}>
       {/* Decorative background glow */}
-      <div className="absolute right-0 top-0 w-80 h-80 bg-[#D4A72C]/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+      <div className="absolute right-0 top-0 w-80 h-80 bg-[#60A5FA]/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
 
       <CardContent className="p-6 relative z-10">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           
           {/* Left Column: Info & Details */}
           <div className="space-y-2 flex-1">
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-[11px] font-bold tracking-wider text-[#D4A72C] uppercase">
-              <Sparkles className="w-3 h-3" /> Official Loksewa Countdown
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/10 backdrop-blur-md rounded-full text-[11px] font-bold tracking-wider text-[#60A5FA] uppercase">
+              <Sparkles className="w-3 h-3" /> Official Examination Countdown
             </div>
 
             <h2 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">
@@ -173,7 +173,7 @@ export function LoksewaExamCountdown({
 
             <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-slate-300 font-medium">
               <span className="flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-[#D4A72C]" />
+                <Calendar className="w-3.5 h-3.5 text-[#60A5FA]" />
                 {new Date(schedule.exam_date).toLocaleDateString("en-US", {
                   year: "numeric",
                   month: "short",
@@ -205,7 +205,7 @@ export function LoksewaExamCountdown({
                   href={schedule.official_notice_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-[#D4A72C] hover:underline font-semibold"
+                  className="inline-flex items-center gap-1.5 text-xs text-[#60A5FA] hover:underline font-semibold"
                 >
                   Official PSC Notice <ExternalLink className="w-3 h-3" />
                 </a>
@@ -240,7 +240,7 @@ export function LoksewaExamCountdown({
 
                 {/* Hours */}
                 <div className="flex flex-col items-center justify-center w-16 sm:w-20 h-18 sm:h-20 bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 shadow-inner">
-                  <span className="text-2xl sm:text-3xl font-black text-[#D4A72C] leading-none">
+                  <span className="text-2xl sm:text-3xl font-black text-[#60A5FA] leading-none">
                     {String(timeLeft.hours).padStart(2, "0")}
                   </span>
                   <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-300 tracking-wider mt-1">

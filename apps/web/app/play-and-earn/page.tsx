@@ -2,9 +2,9 @@ import { Metadata } from "next";
 import { PlayAndEarnContent } from "./PlayAndEarnContent";
 
 export const metadata: Metadata = {
-  title: "LoksewaAI Play & Earn — Learn, Play & Earn XP",
+  title: "NES Mastery Play & Earn — Learn, Play & Earn XP",
   description:
-    "Learn, play, earn XP, maintain your streak, and climb the leaderboard. Discover LoksewaAI's gamification system designed to keep your exam preparation consistent.",
+    "Learn, play, earn XP, maintain your streak, and climb the leaderboard. Discover NES Mastery's gamification system designed to keep your exam preparation consistent.",
 };
 
 export default function PlayAndEarnPage() {

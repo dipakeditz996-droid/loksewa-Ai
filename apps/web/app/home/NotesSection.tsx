@@ -13,11 +13,11 @@ const STATIC_NOTES = [
     material_type: "notes",
     difficulty: "intermediate",
     estimated_reading_time: 25,
-    subject: "Constitutional Law",
+    subject: "Structural Analysis",
   },
   {
     id: -2,
-    title: "Public Administration Principles",
+    title: "Fluid Mechanics Principles",
     description: "Core theories, administrative behavior, and modern approaches.",
     material_type: "notes",
     difficulty: "beginner",
@@ -86,7 +86,7 @@ export function NotesSection({ notes }: Props) {
           <Link href="/notes">
             <Button
               variant="outline"
-              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
+              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
             >
               Browse All Notes
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

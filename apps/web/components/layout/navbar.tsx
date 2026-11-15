@@ -9,7 +9,7 @@ import {
   Home, Sparkles, ShoppingBag, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -17,7 +17,7 @@ export function Navbar() {
   const [isScrolled, setIsScrolled] = React.useState(false);
   const [pendingHref, setPendingHref] = React.useState<string | null>(null);
   const pendingHrefRef = React.useRef<string | null>(null);
-  const { theme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
   const handleNavigation = (
@@ -111,11 +111,11 @@ export function Navbar() {
 
             {/* ── Brand ────────────────────────────── */}
             <Link href="/" onClick={(event) => handleNavigation(event, "/")} className="flex items-center gap-2.5 group shrink-0 pl-1">
-              <div className="p-1.5 rounded-[9px] bg-gradient-to-br from-[#163E6B] to-[#0B2545] shadow-[0_2px_10px_rgba(11,37,69,0.25)] transition-transform duration-300 group-hover:scale-105 group-hover:rotate-[-3deg]">
-                <BookOpen className="h-5 w-5 text-[#D4A72C]" strokeWidth={2.5} />
+              <div className="p-1.5 rounded-[9px] bg-gradient-to-br from-[#174A68] to-[#102D40] shadow-[0_2px_10px_rgba(23,74,104,0.3)] transition-transform duration-300 group-hover:scale-105">
+                <BookOpen className="h-5 w-5 text-[#60A5FA]" strokeWidth={2.5} />
               </div>
               <span className="font-[800] text-[19px] tracking-tight text-slate-900 dark:text-white hidden sm:inline">
-                Loksewa<span className="text-[#D4A72C]">AI</span>
+                NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>
               </span>
             </Link>
 
@@ -161,11 +161,15 @@ export function Navbar() {
               {/* Theme Toggle */}
               {mounted && (
                 <button
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  type="button"
+                  onClick={() => {
+                    const current = resolvedTheme || theme || "dark";
+                    setTheme(current === "dark" ? "light" : "dark");
+                  }}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
                   aria-label="Toggle theme"
                 >
-                  {theme === "dark"
+                  {(resolvedTheme || theme) === "dark"
                     ? <Sun className="h-4 w-4" />
                     : <Moon className="h-4 w-4" />
                   }
@@ -185,7 +189,7 @@ export function Navbar() {
 
               {/* Get Started */}
               <Link href="/register" onClick={(event) => handleNavigation(event, "/register")}>
-                <Button className="btn-gold-gradient text-[#040B14] h-[36px] px-4.5 rounded-full font-[700] text-[13px] border-none flex items-center gap-1.5 group">
+                <Button className="btn-electric text-white h-[36px] px-5 rounded-full font-[700] text-[13px] border-none flex items-center gap-1.5 group shadow-sm">
                   Get Started
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </Button>
@@ -203,11 +207,15 @@ export function Navbar() {
               </Link>
               {mounted && (
                 <button
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  type="button"
+                  onClick={() => {
+                    const current = resolvedTheme || theme || "dark";
+                    setTheme(current === "dark" ? "light" : "dark");
+                  }}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
                   aria-label="Toggle theme"
                 >
-                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                  {(resolvedTheme || theme) === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </button>
               )}
               <button
@@ -243,10 +251,10 @@ export function Navbar() {
                       }`}
                     >
                       <span className="flex items-center">
-                        {(isActive || isPending) && <span className="w-1.5 h-1.5 rounded-full bg-[#D4A72C] mr-3 shrink-0" />}
+                        {(isActive || isPending) && <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB] mr-3 shrink-0" />}
                         {link.label}
                       </span>
-                      {isPending && <Loader2 className="h-4 w-4 animate-spin text-[#C29322]" aria-hidden="true" />}
+                      {isPending && <Loader2 className="h-4 w-4 animate-spin text-[#2563EB]" aria-hidden="true" />}
                       {isPending && <span className="sr-only" role="status">Opening {link.label}</span>}
                     </Link>
                   );
@@ -268,7 +276,7 @@ export function Navbar() {
                     </Button>
                   </Link>
                   <Link href="/register" onClick={(event) => handleNavigation(event, "/register")} className="flex-1">
-                    <Button className="btn-gold-gradient w-full h-[44px] text-[14px] font-[700] text-[#040B14] rounded-[14px] border-none">
+                    <Button className="btn-electric w-full h-[44px] text-[14px] font-[700] text-white rounded-[14px] border-none shadow-sm">
                       Get Started
                     </Button>
                   </Link>
@@ -281,7 +289,7 @@ export function Navbar() {
 
       {/* ── Mobile app-style bottom tab bar ──────────────────────────────── */}
       <nav
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] bg-white/90 dark:bg-[#04080F]/92 backdrop-blur-2xl border-t border-slate-200/70 dark:border-white/[0.08] shadow-[0_-8px_30px_-12px_rgba(11,37,69,0.18)]"
+        className="lg:hidden fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)] bg-white/90 dark:bg-[#102D40]/95 backdrop-blur-2xl border-t border-slate-200/70 dark:border-white/[0.08] shadow-[0_-8px_30px_-12px_rgba(16,45,64,0.18)]"
         aria-label="Primary"
       >
         <div className="grid grid-cols-5 h-[64px]">
@@ -301,16 +309,16 @@ export function Navbar() {
                 {(isActive || isPending) && (
                   <motion.span
                     layoutId="mobile-tab-active"
-                    className="absolute top-1.5 w-9 h-1 rounded-full bg-[#D4A72C]"
+                    className="absolute top-1.5 w-9 h-1 rounded-full bg-[#2563EB]"
                     transition={{ type: "spring", stiffness: 420, damping: 34 }}
                   />
                 )}
                 {isPending ? (
-                  <Loader2 className="w-[21px] h-[21px] animate-spin text-[#C29322] dark:text-[#F0C95A]" aria-hidden="true" />
+                  <Loader2 className="w-[21px] h-[21px] animate-spin text-[#2563EB] dark:text-[#60A5FA]" aria-hidden="true" />
                 ) : (
                   <Icon
                     className={`w-[21px] h-[21px] transition-colors ${
-                      isActive ? "text-[#C29322] dark:text-[#F0C95A]" : "text-slate-600 dark:text-slate-400"
+                      isActive ? "text-[#2563EB] dark:text-[#60A5FA]" : "text-slate-600 dark:text-slate-400"
                     }`}
                     strokeWidth={isActive ? 2.4 : 2}
                   />
@@ -336,12 +344,12 @@ export function Navbar() {
             {isMobileMenuOpen && (
               <motion.span
                 layoutId="mobile-tab-active"
-                className="absolute top-1.5 w-9 h-1 rounded-full bg-[#D4A72C]"
+                className="absolute top-1.5 w-9 h-1 rounded-full bg-[#2563EB]"
                 transition={{ type: "spring", stiffness: 420, damping: 34 }}
               />
             )}
             {isMobileMenuOpen ? (
-              <X className="w-[21px] h-[21px] text-[#C29322] dark:text-[#F0C95A]" strokeWidth={2.4} />
+              <X className="w-[21px] h-[21px] text-[#2563EB] dark:text-[#60A5FA]" strokeWidth={2.4} />
             ) : (
               <Menu className="w-[21px] h-[21px] text-slate-600 dark:text-slate-400" strokeWidth={2} />
             )}

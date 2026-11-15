@@ -187,19 +187,19 @@ function SidebarNavItem({
       className={cn(
         "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13.5px] font-medium transition-all duration-150",
         active
-          ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#D4A72C]"
+          ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#2563EB]"
           : "text-slate-400 hover:bg-white/5 hover:text-slate-200",
         collapsed && "justify-center px-2"
       )}
     >
       <item.icon
-        className={cn("shrink-0 h-[18px] w-[18px]", active ? "text-[#D4A72C]" : "text-slate-400")}
+        className={cn("shrink-0 h-[18px] w-[18px]", active ? "text-[#60A5FA]" : "text-slate-400")}
         strokeWidth={active ? 2 : 1.5}
       />
       {!collapsed && <span className="truncate">{item.title}</span>}
       {pending && (
         <span role="status" aria-label={`Opening ${item.title}`} className={cn("shrink-0", collapsed ? "" : "ml-auto")}>
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-[#D4A72C]" aria-hidden="true" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-[#2563EB]" aria-hidden="true" />
           <span className="sr-only">Opening {item.title}</span>
         </span>
       )}
@@ -328,7 +328,7 @@ function AdminSidebar({
       <div className="flex h-[60px] items-center justify-between px-4 border-b border-white/10 shrink-0">
         {!collapsed && (
           <Link href="/admin-dashboard" className="flex items-center gap-2.5">
-            <div className="bg-[#D4A72C] text-[#0B2545] p-1.5 rounded-[7px]">
+            <div className="bg-[#D4A72C] text-[#172B4D] p-1.5 rounded-[7px]">
               <BookOpen className="h-4 w-4" strokeWidth={2.5} />
             </div>
             <div className="leading-none">
@@ -342,7 +342,7 @@ function AdminSidebar({
           </Link>
         )}
         {collapsed && (
-          <div className="mx-auto bg-[#D4A72C] text-[#0B2545] p-1.5 rounded-[7px]">
+          <div className="mx-auto bg-[#D4A72C] text-[#172B4D] p-1.5 rounded-[7px]">
             <BookOpen className="h-4 w-4" strokeWidth={2.5} />
           </div>
         )}
@@ -408,7 +408,7 @@ function AdminSidebar({
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden md:flex flex-col bg-[#0B2545] border-r border-white/10 transition-all duration-300 shrink-0 sticky top-0 h-screen",
+          "hidden md:flex flex-col bg-[#102D40] border-r border-[#174A68] transition-all duration-300 shrink-0 sticky top-0 h-screen",
           collapsed ? "w-16" : "w-64"
         )}
       >
@@ -418,7 +418,7 @@ function AdminSidebar({
       {/* Mobile sidebar */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 flex md:hidden flex-col bg-[#0B2545] h-screen w-72 transition-transform duration-300 ease-in-out shadow-2xl",
+          "fixed top-0 left-0 z-50 flex md:hidden flex-col bg-[#102D40] h-screen w-72 transition-transform duration-300 ease-in-out shadow-2xl",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -483,14 +483,14 @@ function AdminHeader({
         {/* Admin info */}
         <div className="flex items-center gap-2.5 pl-1">
           <div className="text-right hidden sm:block leading-none">
-            <p className="text-[13px] font-semibold text-[#0B2545]">{user.name}</p>
+            <p className="text-[13px] font-semibold text-[#172B4D]">{user.name}</p>
             <p className="text-[11px] text-slate-400 capitalize font-medium">{user.role}</p>
           </div>
-          <Avatar className="h-8 w-8 border-2 border-[#D4A72C]/30">
+          <Avatar className="h-8 w-8 border-2 border-[#2563EB]/30">
             {user.avatar ? (
               <RetryImage src={user.avatar} alt={user.name} className="aspect-square h-full w-full object-cover" />
             ) : (
-              <AvatarFallback className="bg-[#0B2545] text-[#D4A72C] font-bold text-[12px]">
+              <AvatarFallback className="bg-[#102D40] text-[#60A5FA] font-bold text-[12px]">
                 {initials}
               </AvatarFallback>
             )}
@@ -551,7 +551,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
+          <div className="h-8 w-8 border-3 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
           <p className="text-sm text-slate-400">Loading admin panel...</p>
         </div>
       </div>
@@ -562,7 +562,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
+          <div className="h-8 w-8 border-3 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
           <p className="text-sm text-slate-400">Redirecting to login...</p>
         </div>
       </div>
@@ -576,13 +576,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="h-20 w-20 rounded-2xl bg-red-50 flex items-center justify-center mx-auto mb-5">
             <ShieldAlert className="w-10 h-10 text-red-400" />
           </div>
-          <h1 className="text-2xl font-bold text-[#0B2545] mb-2">Access Denied</h1>
+          <h1 className="text-2xl font-bold text-[#172B4D] mb-2">Access Denied</h1>
           <p className="text-slate-500 mb-6 text-sm leading-relaxed">
             You do not have permission to view this page. This area is restricted to administrators only.
           </p>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0B2545] text-white text-sm font-semibold rounded-lg hover:bg-[#163E6C] transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#2563EB] text-white text-sm font-semibold rounded-lg hover:bg-[#1D4ED8] transition-colors"
           >
             Return to Home
           </Link>
@@ -622,8 +622,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         position="top-right"
         toastOptions={{
           duration: 4000,
-          style: { background: "#0B2545", color: "#fff", fontSize: "14px" },
-          success: { iconTheme: { primary: "#D4A72C", secondary: "#0B2545" } },
+          style: { background: "#102D40", color: "#fff", fontSize: "14px" },
+          success: { iconTheme: { primary: "#16A36A", secondary: "#102D40" } },
           error: { duration: 6000, style: { background: "#991B1B", color: "#fff", fontSize: "14px" } },
         }}
       />

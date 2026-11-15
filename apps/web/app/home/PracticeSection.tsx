@@ -41,12 +41,12 @@ const PRACTICE_TYPES = [
     difficulty: "Adaptive",
     accuracy: "Personalized",
     time: "20–30 min",
-    color: "text-[#8F6B12] dark:text-[#D4A72C]",
-    bg: "bg-[#D4A72C]/8",
-    border: "border-[#D4A72C]/15",
+    color: "text-[#2563EB] dark:text-[#2563EB]",
+    bg: "bg-[#2563EB]/8",
+    border: "border-[#2563EB]/15",
     href: "/practice",
     badge: "AI-Powered",
-    badgeColor: "text-[#8F6B12] dark:text-[#D4A72C] bg-[#D4A72C]/10",
+    badgeColor: "text-[#2563EB] dark:text-[#2563EB] bg-[#2563EB]/10",
   },
   {
     icon: Shuffle,
@@ -183,7 +183,7 @@ export function PracticeSection() {
 
           {/* Big CTA */}
           <Link href="/practice" className="block">
-            <div className="bg-gradient-to-br from-[#0B2545] to-[#163E6B] rounded-[20px] p-5 flex items-center gap-4 card-hover h-full shadow-[0_4px_30px_rgba(11,37,69,0.3)]">
+            <div className="bg-gradient-to-br from-[#174A68] to-[#102D40] rounded-[20px] p-5 flex items-center gap-4 card-hover h-full shadow-[0_4px_30px_rgba(11,37,69,0.3)]">
               <div className="w-10 h-10 rounded-[12px] bg-white/10 flex items-center justify-center shrink-0">
                 <BarChart2 className="w-5 h-5 text-white" />
               </div>
@@ -191,7 +191,7 @@ export function PracticeSection() {
                 <div className="text-[14px] font-[800] text-white mb-1">View All Practice</div>
                 <div className="text-[12px] text-slate-300">1,000+ practice sets</div>
               </div>
-              <ArrowRight className="w-4 h-4 text-[#D4A72C] shrink-0" />
+              <ArrowRight className="w-4 h-4 text-[#2563EB] shrink-0" />
             </div>
           </Link>
         </div>

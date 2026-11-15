@@ -6,7 +6,7 @@ import { Trophy, Flame, ArrowRight, TrendingUp, Award } from "lucide-react";
 // ── Leaderboard ──────────────────────────────────────────────────────────────
 const PODIUM = [
   { rank: 2, name: "Bikash T.", score: "97.9%", initial: "B", color: "from-blue-400 to-cyan-500", height: "h-16 sm:h-20" },
-  { rank: 1, name: "Sujata R.", score: "98.7%", initial: "S", color: "from-[#D4A72C] to-[#E6BA3D]", height: "h-24 sm:h-28" },
+  { rank: 1, name: "Sujata R.", score: "98.7%", initial: "S", color: "from-[#2563EB] to-[#60A5FA]", height: "h-24 sm:h-28" },
   { rank: 3, name: "Manisha K.", score: "96.4%", initial: "M", color: "from-violet-400 to-purple-500", height: "h-12 sm:h-14" },
 ];
 
@@ -20,8 +20,8 @@ function LeaderboardCard() {
           <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300 mb-1">This Week</div>
           <div className="text-[16px] font-[800] text-slate-800 dark:text-white">Top Performers</div>
         </div>
-        <div className="w-9 h-9 rounded-full bg-[#D4A72C]/10 flex items-center justify-center">
-          <Trophy className="w-4 h-4 text-[#D4A72C]" />
+        <div className="w-9 h-9 rounded-full bg-[#2563EB]/10 flex items-center justify-center">
+          <Trophy className="w-4 h-4 text-[#2563EB]" />
         </div>
       </div>
 
@@ -35,7 +35,7 @@ function LeaderboardCard() {
             </div>
             <div className="text-center">
               <div className="text-[12px] font-[700] text-slate-800 dark:text-white truncate max-w-[88px]">{p.name}</div>
-              <div className="text-[11px] font-[700] text-[#D4A72C]">{p.score}</div>
+              <div className="text-[11px] font-[700] text-[#2563EB]">{p.score}</div>
             </div>
             <div className={`w-full ${p.height} rounded-t-[10px] bg-gradient-to-t from-slate-100 to-slate-50 dark:from-white/[0.06] dark:to-white/[0.02] border border-b-0 border-slate-200 dark:border-white/[0.08] flex items-start justify-center pt-2`}>
               <span className="text-[13px] font-[900] text-slate-700 dark:text-slate-300">#{p.rank}</span>
@@ -45,13 +45,13 @@ function LeaderboardCard() {
       </div>
 
       {/* Your position */}
-      <div className="flex items-center gap-3.5 p-4 rounded-[14px] bg-[#D4A72C]/8 dark:bg-[#D4A72C]/[0.08] border border-[#D4A72C]/25 dark:border-[#D4A72C]/20">
-        <div className="w-9 h-9 rounded-full bg-white dark:bg-[#0B1521] flex items-center justify-center shrink-0 border border-[#D4A72C]/30">
-          <Award className="w-4 h-4 text-[#D4A72C]" />
+      <div className="flex items-center gap-3.5 p-4 rounded-[14px] bg-[#2563EB]/8 dark:bg-[#2563EB]/[0.08] border border-[#2563EB]/25 dark:border-[#2563EB]/20">
+        <div className="w-9 h-9 rounded-full bg-white dark:bg-[#0B1521] flex items-center justify-center shrink-0 border border-[#2563EB]/30">
+          <Award className="w-4 h-4 text-[#2563EB]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[10px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400">Your Rank</div>
-          <div className="text-[15px] font-[900] text-slate-800 dark:text-white">#27 <span className="text-[11px] font-[700] text-[#D4A72C] ml-1">Top 3%</span></div>
+          <div className="text-[15px] font-[900] text-slate-800 dark:text-white">#27 <span className="text-[11px] font-[700] text-[#2563EB] ml-1">Top 3%</span></div>
         </div>
         <div className="flex items-center gap-1 text-[11px] font-[700] text-emerald-500 shrink-0">
           <TrendingUp className="w-3.5 h-3.5" /> 6
@@ -142,8 +142,8 @@ export function LeaderboardStreakSection() {
       <div className="relative z-10 max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8">
 
         <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#163E6B]/50 mb-5">
-            <Trophy className="w-3.5 h-3.5 text-[#D4A72C]" />
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#102D40]/50 mb-5">
+            <Trophy className="w-3.5 h-3.5 text-[#2563EB]" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-600 dark:text-[#4B8BE0]">Community &amp; Motivation</span>
           </div>
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
@@ -161,7 +161,7 @@ export function LeaderboardStreakSection() {
 
         <div className="flex justify-center">
           <Link href="/register">
-            <Button className="bg-gradient-to-r from-[#C29322] to-[#E6BA3D] hover:opacity-90 text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] shadow-[0_8px_30px_rgba(212,167,44,0.3)] flex items-center gap-2 group border-none">
+            <Button className="bg-gradient-to-r from-[#1D4ED8] to-[#60A5FA] hover:opacity-90 text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] shadow-[0_8px_30px_rgba(37,99,235,0.3)] flex items-center gap-2 group border-none">
               Join the Leaderboard
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Button>

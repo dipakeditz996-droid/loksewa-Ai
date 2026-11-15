@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, TrendingUp, TrendingDown, Target, ArrowRight, Zap } from "lucide-react";
 
 const WEAK_TOPICS = [
-  { name: "Constitutional Law", accuracy: 62, questions: 20 },
+  { name: "Structural Analysis", accuracy: 62, questions: 20 },
   { name: "Current Affairs", accuracy: 68, questions: 15 },
-  { name: "Public Administration", accuracy: 71, questions: 12 },
+  { name: "Fluid Mechanics", accuracy: 71, questions: 12 },
 ];
 
 const STRONG_TOPICS = [
@@ -41,7 +41,7 @@ export function AIPreparationSection() {
             </h2>
 
             <p className="text-[17px] text-slate-500 dark:text-slate-400 leading-[1.7] mb-8 max-w-[480px] font-[500]">
-              LoksewaAI continuously analyzes your performance and builds a dynamic preparation roadmap — identifying weak areas, recommending targeted practice, and tracking your exam readiness in real time.
+              NES Mastery continuously analyzes your performance and builds a dynamic preparation roadmap — identifying weak areas, recommending targeted practice, and tracking your exam readiness in real time.
             </p>
 
             {/* AI insight bullets */}
@@ -106,7 +106,7 @@ export function AIPreparationSection() {
               </div>
               <div>
                 <div className="text-[13px] font-[800] text-slate-800 dark:text-white mb-1">Preparation Score</div>
-                <div className="text-[12px] text-[#D4A72C] font-[700] mb-2">Excellent Progress</div>
+                <div className="text-[12px] text-[#2563EB] font-[700] mb-2">Excellent Progress</div>
                 <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[12px] font-[700]">
                   <TrendingUp className="w-3.5 h-3.5" />
                   +14.8% this month

@@ -100,7 +100,7 @@ export function DashboardHeader({ onMenuClick, role = "student" }: DashboardHead
           className="lg:hidden shrink-0 h-9 w-9 p-0"
           onClick={onMenuClick}
         >
-          <Menu className="h-5 w-5 text-[#0B2545] dark:text-white" />
+          <Menu className="h-5 w-5 text-[#174A68] dark:text-white" />
           <span className="sr-only">Toggle sidebar</span>
         </Button>
         <div className="hidden lg:flex min-w-0 flex-col">

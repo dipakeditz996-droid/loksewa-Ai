@@ -18,34 +18,45 @@ input:-webkit-autofill:active {
 /* ===== DESIGN SYSTEM TOKENS ===== */
 
 @theme {
-  /* Brand Primary (Navy - #0B2545) */
-  --color-primary-50: #f1f5f9;
-  --color-primary-100: #e2e8f0;
-  --color-primary-200: #cbd5e1;
-  --color-primary-300: #94a3b8;
-  --color-primary-400: #64748b;
-  --color-primary-500: #475569;
-  --color-primary-600: #334155;
-  --color-primary-700: #1e293b;
-  --color-primary-800: #0f172a;
-  --color-primary-900: #163E6C; /* Secondary Navy */
-  --color-primary-950: #0B2545; /* Main Navy */
+  /* Brand Core Tokens (NES Mastery Official) */
+  --color-petrol: #174A68;
+  --color-midnight: #102D40;
+  --color-electric: #2563EB;
+  --color-electric-hover: #1D4ED8;
+  --color-sky: #60A5FA;
+  --color-cloud: #F5F8FC;
+  --color-slate-text: #172B4D;
 
-  /* Brand Accent (Gold - #D4A63A) */
-  --color-accent-50: #fefce8;
-  --color-accent-100: #fef9c3;
-  --color-accent-200: #fef08a;
-  --color-accent-300: #fde047;
-  --color-accent-400: #facc15;
-  --color-accent-500: #C99A2E; /* Main Gold */
-  --color-accent-600: #ca8a04;
-  --color-accent-700: #a16207;
-  --color-accent-800: #854d0e;
-  --color-accent-900: #713f12;
+  /* Brand Primary Scale (Petrol Blue - #174A68) */
+  --color-primary-50: #f0f7fa;
+  --color-primary-100: #dbeef5;
+  --color-primary-200: #b9deec;
+  --color-primary-300: #85c4dc;
+  --color-primary-400: #4ba4c7;
+  --color-primary-500: #2a87ab;
+  --color-primary-600: #1f6b8b;
+  --color-primary-700: #1b5773;
+  --color-primary-800: #174A68; /* Primary Petrol */
+  --color-primary-900: #102D40; /* Midnight */
+  --color-primary-950: #0a1b26;
 
-  /* Semantic */
-  --color-success: #159A82;
-  --color-error: #DC5A5A;
+  /* Brand Accent Scale (Electric Blue - #2563EB) */
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-400: #60a5fa; /* Sky Blue */
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563EB; /* Main Electric Blue */
+  --color-accent-700: #1D4ED8; /* Hover Electric Blue */
+  --color-accent-800: #1e40af;
+  --color-accent-900: #1e3a8a;
+
+  /* Semantic Colors */
+  --color-success: #16A36A;
+  --color-warning: #D99116;
+  --color-error: #DC4545;
+  --color-info: #3182CE;
   
   /* Border radius */
   --radius-sm: 0.25rem;
@@ -64,127 +75,123 @@ input:-webkit-autofill:active {
 /* ===== shadcn/ui CSS variables ===== */
 
 :root {
-  /* Without this, native form controls (select popups, scrollbars, date
-   * pickers, etc.) render using the OS/browser's own dark-mode preference
-   * instead of following this app's actual active theme - so a visitor
-   * whose OS prefers dark but who has this site in light mode (or vice
-   * versa) gets a native select popup themed opposite to the page around
-   * it. Declaring it explicitly here and under .dark ties native UI to the
-   * theme this app is actually rendering. */
+  /* Centralized Brand Tokens */
+  --brand-primary: #174A68;
+  --brand-primary-dark: #102D40;
+  --brand-accent: #2563EB;
+  --brand-accent-hover: #1D4ED8;
+  --brand-highlight: #60A5FA;
+  --surface: #FFFFFF;
+  --surface-secondary: #EEF3F8;
+  --text-primary: #172B4D;
+  --text-secondary: #64748B;
+  --border-color: #DCE5EF;
+  --success: #16A36A;
+  --warning: #D99116;
+  --error: #DC4545;
+  --info: #3182CE;
+
   color-scheme: light;
-  /* Main Background: #F7F9FC */
-  --background: 216 33% 98%;
-  /* Main Text: #101828 */
-  --foreground: 220 43% 11%;
+  /* Main Background: Cloud White #F5F8FC */
+  --background: 214 55% 98%;
+  /* Main Text: Slate Text #172B4D */
+  --foreground: 218 54% 20%;
   
   /* Cards: #FFFFFF */
   --card: 0 0% 100%;
-  --card-foreground: 220 43% 11%;
+  --card-foreground: 218 54% 20%;
   
   --popover: 0 0% 100%;
-  --popover-foreground: 220 43% 11%;
+  --popover-foreground: 218 54% 20%;
   
-  /* Primary Button (Navy - #0B2545) */
-  --primary: 212 73% 16%;
+  /* Primary Action Button: Electric Blue #2563EB */
+  --primary: 221 83% 53%;
   --primary-foreground: 0 0% 100%;
   
-  /* Secondary/Muted: #F7F9FC bg, #475467 text */
-  --secondary: 216 33% 98%;
-  --secondary-foreground: 216 19% 34%;
+  /* Secondary/Muted: #EEF3F8 bg, #64748B text */
+  --secondary: 210 40% 95%;
+  --secondary-foreground: 218 54% 20%;
   
-  --muted: 216 33% 98%;
-  --muted-foreground: 216 19% 34%;
+  --muted: 210 40% 95%;
+  --muted-foreground: 215 16% 47%;
   
-  /* Accent/Action (Gold - #D4A63A) */
-  --accent: 42 63% 48%;
-  --accent-foreground: 220 43% 11%;
+  /* Accent: Petrol Blue #174A68 */
+  --accent: 202 64% 25%;
+  --accent-foreground: 0 0% 100%;
   
-  --destructive: 0 65% 61%;
+  --destructive: 0 69% 57%;
   --destructive-foreground: 0 0% 100%;
   
-  /* Border: #D9E1EA */
-  --border: 212 27% 88%;
-  --input: 212 27% 88%;
-  /* Ring: #0B2545 */
-  --ring: 212 73% 16%;
+  /* Border: #DCE5EF */
+  --border: 212 41% 90%;
+  --input: 212 41% 90%;
+  /* Ring: Electric Blue */
+  --ring: 221 83% 53%;
   
-  --radius: 0.375rem;
+  --radius: 0.5rem;
 }
 
 /* The admin dashboard is intentionally always-light (it has no theme
  * toggle of its own, and every page in it hardcodes white/slate colors),
  * but it's mounted under the same <html> as the theme-toggleable
- * student/teacher portals. If a visitor has the global theme set to dark,
- * --foreground and friends still resolve to their dark-mode values here
- * even though the visible background is hardcoded white - so any element
- * that relies on inherited color (a bare <select>, an unstyled input)
- * renders near-invisible light-on-light or dark-mode-text-on-white text.
- * This scope pins every token back to its light value and tells the
- * browser's native form-control UI (select popups, etc.) to render light
- * too, regardless of the visitor's global theme preference. */
+ * student/teacher portals. */
 .admin-light-scope,
 html.dark:has(.admin-light-scope),
 html:has(.admin-light-scope),
 .dark .admin-light-scope {
   color-scheme: light !important;
-  /* `color: inherit` (used by the select/input/textarea rule below, and by
-   * anything else that relies on inheritance) copies the PARENT's already
-   * -resolved `color` value - it doesn't re-run `var(--foreground)`. Since
-   * <body> sits outside this scope and stays dark-mode-resolved, redeclaring
-   * just the custom properties here has no effect on inherited `color`
-   * without this explicit re-evaluation at the scope boundary. */
-  color: hsl(220 43% 11%) !important;
-  --background: 0 0% 100% !important;
-  --foreground: 220 43% 11% !important;
+  color: #172B4D !important;
+  --background: 214 55% 98% !important;
+  --foreground: 218 54% 20% !important;
   --card: 0 0% 100% !important;
-  --card-foreground: 220 43% 11% !important;
+  --card-foreground: 218 54% 20% !important;
   --popover: 0 0% 100% !important;
-  --popover-foreground: 220 43% 11% !important;
-  --primary: 212 73% 16% !important;
+  --popover-foreground: 218 54% 20% !important;
+  --primary: 221 83% 53% !important;
   --primary-foreground: 0 0% 100% !important;
-  --secondary: 216 33% 98% !important;
-  --secondary-foreground: 216 19% 34% !important;
-  --muted: 216 33% 98% !important;
-  --muted-foreground: 216 19% 34% !important;
-  --accent: 42 63% 48% !important;
-  --accent-foreground: 220 43% 11% !important;
-  --destructive: 0 65% 61% !important;
+  --secondary: 210 40% 95% !important;
+  --secondary-foreground: 218 54% 20% !important;
+  --muted: 210 40% 95% !important;
+  --muted-foreground: 215 16% 47% !important;
+  --accent: 202 64% 25% !important;
+  --accent-foreground: 0 0% 100% !important;
+  --destructive: 0 69% 57% !important;
   --destructive-foreground: 0 0% 100% !important;
-  --border: 212 27% 88% !important;
-  --input: 212 27% 88% !important;
-  --ring: 212 73% 16% !important;
+  --border: 212 41% 90% !important;
+  --input: 212 41% 90% !important;
+  --ring: 221 83% 53% !important;
 }
 
 .dark {
-  /* Keeping it professional, primarily focused on premium SaaS dashboard aesthetic */
+  /* High contrast, mature engineering education dark theme */
   color-scheme: dark;
-  --background: 215 64% 7%; /* #07111F Page background */
-  --foreground: 210 40% 98%; /* #F8FAFC Primary text */
+  --background: 204 60% 11%; /* #0B1E2B Deep Midnight Blue foundation */
+  --foreground: 214 55% 98%; /* #F5F8FC Cloud White primary text */
   
-  --card: 211 53% 11%; /* #0D1B2A Primary surfaces */
-  --card-foreground: 210 40% 98%;
+  --card: 203 52% 16%; /* #132F42 Elevated Midnight surface */
+  --card-foreground: 214 55% 98%;
   
-  --popover: 211 53% 11%;
-  --popover-foreground: 210 40% 98%;
+  --popover: 203 52% 16%;
+  --popover-foreground: 214 55% 98%;
   
-  --primary: 45 90% 57%; /* #F4C430 Gold accent */
-  --primary-foreground: 215 64% 7%; /* Dark text on gold */
+  --primary: 221 83% 58%; /* Electric Blue #3B82F6 */
+  --primary-foreground: 0 0% 100%;
   
-  --secondary: 210 52% 16%; /* #142A40 Secondary surfaces */
-  --secondary-foreground: 213 27% 73%; /* #A8B8CC Secondary text */
+  --secondary: 203 45% 22%; /* Secondary surface */
+  --secondary-foreground: 213 94% 85%;
   
-  --muted: 210 52% 16%; /* #142A40 Secondary surfaces / Hover */
-  --muted-foreground: 215 20% 65%; /* Accessible muted text (~7.1:1 AAA against #0D1B2A) */
+  --muted: 203 45% 20%;
+  --muted-foreground: 215 20% 70%; /* High contrast, accessible muted text */
   
-  --accent: 45 90% 57%;
-  --accent-foreground: 215 64% 7%;
+  --accent: 221 83% 58%;
+  --accent-foreground: 0 0% 100%;
   
-  --destructive: 0 65% 61%;
+  --destructive: 0 69% 57%;
   --destructive-foreground: 0 0% 100%;
   
-  --border: 212 28% 36%; /* Visible borders against #0D1B2A and #07111F */
-  --input: 212 28% 36%;
-  --ring: 45 90% 57%;
+  --border: 203 40% 26%; /* Visible border against dark surface */
+  --input: 203 40% 26%;
+  --ring: 221 83% 58%;
 }
 
 /* Maps the semantic HSL tokens above (:root / .dark) to bare Tailwind
@@ -549,25 +556,31 @@ option {
 }
 
 /* ===== TEXT GRADIENT UTILITIES ===== */
-.text-gradient-gold {
-  background: linear-gradient(135deg, #C29322 0%, #E6BA3D 50%, #D4A72C 100%);
+.text-gradient-gold,
+.text-gradient-brand {
+  background: linear-gradient(135deg, #174A68 0%, #2563EB 50%, #60A5FA 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.text-gradient-gold-shimmer {
+.text-gradient-gold-shimmer,
+.text-gradient-brand-shimmer {
   background: linear-gradient(
     110deg,
-    #C29322 0%, #D4A72C 20%, #E6BA3D 35%,
-    #FFF0B3 50%,
-    #E6BA3D 65%, #D4A72C 80%, #C29322 100%
+    #174A68 0%, #2563EB 25%, #60A5FA 50%,
+    #93C5FD 65%, #2563EB 80%, #174A68 100%
   );
   background-size: 250% 100%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: gold-shimmer-sweep 4s ease-in-out infinite 2s;
+  animation: brand-shimmer-sweep 4s ease-in-out infinite 2s;
+}
+
+@keyframes brand-shimmer-sweep {
+  0%, 100% { background-position: 200% center; }
+  40%, 60% { background-position: -50% center; }
 }
 
 @keyframes gold-shimmer-sweep {
@@ -576,14 +589,14 @@ option {
 }
 
 .text-gradient-blue-violet {
-  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 50%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #174A68 0%, #2563EB 50%, #60A5FA 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .text-gradient-electric {
-  background: linear-gradient(90deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+  background: linear-gradient(90deg, #2563EB 0%, #3B82F6 50%, #60A5FA 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -591,26 +604,27 @@ option {
 
 /* ===== GLOW EFFECTS ===== */
 .glow-blue {
-  box-shadow: 0 0 30px rgba(59, 130, 246, 0.3), 0 0 60px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 24px rgba(37, 99, 235, 0.25);
 }
 
-.glow-gold {
-  box-shadow: 0 0 20px rgba(212, 167, 44, 0.4), 0 0 40px rgba(212, 167, 44, 0.2);
+.glow-gold,
+.glow-electric {
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
 }
 
 .glow-violet {
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.3), 0 0 60px rgba(139, 92, 246, 0.1);
+  box-shadow: 0 0 24px rgba(23, 74, 104, 0.3);
 }
 
 /* ===== SECTION DIVIDER ===== */
 .section-divider {
   height: 1px;
-  background: linear-gradient(to right, transparent, rgba(22, 62, 107, 0.4), transparent);
+  background: linear-gradient(to right, transparent, rgba(23, 74, 104, 0.4), transparent);
 }
 
 .section-divider-light {
   height: 1px;
-  background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.1), transparent);
+  background: linear-gradient(to right, transparent, rgba(220, 229, 239, 0.8), transparent);
 }
 
 /* ===== PREMIUM CARD HOVER ===== */
@@ -621,71 +635,66 @@ option {
 }
 
 .card-hover:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 28px 54px -16px rgba(11, 37, 69, 0.18), 0 10px 24px -10px rgba(11, 37, 69, 0.1);
-  border-color: rgba(212, 167, 44, 0.35);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(16, 45, 64, 0.12), 0 8px 16px -8px rgba(16, 45, 64, 0.08);
+  border-color: rgba(37, 99, 235, 0.35);
 }
 
 .dark .card-hover:hover {
-  box-shadow: 0 28px 64px -16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(212, 167, 44, 0.08);
+  box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(96, 165, 250, 0.15);
+  border-color: rgba(96, 165, 250, 0.3);
 }
 
-/* ===== UNIFIED GOLD GRADIENT (single source of truth for every gold CTA) ===== */
-.btn-gold-gradient {
-  background: linear-gradient(120deg, #C29322 0%, #E6BA3D 55%, #D4A72C 100%);
-  background-size: 180% 180%;
-  background-position: 0% 50%;
-  transition: background-position 0.5s ease, box-shadow 0.35s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+/* ===== UNIFIED ELECTRIC CTA BUTTON ===== */
+.btn-gold-gradient,
+.btn-electric {
+  background: #2563EB;
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.35);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.btn-gold-gradient:hover {
-  background-position: 100% 50%;
-  box-shadow: 0 16px 38px -10px rgba(212, 167, 44, 0.5);
-  transform: translateY(-2px);
+.btn-gold-gradient:hover,
+.btn-electric:hover {
+  background: #1D4ED8;
+  box-shadow: 0 6px 20px rgba(29, 78, 216, 0.45);
+  transform: translateY(-1.5px);
 }
 
 /* ===== AURORA WASH ===== */
-/* A quiet, page-level gradient wash that replaces flat single-color section
-   backgrounds with subtle depth — meant to sit behind content, not compete
-   with it. */
 .bg-aurora {
   background-image:
-    radial-gradient(1100px circle at 12% -10%, rgba(212, 167, 44, 0.07), transparent 55%),
-    radial-gradient(900px circle at 92% 8%, rgba(37, 99, 235, 0.06), transparent 50%),
-    radial-gradient(800px circle at 50% 100%, rgba(139, 92, 246, 0.04), transparent 60%);
+    radial-gradient(1100px circle at 12% -10%, rgba(23, 74, 104, 0.06), transparent 55%),
+    radial-gradient(900px circle at 92% 8%, rgba(37, 99, 235, 0.05), transparent 50%),
+    radial-gradient(800px circle at 50% 100%, rgba(96, 165, 250, 0.04), transparent 60%);
 }
 
 .dark .bg-aurora {
   background-image:
-    radial-gradient(1100px circle at 12% -10%, rgba(212, 167, 44, 0.1), transparent 55%),
-    radial-gradient(900px circle at 92% 8%, rgba(37, 99, 235, 0.14), transparent 50%),
-    radial-gradient(800px circle at 50% 100%, rgba(139, 92, 246, 0.08), transparent 60%);
+    radial-gradient(1100px circle at 12% -10%, rgba(23, 74, 104, 0.16), transparent 55%),
+    radial-gradient(900px circle at 92% 8%, rgba(37, 99, 235, 0.12), transparent 50%),
+    radial-gradient(800px circle at 50% 100%, rgba(96, 165, 250, 0.06), transparent 60%);
 }
 
 /* ===== FILM GRAIN ===== */
-/* A very fine noise overlay. Real surfaces are never perfectly flat, and a
-   trace of grain is what keeps large gradient fields from looking like plastic.
-   Kept extremely low-opacity — it should be felt, not seen. */
 .bg-grain::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .dark .bg-grain::after {
-  opacity: 0.06;
+  opacity: 0.04;
 }
 
 /* ===== HERO GRID ===== */
-/* Perspective grid that fades out radially, so it reads as depth rather than
-   as graph paper laid over the whole section. */
 .hero-grid {
   background-image:
-    linear-gradient(to right, rgba(11, 37, 69, 0.055) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(11, 37, 69, 0.055) 1px, transparent 1px);
+    linear-gradient(to right, rgba(23, 74, 104, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(23, 74, 104, 0.06) 1px, transparent 1px);
   background-size: 56px 56px;
   -webkit-mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 20%, transparent 78%);
   mask-image: radial-gradient(ellipse 75% 55% at 50% 0%, #000 20%, transparent 78%);
@@ -693,30 +702,29 @@ option {
 
 .dark .hero-grid {
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgba(96, 165, 250, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(96, 165, 250, 0.06) 1px, transparent 1px);
 }
 
-/* ===== GOLD TEXT GRADIENT (dark-mode brightened) ===== */
-/* The default .text-gradient-gold is tuned for light backgrounds; on a dark
-   field those mid-tones go muddy, so lift the whole ramp. */
-.dark .text-gradient-gold {
-  background: linear-gradient(135deg, #E6BA3D 0%, #FFD976 50%, #E0AE33 100%);
+/* ===== BRAND TEXT GRADIENT (dark-mode brightened) ===== */
+.dark .text-gradient-gold,
+.dark .text-gradient-brand {
+  background: linear-gradient(135deg, #60A5FA 0%, #93C5FD 50%, #FFFFFF 100%);
   -webkit-background-clip: text;
   background-clip: text;
 }
 
-.dark .text-gradient-gold-shimmer {
+.dark .text-gradient-gold-shimmer,
+.dark .text-gradient-brand-shimmer {
   background: linear-gradient(
     110deg,
-    #E0AE33 0%, #E6BA3D 20%, #FFD976 35%,
-    #FFFBE0 50%,
-    #FFD976 65%, #E6BA3D 80%, #E0AE33 100%
+    #60A5FA 0%, #93C5FD 25%, #FFFFFF 50%,
+    #93C5FD 65%, #60A5FA 80%, #3B82F6 100%
   );
   background-size: 250% 100%;
   -webkit-background-clip: text;
   background-clip: text;
-  animation: gold-shimmer-sweep 4s ease-in-out infinite 2s;
+  animation: brand-shimmer-sweep 4s ease-in-out infinite 2s;
 }
 
 /* ===== EYEBROW / SECTION BADGE ===== */

@@ -50,7 +50,7 @@ interface NavLinkItem {
   isActive?: (pathname: string) => boolean;
 }
 
-const DEFAULT_BRAND_NAME = "LoksewaAI";
+const DEFAULT_BRAND_NAME = "NES Mastery";
 
 export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   const pathname = usePathname();
@@ -62,7 +62,10 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
   }, []);
 
   // Use real user if available, fallback to Guest for unauthenticated renders
-  const user = authUser ? { name: authUser.name ? authUser.name : authUser.username } : { name: "Guest" };
+  const displayName = authUser
+    ? (authUser.name && authUser.name.trim()) || authUser.username || "Student"
+    : "Guest";
+  const user = { name: displayName };
 
   // Real platform name/logo from Admin Settings > Platform, not hardcoded.
   const [branding, setBranding] = useState<PlatformBranding | null>(null);
@@ -246,22 +249,27 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
       {/* Sidebar */}
       <aside 
         className={cn(
-          "fixed top-0 left-0 z-50 flex h-screen w-72 flex-col bg-[#0B2545] dark:bg-card border-r border-[#163E6B] dark:border-border transition-transform duration-300 ease-in-out lg:translate-x-0 text-white dark:text-foreground",
+          "fixed top-0 left-0 z-50 flex h-screen w-72 flex-col bg-[#102D40] dark:bg-card border-r border-[#174A68] dark:border-border transition-transform duration-300 ease-in-out lg:translate-x-0 text-white dark:text-foreground",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center justify-between px-6 border-b border-[#163E6B] dark:border-border">
+        <div className="flex h-16 items-center justify-between px-6 border-b border-[#174A68] dark:border-border">
           <Link href="/" className="flex items-center space-x-3">
             {branding?.logoUrl ? (
               <RetryImage src={branding.logoUrl} alt={brandName} className="h-8 w-8 rounded-[8px] object-contain" />
             ) : (
-              <div className="bg-[#D4A72C] text-[#0A1118] p-1.5 rounded-[8px]">
-                <BookOpen className="h-5 w-5" strokeWidth={2.5} />
+              <div className="bg-[#174A68] text-white p-1.5 rounded-[8px] border border-[#2563EB]/40 shadow-xs">
+                <BookOpen className="h-5 w-5 text-[#60A5FA]" strokeWidth={2.5} />
               </div>
             )}
-            <span className="font-[800] text-[20px] tracking-tight">
-              {brandBase}
-              {brandSuffix && <span className="text-[#D4A72C]">{brandSuffix}</span>}
+            <span className="font-[800] text-[20px] tracking-tight text-white">
+              {brandName.startsWith("NES") ? (
+                <>
+                  NES <span className="text-[#2563EB] dark:text-[#60A5FA]">{brandName.replace(/^NES\s*/, "") || "Mastery"}</span>
+                </>
+              ) : (
+                brandName
+              )}
             </span>
           </Link>
           <Button variant="ghost" size="icon" className="lg:hidden text-white hover:bg-white/10" onClick={() => setIsOpen(false)}>
@@ -290,7 +298,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                             className={cn(
                               "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[14px] font-medium transition-all duration-200",
                               isActive 
-                                ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#D4A72C]" 
+                                ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#2563EB]" 
                                 : "text-slate-300 hover:bg-white/5 hover:text-white"
                             )}
                           >
@@ -298,7 +306,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                               className={cn(
                                 "h-[18px] w-[18px] transition-all duration-300", 
                                 isActive 
-                                  ? "text-[#D4A72C] drop-shadow-[0_0_8px_rgba(212,167,44,0.5)] scale-110" 
+                                  ? "text-[#60A5FA] drop-shadow-[0_0_8px_rgba(96,165,250,0.4)] scale-110" 
                                   : "text-slate-400 group-hover:text-slate-300"
                               )} 
                               strokeWidth={isActive ? 2 : 1.5} 
@@ -324,7 +332,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                           className={cn(
                             "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[14px] font-medium transition-all duration-200",
                             isActive 
-                              ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#D4A72C]" 
+                              ? "bg-white/10 text-white shadow-[inset_3px_0_0_0_#2563EB]" 
                               : "text-slate-300 hover:bg-white/5 hover:text-white"
                           )}
                         >
@@ -332,7 +340,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                             className={cn(
                               "h-[18px] w-[18px] transition-all duration-300", 
                               isActive 
-                                ? "text-[#D4A72C] drop-shadow-[0_0_8px_rgba(212,167,44,0.5)] scale-110" 
+                                ? "text-[#60A5FA] drop-shadow-[0_0_8px_rgba(96,165,250,0.4)] scale-110" 
                                 : "text-slate-400 group-hover:text-slate-300"
                             )} 
                             strokeWidth={isActive ? 2 : 1.5} 
@@ -359,7 +367,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                     className={cn(
                       "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[14px] font-medium transition-all duration-200",
                       isActive 
-                        ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#D4A72C]" 
+                        ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#2563EB]" 
                         : "text-slate-300 dark:text-muted-foreground hover:bg-white/5 dark:hover:bg-muted/50 hover:text-white dark:hover:text-foreground"
                     )}
                   >
@@ -367,7 +375,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                       className={cn(
                         "h-[18px] w-[18px] transition-all duration-300", 
                         isActive 
-                          ? "text-[#D4A72C] drop-shadow-[0_0_8px_rgba(212,167,44,0.5)] scale-110" 
+                          ? "text-[#60A5FA] drop-shadow-[0_0_8px_rgba(96,165,250,0.4)] scale-110" 
                           : "text-slate-400 dark:text-muted-foreground group-hover:text-slate-300 dark:group-hover:text-foreground"
                       )} 
                       strokeWidth={isActive ? 2 : 1.5} 
@@ -380,7 +388,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
           </nav>
         </ScrollArea>
 
-        <div className="border-t border-[#163E6B] dark:border-border p-4 flex flex-col gap-1">
+        <div className="border-t border-[#174A68] dark:border-border p-4 flex flex-col gap-1">
           {(() => {
             const isSettingsActive = pathname === `/${role}/settings` || pathname.startsWith(`/${role}/settings/`);
             const isHelpActive = pathname === `/${role}/help-support` || pathname.startsWith(`/${role}/help-support/`) || pathname === `/${role}/help` || pathname.startsWith(`/${role}/help/`);
@@ -392,7 +400,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                   className={cn(
                     "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
                     isSettingsActive 
-                      ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#D4A72C]" 
+                      ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#2563EB]" 
                       : "text-slate-300 dark:text-muted-foreground hover:bg-white/5 dark:hover:bg-muted/50 hover:text-white dark:hover:text-foreground"
                   )}
                 >
@@ -400,7 +408,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                     className={cn(
                       "h-[18px] w-[18px] transition-all duration-300", 
                       isSettingsActive 
-                        ? "text-[#D4A72C] drop-shadow-[0_0_8px_rgba(212,167,44,0.5)] scale-110" 
+                        ? "text-[#60A5FA] drop-shadow-[0_0_8px_rgba(96,165,250,0.4)] scale-110" 
                         : "text-slate-400 dark:text-muted-foreground group-hover:text-slate-300 dark:group-hover:text-foreground"
                     )} 
                     strokeWidth={isSettingsActive ? 2 : 1.5} 
@@ -413,7 +421,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                   className={cn(
                     "flex items-center gap-3 rounded-[8px] px-3 py-2.5 text-[13px] font-medium transition-all duration-200 mb-2",
                     isHelpActive 
-                      ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#D4A72C]" 
+                      ? "bg-white/10 text-white dark:bg-primary/10 dark:text-foreground shadow-[inset_2px_0_0_0_#2563EB]" 
                       : "text-slate-300 dark:text-muted-foreground hover:bg-white/5 dark:hover:bg-muted/50 hover:text-white dark:hover:text-foreground"
                   )}
                 >
@@ -421,7 +429,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
                     className={cn(
                       "h-[18px] w-[18px] transition-all duration-300", 
                       isHelpActive 
-                        ? "text-[#D4A72C] drop-shadow-[0_0_8px_rgba(212,167,44,0.5)] scale-110" 
+                        ? "text-[#60A5FA] drop-shadow-[0_0_8px_rgba(96,165,250,0.4)] scale-110" 
                         : "text-slate-400 dark:text-muted-foreground group-hover:text-slate-300 dark:group-hover:text-foreground"
                     )} 
                     strokeWidth={isHelpActive ? 2 : 1.5} 
@@ -433,7 +441,7 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
           })()}
 
           <div className="flex items-center gap-3 bg-white/5 p-3 rounded-[12px] border border-white/10 mt-2">
-            <Avatar className="h-10 w-10 border border-[#D4A72C]/30 bg-[#0A1118]">
+            <Avatar className="h-10 w-10 border border-[#2563EB]/40 bg-[#102D40]">
               <RetryImage 
                 src={(mounted && authUser?.avatar) ? authUser.avatar : "/images/profile.png"} 
                 alt={mounted ? user.name : "User"} 

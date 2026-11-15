@@ -2,9 +2,9 @@ import { Metadata } from "next";
 import { FeaturesContent } from "./FeaturesContent";
 
 export const metadata: Metadata = {
-  title: "LoksewaAI Features — Smart Loksewa Preparation",
+  title: "NES Mastery Features — Smart Loksewa Preparation",
   description:
-    "Explore LoksewaAI's comprehensive suite of smart Loksewa preparation tools: syllabus-aligned courses, real-time practice, timed mock exams, AI Tutor, and student marketplace.",
+    "Explore NES Mastery's comprehensive suite of smart Loksewa preparation tools: syllabus-aligned courses, real-time practice, timed mock exams, AI Tutor, and student marketplace.",
 };
 
 export default function FeaturesPage() {

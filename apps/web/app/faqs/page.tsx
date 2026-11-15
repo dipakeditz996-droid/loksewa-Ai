@@ -2,9 +2,9 @@ import { Metadata } from "next";
 import { FaqsContent } from "./FaqsContent";
 
 export const metadata: Metadata = {
-  title: "LoksewaAI FAQs",
+  title: "NES Mastery FAQs",
   description:
-    "Find answers to frequently asked questions about LoksewaAI courses, syllabus, practice MCQs, timed mock exams, negative marking, payments, and account security.",
+    "Find answers to frequently asked questions about NES Mastery courses, syllabus, practice MCQs, timed mock exams, negative marking, payments, and account security.",
 };
 
 export default function FaqsPage() {

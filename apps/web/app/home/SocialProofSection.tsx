@@ -16,7 +16,7 @@ const STATIC_METRICS = [
 const AVATAR_COLORS = [
   "from-blue-500 to-violet-600",
   "from-emerald-400 to-cyan-500",
-  "from-[#D4A72C] to-orange-500",
+  "from-[#2563EB] to-orange-500",
 ];
 
 interface Props {
@@ -50,7 +50,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
 
         {/* Header */}
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#163E6B]/50 mb-5">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#102D40]/50 mb-5">
             <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-[#4B8BE0]">Trusted by Aspirants</span>
           </div>
@@ -59,7 +59,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
             <span className="text-gradient-gold">Loksewa preparation.</span>
           </h2>
           <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
-            Thousands of aspirants trust LoksewaAI to prepare smarter, practice better, and perform with confidence.
+            Thousands of aspirants trust NES Mastery to prepare smarter, practice better, and perform with confidence.
           </p>
           <div className="mt-6">
             <WriteReviewTrigger />
@@ -71,9 +71,9 @@ export function SocialProofSection({ testimonials, stats }: Props) {
           {metrics.map((m, i) => (
             <div
               key={m.label}
-              className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 text-center group hover:border-[#D4A72C]/30 dark:hover:border-[#D4A72C]/20 transition-all card-hover overflow-hidden"
+              className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 text-center group hover:border-[#2563EB]/30 dark:hover:border-[#2563EB]/20 transition-all card-hover overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#D4A72C]/[0.02] to-transparent rounded-[16px] sm:rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-0 bg-gradient-to-br from-[#2563EB]/[0.02] to-transparent rounded-[16px] sm:rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
               <div className={`text-[24px] xs:text-[28px] sm:text-[36px] md:text-[44px] font-[900] mb-1 leading-tight tracking-tight tabular-nums ${
                 i === 3 ? "text-gradient-gold" : "text-slate-900 dark:text-white"
               }`}>
@@ -96,7 +96,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
               {/* Stars */}
               <div className="flex items-center gap-0.5">
                 {Array.from({ length: t.rating }).map((_, j) => (
-                  <Star key={j} className="w-3.5 h-3.5 fill-[#D4A72C] text-[#D4A72C]" />
+                  <Star key={j} className="w-3.5 h-3.5 fill-[#2563EB] text-[#2563EB]" />
                 ))}
               </div>
 
@@ -116,7 +116,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
                 )}
                 <div>
                   <div className="text-[13px] font-[700] text-slate-800 dark:text-white">{t.name}</div>
-                  <div className="text-[11.5px] text-[#8F6B12] dark:text-[#D4A72C] font-[600]">{t.position}</div>
+                  <div className="text-[11.5px] text-[#2563EB] dark:text-[#2563EB] font-[600]">{t.position}</div>
                 </div>
               </div>
             </div>

@@ -8,7 +8,7 @@ export function AnalyticsSection() {
     <section className="py-24 bg-slate-50 dark:bg-[#04080F] relative overflow-hidden">
 
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
-      <div className="absolute top-[30%] left-[-10%] w-[500px] h-[500px] bg-[#D4A72C]/[0.03] dark:bg-[#D4A72C]/[0.08] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute top-[30%] left-[-10%] w-[500px] h-[500px] bg-[#2563EB]/[0.03] dark:bg-[#2563EB]/[0.08] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
@@ -33,7 +33,7 @@ export function AnalyticsSection() {
               ].map((f) => (
                 <div key={f.label} className="flex flex-col">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#D4A72C]" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
                     <h3 className="text-[15px] font-[800] text-slate-800 dark:text-white">{f.label}</h3>
                   </div>
                   <p className="text-[13.5px] text-slate-500 dark:text-slate-400 leading-[1.6] pl-3.5">
@@ -44,7 +44,7 @@ export function AnalyticsSection() {
             </div>
 
             <Link href="/register">
-              <Button className="bg-gradient-to-r from-[#C29322] to-[#E6BA3D] hover:opacity-90 text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] shadow-[0_8px_30px_rgba(212,167,44,0.3)] flex items-center gap-2 group border-none">
+              <Button className="bg-gradient-to-r from-[#1D4ED8] to-[#60A5FA] hover:opacity-90 text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] shadow-[0_8px_30px_rgba(37,99,235,0.3)] flex items-center gap-2 group border-none">
                 Start Tracking Free
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -97,12 +97,12 @@ export function AnalyticsSection() {
                       <div className="w-full bg-slate-100 dark:bg-white/[0.05] rounded-t-[4px] relative overflow-hidden" style={{ height: "180px" }}>
                         <div 
                           className={`absolute bottom-0 w-full rounded-t-[4px] transition-all duration-700 animate-bar-grow ${
-                            bar.active ? "bg-gradient-to-t from-[#D4A72C] to-[#E6BA3D]" : "bg-blue-500/80 dark:bg-blue-500/60"
+                            bar.active ? "bg-gradient-to-t from-[#2563EB] to-[#60A5FA]" : "bg-blue-500/80 dark:bg-blue-500/60"
                           }`} 
                           style={{ height: `${bar.h}%`, animationDelay: `${i * 100}ms` }} 
                         />
                       </div>
-                      <span className={`text-[10px] font-[700] ${bar.active ? "text-[#D4A72C]" : "text-slate-400"}`}>{bar.day}</span>
+                      <span className={`text-[10px] font-[700] ${bar.active ? "text-[#2563EB]" : "text-slate-400"}`}>{bar.day}</span>
                     </div>
                   ))}
                 </div>
@@ -116,7 +116,7 @@ export function AnalyticsSection() {
                 </div>
                 <div>
                   <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-widest mb-1">Highest</div>
-                  <div className="text-[20px] font-[900] text-[#D4A72C]">87.0%</div>
+                  <div className="text-[20px] font-[900] text-[#2563EB]">87.0%</div>
                 </div>
                 <div>
                   <div className="text-[11px] font-[700] text-slate-400 uppercase tracking-widest mb-1">Growth</div>

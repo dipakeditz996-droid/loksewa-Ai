@@ -7,7 +7,7 @@ import {
   ArrowRight, TrendingUp, Award, Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LoksewaBadgeIcon } from "@/components/ui/loksewa-badge-icon";
+
 import { useHeroDepth, useMagneticHover, useSafeReducedMotion, DEPTH_TIERS, type DepthTier } from "./useHeroDepth";
 
 type TierOffset = { x: MotionValue<number>; y: MotionValue<number> };
@@ -64,14 +64,14 @@ function DepthCard({
 
 // ── Subject mastery rows inside the dashboard mockup ───────────────────────────
 const SUBJECT_MASTERY = [
-  { label: "Constitutional Law", value: 92, color: "bg-[#D4A72C]" },
-  { label: "Public Administration", value: 88, color: "bg-blue-500" },
-  { label: "Current Affairs", value: 81, color: "bg-violet-500" },
+  { label: "Structural Analysis", value: 92, color: "bg-[#2563EB]" },
+  { label: "Fluid Mechanics", value: 88, color: "bg-blue-500" },
+  { label: "Engineering Mathematics", value: 85, color: "bg-cyan-500" },
 ];
 
-const EXAM_CHIPS = ["Section Officer", "Kharidar", "Nayab Subba", "Sub-Engineer"];
+const EXAM_CHIPS = ["NEC Civil License", "Civil Sub-Engineer", "IOE Entrance", "Sub-Engineer"];
 
-const ACCENT_WORDS = ["upgraded.", "redefined.", "unlocked.", "perfected."];
+const ACCENT_WORDS = ["NEC License.", "IOE Entrance.", "Top Ranks.", "Engineers."];
 
 // ── Circular score gauge (pure SVG, no chart library) ──────────────────────────
 function ScoreGauge({ value, reducedMotion }: { value: number; reducedMotion: boolean }) {
@@ -94,7 +94,7 @@ function ScoreGauge({ value, reducedMotion }: { value: number; reducedMotion: bo
         />
         <defs>
           <linearGradient id="heroGaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#C29322" />
+            <stop offset="0%" stopColor="#1D4ED8" />
             <stop offset="100%" stopColor="#F0C95A" />
           </linearGradient>
         </defs>
@@ -103,7 +103,7 @@ function ScoreGauge({ value, reducedMotion }: { value: number; reducedMotion: bo
         <span className="text-[24px] font-[900] text-slate-900 dark:text-white leading-none tracking-tight">
           {value}<span className="text-[12px] text-slate-500 dark:text-slate-400 font-[700]">%</span>
         </span>
-        <span className="text-[8.5px] font-[800] text-[#C29322] dark:text-[#F0C95A] uppercase tracking-widest mt-1.5">Excellent</span>
+        <span className="text-[8.5px] font-[800] text-[#1D4ED8] dark:text-[#F0C95A] uppercase tracking-widest mt-1.5">Excellent</span>
       </div>
     </div>
   );
@@ -119,12 +119,12 @@ function RankCard({ offset, reducedMotion }: { offset: TierOffset; reducedMotion
       className="absolute z-30 -top-2 right-0 xl:right-[-4%]"
     >
       <div className="rounded-[18px] p-4 flex flex-col items-center bg-white/90 dark:bg-white/[0.06] backdrop-blur-2xl border border-slate-200/70 dark:border-white/10 shadow-[0_18px_44px_-14px_rgba(11,37,69,0.28)] dark:shadow-[0_18px_44px_-10px_rgba(0,0,0,0.7)]">
-        <div className="w-9 h-9 rounded-full bg-[#D4A72C]/12 dark:bg-[#D4A72C]/15 flex items-center justify-center mb-2">
-          <Award className="w-4.5 h-4.5 text-[#C29322] dark:text-[#F0C95A]" />
+        <div className="w-9 h-9 rounded-full bg-[#2563EB]/12 dark:bg-[#2563EB]/15 flex items-center justify-center mb-2">
+          <Award className="w-4.5 h-4.5 text-[#1D4ED8] dark:text-[#F0C95A]" />
         </div>
         <div className="text-[8.5px] font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Current Rank</div>
         <div className="text-[24px] font-[900] text-slate-900 dark:text-white leading-none mb-1">#27</div>
-        <div className="text-[10.5px] font-[700] text-[#C29322] dark:text-[#F0C95A]">Top 3%</div>
+        <div className="text-[10.5px] font-[700] text-[#1D4ED8] dark:text-[#F0C95A]">Top 3%</div>
       </div>
     </DepthCard>
   );
@@ -170,7 +170,7 @@ function HeroShowcase() {
         className="absolute inset-0 flex items-center justify-center pointer-events-none"
         style={{ x: tiers.background.x, y: tiers.background.y }}
       >
-        <div className="absolute w-[440px] h-[440px] rounded-full bg-[#D4A72C]/[0.12] dark:bg-[#D4A72C]/[0.18] blur-[120px]" />
+        <div className="absolute w-[440px] h-[440px] rounded-full bg-[#2563EB]/[0.12] dark:bg-[#2563EB]/[0.18] blur-[120px]" />
         <div className="absolute w-[400px] h-[400px] rounded-full bg-blue-500/[0.08] dark:bg-blue-500/[0.16] blur-[120px] translate-x-20 translate-y-10" />
       </motion.div>
 
@@ -192,7 +192,7 @@ function HeroShowcase() {
             <span className="w-2.5 h-2.5 rounded-full bg-amber-300 dark:bg-amber-400/60" />
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
             <span className="mx-auto text-[10.5px] font-[600] text-slate-600 dark:text-slate-400 tracking-wide">
-              app.loksewaai.com/dashboard
+              app.nesmastery.com/dashboard
             </span>
           </div>
 
@@ -272,7 +272,7 @@ function MobileHeroShowcase({ reducedMotion }: { reducedMotion: boolean }) {
     >
       {/* Glow bed */}
       <div className="absolute -inset-6 -z-10 pointer-events-none">
-        <div className="absolute left-0 top-0 w-[220px] h-[220px] rounded-full bg-[#D4A72C]/[0.16] blur-[80px]" />
+        <div className="absolute left-0 top-0 w-[220px] h-[220px] rounded-full bg-[#2563EB]/[0.16] blur-[80px]" />
         <div className="absolute right-0 bottom-0 w-[200px] h-[200px] rounded-full bg-blue-500/[0.12] blur-[80px]" />
       </div>
 
@@ -282,7 +282,7 @@ function MobileHeroShowcase({ reducedMotion }: { reducedMotion: boolean }) {
           <span className="w-2 h-2 rounded-full bg-amber-300 dark:bg-amber-400/60" />
           <span className="w-2 h-2 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
           <span className="mx-auto text-[10px] font-[600] text-slate-600 dark:text-slate-400">
-            app.loksewaai.com
+            app.nesmastery.com
           </span>
         </div>
 
@@ -320,12 +320,12 @@ function MobileHeroShowcase({ reducedMotion }: { reducedMotion: boolean }) {
 
           <div className="flex items-center gap-4 mt-4 pt-3.5 border-t border-slate-100 dark:border-white/[0.06]">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-[#D4A72C]/12 flex items-center justify-center">
-                <Award className="w-4 h-4 text-[#C29322] dark:text-[#F0C95A]" />
+              <div className="w-8 h-8 rounded-full bg-[#2563EB]/12 flex items-center justify-center">
+                <Award className="w-4 h-4 text-[#1D4ED8] dark:text-[#F0C95A]" />
               </div>
               <div>
                 <div className="text-[13px] font-[900] text-slate-900 dark:text-white leading-none">#27</div>
-                <div className="text-[9px] font-[700] text-[#C29322] dark:text-[#F0C95A] mt-0.5">Top 3%</div>
+                <div className="text-[9px] font-[700] text-[#1D4ED8] dark:text-[#F0C95A] mt-0.5">Top 3%</div>
               </div>
             </div>
             <div className="w-px h-8 bg-slate-100 dark:bg-white/10" />
@@ -351,7 +351,7 @@ const AVATAR_GRADIENTS = [
   "from-violet-400 to-violet-600",
   "from-emerald-400 to-emerald-600",
   "from-orange-400 to-orange-600",
-  "from-[#D4A72C] to-[#E6BA3D]",
+  "from-[#2563EB] to-[#60A5FA]",
 ];
 
 function TrustIndicators() {
@@ -367,7 +367,7 @@ function TrustIndicators() {
         </div>
         <div className="flex flex-col items-center justify-center py-3 px-1.5">
           <span className="flex items-center gap-0.5 text-[13px] font-[900] text-slate-900 dark:text-white leading-none">
-            <span className="text-[#D4A72C]">★</span> 4.9
+            <span className="text-[#2563EB]">★</span> 4.9
           </span>
           <span className="text-[9.5px] font-[600] text-slate-500 dark:text-slate-400 mt-1 text-center leading-tight">rating</span>
         </div>
@@ -399,7 +399,7 @@ function TrustIndicators() {
         <div>
           <div className="flex items-center gap-1">
             {"★★★★★".split("").map((s, i) => (
-              <span key={i} className="text-[#D4A72C] text-[13px] leading-none">{s}</span>
+              <span key={i} className="text-[#2563EB] text-[13px] leading-none">{s}</span>
             ))}
             <span className="text-[14px] font-[800] text-slate-900 dark:text-white ml-1.5 leading-none">4.9</span>
           </div>
@@ -456,10 +456,10 @@ function Headline({ reducedMotion }: { reducedMotion: boolean }) {
       variants={reducedMotion ? undefined : headlineContainer}
     >
       <motion.span variants={reducedMotion ? undefined : headlineLine} className="block">
-        Your Loksewa
+        Engineering Excellence,
       </motion.span>
       <motion.span variants={reducedMotion ? undefined : headlineLine} className="block text-slate-600 dark:text-slate-400">
-        preparation,
+        mastered for
       </motion.span>
       <motion.span variants={reducedMotion ? undefined : headlineLine} className="relative block w-fit">
         <span className="relative inline-block overflow-hidden align-bottom" style={{ height: "1.15em" }}>
@@ -480,7 +480,7 @@ function Headline({ reducedMotion }: { reducedMotion: boolean }) {
           initial={reducedMotion ? false : { scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="absolute -bottom-2 left-0 right-0 h-[3.5px] rounded-full bg-gradient-to-r from-[#C29322] via-[#E6BA3D] to-transparent opacity-60 origin-left"
+          className="absolute -bottom-2 left-0 right-0 h-[3.5px] rounded-full bg-gradient-to-r from-[#1D4ED8] via-[#60A5FA] to-transparent opacity-60 origin-left"
         />
       </motion.span>
     </motion.h1>
@@ -499,7 +499,7 @@ function MagneticCTA() {
       className="w-full sm:w-auto"
     >
       <Link href="/register">
-        <Button className="btn-gold-gradient relative overflow-hidden text-[#0B1524] h-[56px] px-8 rounded-[14px] font-[800] text-[16px] shadow-[0_16px_40px_-12px_rgba(212,167,44,0.6)] border-none w-full sm:w-auto flex items-center justify-center gap-2.5 group">
+        <Button className="btn-gold-gradient relative overflow-hidden text-[#0B1524] h-[56px] px-8 rounded-[14px] font-[800] text-[16px] shadow-[0_16px_40px_-12px_rgba(37,99,235,0.6)] border-none w-full sm:w-auto flex items-center justify-center gap-2.5 group">
           <span className="absolute inset-0 bg-white/25 -translate-x-full group-hover:animate-[shimmer_1.5s_ease-in-out]" />
           Start Preparing Now
           <ArrowRight className="w-4.5 h-4.5 group-hover:translate-x-1 transition-transform" />
@@ -523,7 +523,7 @@ export function HeroSection() {
       <div className="absolute inset-0 bg-gradient-to-b from-white via-slate-50 to-slate-100/60 dark:from-[#0B1526] dark:via-[#070E1B] dark:to-[#050A14]" />
 
       {/* Aurora blooms — the main source of colour and depth. */}
-      <div className="absolute -top-[10%] left-[8%] w-[820px] h-[820px] rounded-full bg-[#D4A72C]/[0.10] dark:bg-[#D4A72C]/[0.13] blur-[150px] pointer-events-none" />
+      <div className="absolute -top-[10%] left-[8%] w-[820px] h-[820px] rounded-full bg-[#2563EB]/[0.10] dark:bg-[#2563EB]/[0.13] blur-[150px] pointer-events-none" />
       <div className="absolute top-[6%] right-[2%] w-[760px] h-[760px] rounded-full bg-blue-500/[0.10] dark:bg-blue-500/[0.16] blur-[150px] pointer-events-none" />
       <div className="absolute bottom-[-18%] left-[26%] w-[680px] h-[680px] rounded-full bg-violet-500/[0.07] dark:bg-violet-600/[0.14] blur-[150px] pointer-events-none" />
 
@@ -541,29 +541,12 @@ export function HeroSection() {
           {/* ── LEFT: Hero text ── */}
           <div className="flex flex-col items-start text-left">
 
-            {/* Badge */}
-            <motion.div
-              initial={reducedMotion ? false : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reducedMotion ? { duration: 0 } : { duration: 0.5 }}
-              className="eyebrow-pill inline-flex items-center gap-2 pl-2 pr-3.5 py-1.5 rounded-full bg-white/80 dark:bg-white/[0.06] border border-slate-200/80 dark:border-white/10 shadow-[0_2px_12px_rgba(11,37,69,0.06)] backdrop-blur-md mb-8"
-            >
-              <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#D4A72C]/15">
-                <LoksewaBadgeIcon className="w-3 h-3 text-[#C29322] dark:text-[#F0C95A]" />
-              </span>
-              <span className="text-[10.5px] font-[800] uppercase tracking-[0.14em] text-slate-600 dark:text-slate-300">
-                Powered by intelligent learning
-              </span>
-            </motion.div>
-
             {/* Headline */}
             <Headline reducedMotion={reducedMotion} />
 
             {/* Supporting copy — rendered directly as static element to eliminate LCP element render delay */}
             <p className="text-[17px] md:text-[19px] text-slate-600 dark:text-slate-400 leading-[1.7] max-w-[520px] mb-9 font-[450]">
-              An AI that learns how you study — spotting weak topics, rebuilding your
-              plan daily, and putting you in front of the questions that actually move
-              your rank.
+              Nepal&apos;s authoritative preparation platform for IOE Entrance and NEC Engineering License examinations — diagnosing conceptual gaps, curating verified question banks, and guiding you to top scores.
             </p>
 
             {/* CTAs */}

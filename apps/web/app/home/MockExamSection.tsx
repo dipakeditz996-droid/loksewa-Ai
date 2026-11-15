@@ -39,8 +39,8 @@ export function MockExamSection() {
             {/* Exam header bar */}
             <div className="bg-slate-50 dark:bg-[#04080F] border-b border-slate-200 dark:border-white/[0.05] px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] font-[800] uppercase tracking-widest text-[#8F6B12] dark:text-[#D4A72C] mb-1">REALISTIC EXAM ENVIRONMENT</div>
-                <h3 className="text-[16px] font-[800] text-slate-800 dark:text-white">Section Officer — Full Mock Exam</h3>
+                <div className="text-[10px] font-[800] uppercase tracking-widest text-[#2563EB] dark:text-[#2563EB] mb-1">REALISTIC EXAM ENVIRONMENT</div>
+                <h3 className="text-[16px] font-[800] text-slate-800 dark:text-white">NEC Civil License — Full Mock Exam</h3>
               </div>
               <div className="flex items-center gap-2.5 bg-red-50 dark:bg-red-500/[0.08] border border-red-100 dark:border-red-500/[0.15] px-4 py-2 rounded-[10px]">
                 <Clock className="w-4 h-4 text-red-500 shrink-0" />
@@ -55,14 +55,14 @@ export function MockExamSection() {
                 <span className="text-[12px] font-[700] text-emerald-600 dark:text-emerald-400">34% Complete</span>
               </div>
               <div className="w-full h-2 bg-slate-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
-                <div className="w-[34%] h-full bg-gradient-to-r from-[#D4A72C] to-[#E6BA3D] rounded-full" />
+                <div className="w-[34%] h-full bg-gradient-to-r from-[#2563EB] to-[#60A5FA] rounded-full" />
               </div>
             </div>
 
             {/* Question */}
             <div className="px-6 py-5">
               <p className="text-[16px] md:text-[18px] font-[600] text-slate-800 dark:text-white leading-[1.65] mb-6">
-                Which of the following is related to the fundamental right to <span className="font-[800] text-[#8F6B12] dark:text-[#D4A72C]">equality</span> according to the Constitution of Nepal 2072?
+                Which of the following is related to the fundamental right to <span className="font-[800] text-[#2563EB] dark:text-[#2563EB]">equality</span> according to the Constitution of Nepal 2072?
               </p>
 
               {/* Options */}
@@ -72,7 +72,7 @@ export function MockExamSection() {
                     key={i}
                     className={`flex items-center gap-4 p-4 rounded-[14px] border cursor-pointer transition-all ${
                       i === SELECTED
-                        ? "bg-blue-50 dark:bg-[#163E6B]/20 border-blue-500/30 dark:border-blue-500/30 shadow-[0_0_0_1px_rgba(59,130,246,0.2)]"
+                        ? "bg-blue-50 dark:bg-[#102D40]/20 border-blue-500/30 dark:border-blue-500/30 shadow-[0_0_0_1px_rgba(59,130,246,0.2)]"
                         : "bg-white dark:bg-[#04080F] border-slate-200 dark:border-white/[0.05] hover:bg-slate-50 dark:hover:bg-white/[0.03]"
                     }`}
                   >
@@ -97,10 +97,10 @@ export function MockExamSection() {
                   Mark for Review
                 </button>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="h-10 px-5 rounded-[10px] text-[13px] font-[600] border-slate-200 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 bg-transparent transition-all">
+                  <Button variant="outline" className="h-10 px-5 rounded-[10px] text-[13px] font-[600] border-slate-200 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 bg-transparent transition-all">
                     Previous
                   </Button>
-                  <Button className="h-10 px-6 rounded-[10px] text-[13px] font-[700] bg-[#D4A72C] text-[#020611] hover:bg-[#C29322] border-none">
+                  <Button className="h-10 px-6 rounded-[10px] text-[13px] font-[700] bg-[#2563EB] text-[#020611] hover:bg-[#1D4ED8] border-none">
                     Next <ChevronRight className="w-3.5 h-3.5 ml-1" />
                   </Button>
                 </div>
@@ -115,7 +115,7 @@ export function MockExamSection() {
               {[
                 { label: "Accuracy", value: "78%", icon: Target, color: "text-emerald-500" },
                 { label: "Avg. Speed", value: "62s / Q", icon: Clock, color: "text-blue-500" },
-                { label: "Est. Rank", value: "#41", icon: TrendingUp, color: "text-[#8F6B12] dark:text-[#D4A72C]" },
+                { label: "Est. Rank", value: "#41", icon: TrendingUp, color: "text-[#2563EB] dark:text-[#2563EB]" },
                 { label: "Readiness", value: "Good", icon: FileText, color: "text-violet-500" },
               ].map(({ label, value, icon: Icon, color }) => (
                 <div key={label} className="flex items-center justify-between py-2.5 border-b border-slate-50 dark:border-white/[0.04] last:border-0">

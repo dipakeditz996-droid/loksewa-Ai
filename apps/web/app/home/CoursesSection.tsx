@@ -8,38 +8,38 @@ import { PublicCourse } from "@/lib/api/public-api";
 const STATIC_COURSES = [
   {
     id: -1,
-    name: "Section Officer",
-    description: "Comprehensive preparation for Section Officer (Sakha Adhikrit) under PSC Nepal.",
-    accent: "from-blue-500 to-violet-600",
-    tag: "Coming Soon",
+    name: "NEC Civil Engineering License",
+    description: "Comprehensive preparation for Nepal Engineering Council (NEC) Civil Engineering license exam.",
+    accent: "from-blue-500 to-indigo-600",
+    tag: "Popular",
   },
   {
     id: -2,
-    name: "Kharidar",
-    description: "Complete Kharidar exam preparation with structured syllabus and practice sets.",
+    name: "IOE BE Entrance Preparation",
+    description: "Complete entrance exam preparation covering Physics, Chemistry, Math, and English for Pulchowk and affiliated colleges.",
     accent: "from-emerald-500 to-cyan-500",
-    tag: "Coming Soon",
+    tag: "Popular",
   },
   {
     id: -3,
-    name: "Nayab Subba",
-    description: "Targeted preparation for Nayab Subba (Lekha Service & General) examinations.",
-    accent: "from-[#D4A72C] to-orange-500",
+    name: "NEC Electrical Engineering License",
+    description: "Targeted license examination prep with chapter-wise drills, past papers, and mock exams.",
+    accent: "from-[#2563EB] to-cyan-500",
     tag: "Coming Soon",
   },
   {
     id: -4,
-    name: "Sub-Engineer",
-    description: "Technical & general preparation for Sub-Engineer across various departments.",
-    accent: "from-red-500 to-pink-600",
-    tag: "Coming Soon",
+    name: "Civil Sub-Engineer (Technical PSC)",
+    description: "Technical & general engineering curriculum for 5th Level Sub-Engineer examinations.",
+    accent: "from-indigo-500 to-blue-600",
+    tag: "Popular",
   },
 ];
 
 const ACCENTS = [
   "from-blue-500 to-violet-600",
   "from-emerald-500 to-cyan-500",
-  "from-[#D4A72C] to-orange-500",
+  "from-[#2563EB] to-orange-500",
   "from-red-500 to-pink-600",
 ];
 
@@ -90,7 +90,7 @@ export function CoursesSection({ courses: apiCourses }: Props) {
           <Link href="/courses">
             <Button
               variant="outline"
-              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
+              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
             >
               View All Courses
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -155,7 +155,7 @@ export function CoursesSection({ courses: apiCourses }: Props) {
                         ? `From Rs. ${Number(course.startingPrice).toLocaleString()}`
                         : ""}
                     </span>
-                    <span className="text-[12px] font-[700] text-[#D4A72C] flex items-center gap-1 group-hover:gap-2 transition-all">
+                    <span className="text-[12px] font-[700] text-[#2563EB] flex items-center gap-1 group-hover:gap-2 transition-all">
                       View Course <ArrowRight className="w-3 h-3" />
                     </span>
                   </div>

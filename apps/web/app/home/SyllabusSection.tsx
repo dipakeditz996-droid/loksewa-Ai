@@ -7,19 +7,19 @@ import { ArrowRight, Map, ChevronRight, CheckCircle2, AlertCircle } from "lucide
 
 const STATIC_HIERARCHY = [
   {
-    exam: "Section Officer",
+    exam: "NEC Civil License",
     papers: [
       {
         name: "Paper I — General Studies",
         subjects: [
           {
-            name: "Constitutional Law",
+            name: "Structural Analysis",
             chapters: ["Fundamental Rights", "Directive Principles", "State Organs", "Constitutional Bodies"],
             progress: 72,
             isWeak: false,
           },
           {
-            name: "Public Administration",
+            name: "Fluid Mechanics",
             chapters: ["Administrative Theory", "Organization", "Personnel", "Financial Admin"],
             progress: 45,
             isWeak: true,
@@ -72,7 +72,7 @@ export function SyllabusSection() {
           <Link href="/syllabus">
             <Button
               variant="outline"
-              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#D4A72C] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#D4A72C]/50 dark:hover:border-[#D4A72C]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
+              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
             >
               Explore Syllabus
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -90,7 +90,7 @@ export function SyllabusSection() {
             <div className="flex items-center gap-1.5 text-[11px] font-[600] text-slate-600 dark:text-slate-400 mb-5">
               {["Exam", "Paper", "Subject", "Chapter", "Topic"].map((item, i, arr) => (
                 <React.Fragment key={item}>
-                  <span className={i === 0 ? "text-[#8F6B12] dark:text-[#D4A72C]" : i === arr.length - 1 ? "text-slate-700 dark:text-slate-200" : ""}>{item}</span>
+                  <span className={i === 0 ? "text-[#2563EB] dark:text-[#2563EB]" : i === arr.length - 1 ? "text-slate-700 dark:text-slate-200" : ""}>{item}</span>
                   {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />}
                 </React.Fragment>
               ))}
@@ -98,8 +98,8 @@ export function SyllabusSection() {
 
             {/* Exam header */}
             <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-white/[0.05]">
-              <div className="w-9 h-9 rounded-[10px] bg-[#D4A72C]/10 flex items-center justify-center">
-                <Map className="w-4.5 h-4.5 text-[#D4A72C]" />
+              <div className="w-9 h-9 rounded-[10px] bg-[#2563EB]/10 flex items-center justify-center">
+                <Map className="w-4.5 h-4.5 text-[#2563EB]" />
               </div>
               <div>
                 <div className="text-[15px] font-[800] text-slate-800 dark:text-white">{data?.exam}</div>
@@ -166,9 +166,9 @@ export function SyllabusSection() {
               <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-4">Loksewa Academic Hierarchy</div>
               <div className="space-y-3">
                 {[
-                  { level: "Exam", desc: "Section Officer, Kharidar, Nayab Subba...", color: "bg-[#D4A72C]" },
+                  { level: "Exam", desc: "Civil, Electrical, Mechanical, Computer...", color: "bg-[#2563EB]" },
                   { level: "Paper", desc: "General Studies, Specific Knowledge...", color: "bg-blue-500" },
-                  { level: "Subject", desc: "Constitutional Law, Public Admin...", color: "bg-violet-500" },
+                  { level: "Subject", desc: "Structural Analysis, Public Admin...", color: "bg-violet-500" },
                   { level: "Chapter", desc: "Fundamental Rights, State Organs...", color: "bg-emerald-500" },
                   { level: "Topic", desc: "Articles 12–23, Constitutional Bodies...", color: "bg-pink-500" },
                 ].map((item, i) => (
@@ -189,7 +189,7 @@ export function SyllabusSection() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: "Exam Positions", value: "20+", color: "text-[#8F6B12] dark:text-[#D4A72C]" },
+                { label: "Exam Positions", value: "20+", color: "text-[#2563EB] dark:text-[#2563EB]" },
                 { label: "Subjects Covered", value: "100%", color: "text-emerald-500" },
                 { label: "Topics Mapped", value: "1,200+", color: "text-blue-500" },
                 { label: "Questions Linked", value: "250K+", color: "text-violet-500" },

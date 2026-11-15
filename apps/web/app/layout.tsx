@@ -43,9 +43,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Loksewa Examination & Learning Ecosystem",
+  title: "NES Mastery | Engineering Entrance & License Examination Preparation Platform",
   description:
-    "Comprehensive preparation platform for Nepal Public Service Commission examinations.",
+    "Nepal's premier engineering examination preparation platform for IOE Entrance, NEC License, and Technical Engineering Services.",
 };
 
 export default function RootLayout({
@@ -58,14 +58,39 @@ export default function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var storageKey = 'theme';
+                  var theme = localStorage.getItem(storageKey);
+                  var supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches === true;
+                  if (theme === 'dark') {
+                    document.documentElement.classList.remove('light');
+                    document.documentElement.classList.add('dark');
+                  } else if (theme === 'system') {
+                    document.documentElement.classList.remove('light', 'dark');
+                    document.documentElement.classList.add(supportDarkMode ? 'dark' : 'light');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                    document.documentElement.classList.add('light');
+                  }
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body
         suppressHydrationWarning
         className={`${inter.variable} ${jakarta.variable} font-sans antialiased bg-background text-foreground min-h-screen flex flex-col`}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
-          enableSystem={false}
+          defaultTheme="light"
+          enableSystem={true}
           disableTransitionOnChange
         >
           <Providers>

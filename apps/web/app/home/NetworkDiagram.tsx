@@ -35,11 +35,11 @@ export function NetworkDiagram() {
 
       {/* Center AI core */}
       <div
-        className="absolute z-10 flex flex-col items-center justify-center rounded-full bg-gradient-to-br from-[#0B2545] to-[#163E6B] dark:from-[#0B2545] dark:to-[#0B1F3A] shadow-[0_20px_50px_-10px_rgba(11,37,69,0.4)] dark:shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)] border border-white/10"
+        className="absolute z-10 flex flex-col items-center justify-center rounded-full bg-gradient-to-br from-[#174A68] to-[#102D40] dark:from-[#174A68] dark:to-[#0B1F3A] shadow-[0_20px_50px_-10px_rgba(11,37,69,0.4)] dark:shadow-[0_20px_60px_-10px_rgba(0,0,0,0.7)] border border-white/10"
         style={{ left: "50%", top: "50%", width: "22%", height: "22%", transform: "translate(-50%, -50%)" }}
       >
         <div className={`absolute inset-0 rounded-full ${reducedMotion ? "" : "animate-pulse-glow"}`} />
-        <Brain className="w-[34%] h-[34%] text-[#D4A72C] relative" strokeWidth={1.75} />
+        <Brain className="w-[34%] h-[34%] text-[#2563EB] relative" strokeWidth={1.75} />
         <span className="mt-1 text-[8px] sm:text-[9px] font-[800] uppercase tracking-widest text-white/70 relative">AI Core</span>
       </div>
 

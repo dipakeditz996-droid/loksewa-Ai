@@ -101,7 +101,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
             {activeCourse ? (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="text-[11px] font-semibold text-muted-foreground">Active Course:</span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-bold bg-[#D4A72C]/15 text-[#D4A72C] border border-[#D4A72C]/30">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[12px] font-bold bg-[#2563EB]/15 text-[#2563EB] dark:text-[#60A5FA] border border-[#2563EB]/30">
                   <BookOpen className="w-3.5 h-3.5" />
                   {activeCourse.title}
                 </span>
@@ -120,7 +120,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
                 <span className="text-[12px] text-muted-foreground">No active course yet.</span>
                 <Link
                   href="/courses"
-                  className="text-[12px] font-semibold text-[#D4A72C] hover:underline flex items-center gap-1"
+                  className="text-[12px] font-semibold text-[#2563EB] dark:text-[#60A5FA] hover:underline flex items-center gap-1"
                 >
                   Explore Courses <ArrowRight className="w-3 h-3" />
                 </Link>
@@ -139,7 +139,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-2">
             <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP
+                <Sparkles className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA] fill-[#2563EB] dark:fill-[#60A5FA]" /> Total XP
               </div>
               <div className="text-xl md:text-2xl font-bold text-primary dark:text-foreground mt-auto">
                 {referralData.profile.xp.toLocaleString()} XP
@@ -200,7 +200,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-2">
             <div className="bg-muted border border-border/50 rounded-xl p-3 md:p-4 flex flex-col">
               <div className="flex items-center gap-1.5 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                <Sparkles className="w-3.5 h-3.5 text-[#D4A72C] fill-[#D4A72C]" /> Total XP
+                <Sparkles className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA] fill-[#2563EB] dark:fill-[#60A5FA]" /> Total XP
               </div>
               <div className="text-xl md:text-2xl font-bold text-muted-foreground mt-auto">
                 {referralData === null ? "—" : <Skeleton className="h-7 w-20 my-0.5" />}
@@ -295,14 +295,14 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           </div>
         )}
 
-        <div className="bg-[#0B2545] dark:bg-[#0D1B2A] text-white p-5 rounded-2xl border border-[#163E6B] dark:border-[#243B53] shadow-lg relative overflow-hidden">
+        <div className="bg-[#102D40] dark:bg-[#0D1B2A] text-white p-5 rounded-2xl border border-[#174A68] dark:border-[#243B53] shadow-lg relative overflow-hidden">
           <div className="absolute right-0 top-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
 
           {data?.package?.hasActivePackage && data.package.planName ? (
             <div className="relative z-10 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-[#D4A72C] rounded-lg">
+                  <div className="p-1.5 bg-[#2563EB] rounded-lg">
                     <Sparkles className="w-4 h-4 text-[#0A1118]" />
                   </div>
                   <span className="font-bold text-[15px] tracking-tight text-white">
@@ -323,7 +323,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
               <div className="pt-2 border-t border-white/15 text-xs text-slate-300 space-y-1">
                 <div className="flex justify-between">
                   <span className="text-slate-400">Remaining Access:</span>
-                  <span className="font-bold text-[#D4A72C]">
+                  <span className="font-bold text-[#2563EB] dark:text-[#60A5FA]">
                     {data.package.remainingDays ?? 0} days
                   </span>
                 </div>
@@ -339,7 +339,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
 
               <Button
                 asChild
-                className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold shadow-sm transition-colors"
+                className="w-full mt-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-9 text-xs font-bold shadow-sm transition-colors"
               >
                 <Link href="/student/courses">Go to My Courses</Link>
               </Button>
@@ -347,7 +347,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           ) : analytics?.active_course ? (
             <div className="relative z-10 space-y-3">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-[#D4A72C] rounded-lg">
+                <div className="p-1.5 bg-[#2563EB] rounded-lg">
                   <Sparkles className="w-4 h-4 text-[#0A1118]" />
                 </div>
                 <span className="font-bold text-lg tracking-tight text-white">Active Plan</span>
@@ -358,19 +358,19 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
               <div className="pt-2 border-t border-white/15">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs text-slate-400 font-medium">Journey Progress</span>
-                  <span className="text-xs font-bold text-[#D4A72C]">
+                  <span className="text-xs font-bold text-[#2563EB] dark:text-[#60A5FA]">
                     {analytics.journey_progress}%
                   </span>
                 </div>
                 <Progress
                   value={analytics.journey_progress}
                   className="h-1.5 bg-white/10"
-                  indicatorClassName="bg-[#D4A72C]"
+                  indicatorClassName="bg-[#2563EB]"
                 />
               </div>
               <Button
                 asChild
-                className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold"
+                className="w-full mt-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-9 text-xs font-bold"
               >
                 <Link href="/student/study-plan">Resume Journey</Link>
               </Button>
@@ -378,8 +378,8 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           ) : loading ? (
             <div className="relative z-10 space-y-3">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-[#D4A72C]/20 rounded-lg">
-                  <Sparkles className="w-4 h-4 text-[#D4A72C]" />
+                <div className="p-1.5 bg-[#2563EB]/20 rounded-lg">
+                  <Sparkles className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
                 </div>
                 <Skeleton className="h-5 w-28 bg-white/20" />
               </div>
@@ -389,8 +389,8 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
           ) : (
             <div className="relative z-10 space-y-3">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-[#D4A72C]/20 rounded-lg">
-                  <Sparkles className="w-4 h-4 text-[#D4A72C]" />
+                <div className="p-1.5 bg-[#2563EB]/20 rounded-lg">
+                  <Sparkles className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
                 </div>
                 <span className="font-bold text-lg tracking-tight text-white">Unlock Full Access</span>
               </div>
@@ -399,7 +399,7 @@ export const DashboardHeaderSection = memo(function DashboardHeaderSection({
               </p>
               <Button
                 asChild
-                className="w-full mt-2 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] h-9 text-xs font-bold"
+                className="w-full mt-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-9 text-xs font-bold"
               >
                 <Link href="/student/plans">View Plans</Link>
               </Button>

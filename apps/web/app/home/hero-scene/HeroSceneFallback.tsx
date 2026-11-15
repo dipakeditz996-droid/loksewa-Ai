@@ -10,12 +10,12 @@ export function HeroSceneFallback({ className }: { className?: string }) {
     >
       <defs>
         <linearGradient id="hs-navy" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#163E6C" />
-          <stop offset="100%" stopColor="#0B2545" />
+          <stop offset="0%" stopColor="#174A68" />
+          <stop offset="100%" stopColor="#102D40" />
         </linearGradient>
         <linearGradient id="hs-gold" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#E6BA3D" />
-          <stop offset="100%" stopColor="#C29322" />
+          <stop offset="0%" stopColor="#60A5FA" />
+          <stop offset="100%" stopColor="#2563EB" />
         </linearGradient>
       </defs>
 
@@ -48,7 +48,7 @@ export function HeroSceneFallback({ className }: { className?: string }) {
       {/* bookmark ribbon */}
       <path
         d="M182 100 L182 158 L172 148 L162 158 L162 100 Z"
-        fill="#D4A72C"
+        fill="#2563EB"
         opacity="0.85"
       />
     </svg>

@@ -23,8 +23,8 @@ export default function PerformanceTrendChart({ trend }: PerformanceTrendChartPr
         <AreaChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#D4A72C" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#D4A72C" stopOpacity={0} />
+              <stop offset="5%" stopColor="#2563EB" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -51,7 +51,7 @@ export default function PerformanceTrendChart({ trend }: PerformanceTrendChartPr
           <Area
             type="monotone"
             dataKey="accuracy"
-            stroke="#D4A72C"
+            stroke="#2563EB"
             strokeWidth={3}
             fillOpacity={1}
             fill="url(#colorAccuracy)"

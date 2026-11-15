@@ -238,9 +238,9 @@ export function MyCoursesContent() {
                 }`}
             />
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#0B2545] to-[#163E6B] text-white">
-              <GraduationCap className="w-12 h-12 mb-2 opacity-50" />
-              <span className="font-bold opacity-70">Preparation Course</span>
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#102D40] to-[#174A68] text-white">
+              <GraduationCap className="w-12 h-12 mb-2 opacity-60 text-[#60A5FA]" />
+              <span className="font-bold opacity-80 text-xs">Preparation Course</span>
             </div>
           )}
 
@@ -333,7 +333,7 @@ export function MyCoursesContent() {
                 <div className="flex items-center gap-2">
                   <Button
                     asChild
-                    className="flex-1 bg-primary text-primary-foreground hover:bg-[#163E6B] text-white font-semibold rounded-[12px] h-9 text-xs shadow-xs"
+                    className="flex-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-semibold rounded-[12px] h-9 text-xs shadow-xs"
                   >
                     <Link href={`/student/courses/${item.course.id}`}>
                       Resume Learning <ArrowRight className="w-3.5 h-3.5 ml-1" />
@@ -362,7 +362,7 @@ export function MyCoursesContent() {
                 </p>
                 <Button
                   asChild
-                  className="w-full bg-[#0B2545] hover:bg-[#163E6B] text-white font-semibold rounded-[12px] h-9 text-xs shadow-xs"
+                  className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-semibold rounded-[12px] h-9 text-xs shadow-xs"
                 >
                   <Link
                     href={`/student/buy-course/plans?course_id=${item.course.id}&course_name=${encodeURIComponent(
@@ -401,19 +401,19 @@ export function MyCoursesContent() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap pt-0.5">
-            <h2 className="text-xl sm:text-2xl font-extrabold text-primary dark:text-foreground tracking-tight flex items-center gap-2">
-              <BookOpen className="w-6 h-6 text-[#D4A72C]" />
+            <h2 className="text-xl sm:text-2xl font-extrabold text-[#172B4D] dark:text-foreground tracking-tight flex items-center gap-2">
+              <BookOpen className="w-6 h-6 text-[#2563EB] dark:text-[#60A5FA]" />
               {data?.selected_level?.name ? (
                 <>
                   <span>{data.selected_category?.name}</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-[#0B2545] dark:text-[#D4A72C]">{data.selected_level.name}</span>
+                  <span className="text-[#174A68] dark:text-[#60A5FA]">{data.selected_level.name}</span>
                 </>
               ) : data?.registered_level?.name ? (
                 <>
                   <span>{data.registered_category?.name}</span>
                   <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-[#0B2545] dark:text-[#D4A72C]">{data.registered_level.name}</span>
+                  <span className="text-[#174A68] dark:text-[#60A5FA]">{data.registered_level.name}</span>
                 </>
               ) : (
                 <span>All Available Courses</span>
@@ -450,15 +450,15 @@ export function MyCoursesContent() {
               setModalSearch("");
               setBrowseModalOpen(true);
             }}
-            className="rounded-xl text-xs font-semibold border-border hover:bg-muted text-primary dark:text-foreground h-9 px-3.5 shadow-2xs"
+            className="rounded-xl text-xs font-semibold border-border hover:bg-muted text-foreground h-9 px-3.5 shadow-2xs"
           >
-            <Compass className="w-4 h-4 mr-1.5 text-[#D4A72C]" />
+            <Compass className="w-4 h-4 mr-1.5 text-[#2563EB] dark:text-[#60A5FA]" />
             Browse Another Course
           </Button>
 
           <Button
             asChild
-            className="rounded-xl text-xs font-bold bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-white h-9 px-4 shadow-[0_4px_14px_rgba(212,167,44,0.3)]"
+            className="rounded-xl text-xs font-bold bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-9 px-4 shadow-[0_4px_14px_rgba(37,99,235,0.25)] transition-all"
           >
             <Link href="/student/buy-course">
               <GraduationCap className="w-4 h-4 mr-1.5" />
@@ -485,7 +485,7 @@ export function MyCoursesContent() {
           <Button
             size="sm"
             onClick={() => setSetPrefModalOpen(true)}
-            className="bg-[#0B2545] hover:bg-[#163E6B] text-white text-xs font-semibold rounded-xl h-9 shrink-0 px-4"
+            className="bg-[#174A68] hover:bg-[#102D40] text-white text-xs font-semibold rounded-xl h-9 shrink-0 px-4"
           >
             Choose Preparation Focus
           </Button>
@@ -533,13 +533,13 @@ export function MyCoursesContent() {
       {/* Unauthenticated State */}
       {!authLoading && !user && (
         <div className="bg-card border border-border rounded-[24px] p-8 text-center max-w-lg mx-auto shadow-sm">
-          <BookOpen className="w-12 h-12 text-[#D4A72C] mx-auto mb-3" />
+          <BookOpen className="w-12 h-12 text-[#2563EB] mx-auto mb-3" />
           <h3 className="text-lg font-bold text-foreground">Sign In to View Your Learning</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             Please log in with your student account to view enrolled preparation courses and explore study materials.
           </p>
           <Link href="/login?redirect=/student/learning">
-            <Button className="mt-4 bg-[#0B2545] hover:bg-[#163E6B] text-white font-bold h-9 text-xs rounded-xl">
+            <Button className="mt-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold h-9 text-xs rounded-xl">
               Sign In Now
             </Button>
           </Link>
@@ -552,11 +552,27 @@ export function MyCoursesContent() {
           <Trophy className="w-12 h-12 text-red-300 mx-auto mb-3" />
           <h3 className="text-lg font-bold">Failed to load courses</h3>
           <p className="mt-1 text-xs">
-            {error instanceof Error ? error.message : "An error occurred while fetching your course catalog. Please refresh."}
+            {(error as any)?.data?.detail ||
+              (error as any)?.message ||
+              (error instanceof Error ? error.message : null) ||
+              "An error occurred while fetching your course catalog. Please refresh."}
           </p>
-          <Button onClick={() => refetch()} className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold h-9 text-xs rounded-xl">
-            <RefreshCw className="w-4 h-4 mr-2" /> Try Again
-          </Button>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <Button onClick={() => refetch()} className="bg-red-600 hover:bg-red-700 text-white font-bold h-9 text-xs rounded-xl">
+              <RefreshCw className="w-4 h-4 mr-2" /> Try Again
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setModalCategory(null);
+                setModalLevel(null);
+                setBrowseModalOpen(true);
+              }}
+              className="text-xs h-9 rounded-xl border-red-300 dark:border-red-800"
+            >
+              <Compass className="w-3.5 h-3.5 mr-1.5" /> Browse Catalog
+            </Button>
+          </div>
         </div>
       )}
 
@@ -586,7 +602,7 @@ export function MyCoursesContent() {
                 onClick={() => setBrowseModalOpen(true)}
                 className="rounded-xl text-xs font-semibold h-9"
               >
-                <Compass className="w-4 h-4 mr-1.5 text-[#D4A72C]" /> Browse Other Preparations
+                <Compass className="w-4 h-4 mr-1.5 text-[#2563EB] dark:text-[#60A5FA]" /> Browse Other Preparations
               </Button>
             </div>
           )}
@@ -597,7 +613,7 @@ export function MyCoursesContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-bold text-primary dark:text-foreground flex items-center gap-2">
-                    <Layers className="w-5 h-5 text-[#D4A72C]" /> Other Enrolled Preparations
+                    <Layers className="w-5 h-5 text-[#2563EB] dark:text-[#60A5FA]" /> Other Enrolled Preparations
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     Courses you previously enrolled in or unlocked from other exam categories and levels.
@@ -620,11 +636,11 @@ export function MyCoursesContent() {
       <Dialog open={browseModalOpen} onOpenChange={setBrowseModalOpen}>
         <DialogContent className="max-w-2xl p-6 rounded-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-[#0B2545]">
-              <Compass className="w-5 h-5 text-[#D4A72C]" /> Browse Central Course Catalog
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-[#174A68]">
+              <Compass className="w-5 h-5 text-[#2563EB]" /> Browse Central Course Catalog
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Explore preparation courses across Loksewa PSC, License, and Entrance exams without altering your registered focus.
+              Explore preparation courses across Engineering License, IOE Entrance, and Technical PSC exams without altering your registered focus.
             </DialogDescription>
           </DialogHeader>
 
@@ -646,12 +662,12 @@ export function MyCoursesContent() {
                         setModalLevel(null);
                       }}
                       className={`p-3 rounded-xl border text-left transition-all text-xs ${isSelected
-                        ? "bg-[#0B2545] text-white border-[#0B2545] font-bold shadow-xs"
+                        ? "bg-[#174A68] text-white border-[#174A68] font-bold shadow-xs"
                         : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
                         }`}
                     >
                       <div className="truncate">{cat.name}</div>
-                      <div className={`text-[10px] ${isSelected ? "text-slate-300" : "text-slate-400"}`}>
+                      <div className={`text-[10px] ${isSelected ? "text-slate-200" : "text-slate-400"}`}>
                         {cat.exams?.length || 0} levels
                       </div>
                     </button>
@@ -675,12 +691,12 @@ export function MyCoursesContent() {
                         type="button"
                         onClick={() => setModalLevel(lvl)}
                         className={`p-3 rounded-xl border text-left transition-all text-xs ${isSelected
-                          ? "bg-[#D4A72C] text-[#0A1118] border-[#D4A72C] font-bold shadow-xs"
+                          ? "bg-[#2563EB] text-white border-[#2563EB] font-bold shadow-xs"
                           : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
                           }`}
                       >
                         <div className="truncate">{lvl.name}</div>
-                        <div className="text-[10px] text-slate-500">
+                        <div className={`text-[10px] ${isSelected ? "text-blue-100" : "text-slate-500"}`}>
                           {(lvl.courses?.length || 0) + (lvl.children?.length || 0)} preparations
                         </div>
                       </button>
@@ -706,7 +722,7 @@ export function MyCoursesContent() {
                       setBrowseModalOpen(false);
                       toast.success(`Showing courses for ${modalCategory.name} › ${modalLevel.name}`);
                     }}
-                    className="h-7 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 font-semibold"
+                    className="h-7 text-xs text-[#2563EB] hover:text-[#1D4ED8] hover:bg-blue-50 font-semibold"
                   >
                     Filter My Learning view to this level →
                   </Button>
@@ -740,7 +756,7 @@ export function MyCoursesContent() {
                           <Button
                             asChild
                             size="sm"
-                            className="bg-[#0B2545] text-white hover:bg-[#163E6B] text-xs h-8 rounded-lg"
+                            className="bg-[#2563EB] text-white hover:bg-[#1D4ED8] text-xs h-8 rounded-lg"
                           >
                             <Link
                               href={`/student/buy-course/plans?course_id=${c.id}&course_name=${encodeURIComponent(
@@ -765,7 +781,7 @@ export function MyCoursesContent() {
       <Dialog open={setPrefModalOpen} onOpenChange={setSetPrefModalOpen}>
         <DialogContent className="max-w-md p-6 rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-[#0B2545]">
+            <DialogTitle className="text-lg font-bold text-[#174A68]">
               Choose Your Primary Preparation Focus
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
@@ -788,7 +804,7 @@ export function MyCoursesContent() {
                         setModalLevel(null);
                       }}
                       className={`p-2.5 rounded-xl border text-left text-xs ${isSelected
-                        ? "bg-[#0B2545] text-white font-bold"
+                        ? "bg-[#174A68] text-white font-bold"
                         : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
                         }`}
                     >
@@ -811,7 +827,7 @@ export function MyCoursesContent() {
                         type="button"
                         onClick={() => setModalLevel(lvl)}
                         className={`p-2.5 rounded-xl border text-left text-xs ${isSelected
-                          ? "bg-[#D4A72C] text-[#0A1118] font-bold"
+                          ? "bg-[#2563EB] text-white font-bold"
                           : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
                           }`}
                       >
@@ -830,7 +846,7 @@ export function MyCoursesContent() {
                   handleSaveRegistrationPreference(modalCategory.id, modalLevel.id);
                 }
               }}
-              className="w-full bg-[#0B2545] hover:bg-[#163E6B] text-white font-semibold rounded-xl h-10 text-xs mt-2"
+              className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-semibold rounded-xl h-10 text-xs mt-2"
             >
               {savingPref ? "Saving Preference..." : "Save Preparation Focus"}
             </Button>

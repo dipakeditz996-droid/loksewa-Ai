@@ -44,7 +44,7 @@ export function AILearningNetworkSection() {
             One AI. <span className="text-gradient-blue-violet">Your entire syllabus.</span>
           </h2>
           <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[560px] mx-auto font-[500]">
-            LoksewaAI continuously maps your performance across every subject — hover a node to see exactly where the AI thinks you stand.
+            NES Mastery continuously maps your performance across every subject — hover a node to see exactly where the AI thinks you stand.
           </p>
         </div>
 

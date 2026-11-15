@@ -12,11 +12,11 @@ export interface UseThemeProps {
 }
 
 const ThemeContext = React.createContext<UseThemeProps>({
-  theme: "dark",
+  theme: "light",
   setTheme: () => {},
   themes: ["light", "dark", "system"],
-  resolvedTheme: "dark",
-  systemTheme: "dark",
+  resolvedTheme: "light",
+  systemTheme: "light",
 });
 
 export const useTheme = () => React.useContext(ThemeContext);
@@ -37,21 +37,13 @@ export interface ThemeProviderProps {
 export function ThemeProvider({
   children,
   attribute = "class",
-  defaultTheme = "dark",
-  enableSystem = false,
+  defaultTheme = "light",
+  enableSystem = true,
   storageKey = "theme",
   forcedTheme,
   themes = ["light", "dark"],
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<string>(() => {
-    if (typeof window === "undefined") return defaultTheme;
-    try {
-      return localStorage.getItem(storageKey) || defaultTheme;
-    } catch {
-      return defaultTheme;
-    }
-  });
-
+  const [theme, setThemeState] = React.useState<string>(defaultTheme);
   const [resolvedTheme, setResolvedTheme] = React.useState<string>(defaultTheme);
 
   const applyTheme = React.useCallback(
@@ -75,30 +67,56 @@ export function ThemeProvider({
     [attribute, enableSystem]
   );
 
+  // Synchronize on mount from localStorage or system
   React.useEffect(() => {
-    const current = forcedTheme || theme;
-    applyTheme(current);
-  }, [theme, forcedTheme, applyTheme]);
+    let initialTheme = defaultTheme;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) {
+        initialTheme = stored;
+      }
+    } catch {}
+
+    const target = forcedTheme || initialTheme;
+    setThemeState(target);
+    applyTheme(target);
+  }, [storageKey, defaultTheme, forcedTheme, applyTheme]);
 
   // Listen for storage changes across tabs
   React.useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === storageKey && e.newValue) {
         setThemeState(e.newValue);
+        applyTheme(e.newValue);
       }
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
-  }, [storageKey]);
+  }, [storageKey, applyTheme]);
+
+  // Listen for system theme changes when enableSystem is true
+  React.useEffect(() => {
+    if (!enableSystem) return;
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => {
+      const current = forcedTheme || theme;
+      if (current === "system") {
+        applyTheme("system");
+      }
+    };
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [enableSystem, theme, forcedTheme, applyTheme]);
 
   const setTheme = React.useCallback(
     (newTheme: string) => {
       setThemeState(newTheme);
+      applyTheme(newTheme);
       try {
         localStorage.setItem(storageKey, newTheme);
       } catch {}
     },
-    [storageKey]
+    [storageKey, applyTheme]
   );
 
   const contextValue = React.useMemo<UseThemeProps>(

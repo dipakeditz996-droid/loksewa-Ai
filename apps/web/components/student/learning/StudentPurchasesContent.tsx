@@ -308,7 +308,7 @@ export function StudentPurchasesContent() {
               <BookOpen className="w-4 h-4 mr-1.5" /> My Courses
             </Link>
           </Button>
-          <Button asChild className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold shadow-md text-xs h-9">
+          <Button asChild className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold shadow-md text-xs h-9">
             <Link href="/student/plans">
               <Sparkles className="w-4 h-4 mr-1.5" /> Browse Packages
             </Link>
@@ -369,8 +369,8 @@ export function StudentPurchasesContent() {
       <div className="bg-card rounded-3xl border border-border shadow-sm p-6 lg:p-8 space-y-6">
         <div className="flex items-center justify-between border-b border-border pb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-[#D4A72C]/10 rounded-xl">
-              <Sparkles className="w-5 h-5 text-[#D4A72C]" />
+            <div className="p-2 bg-[#2563EB]/10 rounded-xl">
+              <Sparkles className="w-5 h-5 text-[#2563EB] dark:text-[#60A5FA]" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-foreground">Current Active Plan</h2>
@@ -404,15 +404,15 @@ export function StudentPurchasesContent() {
         ) : activeSubscription ? (
           <div className="space-y-6">
             {/* Hero Card */}
-            <div className="bg-gradient-to-br from-[#0B2545] via-[#0F355E] to-[#163E6B] text-white p-6 lg:p-8 rounded-2xl shadow-xl relative overflow-hidden border border-[#1E4E80]">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-[#D4A72C]/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
+            <div className="bg-gradient-to-br from-[#102D40] via-[#174A68] to-[#102D40] text-white p-6 lg:p-8 rounded-2xl shadow-xl relative overflow-hidden border border-[#174A68]">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-[#2563EB]/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
 
               <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                 {/* Left col: Plan info */}
                 <div className="lg:col-span-7 space-y-4">
                   <div className="flex items-center gap-2 flex-wrap">
                     {isMeaningfulType && (
-                      <span className="text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-[#D4A72C] text-[#0A1118]">
+                      <span className="text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider bg-[#2563EB] text-white">
                         {pkgType!.replace(/_/g, " ")} PACKAGE
                       </span>
                     )}
@@ -422,7 +422,7 @@ export function StudentPurchasesContent() {
                       </span>
                     ) : (
                       <span className="text-xs text-white/70 flex items-center gap-1">
-                        <InfinityIcon className="w-3.5 h-3.5 text-[#D4A72C]" /> Duration: Ongoing Access
+                        <InfinityIcon className="w-3.5 h-3.5 text-[#2563EB] dark:text-[#60A5FA]" /> Duration: Ongoing Access
                       </span>
                     )}
                   </div>
@@ -457,7 +457,7 @@ export function StudentPurchasesContent() {
                             {expiryInfo.label}
                           </span>
                         ) : (
-                          <span className="font-semibold text-[#D4A72C]">
+                          <span className="font-semibold text-[#2563EB] dark:text-[#60A5FA]">
                             {expiryInfo.label}
                           </span>
                         )
@@ -475,7 +475,7 @@ export function StudentPurchasesContent() {
                   {expiryInfo.hasExpiry && !expiryInfo.isExpired ? (
                     /* Valid Future Expiry: Countdown timer */
                     <div className="w-full max-w-sm bg-black/30 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-center shadow-inner">
-                      <div className="text-xs uppercase tracking-widest text-[#D4A72C] font-bold mb-3 flex items-center justify-center gap-1.5">
+                      <div className="text-xs uppercase tracking-widest text-[#2563EB] dark:text-[#60A5FA] font-bold mb-3 flex items-center justify-center gap-1.5">
                         <Clock className="w-3.5 h-3.5" /> Remaining Time
                       </div>
 
@@ -500,7 +500,7 @@ export function StudentPurchasesContent() {
                             <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Mins</span>
                           </div>
                           <div className="bg-white/10 rounded-xl p-2.5">
-                            <span className="text-2xl sm:text-3xl font-black text-[#D4A72C] block">
+                            <span className="text-2xl sm:text-3xl font-black text-[#2563EB] dark:text-[#60A5FA] block">
                               {String(timeRemaining.seconds).padStart(2, "0")}
                             </span>
                             <span className="text-[10px] uppercase tracking-wider text-slate-300 font-semibold">Secs</span>
@@ -528,7 +528,7 @@ export function StudentPurchasesContent() {
                           This plan expired on {formatSubscriptionDate(activeSubscription.expiry_date)}.
                         </p>
                       </div>
-                      <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs w-full">
+                      <Button asChild size="sm" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs w-full">
                         <Link href="/student/plans">Renew / Upgrade Plan</Link>
                       </Button>
                     </div>
@@ -548,7 +548,7 @@ export function StudentPurchasesContent() {
                         <Button asChild variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-xs bg-transparent">
                           <Link href="/student/courses">Go to Courses</Link>
                         </Button>
-                        <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs">
+                        <Button asChild size="sm" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs">
                           <Link href="/student/plans">Explore More Plans</Link>
                         </Button>
                       </div>
@@ -562,12 +562,12 @@ export function StudentPurchasesContent() {
             <div className="bg-muted/40 rounded-2xl p-5 border border-border">
               <div className="flex items-center justify-between mb-3.5 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-[#D4A72C]" />
+                  <BookOpen className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
                   <h4 className="font-bold text-sm text-foreground uppercase tracking-wide">
                     Authorized Preparation(s) in this Package
                   </h4>
                 </div>
-                <Button asChild variant="ghost" size="sm" className="text-xs text-[#D4A72C] hover:text-[#D4A72C]/80 p-0 h-auto font-semibold">
+                <Button asChild variant="ghost" size="sm" className="text-xs text-[#2563EB] dark:text-[#60A5FA] hover:text-[#2563EB] dark:text-[#60A5FA]/80 p-0 h-auto font-semibold">
                   <Link href="/student/courses">
                     View in My Courses <ArrowRight className="w-3.5 h-3.5 ml-1" />
                   </Link>
@@ -579,7 +579,7 @@ export function StudentPurchasesContent() {
                   {activeSubscription.authorized_courses.map((course) => (
                     <div
                       key={course.id}
-                      className="bg-card border border-border rounded-xl p-3.5 flex items-center justify-between hover:border-[#D4A72C]/50 transition-colors"
+                      className="bg-card border border-border rounded-xl p-3.5 flex items-center justify-between hover:border-[#2563EB]/50 transition-colors"
                     >
                       <div className="space-y-0.5 min-w-0 pr-2">
                         <div className="font-bold text-sm text-foreground truncate">{course.title}</div>
@@ -621,7 +621,7 @@ export function StudentPurchasesContent() {
           </div>
         ) : (
           <div className="bg-muted/30 border-2 border-dashed border-border rounded-2xl p-8 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-[#D4A72C]/10 text-[#D4A72C] flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-full bg-[#2563EB]/10 text-[#2563EB] dark:text-[#60A5FA] flex items-center justify-center mx-auto">
               <AlertCircle className="w-7 h-7" />
             </div>
             <div className="max-w-md mx-auto">
@@ -630,7 +630,7 @@ export function StudentPurchasesContent() {
                 You do not have an active package subscription right now. Choose a package to unlock full learning access, mock exams, and syllabus content.
               </p>
             </div>
-            <Button asChild className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold">
+            <Button asChild className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold">
               <Link href="/student/plans">Browse Available Packages</Link>
             </Button>
           </div>
@@ -680,7 +680,7 @@ export function StudentPurchasesContent() {
                       <p className="text-xs text-muted-foreground">
                         You have not submitted any payment orders yet. Once you purchase a package, your payment evidence and verification receipts will be logged here.
                       </p>
-                      <Button asChild size="sm" className="bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs mt-1">
+                      <Button asChild size="sm" className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs mt-1">
                         <Link href="/student/plans">Browse Available Packages</Link>
                       </Button>
                     </div>
@@ -753,7 +753,7 @@ export function StudentPurchasesContent() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setReceiptPayment(payment)}
-                          className="text-[#D4A72C] hover:text-[#D4A72C]/80 hover:bg-[#D4A72C]/10 font-bold text-xs h-8"
+                          className="text-[#2563EB] dark:text-[#60A5FA] hover:text-[#2563EB] dark:text-[#60A5FA]/80 hover:bg-[#2563EB]/10 font-bold text-xs h-8"
                         >
                           <Eye className="w-3.5 h-3.5 mr-1" /> View Receipt
                         </Button>
@@ -789,7 +789,7 @@ export function StudentPurchasesContent() {
             <div id="receipt-print-area" className="space-y-6">
               {/* Header */}
               <div className="text-center border-b border-border pb-5">
-                <div className="inline-flex items-center justify-center p-3 bg-[#D4A72C]/10 rounded-2xl mb-2 text-[#D4A72C]">
+                <div className="inline-flex items-center justify-center p-3 bg-[#2563EB]/10 rounded-2xl mb-2 text-[#2563EB] dark:text-[#60A5FA]">
                   <CreditCard className="w-7 h-7" />
                 </div>
                 <h3 className="text-2xl font-black tracking-tight text-foreground">LoksewaAI</h3>
@@ -859,7 +859,7 @@ export function StudentPurchasesContent() {
                 {/* Total Paid Highlight */}
                 <div className="bg-muted/60 p-4 rounded-2xl flex justify-between items-center mt-4">
                   <span className="font-bold text-base text-foreground">Total Paid:</span>
-                  <span className="text-2xl font-black text-[#D4A72C]">
+                  <span className="text-2xl font-black text-[#2563EB] dark:text-[#60A5FA]">
                     NPR {receiptPayment.amount}
                   </span>
                 </div>
@@ -877,7 +877,7 @@ export function StudentPurchasesContent() {
               </Button>
               <Button
                 onClick={() => setReceiptPayment(null)}
-                className="flex-1 bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold text-xs h-11"
+                className="flex-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs h-11"
               >
                 Done
               </Button>

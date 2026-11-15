@@ -71,7 +71,7 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
           className={cn(
             "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border transition-colors",
             isFocusActive
-              ? "bg-primary text-primary-foreground border-[#0B2545] text-[#D4A72C]"
+              ? "bg-primary text-primary-foreground border-[#174A68] text-[#2563EB] dark:text-[#60A5FA]"
               : "bg-muted border-border text-muted-foreground"
           )}
         >
@@ -126,7 +126,7 @@ export function FocusModeToggle({ variant = "bar", className }: FocusModeToggleP
           onKeyDown={handleKeyDown}
           className={cn(
             "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A72C] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2 focus-visible:ring-offset-white",
             checked ? "bg-primary text-primary-foreground" : "bg-muted/80",
             (isLocked || isLoading) && "cursor-not-allowed opacity-70"
           )}

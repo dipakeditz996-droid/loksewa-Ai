@@ -200,7 +200,7 @@ export function MockExamCountdown({ className = "", enabled = true }: { classNam
                 </Button>
               </div>
             ) : status === "LIVE" ? (
-              <Button asChild className="w-full md:w-auto bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0B2545] font-black shadow-md gap-2">
+              <Button asChild className="w-full md:w-auto bg-[#2563EB] hover:bg-[#2563EB]/90 text-[#172B4D] font-black shadow-md gap-2">
                 <Link href={`/student/exams/${mockExam.id}`}>
                   <Play className="w-4 h-4 fill-current" />
                   {mockExam.active_attempt_id ? "Resume Exam" : "Start Exam Now"}

@@ -148,7 +148,7 @@ export default function StudentDashboardPage() {
     return (
       <div className="min-h-[70vh] flex items-center justify-center p-6 bg-muted/30">
         <div className="max-w-md w-full bg-card border border-border rounded-[24px] shadow-sm p-10 relative overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#D4A72C]/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#2563EB]/10 rounded-full blur-3xl pointer-events-none"></div>
 
           <div className="relative z-10 flex flex-col items-center text-center">
             {isPending ? (
@@ -213,7 +213,7 @@ export default function StudentDashboardPage() {
                 )}
                 <Button
                   onClick={() => (window.location.href = "/student/plans")}
-                  className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold py-6 rounded-xl"
+                  className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold py-6 rounded-xl"
                 >
                   Submit Payment Again
                 </Button>
@@ -233,18 +233,18 @@ export default function StudentDashboardPage() {
                 </p>
                 <Button
                   onClick={() => (window.location.href = "/student/plans")}
-                  className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold py-6 rounded-xl"
+                  className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold py-6 rounded-xl"
                 >
                   Renew Package
                 </Button>
               </>
             ) : (
               <>
-                <div className="w-20 h-20 rounded-full bg-[#D4A72C]/10 flex items-center justify-center mb-6 shadow-sm border border-[#D4A72C]/20">
-                  <Lock className="w-10 h-10 text-[#D4A72C]" />
+                <div className="w-20 h-20 rounded-full bg-[#2563EB]/10 flex items-center justify-center mb-6 shadow-sm border border-[#D4A72C]/20">
+                  <Lock className="w-10 h-10 text-[#2563EB] dark:text-[#60A5FA]" />
                 </div>
                 <h2 className="text-2xl font-bold text-primary dark:text-foreground mb-3">
-                  Welcome to LoksewaAI
+                  Welcome to NES Mastery
                 </h2>
                 <p className="text-muted-foreground mb-8">
                   Your account is ready. Choose a premium package to unlock your full learning
@@ -252,7 +252,7 @@ export default function StudentDashboardPage() {
                 </p>
                 <Button
                   onClick={() => (window.location.href = "/student/plans")}
-                  className="w-full bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-bold py-6 rounded-xl"
+                  className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold py-6 rounded-xl"
                 >
                   Browse Premium Packages
                 </Button>

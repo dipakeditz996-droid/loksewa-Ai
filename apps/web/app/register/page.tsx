@@ -440,7 +440,7 @@ function RegisterForm() {
     if (password.length < 8) return { score: 2, label: "Fair", color: "bg-yellow-500", textColor: "text-yellow-500" };
     if (password.match(/[A-Z]/) && password.match(/[0-9]/) && password.match(/[^A-Za-z0-9]/))
       return { score: 4, label: "Strong", color: "bg-[#22c55e]", textColor: "text-[#22c55e]" };
-    return { score: 3, label: "Good", color: "bg-[#D4A72C]", textColor: "text-[#D4A72C]" };
+    return { score: 3, label: "Good", color: "bg-[#2563EB]", textColor: "text-[#2563EB]" };
   };
 
   const strength = getPasswordStrength();
@@ -466,7 +466,7 @@ function RegisterForm() {
             </div>
             <div>
               <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">
-                Loksewa<span className="text-[#D4A72C]">AI</span>
+                NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>
               </span>
               <span className="text-[9px] text-white/70 block mt-0.5 font-medium tracking-wide">
                 Your Journey. Our Guidance. Your Success.
@@ -489,9 +489,9 @@ function RegisterForm() {
                           <div
                             className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold transition-all duration-300 ${
                               i < currentStep
-                                ? "bg-[#D4A72C] text-black shadow-[0_0_12px_rgba(212,167,44,0.4)]"
+                                ? "bg-[#2563EB] text-black shadow-[0_0_12px_rgba(37,99,235,0.4)]"
                                 : i === currentStep
-                                ? "bg-[#D4A72C]/20 border-2 border-[#D4A72C] text-[#D4A72C]"
+                                ? "bg-[#2563EB]/20 border-2 border-[#2563EB] text-[#2563EB]"
                                 : "bg-white/5 border border-white/20 text-white/40"
                             }`}
                           >
@@ -508,7 +508,7 @@ function RegisterForm() {
                         {i < STEPS.length - 1 && (
                           <div
                             className={`flex-1 h-[1px] mx-2 transition-colors duration-300 ${
-                              i < currentStep ? "bg-[#D4A72C]/60" : "bg-white/10"
+                              i < currentStep ? "bg-[#2563EB]/60" : "bg-white/10"
                             }`}
                           />
                         )}
@@ -530,11 +530,11 @@ function RegisterForm() {
                     <div className="space-y-4">
                       <div className="flex items-center gap-3.5 mb-5">
                         <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
-                          <UserCircle2 className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                          <UserCircle2 className="h-6 w-6 text-[#2563EB]" strokeWidth={1.5} />
                         </div>
                         <div>
                           <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
-                            Basic <span className="text-[#D4A72C]">Information</span>
+                            Basic <span className="text-[#2563EB]">Information</span>
                           </h2>
                           <p className="text-[12px] text-white/60 font-medium">Step 1 of 4: Enter your account details</p>
                         </div>
@@ -571,7 +571,7 @@ function RegisterForm() {
 
                       {/* Full Name */}
                       <div className="relative group">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                           <User className="h-4 w-4" strokeWidth={1.5} />
                         </div>
                         <Input
@@ -580,14 +580,14 @@ function RegisterForm() {
                           value={fullName}
                           onChange={(e) => setFullName(e.target.value)}
                           placeholder="Full Name *"
-                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] placeholder:text-white/40"
                           required
                         />
                       </div>
 
                       {/* Email */}
                       <div className="relative group">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                           <Mail className="h-4 w-4" strokeWidth={1.5} />
                         </div>
                         <Input
@@ -596,14 +596,14 @@ function RegisterForm() {
                           value={email}
                           onChange={(e) => setEmail(e.target.value.toLowerCase().trim())}
                           placeholder="Email Address *"
-                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] placeholder:text-white/40"
                           required
                         />
                       </div>
 
                       {/* Phone Number */}
                       <div className="relative group">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                           <Phone className="h-4 w-4" strokeWidth={1.5} />
                         </div>
                         <Input
@@ -612,14 +612,14 @@ function RegisterForm() {
                           value={mobile}
                           onChange={(e) => setMobile(e.target.value)}
                           placeholder="Mobile Number (98XXXXXXXX) *"
-                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] placeholder:text-white/40"
                           required
                         />
                       </div>
 
                       {/* Password */}
                       <div className="relative group">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                           <Lock className="h-4 w-4" strokeWidth={1.5} />
                         </div>
                         <Input
@@ -628,7 +628,7 @@ function RegisterForm() {
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Password (minimum 8 chars) *"
-                          className="h-[46px] w-full pl-10 pr-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          className="h-[46px] w-full pl-10 pr-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] placeholder:text-white/40"
                           required
                         />
                         <button
@@ -642,7 +642,7 @@ function RegisterForm() {
 
                       {/* Confirm Password */}
                       <div className="relative group">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                           <Lock className="h-4 w-4" strokeWidth={1.5} />
                         </div>
                         <Input
@@ -651,7 +651,7 @@ function RegisterForm() {
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           placeholder="Confirm Password *"
-                          className="h-[46px] w-full pl-10 pr-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                          className="h-[46px] w-full pl-10 pr-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] placeholder:text-white/40"
                           required
                         />
                         <button
@@ -685,7 +685,7 @@ function RegisterForm() {
 
                       {/* Referral Code (Optional) */}
                       <div className="relative group">
-                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                           <Gift className="h-4 w-4" strokeWidth={1.5} />
                         </div>
                         <Input
@@ -700,7 +700,7 @@ function RegisterForm() {
                               ? "border-red-500 focus:border-red-500"
                               : referralStatus === "valid"
                               ? "border-[#22c55e] focus:border-[#22c55e]"
-                              : "border-white/20 focus:border-[#D4A72C]"
+                              : "border-white/20 focus:border-[#2563EB]"
                           }`}
                         />
                         <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
@@ -712,7 +712,7 @@ function RegisterForm() {
                       <Button
                         type="button"
                         onClick={handleNext}
-                        className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2 mt-4"
+                        className="w-full h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(37,99,235,0.25)] flex items-center justify-center gap-2 mt-4"
                       >
                         Continue to Address <ArrowRight className="h-4 w-4" />
                       </Button>
@@ -724,11 +724,11 @@ function RegisterForm() {
                     <div className="space-y-4">
                       <div className="flex items-center gap-3.5 mb-5">
                         <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
-                          <MapPin className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                          <MapPin className="h-6 w-6 text-[#2563EB]" strokeWidth={1.5} />
                         </div>
                         <div>
                           <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
-                            Permanent <span className="text-[#D4A72C]">Address</span>
+                            Permanent <span className="text-[#2563EB]">Address</span>
                           </h2>
                           <p className="text-[12px] text-white/60 font-medium">Step 2 of 4: Structured location info</p>
                         </div>
@@ -755,7 +755,7 @@ function RegisterForm() {
                           Local Level / Municipality / Ward *
                         </label>
                         <div className="relative group">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                             <MapPin className="h-4 w-4" strokeWidth={1.5} />
                           </div>
                           <Input
@@ -764,7 +764,7 @@ function RegisterForm() {
                             value={localLevel}
                             onChange={(e) => setLocalLevel(e.target.value)}
                             placeholder="e.g. Kathmandu Metropolitan City - 10"
-                            className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#D4A72C] focus:ring-1 focus:ring-[#D4A72C] rounded-[10px] placeholder:text-white/40"
+                            className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[13px] text-white focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] rounded-[10px] placeholder:text-white/40"
                             required
                           />
                         </div>
@@ -782,7 +782,7 @@ function RegisterForm() {
                         <Button
                           type="button"
                           onClick={handleNext}
-                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
+                          className="flex-1 h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(37,99,235,0.25)]"
                         >
                           Continue <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
@@ -795,11 +795,11 @@ function RegisterForm() {
                     <div className="space-y-4">
                       <div className="flex items-center gap-3.5 mb-5">
                         <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
-                          <GraduationCap className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                          <GraduationCap className="h-6 w-6 text-[#2563EB]" strokeWidth={1.5} />
                         </div>
                         <div>
                           <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
-                            What are you <span className="text-[#D4A72C]">preparing for?</span>
+                            What are you <span className="text-[#2563EB]">preparing for?</span>
                           </h2>
                           <p className="text-[12px] text-white/60 font-medium">Step 3 of 4: Select your exam category & path</p>
                         </div>
@@ -830,7 +830,7 @@ function RegisterForm() {
                                   }}
                                   className={`h-[42px] px-3.5 rounded-[10px] border text-[12px] font-semibold text-left transition-all ${
                                     isSelected
-                                      ? "border-[#D4A72C] bg-[#D4A72C]/15 text-[#D4A72C] shadow-[0_0_12px_rgba(212,167,44,0.15)]"
+                                      ? "border-[#2563EB] bg-[#2563EB]/15 text-[#2563EB] shadow-[0_0_12px_rgba(37,99,235,0.15)]"
                                       : "border-white/15 bg-white/[0.03] text-white/70 hover:border-white/30"
                                   }`}
                                 >
@@ -858,7 +858,7 @@ function RegisterForm() {
                                   onClick={() => selectExamNode(0, lvl)}
                                   className={`py-2.5 px-3 rounded-[10px] border text-[12px] font-semibold text-center transition-all ${
                                     isSelected
-                                      ? "border-[#D4A72C] bg-[#D4A72C]/15 text-[#D4A72C]"
+                                      ? "border-[#2563EB] bg-[#2563EB]/15 text-[#2563EB]"
                                       : "border-white/15 bg-white/[0.03] text-white/70 hover:border-white/30"
                                   }`}
                                 >
@@ -886,7 +886,7 @@ function RegisterForm() {
                                   onClick={() => selectExamNode(1, svc)}
                                   className={`py-2.5 px-3 rounded-[10px] border text-[12px] font-semibold text-left transition-all ${
                                     isSelected
-                                      ? "border-[#D4A72C] bg-[#D4A72C]/15 text-[#D4A72C]"
+                                      ? "border-[#2563EB] bg-[#2563EB]/15 text-[#2563EB]"
                                       : "border-white/15 bg-white/[0.03] text-white/70 hover:border-white/30"
                                   }`}
                                 >
@@ -899,8 +899,8 @@ function RegisterForm() {
                       )}
 
                       {/* Fixed Canonical Path Preview */}
-                      <div className="rounded-[12px] border border-[#D4A72C]/30 bg-[#D4A72C]/5 p-4 mt-3">
-                        <div className="flex items-center gap-2 text-[#D4A72C] text-[11px] font-bold uppercase tracking-wider mb-1">
+                      <div className="rounded-[12px] border border-[#2563EB]/30 bg-[#2563EB]/5 p-4 mt-3">
+                        <div className="flex items-center gap-2 text-[#2563EB] text-[11px] font-bold uppercase tracking-wider mb-1">
                           <Sparkles className="h-3.5 w-3.5" />
                           Canonical Preparation Path
                         </div>
@@ -924,7 +924,7 @@ function RegisterForm() {
                         <Button
                           type="button"
                           onClick={handleNext}
-                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)]"
+                          className="flex-1 h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(37,99,235,0.25)]"
                         >
                           Review <ArrowRight className="h-4 w-4 ml-2" />
                         </Button>
@@ -941,7 +941,7 @@ function RegisterForm() {
                         </div>
                         <div>
                           <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
-                            Review & <span className="text-[#D4A72C]">Register</span>
+                            Review & <span className="text-[#2563EB]">Register</span>
                           </h2>
                           <p className="text-[12px] text-white/60 font-medium">Step 4 of 4: Verify details before account creation</p>
                         </div>
@@ -966,7 +966,7 @@ function RegisterForm() {
                         </div>
                         <div className="flex justify-between items-start gap-3 text-[12px]">
                           <span className="text-white/50 shrink-0">Preparation</span>
-                          <span className="text-[#D4A72C] font-semibold text-right break-words min-w-0">
+                          <span className="text-[#2563EB] font-semibold text-right break-words min-w-0">
                             {[selectedExamCategory?.name, ...examPath.map((n) => n.name)].filter(Boolean).join(" → ")}
                           </span>
                         </div>
@@ -989,7 +989,7 @@ function RegisterForm() {
                           type="button"
                           onClick={handleRegister}
                           disabled={isLoading}
-                          className="flex-1 h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
+                          className="flex-1 h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(37,99,235,0.25)] flex items-center justify-center gap-2"
                         >
                           {isLoading ? (
                             <>
@@ -1007,11 +1007,11 @@ function RegisterForm() {
 
                       <div className="text-center mt-3 text-[11px] text-white/50">
                         By continuing, you agree to our{" "}
-                        <Link href="/terms" className="text-[#D4A72C] hover:underline">
+                        <Link href="/terms" className="text-[#2563EB] hover:underline">
                           Terms
                         </Link>{" "}
                         and{" "}
-                        <Link href="/privacy" className="text-[#D4A72C] hover:underline">
+                        <Link href="/privacy" className="text-[#2563EB] hover:underline">
                           Privacy Policy
                         </Link>
                         .
@@ -1042,7 +1042,7 @@ function RegisterForm() {
                       Your account was verified using an administrative recovery code. Please log in with your credentials to start learning.
                     </p>
                     <Link href="/login">
-                      <Button className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] text-[14px] font-bold rounded-[10px]">
+                      <Button className="w-full h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-[14px] font-bold rounded-[10px]">
                         Go to Login
                       </Button>
                     </Link>
@@ -1051,11 +1051,11 @@ function RegisterForm() {
                   <>
                     <div className="flex items-center gap-3.5 mb-5">
                       <div className="w-11 h-11 rounded-full border border-white/20 bg-white/5 flex items-center justify-center shrink-0">
-                        <KeyRound className="h-6 w-6 text-[#D4A72C]" strokeWidth={1.5} />
+                        <KeyRound className="h-6 w-6 text-[#2563EB]" strokeWidth={1.5} />
                       </div>
                       <div>
                         <h2 className="text-[22px] font-bold text-white tracking-tight leading-tight">
-                          Verify <span className="text-[#D4A72C]">your email</span>
+                          Verify <span className="text-[#2563EB]">your email</span>
                         </h2>
                         <p className="text-[12px] text-white/60 font-medium">
                           Enter code sent to <span className="text-white font-semibold">{maskEmail(email)}</span>
@@ -1083,7 +1083,7 @@ function RegisterForm() {
                               value={digit}
                               onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                               onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                              className="flex-1 min-w-0 max-w-[52px] aspect-square text-center text-[18px] sm:text-[20px] font-bold bg-[#121B24] border border-white/20 rounded-[10px] text-white focus:border-[#D4A72C] focus:ring-2 focus:ring-[#D4A72C]/30 outline-none transition-all"
+                              className="flex-1 min-w-0 max-w-[52px] aspect-square text-center text-[18px] sm:text-[20px] font-bold bg-[#121B24] border border-white/20 rounded-[10px] text-white focus:border-[#2563EB] focus:ring-2 focus:ring-[#2563EB]/30 outline-none transition-all"
                             />
                           ))}
                         </div>
@@ -1092,7 +1092,7 @@ function RegisterForm() {
                           type="button"
                           onClick={handleVerifyOtp}
                           disabled={otpLoading || otpDigits.join("").length !== 6}
-                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] shadow-[0_4px_20px_rgba(212,167,44,0.25)] flex items-center justify-center gap-2"
+                          className="w-full h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[10px] shadow-[0_4px_20px_rgba(37,99,235,0.25)] flex items-center justify-center gap-2"
                         >
                           {otpLoading ? (
                             <>
@@ -1115,7 +1115,7 @@ function RegisterForm() {
                             onClick={handleResendOtp}
                             className={`font-semibold transition-colors flex items-center gap-1 ${
                               resendActive && !resendLoading
-                                ? "text-[#D4A72C] hover:text-[#e0b745] cursor-pointer"
+                                ? "text-[#2563EB] hover:text-[#60A5FA] cursor-pointer"
                                 : "text-white/40 cursor-not-allowed"
                             }`}
                           >
@@ -1134,13 +1134,13 @@ function RegisterForm() {
 
                         {/* Admin Recovery Code Fallback */}
                         <div className="rounded-[12px] border border-white/10 bg-white/[0.03] p-3.5 flex items-start gap-3 mt-4">
-                          <LifeBuoy className="h-4 w-4 text-[#D4A72C] shrink-0 mt-0.5" />
+                          <LifeBuoy className="h-4 w-4 text-[#2563EB] shrink-0 mt-0.5" />
                           <div className="text-[11px] text-white/60 leading-relaxed">
                             Email issue or spam filter problem? Your administrator can issue a recovery code.{" "}
                             <button
                               type="button"
                               onClick={() => setShowRecovery(true)}
-                              className="text-[#D4A72C] font-semibold hover:underline"
+                              className="text-[#2563EB] font-semibold hover:underline"
                             >
                               Enter Admin Recovery Code
                             </button>
@@ -1157,7 +1157,7 @@ function RegisterForm() {
                         </div>
 
                         <div className="relative group">
-                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#D4A72C] transition-colors">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-[#2563EB] transition-colors">
                             <KeyRound className="h-4 w-4" strokeWidth={1.5} />
                           </div>
                           <Input
@@ -1166,7 +1166,7 @@ function RegisterForm() {
                             value={recoveryCode}
                             onChange={(e) => setRecoveryCode(e.target.value.trim())}
                             placeholder="6-digit recovery code"
-                            className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[14px] text-white font-mono tracking-widest focus:border-[#D4A72C] rounded-[10px]"
+                            className="h-[46px] w-full pl-10 bg-transparent border-white/20 text-[14px] text-white font-mono tracking-widest focus:border-[#2563EB] rounded-[10px]"
                             required
                           />
                         </div>
@@ -1175,7 +1175,7 @@ function RegisterForm() {
                           type="button"
                           onClick={handleVerifyRecovery}
                           disabled={recoveryLoading || !recoveryCode.trim()}
-                          className="w-full h-[46px] bg-gradient-to-r from-[#B08922] to-[#D4A72C] hover:opacity-95 text-[#0A1118] font-bold rounded-[10px] flex items-center justify-center gap-2"
+                          className="w-full h-[46px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold rounded-[10px] flex items-center justify-center gap-2"
                         >
                           {recoveryLoading ? (
                             <>
@@ -1207,7 +1207,7 @@ function RegisterForm() {
             {/* Footer Navigation */}
             <div className="text-center py-4 border-t border-white/5 bg-white/[0.01] text-[12px] text-white/60">
               Already have an account?{" "}
-              <Link href="/login" className="text-[#D4A72C] font-bold hover:text-[#e0b745] transition-colors">
+              <Link href="/login" className="text-[#2563EB] font-bold hover:text-[#60A5FA] transition-colors">
                 Sign in
               </Link>
             </div>

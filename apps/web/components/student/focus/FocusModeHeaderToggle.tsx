@@ -61,9 +61,9 @@ export function FocusModeHeaderToggle() {
         }}
         className={cn(
           "group inline-flex h-9 items-center gap-2 rounded-full border px-2.5 transition-colors",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4A72C] focus-visible:ring-offset-2",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] focus-visible:ring-offset-2",
           checked
-            ? "border-[#0B2545] bg-primary text-primary-foreground text-white"
+            ? "border-[#174A68] bg-primary text-primary-foreground text-white"
             : "border-border bg-transparent text-muted-foreground hover:bg-accent",
           (isLocked || isLoading) && "cursor-not-allowed opacity-80"
         )}
@@ -81,7 +81,7 @@ export function FocusModeHeaderToggle() {
             <Lock className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
           ) : (
             <BellOff
-              className={cn("h-4 w-4", checked && "fill-[#D4A72C] text-[#D4A72C]")}
+              className={cn("h-4 w-4", checked && "fill-[#2563EB] text-[#2563EB] dark:fill-[#60A5FA] dark:text-[#60A5FA]")}
               strokeWidth={1.75}
               aria-hidden="true"
             />

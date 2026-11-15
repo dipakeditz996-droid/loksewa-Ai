@@ -70,7 +70,7 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#D4A72C] rounded-full animate-spin" />
+          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#2563EB] rounded-full animate-spin" />
           <p className="text-sm text-muted-foreground">Loading student portal...</p>
         </div>
       </div>

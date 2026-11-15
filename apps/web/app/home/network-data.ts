@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  Landmark, Newspaper, Lightbulb, Building2, LineChart, Mountain, ScrollText,
+  Binary, Cpu, Compass, Activity, Cog, Layers, Gauge,
 } from "lucide-react";
 
 export type Tier = "weak" | "good" | "strong";
@@ -19,9 +19,9 @@ export function tierOf(accuracy: number): Tier {
 }
 
 export const TIER_STYLE: Record<Tier, { line: string; ring: string; dot: string; text: string; label: string }> = {
-  weak: { line: "#DC5A5A", ring: "border-red-400/60", dot: "bg-red-500", text: "text-red-500", label: "Needs attention" },
-  good: { line: "#D4A72C", ring: "border-[#D4A72C]/60", dot: "bg-[#D4A72C]", text: "text-[#D4A72C]", label: "Good progress" },
-  strong: { line: "#159A82", ring: "border-emerald-400/60", dot: "bg-emerald-500", text: "text-emerald-500", label: "Strong" },
+  weak: { line: "#DC4545", ring: "border-red-400/60", dot: "bg-red-500", text: "text-red-500", label: "Needs attention" },
+  good: { line: "#2563EB", ring: "border-[#2563EB]/60", dot: "bg-[#2563EB]", text: "text-[#2563EB] dark:text-[#60A5FA]", label: "Good progress" },
+  strong: { line: "#16A36A", ring: "border-emerald-400/60", dot: "bg-emerald-500", text: "text-emerald-500", label: "Strong" },
 };
 
 const NODE_RADIUS_PCT = 38;
@@ -36,13 +36,13 @@ function nodePosition(index: number, total: number) {
 }
 
 export const SUBJECTS: Subject[] = [
-  { name: "Constitution", short: "Constitutional Law", icon: Landmark, accuracy: 62 },
-  { name: "Current Affairs", short: "Current Affairs", icon: Newspaper, accuracy: 68 },
-  { name: "Economics", short: "Economics", icon: LineChart, accuracy: 74 },
-  { name: "Gen. Knowledge", short: "General Knowledge", icon: Lightbulb, accuracy: 79 },
-  { name: "Public Admin", short: "Public Administration", icon: Building2, accuracy: 71 },
-  { name: "Geography", short: "Geography", icon: Mountain, accuracy: 85 },
-  { name: "History", short: "Nepal History", icon: ScrollText, accuracy: 91 },
+  { name: "Structures", short: "Structural Analysis", icon: Layers, accuracy: 64 },
+  { name: "Hydraulics", short: "Fluid Mechanics & Hydro", icon: Gauge, accuracy: 78 },
+  { name: "Math & Stat", short: "Engineering Mathematics", icon: Activity, accuracy: 72 },
+  { name: "Circuits", short: "Circuit Analysis", icon: Cpu, accuracy: 82 },
+  { name: "Geotech", short: "Geotechnical Engineering", icon: Compass, accuracy: 70 },
+  { name: "Thermodynamics", short: "Applied Thermodynamics", icon: Cog, accuracy: 88 },
+  { name: "Logic & Digital", short: "Digital Systems", icon: Binary, accuracy: 92 },
 ];
 
 export const SUBJECT_NODES = SUBJECTS.map((s, i) => ({ ...s, ...nodePosition(i, SUBJECTS.length) }));

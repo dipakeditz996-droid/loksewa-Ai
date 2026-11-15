@@ -424,7 +424,7 @@ export default function PracticePage() {
                 Practice With Your Weak Areas
               </h2>
               <p className="text-lg text-slate-600 dark:text-slate-400 font-[500] leading-relaxed mb-10">
-                LoksewaAI continuously analyzes your performance to identify the topics you struggle with, generating targeted practice sessions to strengthen them automatically.
+                NES Mastery continuously analyzes your performance to identify the topics you struggle with, generating targeted practice sessions to strengthen them automatically.
               </p>
               
               <Button className="h-14 px-8 rounded-[12px] bg-[#0B2545] dark:bg-white text-white dark:text-[#0B2545] font-[800] hover:bg-[#163E6B] dark:hover:bg-slate-200 transition-colors">

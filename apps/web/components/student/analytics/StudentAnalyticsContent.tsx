@@ -173,7 +173,7 @@ export function StudentAnalyticsContent() {
       <div className="pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-primary dark:text-foreground flex items-center gap-2">
-            <BarChart className="w-6 h-6 text-[#D4A72C]" /> Preparation Analytics
+            <BarChart className="w-6 h-6 text-[#2563EB] dark:text-[#60A5FA]" /> Preparation Analytics
           </h2>
           <p className="text-muted-foreground mt-0.5 text-sm">
             Deep-dive into your accuracy, question completion metrics, study streak, and subject-wise mastery.
@@ -272,7 +272,7 @@ export function StudentAnalyticsContent() {
           <div className="absolute top-0 right-0 w-32 h-32 bg-black/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
           
           <h3 className="text-[16px] font-bold text-primary-foreground/80 mb-6 flex items-center gap-2 relative z-10">
-            <BrainCircuit className="w-5 h-5" /> LoksewaAI Insight
+            <BrainCircuit className="w-5 h-5" /> NES Mastery Insight
           </h3>
 
           {generatingAI ? (

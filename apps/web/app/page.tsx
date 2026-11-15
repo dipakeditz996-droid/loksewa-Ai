@@ -23,8 +23,8 @@ import { TeacherSection } from "./home/TeacherSection";
 import { FinalCTASection } from "./home/FinalCTASection";
 
 export const metadata = {
-  title: "LoksewaAI | Nepal's Most Intelligent Loksewa Preparation Platform",
-  description: "Prepare smarter with AI-powered personalized study plans, dynamic mock exams, targeted practice, and premium notes for PSC Nepal exams.",
+  title: "NES Mastery | Engineering Entrance & License Examination Preparation Platform",
+  description: "Master your engineering examinations with comprehensive study plans, dynamic mock tests, targeted engineering question banks, and expert notes.",
 };
 
 // Revalidate homepage every 5 minutes (ISR) to deliver instant edge TTFB (<100ms)

@@ -51,7 +51,7 @@ const STATIC_PACKAGES: PublicPackage[] = [
     mock_exam_access: true,
     notes_access: true,
     ai_features: true,
-    color_accent: "from-[#D4A72C] to-[#E6BA3D]",
+    color_accent: "from-[#2563EB] to-[#60A5FA]",
   },
   {
     id: 3,
@@ -93,15 +93,15 @@ export function PricingSection({ packages }: Props) {
       {/* Background elements */}
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-[#D4A72C]/[0.03] dark:bg-[#D4A72C]/[0.05] rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] bg-[#2563EB]/[0.03] dark:bg-[#2563EB]/[0.05] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Header */}
         <div className="text-center mb-16">
-          <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 mb-5">
-            <Sparkles className="w-3.5 h-3.5 text-[#D4A72C]" />
-            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#8F6B12] dark:text-[#D4A72C]">Simple Pricing</span>
+          <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#2563EB]/10 border border-[#2563EB]/20 mb-5">
+            <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
+            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#2563EB] dark:text-[#2563EB]">Simple Pricing</span>
           </div>
           <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
             Invest in your <span className="text-gradient-gold">future.</span>
@@ -118,12 +118,12 @@ export function PricingSection({ packages }: Props) {
               key={pkg.id} 
               className={`card-hover relative bg-white dark:bg-[#060E18] border rounded-[24px] overflow-hidden ${
                 pkg.is_popular 
-                  ? "border-[#D4A72C]/50 dark:border-[#D4A72C]/50 shadow-[0_20px_60px_rgba(212,167,44,0.1)] dark:shadow-[0_20px_80px_rgba(212,167,44,0.15)] md:scale-105 z-10" 
+                  ? "border-[#2563EB]/50 dark:border-[#2563EB]/50 shadow-[0_20px_60px_rgba(37,99,235,0.1)] dark:shadow-[0_20px_80px_rgba(37,99,235,0.15)] md:scale-105 z-10" 
                   : "border-slate-200 dark:border-white/[0.08] shadow-[0_4px_20px_rgba(0,0,0,0.03)] dark:shadow-[0_10px_40px_rgba(0,0,0,0.4)]"
               }`}
             >
               {pkg.is_popular && (
-                <div className="bg-gradient-to-r from-[#C29322] to-[#E6BA3D] text-[#020611] text-center py-1.5 text-[11px] font-[800] uppercase tracking-widest">
+                <div className="bg-gradient-to-r from-[#1D4ED8] to-[#60A5FA] text-[#020611] text-center py-1.5 text-[11px] font-[800] uppercase tracking-widest">
                   MOST POPULAR
                 </div>
               )}
@@ -144,7 +144,7 @@ export function PricingSection({ packages }: Props) {
                   <Button
                     className={`w-full h-[48px] rounded-[12px] font-[700] text-[15px] transition-all mb-8 ${
                       pkg.is_popular
-                        ? "btn-gold-gradient text-[#020611] border-none shadow-[0_8px_25px_rgba(212,167,44,0.3)]"
+                        ? "btn-gold-gradient text-[#020611] border-none shadow-[0_8px_25px_rgba(37,99,235,0.3)]"
                         : "bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 hover:-translate-y-0.5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10"
                     }`}
                   >
@@ -156,9 +156,9 @@ export function PricingSection({ packages }: Props) {
                   {pkg.features.map((feature, i) => (
                     <div key={i} className="flex items-start gap-3">
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                        pkg.is_popular ? "bg-[#D4A72C]/10" : "bg-emerald-500/10"
+                        pkg.is_popular ? "bg-[#2563EB]/10" : "bg-emerald-500/10"
                       }`}>
-                        <Check className={`w-3 h-3 ${pkg.is_popular ? "text-[#8F6B12] dark:text-[#D4A72C]" : "text-emerald-500"}`} />
+                        <Check className={`w-3 h-3 ${pkg.is_popular ? "text-[#2563EB] dark:text-[#2563EB]" : "text-emerald-500"}`} />
                       </div>
                       <span className="text-[14px] text-slate-600 dark:text-slate-300">{feature}</span>
                     </div>

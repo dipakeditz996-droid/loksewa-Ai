@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { studentSettingsApi } from "@/lib/api/student-settings";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ export function AppearanceSection() {
       {/* Theme */}
       <div className="bg-card rounded-2xl border border-border/80 shadow-sm p-8">
         <h3 className="text-lg font-semibold text-primary dark:text-foreground mb-2">Theme</h3>
-        <p className="text-xs text-muted-foreground mb-6">Choose how LoksewaAI looks for you.</p>
+        <p className="text-xs text-muted-foreground mb-6">Choose how NES Mastery looks for you.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {THEMES.map((t) => {
@@ -55,12 +55,12 @@ export function AppearanceSection() {
                 className={cn(
                   "relative flex flex-col items-center gap-3 p-6 rounded-xl border-2 transition-all hover:shadow-md",
                   isActive
-                    ? "border-[#D4A72C] bg-[#D4A72C]/5 shadow-sm"
+                    ? "border-[#2563EB] bg-[#2563EB]/5 shadow-sm"
                     : "border-border bg-card hover:border-border"
                 )}
               >
                 {isActive && (
-                  <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#D4A72C] flex items-center justify-center">
+                  <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-[#2563EB] flex items-center justify-center">
                     <Check className="h-3 w-3 text-white" />
                   </div>
                 )}

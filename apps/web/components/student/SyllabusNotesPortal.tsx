@@ -199,7 +199,7 @@ export default function SyllabusNotesPortal({
         </div>
         <h2 className="text-2xl font-bold text-foreground mb-3">No Active Enrollments Found</h2>
         <p className="text-muted-foreground max-w-lg mx-auto mb-8 leading-relaxed">
-          You are not currently enrolled in any preparation courses. Enroll in a Loksewa PSC preparation course to access your official syllabus, topicwise detailed notes, and revision materials.
+          You are not currently enrolled in any preparation courses. Enroll in an engineering entrance or license preparation course to access your official syllabus, topicwise detailed notes, and revision materials.
         </p>
         <Link href="/courses">
           <Button className="bg-[#1A2E44] hover:bg-[#2A4365] text-white px-6 py-2.5 rounded-xl font-medium shadow-md">
@@ -579,7 +579,7 @@ export default function SyllabusNotesPortal({
             return (
               <div
                 key={material.id}
-                className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden hover:border-primary/40 dark:hover:border-[#D4A72C]/40 group"
+                className="bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden hover:border-primary/40 dark:hover:border-[#2563EB]/40 group"
               >
                 <div className="p-5 flex-1 flex flex-col">
                   {/* Category & Type badges */}
@@ -618,7 +618,7 @@ export default function SyllabusNotesPortal({
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-base font-bold text-foreground group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors line-clamp-2 mb-2">
+                  <h3 className="text-base font-bold text-foreground group-hover:text-[#2563EB] dark:group-hover:text-[#60A5FA] transition-colors line-clamp-2 mb-2">
                     {material.title}
                   </h3>
 

@@ -52,7 +52,7 @@ def _load_env_file(path):
         # Strip a single matching pair of surrounding quotes.
         if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
             value = value[1:-1]
-        if key and (key not in os.environ or not str(os.environ[key]).strip()):
+        if key and (key.startswith('GOOGLE_DRIVE_') or key not in os.environ or not str(os.environ[key]).strip()):
             os.environ[key] = value
 
 

@@ -104,10 +104,9 @@ def get_credentials(force_refresh=False):
             try:
                 _credentials.refresh(Request())
             except Exception as e:
-                logger.error('Google Drive credential refresh failed: %s', type(e).__name__)
+                logger.error('Google Drive credential refresh failed: %s (%s)', type(e).__name__, e)
                 raise GoogleDriveError(
-                    'Could not refresh Google Drive access token. The refresh token may '
-                    'have been revoked - re-run `manage.py drive_authorize`.'
+                    f'Could not refresh Google Drive access token: {e}'
                 ) from None
 
         return _credentials

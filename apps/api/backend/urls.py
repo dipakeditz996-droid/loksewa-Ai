@@ -31,8 +31,19 @@ from core.two_factor_views import (
     TwoFactorLoginView,
 )
 from ai_tutor.views import AITutorEndpointView
+from django.http import JsonResponse
+from django.conf import settings
+
+def health_check(request):
+    db_default = settings.DATABASES['default']
+    return JsonResponse({
+        'status': 'healthy',
+        'db_host': db_default.get('HOST', 'unknown'),
+        'db_name': db_default.get('NAME', 'unknown'),
+    })
 
 urlpatterns = [
+    path('api/health/', health_check, name='health_check'),
     path('admin/', admin.site.urls),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),

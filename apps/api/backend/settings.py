@@ -298,6 +298,13 @@ if _active_db_url:
 
     _conn_health_checks = _env_bool('DJANGO_CONN_HEALTH_CHECKS', True)
 
+    # Permit PostgreSQL 13 on cPanel / shared hosts (Django 6 artificially defaults to PG 14+)
+    try:
+        from django.db.backends.postgresql.base import DatabaseWrapper
+        DatabaseWrapper.check_database_version_supported = lambda self: None
+    except Exception:
+        pass
+
     DATABASES = {
         'default': dj_database_url.parse(
             _active_db_url,

@@ -320,20 +320,12 @@ export function MockExamSection({ examinations: initialExams }: MockExamSectionP
           })}
         </div>
 
-        {/* Bottom CTA to view all exams and syllabus */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+        {/* Bottom CTA to view all exams */}
+        <div className="flex items-center justify-center mt-10">
           <Link href="/exams">
             <Button className="h-12 px-8 rounded-[12px] bg-[#163E6B] hover:bg-[#163E6B]/90 dark:bg-[#D4A72C] dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[800] text-[15px] shadow-[0_0_20px_rgba(22,62,107,0.2)] dark:shadow-[0_0_20px_rgba(212,167,44,0.3)] transition-all flex items-center gap-2">
               Explore All Examinations
               <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-          <Link href="/syllabus">
-            <Button
-              variant="outline"
-              className="h-12 px-6 rounded-[12px] border-slate-300 dark:border-white/20 text-slate-700 dark:text-slate-200 font-[700] hover:bg-slate-100 dark:hover:bg-white/5"
-            >
-              View Examination Syllabus
             </Button>
           </Link>
         </div>

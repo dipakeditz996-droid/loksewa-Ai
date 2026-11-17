@@ -31,7 +31,7 @@ export function TeacherSection() {
               </div>
               
               <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-5 leading-[1.1]">
-                Are you a <span className="text-gradient-gold">Loksewa expert?</span>
+                Are you an <span className="text-gradient-gold">engineering exam expert?</span>
               </h2>
               
               <p className="text-[17px] text-slate-600 dark:text-slate-300 leading-[1.7] mb-8 font-[500] max-w-[480px]">
@@ -41,7 +41,7 @@ export function TeacherSection() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mb-10">
                 {[
                   { icon: BookOpen, text: "Course Creation Tools" },
-                  { icon: Users, text: "Reach 50,000+ Aspirants" },
+                  { icon: Users, text: "Reach Engineering Aspirants" },
                   { icon: DollarSign, text: "Monetize Content" },
                   { icon: BarChart2, text: "Student Analytics" },
                 ].map((f) => (

@@ -338,7 +338,7 @@ function TrustIndicators() {
             ))}
           </div>
           <div>
-            <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">50,000+</div>
+            <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">100+</div>
             <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">active aspirants</div>
           </div>
         </div>
@@ -358,7 +358,7 @@ function TrustIndicators() {
         <div className="hidden md:block w-px h-9 bg-slate-200 dark:bg-white/10" />
 
         <div>
-          <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">12,000+</div>
+          <div className="text-[14px] font-[800] text-slate-900 dark:text-white leading-tight">200+</div>
           <div className="text-[11.5px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">practice questions</div>
         </div>
       </div>

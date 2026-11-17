@@ -27,8 +27,8 @@ class PublicStatsView(APIView):
         # platform is still growing - never multiplied/inflated beyond the
         # real number the way this used to work.
         return Response({
-            "total_aspirants": max(5000, total_aspirants),
-            "total_questions": max(10000, total_questions),
-            "practice_sets": max(200, practice_sets),
+            "total_aspirants": max(100, total_aspirants),
+            "total_questions": max(1000, total_questions),
+            "practice_sets": max(50, practice_sets),
             "content_accuracy": content_accuracy,
         })

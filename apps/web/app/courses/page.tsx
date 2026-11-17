@@ -25,7 +25,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LoksewaBadgeIcon } from "@/components/ui/loksewa-badge-icon";
-import { publicApi, type PublicCategory, type PublicCourse } from "@/lib/api/public-api";
+import { publicApi, type PublicCategory, type PublicCourse, type PublicPackage } from "@/lib/api/public-api";
+import { PricingSection } from "@/app/home/PricingSection";
 
 // Fallback canonical categories
 const STATIC_CATEGORIES: PublicCategory[] = [
@@ -86,6 +87,7 @@ function CoursesContent() {
 
   const [courses, setCourses] = useState<PublicCourse[]>([]);
   const [categories, setCategories] = useState<PublicCategory[]>(STATIC_CATEGORIES);
+  const [packages, setPackages] = useState<PublicPackage[] | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -103,9 +105,10 @@ function CoursesContent() {
     setIsLoading(true);
     setHasError(false);
     try {
-      const [coursesData, categoriesData] = await Promise.all([
+      const [coursesData, categoriesData, packagesData] = await Promise.all([
         publicApi.getCourses(),
         publicApi.getCategories(),
+        publicApi.getPackages(),
       ]);
 
       if (coursesData) {
@@ -116,6 +119,10 @@ function CoursesContent() {
 
       if (categoriesData && categoriesData.length > 0) {
         setCategories(categoriesData);
+      }
+
+      if (packagesData) {
+        setPackages(packagesData);
       }
     } catch (error) {
       console.error("Failed to fetch catalog data:", error);
@@ -594,6 +601,9 @@ function CoursesContent() {
             </div>
           )}
         </section>
+
+        {/* Pricing / Packages Section */}
+        <PricingSection packages={packages} />
       </main>
     </>
   );

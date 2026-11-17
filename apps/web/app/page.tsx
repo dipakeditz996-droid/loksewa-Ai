@@ -18,7 +18,6 @@ import { AnalyticsSection } from "./home/AnalyticsSection";
 import { LeaderboardStreakSection } from "./home/LeaderboardStreakSection";
 import { NotesSection } from "./home/NotesSection";
 import { MarketplaceSection } from "./home/MarketplaceSection";
-import { PricingSection } from "./home/PricingSection";
 import { TeacherSection } from "./home/TeacherSection";
 import { FinalCTASection } from "./home/FinalCTASection";
 
@@ -38,14 +37,12 @@ export default async function Home() {
     categories,
     notes,
     products,
-    packages,
     testimonials,
     stats,
   ] = await Promise.all([
     publicApi.getCategories(),
     publicApi.getNotesMaterials(),
     publicApi.getProducts(),
-    publicApi.getPackages(),
     publicApi.getTestimonials(),
     publicApi.getStats(),
   ]);
@@ -74,7 +71,6 @@ export default async function Home() {
         <LeaderboardStreakSection />
         <NotesSection notes={notes} />
         <MarketplaceSection products={products} />
-        <PricingSection packages={packages} />
         <TeacherSection />
         <FinalCTASection />
       </main>

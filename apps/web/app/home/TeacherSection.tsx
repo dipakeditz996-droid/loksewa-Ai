@@ -63,7 +63,7 @@ export function TeacherSection() {
                 </Button>
                 <Button asChild variant="outline" className="w-full sm:w-auto h-[50px] px-8 rounded-[12px] font-[600] text-[15px] border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] bg-transparent hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 flex items-center justify-center transition-all shadow-sm">
                   <Link href="/contact">
-                    Apply to Teach
+                    Apply to Tech
                   </Link>
                 </Button>
               </div>

@@ -16,7 +16,6 @@ import { PracticeSection } from "./home/PracticeSection";
 import { MockExamSection } from "./home/MockExamSection";
 import { AnalyticsSection } from "./home/AnalyticsSection";
 import { LeaderboardStreakSection } from "./home/LeaderboardStreakSection";
-import { NotesSection } from "./home/NotesSection";
 import { MarketplaceSection } from "./home/MarketplaceSection";
 import { TeacherSection } from "./home/TeacherSection";
 import { FinalCTASection } from "./home/FinalCTASection";
@@ -66,12 +65,11 @@ export default async function Home() {
         <AILearningNetworkSection />
         <StudyPlanSection />
         <CoursesSection categories={categories} />
-        <SyllabusSection />
+        <SyllabusSection notes={notes} />
         <PracticeSection />
         <MockExamSection examinations={examinations} />
         <AnalyticsSection />
         <LeaderboardStreakSection />
-        <NotesSection notes={notes} />
         <MarketplaceSection products={products} />
         <TeacherSection />
         <FinalCTASection />

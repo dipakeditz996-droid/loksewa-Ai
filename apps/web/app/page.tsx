@@ -39,12 +39,14 @@ export default async function Home() {
     products,
     testimonials,
     stats,
+    examinations,
   ] = await Promise.all([
     publicApi.getCategories(),
     publicApi.getNotesMaterials(),
     publicApi.getProducts(),
     publicApi.getTestimonials(),
     publicApi.getStats(),
+    publicApi.getExaminations(),
   ]);
 
   return (
@@ -66,7 +68,7 @@ export default async function Home() {
         <CoursesSection categories={categories} />
         <SyllabusSection />
         <PracticeSection />
-        <MockExamSection />
+        <MockExamSection examinations={examinations} />
         <AnalyticsSection />
         <LeaderboardStreakSection />
         <NotesSection notes={notes} />

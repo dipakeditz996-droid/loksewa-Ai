@@ -792,7 +792,7 @@ export function StudentPurchasesContent() {
                 <div className="inline-flex items-center justify-center p-3 bg-[#2563EB]/10 rounded-2xl mb-2 text-[#2563EB] dark:text-[#60A5FA]">
                   <CreditCard className="w-7 h-7" />
                 </div>
-                <h3 className="text-2xl font-black tracking-tight text-foreground">LoksewaAI</h3>
+                <h3 className="text-2xl font-black tracking-tight text-foreground">NES Mastery</h3>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mt-0.5">
                   Official Payment Receipt
                 </p>

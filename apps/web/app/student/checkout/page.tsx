@@ -201,7 +201,7 @@ export default function CheckoutPage() {
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
                 Free Plan Activated
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-white">Welcome to LoksewaAI!</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-white">Welcome to NES Mastery!</h2>
               <p className="text-sm text-white/70 max-w-sm mx-auto">
                 Your Free Preparation Plan has been activated instantly. No payment details were required.
               </p>

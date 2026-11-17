@@ -288,7 +288,7 @@ export default function DuelGamePage() {
               <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2 ${isBot ? 'bg-amber-500/10 text-amber-600' : 'bg-blue-500/10 text-blue-600'}`}>
                 {isBot ? <Bot className="w-6 h-6" /> : <User className="w-6 h-6" />}
               </div>
-              <p className="font-semibold text-sm truncate">{match.player2_name || (isBot ? "LoksewaAI Bot" : "Opponent")}</p>
+              <p className="font-semibold text-sm truncate">{match.player2_name || (isBot ? "NES Mastery Bot" : "Opponent")}</p>
               <Badge variant={isBot ? "outline" : "default"} className={`text-[10px] mt-1 ${isBot ? 'border-amber-500/30 text-amber-600' : ''}`}>
                 {isBot ? "🤖 Computer" : "👤 Student"}
               </Badge>
@@ -487,12 +487,12 @@ export default function DuelGamePage() {
             match.bot_answered ? (
               <span className="text-emerald-600 flex items-center">
                 <Bot className="w-4 h-4 mr-1.5" />
-                🤖 LoksewaAI Bot has submitted an answer. Advancing...
+                🤖 NES Mastery Bot has submitted an answer. Advancing...
               </span>
             ) : (
               <span className="flex items-center text-amber-600 animate-pulse">
                 <Bot className="w-4 h-4 mr-1.5 animate-spin" />
-                🤖 LoksewaAI Bot is thinking...
+                🤖 NES Mastery Bot is thinking...
               </span>
             )
           ) : (

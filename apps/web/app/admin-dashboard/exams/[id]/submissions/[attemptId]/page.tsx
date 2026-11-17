@@ -11,6 +11,7 @@ import {
   BookOpen, Edit3, MessageSquare, Plus, Trash2, X, AlertTriangle, ShieldCheck
 } from "lucide-react";
 import { adminExamApi, AdminSubjectiveSubmissionDetail } from "@/lib/api/admin-exams";
+import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
 import toast from "react-hot-toast";
 
 interface QuestionScoreItem {
@@ -661,11 +662,12 @@ export default function SubmissionEvaluationPage() {
                 <span className="text-xs text-slate-300 font-medium">Rendering answer sheet...</span>
               </div>
             ) : pdfUrl ? (
-              <iframe
-                src={`${pdfUrl}#zoom=${zoomLevel}`}
-                className="w-full h-full rounded border-0 bg-white"
-                style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: "top center" }}
-                title="Candidate Answer Sheet"
+              <FirstPartyPdfViewer
+                url={pdfUrl}
+                title={`Answer Sheet - ${submission?.student_name || 'Student'}`}
+                allowDownload={true}
+                allowNewTab={true}
+                className="w-full h-full"
               />
             ) : (
               <div className="text-center text-slate-400 p-8 space-y-2">

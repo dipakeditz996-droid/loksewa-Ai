@@ -260,7 +260,7 @@ class PdfBrandingSetting(models.Model):
         max_length=20, default='text',
         choices=[('text', 'Text Watermark'), ('image', 'Image Watermark')]
     )
-    watermark_text = models.CharField(max_length=150, default='LoksewaAI')
+    watermark_text = models.CharField(max_length=150, default='NES Mastery')
     watermark_image_file = models.FileField(upload_to='branding/watermarks/', null=True, blank=True, max_length=500)
     watermark_placement = models.CharField(
         max_length=30, default='center',

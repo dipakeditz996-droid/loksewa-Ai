@@ -11,10 +11,45 @@ with a saved link can still fetch a payment screenshot the way they always
 could with a public-read S3 URL; per-file access control is a separate,
 larger feature, not something this endpoint changes either way.
 """
-from django.http import HttpResponse, HttpResponseNotFound, HttpResponseForbidden, HttpResponseRedirect
+import logging
+import os
+import mimetypes
+from django.conf import settings
+from django.http import HttpResponse, HttpResponseNotFound, HttpResponseForbidden
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 from core import google_drive
+
+logger = logging.getLogger('core.media_views')
+
+
+def _find_in_local_storage(file_id, candidate_models=None):
+    """
+    Attempt to locate a file in local MEDIA_ROOT if referenced by an existing database model.
+    Only falls back to local disk if there is a known model reference.
+    """
+    media_root = getattr(settings, 'MEDIA_ROOT', None)
+    if not media_root or not os.path.exists(media_root):
+        return None, None
+
+    if candidate_models:
+        for obj in candidate_models:
+            file_field = (
+                getattr(obj, 'file', None)
+                or getattr(obj, 'question_paper_pdf', None)
+                or getattr(obj, 'answer_pdf', None)
+                or getattr(obj, 'pdf_file', None)
+            )
+            if file_field:
+                field_name = getattr(file_field, 'name', str(file_field))
+                candidate_path = os.path.join(media_root, field_name)
+                if os.path.exists(candidate_path) and os.path.isfile(candidate_path):
+                    try:
+                        with open(candidate_path, 'rb') as fp:
+                            return fp.read(), os.path.basename(candidate_path)
+                    except Exception as exc:
+                        logger.debug("Failed to read local fallback file %s: %s", candidate_path, exc)
+    return None, None
 
 
 def _get_authenticated_user(request):
@@ -77,12 +112,14 @@ def drive_media_proxy(request, file_id):
 
     from notes.models import StudyMaterial
     from exams.models import Examination, SubjectiveSubmission
+    from exams.models import SubjectiveQuestionSet
     from courses.services.course_access_service import CourseAccessService
 
     # Check if the requested file belongs to protected resources
     matching_material = None
     matching_exam = None
     matching_submission = None
+    matching_question_set = None
 
     # Check StudyMaterial (excluding public syllabus)
     materials = StudyMaterial.objects.exclude(content_category='syllabus').filter(file__contains=file_id)
@@ -113,7 +150,14 @@ def drive_media_proxy(request, file_id):
                 matching_submission = sub
                 break
 
-    is_protected = bool(matching_material or matching_exam or matching_submission)
+    if not matching_material and not matching_exam and not matching_submission:
+        candidate_sets = SubjectiveQuestionSet.objects.filter(pdf_file__contains=file_id)
+        for qset in candidate_sets:
+            if _drive_file_id_matches(qset.pdf_file, file_id):
+                matching_question_set = qset
+                break
+
+    is_protected = bool(matching_material or matching_exam or matching_submission or matching_question_set)
 
     # Reject unauthenticated/unauthorized proxy access for genuinely protected materials.
     # Official syllabus PDFs remain public; only restricted exam/submission materials
@@ -127,6 +171,8 @@ def drive_media_proxy(request, file_id):
 
         if CourseAccessService.is_privileged(user):
             has_access = True
+        elif matching_question_set:
+            has_access = CourseAccessService.is_privileged(user)
         elif matching_material:
             has_access = CourseAccessService.has_note_access(user, matching_material)
         elif matching_exam:
@@ -141,24 +187,48 @@ def drive_media_proxy(request, file_id):
         if not has_access:
             return HttpResponseForbidden("You do not have access to this protected resource.")
 
+    matched_candidates = [
+        obj for obj in (matching_material, matching_exam, matching_submission, matching_question_set) if obj is not None
+    ]
+
+    meta = None
+    content = None
+    drive_fetch_error = None
+
     try:
         meta = google_drive.get_file(file_id)
-    except google_drive.GoogleDriveError:
-        if not is_protected:
-            return HttpResponseRedirect(f'https://lh3.googleusercontent.com/d/{file_id}')
-        return HttpResponse('Could not reach Google Drive.', status=502)
+        if meta is None:
+            # Check local storage if referenced by a known database object before concluding 404
+            local_bytes, local_name = _find_in_local_storage(file_id, candidate_models=matched_candidates)
+            if local_bytes is not None:
+                content = local_bytes
+                mime_type = mimetypes.guess_type(local_name)[0] or 'application/octet-stream'
+                meta = {'id': file_id, 'name': local_name, 'mimeType': mime_type}
+            else:
+                return HttpResponseNotFound('File not found.')
+    except google_drive.GoogleDriveError as drive_err:
+        drive_fetch_error = drive_err
+        logger.warning('Google Drive get_file failed for %s: %s', file_id, drive_err)
 
-    if meta is None:
-        if not is_protected:
-            return HttpResponseRedirect(f'https://lh3.googleusercontent.com/d/{file_id}')
-        return HttpResponseNotFound('File not found.')
+    if content is None and meta is not None:
+        try:
+            content = google_drive.download_file(file_id)
+        except google_drive.GoogleDriveError as drive_err:
+            drive_fetch_error = drive_err
+            logger.warning('Google Drive download failed for %s: %s', file_id, drive_err)
 
-    try:
-        content = google_drive.download_file(file_id)
-    except google_drive.GoogleDriveError:
-        if not is_protected:
-            return HttpResponseRedirect(f'https://lh3.googleusercontent.com/d/{file_id}')
-        return HttpResponse('Could not reach Google Drive.', status=502)
+    # If Drive download failed or was unreachable, fallback to local storage
+    if content is None:
+        local_bytes, local_name = _find_in_local_storage(file_id, candidate_models=matched_candidates)
+        if local_bytes is not None:
+            content = local_bytes
+            mime_type = mimetypes.guess_type(local_name)[0] or 'application/octet-stream'
+            if meta is None:
+                meta = {'id': file_id, 'name': local_name, 'mimeType': mime_type}
+        elif drive_fetch_error is not None:
+            return HttpResponse('Could not reach Google Drive.', status=502)
+        elif meta is None:
+            return HttpResponseNotFound('File not found.')
 
     from core.pdf_utils import resolve_file_display_info, inject_pdf_title, build_content_disposition
 
@@ -212,6 +282,7 @@ def drive_media_proxy(request, file_id):
                     response['Cross-Origin-Resource-Policy'] = 'cross-origin'
                     response['Cross-Origin-Opener-Policy'] = 'unsafe-none'
                     response['Content-Disposition'] = content_disposition
+                    response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
                     return response
             except (ValueError, TypeError):
                 pass
@@ -226,4 +297,5 @@ def drive_media_proxy(request, file_id):
     response['Cross-Origin-Resource-Policy'] = 'cross-origin'
     response['Cross-Origin-Opener-Policy'] = 'unsafe-none'
     response['Content-Disposition'] = content_disposition
+    response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
     return response

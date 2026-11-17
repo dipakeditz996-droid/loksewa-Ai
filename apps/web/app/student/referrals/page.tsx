@@ -52,8 +52,8 @@ export default function StudentReferralsPage() {
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: 'Join me on LoksewaAI',
-        text: `Join me on LoksewaAI and start preparing smarter! Use my referral code: ${profile?.referral_code}`,
+        title: 'Join me on NES Mastery',
+        text: `Join me on NES Mastery and start preparing smarter! Use my referral code: ${profile?.referral_code}`,
         url: referralLink
       }).catch(console.error);
     } else {
@@ -91,7 +91,7 @@ export default function StudentReferralsPage() {
             Invite Friends & <span className="text-[#D4A72C]">Earn Rewards</span>
           </h1>
           <p className="text-lg text-slate-300 mb-8 leading-relaxed">
-            Invite your friends to LoksewaAI and earn XP, coins, and special rewards when they sign up and start learning.
+            Invite your friends to NES Mastery and earn XP, coins, and special rewards when they sign up and start learning.
           </p>
 
           <div className="bg-card/10 backdrop-blur-md rounded-xl p-6 border border-white/10 inline-block w-full md:w-auto">

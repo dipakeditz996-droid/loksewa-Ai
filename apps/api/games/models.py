@@ -48,7 +48,7 @@ class GameMatch(models.Model):
     ended_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        p2_label = "LoksewaAI Bot" if self.is_bot_match else str(self.player2)
+        p2_label = "NES Mastery Bot" if self.is_bot_match else str(self.player2)
         return f"Match {self.id}: {self.player1} vs {p2_label}"
 
 class GameQuestion(models.Model):

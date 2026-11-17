@@ -389,7 +389,7 @@ export default function AdminEmailNotificationSettings() {
                   required
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="admin.lead@loksewaai.com"
+                  placeholder="admin.lead@nesmastery.com"
                   className="w-full text-xs"
                 />
               </div>
@@ -606,7 +606,7 @@ export default function AdminEmailNotificationSettings() {
                   type="email"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
-                  placeholder="admin@loksewaai.com"
+                  placeholder="admin@nesmastery.com"
                   className="text-xs"
                 />
               </div>

@@ -250,7 +250,7 @@ export function FeaturesContent() {
                 24/7 Intelligent Study Companion
               </h2>
               <p className="text-slate-600 dark:text-slate-400 text-base leading-relaxed mb-8">
-                Stuck on a complex constitutional clause or General Knowledge question? LoksewaAI Tutor breaks down difficult concepts in straightforward Nepali and English.
+                Stuck on a complex concept or exam question? NES Mastery AI Tutor breaks down difficult topics in straightforward Nepali and English.
               </p>
 
               <div className="space-y-4 mb-8">
@@ -291,8 +291,8 @@ export function FeaturesContent() {
                   <BrainCircuit className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">LoksewaAI Tutor</h4>
-                  <p className="text-[11px] text-slate-500">Specialized Civil Service AI Assistant</p>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">NES Mastery AI Tutor</h4>
+                  <p className="text-[11px] text-slate-500">Specialized AI Preparation Assistant</p>
                 </div>
               </div>
 

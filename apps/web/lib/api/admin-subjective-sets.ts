@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, downloadFile, fetchBlob } from './client';
 
 export interface SubjectiveQuestionSet {
   id: number;
@@ -89,5 +89,14 @@ export const adminSubjectiveSetsApi = {
     return apiClient<{ detail?: string }>(`/admin/subjective-question-sets/${id}/`, {
       method: 'DELETE',
     });
+  },
+
+  downloadSetPdf: async (id: number, fallbackFilename: string = 'question-set.pdf'): Promise<void> => {
+    return downloadFile(`/admin/subjective-question-sets/${id}/download/`, fallbackFilename);
+  },
+
+  getSetBlobUrl: async (id: number): Promise<string> => {
+    const blob = await fetchBlob(`/admin/subjective-question-sets/${id}/download/?disposition=inline`);
+    return URL.createObjectURL(blob);
   },
 };

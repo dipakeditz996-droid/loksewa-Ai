@@ -468,7 +468,7 @@ export default function PaymentVerificationPage() {
                     <div className="bg-white/5 rounded-xl p-4 border border-white/5 space-y-2.5 text-xs">
                       <div className="flex justify-between items-center">
                         <span className="text-white/50">Package:</span>
-                        <span className="text-white font-medium">{payment.plan_details?.name || "LoksewaAI Package"}</span>
+                        <span className="text-white font-medium">{payment.plan_details?.name || "NES Mastery Package"}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-white/50">Amount:</span>

@@ -219,7 +219,7 @@ export function OsDndGuideModal() {
             </div>
 
             <p className="relative mt-3 text-sm text-white/80 leading-relaxed">
-              LoksewaAI has blocked its own notifications. To also silence{" "}
+              NES Mastery has blocked its own notifications. To also silence{" "}
               <strong className="text-white">WhatsApp, calls, and all other apps</strong>,
               enable Do Not Disturb on {guide.label}:
             </p>

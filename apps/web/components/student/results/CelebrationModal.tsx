@@ -114,7 +114,7 @@ export function CelebrationModal({
   }
 
   const handleShare = async () => {
-    const text = `🏆 I secured Rank #${rank} in LoksewaAI's ${examTitle} with ${percentage.toFixed(1)}%.`;
+    const text = `🏆 I secured Rank #${rank} in NES Mastery's ${examTitle} with ${percentage.toFixed(1)}%.`;
     if (navigator.share) {
       try {
         await navigator.share({

@@ -20,7 +20,7 @@ export function AdminAuditSummary() {
               Phase 4 Implementation Audit
             </CardTitle>
             <p className="text-white/70 text-sm mt-1">
-              Production readiness overview for the LoksewaAI Admin Portal.
+              Production readiness overview for the NES Mastery Admin Portal.
             </p>
           </div>
           <Badge className="bg-[#D4A72C] text-[#0B2545] hover:bg-[#D4A72C]/90 font-bold px-3 py-1 text-sm">

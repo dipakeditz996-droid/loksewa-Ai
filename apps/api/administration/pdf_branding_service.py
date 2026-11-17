@@ -191,7 +191,7 @@ class PdfBrandingService:
                 watermark_img_bytes = None
 
         # Text watermark styling
-        wm_text = (settings.watermark_text or "LoksewaAI").strip()
+        wm_text = (settings.watermark_text or "NES Mastery").strip()
         wm_color = hex_to_rgb(settings.watermark_color)
         wm_opacity = max(0.01, min(1.0, settings.watermark_opacity or 0.15))
         wm_rotation = settings.watermark_rotation or 45

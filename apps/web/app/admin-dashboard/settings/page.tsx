@@ -213,7 +213,7 @@ export default function SettingsPage() {
                     <Input
                       value={formData.platform.name}
                       onChange={(e) => updateFormData("platform", "name", e.target.value)}
-                      placeholder="e.g., Loksewa"
+                      placeholder="e.g., NES Mastery"
                       className="w-full"
                     />
                   </div>
@@ -350,7 +350,7 @@ export default function SettingsPage() {
                       type="email"
                       value={formData.email.fromAddress}
                       onChange={(e) => updateFormData("email", "fromAddress", e.target.value)}
-                      placeholder="noreply@loksewa.com"
+                      placeholder="noreply@nesmastery.com"
                       className="w-full text-xs"
                     />
                   </div>
@@ -361,7 +361,7 @@ export default function SettingsPage() {
                     <Input
                       value={formData.email.fromName}
                       onChange={(e) => updateFormData("email", "fromName", e.target.value)}
-                      placeholder="Loksewa Support"
+                      placeholder="NES Mastery Support"
                       className="w-full text-xs"
                     />
                   </div>

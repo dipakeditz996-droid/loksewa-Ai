@@ -15,6 +15,7 @@ import {
   FileText,
   Scan,
   Hand,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { buildApiUrl, getApiOrigin } from "@/lib/api/client";
@@ -34,7 +35,7 @@ export function normalizePdfUrl(rawUrl: string): string {
     return buildApiUrl(`/media/drive/${fileId}/`);
   }
 
-  // If URL is a relative path starting with /api or /, prepend API origin so PDF.js doesn't fetch from Next.js port
+  // If URL is a relative path starting with /api, /media, or /, prepend API origin so PDF.js doesn't fetch from Next.js port
   if (rawUrl.startsWith("/")) {
     const origin = getApiOrigin();
     rawUrl = `${origin}${rawUrl}`;
@@ -43,6 +44,14 @@ export function normalizePdfUrl(rawUrl: string): string {
   // Ensure download endpoints serve inline for previewing
   if (rawUrl.includes("/download/") && !rawUrl.includes("disposition=")) {
     rawUrl += (rawUrl.includes("?") ? "&" : "?") + "disposition=inline";
+  }
+
+  // Attach auth token if available in browser for direct media/download access
+  if (typeof window !== "undefined" && !rawUrl.startsWith("blob:") && !rawUrl.startsWith("data:")) {
+    const token = localStorage.getItem("access_token");
+    if (token && (rawUrl.includes("/media/") || rawUrl.includes("/download/")) && !rawUrl.includes("token=")) {
+      rawUrl += (rawUrl.includes("?") ? "&" : "?") + `token=${encodeURIComponent(token)}`;
+    }
   }
 
   return rawUrl;
@@ -59,6 +68,8 @@ interface FirstPartyPdfViewerProps {
   title?: string;
   allowDownload?: boolean;
   onDownload?: () => void;
+  allowNewTab?: boolean;
+  onOpenInNewTab?: () => void;
   className?: string;
   initialScale?: number;
 }
@@ -68,6 +79,8 @@ export function FirstPartyPdfViewer({
   title = "Document Preview",
   allowDownload = false,
   onDownload,
+  allowNewTab = true,
+  onOpenInNewTab,
   className = "",
   initialScale,
 }: FirstPartyPdfViewerProps) {
@@ -461,6 +474,17 @@ export function FirstPartyPdfViewer({
 
   const handleRotate = () => {
     setRotation((prev) => (prev + 90) % 360);
+  };
+
+  const handleOpenInNewTab = () => {
+    if (onOpenInNewTab) {
+      onOpenInNewTab();
+      return;
+    }
+    if (url) {
+      const targetUrl = normalizePdfUrl(url);
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   // 7. Mouse / Pointer Drag to Pan (move document in any direction: down, right, up, left)

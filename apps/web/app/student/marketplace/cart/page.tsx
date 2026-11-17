@@ -104,7 +104,7 @@ export default function CartPage() {
               if (!product) return null;
               const sellerName = product.seller_details
                 ? (product.seller_details.full_name || `${product.seller_details.first_name || ''} ${product.seller_details.last_name || ''}`.trim() || 'Student Seller')
-                : 'LoksewaAI Platform';
+                : 'NES Mastery Platform';
               
               return (
                 <div key={item.id} className="bg-card p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row gap-4 relative group">

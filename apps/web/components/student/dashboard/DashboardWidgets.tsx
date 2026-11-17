@@ -217,7 +217,7 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
             <span className="font-bold text-[#2563EB] dark:text-[#60A5FA]">
               {referralData.settings.referrer_xp_reward} XP
             </span>{" "}
-            for every friend who joins LoksewaAI and completes registration.
+            for every friend who joins NES Mastery and completes registration.
           </p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t border-white/10">
             <div>
@@ -302,8 +302,8 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
                   if (navigator.share) {
                     navigator
                       .share({
-                        title: "Join me on LoksewaAI",
-                        text: "Join me on LoksewaAI and start your Loksewa preparation. Use my referral link to get started!",
+                        title: "Join me on NES Mastery",
+                        text: "Join me on NES Mastery and start your preparation. Use my referral link to get started!",
                         url: link,
                       })
                       .catch(console.error);
@@ -311,7 +311,7 @@ export const ReferralCardWidget = memo(function ReferralCardWidget({
                     window.open(
                       `https://twitter.com/intent/tweet?url=${encodeURIComponent(
                         link
-                      )}&text=Join me on LoksewaAI!`
+                      )}&text=Join me on NES Mastery!`
                     );
                   }
                 }}

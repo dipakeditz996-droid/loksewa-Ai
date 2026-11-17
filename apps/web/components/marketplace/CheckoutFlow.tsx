@@ -376,7 +376,7 @@ export function CheckoutFlow({ cartItems, onBack, onComplete }: CheckoutFlowProp
                     </div>
                   </div>
 
-                  <p className="font-[800] text-xl text-slate-900 dark:text-white mb-1">LoksewaAI</p>
+                  <p className="font-[800] text-xl text-slate-900 dark:text-white mb-1">NES Mastery</p>
                   <p className="text-sm font-[600] text-slate-500 mb-4">Payment Number: 98XXXXXXXX</p>
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-[700] rounded-full">
                     <CheckCircle2 className="w-3 h-3" /> Fonepay / eSewa / Khalti

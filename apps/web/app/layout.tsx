@@ -36,6 +36,8 @@ const jakarta = Plus_Jakarta_Sans({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://nesmastery.com';
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -43,9 +45,71 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "NES Mastery | Engineering Entrance & License Examination Preparation Platform",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "NES Mastery | Nepal's Leading Engineering & Public Service Exam Preparation",
+    template: "%s | NES Mastery",
+  },
   description:
-    "Nepal's premier engineering examination preparation platform for IOE Entrance, NEC License, and Technical Engineering Services.",
+    "Nepal's premier examination preparation platform for IOE Entrance, NEC Engineering License, Loksewa Technical & Civil Services. Real exam questions, live mock tests, verified syllabus notes, and instant performance analytics.",
+  keywords: [
+    "NES Mastery",
+    "Loksewa Nepal",
+    "IOE Entrance Preparation",
+    "NEC License Exam",
+    "Nepal Engineering Council",
+    "Public Service Commission Nepal",
+    "Engineering Exam Nepal",
+    "Sub-engineer preparation",
+    "Civil Engineering Loksewa",
+    "Mock Tests Nepal",
+  ],
+  authors: [{ name: "NES Mastery Academic Team", url: SITE_URL }],
+  creator: "NES Mastery",
+  publisher: "NES Mastery",
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    title: "NES Mastery | Nepal's Leading Engineering & Public Service Exam Preparation",
+    description:
+      "Master IOE Entrance, NEC Engineering License, and Loksewa PSC examinations with authentic mock tests, expert-curated notes, and performance analytics.",
+    url: SITE_URL,
+    siteName: "NES Mastery",
+    locale: "en_NP",
+    type: "website",
+    images: [
+      {
+        url: "/images/og-card.png",
+        width: 1200,
+        height: 630,
+        alt: "NES Mastery - Smart Exam Preparation for Nepal Engineering & Public Service",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "NES Mastery | Smart Exam Preparation Platform",
+    description:
+      "Nepal's premier examination preparation platform for IOE Entrance, NEC License, and Loksewa PSC examinations.",
+    images: ["/images/og-card.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
 };
 
 export default function RootLayout({
@@ -59,6 +123,46 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@graph": [
+                {
+                  "@type": "EducationalOrganization",
+                  "@id": `${SITE_URL}/#organization`,
+                  "name": "NES Mastery",
+                  "url": SITE_URL,
+                  "logo": {
+                    "@type": "ImageObject",
+                    "@id": `${SITE_URL}/#logo`,
+                    "url": `${SITE_URL}/images/logo.png`,
+                    "caption": "NES Mastery",
+                  },
+                  "description":
+                    "Nepal's premier examination preparation platform for IOE Entrance, NEC Engineering License, and Public Service Commission (Loksewa) technical services.",
+                  "sameAs": [
+                    "https://www.facebook.com/nesmastery",
+                    "https://www.youtube.com/@nesmastery",
+                  ],
+                },
+                {
+                  "@type": "WebSite",
+                  "@id": `${SITE_URL}/#website`,
+                  "url": SITE_URL,
+                  "name": "NES Mastery",
+                  "description":
+                    "Smart examination preparation platform for Nepal engineering and civil service students.",
+                  "publisher": {
+                    "@id": `${SITE_URL}/#organization`,
+                  },
+                  "inLanguage": "en-US",
+                },
+              ],
+            }),
+          }}
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `

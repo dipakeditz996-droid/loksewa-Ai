@@ -328,22 +328,22 @@ function AdminSidebar({
       <div className="flex h-[60px] items-center justify-between px-4 border-b border-white/10 shrink-0">
         {!collapsed && (
           <Link href="/admin-dashboard" className="flex items-center gap-2.5">
-            <div className="bg-[#D4A72C] text-[#172B4D] p-1.5 rounded-[7px]">
-              <BookOpen className="h-4 w-4" strokeWidth={2.5} />
+            <div className="bg-[#174A68] text-white p-1.5 rounded-[7px] border border-[#2563EB]/40 shadow-xs">
+              <BookOpen className="h-4 w-4 text-[#60A5FA]" strokeWidth={2.5} />
             </div>
             <div className="leading-none">
               <span className="font-[800] text-[17px] tracking-tight text-white">
-                Loksewa<span className="text-[#D4A72C]">AI</span>
+                NES <span className="text-[#60A5FA]">Mastery</span>
               </span>
-              <p className="text-[10px] font-semibold text-white/35 uppercase tracking-widest mt-0.5">
-                Admin
+              <p className="text-[10px] font-semibold text-white/45 uppercase tracking-widest mt-0.5">
+                Admin Portal
               </p>
             </div>
           </Link>
         )}
         {collapsed && (
-          <div className="mx-auto bg-[#D4A72C] text-[#172B4D] p-1.5 rounded-[7px]">
-            <BookOpen className="h-4 w-4" strokeWidth={2.5} />
+          <div className="mx-auto bg-[#174A68] text-white p-1.5 rounded-[7px] border border-[#2563EB]/40 shadow-xs">
+            <BookOpen className="h-4 w-4 text-[#60A5FA]" strokeWidth={2.5} />
           </div>
         )}
         <button
@@ -521,6 +521,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     setMounted(true);
+    if (typeof document !== "undefined") {
+      document.title = "NES Mastery Admin Portal";
+      let meta = document.querySelector('meta[name="robots"]');
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "robots");
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute("content", "noindex, nofollow, noarchive");
+    }
     const html = document.documentElement;
     const body = document.body;
     const hadDark = html.classList.contains("dark");
@@ -552,7 +562,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 border-3 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
-          <p className="text-sm text-slate-400">Loading admin panel...</p>
+          <p className="text-sm font-medium text-slate-500">Loading NES Mastery Admin Portal...</p>
         </div>
       </div>
     );
@@ -563,7 +573,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 border-3 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
-          <p className="text-sm text-slate-400">Redirecting to login...</p>
+          <p className="text-sm font-medium text-slate-500">Redirecting to login...</p>
         </div>
       </div>
     );

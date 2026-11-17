@@ -114,10 +114,10 @@ export default function MarketplacePage() {
             Sell Your Used Book
           </h3>
           <p className="text-white/80 dark:text-muted-foreground font-medium mb-2 text-base">
-            Have physical books you no longer need? Sell them to fellow LoksewaAI students.
+            Have physical books you no longer need? Sell them to fellow NES Mastery students.
           </p>
           <p className="text-white/60 dark:text-muted-foreground/70 text-sm">
-            List your used books and earn while helping another student. All student listings are reviewed by LoksewaAI before appearing in the marketplace.
+            List your used books and earn while helping another student. All student listings are reviewed by NES Mastery before appearing in the marketplace.
           </p>
         </div>
         <div className="relative z-10 flex flex-col sm:flex-row gap-3 shrink-0 w-full md:w-auto">

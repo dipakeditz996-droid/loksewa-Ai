@@ -90,7 +90,7 @@ export function PlayAndEarnContent() {
               How You Earn & Level Up
             </h2>
             <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base leading-relaxed">
-              Every productive study action on LoksewaAI is tracked and recognized.
+              Every productive study action on NES Mastery is tracked and recognized.
             </p>
           </div>
 
@@ -289,7 +289,7 @@ export function PlayAndEarnContent() {
             Start Your Daily Streak Today
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-8">
-            Create an account in 30 seconds, begin your first practice session, and see your name on the LoksewaAI leaderboard.
+            Create an account in 30 seconds, begin your first practice session, and see your name on the NES Mastery leaderboard.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3.5">
             <Link href="/register">

@@ -146,6 +146,79 @@ class SubjectiveQuestionSetViewSet(viewsets.ModelViewSet):
         instance.save(update_fields=['status', 'updated_at'])
         return Response(self.get_serializer(instance).data, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['get'], url_path='download')
+    def download_pdf(self, request, pk=None):
+        instance = self.get_object()
+        if not instance.pdf_file:
+            return Response({'detail': 'No PDF file attached to this question set.'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_inline = request.query_params.get('disposition', '').lower() == 'inline'
+        from core.pdf_utils import inject_pdf_title, build_content_disposition
+        try:
+            f = instance.pdf_file.open('rb')
+            raw_content = f.read()
+            f.close()
+        except Exception as e:
+            return Response({'detail': f'Could not open question set PDF: {e}'}, status=status.HTTP_404_NOT_FOUND)
+
+        display_title = f"{instance.title} - Question Paper"
+        content_type = 'application/pdf' if (raw_content.startswith(b'%PDF-') or (instance.pdf_file.name and instance.pdf_file.name.lower().endswith('.pdf'))) else 'application/octet-stream'
+        if content_type == 'application/pdf' and is_inline:
+            raw_content = inject_pdf_title(raw_content, display_title)
+
+        disposition_type = 'inline' if is_inline else 'attachment'
+        content_disposition = build_content_disposition(display_title, disposition_type=disposition_type)
+        file_size = len(raw_content)
+
+        origin = request.META.get('HTTP_ORIGIN')
+        allow_origin = origin if origin else '*'
+
+        range_header = request.META.get('HTTP_RANGE', '').strip()
+        if range_header and range_header.startswith('bytes=') and file_size > 0:
+            byte_range = range_header[6:].strip()
+            if ',' not in byte_range:
+                parts = byte_range.split('-')
+                start_str = parts[0].strip()
+                end_str = parts[1].strip() if len(parts) > 1 else ''
+                try:
+                    if start_str and end_str:
+                        start = int(start_str)
+                        end = min(int(end_str), file_size - 1)
+                    elif start_str:
+                        start = int(start_str)
+                        end = file_size - 1
+                    elif end_str:
+                        start = max(0, file_size - int(end_str))
+                        end = file_size - 1
+                    else:
+                        start = 0
+                        end = file_size - 1
+
+                    if 0 <= start <= end < file_size:
+                        chunk = raw_content[start:end + 1]
+                        from django.http import HttpResponse
+                        response = HttpResponse(chunk, status=206, content_type=content_type)
+                        response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+                        response['Content-Length'] = str(len(chunk))
+                        response['Accept-Ranges'] = 'bytes'
+                        response['Content-Disposition'] = content_disposition
+                        response['Access-Control-Allow-Origin'] = allow_origin
+                        response['Access-Control-Allow-Credentials'] = 'true'
+                        response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
+                        return response
+                except (ValueError, TypeError):
+                    pass
+
+        from django.http import HttpResponse
+        response = HttpResponse(raw_content, content_type=content_type)
+        response['Accept-Ranges'] = 'bytes'
+        response['Content-Length'] = str(file_size)
+        response['Content-Disposition'] = content_disposition
+        response['Access-Control-Allow-Origin'] = allow_origin
+        response['Access-Control-Allow-Credentials'] = 'true'
+        response['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Range, Accept-Ranges, Content-Length'
+        return response
+
     @action(detail=True, methods=['post'], url_path='assign')
     def assign(self, request, pk=None):
         request_id = request.data.get('request_id')

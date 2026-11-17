@@ -68,10 +68,10 @@ def build_subjective_paper_pdf(
     content = io.BytesIO()
     document = SimpleDocTemplate(
         content, pagesize=A4, rightMargin=20 * mm, leftMargin=20 * mm,
-        topMargin=18 * mm, bottomMargin=18 * mm, title=title, author='LoksewaAI',
+        topMargin=18 * mm, bottomMargin=18 * mm, title=title, author='NES Mastery',
     )
     story = [
-        Paragraph('LOKSEWAAI', heading),
+        Paragraph('NES MASTERY', heading),
         Paragraph(escape(title), heading),
         Paragraph(escape(position_name), metadata),
     ]

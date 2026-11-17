@@ -100,8 +100,12 @@ PROTECTED_MEDIA_PREFIXES = (
 
 def secure_media_serve(request, path, document_root=None, show_indexes=False):
     normalized_path = path.replace('\\', '/').lstrip('/')
-    for prefix in PROTECTED_MEDIA_PREFIXES:
-        if normalized_path.startswith(prefix):
+    is_protected_prefix = any(normalized_path.startswith(prefix) for prefix in PROTECTED_MEDIA_PREFIXES)
+    if is_protected_prefix:
+        from core.media_views import _get_authenticated_user
+        user = _get_authenticated_user(request)
+        is_privileged = bool(user and (getattr(user, 'is_staff', False) or getattr(user, 'role', '') in ('admin', 'super-admin', 'teacher')))
+        if not is_privileged:
             return HttpResponseForbidden("Direct access to protected media files is forbidden. Please access files via the authorized API.")
     return static_serve(request, path, document_root=document_root, show_indexes=show_indexes)
 

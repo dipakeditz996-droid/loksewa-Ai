@@ -13,6 +13,7 @@ import {
   adminExamApi,
   SubjectiveCheckingRequest,
 } from "@/lib/api/admin-exams";
+import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -727,7 +728,13 @@ export default function SubjectiveEvaluationRequestsPage() {
           </DialogHeader>
           <div className="flex-1 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 mt-2">
             {previewPdfUrl ? (
-              <iframe src={previewPdfUrl} className="w-full h-full border-0" title="Answer Sheet Preview" />
+              <FirstPartyPdfViewer
+                url={previewPdfUrl}
+                title={previewPdfTitle || "Answer Sheet"}
+                allowDownload={true}
+                allowNewTab={true}
+                className="w-full h-full"
+              />
             ) : (
               <div className="h-full flex items-center justify-center text-xs text-slate-400">
                 Loading PDF...

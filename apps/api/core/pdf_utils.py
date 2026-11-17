@@ -95,6 +95,16 @@ def resolve_file_display_info(file_id):
     except Exception:
         pass
 
+    # 3. Search in SubjectiveQuestionSet
+    try:
+        from exams.models import SubjectiveQuestionSet
+        set_candidates = SubjectiveQuestionSet.objects.filter(pdf_file__icontains=file_id).select_related('course', 'subject')
+        for cand in set_candidates:
+            if _drive_file_id_matches(cand.pdf_file.name, file_id) or file_id in str(cand.pdf_file.name):
+                return f"{cand.title} - Question Paper", "Question Paper"
+    except Exception:
+        pass
+
     return None, None
 
 

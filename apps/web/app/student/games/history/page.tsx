@@ -82,7 +82,7 @@ export default function GameHistoryPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 font-medium text-primary dark:text-foreground">
-                            {match.player1_name} vs {match.player2_name || (isBot ? 'LoksewaAI Bot' : 'TBD')}
+                            {match.player1_name} vs {match.player2_name || (isBot ? 'NES Mastery Bot' : 'TBD')}
                           </td>
                           <td className="px-6 py-4">
                             {match.player1_score} - {match.player2_score}

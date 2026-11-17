@@ -335,7 +335,7 @@ export default function PdfBrandingSettingsPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#0B2545]">PDF Branding & Watermark Management</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Centrally manage the official LoksewaAI logo, watermark overlays, eligibility rules, and batch processing.
+            Centrally manage the official NES Mastery logo, watermark overlays, eligibility rules, and batch processing.
           </p>
         </div>
 
@@ -554,7 +554,7 @@ export default function PdfBrandingSettingsPage() {
                     type="text"
                     value={settings.watermark_text}
                     onChange={(e) => setSettings({ ...settings, watermark_text: e.target.value })}
-                    placeholder="e.g. LoksewaAI"
+                    placeholder="e.g. NES Mastery"
                     className="w-full p-2.5 border border-slate-200 rounded-lg bg-white text-slate-800 text-sm focus:ring-2 focus:ring-[#0B2545]/20 font-medium"
                   />
                 </div>

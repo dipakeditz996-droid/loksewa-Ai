@@ -103,7 +103,7 @@ export function SmartUpgradeModal({
   } else if (reason === "feature_restricted") {
     const feat = featureName || "This feature";
     title = `${feat} isn't included in your current package`;
-    description = customMessage || `Upgrade to a higher tier LoksewaAI package to unlock ${feat.toLowerCase()} and comprehensive preparation tools.`;
+    description = customMessage || `Upgrade to a higher tier NES Mastery package to unlock ${feat.toLowerCase()} and comprehensive preparation tools.`;
     icon = <Zap className="w-6 h-6 text-amber-500" />;
     badgeLabel = "Upgrade Required";
   }

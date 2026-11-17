@@ -84,7 +84,7 @@ export function WalletOverviewCard({
                 <div className="flex items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#D4A72C]/25 text-[#FFD700] border border-[#D4A72C]/40">
                     <Coins className="w-3.5 h-3.5" />
-                    LoksewaAI Coins
+                    NES Mastery Coins
                   </span>
                   {wallet?.is_locked ? (
                     <Badge variant="destructive" className="text-xs px-2.5 py-0.5">

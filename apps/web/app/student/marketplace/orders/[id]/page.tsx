@@ -642,7 +642,7 @@ export default function StudentOrderDetailPage() {
                     <div>
                       <h3 className="font-bold text-lg mb-1">{item.product_details?.title || item.snapshot_product_name}</h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-3">
-                        Sold by {item.product_details?.seller_details?.full_name || item.snapshot_seller_name || "LoksewaAI"}
+                        Sold by {item.product_details?.seller_details?.full_name || item.snapshot_seller_name || "NES Mastery"}
                       </p>
                       
                       {item.fulfillment_status && (

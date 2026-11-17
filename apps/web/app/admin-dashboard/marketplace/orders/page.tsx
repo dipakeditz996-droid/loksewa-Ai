@@ -472,7 +472,7 @@ export default function MarketplaceOrdersPage() {
                               Qty: {item.quantity} × Rs. {item.price}
                             </div>
                             <div className="text-slate-500 text-xs mt-1">
-                              Seller: {item.product_details?.seller_details?.full_name || item.snapshot_seller_name || "LoksewaAI Official"}
+                              Seller: {item.product_details?.seller_details?.full_name || item.snapshot_seller_name || "NES Mastery Official"}
                             </div>
                           </div>
                           <div className="text-right text-xs">

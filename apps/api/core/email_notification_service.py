@@ -99,12 +99,12 @@ def _render_base_email_html(
         <table role="presentation" width="100%" style="max-width: 580px; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);">
           <!-- Header -->
           <tr>
-            <td style="padding: 28px 32px; background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);">
+            <td style="padding: 28px 32px; background: linear-gradient(135deg, #102d40 0%, #0b2545 100%);">
               <table role="presentation" width="100%">
                 <tr>
                   <td>
-                    <span style="color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">LoksewaAI</span>
-                    <span style="color: #c7d2fe; font-size: 13px; font-weight: 500; margin-left: 8px;">Automated Notification</span>
+                    <span style="color: #ffffff; font-size: 22px; font-weight: 800; letter-spacing: -0.02em;">NES Mastery</span>
+                    <span style="color: #93c5fd; font-size: 13px; font-weight: 500; margin-left: 8px;">Automated Notification</span>
                   </td>
                 </tr>
               </table>
@@ -131,10 +131,10 @@ def _render_base_email_html(
           <tr>
             <td style="padding: 24px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center;">
               <p style="margin: 0 0 8px; font-size: 12px; color: #64748b; font-weight: 500;">
-                LoksewaAI — Empowering Public Service Aspirants Across Nepal
+                NES Mastery — Empowering Examination Aspirants Across Nepal
               </p>
               <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-                &copy; {current_year} LoksewaAI. This is an automated message; please do not reply directly to this email.
+                &copy; {current_year} NES Mastery. This is an automated message; please do not reply directly to this email.
               </p>
             </td>
           </tr>
@@ -157,7 +157,7 @@ def _render_base_email_text(
     frontend_url = _get_base_frontend_url()
     lines = [
         "========================================",
-        "LoksewaAI Automated Notification",
+        "NES Mastery Automated Notification",
         "========================================",
         "",
         headline,
@@ -174,7 +174,7 @@ def _render_base_email_text(
     lines.extend([
         "",
         "----------------------------------------",
-        "LoksewaAI Team — https://www.hemrajkc.com.np",
+        "NES Mastery Team — https://nesmastery.com",
     ])
     return "\n".join(lines)
 
@@ -472,7 +472,7 @@ class EmailNotificationService:
             recipient_key = f"{idempotency_prefix}:{recipient.email}" if idempotency_prefix else None
             log = cls.send(
                 to_email=recipient.email,
-                subject=f"[LoksewaAI Admin] {subject}",
+                subject=f"[NES Mastery Admin] {subject}",
                 html_body=html_body,
                 text_body=text_body,
                 event_category=category,
@@ -556,12 +556,12 @@ class EmailNotificationService:
     def send_student_welcome_email(cls, student) -> Optional[EmailDeliveryLog]:
         """Sends a welcome & email verification confirmation email to a registered student."""
         name = student.get_full_name() or student.username
-        subject = "Welcome to LoksewaAI! Your account is verified"
+        subject = "Welcome to NES Mastery! Your account is verified"
         headline = f"Welcome aboard, {name}!"
         
         content_html = f"""
-        <p>Your email has been successfully verified, and your LoksewaAI account is now active.</p>
-        <p>With LoksewaAI, you have access to curated syllabus materials, real-time mock exams, AI tutoring, and comprehensive preparation tools tailored for public service examinations in Nepal.</p>
+        <p>Your email has been successfully verified, and your NES Mastery account is now active.</p>
+        <p>With NES Mastery, you have access to curated syllabus materials, real-time mock exams, AI tutoring, and comprehensive preparation tools tailored for examinations in Nepal.</p>
         <div style="background-color: #f1f5f9; border-radius: 8px; padding: 16px; margin: 20px 0;">
           <p style="margin: 0; font-size: 14px; color: #475569;">
             <strong>Username:</strong> {html.escape(student.username)}<br/>

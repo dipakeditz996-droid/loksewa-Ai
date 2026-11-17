@@ -812,7 +812,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
                             Account Name
                           </span>
                           <p className="text-sm font-bold text-foreground">
-                            {selectedMethod.account_name || "LoksewaAI"}
+                            {selectedMethod.account_name || "NES Mastery"}
                           </p>
                         </div>
                         <div>

@@ -121,7 +121,7 @@ const DEFAULT_TEMPLATES: NotificationTemplate[] = [
     type: "system",
     targetRole: "all",
     title: "Scheduled System Maintenance Notice: {maintenance_date}",
-    content: "LoksewaAI will undergo routine infrastructure maintenance on {maintenance_date} from {start_time} to {end_time}. Access to mock exams may be briefly disrupted during this window. We apologize for any inconvenience.",
+    content: "NES Mastery will undergo routine infrastructure maintenance on {maintenance_date} from {start_time} to {end_time}. Access to mock exams may be briefly disrupted during this window. We apologize for any inconvenience.",
     variables: ["maintenance_date", "start_time", "end_time"],
     isPreset: true,
   },

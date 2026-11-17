@@ -27,14 +27,14 @@ const FAQS_DATA: FAQItem[] = [
   {
     id: "gen-1",
     category: "General",
-    question: "What is LoksewaAI?",
-    answer: "LoksewaAI is Nepal's dedicated civil service examination preparation platform. It integrates official PSC curriculum tracking, video and modular courses, unlimited topic-wise MCQ practice, full-length timed mock exams with official 20% negative deduction, an intelligent AI Tutor, gamified study streaks, and a peer-to-peer student marketplace for study books."
+    question: "What is NES Mastery?",
+    answer: "NES Mastery is Nepal's premier examination preparation platform. It integrates official curriculum tracking, video and modular courses, unlimited topic-wise MCQ practice, full-length timed mock exams with official negative deduction marking, an intelligent AI Tutor, gamified study streaks, and a student marketplace for study resources."
   },
   {
     id: "gen-2",
     category: "General",
-    question: "Who is LoksewaAI for?",
-    answer: "LoksewaAI is designed for anyone preparing for competitive civil service exams in Nepal, including Section Officer (Sakha Adhikrit), Nayab Subba, Kharidar, Teachers Service Commission (TSC), provincial PSC (Pradesh Lok Sewa), banking examinations, and technical service posts."
+    question: "Who is NES Mastery for?",
+    answer: "NES Mastery is designed for students and professionals preparing for competitive engineering and public examinations in Nepal, including IOE Entrance, NEC License examinations, and Public Service Commission (Loksewa) engineering and civil service posts."
   },
   {
     id: "gen-3",
@@ -47,7 +47,7 @@ const FAQS_DATA: FAQItem[] = [
   {
     id: "crs-1",
     category: "Courses",
-    question: "How do courses work on LoksewaAI?",
+    question: "How do courses work on NES Mastery?",
     answer: "Courses are broken down into topic-wise modules covering both Paper I (General Knowledge & General Mental Ability) and specialized second/third papers. Each module features structured video explanations, downloadable summary notes, and associated test questions to evaluate understanding immediately after watching."
   },
   {
@@ -107,8 +107,8 @@ const FAQS_DATA: FAQItem[] = [
   {
     id: "mkt-1",
     category: "Marketplace",
-    question: "Can I buy books on LoksewaAI?",
-    answer: "Yes. The LoksewaAI Marketplace allows students to purchase new and pre-owned Loksewa reference textbooks, syllabus question banks, and handwritten guidebooks. Each listing indicates the condition, price, publisher/author, and seller details."
+    question: "Can I buy books on NES Mastery?",
+    answer: "Yes. The NES Mastery Marketplace allows students to purchase reference textbooks, syllabus question banks, and handwritten guidebooks. Each listing indicates the condition, price, publisher/author, and seller details."
   },
   {
     id: "mkt-2",
@@ -202,7 +202,7 @@ export function FaqsContent() {
           </h1>
 
           <p className="text-slate-300 text-sm sm:text-base max-w-xl mb-8 leading-relaxed">
-            Have questions about how LoksewaAI courses, syllabus tracking, timed mock tests, payments, or the student marketplace work? Find comprehensive answers below.
+            Have questions about how NES Mastery courses, syllabus tracking, timed mock tests, payments, or the student marketplace work? Find comprehensive answers below.
           </p>
 
           {/* Search Bar */}
@@ -327,7 +327,7 @@ export function FaqsContent() {
             Ready to Start Studying?
           </h2>
           <p className="text-slate-300 text-xs sm:text-sm leading-relaxed mb-6">
-            Join LoksewaAI and experience structured, intelligent civil service preparation today.
+            Join NES Mastery and experience structured, intelligent examination preparation today.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <Link href="/register">

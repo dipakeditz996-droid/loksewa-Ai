@@ -46,7 +46,7 @@ const PRIVACY_OPTIONS = [
   {
     key: "show_profile",
     title: "Show Profile to Other Users",
-    description: "Allow other LoksewaAI students to see your profile information, including your name and avatar.",
+    description: "Allow other NES Mastery students to see your profile information, including your name and avatar.",
   },
   {
     key: "show_leaderboard",

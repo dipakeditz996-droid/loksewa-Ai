@@ -86,7 +86,7 @@ export function TeacherAccountSection() {
       <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-6">
         <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-1">Need to change your email or username?</h3>
         <p className="text-sm text-amber-800 dark:text-amber-200/80">
-          Core account identifiers are managed by LoksewaAI administrators to ensure security and prevent platform abuse. If you need to update these details, please contact support.
+          Core account identifiers are managed by NES Mastery administrators to ensure security and prevent platform abuse. If you need to update these details, please contact support.
         </p>
       </div>
     </div>

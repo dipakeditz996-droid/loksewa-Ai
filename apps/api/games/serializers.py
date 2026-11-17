@@ -33,14 +33,14 @@ class GameMatchSerializer(serializers.ModelSerializer):
 
     def get_player2_name(self, obj):
         if obj.is_bot_match:
-            return "LoksewaAI Bot"
+            return "NES Mastery Bot"
         return obj.player2.username if obj.player2 else None
 
     def get_winner_name(self, obj):
         if obj.winner:
             return obj.winner.username
         if obj.is_bot_match and not obj.is_draw and obj.player2_score > obj.player1_score:
-            return "LoksewaAI Bot"
+            return "NES Mastery Bot"
         return None
 
     def get_opponent_type(self, obj):
@@ -73,14 +73,14 @@ class AdminGameMatchSerializer(serializers.ModelSerializer):
 
     def get_player2_username(self, obj):
         if obj.is_bot_match:
-            return "LoksewaAI Bot (Computer)"
+            return "NES Mastery Bot (Computer)"
         return obj.player2.username if obj.player2 else None
 
     def get_winner_username(self, obj):
         if obj.winner:
             return obj.winner.username
         if obj.is_bot_match and not obj.is_draw and obj.player2_score > obj.player1_score:
-            return "LoksewaAI Bot (Computer)"
+            return "NES Mastery Bot (Computer)"
         return None
 
     def get_opponent_type(self, obj):

@@ -5,6 +5,7 @@ import { adminSubjectiveSetsApi, SubjectiveQuestionSet, SubjectiveSetFilterParam
 import { adminQuestionApi } from '@/lib/api/admin-questions';
 import { adminSyllabusApi, AdminExamCategory } from '@/lib/api/admin-syllabus';
 import { AcademicDependentSelect } from '@/components/admin/syllabus/AcademicDependentSelect';
+import { FirstPartyPdfViewer } from '@/components/common/FirstPartyPdfViewer';
 import Link from 'next/link';
 import { 
   Plus, Search, RefreshCw, FileText, Download, Eye, Edit2, 
@@ -144,6 +145,23 @@ export default function SubjectiveQuestionBankPage() {
   const openPreviewModal = (set: SubjectiveQuestionSet) => {
     setActiveSet(set);
     setIsPreviewOpen(true);
+  };
+
+  const handleDownloadPdf = async (set: SubjectiveQuestionSet) => {
+    try {
+      await adminSubjectiveSetsApi.downloadSetPdf(set.id, set.file_name || `${set.title || 'question-set'}.pdf`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to download PDF');
+    }
+  };
+
+  const handleOpenInNewTab = async (set: SubjectiveQuestionSet) => {
+    try {
+      const blobUrl = await adminSubjectiveSetsApi.getSetBlobUrl(set.id);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      window.open(set.pdf_file, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -535,16 +553,14 @@ export default function SubjectiveQuestionBankPage() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <a
-                          href={set.pdf_file}
-                          target="_blank"
-                          rel="noreferrer"
-                          download
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadPdf(set)}
                           title="Download PDF"
                           className="p-1.5 hover:bg-gray-100 text-gray-600 rounded transition-colors"
                         >
                           <Download className="w-4 h-4" />
-                        </a>
+                        </button>
                         {set.status === 'active' && (
                           <Link
                             href={`/admin-dashboard/exams/new?type=subjective&subjectiveSet=${set.id}&category=${set.exam_category}&position=${set.level}${set.subject ? `&subject=${set.subject}` : ''}`}
@@ -914,31 +930,37 @@ export default function SubjectiveQuestionBankPage() {
             </div>
             {activeSet?.pdf_file && (
               <div className="flex items-center gap-2">
-                <a
-                  href={activeSet.pdf_file}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleOpenInNewTab(activeSet)}
+                  className="inline-flex items-center gap-1 text-xs h-8"
                 >
                   <ExternalLink className="w-3.5 h-3.5" /> Open in New Tab
-                </a>
-                <a
-                  href={activeSet.pdf_file}
-                  download
-                  className="inline-flex items-center gap-1 text-xs bg-[#0B2545] hover:bg-[#163E6C] text-white px-3 py-1.5 rounded-lg transition-colors"
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleDownloadPdf(activeSet)}
+                  className="inline-flex items-center gap-1 text-xs bg-[#0B2545] hover:bg-[#163E6C] text-white h-8"
                 >
                   <Download className="w-3.5 h-3.5" /> Download
-                </a>
+                </Button>
               </div>
             )}
           </DialogHeader>
 
           <div className="flex-1 w-full h-full min-h-0 bg-gray-100 rounded-lg overflow-hidden mt-3">
             {activeSet?.pdf_file ? (
-              <iframe
-                src={`${activeSet.pdf_file}#toolbar=1`}
-                className="w-full h-full border-0"
+              <FirstPartyPdfViewer
+                url={activeSet.pdf_file}
                 title={activeSet.title}
+                allowDownload={true}
+                onDownload={() => handleDownloadPdf(activeSet)}
+                allowNewTab={true}
+                onOpenInNewTab={() => handleOpenInNewTab(activeSet)}
+                className="w-full h-full"
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">

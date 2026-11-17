@@ -115,7 +115,7 @@ export function TeacherNotificationPreferences() {
       <Card className="bg-card border-border shadow-sm rounded-2xl overflow-hidden">
         <CardHeader className="bg-muted/50 border-b border-border">
           <CardTitle className="text-lg font-bold text-foreground">Notification Preferences</CardTitle>
-          <CardDescription>Choose how LoksewaAI keeps you informed about your teaching activity.</CardDescription>
+          <CardDescription>Choose how NES Mastery keeps you informed about your teaching activity.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <div className="px-6">

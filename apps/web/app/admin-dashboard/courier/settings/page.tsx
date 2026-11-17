@@ -532,7 +532,7 @@ export default function CourierSettingsPage() {
                   />
                 )}
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Packages dispatched from LoksewaAI will be handed to this courier hub branch.
+                  Packages dispatched from NES Mastery will be handed to this courier hub branch.
                 </p>
               </div>
 

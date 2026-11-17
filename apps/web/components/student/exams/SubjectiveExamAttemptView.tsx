@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { studentExamsApi, SubjectiveAttemptState } from "@/lib/api/student-exams";
+import { FirstPartyPdfViewer } from "@/components/common/FirstPartyPdfViewer";
 import toast from "react-hot-toast";
 
 interface PageImageItem {
@@ -455,11 +456,12 @@ export function SubjectiveExamAttemptView({
                 </button>
               </div>
             ) : paperPdfUrl ? (
-              <iframe
-                src={`${paperPdfUrl}#zoom=${paperZoom}`}
-                className="w-full h-full rounded border-0 bg-white"
-                style={{ transform: `scale(${paperZoom / 100})`, transformOrigin: "top center" }}
-                title="Question Paper"
+              <FirstPartyPdfViewer
+                url={paperPdfUrl}
+                title={examTitle}
+                allowDownload={true}
+                allowNewTab={true}
+                className="w-full h-full"
               />
             ) : (
               <div className="text-center text-slate-500 p-8 space-y-2">

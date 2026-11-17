@@ -497,7 +497,7 @@ export default function StudentEmailNotificationSettings() {
                     <Input
                       value={editSubject}
                       onChange={e => setEditSubject(e.target.value)}
-                      placeholder="e.g. Welcome to LoksewaAI, {{student_name}}!"
+                      placeholder="e.g. Welcome to NES Mastery, {{student_name}}!"
                       className="text-xs font-mono"
                     />
                   </div>
@@ -534,7 +534,7 @@ export default function StudentEmailNotificationSettings() {
                       className="w-full text-xs font-mono p-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 leading-relaxed focus:ring-2 focus:ring-indigo-500"
                     />
                     <p className="text-[11px] text-slate-400 mt-1">
-                      The template body will be automatically wrapped inside LoksewaAI&apos;s responsive branded container with header and footer.
+                      The template body will be automatically wrapped inside NES Mastery&apos;s responsive branded container with header and footer.
                     </p>
                   </div>
                 </>

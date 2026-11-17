@@ -71,7 +71,7 @@ export function CreateTicketModal({
         <DialogHeader>
           <DialogTitle className="text-xl text-foreground">Contact Support</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Submit a support request to the LoksewaAI admin team. We typically respond within 24 hours.
+            Submit a support request to the NES Mastery admin team. We typically respond within 24 hours.
           </DialogDescription>
         </DialogHeader>
 

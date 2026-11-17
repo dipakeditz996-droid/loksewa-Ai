@@ -570,7 +570,7 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
                   <Bot className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-foreground">LoksewaAI Intelligent Tutor</h3>
+                  <h3 className="text-base font-bold text-foreground">NES Mastery Intelligent AI Tutor</h3>
                   <p className="text-xs text-muted-foreground">
                     Instant 24/7 personalized explanations, syllabus guidance, and past paper clarifications.
                   </p>
@@ -671,7 +671,7 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
       {/* Footer Actions */}
       <div className="p-6 border-t border-border bg-muted/10 flex items-center justify-between gap-4">
         <span className="text-xs text-muted-foreground">
-          LoksewaAI Universal Package Entitlement • Authoritative Server-Enforced Limits
+          NES Mastery Universal Package Entitlement • Authoritative Server-Enforced Limits
         </span>
 
         {isPreview ? (

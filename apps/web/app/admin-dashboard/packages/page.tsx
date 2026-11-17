@@ -2006,7 +2006,7 @@ export default function AdminPackagesPage() {
                   <div>
                     <h4 className="text-xs font-bold text-[#0B2545]">Platform-Wide Feature Limits & Entitlements</h4>
                     <p className="text-[11px] text-slate-600 mt-0.5">
-                      Configure granular allowances for all student-facing features across LoksewaAI. An unset quota must never automatically mean Unlimited. Click <strong>Set Unlimited</strong> (-1) only when unlimited access is explicitly desired.
+                      Configure granular allowances for all student-facing features across NES Mastery. An unset quota must never automatically mean Unlimited. Click <strong>Set Unlimited</strong> (-1) only when unlimited access is explicitly desired.
                     </p>
                   </div>
                 </div>

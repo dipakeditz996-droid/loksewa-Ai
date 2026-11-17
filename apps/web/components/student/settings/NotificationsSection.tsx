@@ -98,7 +98,7 @@ const FALLBACK_CATEGORIES: StudentTaxonomyCategory[] = [
     description: "Account security, platform notices, system updates, and maintenance",
     events: [
       { key: "security_alerts", label: "Account Security Alerts", description: "Critical login notifications, password modifications, and security events (Mandatory)", mandatory: true, in_app: true, email: true },
-      { key: "platform_announcements", label: "Platform Announcements", description: "General updates and notices from the LoksewaAI administration", mandatory: false, in_app: true, email: true },
+      { key: "platform_announcements", label: "Platform Announcements", description: "General updates and notices from the NES Mastery administration", mandatory: false, in_app: true, email: true },
       { key: "feature_announcements", label: "New Feature Announcements", description: "Notices about new platform features, AI tools, and test formats", mandatory: false, in_app: true, email: true },
       { key: "maintenance_alerts", label: "Planned Maintenance Notifications", description: "Advance notifications before scheduled system updates and downtime", mandatory: false, in_app: true, email: true },
     ],

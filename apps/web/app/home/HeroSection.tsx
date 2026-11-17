@@ -17,7 +17,7 @@ const SUBJECT_MASTERY = [
   { label: "Engineering Mathematics", value: 85, color: "bg-cyan-500" },
 ];
 
-const EXAM_CHIPS = ["NEC Civil License", "Civil Sub-Engineer", "IOE Entrance", "Sub-Engineer"];
+const EXAM_CHIPS = ["PSC", "License", "Entrance"];
 
 const ACCENT_WORDS = ["NEC License.", "IOE Entrance.", "Top Ranks.", "Engineers."];
 

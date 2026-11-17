@@ -7,7 +7,6 @@ import { publicApi } from "@/lib/api/public-api";
 import { HeroSection } from "./home/HeroSection";
 import { FeatureStrip } from "./home/FeatureStrip";
 import { SocialProofSection } from "./home/SocialProofSection";
-import { AIPreparationSection } from "./home/AIPreparationSection";
 import { AILearningNetworkSection } from "./home/AILearningNetworkSection";
 import { StudyPlanSection } from "./home/StudyPlanSection";
 import { CoursesSection } from "./home/CoursesSection";
@@ -61,7 +60,6 @@ export default async function Home() {
         </section>
         <FeatureStrip />
         <SocialProofSection testimonials={testimonials} stats={stats} />
-        <AIPreparationSection />
         <AILearningNetworkSection />
         <StudyPlanSection />
         <CoursesSection categories={categories} />

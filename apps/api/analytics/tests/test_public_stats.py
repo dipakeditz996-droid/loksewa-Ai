@@ -23,7 +23,7 @@ class PublicStatsFloorTests(APITestCase):
             Question.objects.create(topic=topic, text=f'Q{i}', question_type='mcq', marks=1)
 
     def test_below_floor_reports_the_floor_not_a_multiple(self):
-        # 3 real students - a naive `* 10` would have reported 30, not 5000.
+        # 3 real students - a naive `* 10` would have reported 30, not 100.
         for i in range(3):
             User.objects.create_user(
                 username=f'stud{i}', email=f's{i}@test.com', password='pass123', role='student')
@@ -31,21 +31,21 @@ class PublicStatsFloorTests(APITestCase):
 
         response = self.client.get('/api/public/stats/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total_aspirants'], 5000)
-        self.assertEqual(response.data['total_questions'], 10000)
-        self.assertEqual(response.data['practice_sets'], 200)
+        self.assertEqual(response.data['total_aspirants'], 100)
+        self.assertEqual(response.data['total_questions'], 1000)
+        self.assertEqual(response.data['practice_sets'], 20)
 
     def test_above_floor_reports_the_real_count_not_a_multiple(self):
         # bulk_create keeps this fast despite the row count needed to clear
-        # the 5000 floor - a naive `* 10` would report 50,010, not 5001.
+        # the 100 floor - a naive `* 10` would report 1010, not 101.
         users = [
             User(username=f'bulk{i}', email=f'bulk{i}@test.com', role='student', is_active=True, password='x')
-            for i in range(5001)
+            for i in range(101)
         ]
         User.objects.bulk_create(users)
 
         response = self.client.get('/api/public/stats/')
-        self.assertEqual(response.data['total_aspirants'], 5001)
+        self.assertEqual(response.data['total_aspirants'], 101)
 
     def test_anonymous_access_allowed(self):
         response = self.client.get('/api/public/stats/')
@@ -55,10 +55,10 @@ class PublicStatsFloorTests(APITestCase):
     def test_practice_sets_counts_only_published_question_sets(self):
         category = ExamCategory.objects.create(name='Loksewa')
         position = Exam.objects.create(name='Kharidar', category=category)
-        for i in range(250):
+        for i in range(30):
             QuestionSet.objects.create(
                 name=f'Set {i}', category=category, exam=position,
-                total_questions=10, status='published' if i < 210 else 'draft',
+                total_questions=10, status='published' if i < 25 else 'draft',
             )
         response = self.client.get('/api/public/stats/')
-        self.assertEqual(response.data['practice_sets'], 210)
+        self.assertEqual(response.data['practice_sets'], 25)

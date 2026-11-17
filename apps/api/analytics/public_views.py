@@ -29,6 +29,6 @@ class PublicStatsView(APIView):
         return Response({
             "total_aspirants": max(100, total_aspirants),
             "total_questions": max(1000, total_questions),
-            "practice_sets": max(50, practice_sets),
+            "practice_sets": max(20, practice_sets),
             "content_accuracy": content_accuracy,
         })

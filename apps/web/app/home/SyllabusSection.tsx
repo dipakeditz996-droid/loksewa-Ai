@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Map, ChevronRight, CheckCircle2, AlertCircle, FileText } from "lucide-react";
+import { ArrowRight, Map, ChevronRight, FileText } from "lucide-react";
 import { PublicNote } from "@/lib/api/public-api";
 
 const STATIC_SYLLABUSES = [
@@ -49,54 +49,11 @@ const STATIC_SYLLABUSES = [
   },
 ];
 
-const STATIC_HIERARCHY = [
-  {
-    exam: "PSC Civil Engineering (5th / 7th Level)",
-    papers: [
-      {
-        name: "Paper I — General Studies & Basic Engineering",
-        subjects: [
-          {
-            name: "Structural Analysis & Mechanics",
-            chapters: ["Stress & Strain", "Shear Force & Bending Moment", "Deflection of Beams", "Truss Analysis"],
-            progress: 72,
-            isWeak: false,
-          },
-          {
-            name: "Fluid Mechanics & Hydraulics",
-            chapters: ["Hydrostatics & Pressure", "Flow Through Pipes", "Open Channel Flow", "Hydraulic Pumps"],
-            progress: 45,
-            isWeak: true,
-          },
-        ],
-      },
-      {
-        name: "Paper II — Technical Subject (Civil)",
-        subjects: [
-          {
-            name: "Surveying & Geomatics",
-            chapters: ["Levelling & Contouring", "Theodolite & Total Station", "Curves & Traversing", "GPS & GIS"],
-            progress: 81,
-            isWeak: false,
-          },
-        ],
-      },
-    ],
-  },
-];
-
 interface Props {
   notes?: PublicNote[] | null;
 }
 
-// This section illustrates the syllabus-tracking FEATURE (per-subject
-// progress and weak/strong flags), which is inherently a personalized,
-// logged-in-student concept - there is no real "progress" for an anonymous
-// visitor to show. Real syllabus browsing lives at /syllabus (linked below);
-// this stays a static product demo like the other illustrative sections.
 export function SyllabusSection({ notes }: Props) {
-  const data = STATIC_HIERARCHY[0];
-
   const syllabusList = (notes && notes.length > 0)
     ? notes.slice(0, 5).map((n, idx) => ({
         id: n.id || idx + 1,
@@ -142,79 +99,62 @@ export function SyllabusSection({ notes }: Props) {
         {/* Hierarchy visualization */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-          {/* LEFT: Hierarchy tree */}
-          <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_50px_rgba(0,0,0,0.5)]">
+          {/* LEFT: Engineering Academic Hierarchy */}
+          <div className="bg-white dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:shadow-[0_10px_50px_rgba(0,0,0,0.5)] flex flex-col justify-between">
+            <div>
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100 dark:border-white/[0.05]">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-[10px] bg-[#2563EB]/10 flex items-center justify-center">
+                    <Map className="w-4.5 h-4.5 text-[#2563EB]" />
+                  </div>
+                  <div>
+                    <div className="text-[15px] font-[800] text-slate-800 dark:text-white">Engineering Academic Hierarchy</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-[500]">Systematic structure of every examination</div>
+                  </div>
+                </div>
+                <span className="text-[10.5px] font-[700] text-[#2563EB] bg-[#2563EB]/10 border border-[#2563EB]/20 px-2.5 py-1 rounded-full">
+                  5 Levels
+                </span>
+              </div>
 
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-[11px] font-[600] text-slate-600 dark:text-slate-400 mb-5">
-              {["Exam", "Paper", "Subject", "Chapter", "Topic"].map((item, i, arr) => (
-                <React.Fragment key={item}>
-                  <span className={i === 0 ? "text-[#2563EB] dark:text-[#2563EB]" : i === arr.length - 1 ? "text-slate-700 dark:text-slate-200" : ""}>{item}</span>
-                  {i < arr.length - 1 && <ChevronRight className="w-3 h-3 text-slate-400 dark:text-slate-500" />}
-                </React.Fragment>
+              {/* Hierarchy Steps */}
+              <div className="space-y-4 my-2">
+                {[
+                  { level: "Exam", desc: "PSC Civil (5th/7th Level), NEC License, Electrical...", color: "bg-[#2563EB]" },
+                  { level: "Paper", desc: "Paper I (General & Basic), Paper II (Technical)...", color: "bg-blue-500" },
+                  { level: "Subject", desc: "Structural Analysis, Fluid Mechanics, Surveying...", color: "bg-violet-500" },
+                  { level: "Chapter", desc: "Stress & Strain, Pipe Flow, Levelling & Contouring...", color: "bg-emerald-500" },
+                  { level: "Topic", desc: "SFD & BMD, Bernoulli Equation, Total Station...", color: "bg-pink-500" },
+                ].map((item, i) => (
+                  <div key={item.level} className="flex items-start gap-3.5">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-3 h-3 rounded-full ${item.color} shrink-0 mt-1 ring-4 ring-slate-100 dark:ring-white/[0.04]`} />
+                      {i < 4 && <div className="w-0.5 h-7 bg-slate-200 dark:bg-white/[0.08] mt-1" />}
+                    </div>
+                    <div>
+                      <div className="text-[13.5px] font-[800] text-slate-800 dark:text-white">{item.level}</div>
+                      <div className="text-[12px] text-slate-600 dark:text-slate-300 font-[500] leading-snug">{item.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-4 mt-4 border-t border-slate-100 dark:border-white/[0.05]">
+              {[
+                { label: "Exam Positions", value: "20+", color: "text-[#2563EB]" },
+                { label: "Subjects Covered", value: "100%", color: "text-emerald-500" },
+                { label: "Topics Mapped", value: "500+", color: "text-blue-500" },
+                { label: "Questions Linked", value: "5,000+", color: "text-violet-500" },
+              ].map((s) => (
+                <div key={s.label} className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200/70 dark:border-white/[0.04] rounded-[12px] p-2 text-center">
+                  <div className={`text-[17px] font-[900] ${s.color} leading-tight`}>{s.value}</div>
+                  <div className="text-[9.5px] font-[600] text-slate-500 dark:text-slate-400 truncate">{s.label}</div>
+                </div>
               ))}
             </div>
-
-            {/* Exam header */}
-            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-100 dark:border-white/[0.05]">
-              <div className="w-9 h-9 rounded-[10px] bg-[#2563EB]/10 flex items-center justify-center">
-                <Map className="w-4.5 h-4.5 text-[#2563EB]" />
-              </div>
-              <div>
-                <div className="text-[15px] font-[800] text-slate-800 dark:text-white">{data?.exam}</div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-400 font-[500]">Public Service Commission — Technical Engineering</div>
-              </div>
-            </div>
-
-            {/* Papers & Subjects */}
-            {data?.papers?.map((paper: any, pi: number) => (
-              <div key={pi} className="mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  <div className="text-[12.5px] font-[700] text-slate-600 dark:text-slate-300">{paper.name}</div>
-                </div>
-
-                <div className="ml-4 space-y-3">
-                  {paper.subjects.map((subject) => (
-                    <div
-                      key={subject.name}
-                      className={`p-3.5 rounded-[14px] border ${subject.isWeak
-                          ? "bg-red-50 dark:bg-red-500/[0.05] border-red-100 dark:border-red-500/[0.1]"
-                          : "bg-slate-50 dark:bg-white/[0.02] border-slate-100 dark:border-white/[0.04]"
-                        }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {subject.isWeak
-                            ? <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                            : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          }
-                          <span className="text-[13px] font-[700] text-slate-800 dark:text-white">{subject.name}</span>
-                        </div>
-                        <span className={`text-[11px] font-[700] ${subject.isWeak ? "text-red-500" : "text-emerald-500"}`}>
-                          {subject.progress}%
-                        </span>
-                      </div>
-                      {/* Progress bar */}
-                      <div className="w-full h-1.5 bg-slate-200 dark:bg-white/[0.06] rounded-full overflow-hidden mb-2.5">
-                        <div
-                          className={`h-full rounded-full ${subject.isWeak ? "bg-red-500" : "bg-emerald-500"}`}
-                          style={{ width: `${subject.progress}%` }}
-                        />
-                      </div>
-                      {/* Chapters */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {subject.chapters.map((ch) => (
-                          <span key={ch} className="text-[10px] font-[600] text-slate-700 dark:text-slate-300 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] px-2 py-0.5 rounded-full">
-                            {ch}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
 
           {/* RIGHT: Syllabus PDFs Vertical List & Explore */}

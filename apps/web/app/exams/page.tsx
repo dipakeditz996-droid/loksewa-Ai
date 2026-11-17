@@ -65,7 +65,7 @@ export default function ExamsPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
-            Experience structured Loksewa examinations with realistic timing, question patterns, instant results, and detailed performance analysis.
+            Experience structured competitive engineering examinations with realistic timing, question patterns, instant results, and detailed performance analysis.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-2xl mx-auto mb-8">
@@ -250,7 +250,7 @@ export default function ExamsPage() {
                 </h2>
                 
                 <p className="text-slate-300 font-[500] text-lg mb-8 max-w-2xl">
-                  Experience a complete exam-style assessment covering multiple subjects based on the latest Loksewa syllabus. Test your readiness under real time constraints.
+                  Experience a complete exam-style assessment covering multiple subjects based on the latest competitive examination syllabus. Test your readiness under real time constraints.
                 </p>
 
                 <div className="flex flex-wrap items-center gap-4 mb-8">

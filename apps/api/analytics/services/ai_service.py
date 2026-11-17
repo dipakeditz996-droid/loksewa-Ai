@@ -28,7 +28,7 @@ class AIService:
         url = AIService.get_api_url()
         
         system_prompt = (
-            "You are an AI study assistant for Loksewa (Public Service Commission) exams. "
+            "You are an AI study assistant for competitive engineering examinations (including Technical Public Service Commission exams). "
             "Analyze the student's analytics and provide a concise 'AI Study Recommendation' "
             "and a 'Today's Recommended Plan' (list of practical tasks). "
             "Do NOT use emojis, sparkle effects, or overly enthusiastic language. "

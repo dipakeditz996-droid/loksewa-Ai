@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { 
-  Check, X, Zap, Shield, Sparkles, BookOpen, Clock, 
+import {
+  Check, X, Zap, Shield, Sparkles, BookOpen, Clock,
   HelpCircle, Bot, Award, FileText, ChevronRight, Layers,
   ExternalLink, Info, AlertTriangle, ArrowRight, CheckCircle2,
   Lock, Flame, Target
@@ -22,10 +22,10 @@ interface Props {
 export function StudentPackageDetailView({ plan, isPreview = false, onSelect, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<"overview" | "exams" | "materials" | "ai" | "features">("overview");
 
-  const isHighlighted = 
+  const isHighlighted =
     plan.is_featured ||
-    plan.badge === "POPULAR" || 
-    plan.badge === "RECOMMENDED" || 
+    plan.badge === "POPULAR" ||
+    plan.badge === "RECOMMENDED" ||
     plan.badge === "BEST_VALUE" ||
     plan.display_badge?.toLowerCase().includes("popular") ||
     plan.display_badge?.toLowerCase().includes("recommended");
@@ -45,7 +45,7 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
 
   // Course Access
   if (plan.course_access_type === "ALL_ACCESS") {
-    includedItems.push("Full access to all Loksewa PSC preparation courses");
+    includedItems.push("Full access to all competitive engineering exam preparation courses");
   } else if (plan.package_type === "MULTI") {
     includedItems.push(`Access to any ${plan.allowed_preparation_count || 1} eligible syllabus courses`);
   } else if (plan.course_details?.title) {
@@ -117,11 +117,10 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
       )}
 
       {/* Package Header Card */}
-      <div className={`p-6 sm:p-8 border-b border-border transition-colors ${
-        isHighlighted 
-          ? "bg-gradient-to-br from-[#0F1822] via-[#14202D] to-[#0A1118] text-white" 
-          : "bg-muted/30"
-      }`}>
+      <div className={`p-6 sm:p-8 border-b border-border transition-colors ${isHighlighted
+        ? "bg-gradient-to-br from-[#0F1822] via-[#14202D] to-[#0A1118] text-white"
+        : "bg-muted/30"
+        }`}>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
           <div className="space-y-3 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -146,16 +145,15 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
             </h1>
 
             <p className={`text-sm leading-relaxed max-w-2xl ${isHighlighted ? "text-white/70" : "text-muted-foreground"}`}>
-              {plan.description || "Comprehensive examination preparation package designed for Loksewa PSC candidates."}
+              {plan.description || "Comprehensive examination preparation package designed for engineering candidates."}
             </p>
           </div>
 
           {/* Pricing & CTA Card */}
-          <div className={`p-5 rounded-2xl border flex flex-col justify-between shrink-0 min-w-[200px] text-right sm:text-left ${
-            isHighlighted 
-              ? "bg-white/5 border-white/10" 
-              : "bg-card border-border shadow-sm"
-          }`}>
+          <div className={`p-5 rounded-2xl border flex flex-col justify-between shrink-0 min-w-[200px] text-right sm:text-left ${isHighlighted
+            ? "bg-white/5 border-white/10"
+            : "bg-card border-border shadow-sm"
+            }`}>
             <div>
               <span className={`text-[11px] font-bold uppercase tracking-wider ${isHighlighted ? "text-white/60" : "text-muted-foreground"}`}>
                 Package Price
@@ -190,7 +188,7 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
 
             {!isPreview && (
               <div className="mt-4">
-                <Button 
+                <Button
                   onClick={onSelect}
                   asChild={!onSelect}
                   className="w-full bg-[#D4A72C] text-[#0A1118] hover:bg-[#D4A72C]/90 font-bold rounded-xl h-10 shadow-sm"
@@ -227,7 +225,7 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
             ))
           ) : (
             <span className="px-3 py-1 rounded-full bg-muted font-medium">
-              All Eligible Loksewa PSC Preparations
+              All Eligible Competitive Engineering Exam Preparations
             </span>
           )}
         </div>
@@ -245,11 +243,10 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id as any)}
-            className={`py-3 px-3.5 border-b-2 font-medium transition-colors whitespace-nowrap ${
-              activeTab === t.id
-                ? "border-[#D4A72C] text-[#D4A72C] font-bold"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
+            className={`py-3 px-3.5 border-b-2 font-medium transition-colors whitespace-nowrap ${activeTab === t.id
+              ? "border-[#D4A72C] text-[#D4A72C] font-bold"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
           >
             {t.label}
           </button>
@@ -400,11 +397,10 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
                 return (
                   <div
                     key={cfg.exam_type}
-                    className={`p-5 rounded-2xl border transition-all ${
-                      !cfg.is_enabled
-                        ? "border-border/60 bg-muted/10 opacity-70"
-                        : "border-border bg-card shadow-sm hover:border-[#D4A72C]/40"
-                    }`}
+                    className={`p-5 rounded-2xl border transition-all ${!cfg.is_enabled
+                      ? "border-border/60 bg-muted/10 opacity-70"
+                      : "border-border bg-card shadow-sm hover:border-[#D4A72C]/40"
+                      }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="space-y-1">
@@ -527,7 +523,7 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
                 <div>
                   <h3 className="text-base font-bold text-foreground">Study Notes & Reference Materials</h3>
                   <p className="text-xs text-muted-foreground">
-                    Access to digital Loksewa summaries, subject syllabus notes, and official resources.
+                    Access to digital study summaries, subject syllabus notes, and official resources.
                   </p>
                 </div>
               </div>
@@ -536,11 +532,11 @@ export function StudentPackageDetailView({ plan, isPreview = false, onSelect, on
                 <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-1">
                   <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Access Scope</span>
                   <p className="text-sm font-bold text-foreground">
-                    {plan.notes_access_type === "ALL" 
-                      ? "All Platform Notes & Summaries" 
-                      : plan.notes_access_type === "COURSE_NOTES" 
-                      ? "Enrolled Course Notes Only" 
-                      : "No Notes Included"}
+                    {plan.notes_access_type === "ALL"
+                      ? "All Platform Notes & Summaries"
+                      : plan.notes_access_type === "COURSE_NOTES"
+                        ? "Enrolled Course Notes Only"
+                        : "No Notes Included"}
                   </p>
                 </div>
 

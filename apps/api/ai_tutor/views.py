@@ -160,7 +160,7 @@ class SendMessageView(APIView):
 class AITutorEndpointView(APIView):
     """
     POST /api/ai/tutor/
-    Official low-cost, secure AI Tutor endpoint for Nepal Loksewa preparation.
+    Official low-cost, secure AI Tutor endpoint for competitive engineering and technical exam preparation.
 
     Enforces JWT authentication, session revocation, platform kill-switch,
     subscription allowances, rate limits, and bounded token/timeout generation.
@@ -217,7 +217,7 @@ class AITutorEndpointView(APIView):
 
         # 5. Build prompt & system instruction
         base_prompt = getattr(ai_tutor_settings, 'ai_tutor_base_prompt', '') or (
-            "You are an expert AI Tutor for Loksewa exam preparation in Nepal. "
+            "You are an expert AI Tutor for competitive engineering and technical exam preparation in Nepal. "
             "You provide accurate, clear, and structured answers."
         )
 
@@ -237,7 +237,7 @@ class AITutorEndpointView(APIView):
         else:
             system_instruction += (
                 "Knowledge limitation: No verified platform study material was retrieved for this query. "
-                "Act as a general Loksewa curriculum tutor based on standard syllabus principles. "
+                "Act as a general curriculum tutor based on standard syllabus principles. "
                 "Do not invent fictitious statutes, citation numbers, or exam rulings.\n"
             )
 

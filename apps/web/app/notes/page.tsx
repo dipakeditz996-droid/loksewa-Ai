@@ -164,7 +164,7 @@ export default function NotesPage() {
             </h1>
 
             <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
-              Explore structured study materials, revision notes, subject guides, and exam-focused resources designed around the Loksewa syllabus.
+              Explore structured study materials, revision notes, subject guides, and exam-focused resources designed around competitive engineering exam syllabi.
             </p>
 
             {/* Large Search Interface */}
@@ -510,7 +510,7 @@ export default function NotesPage() {
           <div className="container mx-auto px-4 max-w-7xl">
             <div className="text-center mb-16">
               <h2 className="text-3xl font-[800] text-slate-900 dark:text-white tracking-tight mb-4">A Better Way To Study</h2>
-              <p className="text-lg text-slate-500 font-[500] max-w-2xl mx-auto">Experience a distraction-free, powerful reading interface designed specifically for Loksewa preparation.</p>
+              <p className="text-lg text-slate-500 font-[500] max-w-2xl mx-auto">Experience a distraction-free, powerful reading interface designed specifically for competitive exam preparation.</p>
             </div>
 
             <div className="relative mx-auto max-w-6xl rounded-[24px] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#060B11] shadow-2xl overflow-hidden flex flex-col md:flex-row h-[600px]">

@@ -401,7 +401,7 @@ export default function StudentPlansPage() {
                       {plan.name}
                     </h3>
                     <p className={`text-xs line-clamp-2 ${isHighlighted ? "text-white/60" : "text-muted-foreground"}`}>
-                      {plan.description || "Comprehensive Loksewa preparation with dedicated study features."}
+                      {plan.description || "Comprehensive competitive engineering exam preparation with dedicated study features."}
                     </p>
                   </div>
 
@@ -433,7 +433,7 @@ export default function StudentPlansPage() {
                       </div>
                       <span className={`text-xs font-medium ${isHighlighted ? "text-white/90" : "text-foreground"}`}>
                         {plan.course_access_type === "ALL_ACCESS" 
-                          ? "Full access to all Loksewa courses" 
+                          ? "Full access to all published engineering preparation courses" 
                           : plan.package_type === "MULTI"
                           ? `Access to any ${plan.allowed_preparation_count} courses`
                           : "Curated syllabus courses included"}

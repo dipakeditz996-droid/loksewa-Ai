@@ -25,12 +25,12 @@ EXAM_TYPE_CONFIGS = [
     {
         'key': 'model',
         'label': 'Model Exams',
-        'description': 'Curated model test papers based on the official Loksewa syllabus and mark scheme.',
+        'description': 'Curated model test papers based on the official examination syllabus and mark scheme.',
     },
     {
         'key': 'past_year',
         'label': 'Past Question Papers',
-        'description': 'Actual historical questions and question sets from previous Loksewa PSC examinations.',
+        'description': 'Actual historical questions and question sets from previous competitive examinations.',
     },
     {
         'key': 'subject',

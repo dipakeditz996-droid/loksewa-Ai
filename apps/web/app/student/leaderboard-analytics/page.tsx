@@ -34,7 +34,7 @@ function LeaderboardAnalyticsPageInner() {
           Leaderboard & Analytics
         </h1>
         <p className="text-muted-foreground mt-1 font-medium max-w-2xl text-sm sm:text-base">
-          Track competitive rankings among Loksewa aspirants and analyze your preparation strengths, weaknesses, and progress metrics.
+          Track competitive rankings among engineering aspirants and analyze your preparation strengths, weaknesses, and progress metrics.
         </p>
       </div>
 

@@ -80,8 +80,8 @@ export interface PlatformFeatureItem {
 const PLATFORM_FEATURES: PlatformFeatureItem[] = [
   // Objective Exams
   { key: "exam:objective:total", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Total Objective Exam Attempts", description: "Overall combined attempts across all objective exam categories (-1 = unlimited)", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
-  { key: "exam:objective:past_year", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Past Year Objective Exams", description: "Attempts for official Loksewa past year question papers", defaultQuota: 10, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
-  { key: "exam:objective:model", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Model Exams", description: "Standard Loksewa objective model exams prepared by experts", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:past_year", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Past Year Objective Exams", description: "Attempts for official competitive past year question papers", defaultQuota: 10, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
+  { key: "exam:objective:model", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Model Exams", description: "Standard competitive objective model exams prepared by experts", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
   { key: "exam:objective:mock", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Mock Exams", description: "Full-length timed simulated mock exams", defaultQuota: 5, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
   { key: "exam:objective:live", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Live Scheduled Exams", description: "Scheduled live rank exams with real-time ranking and percentiles", defaultQuota: 2, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
   { key: "exam:objective:topicwise", category: "objective_exams", categoryLabel: "Objective Examinations", title: "Objective Topicwise Tests", description: "Targeted tests focused on specific syllabus topics/chapters", defaultQuota: -1, unit: "attempts", supportsUnlimited: true, allowedResetPolicies: ["NEVER", "MONTHLY", "DAILY"] },
@@ -164,7 +164,7 @@ export const DEFAULT_EXAM_ACCESS_CONFIGS: PackageExamAccessConfig[] = [
   {
     exam_type: "model",
     exam_type_label: "Model Exams",
-    description: "Curated model test papers based on the official Loksewa syllabus and mark scheme.",
+    description: "Curated model test papers based on the official examination syllabus and mark scheme.",
     is_enabled: true,
     access_mode: "ANY",
     total_attempts: 10,
@@ -174,7 +174,7 @@ export const DEFAULT_EXAM_ACCESS_CONFIGS: PackageExamAccessConfig[] = [
   {
     exam_type: "past_year",
     exam_type_label: "Past Question Papers",
-    description: "Actual historical questions and sets from previous Loksewa PSC examinations.",
+    description: "Actual historical questions and sets from previous competitive examinations.",
     is_enabled: true,
     access_mode: "ANY",
     total_attempts: 10,

@@ -1017,7 +1017,7 @@ export function LeaderboardContent() {
                   </SelectTrigger>
                   <SelectContent className="bg-[#0D1F38] border-white/10 text-white">
                     <SelectItem value="all" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">All Exams</SelectItem>
-                    <SelectItem value="loksewa" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Loksewa</SelectItem>
+                    <SelectItem value="loksewa" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Competitive Exam</SelectItem>
                     <SelectItem value="model" className="text-xs text-white/70 focus:bg-card/10 focus:text-white">Model Exam</SelectItem>
                   </SelectContent>
                 </Select>

@@ -368,7 +368,7 @@ export default function ExamDetailsPage() {
                     <div>
                       <p className="text-sm font-semibold text-foreground">Official Expert Solution Available</p>
                       <p className="text-xs text-muted-foreground">
-                        Prepared by Loksewa PSC experts with comprehensive model answers and grading guidelines.
+                        Prepared by competitive engineering exam experts with comprehensive model answers and grading guidelines.
                       </p>
                     </div>
                   </div>

@@ -24,7 +24,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 const MODES = [
-  { id: 'EXPLAIN', label: 'Explain', icon: Lightbulb, description: 'Get clear explanations for Loksewa topics' },
+  { id: 'EXPLAIN', label: 'Explain', icon: Lightbulb, description: 'Get clear explanations for competitive exam topics' },
   { id: 'PRACTICE', label: 'Practice', icon: Brain, description: 'Generate mock MCQs' },
   { id: 'REVISION', label: 'Revision', icon: BookOpen, description: 'Quick summaries and key facts' },
   { id: 'EXAM_STRATEGY', label: 'Strategy', icon: Target, description: 'Exam prep tips and tricks' },
@@ -255,7 +255,7 @@ export default function AITutorPage() {
             </div>
             <div>
               <h1 className="font-bold text-primary dark:text-foreground leading-tight">AI Tutor</h1>
-              <p className="text-xs text-muted-foreground">Your personal Loksewa preparation assistant.</p>
+              <p className="text-xs text-muted-foreground">Your personal competitive exam preparation assistant.</p>
             </div>
           </div>
         </header>

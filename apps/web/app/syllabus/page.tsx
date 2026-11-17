@@ -133,7 +133,7 @@ export default function SyllabusPage() {
           </div>
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-[900] tracking-tight text-slate-900 dark:text-white mb-6 leading-tight">
-            Explore the Complete Loksewa <span className="text-[#D4A72C]">Syllabus</span>.
+            Explore the Complete Engineering Exam <span className="text-[#D4A72C]">Syllabus</span>.
           </h1>
 
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">

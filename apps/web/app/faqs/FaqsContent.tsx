@@ -114,7 +114,7 @@ const FAQS_DATA: FAQItem[] = [
     id: "mkt-2",
     category: "Marketplace",
     question: "Can students sell used books?",
-    answer: "Yes! Any registered student can create a listing for their second-hand Loksewa books through their Student Portal under 'Sell a Book'. You provide the book title, condition (Like New, Good, Fair), price, photos, and contact/delivery details. Once reviewed, the listing goes live in the public Marketplace."
+    answer: "Yes! Any registered student can create a listing for their second-hand engineering and competitive exam books through their Student Portal under 'Sell a Book'. You provide the book title, condition (Like New, Good, Fair), price, photos, and contact/delivery details. Once reviewed, the listing goes live in the public Marketplace."
   },
   {
     id: "mkt-3",
@@ -128,7 +128,7 @@ const FAQS_DATA: FAQItem[] = [
     id: "acc-1",
     category: "Account",
     question: "How do I register for an account?",
-    answer: "Click the 'Get Started' button in the top navigation. Enter your full name, email address, phone number, and create a secure password. You can also select your target Loksewa examination level to customize your dashboard."
+    answer: "Click the 'Get Started' button in the top navigation. Enter your full name, email address, phone number, and create a secure password. You can also select your target engineering examination track to customize your dashboard."
   },
   {
     id: "acc-2",

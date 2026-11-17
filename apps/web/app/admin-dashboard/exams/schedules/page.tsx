@@ -243,7 +243,7 @@ export default function AdminExamSchedulesPage() {
             Official Exam Schedules
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Manage real database-backed Loksewa examination dates and public countdown targets.
+            Manage real database-backed official examination dates and public countdown targets.
           </p>
         </div>
         <Button
@@ -254,7 +254,7 @@ export default function AdminExamSchedulesPage() {
         </Button>
       </div>
 
-      {/* Active Next Loksewa Exam Hero Banner */}
+      {/* Active Next Official Exam Hero Banner */}
       {activeSchedule && (
         <Card className="bg-gradient-to-r from-[#0B2545] to-[#163E6B] text-white border-none shadow-md overflow-hidden relative">
           <div className="absolute right-0 top-0 w-64 h-64 bg-[#D4A72C]/10 rounded-full blur-2xl pointer-events-none" />
@@ -262,7 +262,7 @@ export default function AdminExamSchedulesPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#D4A72C] text-[#0B2545] rounded-full text-xs font-black tracking-wider uppercase">
-                  <Star className="w-3.5 h-3.5 fill-current" /> Active "Next Loksewa Exam"
+                  <Star className="w-3.5 h-3.5 fill-current" /> Active "Next Official Exam"
                 </div>
                 <h2 className="text-xl md:text-2xl font-black text-white">{activeSchedule.title}</h2>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
@@ -525,7 +525,7 @@ export default function AdminExamSchedulesPage() {
               {editingSchedule ? "Edit Exam Schedule" : "Create Official Exam Schedule"}
             </DialogTitle>
             <DialogDescription>
-              Set the authoritative date, time, and details for official Loksewa examinations.
+              Set the authoritative date, time, and details for official examinations.
             </DialogDescription>
           </DialogHeader>
 
@@ -537,7 +537,7 @@ export default function AdminExamSchedulesPage() {
                   Exam Title <span className="text-red-500">*</span>
                 </label>
                 <Input
-                  placeholder="e.g. Loksewa Section Officer 2083 First Paper"
+                  placeholder="e.g. NEC Civil Engineering License 2083"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   required
@@ -700,7 +700,7 @@ export default function AdminExamSchedulesPage() {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="rounded border-slate-300 text-[#0B2545] focus:ring-[#D4A72C] h-4 w-4"
                 />
-                Set as Active "Next Loksewa Exam"
+                Set as Active "Next Official Exam"
               </label>
             </div>
 

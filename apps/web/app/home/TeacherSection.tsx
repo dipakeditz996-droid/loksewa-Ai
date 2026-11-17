@@ -6,38 +6,38 @@ import { GraduationCap, ArrowRight, BookOpen, Users, DollarSign, BarChart2 } fro
 export function TeacherSection() {
   return (
     <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#060E18] relative overflow-hidden">
-      
+
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
-      
+
       {/* Background shapes */}
       <div className="absolute top-[10%] left-[-5%] w-[400px] h-[400px] bg-[#2563EB]/[0.03] dark:bg-[#2563EB]/[0.06] rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-[#102D40]/[0.03] dark:bg-[#102D40]/[0.1] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         <div className="bg-slate-50 dark:bg-[#0A1520] border border-slate-200 dark:border-white/[0.06] rounded-[32px] p-6 md:p-10 lg:p-12 overflow-hidden relative shadow-[0_10px_40px_rgba(0,0,0,0.03)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
-          
+
           {/* Subtle grid pattern inside card */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:24px_24px] opacity-60" />
 
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_0.8fr] gap-12 lg:gap-20 items-center">
-            
+
             {/* Left Content */}
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#2563EB]/10 border border-[#2563EB]/20 mb-6">
                 <GraduationCap className="w-3.5 h-3.5 text-[#2563EB]" />
                 <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#2563EB] dark:text-[#2563EB]">Teacher Ecosystem</span>
               </div>
-              
+
               <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-5 leading-[1.1]">
                 Are you an <span className="text-gradient-gold">engineering exam expert?</span>
               </h2>
-              
+
               <p className="text-[17px] text-slate-600 dark:text-slate-300 leading-[1.7] mb-8 font-[500] max-w-[480px]">
                 Join Nepal&apos;s most advanced EdTech platform. Create courses, write study materials, build mock exams, and monetize your expertise directly on NES Mastery.
               </p>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 mb-10">
                 {[
                   { icon: BookOpen, text: "Course Creation Tools" },

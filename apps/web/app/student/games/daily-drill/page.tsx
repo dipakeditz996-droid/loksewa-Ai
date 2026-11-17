@@ -336,7 +336,7 @@ export default function DailyDrillPage() {
                   {/* Course Context Badge */}
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/30 border border-white/10 text-xs font-semibold text-white/80 mb-6">
                     <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Course: <strong className="text-white">{session?.course_title || todayData?.course_title || "Loksewa Syllabus"}</strong></span>
+                    <span>Course: <strong className="text-white">{session?.course_title || todayData?.course_title || "Engineering Syllabus"}</strong></span>
                     <span className="text-white/30">•</span>
                     <span className="text-emerald-400">{session?.focus_label || "Syllabus Mixed"}</span>
                   </div>

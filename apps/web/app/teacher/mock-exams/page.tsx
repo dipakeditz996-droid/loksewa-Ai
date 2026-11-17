@@ -227,7 +227,7 @@ export default function MockExamsDashboard() {
           </div>
           <h3 className="mb-2 text-xl font-bold text-foreground">Your examination workspace is ready.</h3>
           <p className="mx-auto mb-6 max-w-md text-[13px] text-muted-foreground">
-            Create your first model exam and build a realistic Loksewa examination experience for your students.
+            Create your first model exam and build a realistic competitive examination experience for your students.
           </p>
           <Link href="/teacher/mock-exams/new">
             <Button className="rounded-[9px] bg-[#0B2545] dark:bg-[#D4A72C] hover:bg-[#163E6C] dark:hover:bg-[#bfa228] text-white dark:text-[#0A1118] font-bold">Create Mock Exam</Button>

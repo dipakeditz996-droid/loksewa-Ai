@@ -51,7 +51,7 @@ export function PlayAndEarnContent() {
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300/90 max-w-2xl font-normal leading-relaxed mb-6">
-            Loksewa preparation requires discipline over months. Turn your daily study routine into a habit by earning XP, keeping your streak alive, and challenging peers in quiz battles.
+            Competitive engineering exam preparation requires discipline over months. Turn your daily study routine into a habit by earning XP, keeping your streak alive, and challenging peers in quiz battles.
           </p>
 
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300 font-medium mb-10 max-w-lg">
@@ -103,7 +103,7 @@ export function PlayAndEarnContent() {
                 </div>
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Daily Study Streaks</h3>
                 <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
-                  Log in and complete at least one study session or practice set each day. Unbroken streaks build the muscle memory needed to pass Loksewa.
+                  Log in and complete at least one study session or practice set each day. Unbroken streaks build the muscle memory needed to crack competitive engineering exams.
                 </p>
               </div>
               <div className="pt-4 border-t border-slate-200 dark:border-white/10 text-xs font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-1.5">

@@ -292,7 +292,7 @@ export default function FullResultPage() {
                       Request for Evaluation
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Submit your answer sheet for manual checking by a Loksewa expert evaluator
+                      Submit your answer sheet for manual checking by an expert engineering evaluator
                     </CardDescription>
                   </div>
                 </div>
@@ -506,7 +506,7 @@ export default function FullResultPage() {
             </CardHeader>
             <CardContent className="pt-0 pb-3 text-xs text-muted-foreground">
               {expertSolutionInfo?.is_expert_solution_published
-                ? "Access model answers and detailed explanations prepared by Loksewa faculty."
+                ? "Access model answers and detailed explanations prepared by expert engineering faculty."
                 : "No Expert Solution has been published for this exam yet."}
             </CardContent>
             <CardFooter className="pt-0">

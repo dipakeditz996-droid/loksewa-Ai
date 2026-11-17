@@ -1167,7 +1167,7 @@ export default function UsersManagementPage() {
                                   <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                                   <div>
                                     <p className="font-semibold">Full Platform Access</p>
-                                    <p className="text-[11px] opacity-90 mt-0.5">Grants student complete access to all published Loksewa preparation courses on the platform.</p>
+                                    <p className="text-[11px] opacity-90 mt-0.5">Grants student complete access to all published engineering preparation courses on the platform.</p>
                                   </div>
                                 </div>
                               )}

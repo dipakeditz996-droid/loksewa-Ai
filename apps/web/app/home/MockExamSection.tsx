@@ -3,8 +3,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Clock, FileText, BookmarkPlus, ChevronRight, TrendingUp, Target } from "lucide-react";
 
-const OPTIONS = ["A. Article 16", "B. Article 18", "C. Article 20", "D. Article 22"];
-const SELECTED = 1; // index of selected option
+const OPTIONS = ["A. wL² / 4", "B. wL² / 8", "C. wL² / 12", "D. wL / 2"];
+const SELECTED = 1; // index of selected option (wL² / 8 is the correct maximum bending moment)
 
 export function MockExamSection() {
   return (
@@ -26,7 +26,7 @@ export function MockExamSection() {
             <span className="text-gradient-gold">before the real exam.</span>
           </h2>
           <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
-            Full-length timed mock exams replicating the exact Loksewa exam environment.
+            Full-length timed mock exams replicating the exact competitive engineering exam environment.
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export function MockExamSection() {
             {/* Question */}
             <div className="px-6 py-5">
               <p className="text-[16px] md:text-[18px] font-[600] text-slate-800 dark:text-white leading-[1.65] mb-6">
-                Which of the following is related to the fundamental right to <span className="font-[800] text-[#2563EB] dark:text-[#2563EB]">equality</span> according to the Constitution of Nepal 2072?
+                For a simply supported beam of span <span className="font-[800] text-[#2563EB] dark:text-[#2563EB]">L</span> carrying a uniformly distributed load <span className="font-[800] text-[#2563EB] dark:text-[#2563EB]">w</span> over the entire length, the maximum bending moment occurs at mid-span and is equal to:
               </p>
 
               {/* Options */}

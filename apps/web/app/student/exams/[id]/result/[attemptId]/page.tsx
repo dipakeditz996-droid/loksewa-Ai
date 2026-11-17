@@ -234,7 +234,7 @@ export default function ExamResultPage() {
                             Request Manual Checking
                           </CardTitle>
                           <CardDescription className="text-xs">
-                            Have an experienced Loksewa teacher grade your handwritten answer sheet question-by-question.
+                            Have an experienced engineering faculty member grade your handwritten answer sheet question-by-question.
                           </CardDescription>
                         </div>
                       </div>
@@ -454,7 +454,7 @@ export default function ExamResultPage() {
                       Expert Solution PDF
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Official model solutions and marking scheme prepared by Loksewa faculty
+                      Official model solutions and marking scheme prepared by expert engineering faculty
                     </CardDescription>
                   </div>
                 </div>

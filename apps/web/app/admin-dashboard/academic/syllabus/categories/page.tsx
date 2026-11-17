@@ -348,7 +348,7 @@ export default function CategoriesPage() {
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="e.g. Loksewa, Banking, Security"
+                    placeholder="e.g. PSC Exams, License Exams, Entrance Exams"
                     className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20 focus:border-[#0B2545]/30"
                   />
                 </div>

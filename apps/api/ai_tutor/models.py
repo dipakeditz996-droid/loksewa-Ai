@@ -50,7 +50,7 @@ class PromptTemplate(models.Model):
     system prompt. One row per Conversation mode."""
 
     MODE_DEFAULTS = {
-        'EXPLAIN': "Your goal is to explain concepts clearly with key points and Loksewa exam relevance.",
+        'EXPLAIN': "Your goal is to explain concepts clearly with key points and competitive exam relevance.",
         'PRACTICE': "Your goal is to generate practice questions (MCQs) for the student. Clearly state these are AI-generated.",
         'REVISION': "Your goal is to provide quick summaries, important facts, and common mistakes for rapid revision.",
         'EXAM_STRATEGY': "Your goal is to provide exam preparation strategies and tips for scoring high.",

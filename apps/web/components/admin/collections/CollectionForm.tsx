@@ -179,7 +179,7 @@ export default function CollectionForm({ collection, onSaved }: CollectionFormPr
               type="text"
               value={name}
               onChange={e => { setName(e.target.value); setErrors(prev => ({ ...prev, name: '' })); }}
-              placeholder="e.g. Loksewa PSC Previous Papers"
+              placeholder="e.g. Civil Engineering Previous Papers"
               className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B2545]/30 ${
                 errors.name ? 'border-red-400 bg-red-50' : 'border-gray-200'
               }`}

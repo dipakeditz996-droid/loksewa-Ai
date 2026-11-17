@@ -733,7 +733,7 @@ export default function CreateExamPage() {
                   ? "e.g. Governance & Constitution — Topicwise Test 1"
                   : majorType === "subjective"
                   ? "e.g. Section Officer Paper II — Public Administration Subjective"
-                  : "e.g. Loksewa Section Officer — Full Mock Test 1"
+                  : "e.g. Civil Engineering — Full Mock Test 1"
               }
             />
           </div>
@@ -1080,7 +1080,7 @@ export default function CreateExamPage() {
                     Subjective Question Paper (PDF / Image)
                   </h2>
                   <p className="text-sm text-slate-500 mt-0.5">
-                    Upload the official Loksewa PSC question paper (PDF or Image: JPG, PNG, WEBP) that students will read during their exam.
+                    Upload the official examination question paper (PDF or Image: JPG, PNG, WEBP) that students will read during their exam.
                   </p>
                 </div>
                 {hasQuestionPaper && (

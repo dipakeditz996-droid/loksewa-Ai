@@ -7,10 +7,10 @@ import { ArrowRight, CalendarDays, CheckCircle2 } from "lucide-react";
 
 const STUDY_PLAN = [
   { day: "MON", topic: "Structural Analysis", tasks: "20 Questions", type: "practice", done: true },
-  { day: "TUE", topic: "General Knowledge", tasks: "30 Questions", type: "practice", done: true },
+  { day: "TUE", topic: "Fluid Mechanics", tasks: "30 Questions", type: "practice", done: true },
   { day: "WED", topic: "Mock Examination", tasks: "Full Test", type: "exam", done: false, active: true },
   { day: "THU", topic: "Weak Topic Revision", tasks: "AI Selected", type: "revision", done: false },
-  { day: "FRI", topic: "Current Affairs", tasks: "25 Questions", type: "practice", done: false },
+  { day: "FRI", topic: "Surveying & Geomatics", tasks: "25 Questions", type: "practice", done: false },
   { day: "SAT", topic: "Full Practice", tasks: "50 Questions", type: "practice", done: false },
   { day: "SUN", topic: "Performance Review", tasks: "Analytics", type: "review", done: false },
 ];

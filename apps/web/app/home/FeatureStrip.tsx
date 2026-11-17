@@ -36,7 +36,7 @@ const features = [
   },
   {
     icon: BookOpen,
-    title: "Expert Notes",
+    title: "Official Syllabus",
     sub: "Curated Learning",
     color: "text-emerald-500 dark:text-emerald-400",
     bg: "bg-emerald-500/10",

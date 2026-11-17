@@ -119,11 +119,10 @@ export function SyllabusSection() {
                   {paper.subjects.map((subject) => (
                     <div
                       key={subject.name}
-                      className={`p-3.5 rounded-[14px] border ${
-                        subject.isWeak
+                      className={`p-3.5 rounded-[14px] border ${subject.isWeak
                           ? "bg-red-50 dark:bg-red-500/[0.05] border-red-100 dark:border-red-500/[0.1]"
                           : "bg-slate-50 dark:bg-white/[0.02] border-slate-100 dark:border-white/[0.04]"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">

@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Official Nepal Exam Syllabi & Curriculum',
+  title: 'Competitive Engineering Exam Syllabi & Curriculum',
   description:
-    'Browse official syllabus structures, paper breakdowns, subject topics, and downloadable curriculum PDFs for Nepal Public Service Commission (Loksewa), IOE Entrance, and NEC License.',
+    'Browse official syllabus structures, paper breakdowns, subject topics, and downloadable curriculum PDFs for Competitive Engineering Exams (Technical PSC), IOE Entrance, and NEC License.',
   alternates: {
     canonical: '/syllabus',
   },
   openGraph: {
-    title: 'Nepal Exam Syllabi & Curriculum | NES Mastery',
+    title: 'Competitive Engineering Exam Syllabi & Curriculum | NES Mastery',
     description:
-      'Browse official syllabus structures, paper breakdowns, and downloadable curriculum PDFs for Nepal engineering and civil service examinations.',
+      'Browse official syllabus structures, paper breakdowns, and downloadable curriculum PDFs for Nepal engineering and competitive examinations.',
     url: '/syllabus',
   },
 };

@@ -523,7 +523,7 @@ export default function SellerDashboardPage() {
                       setForm((f) => ({ ...f, title: e.target.value }))
                     }
                     className="input-style"
-                    placeholder="e.g. Loksewa Tayari Pustika"
+                    placeholder="e.g. Civil Engineering Objective Guide"
                   />
                 </div>
                 <div>

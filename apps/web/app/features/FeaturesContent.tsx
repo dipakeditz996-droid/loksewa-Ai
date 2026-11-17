@@ -46,12 +46,12 @@ export function FeaturesContent() {
           <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-white tracking-tight mb-6 max-w-4xl leading-[1.12]">
             Everything You Need to Ace Your{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#F0C95A] via-[#D4A72C] to-[#B38318]">
-              Loksewa Examination
+              Competitive Engineering Exams
             </span>
           </h1>
 
           <p className="text-base sm:text-lg text-slate-300/90 max-w-2xl font-normal leading-relaxed mb-10">
-            A comprehensive, AI-assisted platform engineered specifically for Public Service Commission (PSC) aspirants in Nepal. From structured curriculum courses to timed simulations and peer challenges.
+            A comprehensive, AI-assisted platform engineered specifically for engineering and competitive technical examination aspirants in Nepal. From structured curriculum courses to timed simulations and peer challenges.
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3.5">
@@ -208,7 +208,7 @@ export function FeaturesContent() {
               </div>
               <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2.5">Full-Length Mock Exams</h3>
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
-                Timed exams simulating the exact question counts, section timings, and official 20% negative deduction of actual Loksewa tests.
+                Timed exams simulating the exact question counts, section timings, and official 20% negative deduction of actual competitive engineering tests.
               </p>
               <Link href="/exams">
                 <Button variant="outline" className="font-bold text-xs h-9 px-4 rounded-lg border-slate-200 dark:border-white/10 flex items-center gap-1.5">
@@ -258,7 +258,7 @@ export function FeaturesContent() {
                   <CheckCircle2 className="w-5 h-5 text-violet-500 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="text-sm font-bold text-slate-900 dark:text-white">Instant Concept Explanations</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Ask any Loksewa topic and receive step-by-step reasoning with reference to official provisions.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Ask any exam syllabus topic and receive step-by-step reasoning with reference to official provisions.</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -323,7 +323,7 @@ export function FeaturesContent() {
               Build Daily Consistency with Play & Earn
             </h2>
             <p className="text-slate-600 dark:text-slate-400 text-sm sm:text-base leading-relaxed">
-              Loksewa preparation demands persistence. Earn XP, maintain daily study streaks, challenge peers in quiz battles, and climb the leaderboard.
+              Competitive engineering exam preparation demands persistence. Earn XP, maintain daily study streaks, challenge peers in quiz battles, and climb the leaderboard.
             </p>
           </div>
 
@@ -461,7 +461,7 @@ export function FeaturesContent() {
       <section className="py-12 sm:py-14 lg:py-16 bg-gradient-to-br from-[#0B2545] to-[#163E6B] text-white text-center relative overflow-hidden">
         <div className="max-w-3xl mx-auto px-4 relative z-10">
           <h2 className="text-3xl sm:text-4xl font-black mb-4 tracking-tight">
-            Ready to Accelerate Your Loksewa Journey?
+            Ready to Accelerate Your Preparation Journey?
           </h2>
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed mb-8">
             Create your account today to access curriculum notes, begin your first practice session, and start climbing the leaderboard.

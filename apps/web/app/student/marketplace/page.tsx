@@ -89,12 +89,12 @@ export default function MarketplacePage() {
 
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Marketplace</h2>
           <p className="text-muted-foreground mt-1">
-            Verified physical books, printed question sets, and student-to-student used copies for Loksewa preparation.
+            Verified physical books, printed question sets, and student-to-student used copies for competitive engineering exam preparation.
           </p>
         </div>
         <Button asChild variant="outline">
@@ -206,12 +206,12 @@ export default function MarketplacePage() {
               </CardHeader>
               <CardFooter className="p-4 pt-0 flex items-center justify-between">
                 <div className="font-bold text-lg">
-                      <span>Rs. {product.final_price}</span>
-                      {product.discount_price && (
-                        <span className="text-sm text-muted-foreground line-through ml-2 font-normal">
-                          Rs. {product.price}
-                        </span>
-                      )}
+                  <span>Rs. {product.final_price}</span>
+                  {product.discount_price && (
+                    <span className="text-sm text-muted-foreground line-through ml-2 font-normal">
+                      Rs. {product.price}
+                    </span>
+                  )}
                 </div>
                 <Button asChild size="sm">
                   <Link href={`/student/marketplace/${product.id}`}>

@@ -73,7 +73,7 @@ const ACCENTS = [
 // Helper to choose the most appropriate icon for each canonical category
 function getCategoryIcon(name: string) {
   const lower = name.toLowerCase();
-  if (lower.includes("psc") || lower.includes("public service") || lower.includes("loksewa")) {
+  if (lower.includes("psc") || lower.includes("public service") || lower.includes("loksewa") || lower.includes("competitive")) {
     return Landmark;
   }
   if (lower.includes("license") || lower.includes("nec") || lower.includes("diploma")) {

@@ -24,7 +24,7 @@ import { FinalCTASection } from "./home/FinalCTASection";
 
 export const metadata = {
   title: "NES Mastery | Engineering Entrance & License Examination Preparation Platform",
-  description: "Master your engineering examinations with comprehensive study plans, dynamic mock tests, targeted engineering question banks, and expert notes.",
+  description: "Master your engineering examinations with comprehensive study plans, dynamic mock tests, targeted engineering question banks, and official syllabus.",
 };
 
 // Revalidate homepage every 5 minutes (ISR) to deliver instant edge TTFB (<100ms)

@@ -122,7 +122,7 @@ export default function ProductDetailPage() {
               ) : (
                 <div className="w-48 h-64 rounded-lg bg-gradient-to-br from-[#163E6B] to-[#0A1118] p-5 flex flex-col justify-between shadow-2xl border-l-4 border-amber-400">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black uppercase tracking-wider text-white/80">Loksewa</span>
+                    <span className="text-xs font-black uppercase tracking-wider text-white/80">Engineering</span>
                     <BookOpen className="w-5 h-5 text-amber-400" />
                   </div>
                   <div>

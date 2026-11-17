@@ -136,7 +136,7 @@ function ProductCardCover({
   return (
     <div className={`relative z-10 w-32 h-44 rounded-[6px] bg-gradient-to-br ${imageColor} p-3 flex flex-col justify-between shadow-[0_6px_16px_rgba(0,0,0,0.18)] border-l-4 border-amber-400/80 group-hover:scale-105 transition-all duration-300`}>
       <div className="flex items-center justify-between">
-        <span className="text-[9px] font-black uppercase tracking-wider text-white/80">Loksewa</span>
+        <span className="text-[9px] font-black uppercase tracking-wider text-white/80">Engineering</span>
         <BookOpen className="w-3.5 h-3.5 text-white/80" />
       </div>
       <div>
@@ -242,7 +242,7 @@ export default function MarketplacePage() {
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8">
               <ShoppingBag className="w-4 h-4 text-[#D4A72C]" />
               <span className="text-[11px] font-bold uppercase tracking-widest text-white/90">
-                LOKSEWA STUDY MARKETPLACE
+                ENGINEERING STUDY MARKETPLACE
               </span>
             </div>
             
@@ -252,7 +252,7 @@ export default function MarketplacePage() {
             </h1>
             
             <p className="text-lg md:text-xl text-slate-300 font-[500] max-w-2xl mx-auto mb-12">
-              Discover books, study materials, stationery, and carefully selected preparation resources built for serious Loksewa aspirants.
+              Discover books, study materials, stationery, and carefully selected preparation resources built for serious engineering aspirants.
             </p>
 
             <div className="relative max-w-2xl mx-auto mb-8 group">
@@ -332,7 +332,7 @@ export default function MarketplacePage() {
                     Exclusive Collection
                   </div>
                   <h2 className="text-3xl md:text-5xl font-[900] tracking-tight mb-4">Prepare Better.<br/>Study Smarter.</h2>
-                  <p className="text-lg text-white/80 font-[500] mb-8">Curated resources, premium books, and comprehensive study materials designed exclusively for your Loksewa journey.</p>
+                  <p className="text-lg text-white/80 font-[500] mb-8">Curated resources, premium books, and comprehensive study materials designed exclusively for your competitive exam journey.</p>
                   <Button className="h-12 px-8 rounded-[12px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[700]">
                     Explore Collection <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>

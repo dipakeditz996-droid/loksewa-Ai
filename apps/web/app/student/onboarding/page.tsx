@@ -139,7 +139,7 @@ function OnboardingForm() {
               <BookOpen className="h-5 w-5 text-white" strokeWidth={1.5} />
             </div>
             <div>
-              <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">Loksewa<span className="text-[#D4A72C]">AI</span></span>
+              <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">NES<span className="text-[#2563EB] dark:text-[#60A5FA] ml-1">Mastery</span></span>
               <span className="text-[9px] text-white/70 block mt-0.5 font-medium tracking-wide">Your Journey. Our Guidance. Your Success.</span>
             </div>
           </Link>

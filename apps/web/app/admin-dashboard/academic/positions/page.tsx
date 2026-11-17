@@ -178,7 +178,7 @@ export default function AcademicPositionsPage() {
             Positions
           </h1>
           <p className="text-slate-500 text-sm mt-1">
-            Manage job positions for Loksewa exams.
+            Manage job positions and designations for competitive exams.
           </p>
         </div>
         <Button
@@ -355,7 +355,7 @@ export default function AcademicPositionsPage() {
             </DialogTitle>
             <DialogDescription className="text-slate-600 dark:text-slate-300">
               {modalMode === "create"
-                ? "Add a new job position or role for Loksewa exams."
+                ? "Add a new job position or role for competitive exams."
                 : "Update the position details below."}
             </DialogDescription>
           </DialogHeader>

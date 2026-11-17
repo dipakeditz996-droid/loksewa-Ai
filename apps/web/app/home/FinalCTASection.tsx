@@ -33,7 +33,7 @@ export function FinalCTASection() {
 
         <h2 className="text-[40px] md:text-[56px] lg:text-[64px] font-[900] tracking-tight text-white mb-6 leading-[1.1]">
           Ready to transform your <br className="hidden md:block" />
-          <span className="text-gradient-gold">Loksewa preparation?</span>
+          <span className="text-gradient-gold">competitive exam preparation?</span>
         </h2>
         
         <p className="text-[18px] md:text-[20px] text-slate-400 leading-relaxed mb-10 max-w-[600px] mx-auto font-[500]">

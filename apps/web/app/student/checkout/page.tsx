@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  ArrowLeft, CheckCircle2, UploadCloud, AlertTriangle, Loader2, 
+import {
+  ArrowLeft, CheckCircle2, UploadCloud, AlertTriangle, Loader2,
   Sparkles, ShieldCheck, BookOpen, Bot, GraduationCap, Clock, Check, QrCode
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -42,12 +42,12 @@ export default function CheckoutPage() {
       try {
         const storedPlanId = localStorage.getItem("onboarding_selected_plan_id");
         const storedCourses = localStorage.getItem("onboarding_selected_courses");
-        
+
         if (!storedPlanId) {
           router.replace("/student/onboarding/preparation");
           return;
         }
-        
+
         if (storedCourses) {
           try {
             const courses = JSON.parse(storedCourses);
@@ -56,16 +56,16 @@ export default function CheckoutPage() {
             setSelectedCourses([]);
           }
         }
-        
+
         const [planData, methodsData] = await Promise.all([
           subscriptionsApi.getPlan(storedPlanId),
           marketplaceApi.getPaymentMethods().catch(() => [])
         ]);
-        
+
         setPlan(planData);
         const activeMethods = (methodsData || []).filter((m: any) => m.is_active !== false);
         setPaymentMethods(activeMethods);
-        
+
         if (activeMethods.length > 0 && activeMethods[0]?.id) {
           setSelectedMethodId(activeMethods[0].id);
         }
@@ -76,7 +76,7 @@ export default function CheckoutPage() {
         setLoading(false);
       }
     };
-    
+
     loadData();
   }, [router]);
 
@@ -111,11 +111,11 @@ export default function CheckoutPage() {
       const courseIds = selectedCourses.map((c) => c.id).filter(Boolean);
       const payload = courseIds.length > 0 ? { course_ids: courseIds } : undefined;
       await subscriptionsApi.activateFreePlan(plan.id, payload);
-      
+
       // Clear localStorage onboarding cache
       localStorage.removeItem("onboarding_selected_plan_id");
       localStorage.removeItem("onboarding_selected_courses");
-      
+
       setFreeSuccess(true);
     } catch (err: any) {
       console.error(err);
@@ -147,10 +147,10 @@ export default function CheckoutPage() {
       setError("Please upload your payment receipt or screenshot.");
       return;
     }
-    
+
     setSubmitting(true);
     setError(null);
-    
+
     try {
       const formData = new FormData();
       formData.append("plan", plan.id.toString());
@@ -159,20 +159,20 @@ export default function CheckoutPage() {
       formData.append("transaction_id", transactionId.trim());
       formData.append("screenshot", screenshot);
       if (note.trim()) formData.append("note", note.trim());
-      
+
       // Append selected course IDs
       selectedCourses.forEach((course) => {
         if (course.id) {
           formData.append("course_ids", course.id.toString());
         }
       });
-      
+
       const res = await subscriptionsApi.submitPayment(formData);
-      
+
       // Clear localStorage
       localStorage.removeItem("onboarding_selected_plan_id");
       localStorage.removeItem("onboarding_selected_courses");
-      
+
       // Navigate to live payment verification screen
       router.push(`/student/payment/verification/${res.id}`);
     } catch (err: any) {
@@ -190,13 +190,13 @@ export default function CheckoutPage() {
       <div className="min-h-screen relative flex font-sans overflow-hidden bg-[#0A1118] text-white">
         <div className="absolute inset-0 z-0 bg-cover bg-[25%_top] lg:bg-[center_top] bg-no-repeat" style={{ backgroundImage: `url(${bgImage.src})` }} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/80 to-black/95 mix-blend-multiply" />
-        
+
         <div className="container relative z-10 w-full mx-auto px-6 flex flex-col min-h-screen items-center justify-center">
           <div className="w-full max-w-lg bg-black/60 backdrop-blur-[24px] border border-emerald-500/30 rounded-[28px] p-8 md:p-10 text-center shadow-[0_20px_60px_rgba(16,185,129,0.15)] space-y-6">
             <div className="w-20 h-20 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto shadow-inner">
               <CheckCircle2 className="w-10 h-10" />
             </div>
-            
+
             <div className="space-y-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full">
                 Free Plan Activated
@@ -245,8 +245,8 @@ export default function CheckoutPage() {
 
       <div className="container relative z-10 w-full mx-auto px-4 md:px-8 py-8 flex flex-col min-h-screen">
         <div className="flex justify-between items-center w-full mb-6">
-          <button 
-            onClick={() => router.back()} 
+          <button
+            onClick={() => router.back()}
             className="flex items-center space-x-2 text-white/70 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -256,7 +256,7 @@ export default function CheckoutPage() {
 
         <div className="w-full flex justify-center flex-1 py-2 pb-12">
           <div className="w-full max-w-5xl bg-black/50 backdrop-blur-[24px] border border-white/10 rounded-[26px] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.5)] flex flex-col">
-            
+
             {/* Header */}
             <div className="p-6 md:p-8 border-b border-white/10 flex items-center justify-between">
               <div>
@@ -270,7 +270,7 @@ export default function CheckoutPage() {
                   {isFreePlan ? "Confirm Your Free Plan" : "Review & Complete Payment"}
                 </h2>
                 <p className="text-xs md:text-sm text-white/60 font-medium mt-1">
-                  {isFreePlan 
+                  {isFreePlan
                     ? "Activate instant access to mock exams, notes, and AI assistance at zero cost."
                     : "Complete manual bank/eSewa transfer and upload proof for administrator review."}
                 </p>
@@ -301,7 +301,7 @@ export default function CheckoutPage() {
                 <div className="w-full md:w-5/12 bg-white/[0.03] p-6 md:p-8 border-b md:border-b-0 md:border-r border-white/10 space-y-6">
                   <div>
                     <h3 className="text-xs font-bold text-white/50 uppercase tracking-wider mb-4">Package Summary</h3>
-                    
+
                     <div className="bg-white/5 rounded-2xl p-5 border border-white/10 space-y-4">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -316,7 +316,7 @@ export default function CheckoutPage() {
                       </div>
 
                       <p className="text-xs text-white/70 line-clamp-2">
-                        {plan.description || "Loksewa comprehensive preparation syllabus and exams."}
+                        {plan.description || "Comprehensive competitive engineering exam preparation syllabus and exams."}
                       </p>
 
                       <div className="pt-3 border-t border-white/10 flex items-baseline justify-between">
@@ -359,7 +359,7 @@ export default function CheckoutPage() {
                   <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-start gap-3 text-xs text-white/60">
                     <ShieldCheck className="w-4 h-4 text-[#D4A72C] shrink-0 mt-0.5" />
                     <span>
-                      {isFreePlan 
+                      {isFreePlan
                         ? "Instant server-side activation. Upgrade to premium packages anytime."
                         : "Payments are securely verified against our official banking accounts."}
                     </span>
@@ -392,7 +392,7 @@ export default function CheckoutPage() {
                         </div>
 
                         <p className="text-xs text-white/70 leading-relaxed">
-                          This is a free tier provided to support your Loksewa exam preparation. You will immediately receive access to standard practice question sets, public study materials, and AI Tutor trial queries.
+                          This is a free tier provided to support your competitive engineering exam preparation. You will immediately receive access to standard practice question sets, public study materials, and AI Tutor trial queries.
                         </p>
 
                         <div className="grid sm:grid-cols-2 gap-3 pt-2">
@@ -442,7 +442,7 @@ export default function CheckoutPage() {
                           )}
                         </Button>
                         <p className="text-[11px] text-center text-white/50">
-                          By activating, you immediately gain access to Loksewa preparation tools.
+                          By activating, you immediately gain access to engineering exam preparation tools.
                         </p>
                       </div>
                     </div>
@@ -461,11 +461,10 @@ export default function CheckoutPage() {
                                 key={method.id}
                                 type="button"
                                 onClick={() => setSelectedMethodId(method.id)}
-                                className={`p-3 rounded-xl border text-left transition-all ${
-                                  isSelected
-                                    ? "border-[#D4A72C] bg-[#D4A72C]/10 text-white shadow-sm"
-                                    : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
-                                }`}
+                                className={`p-3 rounded-xl border text-left transition-all ${isSelected
+                                  ? "border-[#D4A72C] bg-[#D4A72C]/10 text-white shadow-sm"
+                                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                                  }`}
                               >
                                 <span className="font-bold text-xs block">{method.display_name}</span>
                                 <span className="text-[10px] text-white/50">{method.method_type}</span>
@@ -544,11 +543,10 @@ export default function CheckoutPage() {
                           </label>
                           <div
                             onClick={() => fileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
-                              screenshot
-                                ? "border-emerald-500/50 bg-emerald-500/5"
-                                : "border-white/20 hover:border-[#D4A72C]/50 bg-black/20"
-                            }`}
+                            className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${screenshot
+                              ? "border-emerald-500/50 bg-emerald-500/5"
+                              : "border-white/20 hover:border-[#D4A72C]/50 bg-black/20"
+                              }`}
                           >
                             <input
                               type="file"

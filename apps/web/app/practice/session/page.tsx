@@ -203,7 +203,7 @@ function PracticeSessionContent() {
             <BookOpen className="h-5 w-5 text-white dark:text-primary" strokeWidth={2.5} />
           </div>
           <span className="font-[800] text-[18px] text-foreground tracking-tight hidden sm:block">
-            Loksewa<span className="text-[#D4A72C]">AI</span>
+            NES<span className="text-[#2563EB] dark:text-[#60A5FA]"> Mastery</span>
           </span>
           <div className="h-6 w-px bg-border mx-2 hidden sm:block"></div>
           <div className="flex flex-col">

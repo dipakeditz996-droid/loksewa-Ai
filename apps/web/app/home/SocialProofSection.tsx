@@ -7,9 +7,9 @@ import { WriteReviewTrigger } from "@/components/home/WriteReviewTrigger";
 // Fallback only for when /public/stats/ can't be reached (outage) — the real
 // endpoint always returns real, floor-guaranteed counts, never these.
 const STATIC_METRICS = [
-  { value: "5,000+", label: "Aspirants", description: "Active learners" },
-  { value: "10,000+", label: "Questions", description: "Practice questions" },
-  { value: "200+", label: "Practice Sets", description: "Topic-wise sets" },
+  { value: "100+", label: "Aspirants", description: "Active learners" },
+  { value: "1,000+", label: "Questions", description: "Practice questions" },
+  { value: "20+", label: "Practice Sets", description: "Topic-wise sets" },
   { value: "95%", label: "Content Accuracy", description: "Verified by experts" },
 ];
 
@@ -56,7 +56,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
           </div>
           <h2 className="text-[30px] sm:text-[36px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-3 sm:mb-4 leading-[1.1]">
             Built for serious{" "}
-            <span className="text-gradient-gold">Loksewa preparation.</span>
+            <span className="text-gradient-gold">engineering exam preparation.</span>
           </h2>
           <p className="text-[15.5px] sm:text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Thousands of aspirants trust NES Mastery to prepare smarter, practice better, and perform with confidence.

@@ -714,14 +714,14 @@ export function MockExamBuilder({ initialData, mode }: MockExamBuilderProps) {
             <div className="w-3 h-3 rounded-full bg-green-500" />
           </div>
           <div className="bg-slate-700/50 rounded-md px-3 py-1 text-xs text-slate-400 font-medium flex-1 text-center font-mono">
-            loksewa.ai/exam/{formData.title?.toLowerCase().replace(/\s+/g, '-')}
+            nesmastery.com/exam/{formData.title?.toLowerCase().replace(/\s+/g, '-')}
           </div>
         </div>
 
         {/* Exam Header */}
         <div className="bg-card p-4 flex justify-between items-center border-b border-slate-200">
           <div className="font-bold text-slate-800 text-lg flex items-center gap-2">
-            <span className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-xs">LOK</span>
+            <span className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center font-bold text-xs">NES</span>
             {formData.title || "Untitled Exam"}
           </div>
           <div className="flex items-center gap-4">

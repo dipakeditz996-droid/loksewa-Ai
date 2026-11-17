@@ -5,14 +5,14 @@ import { Sparkles, TrendingUp, TrendingDown, Target, ArrowRight, Zap } from "luc
 
 const WEAK_TOPICS = [
   { name: "Structural Analysis", accuracy: 62, questions: 20 },
-  { name: "Current Affairs", accuracy: 68, questions: 15 },
+  { name: "Soil Mechanics", accuracy: 68, questions: 15 },
   { name: "Fluid Mechanics", accuracy: 71, questions: 12 },
 ];
 
 const STRONG_TOPICS = [
-  { name: "Nepal History", accuracy: 91 },
-  { name: "General Science", accuracy: 88 },
-  { name: "Geography", accuracy: 85 },
+  { name: "Surveying & Geomatics", accuracy: 91 },
+  { name: "Building Materials", accuracy: 88 },
+  { name: "Engineering Mechanics", accuracy: 85 },
 ];
 
 export function AIPreparationSection() {

@@ -54,7 +54,7 @@ export default function PracticePage() {
           </h1>
 
           <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
-            Challenge yourself with topic-wise questions, practice sets, and exam-style tests designed around the Loksewa syllabus.
+            Challenge yourself with topic-wise questions, practice sets, and exam-style tests designed around competitive engineering exam syllabi.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto mb-6">
@@ -110,7 +110,7 @@ export default function PracticePage() {
               </div>
               <h3 className="text-xl font-[800] text-slate-900 dark:text-white mb-3">Topic Practice</h3>
               <p className="text-sm font-[500] text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
-                Practice specific topics from the Loksewa syllabus. Focus on what matters.
+                Practice specific topics from the competitive exam syllabus. Focus on what matters.
               </p>
               <div className="flex items-center justify-between mt-auto">
                 <span className="text-xs font-[700] text-slate-500 uppercase tracking-wider">4.5K+ Qs</span>
@@ -161,7 +161,7 @@ export default function PracticePage() {
               </div>
               <h3 className="text-xl font-[800] text-slate-900 dark:text-white mb-3">Previous Questions</h3>
               <p className="text-sm font-[500] text-slate-600 dark:text-slate-400 leading-relaxed mb-6">
-                Practice questions based on previous Loksewa examination patterns.
+                Practice questions based on previous competitive engineering examination patterns.
               </p>
               <div className="flex items-center justify-between mt-auto">
                 <span className="text-xs font-[700] text-slate-500 uppercase tracking-wider">Archive</span>

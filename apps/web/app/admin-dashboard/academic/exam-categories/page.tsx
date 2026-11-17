@@ -284,7 +284,7 @@ export default function ExamCategoriesPage() {
               <Label htmlFor="cat_name">Name <span className="text-red-500">*</span></Label>
               <Input
                 id="cat_name"
-                placeholder="e.g. Loksewa, Banking, Security"
+                placeholder="e.g. PSC Exams, License Exams, Entrance Exams"
                 value={fname}
                 onChange={e => setFname(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSave()}

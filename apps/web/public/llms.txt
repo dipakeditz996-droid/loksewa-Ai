@@ -1,12 +1,12 @@
 # NES Mastery
 
-> NES Mastery is Nepal's leading examination preparation platform specializing in competitive engineering and public service examinations.
+> NES Mastery is Nepal's leading examination preparation platform specializing in competitive engineering and technical examinations.
 
 ## Core Examination Tracks
 
 - **IOE Entrance Examination**: Preparation for Institute of Engineering (Tribhuvan University) B.E./B.Arch entrance exams with comprehensive physics, chemistry, mathematics, and English modules.
 - **NEC License Examination**: Comprehensive mock questions and preparation for the Nepal Engineering Council professional engineer licensing exams across Civil, Electrical, Mechanical, and Computer disciplines.
-- **PSC (Loksewa) Engineering & Civil Services**: Full syllabus coverage for Section Officer, Nayab Subba, Kharidar, and Sub-engineer posts with authentic negative deduction scoring (-20%).
+- **Competitive Engineering & Technical Government Exams**: Full syllabus coverage for engineering posts and technical service examinations with authentic negative deduction scoring (-20%).
 
 ## Key Platform Features
 

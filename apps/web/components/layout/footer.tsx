@@ -97,7 +97,7 @@ export function Footer() {
               </Link>
 
               <p className="text-[14px] text-slate-500 dark:text-slate-400 leading-[1.7] mb-6 max-w-[280px]">
-                Nepal&apos;s premier engineering entrance and license examination preparation platform. Expert curriculum, topic drills, and proven success.
+                Nepal&apos;s premier competitive engineering examination preparation platform. Expert curriculum, topic drills, and proven success.
               </p>
 
               {/* Social links */}

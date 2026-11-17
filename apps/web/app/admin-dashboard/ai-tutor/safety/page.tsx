@@ -113,7 +113,7 @@ export default function AITutorSafetyPage() {
       setSimResult({
         status: "refused",
         guardrail: "Syllabus Grounding & Knowledge Retrieval",
-        reason: "Query outside Loksewa syllabus scope. Refusal redirect to syllabus topics would trigger.",
+        reason: "Query outside prescribed syllabus scope. Refusal redirect to syllabus topics would trigger.",
       });
     } else {
       setSimResult({
@@ -312,7 +312,7 @@ export default function AITutorSafetyPage() {
               id: "syllabus_grounding",
               name: "Syllabus Grounding & Knowledge Retrieval",
               category: "Academic Integrity",
-              description: "Ensures responses strictly adhere to Loksewa syllabus topics using verified study materials.",
+              description: "Ensures responses strictly adhere to prescribed syllabus topics using verified study materials.",
               status: "active",
               enforcementLevel: "Strict Context",
               details: "Indexed study materials cited on student responses.",

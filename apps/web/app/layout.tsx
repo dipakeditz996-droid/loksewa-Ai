@@ -51,22 +51,22 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "NES Mastery | Nepal's Leading Engineering & Public Service Exam Preparation",
+    default: "NES Mastery | Competitive Engineering Exams & Technical Preparation Nepal",
     template: "%s | NES Mastery",
   },
   description:
-    "Nepal's premier examination preparation platform for IOE Entrance, NEC Engineering License, Loksewa Technical & Civil Services. Real exam questions, live mock tests, verified syllabus notes, and instant performance analytics.",
+    "Nepal's premier examination preparation platform for Competitive Engineering Exams, IOE Entrance, NEC Engineering License, and Technical Government Examinations. Real exam questions, live mock tests, verified syllabus notes, and instant performance analytics.",
   keywords: [
     "NES Mastery",
-    "Loksewa Nepal",
+    "Competitive Engineering Exams Nepal",
+    "Engineering Exam Preparation Nepal",
     "IOE Entrance Preparation",
     "NEC License Exam",
     "Nepal Engineering Council",
-    "Public Service Commission Nepal",
-    "Engineering Exam Nepal",
-    "Sub-engineer preparation",
-    "Civil Engineering Loksewa",
-    "Mock Tests Nepal",
+    "Civil Engineering Competitive Exam Preparation",
+    "Technical Government Exam Preparation",
+    "Engineering License Exam Preparation",
+    "Engineering Mock Tests Nepal",
   ],
   authors: [{ name: "NES Mastery Academic Team", url: SITE_URL }],
   creator: "NES Mastery",
@@ -93,9 +93,9 @@ export const metadata: Metadata = {
   },
   manifest: "/site.webmanifest",
   openGraph: {
-    title: "NES Mastery | Nepal's Leading Engineering & Public Service Exam Preparation",
+    title: "NES Mastery | Competitive Engineering Exams & Technical Preparation Nepal",
     description:
-      "Master IOE Entrance, NEC Engineering License, and Loksewa PSC examinations with authentic mock tests, expert-curated notes, and performance analytics.",
+      "Master Competitive Engineering Exams, NEC Engineering License, and IOE Entrance with authentic mock tests, expert-curated notes, and performance analytics.",
     url: SITE_URL,
     siteName: "NES Mastery",
     locale: "en_NP",
@@ -105,15 +105,15 @@ export const metadata: Metadata = {
         url: "/images/og-card.png",
         width: 1200,
         height: 630,
-        alt: "NES Mastery - Smart Exam Preparation for Nepal Engineering & Public Service",
+        alt: "NES Mastery - Competitive Engineering Exam Preparation Nepal",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "NES Mastery | Smart Exam Preparation Platform",
+    title: "NES Mastery | Competitive Engineering Exam Preparation",
     description:
-      "Nepal's premier examination preparation platform for IOE Entrance, NEC License, and Loksewa PSC examinations.",
+      "Nepal's premier examination preparation platform for Competitive Engineering Exams, NEC License, and IOE Entrance.",
     images: ["/images/og-card.png"],
   },
   robots: {
@@ -158,7 +158,7 @@ export default function RootLayout({
                     "caption": "NES Mastery",
                   },
                   "description":
-                    "Nepal's premier examination preparation platform for IOE Entrance, NEC Engineering License, and Public Service Commission (Loksewa) technical services.",
+                    "Nepal's premier examination preparation platform for Competitive Engineering Exams, IOE Entrance, NEC Engineering License, and Technical Government Examinations.",
                   "sameAs": [
                     "https://www.facebook.com/nesmastery",
                     "https://www.youtube.com/@nesmastery",
@@ -170,7 +170,7 @@ export default function RootLayout({
                   "url": SITE_URL,
                   "name": "NES Mastery",
                   "description":
-                    "Smart examination preparation platform for Nepal engineering and civil service students.",
+                    "Competitive engineering examination preparation platform for Nepalese engineering students and professionals.",
                   "publisher": {
                     "@id": `${SITE_URL}/#organization`,
                   },

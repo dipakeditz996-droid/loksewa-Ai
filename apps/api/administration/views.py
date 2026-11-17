@@ -1779,7 +1779,7 @@ class AdminAITutorSafetyView(APIView):
                 "id": "syllabus_grounding",
                 "name": "Syllabus Grounding & Knowledge Retrieval",
                 "category": "Academic Integrity",
-                "description": "Ensures responses strictly adhere to Loksewa syllabus topics using verified study materials.",
+                "description": "Ensures responses strictly adhere to prescribed syllabus topics using verified study materials.",
                 "status": "active" if sources_count > 0 else "degraded",
                 "enforcementLevel": "Strict",
                 "details": f"{sources_count} published study material(s) indexed for context citation.",

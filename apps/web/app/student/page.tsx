@@ -304,7 +304,7 @@ export default function StudentDashboardPage() {
         <StudentEntitlementsUsageWidget enabled={!loading} />
       </section>
 
-      {/* 3. Official Loksewa Exam Countdown & Upcoming Mock Exam Banner */}
+      {/* 3. Official Competitive Exam Countdown & Upcoming Mock Exam Banner */}
       <section className="space-y-4">
         <LoksewaExamCountdown />
         <MockExamCountdown enabled={!loading} />

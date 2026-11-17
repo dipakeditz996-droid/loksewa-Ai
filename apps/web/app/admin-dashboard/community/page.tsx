@@ -305,7 +305,7 @@ function AdminCommunityPageInner() {
           <h1 className="text-2xl font-bold text-[#0B2545] flex items-center gap-2">
             <MessageSquare className="w-6 h-6" /> Community Moderation
           </h1>
-          <p className="text-slate-500 mt-1">Manage discussions, replies, and reports from the Loksewa Community.</p>
+          <p className="text-slate-500 mt-1">Manage discussions, replies, and reports from the Student Community.</p>
         </div>
       </div>
 

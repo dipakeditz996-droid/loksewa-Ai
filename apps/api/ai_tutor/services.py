@@ -185,7 +185,7 @@ class AdminAILogic:
             }
             
         prompt = f"""
-        You are an expert examiner for Nepal Loksewa exams.
+        You are an expert examiner for Nepal competitive engineering and technical exams.
         Subject: {subject}
         Question: {question_text}
         
@@ -234,7 +234,7 @@ class AdminAILogic:
             return questions
 
         prompt = f"""
-        You are an expert examiner for Nepal Loksewa exams.
+        You are an expert examiner for Nepal competitive engineering and technical exams.
         Subject: {subject}
         
         I will provide a JSON list of questions. For each question, please generate the missing content.

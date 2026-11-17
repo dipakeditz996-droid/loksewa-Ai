@@ -388,7 +388,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
               Activate: {plan.name}
             </h1>
             <p className="text-white/70 text-sm max-w-2xl">
-              Get started with Loksewa preparation completely free. No payment methods, no bank transfers, and no admin verification required.
+              Get started with competitive exam preparation completely free. No payment methods, no bank transfers, and no admin verification required.
             </p>
           </div>
         </div>
@@ -473,7 +473,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
                     <span className="text-xs font-bold text-foreground block">
                       {(plan.free_mock_attempts ?? 0) > 0 ? `${plan.free_mock_attempts} Free Mock Test Attempts` : "Curated Mock Exams"}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">Practice real Loksewa exam patterns</span>
+                    <span className="text-[11px] text-muted-foreground">Practice real competitive exam patterns</span>
                   </div>
                 </div>
 
@@ -482,7 +482,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
                     <BookOpen className="w-4 h-4" />
                   </div>
                   <div>
-                    <span className="text-xs font-bold text-foreground block">Loksewa Study Notes</span>
+                    <span className="text-xs font-bold text-foreground block">Engineering Study Notes</span>
                     <span className="text-[11px] text-muted-foreground">Syllabus-aligned learning materials</span>
                   </div>
                 </div>
@@ -540,7 +540,7 @@ export default function PlanCheckoutPage({ params }: { params: Promise<{ planId:
                 )}
               </Button>
               <p className="text-xs text-center text-muted-foreground">
-                By activating, you immediately gain access to the included Loksewa materials. You can upgrade to a Premium plan at any time.
+                By activating, you immediately gain access to the included preparation materials. You can upgrade to a Premium plan at any time.
               </p>
             </div>
           </div>

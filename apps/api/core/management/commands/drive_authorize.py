@@ -68,7 +68,9 @@ class Command(BaseCommand):
             port=0,
             authorization_prompt_message='AUTHORIZE_URL_START\n{url}\nAUTHORIZE_URL_END',
             success_message='Authorization complete. You can close this tab and return to the terminal.',
-            open_browser=False,
+            open_browser=True,
+            prompt='consent',
+            access_type='offline',
         )
 
         if not credentials.refresh_token:

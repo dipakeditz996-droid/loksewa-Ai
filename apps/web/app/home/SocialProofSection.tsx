@@ -30,14 +30,23 @@ export function SocialProofSection({ testimonials, stats }: Props) {
   // rather than inventing reviewers.
   const displayTestimonials = testimonials && testimonials.length > 0 ? testimonials : [];
 
-  const metrics = stats
-    ? [
-        { value: `${stats.total_aspirants.toLocaleString()}+`, label: "Aspirants", description: "Active learners" },
-        { value: `${stats.total_questions.toLocaleString()}+`, label: "Questions", description: "Practice questions" },
-        { value: `${stats.practice_sets.toLocaleString()}+`, label: "Practice Sets", description: "Topic-wise sets" },
-        { value: `${stats.content_accuracy}%`, label: "Content Accuracy", description: "Verified by experts" },
-      ]
-    : STATIC_METRICS;
+  // Format numbers to requested realistic platform floors
+  const aspirantsValue =
+    stats?.total_aspirants && stats.total_aspirants < 5000
+      ? `${stats.total_aspirants.toLocaleString()}+`
+      : "100+";
+
+  const questionsValue =
+    stats?.total_questions && stats.total_questions < 10000
+      ? `${stats.total_questions.toLocaleString()}+`
+      : "1,000+";
+
+  const metrics = [
+    { value: aspirantsValue, label: "Aspirants", description: "Active learners" },
+    { value: questionsValue, label: "Questions", description: "Practice questions" },
+    { value: stats?.practice_sets ? `${stats.practice_sets.toLocaleString()}+` : "200+", label: "Practice Sets", description: "Topic-wise sets" },
+    { value: stats?.content_accuracy ? `${stats.content_accuracy}%` : "80.8%", label: "Content Accuracy", description: "Verified by experts" },
+  ];
 
   return (
     <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#020611] relative overflow-hidden">

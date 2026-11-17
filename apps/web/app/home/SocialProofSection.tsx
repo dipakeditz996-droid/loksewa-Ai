@@ -83,9 +83,8 @@ export function SocialProofSection({ testimonials, stats }: Props) {
               className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 text-center group hover:border-[#2563EB]/30 dark:hover:border-[#2563EB]/20 transition-all card-hover overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-br from-[#2563EB]/[0.02] to-transparent rounded-[16px] sm:rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className={`text-[24px] xs:text-[28px] sm:text-[36px] md:text-[44px] font-[900] mb-1 leading-tight tracking-tight tabular-nums ${
-                i === 3 ? "text-gradient-gold" : "text-slate-900 dark:text-white"
-              }`}>
+              <div className={`text-[24px] xs:text-[28px] sm:text-[36px] md:text-[44px] font-[900] mb-1 leading-tight tracking-tight tabular-nums ${i === 3 ? "text-gradient-gold" : "text-slate-900 dark:text-white"
+                }`}>
                 {m.value}
               </div>
               <div className="text-[12px] sm:text-[13px] font-[700] text-slate-800 dark:text-slate-100 mb-1">{m.label}</div>
@@ -96,41 +95,41 @@ export function SocialProofSection({ testimonials, stats }: Props) {
 
         {/* Testimonials — omitted entirely until an admin publishes at least one */}
         {displayTestimonials.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {displayTestimonials.slice(0, 3).map((t, i) => (
-            <div
-              key={t.id}
-              className="bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[20px] p-6 flex flex-col gap-4 hover:border-slate-300 dark:hover:border-white/[0.1] transition-all card-hover"
-            >
-              {/* Stars */}
-              <div className="flex items-center gap-0.5">
-                {Array.from({ length: t.rating }).map((_, j) => (
-                  <Star key={j} className="w-3.5 h-3.5 fill-[#2563EB] text-[#2563EB]" />
-                ))}
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {displayTestimonials.slice(0, 3).map((t, i) => (
+              <div
+                key={t.id}
+                className="bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[20px] p-6 flex flex-col gap-4 hover:border-slate-300 dark:hover:border-white/[0.1] transition-all card-hover"
+              >
+                {/* Stars */}
+                <div className="flex items-center gap-0.5">
+                  {Array.from({ length: t.rating }).map((_, j) => (
+                    <Star key={j} className="w-3.5 h-3.5 fill-[#2563EB] text-[#2563EB]" />
+                  ))}
+                </div>
 
-              {/* Review */}
-              <p className="text-[14px] text-slate-600 dark:text-slate-300 leading-[1.7] flex-1">
-                &ldquo;{t.review}&rdquo;
-              </p>
+                {/* Review */}
+                <p className="text-[14px] text-slate-600 dark:text-slate-300 leading-[1.7] flex-1">
+                  &ldquo;{t.review}&rdquo;
+                </p>
 
-              {/* Author */}
-              <div className="flex items-center gap-3 pt-2 border-t border-slate-100 dark:border-white/[0.04]">
-                {t.avatar ? (
-                  <RetryImage src={t.avatar} alt={t.name} className="w-9 h-9 rounded-full object-cover" />
-                ) : (
-                  <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white font-[700] text-[13px]`}>
-                    {t.name.charAt(0)}
+                {/* Author */}
+                <div className="flex items-center gap-3 pt-2 border-t border-slate-100 dark:border-white/[0.04]">
+                  {t.avatar ? (
+                    <RetryImage src={t.avatar} alt={t.name} className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white font-[700] text-[13px]`}>
+                      {t.name.charAt(0)}
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-[13px] font-[700] text-slate-800 dark:text-white">{t.name}</div>
+                    <div className="text-[11.5px] text-[#2563EB] dark:text-[#2563EB] font-[600]">{t.position}</div>
                   </div>
-                )}
-                <div>
-                  <div className="text-[13px] font-[700] text-slate-800 dark:text-white">{t.name}</div>
-                  <div className="text-[11.5px] text-[#2563EB] dark:text-[#2563EB] font-[600]">{t.position}</div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         )}
 
       </div>

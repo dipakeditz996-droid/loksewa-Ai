@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef, Suspense } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import {
   BookOpen,
   User,
@@ -460,9 +462,16 @@ function RegisterForm() {
       <div className="container relative z-10 w-full mx-auto px-4 md:px-12 py-6 flex flex-col min-h-screen">
         {/* Header Logo */}
         <div className="flex justify-start w-full mb-auto lg:mb-0">
-          <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity w-fit mt-2">
-            <div className="bg-transparent border border-white/80 p-1.5 rounded-[8px] flex items-center justify-center">
-              <BookOpen className="h-5 w-5 text-white" strokeWidth={1.5} />
+          <Link href="/" className="flex items-center space-x-3 hover:opacity-90 transition-opacity w-fit mt-2" aria-label="NES Mastery Home">
+            <div className="h-[46px] w-[101px] relative overflow-hidden rounded-[10px] bg-white border border-white/20 p-1 flex items-center justify-center shadow-md">
+              <Image
+                src={BRAND_ASSETS.logo}
+                alt={BRAND_ALT}
+                width={464}
+                height={211}
+                priority
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">

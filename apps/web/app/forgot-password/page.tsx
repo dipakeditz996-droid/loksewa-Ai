@@ -2,7 +2,9 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import { BookOpen, Mail, ArrowLeft, Lock, Eye, EyeOff, CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +57,16 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0A1118] text-white px-6 py-12">
       <div className="w-full max-w-[420px]">
-        <Link href="/" className="flex items-center gap-3 mb-8 w-fit">
-          <div className="bg-transparent border border-white/80 p-1.5 rounded-[8px] flex items-center justify-center">
-            <BookOpen className="h-5 w-5 text-white" strokeWidth={1.5} />
+        <Link href="/" className="flex items-center gap-3 mb-8 w-fit" aria-label="NES Mastery Home">
+          <div className="h-[44px] w-[97px] relative overflow-hidden rounded-[9px] bg-white border border-white/20 p-1 flex items-center justify-center shadow-md">
+            <Image
+              src={BRAND_ASSETS.logo}
+              alt={BRAND_ALT}
+              width={464}
+              height={211}
+              priority
+              className="w-full h-full object-contain"
+            />
           </div>
           <span className="font-[800] text-[20px] tracking-tight text-white leading-none">
             NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>

@@ -2,8 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import {
   BookOpen, Menu, X, Moon, Sun, ArrowRight,
   Home, Sparkles, ShoppingBag, Loader2,
@@ -110,9 +112,16 @@ export function Navbar() {
           >
 
             {/* ── Brand ────────────────────────────── */}
-            <Link href="/" onClick={(event) => handleNavigation(event, "/")} className="flex items-center gap-2.5 group shrink-0 pl-1">
-              <div className="p-1.5 rounded-[9px] bg-gradient-to-br from-[#174A68] to-[#102D40] shadow-[0_2px_10px_rgba(23,74,104,0.3)] transition-transform duration-300 group-hover:scale-105">
-                <BookOpen className="h-5 w-5 text-[#60A5FA]" strokeWidth={2.5} />
+            <Link href="/" onClick={(event) => handleNavigation(event, "/")} className="flex items-center gap-2.5 group shrink-0 pl-1" aria-label="NES Mastery Home">
+              <div className="h-[36px] w-[79px] relative overflow-hidden rounded-[8px] bg-white border border-slate-200/80 dark:border-white/10 p-1 flex items-center justify-center shadow-xs transition-transform duration-300 group-hover:scale-[1.03]">
+                <Image
+                  src={BRAND_ASSETS.logo}
+                  alt={BRAND_ALT}
+                  width={464}
+                  height={211}
+                  priority
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="font-[800] text-[19px] tracking-tight text-slate-900 dark:text-white hidden sm:inline">
                 NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>

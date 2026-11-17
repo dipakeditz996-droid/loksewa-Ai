@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -327,9 +329,16 @@ function AdminSidebar({
       {/* Logo + Collapse Toggle */}
       <div className="flex h-[60px] items-center justify-between px-4 border-b border-white/10 shrink-0">
         {!collapsed && (
-          <Link href="/admin-dashboard" className="flex items-center gap-2.5">
-            <div className="bg-[#174A68] text-white p-1.5 rounded-[7px] border border-[#2563EB]/40 shadow-xs">
-              <BookOpen className="h-4 w-4 text-[#60A5FA]" strokeWidth={2.5} />
+          <Link href="/admin-dashboard" className="flex items-center gap-2.5" aria-label="NES Mastery Admin Portal">
+            <div className="h-[34px] w-[75px] relative overflow-hidden rounded-[7px] bg-white border border-white/20 p-0.5 flex items-center justify-center shadow-xs">
+              <Image
+                src={BRAND_ASSETS.logo}
+                alt={BRAND_ALT}
+                width={464}
+                height={211}
+                priority
+                className="w-full h-full object-contain"
+              />
             </div>
             <div className="leading-none">
               <span className="font-[800] text-[17px] tracking-tight text-white">
@@ -342,8 +351,14 @@ function AdminSidebar({
           </Link>
         )}
         {collapsed && (
-          <div className="mx-auto bg-[#174A68] text-white p-1.5 rounded-[7px] border border-[#2563EB]/40 shadow-xs">
-            <BookOpen className="h-4 w-4 text-[#60A5FA]" strokeWidth={2.5} />
+          <div className="mx-auto h-8 w-8 relative overflow-hidden rounded-[7px] bg-white border border-white/20 p-1 flex items-center justify-center shadow-xs">
+            <Image
+              src={BRAND_ASSETS.logoSquare}
+              alt={BRAND_ALT}
+              width={512}
+              height={512}
+              className="w-full h-full object-contain"
+            />
           </div>
         )}
         <button
@@ -561,7 +576,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="admin-light-scope min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-3 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
+          <div className="h-10 w-[88px] relative overflow-hidden rounded-[8px] bg-white border border-slate-200 p-1 flex items-center justify-center shadow-xs">
+            <Image
+              src={BRAND_ASSETS.logo}
+              alt={BRAND_ALT}
+              width={464}
+              height={211}
+              priority
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <div className="h-6 w-6 border-2 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
           <p className="text-sm font-medium text-slate-500">Loading NES Mastery Admin Portal...</p>
         </div>
       </div>

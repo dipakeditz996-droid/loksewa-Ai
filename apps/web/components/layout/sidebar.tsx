@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import { usePathname } from "next/navigation";
 import { 
   BookOpen, 
@@ -254,12 +256,18 @@ export function Sidebar({ isOpen, setIsOpen, role = "student" }: SidebarProps) {
         )}
       >
         <div className="flex h-16 items-center justify-between px-6 border-b border-[#174A68] dark:border-border">
-          <Link href="/" className="flex items-center space-x-3">
+          <Link href="/" className="flex items-center space-x-3" aria-label="NES Mastery Home">
             {branding?.logoUrl ? (
               <RetryImage src={branding.logoUrl} alt={brandName} className="h-8 w-8 rounded-[8px] object-contain" />
             ) : (
-              <div className="bg-[#174A68] text-white p-1.5 rounded-[8px] border border-[#2563EB]/40 shadow-xs">
-                <BookOpen className="h-5 w-5 text-[#60A5FA]" strokeWidth={2.5} />
+              <div className="h-9 w-[78px] relative overflow-hidden rounded-[8px] bg-white border border-white/20 p-1 flex items-center justify-center shadow-xs">
+                <Image
+                  src={BRAND_ASSETS.logo}
+                  alt={BRAND_ALT}
+                  width={464}
+                  height={211}
+                  className="w-full h-full object-contain"
+                />
               </div>
             )}
             <span className="font-[800] text-[20px] tracking-tight text-white">

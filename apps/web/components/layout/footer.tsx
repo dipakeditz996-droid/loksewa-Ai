@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import {
   BookOpen, Mail,
   ShieldCheck, BadgeCheck, Cpu, TrendingUp, ArrowRight,
@@ -79,9 +81,15 @@ export function Footer() {
             {/* Brand column (spans 2) */}
             <div className="lg:col-span-2">
               {/* Logo */}
-              <Link href="/" className="flex items-center gap-2.5 group mb-5 w-fit">
-                <div className="p-1.5 rounded-[8px] bg-[#174A68] dark:bg-[#102D40] border border-[#2563EB]/30 group-hover:scale-105 transition-transform">
-                  <BookOpen className="h-5 w-5 text-[#60A5FA]" strokeWidth={2.5} />
+              <Link href="/" className="flex items-center gap-3 group mb-5 w-fit" aria-label="NES Mastery Home">
+                <div className="h-[40px] w-[88px] relative overflow-hidden rounded-[8px] bg-white border border-slate-200/80 dark:border-white/10 p-1 flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform">
+                  <Image
+                    src={BRAND_ASSETS.logo}
+                    alt={BRAND_ALT}
+                    width={464}
+                    height={211}
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 <span className="font-[800] text-[20px] tracking-tight text-slate-900 dark:text-white">
                   NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>

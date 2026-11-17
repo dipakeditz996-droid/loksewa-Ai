@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 import { AlertTriangle } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { DashboardHeader } from "@/components/layout/dashboard-header";
@@ -78,9 +80,19 @@ function StudentLayoutContent({ children }: { children: React.ReactNode }) {
   if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-3 border-[#0B2545] border-t-[#2563EB] rounded-full animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading student portal...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-[88px] relative overflow-hidden rounded-[8px] bg-white border border-slate-200 dark:border-white/10 p-1 flex items-center justify-center shadow-xs">
+            <Image
+              src={BRAND_ASSETS.logo}
+              alt={BRAND_ALT}
+              width={464}
+              height={211}
+              priority
+              className="w-full h-full object-contain"
+            />
+          </div>
+          <div className="h-6 w-6 border-2 border-[#102D40] border-t-[#2563EB] rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground font-medium">Loading NES Mastery...</p>
         </div>
       </div>
     );

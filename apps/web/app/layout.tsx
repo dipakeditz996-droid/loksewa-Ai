@@ -42,6 +42,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#102D40" },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -75,6 +79,19 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/",
   },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/icon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/brand/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+  },
+  manifest: "/site.webmanifest",
   openGraph: {
     title: "NES Mastery | Nepal's Leading Engineering & Public Service Exam Preparation",
     description:
@@ -137,7 +154,7 @@ export default function RootLayout({
                   "logo": {
                     "@type": "ImageObject",
                     "@id": `${SITE_URL}/#logo`,
-                    "url": `${SITE_URL}/images/logo.png`,
+                    "url": `${SITE_URL}/brand/logo.png`,
                     "caption": "NES Mastery",
                   },
                   "description":

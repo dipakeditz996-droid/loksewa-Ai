@@ -9,6 +9,7 @@ import bgImage from "../../media/login.webp";
 import leftBranchImg from "../../media/left-branch.png";
 import rightBranchImg from "../../media/right-branch.png";
 import Image from "next/image";
+import { BRAND_ASSETS, BRAND_ALT } from "@/lib/brand";
 
 import { useRouter } from "next/navigation";
 import { authApi, User as AuthUser } from "../../lib/api/auth";
@@ -193,9 +194,16 @@ function LoginContent() {
         <div className="w-full lg:w-[45%] flex flex-col pt-8 pb-8 lg:pr-8">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-3 mb-12 hover:opacity-90 transition-opacity w-fit">
-            <div className="bg-white p-1.5 rounded-[8px] shadow-sm">
-              <BookOpen className="h-5 w-5 text-[#174A68]" strokeWidth={2} />
+          <Link href="/" className="flex items-center space-x-3 mb-12 hover:opacity-90 transition-opacity w-fit" aria-label="NES Mastery Home">
+            <div className="h-[46px] w-[101px] relative overflow-hidden rounded-[10px] bg-white border border-white/20 p-1 flex items-center justify-center shadow-md">
+              <Image
+                src={BRAND_ASSETS.logo}
+                alt={BRAND_ALT}
+                width={464}
+                height={211}
+                priority
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <span className="font-[800] text-[22px] tracking-tight text-white drop-shadow-md leading-none flex items-center">

@@ -35,11 +35,41 @@ from django.http import JsonResponse
 from django.conf import settings
 
 def health_check(request):
+    import os
     db_default = settings.DATABASES['default']
+    
+    drive_diag = {
+        'drive_keys_present': [
+            k for k in [
+                'GOOGLE_DRIVE_CLIENT_ID',
+                'GOOGLE_DRIVE_CLIENT_SECRET',
+                'GOOGLE_DRIVE_REFRESH_TOKEN',
+                'GOOGLE_DRIVE_ROOT_FOLDER_ID'
+            ] if bool(os.environ.get(k, '').strip())
+        ]
+    }
+    try:
+        from core import google_drive
+        drive_diag['is_configured'] = google_drive.is_configured()
+        if drive_diag['is_configured']:
+            try:
+                creds = google_drive.get_credentials()
+                drive_diag['credentials_valid'] = creds.valid
+                meta = google_drive.get_file('1NYLNe-40_sMt_CrXgUQrXMkUt2MLoBV8')
+                drive_diag['test_file_found'] = meta is not None
+                if meta:
+                    drive_diag['test_file_name'] = meta.get('name')
+            except Exception as drive_err:
+                drive_diag['drive_error'] = str(drive_err)
+                drive_diag['drive_error_type'] = type(drive_err).__name__
+    except Exception as mod_err:
+        drive_diag['module_error'] = str(mod_err)
+
     return JsonResponse({
         'status': 'healthy',
         'db_host': db_default.get('HOST', 'unknown'),
         'db_name': db_default.get('NAME', 'unknown'),
+        'drive': drive_diag,
     })
 
 urlpatterns = [

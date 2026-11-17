@@ -303,9 +303,8 @@ if _active_db_url:
             _active_db_url,
             conn_max_age=_conn_max_age,
             conn_health_checks=_conn_health_checks,
-            # Supabase requires TLS. This adds sslmode=require to OPTIONS;
-            # no certificate is bundled or hardcoded.
-            ssl_require=_is_postgres,
+            # Supabase requires TLS. Local PostgreSQL (localhost / cPanel) does not.
+            ssl_require=_is_postgres and 'localhost' not in _active_db_url and '127.0.0.1' not in _active_db_url,
         )
     }
     if _is_pooled:

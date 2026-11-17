@@ -450,6 +450,12 @@ class CourseAccessService:
         """Determines whether `user` may access the given StudyMaterial instance."""
         if cls.is_privileged(user):
             return True
+
+        # Syllabus items and global free materials are universally accessible
+        if getattr(note, 'content_category', None) == 'syllabus':
+            return True
+        if getattr(note, 'access_type', None) == 'free' and not getattr(note, 'course_id', None):
+            return True
         if not user or not user.is_authenticated:
             return bool(note.status == 'published' and note.access_type == 'free' and note.course_id is None)
 

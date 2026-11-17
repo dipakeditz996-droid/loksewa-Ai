@@ -55,7 +55,7 @@ class PublicStudyMaterialListView(APIView):
 
 
 class StudyMaterialViewSet(viewsets.ReadOnlyModelViewSet):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     pagination_class = NotesPagination
 
     def get_queryset(self):

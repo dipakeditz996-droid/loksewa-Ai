@@ -188,9 +188,12 @@ export function FirstPartyPdfViewer({
     const httpHeaders: Record<string, string> = {};
     if (token && !resolvedUrl.startsWith("blob:") && !resolvedUrl.startsWith("data:")) {
       httpHeaders["Authorization"] = `Bearer ${token}`;
-      if (resolvedUrl.includes("/media/drive/") && !resolvedUrl.includes("token=")) {
+      if (!resolvedUrl.includes("token=")) {
         resolvedUrl += (resolvedUrl.includes("?") ? "&" : "?") + `token=${encodeURIComponent(token)}`;
       }
+    }
+    if (!resolvedUrl.includes("disposition=") && resolvedUrl.includes("/download/")) {
+      resolvedUrl += (resolvedUrl.includes("?") ? "&" : "?") + "disposition=inline";
     }
 
     let currentLoadingTask: any = null;

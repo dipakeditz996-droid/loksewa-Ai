@@ -116,15 +116,15 @@ function RankCard({ offset, reducedMotion }: { offset: TierOffset; reducedMotion
       tier="far"
       offset={offset}
       reducedMotion={reducedMotion}
-      className="absolute z-30 -top-2 right-0 xl:right-[-4%]"
+      className="absolute z-30 -top-3.5 -right-3.5"
     >
-      <div className="rounded-[18px] p-4 flex flex-col items-center bg-white/90 dark:bg-white/[0.06] backdrop-blur-2xl border border-slate-200/70 dark:border-white/10 shadow-[0_18px_44px_-14px_rgba(11,37,69,0.28)] dark:shadow-[0_18px_44px_-10px_rgba(0,0,0,0.7)]">
-        <div className="w-9 h-9 rounded-full bg-[#2563EB]/12 dark:bg-[#2563EB]/15 flex items-center justify-center mb-2">
-          <Award className="w-4.5 h-4.5 text-[#1D4ED8] dark:text-[#F0C95A]" />
+      <div className="rounded-[16px] p-3 flex flex-col items-center bg-white/90 dark:bg-white/[0.06] backdrop-blur-2xl border border-slate-200/70 dark:border-white/10 shadow-[0_16px_36px_-12px_rgba(11,37,69,0.28)] dark:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.7)]">
+        <div className="w-8 h-8 rounded-full bg-[#2563EB]/12 dark:bg-[#2563EB]/15 flex items-center justify-center mb-1.5">
+          <Award className="w-4 h-4 text-[#1D4ED8] dark:text-[#F0C95A]" />
         </div>
-        <div className="text-[8.5px] font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-1">Current Rank</div>
-        <div className="text-[24px] font-[900] text-slate-900 dark:text-white leading-none mb-1">#27</div>
-        <div className="text-[10.5px] font-[700] text-[#1D4ED8] dark:text-[#F0C95A]">Top 3%</div>
+        <div className="text-[8px] font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-0.5">Current Rank</div>
+        <div className="text-[20px] font-[900] text-slate-900 dark:text-white leading-none mb-0.5">#27</div>
+        <div className="text-[9.5px] font-[700] text-[#1D4ED8] dark:text-[#F0C95A]">Top 3%</div>
       </div>
     </DepthCard>
   );
@@ -136,10 +136,10 @@ function StreakCard({ offset, reducedMotion }: { offset: TierOffset; reducedMoti
       tier="far"
       offset={offset}
       reducedMotion={reducedMotion}
-      className="absolute z-30 bottom-6 left-0 xl:left-[-8%]"
+      className="absolute z-30 -bottom-3.5 -left-3.5"
     >
-      <div className="rounded-[18px] p-3.5 flex items-center gap-3 bg-white/90 dark:bg-white/[0.06] backdrop-blur-2xl border border-slate-200/70 dark:border-white/10 shadow-[0_18px_44px_-14px_rgba(11,37,69,0.28)] dark:shadow-[0_18px_44px_-10px_rgba(0,0,0,0.7)]">
-        <div className="w-9 h-9 rounded-[11px] bg-orange-500/12 flex items-center justify-center text-xl">
+      <div className="rounded-[16px] p-2.5 px-3 flex items-center gap-2.5 bg-white/90 dark:bg-white/[0.06] backdrop-blur-2xl border border-slate-200/70 dark:border-white/10 shadow-[0_16px_36px_-12px_rgba(11,37,69,0.28)] dark:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.7)]">
+        <div className="w-8 h-8 rounded-[10px] bg-orange-500/12 flex items-center justify-center text-lg">
           <motion.span
             animate={reducedMotion ? undefined : { scale: [1, 1.18, 1.02, 1], rotate: [0, -6, 4, 0] }}
             transition={reducedMotion ? undefined : { duration: 2.4, repeat: Infinity, ease: "easeInOut", delay: 1 }}
@@ -149,8 +149,8 @@ function StreakCard({ offset, reducedMotion }: { offset: TierOffset; reducedMoti
           </motion.span>
         </div>
         <div>
-          <div className="text-[13px] font-[900] text-slate-900 dark:text-white leading-tight">7 Day Streak</div>
-          <div className="text-[11px] font-[700] text-orange-500">Keep going!</div>
+          <div className="text-[12px] font-[900] text-slate-900 dark:text-white leading-tight">7 Day Streak</div>
+          <div className="text-[10px] font-[700] text-orange-500">Keep going!</div>
         </div>
       </div>
     </DepthCard>
@@ -163,99 +163,102 @@ function HeroShowcase() {
   const bars = [30, 40, 35, 50, 45, 70, 94];
 
   return (
-    <div ref={containerRef} className="relative w-full h-[560px] flex items-center justify-center">
+    <div ref={containerRef} className="relative w-full h-[520px] flex items-center justify-start pl-2">
 
       {/* Glow bed behind the card — gives it the sense of being lit from behind */}
       <motion.div
-        className="absolute inset-0 flex items-center justify-center pointer-events-none"
+        className="absolute inset-0 flex items-center justify-start pointer-events-none"
         style={{ x: tiers.background.x, y: tiers.background.y }}
       >
-        <div className="absolute w-[440px] h-[440px] rounded-full bg-[#2563EB]/[0.12] dark:bg-[#2563EB]/[0.18] blur-[120px]" />
-        <div className="absolute w-[400px] h-[400px] rounded-full bg-blue-500/[0.08] dark:bg-blue-500/[0.16] blur-[120px] translate-x-20 translate-y-10" />
+        <div className="absolute w-[380px] h-[380px] rounded-full bg-[#2563EB]/[0.12] dark:bg-[#2563EB]/[0.18] blur-[110px]" />
+        <div className="absolute w-[340px] h-[340px] rounded-full bg-blue-500/[0.08] dark:bg-blue-500/[0.16] blur-[110px] translate-x-12 translate-y-8" />
       </motion.div>
 
-      <RankCard offset={tiers.far} reducedMotion={reducedMotion} />
-      <StreakCard offset={tiers.far} reducedMotion={reducedMotion} />
+      {/* Unified wrapper keeping the showcase and floating cards anchored tightly */}
+      <div className="relative w-full max-w-[365px]">
+        <RankCard offset={tiers.far} reducedMotion={reducedMotion} />
+        <StreakCard offset={tiers.far} reducedMotion={reducedMotion} />
 
-      {/* Product dashboard mockup */}
-      <motion.div style={{ x: tiers.near.x, y: tiers.near.y }} className="relative z-20 w-full max-w-[430px]">
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={reducedMotion ? { duration: 0 } : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          whileHover={reducedMotion ? undefined : { y: -6, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }}
-          className="rounded-[22px] overflow-hidden bg-white dark:bg-[#0B1524] border border-slate-200/80 dark:border-white/[0.09] shadow-[0_48px_100px_-28px_rgba(11,37,69,0.4)] dark:shadow-[0_48px_110px_-24px_rgba(0,0,0,0.85)]"
-        >
-          {/* Window chrome */}
-          <div className="flex items-center gap-1.5 px-4 h-10 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.03]">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-300 dark:bg-red-400/60" />
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-300 dark:bg-amber-400/60" />
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
-            <span className="mx-auto text-[10.5px] font-[600] text-slate-600 dark:text-slate-400 tracking-wide">
-              app.nesmastery.com/dashboard
-            </span>
-          </div>
-
-          <div className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
-                AI Preparation Score
-              </span>
-              <span className="flex items-center gap-1 text-[10.5px] font-[700] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 rounded-full">
-                <TrendingUp className="w-3 h-3" /> +14.8%
+        {/* Product dashboard mockup */}
+        <motion.div style={{ x: tiers.near.x, y: tiers.near.y }} className="relative z-20 w-full">
+          <motion.div
+            initial={reducedMotion ? false : { opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reducedMotion ? { duration: 0 } : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            whileHover={reducedMotion ? undefined : { y: -6, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } }}
+            className="rounded-[20px] overflow-hidden bg-white dark:bg-[#0B1524] border border-slate-200/80 dark:border-white/[0.09] shadow-[0_40px_90px_-24px_rgba(11,37,69,0.38)] dark:shadow-[0_40px_90px_-20px_rgba(0,0,0,0.85)]"
+          >
+            {/* Window chrome */}
+            <div className="flex items-center gap-1.5 px-3.5 h-9 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50 dark:bg-white/[0.03]">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-300 dark:bg-red-400/60" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-300 dark:bg-amber-400/60" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 dark:bg-emerald-400/60" />
+              <span className="mx-auto text-[10px] font-[600] text-slate-600 dark:text-slate-400 tracking-wide">
+                app.nesmastery.com/dashboard
               </span>
             </div>
 
-            <div className="flex items-center gap-5 mb-5">
-              <ScoreGauge value={87} reducedMotion={reducedMotion} />
-              <div className="flex-1 space-y-2.5">
-                {SUBJECT_MASTERY.map((s, i) => (
-                  <div key={s.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-[600] text-slate-600 dark:text-slate-300">{s.label}</span>
-                      <span className="text-[11px] font-[700] text-slate-900 dark:text-white">{s.value}%</span>
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3.5">
+                <span className="text-[9.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                  AI Preparation Score
+                </span>
+                <span className="flex items-center gap-1 text-[10px] font-[700] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 rounded-full">
+                  <TrendingUp className="w-3 h-3" /> +14.8%
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4 mb-4">
+                <ScoreGauge value={87} reducedMotion={reducedMotion} />
+                <div className="flex-1 space-y-2">
+                  {SUBJECT_MASTERY.map((s, i) => (
+                    <div key={s.label}>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[10.5px] font-[600] text-slate-600 dark:text-slate-300 truncate pr-1">{s.label}</span>
+                        <span className="text-[10.5px] font-[700] text-slate-900 dark:text-white shrink-0">{s.value}%</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 dark:bg-white/[0.08] rounded-full overflow-hidden">
+                        <motion.div
+                          className={`h-full rounded-full ${s.color}`}
+                          initial={reducedMotion ? false : { width: 0 }}
+                          animate={{ width: `${s.value}%` }}
+                          transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay: 0.8 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                        />
+                      </div>
                     </div>
-                    <div className="h-1.5 w-full bg-slate-100 dark:bg-white/[0.08] rounded-full overflow-hidden">
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3.5 border-t border-slate-100 dark:border-white/[0.06]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                    Accuracy This Week
+                  </span>
+                  <span className="text-[14px] font-[900] text-slate-900 dark:text-white">94%</span>
+                </div>
+                <div className="h-8 w-full flex items-end gap-1.5">
+                  {bars.map((h, i) => (
+                    <div key={i} className="flex-1 relative h-full">
+                      <div className="absolute inset-0 bg-emerald-500/12 dark:bg-emerald-500/10 rounded-[3px]" />
                       <motion.div
-                        className={`h-full rounded-full ${s.color}`}
-                        initial={reducedMotion ? false : { width: 0 }}
-                        animate={{ width: `${s.value}%` }}
-                        transition={reducedMotion ? { duration: 0 } : { duration: 0.9, delay: 0.8 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                        className="absolute bottom-0 w-full bg-emerald-500 rounded-[3px]"
+                        initial={reducedMotion ? false : { height: 0 }}
+                        animate={{ height: `${h}%` }}
+                        transition={
+                          reducedMotion
+                            ? { duration: 0 }
+                            : { duration: 0.5, delay: 0.9 + i * 0.05, ease: "easeOut" }
+                        }
                       />
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div className="pt-4 border-t border-slate-100 dark:border-white/[0.06]">
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[10px] font-[800] uppercase tracking-widest text-slate-700 dark:text-slate-300">
-                  Accuracy This Week
-                </span>
-                <span className="text-[15px] font-[900] text-slate-900 dark:text-white">94%</span>
-              </div>
-              <div className="h-9 w-full flex items-end gap-1.5">
-                {bars.map((h, i) => (
-                  <div key={i} className="flex-1 relative h-full">
-                    <div className="absolute inset-0 bg-emerald-500/12 dark:bg-emerald-500/10 rounded-[3px]" />
-                    <motion.div
-                      className="absolute bottom-0 w-full bg-emerald-500 rounded-[3px]"
-                      initial={reducedMotion ? false : { height: 0 }}
-                      animate={{ height: `${h}%` }}
-                      transition={
-                        reducedMotion
-                          ? { duration: 0 }
-                          : { duration: 0.5, delay: 0.9 + i * 0.05, ease: "easeOut" }
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          </motion.div>
         </motion.div>
-      </motion.div>
+      </div>
 
     </div>
   );

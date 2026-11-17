@@ -134,14 +134,14 @@ function StreakCard() {
 
 export function LeaderboardStreakSection() {
   return (
-    <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#020611] relative overflow-hidden">
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
       <div className="absolute bottom-[-10%] right-[-5%] w-[550px] h-[550px] bg-orange-500/[0.03] dark:orange-500/[0.05] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8">
 
-        <div className="text-center mb-14">
+        <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#102D40]/50 mb-5">
             <Trophy className="w-3.5 h-3.5 text-[#2563EB]" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-600 dark:text-[#4B8BE0]">Community &amp; Motivation</span>
@@ -154,7 +154,7 @@ export function LeaderboardStreakSection() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <LeaderboardCard />
           <StreakCard />
         </div>

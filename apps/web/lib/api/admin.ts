@@ -1279,23 +1279,40 @@ export const adminApi = {
   },
 
   createTestimonial: async (data: AdminTestimonialInput): Promise<AdminTestimonial> => {
-    return apiClient<AdminTestimonial>("/admin/testimonials/", {
+    const res = await apiClient<AdminTestimonial>("/admin/testimonials/", {
       method: "POST",
       body: JSON.stringify(data),
     });
+    try {
+      await fetch("/api/revalidate?tag=testimonials&path=/", { method: "POST" });
+    } catch {}
+    return res;
   },
 
   updateTestimonial: async (id: number, data: Partial<AdminTestimonialInput>): Promise<AdminTestimonial> => {
-    return apiClient<AdminTestimonial>(`/admin/testimonials/${id}/`, {
+    const res = await apiClient<AdminTestimonial>(`/admin/testimonials/${id}/`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });
+    try {
+      await fetch("/api/revalidate?tag=testimonials&path=/", { method: "POST" });
+    } catch {}
+    return res;
   },
 
   deleteTestimonial: async (id: number): Promise<void> => {
-    return apiClient<void>(`/admin/testimonials/${id}/`, {
+    await apiClient<void>(`/admin/testimonials/${id}/`, {
       method: "DELETE",
     });
+    try {
+      await fetch("/api/revalidate?tag=testimonials&path=/", { method: "POST" });
+    } catch {}
+  },
+
+  revalidatePublicReviews: async (): Promise<void> => {
+    try {
+      await fetch("/api/revalidate?tag=testimonials&path=/", { method: "POST" });
+    } catch {}
   },
 
   getWebsitePages: async (): Promise<AdminWebsitePage[]> => {

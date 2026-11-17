@@ -1,6 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
+from django.core.cache import cache
+from django.db.models import Avg
+from administration.cache_service import (
+    CACHE_KEY_PUBLIC_TESTIMONIALS,
+    CACHE_KEY_PUBLIC_TESTIMONIAL_STATS,
+)
 
 
 class PublicPlatformSettingsView(APIView):
@@ -48,9 +54,40 @@ class PublicTestimonialView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
+        cached = cache.get(CACHE_KEY_PUBLIC_TESTIMONIALS)
+        if cached is not None:
+            return Response(cached)
+
         from .models import Testimonial
         from .testimonial_serializers import PublicTestimonialSerializer
 
         testimonials = Testimonial.objects.filter(is_published=True)
         serializer = PublicTestimonialSerializer(testimonials, many=True)
-        return Response(serializer.data)
+        data = serializer.data
+        cache.set(CACHE_KEY_PUBLIC_TESTIMONIALS, data, timeout=300)
+        return Response(data)
+
+
+class PublicTestimonialStatsView(APIView):
+    """GET /api/public/testimonials/stats/ - aggregate count and average rating
+    of published testimonials."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        cached = cache.get(CACHE_KEY_PUBLIC_TESTIMONIAL_STATS)
+        if cached is not None:
+            return Response(cached)
+
+        from .models import Testimonial
+
+        published_qs = Testimonial.objects.filter(is_published=True)
+        count = published_qs.count()
+        avg_rating = published_qs.aggregate(avg=Avg('rating'))['avg']
+        avg_val = round(float(avg_rating), 1) if avg_rating is not None and count > 0 else 5.0
+
+        payload = {
+            'total_reviews': count,
+            'average_rating': avg_val,
+        }
+        cache.set(CACHE_KEY_PUBLIC_TESTIMONIAL_STATS, payload, timeout=300)
+        return Response(payload)

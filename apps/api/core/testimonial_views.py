@@ -3,6 +3,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from administration.permissions import IsAdminUser
+from administration.cache_service import AdminCacheService
+from administration.models import AuditLog
 from .models import Testimonial
 from .testimonial_serializers import AdminTestimonialSerializer, StudentTestimonialSerializer
 
@@ -16,7 +18,48 @@ class AdminTestimonialViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'role_title', 'quote']
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        instance = serializer.save(created_by=self.request.user)
+        AdminCacheService.invalidate_testimonials()
+        try:
+            AuditLog.objects.create(
+                actor=self.request.user,
+                action='CREATE_TESTIMONIAL',
+                entity_type='Testimonial',
+                entity_id=str(instance.id),
+                details={'name': instance.name, 'is_published': instance.is_published, 'rating': instance.rating},
+            )
+        except Exception:
+            pass
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        AdminCacheService.invalidate_testimonials()
+        try:
+            AuditLog.objects.create(
+                actor=self.request.user,
+                action='UPDATE_TESTIMONIAL',
+                entity_type='Testimonial',
+                entity_id=str(instance.id),
+                details={'name': instance.name, 'is_published': instance.is_published, 'rating': instance.rating},
+            )
+        except Exception:
+            pass
+
+    def perform_destroy(self, instance):
+        instance_id = str(instance.id)
+        details = {'name': instance.name, 'quote': instance.quote[:100], 'rating': instance.rating}
+        instance.delete()
+        AdminCacheService.invalidate_testimonials()
+        try:
+            AuditLog.objects.create(
+                actor=self.request.user,
+                action='DELETE_TESTIMONIAL',
+                entity_type='Testimonial',
+                entity_id=instance_id,
+                details=details,
+            )
+        except Exception:
+            pass
 
 
 class MyTestimonialView(APIView):
@@ -70,8 +113,10 @@ class MyTestimonialView(APIView):
                 'is_published': False,
             },
         )
+        AdminCacheService.invalidate_testimonials()
         return Response(StudentTestimonialSerializer(testimonial).data, status=status.HTTP_200_OK)
 
     def delete(self, request):
         Testimonial.objects.filter(created_by=request.user).delete()
+        AdminCacheService.invalidate_testimonials()
         return Response(status=status.HTTP_204_NO_CONTENT)

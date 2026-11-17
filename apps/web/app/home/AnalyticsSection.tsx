@@ -5,14 +5,14 @@ import { ArrowRight, TrendingUp, Calendar, Award } from "lucide-react";
 
 export function AnalyticsSection() {
   return (
-    <section className="py-24 bg-slate-50 dark:bg-[#04080F] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-slate-50 dark:bg-[#04080F] relative overflow-hidden">
 
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
       <div className="absolute top-[30%] left-[-10%] w-[500px] h-[500px] bg-[#2563EB]/[0.03] dark:bg-[#2563EB]/[0.08] rounded-full blur-[150px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-center">
 
           {/* ── LEFT: Text ── */}
           <div className="order-2 lg:order-1">

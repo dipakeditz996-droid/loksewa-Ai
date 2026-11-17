@@ -285,7 +285,7 @@ export default function StudentDashboardPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-[1400px] mx-auto space-y-8 bg-muted/50 min-h-[calc(100vh-72px)]">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6 bg-muted/50 min-h-[calc(100vh-72px)]">
       {/* 1. HEADER (always pinned at top) */}
       <DashboardHeaderSection
         data={data}

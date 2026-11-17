@@ -28,14 +28,14 @@ function NetworkList() {
 
 export function AILearningNetworkSection() {
   return (
-    <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
+    <section className="pt-12 sm:pt-14 lg:pt-16 pb-6 sm:pb-8 bg-white dark:bg-[#020611] relative overflow-hidden">
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
       <div className="absolute top-[10%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-violet-500/[0.03] dark:bg-violet-600/[0.06] rounded-full blur-[160px] pointer-events-none" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
-        <div className="text-center mb-14">
+        <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 mb-5">
             <Brain className="w-3.5 h-3.5 text-violet-500" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-violet-500 dark:text-violet-400">Live AI Understanding</span>
@@ -54,7 +54,7 @@ export function AILearningNetworkSection() {
         <NetworkList />
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-6 mt-10 flex-wrap">
+        <div className="flex items-center justify-center gap-6 mt-6 flex-wrap">
           {(["strong", "good", "weak"] as Tier[]).map((t) => (
             <div key={t} className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${TIER_STYLE[t].dot}`} />

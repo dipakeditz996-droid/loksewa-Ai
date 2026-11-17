@@ -5,7 +5,7 @@ import { ArrowRight, Sparkles } from "lucide-react";
 
 export function FinalCTASection() {
   return (
-    <section className="relative py-32 overflow-hidden bg-[#020611]">
+    <section className="relative py-16 sm:py-20 lg:py-24 overflow-hidden bg-[#020611]">
       
       {/* ── Background Image & Layers ── */}
       <div className="absolute inset-0 z-0">
@@ -24,7 +24,7 @@ export function FinalCTASection() {
       {/* ── Content ── */}
       <div className="relative z-10 max-w-[800px] mx-auto px-4 sm:px-6 lg:px-8 text-center">
         
-        <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-8">
+        <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 backdrop-blur-md mb-6">
           <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
           <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-300">
             Start Your Journey Today

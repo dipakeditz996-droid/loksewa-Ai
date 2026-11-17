@@ -95,6 +95,27 @@ class PublicCourseListViewTests(APITestCase):
             [course.id],
         )
 
+    def test_public_categories_endpoint_annotates_course_counts(self):
+        """Tests that /api/courses/categories/ returns active categories with accurate course counts."""
+        empty_cat = ExamCategory.objects.create(name='Empty Category', order=99, is_active=True)
+        inactive_cat = ExamCategory.objects.create(name='Inactive Category', order=100, is_active=False)
+
+        response = self.client.get('/api/courses/categories/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        cat_ids = [c['id'] for c in response.data]
+        self.assertIn(self.category.id, cat_ids)
+        self.assertIn(empty_cat.id, cat_ids)
+        self.assertNotIn(inactive_cat.id, cat_ids)
+
+        found_cat = next(c for c in response.data if c['id'] == self.category.id)
+        self.assertEqual(found_cat['course_count'], 1)
+        self.assertEqual(found_cat['published_course_count'], 1)
+
+        found_empty = next(c for c in response.data if c['id'] == empty_cat.id)
+        self.assertEqual(found_empty['course_count'], 0)
+        self.assertEqual(found_empty['published_course_count'], 0)
+
 
 class TeacherCourseViewSetTests(APITestCase):
     def setUp(self):

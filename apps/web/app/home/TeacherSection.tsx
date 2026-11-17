@@ -5,7 +5,7 @@ import { GraduationCap, ArrowRight, BookOpen, Users, DollarSign, BarChart2 } fro
 
 export function TeacherSection() {
   return (
-    <section className="py-24 bg-white dark:bg-[#060E18] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#060E18] relative overflow-hidden">
       
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
@@ -16,7 +16,7 @@ export function TeacherSection() {
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="bg-slate-50 dark:bg-[#0A1520] border border-slate-200 dark:border-white/[0.06] rounded-[32px] p-8 md:p-12 lg:p-16 overflow-hidden relative shadow-[0_10px_40px_rgba(0,0,0,0.03)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+        <div className="bg-slate-50 dark:bg-[#0A1520] border border-slate-200 dark:border-white/[0.06] rounded-[32px] p-6 md:p-10 lg:p-12 overflow-hidden relative shadow-[0_10px_40px_rgba(0,0,0,0.03)] dark:shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
           
           {/* Subtle grid pattern inside card */}
           <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:24px_24px] opacity-60" />

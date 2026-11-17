@@ -187,8 +187,49 @@ class TeacherDashboardView(APIView):
 
 
 # ============================================================
-# PUBLIC COURSE LISTING
+# PUBLIC COURSE LISTING & CATEGORIES
 # ============================================================
+
+class PublicCategoryListView(APIView):
+    """
+    GET /api/courses/categories/
+    Returns active ExamCategory rows annotated with accurate course counts.
+    Publicly accessible (no auth required).
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from exams.models import ExamCategory
+        from django.db.models import Count, Q
+
+        categories = ExamCategory.objects.filter(
+            is_active=True
+        ).annotate(
+            course_count=Count(
+                'exams__courses',
+                filter=Q(exams__courses__status__in=['published', 'coming_soon']),
+                distinct=True
+            ),
+            published_course_count=Count(
+                'exams__courses',
+                filter=Q(exams__courses__status='published'),
+                distinct=True
+            ),
+        ).order_by('order', 'id')
+
+        data = [
+            {
+                'id': cat.id,
+                'name': cat.name,
+                'description': cat.description or '',
+                'order': cat.order,
+                'course_count': cat.course_count,
+                'published_course_count': cat.published_course_count,
+            }
+            for cat in categories
+        ]
+        return Response(data)
+
 
 class PublicCourseListView(APIView):
     """

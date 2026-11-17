@@ -51,8 +51,8 @@ export default function PracticeSetupPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-[1050px] space-y-12 px-4 py-8 md:px-8 md:py-10">
-      <header className="border-b border-border pb-6">
+    <main className="mx-auto max-w-[1050px] space-y-8 px-4 py-6 md:px-8 md:py-8">
+      <header className="border-b border-border pb-5">
         <p className="text-xs font-bold uppercase text-muted-foreground">Student Portal</p>
         <h1 className="mt-2 text-3xl font-bold text-primary dark:text-foreground">Practice</h1>
       </header>

@@ -54,7 +54,7 @@ const features = [
 
 export function FeatureStrip() {
   return (
-    <section className="relative z-20 -mt-10 py-0">
+    <section className="relative z-20 py-4 sm:py-5">
       <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {features.map((f) => {
@@ -62,7 +62,7 @@ export function FeatureStrip() {
             return (
               <div
                 key={f.title}
-                className="card-hover flex flex-col items-center text-center gap-2.5 px-4 py-5 rounded-[18px] bg-white/90 dark:bg-white/[0.05] backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_-12px_rgba(11,37,69,0.16)] dark:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6)] cursor-default"
+                className="card-hover flex flex-col items-center text-center gap-2 px-3.5 py-4 sm:px-4 sm:py-4.5 rounded-[16px] bg-white/90 dark:bg-white/[0.05] backdrop-blur-xl border border-slate-200/80 dark:border-white/10 shadow-[0_10px_30px_-12px_rgba(11,37,69,0.16)] dark:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6)] cursor-default"
               >
                 <div className={`w-10 h-10 rounded-[11px] ${f.bg} border ${f.border} flex items-center justify-center transition-transform duration-300`}>
                   <Icon className={`w-[18px] h-[18px] ${f.color}`} />

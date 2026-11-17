@@ -40,7 +40,7 @@ export default function StudyPlanPage() {
   const prefs = plan.data?.preferences ?? prep?.preferences ?? null;
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6 min-h-[calc(100vh-72px)]">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 min-h-[calc(100vh-72px)]">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between pb-5 border-b border-border">
         <div>
           <h1 className="text-[28px] md:text-3xl font-bold tracking-tight text-primary dark:text-foreground">My Study Plan</h1>

@@ -140,10 +140,10 @@ export default function NotesPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
-      <main className="flex-grow pt-0 pb-20">
+      <main className="flex-grow pt-0 pb-12">
         
         {/* 1. HERO SECTION */}
-        <section className="relative pt-32 pb-20 md:pt-40 md:pb-24 overflow-hidden">
+        <section className="relative pt-24 pb-12 sm:pt-28 sm:pb-14 lg:pt-32 lg:pb-16 overflow-hidden">
           {/* Subtle premium background visual */}
           <div className="absolute inset-0 z-0 pointer-events-none">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#163E6B_0%,transparent_70%)] opacity-20 dark:opacity-40"></div>
@@ -163,7 +163,7 @@ export default function NotesPage() {
               Study Smarter With <span className="text-[#163E6B] dark:text-[#D4A72C]">Organized Notes.</span>
             </h1>
 
-            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-10 font-[500]">
+            <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
               Explore structured study materials, revision notes, subject guides, and exam-focused resources designed around the Loksewa syllabus.
             </p>
 
@@ -216,9 +216,9 @@ export default function NotesPage() {
         </section>
 
         {/* 2. NOTE CATEGORY SELECTOR */}
-        <section className="py-16 bg-white dark:bg-[#060B11] border-y border-slate-200 dark:border-white/5">
+        <section className="py-10 sm:py-12 lg:py-14 bg-white dark:bg-[#060B11] border-y border-slate-200 dark:border-white/5">
           <div className="container mx-auto px-4">
-            <div className="text-center mb-12">
+            <div className="text-center mb-8 sm:mb-10">
               <h2 className="text-3xl font-[800] text-slate-900 dark:text-white tracking-tight">Explore Study Materials</h2>
               <p className="text-slate-500 mt-2 font-[500]">Find exactly what you need for your preparation stage.</p>
             </div>
@@ -265,9 +265,9 @@ export default function NotesPage() {
         </section>
 
         {/* 3. FEATURED NOTES */}
-        <section className="py-16">
+        <section className="py-10 sm:py-12 lg:py-14">
           <div className="container mx-auto px-4 max-w-7xl">
-            <div className="mb-10">
+            <div className="mb-6 sm:mb-8">
               <h2 className="text-2xl font-[800] text-slate-900 dark:text-white tracking-tight">Featured Study Materials</h2>
               <p className="text-slate-500 mt-1 font-[500]">Start with the most useful materials for your preparation.</p>
             </div>

@@ -65,7 +65,7 @@ export default function StudentSettingsPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-primary dark:text-foreground">Settings</h1>

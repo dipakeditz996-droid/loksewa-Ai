@@ -3809,6 +3809,16 @@ class AdminReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
     permission_classes = [IsAdminUser]
 
+    def perform_destroy(self, instance):
+        instance.delete()
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_marketplace()
+
+    def perform_update(self, serializer):
+        serializer.save()
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_marketplace()
+
 
 class AdminDisputeViewSet(viewsets.ModelViewSet):
     queryset = Dispute.objects.all().order_by('-created_at')

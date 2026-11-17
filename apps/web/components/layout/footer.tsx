@@ -75,7 +75,7 @@ export function Footer() {
       <div className="relative z-10">
 
         {/* ── Main footer columns ───────────────── */}
-        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-12">
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-14 lg:pt-16 pb-8 sm:pb-10 lg:pb-12">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 lg:gap-8">
 
             {/* Brand column (spans 2) */}

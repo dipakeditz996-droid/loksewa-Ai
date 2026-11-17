@@ -43,7 +43,7 @@ export default function ExamsPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
       {/* 1. HERO SECTION */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-24 overflow-hidden">
+      <section className="relative pt-24 pb-12 sm:pt-28 sm:pb-14 lg:pt-32 lg:pb-16 overflow-hidden">
         {/* Subtle premium background visual */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#163E6B_0%,transparent_70%)] opacity-20 dark:opacity-50"></div>
@@ -64,11 +64,11 @@ export default function ExamsPage() {
             Test Yourself Like the <span className="text-[#D4A72C]">Real Exam.</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-10 font-[500]">
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
             Experience structured Loksewa examinations with realistic timing, question patterns, instant results, and detailed performance analysis.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-2xl mx-auto mb-12">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 max-w-2xl mx-auto mb-8">
             <Button className="h-14 px-8 rounded-[12px] bg-[#D4A72C] hover:bg-[#D4A72C]/90 text-[#0A1118] font-[800] text-[16px] shadow-[0_0_20px_rgba(212,167,44,0.3)] w-full sm:w-auto">
               Explore Exams <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
@@ -99,9 +99,9 @@ export default function ExamsPage() {
       </section>
 
       {/* 2. EXAM TYPE SELECTOR */}
-      <section className="py-16 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5 relative z-20">
+      <section className="py-10 sm:py-12 lg:py-14 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5 relative z-20">
         <div className="container mx-auto px-4 max-w-[1200px]">
-          <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-10 text-center">Choose Your Exam Experience</h2>
+          <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-8 text-center">Choose Your Exam Experience</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Practice Exam */}
@@ -174,7 +174,7 @@ export default function ExamsPage() {
       </section>
 
       {/* 3. EXAM SEARCH + FILTER */}
-      <section className="py-12 bg-slate-50 dark:bg-[#0A1118]">
+      <section className="py-6 sm:py-8 bg-slate-50 dark:bg-[#0A1118]">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <div className="bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/10 rounded-[20px] p-4 shadow-sm">
             
@@ -287,10 +287,10 @@ export default function ExamsPage() {
       </section>
 
       {/* 5. AVAILABLE EXAMS */}
-      <section className="py-16 bg-slate-50 dark:bg-[#0A1118]">
+      <section className="py-10 sm:py-12 lg:py-14 bg-slate-50 dark:bg-[#0A1118]">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-2">Available Examinations</h2>
-          <p className="text-slate-600 dark:text-slate-400 font-[500] mb-10">Choose an assessment based on your target exam and preparation level.</p>
+          <p className="text-slate-600 dark:text-slate-400 font-[500] mb-6">Choose an assessment based on your target exam and preparation level.</p>
           
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
@@ -436,9 +436,9 @@ export default function ExamsPage() {
       </section>
 
       {/* 8. EXAM SIMULATION PREVIEW & 10. RESULT PREVIEW */}
-      <section className="py-20 border-y border-slate-200 dark:border-white/5 bg-white dark:bg-[#0B1521] overflow-hidden relative">
+      <section className="py-12 sm:py-14 lg:py-16 border-y border-slate-200 dark:border-white/5 bg-white dark:bg-[#0B1521] overflow-hidden relative">
         <div className="container mx-auto px-4 max-w-[1200px]">
-          <div className="text-center mb-16">
+          <div className="text-center mb-8 sm:mb-10">
             <h2 className="text-3xl md:text-4xl font-[900] text-slate-900 dark:text-white mb-4">Built For Real Exam Conditions</h2>
             <p className="text-lg text-slate-600 dark:text-slate-400 font-[500] max-w-2xl mx-auto">
               Our interface mirrors actual computer-based testing environments to ensure you are comfortable on exam day.

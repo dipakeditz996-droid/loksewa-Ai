@@ -11,6 +11,17 @@
 
 import { apiClient } from "./client";
 
+// ── Categories (real, public) ────────────────────────────────────────────────
+
+export interface PublicCategory {
+  id: number;
+  name: string;
+  description: string;
+  order: number;
+  course_count: number;
+  published_course_count?: number;
+}
+
 // ── Courses (real, public) ───────────────────────────────────────────────────
 
 export interface PublicCoursePlan {
@@ -235,12 +246,16 @@ export interface PublicTestimonial {
 
 // ── API Functions ─────────────────────────────────────────────────────────────
 
-async function safeGet<T>(endpoint: string, revalidate = 300): Promise<T | null> {
+async function safeGet<T>(endpoint: string, revalidate = 300, tags?: string[]): Promise<T | null> {
   try {
+    const nextOpts: { revalidate: number; tags?: string[] } = { revalidate };
+    if (tags && tags.length > 0) {
+      nextOpts.tags = tags;
+    }
     return await apiClient<T>(endpoint, {
       skipRedirect: true,
       cache: "default",
-      next: { revalidate },
+      next: nextOpts,
     } as any);
   } catch {
     return null;
@@ -248,6 +263,48 @@ async function safeGet<T>(endpoint: string, revalidate = 300): Promise<T | null>
 }
 
 export const publicApi = {
+  /** Get preparation categories with accurate course counts */
+  getCategories: async (): Promise<PublicCategory[] | null> => {
+    const direct = await safeGet<PublicCategory[]>("/courses/categories/", 300, ["categories", "public-categories"]);
+    if (direct && direct.length > 0) {
+      return direct;
+    }
+    // Fallback: derive categories and course counts from hierarchy or courses
+    try {
+      const courses = await safeGet<PublicCourse[]>("/courses/public/");
+      if (courses && courses.length > 0) {
+        const catMap = new Map<number, PublicCategory>();
+        for (const c of courses) {
+          const catId = c.exam?.category_id || c.category_id;
+          const catName = c.exam?.category_name || c.category_name;
+          if (catId && catName) {
+            if (!catMap.has(catId)) {
+              catMap.set(catId, {
+                id: catId,
+                name: catName,
+                description: "",
+                order: c.order ?? 0,
+                course_count: 0,
+                published_course_count: 0,
+              });
+            }
+            const cat = catMap.get(catId)!;
+            cat.course_count += 1;
+            if (c.status === "published") {
+              cat.published_course_count = (cat.published_course_count || 0) + 1;
+            }
+          }
+        }
+        if (catMap.size > 0) {
+          return Array.from(catMap.values()).sort((a, b) => a.order - b.order || a.id - b.id);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  },
+
   /** Get published, open-for-enrollment courses (real Course model) with optional hierarchy filters. */
   getCourses: (params?: { category_id?: number; level_id?: number; status?: string; search?: string }): Promise<PublicCourse[] | null> => {
     const query = new URLSearchParams();
@@ -305,7 +362,7 @@ export const publicApi = {
    * Integration-ready: backend must expose GET /public/testimonials/
    */
   getTestimonials: (): Promise<PublicTestimonial[] | null> =>
-    safeGet<PublicTestimonial[]>("/public/testimonials/"),
+    safeGet<PublicTestimonial[]>("/public/testimonials/", 300, ["testimonials", "public-reviews"]),
 
   /** Get the progressive academic hierarchy (Category -> Exam -> Level -> Faculty -> Course) */
   getCourseHierarchy: (): Promise<any[] | null> =>

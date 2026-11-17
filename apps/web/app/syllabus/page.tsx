@@ -117,7 +117,7 @@ export default function SyllabusPage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
       {/* 1. HERO SECTION */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden">
+      <section className="relative pt-24 pb-12 sm:pt-28 sm:pb-14 lg:pt-32 lg:pb-16 overflow-hidden">
         {/* Subtle premium background visual */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#163E6B_0%,transparent_70%)] opacity-20 dark:opacity-40"></div>
@@ -136,7 +136,7 @@ export default function SyllabusPage() {
             Explore the Complete Loksewa <span className="text-[#D4A72C]">Syllabus</span>.
           </h1>
 
-          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-10 font-[500]">
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
             Explore every paper, subject, and topic in one organized preparation system. Know exactly what to study before you start practicing.
           </p>
 
@@ -164,7 +164,7 @@ export default function SyllabusPage() {
       </section>
 
       {/* 2. EXAM SELECTOR */}
-      <section id="exam-selector" className="py-12 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5">
+      <section id="exam-selector" className="py-8 sm:py-10 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <h2 className="text-2xl font-[800] text-slate-900 dark:text-white mb-6 text-center">Choose Your Examination</h2>
 

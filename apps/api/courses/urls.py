@@ -4,6 +4,7 @@ from .views import (
     TeacherCourseViewSet,
     TeacherDashboardView,
     PublicCourseListView,
+    PublicCategoryListView,
     StudentEnrollmentView,
     StudentCourseApplicationView,
     CourseDetailView,
@@ -22,6 +23,7 @@ urlpatterns = [
 
     # Public (no auth)
     path('courses/public/', PublicCourseListView.as_view(), name='public-courses'),
+    path('courses/categories/', PublicCategoryListView.as_view(), name='public-categories'),
     path('courses/hierarchy/', ProgressiveHierarchyAPIView.as_view(), name='course-hierarchy'),
 
     # Student authenticated

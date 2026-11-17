@@ -36,6 +36,7 @@ from .public_views import (
     PublicQuestionSetListView,
     PublicExamPreferenceTreeView,
 )
+from courses.views import PublicCategoryListView
 
 router = DefaultRouter()
 router.register(r'exams', ExamViewSet)
@@ -77,6 +78,7 @@ router.register(r'admin/schedules', AdminExamScheduleViewSet, basename='admin-sc
 urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     # Public (no auth) — Syllabus, Exams & Practice pages
+    path('public/categories/', PublicCategoryListView.as_view(), name='public-categories-alt'),
     path('public/syllabus/', PublicSyllabusTreeView.as_view(), name='public-syllabus'),
     path('public/exam-preferences/', PublicExamPreferenceTreeView.as_view(), name='public-exam-preferences'),
     path('public/exams/', PublicExaminationListView.as_view(), name='public-exam-list'),

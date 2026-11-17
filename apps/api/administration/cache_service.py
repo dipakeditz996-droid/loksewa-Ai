@@ -22,6 +22,8 @@ CACHE_KEY_SYLLABUS_STATS = 'admin:syllabus:stats'
 CACHE_KEY_COLLECTIONS_LIST = 'admin:collections:list'
 CACHE_KEY_PACKAGES_LIST = 'admin:packages:list'
 CACHE_KEY_DATA_SAFETY_OVERVIEW = 'admin:data_safety:overview'
+CACHE_KEY_PUBLIC_TESTIMONIALS = 'public:testimonials'
+CACHE_KEY_PUBLIC_TESTIMONIAL_STATS = 'public:testimonials:stats'
 
 
 CACHE_KEY_EXAMS_VERSION = 'admin:exams:version'
@@ -141,3 +143,15 @@ class AdminCacheService:
             cache.delete(CACHE_KEY_DATA_SAFETY_OVERVIEW)
         except Exception as e:
             logger.warning("Failed to invalidate data safety cache: %s", e)
+
+    @staticmethod
+    def invalidate_testimonials():
+        """Invalidate public testimonials and aggregate stats caches."""
+        try:
+            cache.delete_many([
+                CACHE_KEY_PUBLIC_TESTIMONIALS,
+                CACHE_KEY_PUBLIC_TESTIMONIAL_STATS,
+                CACHE_KEY_DASHBOARD_STATS,
+            ])
+        except Exception as e:
+            logger.warning("Failed to invalidate testimonials cache: %s", e)

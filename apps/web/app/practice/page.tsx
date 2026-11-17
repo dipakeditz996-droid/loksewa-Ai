@@ -34,7 +34,7 @@ export default function PracticePage() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
       {/* 1. HERO SECTION */}
-      <section className="relative pt-32 pb-20 md:pt-40 md:pb-24 overflow-hidden">
+      <section className="relative pt-24 pb-12 sm:pt-28 sm:pb-14 lg:pt-32 lg:pb-16 overflow-hidden">
         {/* Subtle premium background visual */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,#163E6B_0%,transparent_70%)] opacity-20 dark:opacity-40"></div>
@@ -53,13 +53,13 @@ export default function PracticePage() {
             Practice Smarter. <span className="text-[#D4A72C]">Prepare Better.</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-10 font-[500]">
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed mb-6 font-[500]">
             Challenge yourself with topic-wise questions, practice sets, and exam-style tests designed around the Loksewa syllabus.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto mb-10">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 max-w-2xl mx-auto mb-6">
             <div className="relative w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />https://127.0.0.1:64554/static/artifacts/6142294a-0a87-49a5-81fc-c186bff40f53/.user_uploaded/media_1792467929653.png?csrf=95ff603e-72ca-40d6-8428-d741f381e215
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input 
                 type="text" 
                 placeholder="Search questions, subjects, topics, or practice sets..." 
@@ -98,9 +98,9 @@ export default function PracticePage() {
       </section>
 
       {/* 2. PRACTICE TYPE SELECTOR */}
-      <section className="py-16 border-y border-slate-200 dark:border-white/5 bg-white dark:bg-[#0B1521]">
+      <section className="py-10 sm:py-12 lg:py-14 border-y border-slate-200 dark:border-white/5 bg-white dark:bg-[#0B1521]">
         <div className="container mx-auto px-4 max-w-[1200px]">
-          <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-10 text-center">Choose Your Practice Mode</h2>
+          <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-8 text-center">Choose Your Practice Mode</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {/* Topic Practice */}

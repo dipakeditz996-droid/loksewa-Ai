@@ -21,7 +21,7 @@ export function FeaturesContent() {
   return (
     <div className="w-full">
       {/* ── 1. Hero Section ── */}
-      <section className="relative overflow-hidden bg-[#0A1118] border-b border-white/5 py-16 md:py-28">
+      <section className="relative overflow-hidden bg-[#0A1118] border-b border-white/5 py-10 md:py-16">
         <div className="absolute inset-0 z-0">
           <div
             className="absolute inset-0 opacity-[0.25] blur-[1px] bg-cover bg-center bg-no-repeat"
@@ -74,9 +74,9 @@ export function FeaturesContent() {
       </section>
 
       {/* ── 2. Smart Learning Section ── */}
-      <section className="py-20 md:py-28 bg-white dark:bg-[#04080F] border-b border-slate-200/80 dark:border-white/[0.06] relative">
+      <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#04080F] border-b border-slate-200/80 dark:border-white/[0.06] relative">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-wider mb-4">
               <BookOpen className="w-3.5 h-3.5" />
               Smart Learning
@@ -170,9 +170,9 @@ export function FeaturesContent() {
       </section>
 
       {/* ── 3. Practice & Examination Section ── */}
-      <section className="py-20 md:py-28 bg-slate-50 dark:bg-[#020610] border-b border-slate-200/80 dark:border-white/[0.06] relative">
+      <section className="py-12 sm:py-14 lg:py-16 bg-slate-50 dark:bg-[#020610] border-b border-slate-200/80 dark:border-white/[0.06] relative">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 text-[#D4A72C] text-xs font-bold uppercase tracking-wider mb-4">
               <Target className="w-3.5 h-3.5" />
               Practice & Examination
@@ -238,7 +238,7 @@ export function FeaturesContent() {
       </section>
 
       {/* ── 4. AI Learning Section ── */}
-      <section className="py-20 md:py-28 bg-white dark:bg-[#04080F] border-b border-slate-200/80 dark:border-white/[0.06] relative overflow-hidden">
+      <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#04080F] border-b border-slate-200/80 dark:border-white/[0.06] relative overflow-hidden">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             <div>
@@ -312,9 +312,9 @@ export function FeaturesContent() {
       </section>
 
       {/* ── 5. Gamification (Play & Earn) Section ── */}
-      <section className="py-20 md:py-28 bg-slate-50 dark:bg-[#020610] border-b border-slate-200/80 dark:border-white/[0.06]">
+      <section className="py-12 sm:py-14 lg:py-16 bg-slate-50 dark:bg-[#020610] border-b border-slate-200/80 dark:border-white/[0.06]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D4A72C]/10 border border-[#D4A72C]/20 text-[#D4A72C] text-xs font-bold uppercase tracking-wider mb-4">
               <Trophy className="w-3.5 h-3.5" />
               Gamification & Discipline
@@ -381,7 +381,7 @@ export function FeaturesContent() {
       </section>
 
       {/* ── 6. Community & Marketplace Section ── */}
-      <section className="py-20 md:py-28 bg-white dark:bg-[#04080F] border-b border-slate-200/80 dark:border-white/[0.06]">
+      <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#04080F] border-b border-slate-200/80 dark:border-white/[0.06]">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
             {/* Community Card */}
@@ -458,7 +458,7 @@ export function FeaturesContent() {
       </section>
 
       {/* ── 7. Final Call to Action ── */}
-      <section className="py-20 bg-gradient-to-br from-[#0B2545] to-[#163E6B] text-white text-center relative overflow-hidden">
+      <section className="py-12 sm:py-14 lg:py-16 bg-gradient-to-br from-[#0B2545] to-[#163E6B] text-white text-center relative overflow-hidden">
         <div className="max-w-3xl mx-auto px-4 relative z-10">
           <h2 className="text-3xl sm:text-4xl font-black mb-4 tracking-tight">
             Ready to Accelerate Your Loksewa Journey?

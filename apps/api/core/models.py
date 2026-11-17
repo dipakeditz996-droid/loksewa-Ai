@@ -322,6 +322,15 @@ class Testimonial(models.Model):
         return f"{self.name} ({'published' if self.is_published else 'draft'})"
 
 
+@receiver([post_save, post_delete], sender=Testimonial)
+def _invalidate_testimonial_cache_on_change(sender, **kwargs):
+    try:
+        from administration.cache_service import AdminCacheService
+        AdminCacheService.invalidate_testimonials()
+    except Exception:
+        pass
+
+
 class WebsitePage(models.Model):
     """Admin-managed content for a public/legal page (Contact, Privacy, Terms,
     Refund today; About/FAQ/etc could reuse this same model later without a

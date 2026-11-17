@@ -70,6 +70,18 @@ input:-webkit-autofill:active {
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   /* Headings / KPI numbers only — body copy stays on --font-sans (Inter) */
   --font-heading: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Centralized Spacing Tokens (Scale) */
+  --spacing-space-1: 4px;
+  --spacing-space-2: 8px;
+  --spacing-space-3: 12px;
+  --spacing-space-4: 16px;
+  --spacing-space-5: 20px;
+  --spacing-space-6: 24px;
+  --spacing-space-8: 32px;
+  --spacing-space-10: 40px;
+  --spacing-space-12: 48px;
+  --spacing-space-16: 64px;
 }
 
 /* ===== shadcn/ui CSS variables ===== */
@@ -90,6 +102,24 @@ input:-webkit-autofill:active {
   --warning: #D99116;
   --error: #DC4545;
   --info: #3182CE;
+
+  /* Centralized Spacing System Tokens */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Semantic Vertical Layout Rhythm Tokens */
+  --space-element: 12px;        /* 8-16px between related elements */
+  --space-group: 20px;          /* 16-24px between content groups */
+  --space-section: 40px;        /* 32-48px between major sections */
+  --space-section-lg: 56px;     /* 48-64px for major page regions where justified */
 
   color-scheme: light;
   /* Main Background: Cloud White #F5F8FC */
@@ -725,6 +755,55 @@ option {
   -webkit-background-clip: text;
   background-clip: text;
   animation: brand-shimmer-sweep 4s ease-in-out infinite 2s;
+}
+
+/* ===== STANDARDIZED VERTICAL SPACING SYSTEM ===== */
+/* Major section vertical padding: 48px mobile, 56px tablet, 64px desktop */
+.section-py {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+}
+@media (min-width: 640px) {
+  .section-py {
+    padding-top: 3.5rem;
+    padding-bottom: 3.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .section-py {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+}
+
+/* Compact section vertical padding (banners, tightly coupled sections): 24px - 32px */
+.section-py-sm {
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+@media (min-width: 640px) {
+  .section-py-sm {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+  }
+}
+
+/* Hero section vertical padding */
+.hero-py {
+  padding-top: 3.5rem;
+  padding-bottom: 3rem;
+}
+@media (min-width: 640px) {
+  .hero-py {
+    padding-top: 4rem;
+    padding-bottom: 3.5rem;
+  }
+}
+@media (min-width: 1024px) {
+  .hero-py {
+    padding-top: 4.5rem;
+    padding-bottom: 4rem;
+  }
 }
 
 /* ===== EYEBROW / SECTION BADGE ===== */

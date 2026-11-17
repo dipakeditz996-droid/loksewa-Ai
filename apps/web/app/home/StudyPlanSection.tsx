@@ -44,14 +44,14 @@ const TYPE_STYLES: Record<string, { bg: string; border: string; dot: string; tex
 
 export function StudyPlanSection() {
   return (
-    <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
+    <section className="pt-6 sm:pt-8 pb-12 sm:pb-14 lg:pb-16 bg-white dark:bg-[#020611] relative overflow-hidden">
 
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
 
           {/* ── LEFT: Weekly plan ── */}
           <div>

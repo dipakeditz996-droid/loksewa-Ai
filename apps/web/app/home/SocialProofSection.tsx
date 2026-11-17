@@ -40,7 +40,7 @@ export function SocialProofSection({ testimonials, stats }: Props) {
     : STATIC_METRICS;
 
   return (
-    <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#020611] relative overflow-hidden">
 
       {/* Background */}
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
@@ -49,25 +49,25 @@ export function SocialProofSection({ testimonials, stats }: Props) {
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#102D40]/50 mb-5">
+        <div className="text-center mb-8 sm:mb-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#102D40]/50 mb-4 sm:mb-5">
             <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-[#4B8BE0]">Trusted by Aspirants</span>
           </div>
-          <h2 className="text-[32px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-4 leading-[1.1]">
+          <h2 className="text-[30px] sm:text-[36px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-3 sm:mb-4 leading-[1.1]">
             Built for serious{" "}
             <span className="text-gradient-gold">Loksewa preparation.</span>
           </h2>
-          <p className="text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
+          <p className="text-[15.5px] sm:text-[17px] text-slate-600 dark:text-slate-300 max-w-[520px] mx-auto font-[500]">
             Thousands of aspirants trust NES Mastery to prepare smarter, practice better, and perform with confidence.
           </p>
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-5">
             <WriteReviewTrigger />
           </div>
         </div>
 
         {/* Metrics */}
-        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${displayTestimonials.length > 0 ? "mb-16 md:mb-20" : ""}`}>
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${displayTestimonials.length > 0 ? "mb-8 sm:mb-10 md:mb-12" : ""}`}>
           {metrics.map((m, i) => (
             <div
               key={m.label}

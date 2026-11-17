@@ -174,7 +174,7 @@ export function FaqsContent() {
   return (
     <div className="w-full">
       {/* ── 1. Hero Section ── */}
-      <section className="relative overflow-hidden bg-[#0A1118] border-b border-white/5 py-16 md:py-24">
+      <section className="relative overflow-hidden bg-[#0A1118] border-b border-white/5 py-10 md:py-16">
         <div className="absolute inset-0 z-0">
           <div
             className="absolute inset-0 opacity-[0.20] blur-[1px] bg-cover bg-center bg-no-repeat"
@@ -201,7 +201,7 @@ export function FaqsContent() {
             </span>
           </h1>
 
-          <p className="text-slate-300 text-sm sm:text-base max-w-xl mb-8 leading-relaxed">
+          <p className="text-slate-300 text-sm sm:text-base max-w-xl mb-6 leading-relaxed">
             Have questions about how NES Mastery courses, syllabus tracking, timed mock tests, payments, or the student marketplace work? Find comprehensive answers below.
           </p>
 
@@ -220,10 +220,10 @@ export function FaqsContent() {
       </section>
 
       {/* ── 2. Category Filter & Accordion ── */}
-      <section className="py-16 md:py-24 bg-white dark:bg-[#04080F]">
+      <section className="py-10 sm:py-12 lg:py-14 bg-white dark:bg-[#04080F]">
         <div className="max-w-[980px] mx-auto px-4 sm:px-6 lg:px-8">
           {/* Category Tabs */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
             {CATEGORIES.map((cat) => {
               const isActive = activeCategory === cat;
               return (

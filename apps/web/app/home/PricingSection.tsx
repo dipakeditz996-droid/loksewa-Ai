@@ -88,7 +88,7 @@ export function PricingSection({ packages }: Props) {
     : STATIC_PACKAGES;
 
   return (
-    <section className="py-24 bg-slate-50 dark:bg-[#020611] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-slate-50 dark:bg-[#020611] relative overflow-hidden">
       
       {/* Background elements */}
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
@@ -98,7 +98,7 @@ export function PricingSection({ packages }: Props) {
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Header */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-8 sm:mb-10">
           <div className="eyebrow-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#2563EB]/10 border border-[#2563EB]/20 mb-5">
             <Sparkles className="w-3.5 h-3.5 text-[#2563EB]" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-[#2563EB] dark:text-[#2563EB]">Simple Pricing</span>

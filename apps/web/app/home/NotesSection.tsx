@@ -63,7 +63,7 @@ export function NotesSection({ notes }: Props) {
     : STATIC_NOTES;
 
   return (
-    <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#020611] relative overflow-hidden">
       
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
@@ -72,7 +72,7 @@ export function NotesSection({ notes }: Props) {
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 sm:mb-10">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
               <BookMarked className="w-3.5 h-3.5 text-emerald-500" />

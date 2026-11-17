@@ -35,14 +35,14 @@ export default async function Home() {
   // Note: These use the publicApi adapter which gracefully catches errors and returns null
   // The components handle the null case by falling back to curated static showcase data.
   const [
-    courses,
+    categories,
     notes,
     products,
     packages,
     testimonials,
     stats,
   ] = await Promise.all([
-    publicApi.getCourses(),
+    publicApi.getCategories(),
     publicApi.getNotesMaterials(),
     publicApi.getProducts(),
     publicApi.getPackages(),
@@ -56,7 +56,7 @@ export default async function Home() {
     <div className="w-full flex flex-col min-h-screen overflow-x-clip">
       <main className="flex-1 bg-slate-50 dark:bg-[#020611] bg-aurora min-h-screen overflow-x-clip">
         <HeroSection />
-        <section className="pt-1 pb-12 sm:pt-3 sm:pb-14 relative z-20">
+        <section className="py-4 sm:py-5 relative z-20">
           <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
             <LoksewaExamCountdown />
           </div>
@@ -66,7 +66,7 @@ export default async function Home() {
         <AIPreparationSection />
         <AILearningNetworkSection />
         <StudyPlanSection />
-        <CoursesSection courses={courses} />
+        <CoursesSection categories={categories} />
         <SyllabusSection />
         <PracticeSection />
         <MockExamSection />

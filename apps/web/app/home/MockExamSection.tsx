@@ -8,7 +8,7 @@ const SELECTED = 1; // index of selected option
 
 export function MockExamSection() {
   return (
-    <section className="py-24 bg-white dark:bg-[#020611] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#020611] relative overflow-hidden">
 
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-40 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
@@ -16,7 +16,7 @@ export function MockExamSection() {
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Header */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 mb-4">
             <FileText className="w-3.5 h-3.5 text-red-500" />
             <span className="text-[10.5px] font-[800] uppercase tracking-widest text-red-500 dark:text-red-400">Mock Examinations</span>

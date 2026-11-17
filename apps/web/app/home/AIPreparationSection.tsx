@@ -17,7 +17,7 @@ const STRONG_TOPICS = [
 
 export function AIPreparationSection() {
   return (
-    <section className="py-24 bg-slate-50 dark:bg-[#04080F] relative overflow-hidden">
+    <section className="py-12 sm:py-14 lg:py-16 bg-slate-50 dark:bg-[#04080F] relative overflow-hidden">
 
       {/* Background */}
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50" />
@@ -26,7 +26,7 @@ export function AIPreparationSection() {
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-center">
 
           {/* ── LEFT: Text ── */}
           <div>

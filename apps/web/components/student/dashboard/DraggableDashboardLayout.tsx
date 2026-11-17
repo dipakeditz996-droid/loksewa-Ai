@@ -159,7 +159,7 @@ export default function DraggableDashboardLayout({
         onDragEnd={handleFullDragEnd}
       >
         <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
-          <div className="space-y-8">
+          <div className="space-y-6">
             {fullOrder.map((widgetId) => {
               if (widgetId === "motivation" && motivation) {
                 return (
@@ -264,7 +264,7 @@ export default function DraggableDashboardLayout({
         onDragEnd={handleGridDragEnd}
       >
         <SortableContext items={gridOrder} strategy={verticalListSortingStrategy}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             {gridOrder.map((widgetId) => {
               if (widgetId === "referrals-list") {
                 return (

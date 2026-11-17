@@ -213,198 +213,154 @@ export default function SyllabusNotesPortal({
   const activePrep = data?.selectedPreparation;
 
   return (
-    <div className="max-w-[1400px] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-8">
+    <div className="max-w-[1400px] mx-auto py-6 px-4 sm:px-6 lg:px-8 space-y-6">
 
-      {/* 1. HEADER & PREPARATION SELECTOR */}
-      <div className="bg-gradient-to-br from-[#0F1E2E] via-[#162A3E] to-[#1E3A58] text-white rounded-2xl p-6 sm:p-8 shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-96 h-full bg-gradient-to-l from-white/5 to-transparent pointer-events-none" />
-        {/* Cached content stays on screen during a background revalidation
-            (e.g. returning to this page after the 5 min staleTime) - this is
-            the only visible sign a refresh is happening, never a full-page
-            reload back to the loading state. */}
+      {/* 1. HEADER & PREPARATION SELECTOR — redesigned */}
+      <div className="relative rounded-2xl overflow-hidden shadow-xl border border-white/[0.07]">
+        {/* Background gradient layers */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#0D1B2A] via-[#132236] to-[#1A3050]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,#1E4080_0%,transparent_60%)] opacity-50" />
+        <div className="absolute top-0 right-0 w-72 h-72 bg-[#C4A45C]/[0.07] rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:32px_32px]" />
+
+        {/* Background refetch indicator */}
         {isFetching && !loading && (
-          <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 text-[11px] font-medium text-white/60 bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-sm">
-            <Loader2 className="w-3 h-3 animate-spin" /> Updating...
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 text-[10px] font-semibold text-white/50 bg-white/10 px-2.5 py-1 rounded-full backdrop-blur-sm border border-white/10">
+            <Loader2 className="w-3 h-3 animate-spin" /> Syncing...
           </div>
         )}
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            {/* Breadcrumb pills */}
-            {loading && !data ? (
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-6 w-20 rounded-md bg-white/10 animate-pulse" />
-                <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-                <div className="h-6 w-24 rounded-md bg-white/10 animate-pulse" />
-                <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-                <div className="h-6 w-36 rounded-md bg-[#C4A45C]/20 border border-[#C4A45C]/30 animate-pulse" />
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#C4A45C] mb-3">
-                <span className="bg-white/10 px-2.5 py-1 rounded-md backdrop-blur-sm">
-                  {activePrep?.categoryName || "PSC Exams"}
-                </span>
-                <ChevronRight className="w-3.5 h-3.5 text-white/50" />
-                <span className="bg-white/10 px-2.5 py-1 rounded-md backdrop-blur-sm">
-                  {activePrep?.levelName || "Exam Level"}
-                </span>
-                <ChevronRight className="w-3.5 h-3.5 text-white/50" />
-                <span className="bg-[#C4A45C]/20 text-[#E7CA85] border border-[#C4A45C]/30 px-2.5 py-1 rounded-md backdrop-blur-sm">
-                  {activePrep?.name || "Preparation"}
-                </span>
-              </div>
-            )}
 
-            {loading && !data ? (
-              <div className="h-8 w-64 bg-white/15 rounded-lg animate-pulse mb-2" />
-            ) : (
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mb-2">
-                {activePrep?.name ? `${activePrep.name} — ${pageTitle}` : pageTitle}
-              </h1>
-            )}
-            <p className="text-sm text-slate-300 max-w-2xl">
-              {pageSubtitle}
-            </p>
-          </div>
+        <div className="relative z-10 p-5 sm:p-7">
+          {/* Top row: Breadcrumb + optional prep switcher */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-5 mb-6">
+            {/* Left: breadcrumb + title + subtitle */}
+            <div className="min-w-0">
+              {/* Breadcrumb */}
+              {loading && !data ? (
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-5 w-20 rounded bg-white/10 animate-pulse" />
+                  <ChevronRight className="w-3 h-3 text-white/20" />
+                  <div className="h-5 w-24 rounded bg-white/10 animate-pulse" />
+                  <ChevronRight className="w-3 h-3 text-white/20" />
+                  <div className="h-5 w-32 rounded bg-[#C4A45C]/15 animate-pulse" />
+                </div>
+              ) : (
+                <nav className="flex flex-wrap items-center gap-1.5 mb-3" aria-label="breadcrumb">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-white/40 bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 rounded-md">
+                    {activePrep?.categoryName || "PSC Exams"}
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-white/20 shrink-0" />
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-white/40 bg-white/[0.06] border border-white/[0.08] px-2.5 py-1 rounded-md">
+                    {activePrep?.levelName || "Exam Level"}
+                  </span>
+                  <ChevronRight className="w-3 h-3 text-white/20 shrink-0" />
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-widest text-[#E7CA85] bg-[#C4A45C]/[0.15] border border-[#C4A45C]/30 px-2.5 py-1 rounded-md shadow-sm">
+                    {activePrep?.name || "Preparation"}
+                  </span>
+                </nav>
+              )}
 
-          {/* Preparation Switcher (if student has multiple enrollments) */}
-          {(data?.authorizedPreparations?.length ?? 0) > 1 && (
-            <div className="bg-white/10 p-2 rounded-xl backdrop-blur-md border border-white/15 shrink-0">
-              <label className="text-xs font-medium text-slate-300 block mb-1.5 px-1">
-                Switch Preparation:
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {data?.authorizedPreparations?.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => handlePrepChange(p.id)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                      activePrep?.id === p.id
-                        ? "bg-[#C4A45C] text-[#0A1118] shadow-sm font-bold"
-                        : "bg-white/5 text-white/80 hover:bg-white/15"
-                    )}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
+              {/* Page title */}
+              {loading && !data ? (
+                <div className="h-7 w-56 bg-white/10 rounded-lg animate-pulse mb-2" />
+              ) : (
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white leading-snug mb-1.5">
+                  {activePrep?.name
+                    ? <><span className="text-[#E7CA85]">{activePrep.name}</span> — {pageTitle}</>
+                    : pageTitle}
+                </h1>
+              )}
+              <p className="text-sm text-slate-400 max-w-xl leading-relaxed">
+                {pageSubtitle}
+              </p>
             </div>
-          )}
-        </div>
 
-        {/* Real Database Content Counts Banner */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-6 pt-6 border-t border-white/10">
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Syllabus</div>
-            {loading && !data ? (
-              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
-            ) : (
-              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                {data?.counts?.syllabus ?? 0} <span className="text-xs font-medium text-slate-400">files</span>
+            {/* Right: Preparation Switcher (only when student has multiple enrollments) */}
+            {(data?.authorizedPreparations?.length ?? 0) > 1 && (
+              <div className="shrink-0 bg-white/[0.06] border border-white/[0.10] rounded-xl p-3 backdrop-blur-md min-w-[200px] max-w-[340px]">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 px-0.5">
+                  Switch Preparation
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {data?.authorizedPreparations?.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => handlePrepChange(p.id)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all border",
+                        activePrep?.id === p.id
+                          ? "bg-[#C4A45C] text-[#0A1118] border-transparent shadow-md font-bold"
+                          : "bg-white/[0.05] text-white/70 border-white/10 hover:bg-white/[0.12] hover:text-white hover:border-white/20"
+                      )}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Subjective Topicwise</div>
-            {loading && !data ? (
-              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
-            ) : (
-              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                {data?.counts?.subjective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-white/[0.08]">
+            {[
+              { key: "syllabus", label: "Syllabus", unit: "files", icon: BookOpen, count: data?.counts?.syllabus ?? 0, color: "text-[#60A5FA]", bg: "bg-blue-500/[0.10]" },
+              { key: "subjective", label: "Subjective", unit: "notes", icon: FileText, count: data?.counts?.subjective_topicwise ?? 0, color: "text-emerald-400", bg: "bg-emerald-500/[0.10]" },
+              { key: "objective", label: "Objective", unit: "notes", icon: Layers, count: data?.counts?.objective_topicwise ?? 0, color: "text-violet-400", bg: "bg-violet-500/[0.10]" },
+              { key: "revision", label: "Revision", unit: "notes", icon: Sparkles, count: data?.counts?.revision_notes ?? 0, color: "text-[#C4A45C]", bg: "bg-[#C4A45C]/[0.10]" },
+            ].map(({ key, label, unit, icon: Icon, count, color, bg }) => (
+              <div key={key} className={cn("rounded-xl p-3 sm:p-4 border border-white/[0.07] flex items-center gap-3", bg)}>
+                <div className={cn("w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.05]", color)}>
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 truncate">{label}</p>
+                  {loading && !data ? (
+                    <div className="h-5 w-10 bg-white/10 rounded animate-pulse mt-0.5" />
+                  ) : (
+                    <p className={cn("text-lg sm:text-xl font-black leading-tight", color)}>
+                      {count}
+                      <span className="text-[10px] font-medium text-slate-500 ml-1">{unit}</span>
+                    </p>
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Objective Topicwise</div>
-            {loading && !data ? (
-              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
-            ) : (
-              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                {data?.counts?.objective_topicwise ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
-              </div>
-            )}
-          </div>
-          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-3 border border-white/10">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Revision Notes</div>
-            {loading && !data ? (
-              <div className="h-7 w-16 bg-white/10 rounded animate-pulse mt-1" />
-            ) : (
-              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">
-                {data?.counts?.revision_notes ?? 0} <span className="text-xs font-medium text-slate-400">materials</span>
-              </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
 
       {/* 2. SECTION TABS (The 4 core client sections) */}
       <div className="flex flex-col gap-4">
-        <div className="border-b border-border bg-card rounded-xl p-1.5 shadow-sm">
-          <div className="flex flex-wrap sm:flex-nowrap gap-2">
-            <button
-              onClick={() => setActiveSection('syllabus')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap",
-                activeSection === 'syllabus'
-                  ? "bg-[#1A2E44] text-white shadow-md"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>Syllabus</span>
-              <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'syllabus' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data?.counts?.syllabus ?? 0}
-              </Badge>
-            </button>
-
-            <button
-              onClick={() => setActiveSection('subjective_topicwise')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap",
-                activeSection === 'subjective_topicwise'
-                  ? "bg-[#1A2E44] text-white shadow-md"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Subjective Topicwise Notes [Detailed]</span>
-              <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'subjective_topicwise' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data?.counts?.subjective_topicwise ?? 0}
-              </Badge>
-            </button>
-
-            <button
-              onClick={() => setActiveSection('objective_topicwise')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap",
-                activeSection === 'objective_topicwise'
-                  ? "bg-[#1A2E44] text-white shadow-md"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              <Layers className="w-4 h-4" />
-              <span>Objective Topicwise Notes [Detailed]</span>
-              <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'objective_topicwise' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data?.counts?.objective_topicwise ?? 0}
-              </Badge>
-            </button>
-
-            <button
-              onClick={() => setActiveSection('revision_notes')}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap",
-                activeSection === 'revision_notes'
-                  ? "bg-[#1A2E44] text-white shadow-md"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
-              )}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>Revision Notes</span>
-              <Badge className={cn("ml-1.5 text-xs py-0 px-2", activeSection === 'revision_notes' ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-foreground")}>
-                {data?.counts?.revision_notes ?? 0}
-              </Badge>
-            </button>
+        <div className="bg-card border border-border rounded-xl p-1.5 shadow-sm">
+          <div className="flex flex-wrap sm:flex-nowrap gap-1.5">
+            {([
+              { key: "syllabus", label: "Syllabus", shortLabel: "Syllabus", icon: BookOpen, count: data?.counts?.syllabus ?? 0 },
+              { key: "subjective_topicwise", label: "Subjective Notes", shortLabel: "Subjective", icon: FileText, count: data?.counts?.subjective_topicwise ?? 0 },
+              { key: "objective_topicwise", label: "Objective Notes", shortLabel: "Objective", icon: Layers, count: data?.counts?.objective_topicwise ?? 0 },
+              { key: "revision_notes", label: "Revision Notes", shortLabel: "Revision", icon: Sparkles, count: data?.counts?.revision_notes ?? 0 },
+            ] as const).map(({ key, label, icon: Icon, count }) => {
+              const isActive = activeSection === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveSection(key)}
+                  className={cn(
+                    "flex-1 flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg font-semibold text-sm transition-all min-w-0",
+                    isActive
+                      ? "bg-[#1A2E44] text-white shadow-md"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  <Icon className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline truncate">{label}</span>
+                  <span className="sm:hidden">{label.split(" ")[0]}</span>
+                  <Badge className={cn("shrink-0 text-[11px] font-bold py-0 px-1.5 min-w-[20px] text-center", isActive ? "bg-[#C4A45C] text-[#0A1118]" : "bg-muted text-muted-foreground")}>
+                    {count}
+                  </Badge>
+                </button>
+              );
+            })}
           </div>
         </div>
 

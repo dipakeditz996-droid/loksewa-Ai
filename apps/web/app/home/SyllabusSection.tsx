@@ -7,31 +7,31 @@ import { ArrowRight, Map, ChevronRight, CheckCircle2, AlertCircle } from "lucide
 
 const STATIC_HIERARCHY = [
   {
-    exam: "NEC Civil License",
+    exam: "PSC Civil Engineering (5th / 7th Level)",
     papers: [
       {
-        name: "Paper I — General Studies",
+        name: "Paper I — General Studies & Basic Engineering",
         subjects: [
           {
-            name: "Structural Analysis",
-            chapters: ["Fundamental Rights", "Directive Principles", "State Organs", "Constitutional Bodies"],
+            name: "Structural Analysis & Mechanics",
+            chapters: ["Stress & Strain", "Shear Force & Bending Moment", "Deflection of Beams", "Truss Analysis"],
             progress: 72,
             isWeak: false,
           },
           {
-            name: "Fluid Mechanics",
-            chapters: ["Administrative Theory", "Organization", "Personnel", "Financial Admin"],
+            name: "Fluid Mechanics & Hydraulics",
+            chapters: ["Hydrostatics & Pressure", "Flow Through Pipes", "Open Channel Flow", "Hydraulic Pumps"],
             progress: 45,
             isWeak: true,
           },
         ],
       },
       {
-        name: "Paper II — Specific Knowledge",
+        name: "Paper II — Technical Subject (Civil)",
         subjects: [
           {
-            name: "General Knowledge & Current Affairs",
-            chapters: ["Nepal History", "Geography", "Economy", "International Relations"],
+            name: "Surveying & Geomatics",
+            chapters: ["Levelling & Contouring", "Theodolite & Total Station", "Curves & Traversing", "GPS & GIS"],
             progress: 81,
             isWeak: false,
           },
@@ -103,7 +103,7 @@ export function SyllabusSection() {
               </div>
               <div>
                 <div className="text-[15px] font-[800] text-slate-800 dark:text-white">{data?.exam}</div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-400 font-[500]">Loksewa Aayog — PSC Nepal</div>
+                <div className="text-[11px] text-slate-600 dark:text-slate-400 font-[500]">Public Service Commission — Technical Engineering</div>
               </div>
             </div>
 
@@ -163,14 +163,14 @@ export function SyllabusSection() {
           <div className="flex flex-col gap-5">
             {/* Hierarchy explanation */}
             <div className="bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[24px] p-6">
-              <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-4">Loksewa Academic Hierarchy</div>
+              <div className="text-[11px] font-[800] uppercase tracking-widest text-slate-600 dark:text-slate-400 mb-4">Engineering Academic Hierarchy</div>
               <div className="space-y-3">
                 {[
-                  { level: "Exam", desc: "Civil, Electrical, Mechanical, Computer...", color: "bg-[#2563EB]" },
-                  { level: "Paper", desc: "General Studies, Specific Knowledge...", color: "bg-blue-500" },
-                  { level: "Subject", desc: "Structural Analysis, Public Admin...", color: "bg-violet-500" },
-                  { level: "Chapter", desc: "Fundamental Rights, State Organs...", color: "bg-emerald-500" },
-                  { level: "Topic", desc: "Articles 12–23, Constitutional Bodies...", color: "bg-pink-500" },
+                  { level: "Exam", desc: "PSC Civil (5th/7th Level), NEC License, Electrical...", color: "bg-[#2563EB]" },
+                  { level: "Paper", desc: "Paper I (General & Basic), Paper II (Technical)...", color: "bg-blue-500" },
+                  { level: "Subject", desc: "Structural Analysis, Fluid Mechanics, Surveying...", color: "bg-violet-500" },
+                  { level: "Chapter", desc: "Stress & Strain, Pipe Flow, Levelling & Contouring...", color: "bg-emerald-500" },
+                  { level: "Topic", desc: "SFD & BMD, Bernoulli Equation, Total Station...", color: "bg-pink-500" },
                 ].map((item, i) => (
                   <div key={item.level} className="flex items-start gap-3">
                     <div className="flex flex-col items-center">
@@ -191,8 +191,8 @@ export function SyllabusSection() {
               {[
                 { label: "Exam Positions", value: "20+", color: "text-[#2563EB] dark:text-[#2563EB]" },
                 { label: "Subjects Covered", value: "100%", color: "text-emerald-500" },
-                { label: "Topics Mapped", value: "1,200+", color: "text-blue-500" },
-                { label: "Questions Linked", value: "250K+", color: "text-violet-500" },
+                { label: "Topics Mapped", value: "500+", color: "text-blue-500" },
+                { label: "Questions Linked", value: "5,000+", color: "text-violet-500" },
               ].map((s) => (
                 <div key={s.label} className="bg-slate-50 dark:bg-[#060E18] border border-slate-200 dark:border-white/[0.06] rounded-[16px] p-4 text-center">
                   <div className={`text-[28px] font-[900] ${s.color} mb-1`}>{s.value}</div>

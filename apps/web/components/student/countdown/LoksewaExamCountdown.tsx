@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Calendar, Clock, ExternalLink, Sparkles, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { schedulesApi } from "@/lib/api/schedules";
+import { formatNepaliDateDisplay } from "@/lib/nepali-date";
 
 import { useOptionalStudentContext } from "@/contexts/StudentContext";
 
@@ -192,11 +193,7 @@ export function LoksewaExamCountdown({
             <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-slate-300 font-medium">
               <span className="flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5 text-[#60A5FA]" />
-                {new Date(schedule.exam_date).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {formatNepaliDateDisplay(schedule.exam_date, { showAd: true })}
               </span>
               {schedule.exam_time && (
                 <span className="flex items-center gap-1">

@@ -7,6 +7,7 @@ import { ArrowLeft, CalendarDays, Clock, Loader2, Save, User, AlertCircle } from
 import { adminStudyPlanApi, AdminStudyPlanTemplate, StudyPlanLevel, StudyPlanTime } from "@/lib/api/admin-study-plan";
 import { adminSyllabusApi } from "@/lib/api/admin-syllabus";
 import { adminApi } from "@/lib/api/admin";
+import { NepaliDatePicker } from "@/components/ui/nepali-date-picker";
 import toast from "react-hot-toast";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -311,13 +312,12 @@ export default function CreateStudyPlanPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">Target Date *</label>
-            <input
-              type="date"
+            <NepaliDatePicker
+              label="Target Date (Nepali / BS)"
+              placeholder="Select target exam date in BS..."
               value={targetDate}
-              min={minDate}
-              onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full p-2.5 border border-slate-200 rounded-lg bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#0B2545]/20"
+              onChange={setTargetDate}
+              required
             />
             <p className="text-xs text-slate-500 mt-1">The exam date the student is working towards.</p>
           </div>

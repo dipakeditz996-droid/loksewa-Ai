@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Bar, SectionFailed, SectionShell, SectionSkeleton, errorText } from "@/components/study-plan/sections";
+import { formatNepaliDateDisplay } from "@/lib/nepali-date";
 import type {
   Overview, PlanStatus, PreparationOption, Rules, ScheduleGroup, StudentRow, StudentsResponse,
   TopicClass, TopicsResponse,
@@ -345,7 +346,7 @@ function StudentRowView({ r }: { r: StudentRow }) {
       <td className="px-3 py-3 whitespace-nowrap">
         {r.countdown && r.countdown.source === "schedule" ? (
           <>
-            {new Date(`${r.countdown.exam_date}T00:00:00`).toLocaleDateString(undefined, { dateStyle: "medium" })}
+            {formatNepaliDateDisplay(r.countdown.exam_date, { showAd: true })}
             <p className="text-[11px] text-muted-foreground">{plural(r.countdown.days_remaining, "day")} left</p>
           </>
         ) : <span className="text-muted-foreground">Not configured</span>}
@@ -461,7 +462,7 @@ export function SchedulePanel({ groups }: { groups: ScheduleGroup[] }) {
                   <td className="px-3 py-2.5 font-medium">{g.name}</td>
                   <td className="px-3 py-2.5">{g.countdown ? g.countdown.title : <span className="text-amber-700">No exam date configured</span>}</td>
                   <td className="px-3 py-2.5 whitespace-nowrap">{g.countdown ? SCOPE_LABEL[g.countdown.scope ?? "exam"] : "—"}</td>
-                  <td className="px-3 py-2.5 whitespace-nowrap">{g.countdown ? new Date(`${g.countdown.exam_date}T00:00:00`).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—"}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">{g.countdown ? formatNepaliDateDisplay(g.countdown.exam_date, { showAd: true }) : "—"}</td>
                   <td className="px-3 py-2.5 tabular-nums">{g.countdown ? g.countdown.days_remaining : "—"}</td>
                   <td className="px-3 py-2.5 tabular-nums">{g.students}{g.countdown && g.without_schedule > 0 ? ` (${g.without_schedule} without)` : ""}</td>
                 </tr>

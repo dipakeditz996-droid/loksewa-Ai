@@ -253,6 +253,9 @@ importers:
       lucide-react:
         specifier: ^1.31.0
         version: 1.31.0(react@19.2.0)
+      nepali-date-converter:
+        specifier: ^3.4.2
+        version: 3.4.2
       next:
         specifier: 16.3.0
         version: 16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.15.3)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -5043,6 +5046,10 @@ packages:
   neo-async@2.6.2:
     resolution: {integrity: sha512-Yd3UES5mWCSqR+qNT93S3UoYUkqAZ9lLg8a7g9rimsWmYGK8cVToA4/sF3RrshdyV3sAGMXVUmpMYOw+dLpOuw==}
 
+  nepali-date-converter@3.4.2:
+    resolution: {integrity: sha512-PB1xewtM/TTVMSpJCdNHcYYQkZhRk1GY2bKlU3jlJ9ViRuwDpTuGpkiUM0kWdoKQBuuvNkbroAcuI1p9/2sC6Q==}
+    engines: {node: '>=6.0.0'}
+
   next-themes@0.4.6:
     resolution: {integrity: sha512-pZvgD5L0IEvX5/9GWyHMf3m8BKiVQwsCMHfoFosXtXBMnaS0ZnIJ9ST4b4NqLVKDEm8QBxoNNGNaBv2JNF6XNA==}
     peerDependencies:
@@ -8646,11 +8653,11 @@ snapshots:
   '@types/eslint-scope@3.7.7':
     dependencies:
       '@types/eslint': 9.6.1
-      '@types/estree': 1.0.8
+      '@types/estree': 1.0.9
 
   '@types/eslint@9.6.1':
     dependencies:
-      '@types/estree': 1.0.8
+      '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
 
   '@types/estree-jsx@1.0.5':
@@ -11693,6 +11700,8 @@ snapshots:
 
   neo-async@2.6.2: {}
 
+  nepali-date-converter@3.4.2: {}
+
   next-themes@0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       react: 19.2.0
@@ -13125,7 +13134,7 @@ snapshots:
   webpack@5.106.2(postcss@8.5.26):
     dependencies:
       '@types/eslint-scope': 3.7.7
-      '@types/estree': 1.0.8
+      '@types/estree': 1.0.9
       '@types/json-schema': 7.0.15
       '@webassemblyjs/ast': 1.14.1
       '@webassemblyjs/wasm-edit': 1.14.1

@@ -23,6 +23,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { schedulesApi, OfficialExamSchedule } from "@/lib/api/schedules";
 import { apiClient } from "@/lib/api/client";
+import { NepaliDatePicker } from "@/components/ui/nepali-date-picker";
+import { formatNepaliDateDisplay } from "@/lib/nepali-date";
 import toast from "react-hot-toast";
 
 interface CategoryOption {
@@ -266,14 +268,9 @@ export default function AdminExamSchedulesPage() {
                 </div>
                 <h2 className="text-xl md:text-2xl font-black text-white">{activeSchedule.title}</h2>
                 <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1 font-medium">
                     <Calendar className="w-3.5 h-3.5 text-[#D4A72C]" />
-                    {new Date(activeSchedule.exam_date).toLocaleDateString("en-US", {
-                      weekday: "short",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    {formatNepaliDateDisplay(activeSchedule.exam_date, { showAd: true })}
                   </span>
                   {activeSchedule.exam_time && (
                     <span className="flex items-center gap-1">
@@ -448,11 +445,7 @@ export default function AdminExamSchedulesPage() {
                     <TableCell>
                       <div className="text-xs">
                         <p className="font-semibold text-[#0B2545]">
-                          {new Date(item.exam_date).toLocaleDateString("en-US", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {formatNepaliDateDisplay(item.exam_date, { showAd: true })}
                         </p>
                         {item.exam_time && <p className="text-slate-500">{item.exam_time.slice(0, 5)} (NPT)</p>}
                       </div>
@@ -462,11 +455,7 @@ export default function AdminExamSchedulesPage() {
                     <TableCell>
                       <span className="text-xs text-slate-600">
                         {item.application_deadline
-                          ? new Date(item.application_deadline).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })
+                          ? formatNepaliDateDisplay(item.application_deadline, { showAd: true })
                           : "—"}
                       </span>
                     </TableCell>
@@ -610,13 +599,11 @@ export default function AdminExamSchedulesPage() {
             {/* Date and Time */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Exam Date (YYYY-MM-DD) <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  type="date"
+                <NepaliDatePicker
+                  label="Exam Date (Nepali / BS)"
+                  placeholder="Select Exam Date in BS..."
                   value={formData.exam_date}
-                  onChange={(e) => setFormData({ ...formData, exam_date: e.target.value })}
+                  onChange={(val) => setFormData({ ...formData, exam_date: val })}
                   required
                 />
               </div>
@@ -637,24 +624,20 @@ export default function AdminExamSchedulesPage() {
             {/* Application Deadline & Result Date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Application Deadline (Optional)
-                </label>
-                <Input
-                  type="date"
+                <NepaliDatePicker
+                  label="Application Deadline (Optional)"
+                  placeholder="Select Deadline in BS..."
                   value={formData.application_deadline}
-                  onChange={(e) => setFormData({ ...formData, application_deadline: e.target.value })}
+                  onChange={(val) => setFormData({ ...formData, application_deadline: val })}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Result Expected Date (Optional)
-                </label>
-                <Input
-                  type="date"
+                <NepaliDatePicker
+                  label="Result Expected Date (Optional)"
+                  placeholder="Select Result Date in BS..."
                   value={formData.result_expected_date}
-                  onChange={(e) => setFormData({ ...formData, result_expected_date: e.target.value })}
+                  onChange={(val) => setFormData({ ...formData, result_expected_date: val })}
                 />
               </div>
             </div>

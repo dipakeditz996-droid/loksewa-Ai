@@ -216,99 +216,88 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
       <div className="relative z-10 max-w-[1360px] mx-auto w-full px-4 sm:px-6 lg:px-8">
         <div className="max-w-[760px]">
           {/* Dynamic Slide Content */}
-          <div className="flex flex-col items-start text-left">
+          {(() => {
+            const effectiveBadge =
+              currentBanner.badge_text?.trim() ||
+              "IOE ENTRANCE & NEC LICENSE 2081/82";
 
-            {/* Slide Badge */}
-            {currentBanner.badge_text ? (
-              <motion.div
-                key={`badge-${currentBanner.id ?? currentIndex}`}
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
-                <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
-                  {currentBanner.badge_text}
-                </span>
-              </motion.div>
-            ) : !currentBanner.id ? (
-              <motion.div
-                key={`badge-${currentBanner.id ?? currentIndex}`}
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
-                <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
-                  Engineering Entrance & License
-                </span>
-              </motion.div>
-            ) : null}
+            const effectiveTitle =
+              currentBanner.title?.trim() ||
+              "Master IOE Entrance & NEC License Examinations";
 
-            {/* Dynamic Headline */}
-            {currentBanner.title ? (
-              <motion.h1
-                key={`title-${currentBanner.id ?? currentIndex}`}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
-              >
-                <span>{currentBanner.title}</span>
-              </motion.h1>
-            ) : !currentBanner.id ? (
-              <motion.h1
-                key={`title-${currentBanner.id ?? currentIndex}`}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
-              >
-                Engineering Excellence,{" "}
-                <span className="text-[#60A5FA]">Mastered.</span>
-              </motion.h1>
-            ) : null}
+            const effectiveSubtitle =
+              currentBanner.subtitle?.trim() ||
+              "Nepal's premier engineering platform with verified question banks, live mock tests, and smart performance analytics.";
 
-            {/* Concise Supporting Copy (Clean, focused, no lengthy fluff) */}
-            {currentBanner.subtitle && (
-              <motion.p
-                key={`sub-${currentBanner.id ?? currentIndex}`}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                className="text-[16px] sm:text-[17.5px] md:text-[18.5px] text-slate-100 leading-[1.55] max-w-[540px] mb-6 font-[500] drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]"
-              >
-                {currentBanner.subtitle}
-              </motion.p>
-            )}
-
-            {/* Professional CTA Buttons (Polished height, radius, hierarchy) */}
-            <div className="flex flex-col sm:flex-row gap-3.5 w-full sm:w-auto mb-6">
-              <Link href={currentBanner.cta_url || "/register"} className="w-full sm:w-auto">
-                <Button className="h-[48px] sm:h-[50px] px-8 rounded-[12px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-[800] text-[15px] shadow-[0_10px_25px_-5px_rgba(37,99,235,0.6)] border border-blue-400/30 w-full sm:w-auto flex items-center justify-center gap-2.5 group transition-all">
-                  {currentBanner.cta_text || "Start Preparing Now"}
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </Button>
-              </Link>
-
-              {currentBanner.cta_secondary_text && (
-                <Link href={currentBanner.cta_secondary_url || "/courses"} className="w-full sm:w-auto">
-                  <Button
-                    variant="outline"
-                    className="h-[48px] sm:h-[50px] px-7 rounded-[12px] border border-white/35 text-white hover:text-white hover:bg-white/20 hover:border-white/60 bg-slate-950/60 backdrop-blur-md font-[700] text-[15px] w-full sm:w-auto flex items-center justify-center gap-2 transition-all shadow-md"
+            return (
+              <div className="flex flex-col items-start text-left">
+                {/* Slide Badge */}
+                {effectiveBadge && (
+                  <motion.div
+                    key={`badge-${currentBanner.id ?? currentIndex}`}
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
                   >
-                    <Play className="w-4 h-4 fill-white text-white" />
-                    {currentBanner.cta_secondary_text}
-                  </Button>
-                </Link>
-              )}
-            </div>
+                    <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
+                    <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
+                      {effectiveBadge}
+                    </span>
+                  </motion.div>
+                )}
 
-            {/* Trust Indicators */}
-            <TrustIndicators />
-          </div>
+                {/* Dynamic Headline */}
+                <motion.h1
+                  key={`title-${currentBanner.id ?? currentIndex}`}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                  className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
+                >
+                  <span>{effectiveTitle}</span>
+                </motion.h1>
+
+                {/* Concise Supporting Copy */}
+                {effectiveSubtitle && (
+                  <motion.p
+                    key={`sub-${currentBanner.id ?? currentIndex}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className="text-[16px] sm:text-[17.5px] md:text-[18.5px] text-slate-100 leading-[1.55] max-w-[540px] mb-6 font-[500] drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]"
+                  >
+                    {effectiveSubtitle}
+                  </motion.p>
+                )}
+
+                {/* Professional CTA Buttons */}
+                <div className="flex flex-col sm:flex-row gap-3.5 w-full sm:w-auto mb-6">
+                  <Link href={currentBanner.cta_url || "/register"} className="w-full sm:w-auto">
+                    <Button className="h-[48px] sm:h-[50px] px-8 rounded-[12px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-[800] text-[15px] shadow-[0_10px_25px_-5px_rgba(37,99,235,0.6)] border border-blue-400/30 w-full sm:w-auto flex items-center justify-center gap-2.5 group transition-all">
+                      {currentBanner.cta_text || "Start Preparing Now"}
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </Button>
+                  </Link>
+
+                  {currentBanner.cta_secondary_text && (
+                    <Link href={currentBanner.cta_secondary_url || "/courses"} className="w-full sm:w-auto">
+                      <Button
+                        variant="outline"
+                        className="h-[48px] sm:h-[50px] px-7 rounded-[12px] border border-white/35 text-white hover:text-white hover:bg-white/20 hover:border-white/60 bg-slate-950/60 backdrop-blur-md font-[700] text-[15px] w-full sm:w-auto flex items-center justify-center gap-2 transition-all shadow-md"
+                      >
+                        <Play className="w-4 h-4 fill-white text-white" />
+                        {currentBanner.cta_secondary_text}
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+
+                {/* Trust Indicators */}
+                <TrustIndicators />
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Carousel Navigation Controls & Pagination Indicators ─────────── */}

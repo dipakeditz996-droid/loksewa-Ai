@@ -17,21 +17,7 @@ interface TimeLeft {
   isExpired: boolean;
 }
 
-function getNoticeLabel(schedule: { exam_name?: string | null; category_name?: string | null }): string {
-  if (schedule.exam_name && schedule.exam_name.trim()) {
-    const name = schedule.exam_name.trim();
-    if (/notice/i.test(name)) {
-      return name.toLowerCase().startsWith("official") ? name : `Official ${name}`;
-    }
-    return `Official ${name} Notice`;
-  }
-  if (schedule.category_name && schedule.category_name.trim()) {
-    const cat = schedule.category_name.trim();
-    if (/license/i.test(cat)) return "Official License Notice";
-    if (/psc/i.test(cat) || /loksewa/i.test(cat)) return "Official PSC Notice";
-    if (/notice/i.test(cat)) return `Official ${cat}`;
-    return `Official ${cat} Notice`;
-  }
+function getNoticeLabel(_schedule?: { exam_name?: string | null; category_name?: string | null }): string {
   return "Official Exam Notice";
 }
 

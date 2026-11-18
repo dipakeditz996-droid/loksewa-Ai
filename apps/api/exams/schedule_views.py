@@ -15,6 +15,15 @@ from .schedule_serializers import (
     StudentUpcomingMockExamSerializer
 )
 
+def invalidate_schedule_cache():
+    try:
+        from django.core.cache import cache
+        cache.delete("next_official_exam:global")
+        if hasattr(cache, 'delete_pattern'):
+            cache.delete_pattern("next_official_exam:*")
+    except Exception:
+        pass
+
 class AdminExamScheduleViewSet(viewsets.ModelViewSet):
     """
     CRUD ViewSet for Admins to manage Official Loksewa PSC exam schedules.
@@ -37,12 +46,18 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         schedule = serializer.save()
+        invalidate_schedule_cache()
         if schedule.is_published:
             NotificationService.notify_admins_schedule_change(schedule, event_type="created")
 
     def perform_update(self, serializer):
         schedule = serializer.save()
+        invalidate_schedule_cache()
         NotificationService.notify_admins_schedule_change(schedule, event_type="updated")
+
+    def perform_destroy(self, instance):
+        instance.delete()
+        invalidate_schedule_cache()
 
     @action(detail=True, methods=['post'], url_path='set-active')
     def set_active(self, request, pk=None):
@@ -55,6 +70,7 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
             )
         schedule.is_active = True
         schedule.save()
+        invalidate_schedule_cache()
         NotificationService.notify_admins_schedule_change(schedule, event_type="activated as Next Exam")
         return Response(AdminExamScheduleSerializer(schedule).data)
 
@@ -64,6 +80,7 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
         schedule = self.get_object()
         schedule.is_published = not schedule.is_published
         schedule.save()
+        invalidate_schedule_cache()
         event_type = "published" if schedule.is_published else "unpublished"
         NotificationService.notify_admins_schedule_change(schedule, event_type=event_type)
         return Response(AdminExamScheduleSerializer(schedule).data)

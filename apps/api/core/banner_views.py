@@ -37,7 +37,7 @@ class PublicHomepageBannerView(APIView):
             data = serializer.data
             cache.set(CACHE_KEY_PUBLIC_BANNERS, data, timeout=300)
             return Response(data)
-        except (OperationalError, ProgrammingError):
+        except Exception as e:
             _ensure_banner_table()
             try:
                 banners = HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at')
@@ -58,7 +58,7 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         try:
             return super().list(request, *args, **kwargs)
-        except (OperationalError, ProgrammingError):
+        except Exception:
             _ensure_banner_table()
             try:
                 return super().list(request, *args, **kwargs)
@@ -68,7 +68,7 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         try:
             return super().create(request, *args, **kwargs)
-        except (OperationalError, ProgrammingError):
+        except Exception:
             _ensure_banner_table()
             return super().create(request, *args, **kwargs)
 

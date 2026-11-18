@@ -12,7 +12,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PublicBanner } from "@/lib/api/public-api";
+import { PublicBanner, publicApi } from "@/lib/api/public-api";
+import { useQuery } from "@tanstack/react-query";
 import { useSafeReducedMotion } from "./useHeroDepth";
 
 // ── Default Curated Banners (Fallback when none configured in database) ───────
@@ -121,10 +122,20 @@ interface HeroSectionProps {
 export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
   const reducedMotion = useSafeReducedMotion();
 
-  // Combine real banners or use fallback
-  const banners = (initialBanners && initialBanners.length > 0)
-    ? initialBanners
-    : FALLBACK_BANNERS;
+  // Client-side live query so uploaded admin banners show immediately without waiting for ISR build cache
+  const { data: liveBanners } = useQuery({
+    queryKey: ["public-banners"],
+    queryFn: () => publicApi.getBanners(),
+    initialData: initialBanners && initialBanners.length > 0 ? initialBanners : undefined,
+    staleTime: 60 * 1000,
+  });
+
+  // Combine real banners (live or SSR) or use fallback
+  const banners = (liveBanners && liveBanners.length > 0)
+    ? liveBanners
+    : (initialBanners && initialBanners.length > 0)
+      ? initialBanners
+      : FALLBACK_BANNERS;
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);

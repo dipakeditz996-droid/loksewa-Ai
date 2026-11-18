@@ -8,21 +8,26 @@ export async function POST(request: NextRequest) {
     const path = searchParams.get("path");
 
     if (!tag && !path) {
-      // Revalidate default homepage and testimonials tag
-      try { revalidateTag("testimonials", { expire: 0 }); } catch {}
-      try { revalidateTag("public-reviews", { expire: 0 }); } catch {}
-      revalidatePath("/", "page");
+      // Revalidate default homepage, banners, and testimonials
+      try { revalidateTag("testimonials"); } catch {}
+      try { revalidateTag("public-reviews"); } catch {}
+      try { revalidateTag("banners"); } catch {}
+      try { revalidateTag("homepage-hero"); } catch {}
+      try { revalidatePath("/", "page"); } catch {}
       return NextResponse.json({ revalidated: true, message: "Default paths and tags revalidated" });
     }
 
     if (tag) {
-      try { revalidateTag(tag, { expire: 0 }); } catch {}
+      try { revalidateTag(tag); } catch {}
       if (tag === "testimonials") {
-        try { revalidateTag("public-reviews", { expire: 0 }); } catch {}
+        try { revalidateTag("public-reviews"); } catch {}
+      }
+      if (tag === "banners") {
+        try { revalidateTag("homepage-hero"); } catch {}
       }
     }
     if (path) {
-      revalidatePath(path, "page");
+      try { revalidatePath(path, "page"); } catch {}
     }
 
     return NextResponse.json({

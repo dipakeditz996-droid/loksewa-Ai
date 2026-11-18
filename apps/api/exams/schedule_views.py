@@ -46,12 +46,16 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         schedule = serializer.save()
+        if schedule.is_active:
+            ExamSchedule.objects.exclude(id=schedule.id).filter(is_active=True).update(is_active=False)
         invalidate_schedule_cache()
         if schedule.is_published:
             NotificationService.notify_admins_schedule_change(schedule, event_type="created")
 
     def perform_update(self, serializer):
         schedule = serializer.save()
+        if schedule.is_active:
+            ExamSchedule.objects.exclude(id=schedule.id).filter(is_active=True).update(is_active=False)
         invalidate_schedule_cache()
         NotificationService.notify_admins_schedule_change(schedule, event_type="updated")
 
@@ -63,13 +67,9 @@ class AdminExamScheduleViewSet(viewsets.ModelViewSet):
     def set_active(self, request, pk=None):
         """Set this schedule as the single active Next Loksewa Exam."""
         schedule = self.get_object()
-        if schedule.exam_date < timezone.now().date():
-            return Response(
-                {"detail": "Cannot set a past exam schedule as the active upcoming exam."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        ExamSchedule.objects.exclude(id=schedule.id).filter(is_active=True).update(is_active=False)
         schedule.is_active = True
-        schedule.save()
+        schedule.save(update_fields=['is_active'])
         invalidate_schedule_cache()
         NotificationService.notify_admins_schedule_change(schedule, event_type="activated as Next Exam")
         return Response(AdminExamScheduleSerializer(schedule).data)

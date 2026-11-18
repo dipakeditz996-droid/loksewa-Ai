@@ -221,36 +221,57 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
           <div className="flex flex-col items-start text-left">
 
             {/* Slide Badge */}
-            <motion.div
-              key={`badge-${currentBanner.id ?? currentIndex}`}
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
-              <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
-                {currentBanner.badge_text || "Engineering Entrance & License"}
-              </span>
-            </motion.div>
+            {currentBanner.badge_text ? (
+              <motion.div
+                key={`badge-${currentBanner.id ?? currentIndex}`}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
+                <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
+                  {currentBanner.badge_text}
+                </span>
+              </motion.div>
+            ) : !currentBanner.id ? (
+              <motion.div
+                key={`badge-${currentBanner.id ?? currentIndex}`}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
+                <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
+                  Engineering Entrance & License
+                </span>
+              </motion.div>
+            ) : null}
 
             {/* Dynamic Headline */}
-            <motion.h1
-              key={`title-${currentBanner.id ?? currentIndex}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
-            >
-              {currentBanner.title ? (
+            {currentBanner.title ? (
+              <motion.h1
+                key={`title-${currentBanner.id ?? currentIndex}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
+              >
                 <span>{currentBanner.title}</span>
-              ) : (
-                <>
-                  Engineering Excellence,{" "}
-                  <span className="text-[#60A5FA]">Mastered.</span>
-                </>
-              )}
-            </motion.h1>
+              </motion.h1>
+            ) : !currentBanner.id ? (
+              <motion.h1
+                key={`title-${currentBanner.id ?? currentIndex}`}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
+              >
+                Engineering Excellence,{" "}
+                <span className="text-[#60A5FA]">Mastered.</span>
+              </motion.h1>
+            ) : null}
 
             {/* Concise Supporting Copy (Clean, focused, no lengthy fluff) */}
             {currentBanner.subtitle && (

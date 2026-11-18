@@ -9,21 +9,21 @@ export async function POST(request: NextRequest) {
 
     if (!tag && !path) {
       // Revalidate default homepage, banners, and testimonials
-      try { revalidateTag("testimonials"); } catch {}
-      try { revalidateTag("public-reviews"); } catch {}
-      try { revalidateTag("banners"); } catch {}
-      try { revalidateTag("homepage-hero"); } catch {}
+      try { (revalidateTag as any)("testimonials", { expire: 0 }); } catch {}
+      try { (revalidateTag as any)("public-reviews", { expire: 0 }); } catch {}
+      try { (revalidateTag as any)("banners", { expire: 0 }); } catch {}
+      try { (revalidateTag as any)("homepage-hero", { expire: 0 }); } catch {}
       try { revalidatePath("/", "page"); } catch {}
       return NextResponse.json({ revalidated: true, message: "Default paths and tags revalidated" });
     }
 
     if (tag) {
-      try { revalidateTag(tag); } catch {}
+      try { (revalidateTag as any)(tag, { expire: 0 }); } catch {}
       if (tag === "testimonials") {
-        try { revalidateTag("public-reviews"); } catch {}
+        try { (revalidateTag as any)("public-reviews", { expire: 0 }); } catch {}
       }
       if (tag === "banners") {
-        try { revalidateTag("homepage-hero"); } catch {}
+        try { (revalidateTag as any)("homepage-hero", { expire: 0 }); } catch {}
       }
     }
     if (path) {

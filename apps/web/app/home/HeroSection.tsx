@@ -6,13 +6,10 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
-  TrendingUp,
-  Award,
   Play,
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PublicBanner } from "@/lib/api/public-api";
@@ -61,205 +58,7 @@ const FALLBACK_BANNERS: PublicBanner[] = [
   },
 ];
 
-const SUBJECT_MASTERY = [
-  { label: "Structural Analysis", value: 92, color: "bg-[#2563EB]" },
-  { label: "Fluid Mechanics", value: 88, color: "bg-blue-500" },
-  { label: "Engineering Mathematics", value: 85, color: "bg-cyan-500" },
-];
-
 const EXAM_CHIPS = ["PSC Civil & Electrical", "NEC License", "IOE Entrance"];
-
-// ── Circular score gauge ───────────────────────────────────────────────────────
-function ScoreGauge({ value, reducedMotion }: { value: number; reducedMotion: boolean }) {
-  const radius = 50;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (value / 100) * circumference;
-  return (
-    <div className="relative w-[124px] h-[124px] shrink-0">
-      <svg viewBox="0 0 124 124" className="w-full h-full -rotate-90">
-        <circle
-          cx="62"
-          cy="62"
-          r={radius}
-          fill="none"
-          strokeWidth="11"
-          className="stroke-slate-100 dark:stroke-white/[0.08]"
-        />
-        <motion.circle
-          cx="62"
-          cy="62"
-          r={radius}
-          fill="none"
-          stroke="url(#heroGaugeGradient)"
-          strokeWidth="11"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          initial={reducedMotion ? false : { strokeDashoffset: circumference }}
-          animate={{ strokeDashoffset: offset }}
-          transition={reducedMotion ? { duration: 0 } : { duration: 1.2, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
-        />
-        <defs>
-          <linearGradient id="heroGaugeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#2563EB" />
-            <stop offset="100%" stopColor="#F0C95A" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[26px] font-[900] text-slate-900 dark:text-white leading-none tracking-tight">
-          {value}
-          <span className="text-[13px] text-slate-500 dark:text-slate-400 font-[700]">%</span>
-        </span>
-        <span className="text-[9px] font-[800] text-[#2563EB] dark:text-[#F0C95A] uppercase tracking-widest mt-1.5">
-          Excellent
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ── Accent badges ─────────────────────────────────────────────────────────────
-function RankCard({ reducedMotion }: { reducedMotion: boolean }) {
-  return (
-    <motion.div
-      initial={reducedMotion ? false : { opacity: 0, scale: 0.9, y: 12 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={
-        reducedMotion
-          ? { duration: 0 }
-          : { duration: 0.55, delay: 0.35, ease: [0.16, 1, 0.3, 1] }
-      }
-      whileHover={reducedMotion ? undefined : { y: -3, transition: { duration: 0.2 } }}
-      className="absolute z-30 -top-4 -right-4 sm:-right-5"
-    >
-      <div className="rounded-[16px] p-3 flex flex-col items-center bg-white/95 dark:bg-[#0E1A2E]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/10 shadow-[0_16px_36px_-12px_rgba(11,37,69,0.28)] dark:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.7)]">
-        <div className="w-8 h-8 rounded-full bg-[#2563EB]/12 dark:bg-[#2563EB]/15 flex items-center justify-center mb-1.5">
-          <Award className="w-4 h-4 text-[#2563EB] dark:text-[#F0C95A]" />
-        </div>
-        <div className="text-[8px] font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-0.5">
-          Current Rank
-        </div>
-        <div className="text-[20px] font-[900] text-slate-900 dark:text-white leading-none mb-0.5">#27</div>
-        <div className="text-[9.5px] font-[700] text-[#2563EB] dark:text-[#F0C95A]">Top 3%</div>
-      </div>
-    </motion.div>
-  );
-}
-
-function StreakCard({ reducedMotion }: { reducedMotion: boolean }) {
-  return (
-    <motion.div
-      initial={reducedMotion ? false : { opacity: 0, scale: 0.9, y: 12 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={
-        reducedMotion
-          ? { duration: 0 }
-          : { duration: 0.55, delay: 0.45, ease: [0.16, 1, 0.3, 1] }
-      }
-      whileHover={reducedMotion ? undefined : { y: -3, transition: { duration: 0.2 } }}
-      className="absolute z-30 -top-4 -left-4 sm:-left-5"
-    >
-      <div className="rounded-[16px] p-2.5 px-3 flex items-center gap-2.5 bg-white/95 dark:bg-[#0E1A2E]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/10 shadow-[0_16px_36px_-12px_rgba(11,37,69,0.28)] dark:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.7)]">
-        <div className="w-8 h-8 rounded-[10px] bg-orange-500/12 flex items-center justify-center text-lg">
-          <span className="inline-block">🔥</span>
-        </div>
-        <div>
-          <div className="text-[12px] font-[900] text-slate-900 dark:text-white leading-tight">7 Day Streak</div>
-          <div className="text-[10px] font-[700] text-orange-500">Keep going!</div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-// ── Hero showcase: product-dashboard mockup ──────────────────────────────────
-function HeroShowcase() {
-  const reducedMotion = useSafeReducedMotion();
-
-  return (
-    <div className="relative w-full flex items-center justify-center lg:justify-end">
-      {/* Glow bed behind the card */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="absolute w-[460px] h-[460px] rounded-full bg-[#2563EB]/[0.12] dark:bg-[#2563EB]/[0.18] blur-[120px]" />
-        <div className="absolute w-[400px] h-[400px] rounded-full bg-blue-500/[0.10] dark:bg-blue-500/[0.16] blur-[120px] translate-x-12 translate-y-8" />
-      </div>
-
-      <div className="relative z-20 w-full max-w-[430px]">
-        <RankCard reducedMotion={reducedMotion} />
-        <StreakCard reducedMotion={reducedMotion} />
-
-        <motion.div
-          initial={reducedMotion ? false : { opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={reducedMotion ? { duration: 0 } : { duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          whileHover={reducedMotion ? undefined : { y: -4, transition: { duration: 0.3 } }}
-          className="rounded-[22px] overflow-hidden bg-white/95 dark:bg-[#0B1524]/95 backdrop-blur-xl border border-slate-200/90 dark:border-white/[0.10] shadow-[0_32px_80px_-20px_rgba(11,37,69,0.35)] dark:shadow-[0_32px_90px_-20px_rgba(0,0,0,0.85)]"
-        >
-          {/* Window chrome */}
-          <div className="flex items-center gap-2 px-4 h-10 border-b border-slate-100 dark:border-white/[0.06] bg-slate-50/80 dark:bg-white/[0.03]">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
-            <span className="mx-auto text-[11px] font-[600] text-slate-500 dark:text-slate-400 tracking-wide">
-              app.nesmastery.com/dashboard
-            </span>
-          </div>
-
-          <div className="p-4 sm:p-5">
-            <div className="flex items-center justify-between mb-3.5">
-              <span className="text-[10.5px] font-[800] uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Engineering Mastery Score
-              </span>
-              <span className="flex items-center gap-1 text-[10.5px] font-[700] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 rounded-full">
-                <TrendingUp className="w-3 h-3" /> +14.8%
-              </span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <ScoreGauge value={87} reducedMotion={reducedMotion} />
-              <div className="flex-1 space-y-2">
-                {SUBJECT_MASTERY.map((s, i) => (
-                  <div key={s.label}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10.5px] font-[600] text-slate-600 dark:text-slate-300 truncate pr-2">
-                        {s.label}
-                      </span>
-                      <span className="text-[10.5px] font-[700] text-slate-900 dark:text-white shrink-0">
-                        {s.value}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-100 dark:bg-white/[0.08] rounded-full overflow-hidden">
-                      <motion.div
-                        className={`h-full rounded-full ${s.color}`}
-                        initial={reducedMotion ? false : { width: 0 }}
-                        animate={{ width: `${s.value}%` }}
-                        transition={
-                          reducedMotion
-                            ? { duration: 0 }
-                            : { duration: 0.9, delay: 0.7 + i * 0.1, ease: [0.16, 1, 0.3, 1] }
-                        }
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 mt-4 pt-3.5 border-t border-slate-100 dark:border-white/[0.06] text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span className="text-slate-600 dark:text-slate-300 font-[600]">Live Mock Exam Ready</span>
-              </div>
-              <span className="text-[11px] font-[700] text-[#2563EB] dark:text-[#60A5FA]">
-                Verified 2081/82
-              </span>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </div>
-  );
-}
 
 // ── Trust indicators ───────────────────────────────────────────────────────────
 const AVATAR_GRADIENTS = [
@@ -400,9 +199,8 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
 
       {/* ── Content Grid ────────────────────────────────────────────────────── */}
       <div className="relative z-10 max-w-[1360px] mx-auto w-full px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-8 lg:gap-12 items-center">
-
-          {/* LEFT: Dynamic Slide Content */}
+        <div className="max-w-[760px]">
+          {/* Dynamic Slide Content */}
           <div className="flex flex-col items-start text-left">
 
             {/* Slide Badge */}
@@ -490,12 +288,6 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
             {/* Trust Indicators */}
             <TrustIndicators />
           </div>
-
-          {/* RIGHT: High-fidelity Product Showcase Mockup */}
-          <div className="hidden lg:block">
-            <HeroShowcase />
-          </div>
-
         </div>
 
         {/* ── Carousel Navigation Controls & Pagination Indicators ─────────── */}

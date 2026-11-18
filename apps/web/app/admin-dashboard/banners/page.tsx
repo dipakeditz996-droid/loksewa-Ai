@@ -241,9 +241,12 @@ export default function AdminBannersPage() {
     if (targetIndex < 0 || targetIndex >= banners.length) return;
 
     const newBanners = [...banners];
-    const temp = newBanners[index];
-    newBanners[index] = newBanners[targetIndex];
-    newBanners[targetIndex] = temp;
+    const sourceItem = newBanners[index];
+    const targetItem = newBanners[targetIndex];
+    if (!sourceItem || !targetItem) return;
+
+    newBanners[index] = targetItem;
+    newBanners[targetIndex] = sourceItem;
 
     // Re-assign display_order
     const reorderPayload = newBanners.map((b, idx) => ({

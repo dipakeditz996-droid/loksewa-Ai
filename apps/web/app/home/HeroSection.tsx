@@ -324,7 +324,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
   const totalSlides = banners.length;
-  const currentBanner = banners[currentIndex] || banners[0];
+  const currentBanner: PublicBanner = banners[currentIndex] ?? banners[0] ?? FALLBACK_BANNERS[0]!;
 
   // Auto transition every 5.5 seconds (paused on hover or if only 1 slide exists)
   useEffect(() => {

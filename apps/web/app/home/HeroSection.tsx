@@ -157,7 +157,7 @@ function StreakCard({ reducedMotion }: { reducedMotion: boolean }) {
           : { duration: 0.55, delay: 0.45, ease: [0.16, 1, 0.3, 1] }
       }
       whileHover={reducedMotion ? undefined : { y: -3, transition: { duration: 0.2 } }}
-      className="absolute z-30 -bottom-4 -left-4 sm:-left-5"
+      className="absolute z-30 -top-4 -left-4 sm:-left-5"
     >
       <div className="rounded-[16px] p-2.5 px-3 flex items-center gap-2.5 bg-white/95 dark:bg-[#0E1A2E]/95 backdrop-blur-2xl border border-slate-200/80 dark:border-white/10 shadow-[0_16px_36px_-12px_rgba(11,37,69,0.28)] dark:shadow-[0_16px_36px_-10px_rgba(0,0,0,0.7)]">
         <div className="w-8 h-8 rounded-[10px] bg-orange-500/12 flex items-center justify-center text-lg">
@@ -272,35 +272,37 @@ const AVATAR_GRADIENTS = [
 
 function TrustIndicators() {
   return (
-    <div className="flex flex-wrap items-center gap-x-7 gap-y-3 pt-3">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 border-t border-white/20 mt-2 w-full max-w-[560px]">
       <div className="flex items-center gap-3">
         <div className="flex -space-x-2">
           {AVATAR_GRADIENTS.map((g, i) => (
             <div
               key={i}
-              className={`w-7 h-7 rounded-full bg-gradient-to-br ${g} ring-2 ring-white dark:ring-[#070E1B] shadow-xs`}
+              className={`w-7 h-7 rounded-full bg-gradient-to-br ${g} ring-2 ring-slate-900 shadow-xs`}
             />
           ))}
         </div>
         <div>
-          <div className="text-[13px] font-[800] text-slate-900 dark:text-white leading-tight">10,000+</div>
-          <div className="text-[11px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">Aspirants Enrolled</div>
+          <div className="text-[14px] font-[900] text-white leading-tight drop-shadow-sm">10,000+</div>
+          <div className="text-[11.5px] font-[600] text-slate-200 leading-tight">Aspirants Enrolled</div>
         </div>
       </div>
 
-      <div className="hidden sm:block w-px h-7 bg-slate-200 dark:bg-white/10" />
+      <div className="hidden sm:block w-px h-8 bg-white/25" />
 
-      <div className="flex items-center gap-1.5">
-        <div className="flex text-[#2563EB] text-[13px] leading-none">★★★★★</div>
-        <span className="text-[13px] font-[800] text-slate-900 dark:text-white leading-none">4.9/5</span>
-        <span className="text-[11px] font-[600] text-slate-500 dark:text-slate-400 leading-none">Rating</span>
+      <div className="flex items-center gap-2">
+        <div className="flex text-amber-400 text-[14px] leading-none drop-shadow-sm">★★★★★</div>
+        <div>
+          <div className="text-[14px] font-[900] text-white leading-tight drop-shadow-sm">4.9/5</div>
+          <div className="text-[11.5px] font-[600] text-slate-200 leading-tight">Student Rating</div>
+        </div>
       </div>
 
-      <div className="hidden sm:block w-px h-7 bg-slate-200 dark:bg-white/10" />
+      <div className="hidden sm:block w-px h-8 bg-white/25" />
 
       <div>
-        <div className="text-[13px] font-[800] text-slate-900 dark:text-white leading-tight">5,000+</div>
-        <div className="text-[11px] font-[600] text-slate-500 dark:text-slate-400 leading-tight">Exam Questions</div>
+        <div className="text-[14px] font-[900] text-white leading-tight drop-shadow-sm">5,000+</div>
+        <div className="text-[11.5px] font-[600] text-slate-200 leading-tight">Exam Questions</div>
       </div>
     </div>
   );
@@ -371,7 +373,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               <img
                 src={currentBanner.image_url || "/media/hero_background.webp"}
                 alt={currentBanner.title || "NES Mastery Banner"}
-                className="w-full h-full object-cover object-center filter brightness-[0.70] contrast-[1.05]"
+                className="w-full h-full object-cover object-center filter brightness-[0.92] contrast-[1.08]"
                 loading="eager"
                 onError={(e) => {
                   const target = e.currentTarget;
@@ -382,9 +384,9 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               />
             </picture>
 
-            {/* Premium Gradient Overlays for Guaranteed Text Readability */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#020611]/95 via-[#020611]/85 to-[#020611]/40" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#020611] via-transparent to-[#020611]/50" />
+            {/* High-visibility architectural scrim: dark on left for text legibility, clear on center/right for image visibility */}
+            <div className="absolute inset-0 bg-gradient-to-r from-[#020611]/90 via-[#020611]/55 to-[#020611]/15" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#020611]/60 via-transparent to-[#020611]/75" />
           </motion.div>
         </AnimatePresence>
 
@@ -393,10 +395,10 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
         <div className="absolute bottom-[-10%] right-[5%] w-[500px] h-[500px] rounded-full bg-blue-600/[0.12] blur-[140px] pointer-events-none" />
 
         {/* Subtle Architectural Perspective Grid */}
-        <div className="absolute inset-0 bg-neural-grid opacity-25 pointer-events-none" />
+        <div className="absolute inset-0 bg-neural-grid opacity-20 pointer-events-none" />
 
-        {/* Bottom soft transition into next section */}
-        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-slate-50 dark:from-[#020611] to-transparent pointer-events-none" />
+        {/* Bottom soft transition into next section (clean, no heavy fog) */}
+        <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#020611]/90 to-transparent pointer-events-none" />
       </div>
 
       {/* ── Content Grid ────────────────────────────────────────────────────── */}
@@ -412,10 +414,10 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#2563EB]/20 border border-[#2563EB]/35 backdrop-blur-md mb-4"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#2563EB]/25 border border-[#3B82F6]/50 backdrop-blur-md mb-4 shadow-sm"
             >
-              <Sparkles className="w-3.5 h-3.5 text-[#60A5FA]" />
-              <span className="text-[11px] font-[800] uppercase tracking-wider text-[#60A5FA]">
+              <Sparkles className="w-3.5 h-3.5 text-[#93C5FD]" />
+              <span className="text-[11.5px] font-[800] uppercase tracking-wider text-[#93C5FD]">
                 {currentBanner.badge_text || "Engineering Entrance & License"}
               </span>
             </motion.div>
@@ -426,14 +428,14 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-              className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[56px] lg:text-[62px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white"
+              className="text-[34px] xs:text-[40px] sm:text-[48px] md:text-[54px] lg:text-[60px] font-[900] tracking-[-0.035em] leading-[1.06] mb-4 text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.85)]"
             >
               {currentBanner.title ? (
                 <span>{currentBanner.title}</span>
               ) : (
                 <>
                   Engineering Excellence,{" "}
-                  <span className="text-gradient-gold">Mastered.</span>
+                  <span className="text-[#60A5FA]">Mastered.</span>
                 </>
               )}
             </motion.h1>
@@ -445,16 +447,16 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
-                className="text-[15px] sm:text-[16.5px] md:text-[17.5px] text-slate-300 leading-[1.55] max-w-[540px] mb-6 font-[400]"
+                className="text-[16px] sm:text-[17.5px] md:text-[18.5px] text-slate-100 leading-[1.55] max-w-[540px] mb-6 font-[500] drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]"
               >
                 {currentBanner.subtitle}
               </motion.p>
             )}
 
             {/* Professional CTA Buttons (Polished height, radius, hierarchy) */}
-            <div className="flex flex-col sm:flex-row gap-3.5 w-full sm:w-auto mb-5">
+            <div className="flex flex-col sm:flex-row gap-3.5 w-full sm:w-auto mb-6">
               <Link href={currentBanner.cta_url || "/register"} className="w-full sm:w-auto">
-                <Button className="h-[48px] sm:h-[50px] px-7 rounded-[12px] bg-[#2563EB] hover:bg-[#1d4ed8] text-white font-[800] text-[15px] shadow-[0_10px_25px_-5px_rgba(37,99,235,0.5)] border-none w-full sm:w-auto flex items-center justify-center gap-2.5 group transition-all">
+                <Button className="h-[48px] sm:h-[50px] px-8 rounded-[12px] bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-[800] text-[15px] shadow-[0_10px_25px_-5px_rgba(37,99,235,0.6)] border border-blue-400/30 w-full sm:w-auto flex items-center justify-center gap-2.5 group transition-all">
                   {currentBanner.cta_text || "Start Preparing Now"}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Button>
@@ -464,9 +466,9 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
                 <Link href={currentBanner.cta_secondary_url || "/courses"} className="w-full sm:w-auto">
                   <Button
                     variant="outline"
-                    className="h-[48px] sm:h-[50px] px-6 rounded-[12px] border border-white/20 text-white hover:text-white hover:bg-white/10 hover:border-white/35 bg-white/[0.05] backdrop-blur-md font-[700] text-[15px] w-full sm:w-auto flex items-center justify-center gap-2 transition-all"
+                    className="h-[48px] sm:h-[50px] px-7 rounded-[12px] border border-white/40 text-white hover:text-white hover:bg-white/20 hover:border-white/60 bg-white/10 backdrop-blur-md font-[700] text-[15px] w-full sm:w-auto flex items-center justify-center gap-2 transition-all shadow-sm"
                   >
-                    <Play className="w-4 h-4 fill-current text-white/90" />
+                    <Play className="w-4 h-4 fill-white text-white" />
                     {currentBanner.cta_secondary_text}
                   </Button>
                 </Link>
@@ -475,13 +477,13 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
 
             {/* Exam Tags */}
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-[11px] font-[700] uppercase tracking-wider text-slate-400 mr-1">
+              <span className="text-[11.5px] font-[800] uppercase tracking-wider text-slate-200 mr-1 drop-shadow-sm">
                 Curriculum:
               </span>
               {EXAM_CHIPS.map((chip) => (
                 <span
                   key={chip}
-                  className="text-[11.5px] font-[600] text-slate-300 bg-white/[0.07] border border-white/10 px-2.5 py-0.5 rounded-full backdrop-blur-sm"
+                  className="text-[12px] font-[700] text-white bg-slate-900/75 border border-white/25 px-3 py-1 rounded-full backdrop-blur-md shadow-sm"
                 >
                   {chip}
                 </span>

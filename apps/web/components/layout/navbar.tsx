@@ -96,6 +96,8 @@ export function Navbar() {
     { href: "/marketplace", label: "Marketplace", icon: ShoppingBag },
   ];
 
+  const isHeroTransparent = !isScrolled && pathname === "/";
+
   return (
     <>
       {/* Fixed wrapper is full-width and non-interactive; the actual bar
@@ -104,10 +106,12 @@ export function Navbar() {
       <header className="fixed top-0 left-0 w-full z-50 pointer-events-none">
         <div className="pointer-events-auto mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 pt-3 sm:pt-4">
           <div
-            className={`flex items-center justify-between gap-3 rounded-full border transition-all duration-500 ${
-              isScrolled
-                ? "px-3 py-2 bg-white/85 dark:bg-[#04080F]/90 backdrop-blur-xl border-slate-200/70 dark:border-white/[0.08] shadow-[0_10px_36px_-8px_rgba(11,37,69,0.16)] dark:shadow-[0_10px_36px_-8px_rgba(0,0,0,0.6)]"
-                : "px-3 py-2.5 bg-white/55 dark:bg-white/[0.02] backdrop-blur-md border-white/40 dark:border-white/[0.04] shadow-[0_4px_20px_-8px_rgba(11,37,69,0.08)]"
+            className={`flex items-center justify-between gap-3 rounded-full border transition-all duration-300 ${
+              isHeroTransparent
+                ? "px-3.5 py-2.5 bg-slate-950/85 backdrop-blur-xl border-white/20 shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)]"
+                : isScrolled
+                ? "px-3 py-2 bg-white/95 dark:bg-[#071322]/95 backdrop-blur-xl border-slate-200/80 dark:border-white/[0.08] shadow-[0_10px_36px_-8px_rgba(11,37,69,0.16)] dark:shadow-[0_10px_36px_-8px_rgba(0,0,0,0.6)]"
+                : "px-3 py-2.5 bg-white/95 dark:bg-[#071322]/95 backdrop-blur-md border-slate-200/70 dark:border-white/[0.06] shadow-[0_4px_20px_-8px_rgba(11,37,69,0.1)]"
             }`}
           >
 
@@ -123,13 +127,19 @@ export function Navbar() {
                   className="w-full h-full object-contain"
                 />
               </div>
-              <span className="font-[800] text-[19px] tracking-tight text-slate-900 dark:text-white hidden sm:inline">
+              <span className={`font-[800] text-[19px] tracking-tight hidden sm:inline ${
+                isHeroTransparent ? "text-white" : "text-slate-900 dark:text-white"
+              }`}>
                 NES <span className="text-[#2563EB] dark:text-[#60A5FA]">Mastery</span>
               </span>
             </Link>
 
             {/* ── Desktop Navigation — pill segment with a sliding active indicator ── */}
-            <nav className="hidden lg:flex items-center gap-0.5 bg-slate-900/[0.04] dark:bg-white/[0.05] rounded-full p-1">
+            <nav className={`hidden lg:flex items-center gap-0.5 rounded-full p-1 ${
+              isHeroTransparent
+                ? "bg-white/[0.08] border border-white/10"
+                : "bg-slate-900/[0.04] dark:bg-white/[0.05]"
+            }`}>
               {navLinks.map((link) => {
                 const isActive = pathname === link.href;
                 const isPending = pendingHref === link.href;
@@ -145,19 +155,21 @@ export function Navbar() {
                     {(isActive || isPending) && (
                       <motion.span
                         layoutId="nav-active-pill"
-                        className={`absolute inset-0 rounded-full shadow-[0_2px_10px_rgba(11,37,69,0.1)] ${isPending ? "bg-white/70 dark:bg-white/10" : "bg-white dark:bg-white/10"}`}
+                        className="absolute inset-0 rounded-full bg-[#2563EB] shadow-[0_2px_10px_rgba(37,99,235,0.4)]"
                         transition={{ type: "spring", stiffness: 420, damping: 34 }}
                       />
                     )}
                     <span
                       className={`relative z-10 flex items-center gap-1.5 transition-colors duration-200 ${
                         isActive || isPending
-                          ? "text-slate-900 dark:text-white"
-                          : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white"
+                          ? "text-white font-[700]"
+                          : isHeroTransparent
+                          ? "text-slate-200 hover:text-white font-[600]"
+                          : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-[600]"
                       }`}
                     >
                       {link.label}
-                      {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#C29322]" aria-hidden="true" />}
+                      {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-white" aria-hidden="true" />}
                     </span>
                     {isPending && <span className="sr-only" role="status">Opening {link.label}</span>}
                   </Link>
@@ -175,7 +187,11 @@ export function Navbar() {
                     const current = resolvedTheme || theme || "dark";
                     setTheme(current === "dark" ? "light" : "dark");
                   }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    isHeroTransparent
+                      ? "text-slate-200 hover:text-white hover:bg-white/10"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-900/[0.05] dark:hover:bg-white/8"
+                  }`}
                   aria-label="Toggle theme"
                 >
                   {(resolvedTheme || theme) === "dark"
@@ -185,20 +201,22 @@ export function Navbar() {
                 </button>
               )}
 
-              {/* Log In - single unified entry point; role-based redirect happens
-                  after authentication (see app/login/page.tsx), never via a
-                  separate public Teacher/Admin portal link. */}
+              {/* Log In */}
               <Link
                 href="/login"
                 onClick={(event) => handleNavigation(event, "/login")}
-                className="text-[13px] font-[600] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors px-1.5"
+                className={`text-[13px] font-[700] transition-colors px-1.5 ${
+                  isHeroTransparent
+                    ? "text-slate-200 hover:text-white"
+                    : "text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+                }`}
               >
                 Log In
               </Link>
 
               {/* Get Started */}
               <Link href="/register" onClick={(event) => handleNavigation(event, "/register")}>
-                <Button className="btn-electric text-white h-[36px] px-5 rounded-full font-[700] text-[13px] border-none flex items-center gap-1.5 group shadow-sm">
+                <Button className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-[38px] px-5 rounded-full font-[800] text-[13px] border-none flex items-center gap-1.5 group shadow-[0_4px_16px_rgba(37,99,235,0.4)] transition-all">
                   Get Started
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </Button>
@@ -210,7 +228,11 @@ export function Navbar() {
               <Link
                 href="/login"
                 onClick={(event) => handleNavigation(event, "/login")}
-                className="mr-0.5 px-3 py-1.5 rounded-full text-[12px] font-[700] text-slate-700 dark:text-white border border-slate-200/80 dark:border-white/15 hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
+                className={`mr-0.5 px-3 py-1.5 rounded-full text-[12px] font-[700] transition-all ${
+                  isHeroTransparent
+                    ? "text-white border border-white/30 hover:bg-white/10"
+                    : "text-slate-700 dark:text-white border border-slate-200/80 dark:border-white/15 hover:bg-slate-900/[0.05] dark:hover:bg-white/8"
+                }`}
               >
                 Login
               </Link>
@@ -221,7 +243,11 @@ export function Navbar() {
                     const current = resolvedTheme || theme || "dark";
                     setTheme(current === "dark" ? "light" : "dark");
                   }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                    isHeroTransparent
+                      ? "text-slate-200 hover:text-white hover:bg-white/10"
+                      : "text-slate-500 dark:text-slate-400 hover:bg-slate-900/[0.05] dark:hover:bg-white/8"
+                  }`}
                   aria-label="Toggle theme"
                 >
                   {(resolvedTheme || theme) === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -229,7 +255,11 @@ export function Navbar() {
               )}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-slate-700 dark:text-white hover:bg-slate-900/[0.05] dark:hover:bg-white/8 transition-all"
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
+                  isHeroTransparent
+                    ? "text-white hover:bg-white/10"
+                    : "text-slate-700 dark:text-white hover:bg-slate-900/[0.05] dark:hover:bg-white/8"
+                }`}
                 aria-label="Toggle menu"
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

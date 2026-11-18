@@ -60,6 +60,12 @@ const FALLBACK_BANNERS: PublicBanner[] = [
 
 const EXAM_CHIPS = ["PSC Civil & Electrical", "NEC License", "IOE Entrance"];
 
+const DEFAULT_FALLBACK_IMAGES = [
+  "/media/hero_background.webp",
+  "/media/course.webp",
+  "/images/admin_bg.jpg",
+];
+
 // ── Trust indicators ───────────────────────────────────────────────────────────
 const AVATAR_GRADIENTS = [
   "from-blue-400 to-blue-600",
@@ -124,17 +130,19 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
   const [isHovered, setIsHovered] = useState(false);
   const totalSlides = banners.length;
   const currentBanner: PublicBanner = banners[currentIndex] ?? banners[0] ?? FALLBACK_BANNERS[0]!;
+  const fallbackImage = DEFAULT_FALLBACK_IMAGES[currentIndex % DEFAULT_FALLBACK_IMAGES.length]!;
+  const fallbackData = FALLBACK_BANNERS[currentIndex % FALLBACK_BANNERS.length]!;
 
-  // Auto transition every 5.5 seconds (paused on hover or if only 1 slide exists)
+  // Auto transition every 5 seconds (paused only when hovering over controls or if only 1 slide exists)
   useEffect(() => {
-    if (totalSlides <= 1 || isHovered || reducedMotion) return;
+    if (totalSlides <= 1 || isHovered) return;
 
     const timer = setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % totalSlides);
-    }, 5500);
+    }, 5000);
 
     return () => clearInterval(timer);
-  }, [totalSlides, isHovered, reducedMotion]);
+  }, [totalSlides, isHovered]);
 
   const handlePrev = useCallback(() => {
     setCurrentIndex((prev) => (prev - 1 + totalSlides) % totalSlides);
@@ -146,19 +154,17 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
 
   return (
     <section
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className="relative flex items-center pt-20 pb-10 sm:pt-22 sm:pb-12 lg:pt-24 lg:pb-12 overflow-hidden bg-slate-950 text-white min-h-[520px] sm:min-h-[560px] lg:min-h-[600px]"
     >
       {/* ── Dynamic Banner Carousel Background ──────────────────────────────── */}
       <div className="absolute inset-0 z-0 overflow-hidden">
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           <motion.div
-            key={currentBanner.id || currentIndex}
-            initial={{ opacity: 0, scale: 1.03 }}
+            key={currentBanner.id ?? currentIndex}
+            initial={{ opacity: 0, scale: reducedMotion ? 1 : 1.02 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.7, ease: "easeInOut" }}
+            transition={{ duration: reducedMotion ? 0.3 : 0.8, ease: "easeInOut" }}
             className="absolute inset-0"
           >
             {/* Desktop & Mobile Responsive Banner Image */}
@@ -170,14 +176,14 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
                 />
               )}
               <img
-                src={currentBanner.image_url || "/media/hero_background.webp"}
-                alt={currentBanner.title || "NES Mastery Banner"}
+                src={currentBanner.image_url || fallbackImage}
+                alt={currentBanner.title || fallbackData.title}
                 className="w-full h-full object-cover object-[center_26%] filter brightness-[1.20] contrast-[1.08] saturate-[1.12]"
                 loading="eager"
                 onError={(e) => {
                   const target = e.currentTarget;
-                  if (target.src !== "/media/hero_background.webp") {
-                    target.src = "/media/hero_background.webp";
+                  if (target.src !== fallbackImage) {
+                    target.src = fallbackImage;
                   }
                 }}
               />
@@ -205,7 +211,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
 
             {/* Slide Badge */}
             <motion.div
-              key={`badge-${currentBanner.id}`}
+              key={`badge-${currentBanner.id ?? currentIndex}`}
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
@@ -219,7 +225,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
 
             {/* Dynamic Headline */}
             <motion.h1
-              key={`title-${currentBanner.id}`}
+              key={`title-${currentBanner.id ?? currentIndex}`}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
@@ -238,7 +244,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
             {/* Concise Supporting Copy (Clean, focused, no lengthy fluff) */}
             {currentBanner.subtitle && (
               <motion.p
-                key={`sub-${currentBanner.id}`}
+                key={`sub-${currentBanner.id ?? currentIndex}`}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
@@ -292,7 +298,11 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
 
         {/* ── Carousel Navigation Controls & Pagination Indicators ─────────── */}
         {totalSlides > 1 && (
-          <div className="flex items-center justify-between pt-8 sm:pt-10 mt-4 border-t border-white/10">
+          <div
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className="flex items-center justify-between pt-8 sm:pt-10 mt-4 border-t border-white/10"
+          >
             {/* Pagination Indicators / Slide Dots */}
             <div className="flex items-center gap-2">
               {banners.map((_, idx) => (

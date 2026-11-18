@@ -184,7 +184,7 @@ function HeroShowcase() {
         <div className="absolute w-[400px] h-[400px] rounded-full bg-blue-500/[0.10] dark:bg-blue-500/[0.16] blur-[120px] translate-x-12 translate-y-8" />
       </div>
 
-      <div className="relative z-20 w-full max-w-[480px]">
+      <div className="relative z-20 w-full max-w-[430px]">
         <RankCard reducedMotion={reducedMotion} />
         <StreakCard reducedMotion={reducedMotion} />
 
@@ -349,17 +349,17 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
     <section
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="relative flex items-center pt-20 pb-12 sm:pt-24 sm:pb-16 lg:pt-28 lg:pb-16 overflow-hidden bg-slate-950 text-white min-h-[640px] lg:min-h-[700px]"
+      className="relative flex items-center pt-20 pb-10 sm:pt-22 sm:pb-12 lg:pt-24 lg:pb-12 overflow-hidden bg-slate-950 text-white min-h-[520px] sm:min-h-[560px] lg:min-h-[600px]"
     >
       {/* ── Dynamic Banner Carousel Background ──────────────────────────────── */}
       <div className="absolute inset-0 z-0 overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={currentBanner.id || currentIndex}
-            initial={{ opacity: 0, scale: 1.05 }}
+            initial={{ opacity: 0, scale: 1.03 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
+            transition={{ duration: 0.7, ease: "easeInOut" }}
             className="absolute inset-0"
           >
             {/* Desktop & Mobile Responsive Banner Image */}
@@ -373,7 +373,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               <img
                 src={currentBanner.image_url || "/media/hero_background.webp"}
                 alt={currentBanner.title || "NES Mastery Banner"}
-                className="w-full h-full object-cover object-center filter brightness-[0.92] contrast-[1.08]"
+                className="w-full h-full object-cover object-[center_26%] filter brightness-[1.20] contrast-[1.08] saturate-[1.12]"
                 loading="eager"
                 onError={(e) => {
                   const target = e.currentTarget;
@@ -384,21 +384,18 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               />
             </picture>
 
-            {/* High-visibility architectural scrim: dark on left for text legibility, clear on center/right for image visibility */}
-            <div className="absolute inset-0 bg-gradient-to-r from-[#020611]/90 via-[#020611]/55 to-[#020611]/15" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#020611]/60 via-transparent to-[#020611]/75" />
+            {/* Targeted architectural scrim: soft gradient on the left for text legibility, clear on center & right so building is clearly visible */}
+            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/40 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-transparent to-slate-950/45 pointer-events-none" />
           </motion.div>
         </AnimatePresence>
 
         {/* Ambient Aurora Glows */}
-        <div className="absolute -top-[10%] left-[5%] w-[600px] h-[600px] rounded-full bg-[#2563EB]/[0.15] blur-[140px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[5%] w-[500px] h-[500px] rounded-full bg-blue-600/[0.12] blur-[140px] pointer-events-none" />
+        <div className="absolute -top-[10%] left-[5%] w-[500px] h-[500px] rounded-full bg-[#2563EB]/[0.12] blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[5%] w-[450px] h-[450px] rounded-full bg-blue-600/[0.10] blur-[120px] pointer-events-none" />
 
         {/* Subtle Architectural Perspective Grid */}
-        <div className="absolute inset-0 bg-neural-grid opacity-20 pointer-events-none" />
-
-        {/* Bottom soft transition into next section (clean, no heavy fog) */}
-        <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#020611]/90 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-neural-grid opacity-15 pointer-events-none" />
       </div>
 
       {/* ── Content Grid ────────────────────────────────────────────────────── */}
@@ -466,7 +463,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
                 <Link href={currentBanner.cta_secondary_url || "/courses"} className="w-full sm:w-auto">
                   <Button
                     variant="outline"
-                    className="h-[48px] sm:h-[50px] px-7 rounded-[12px] border border-white/40 text-white hover:text-white hover:bg-white/20 hover:border-white/60 bg-white/10 backdrop-blur-md font-[700] text-[15px] w-full sm:w-auto flex items-center justify-center gap-2 transition-all shadow-sm"
+                    className="h-[48px] sm:h-[50px] px-7 rounded-[12px] border border-white/35 text-white hover:text-white hover:bg-white/20 hover:border-white/60 bg-slate-950/60 backdrop-blur-md font-[700] text-[15px] w-full sm:w-auto flex items-center justify-center gap-2 transition-all shadow-md"
                   >
                     <Play className="w-4 h-4 fill-white text-white" />
                     {currentBanner.cta_secondary_text}
@@ -483,7 +480,7 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
               {EXAM_CHIPS.map((chip) => (
                 <span
                   key={chip}
-                  className="text-[12px] font-[700] text-white bg-slate-900/75 border border-white/25 px-3 py-1 rounded-full backdrop-blur-md shadow-sm"
+                  className="text-[12px] font-[700] text-white bg-slate-950/80 border border-white/20 px-3 py-1 rounded-full backdrop-blur-md shadow-sm"
                 >
                   {chip}
                 </span>

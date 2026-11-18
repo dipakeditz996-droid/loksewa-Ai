@@ -108,7 +108,7 @@ export function Navbar() {
           <div
             className={`flex items-center justify-between gap-3 rounded-full border transition-all duration-300 ${
               isHeroTransparent
-                ? "px-3.5 py-2.5 bg-slate-950/85 backdrop-blur-xl border-white/20 shadow-[0_14px_40px_-8px_rgba(0,0,0,0.6)]"
+                ? "px-3.5 py-2.5 bg-slate-950/90 backdrop-blur-2xl border-white/25 shadow-[0_16px_44px_-8px_rgba(0,0,0,0.7)]"
                 : isScrolled
                 ? "px-3 py-2 bg-white/95 dark:bg-[#071322]/95 backdrop-blur-xl border-slate-200/80 dark:border-white/[0.08] shadow-[0_10px_36px_-8px_rgba(11,37,69,0.16)] dark:shadow-[0_10px_36px_-8px_rgba(0,0,0,0.6)]"
                 : "px-3 py-2.5 bg-white/95 dark:bg-[#071322]/95 backdrop-blur-md border-slate-200/70 dark:border-white/[0.06] shadow-[0_4px_20px_-8px_rgba(11,37,69,0.1)]"

@@ -3,6 +3,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.core.cache import cache
+from django.db import OperationalError, ProgrammingError
+import logging
+
+logger = logging.getLogger(__name__)
 
 from administration.permissions import IsAdminUser
 from administration.models import AuditLog
@@ -10,6 +14,13 @@ from .models import HomepageBanner
 from .banner_serializers import PublicHomepageBannerSerializer, AdminHomepageBannerSerializer
 
 CACHE_KEY_PUBLIC_BANNERS = 'public:homepage_banners'
+
+def _ensure_banner_table():
+    try:
+        from django.core.management import call_command
+        call_command('migrate', 'core', interactive=False)
+    except Exception as e:
+        logger.warning(f"Auto-migration for core banner failed: {e}")
 
 class PublicHomepageBannerView(APIView):
     """GET /api/public/banners/ - Returns active homepage banners in display order."""
@@ -20,11 +31,20 @@ class PublicHomepageBannerView(APIView):
         if cached is not None:
             return Response(cached)
 
-        banners = HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at')
-        serializer = PublicHomepageBannerSerializer(banners, many=True, context={'request': request})
-        data = serializer.data
-        cache.set(CACHE_KEY_PUBLIC_BANNERS, data, timeout=300)
-        return Response(data)
+        try:
+            banners = HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at')
+            serializer = PublicHomepageBannerSerializer(banners, many=True, context={'request': request})
+            data = serializer.data
+            cache.set(CACHE_KEY_PUBLIC_BANNERS, data, timeout=300)
+            return Response(data)
+        except (OperationalError, ProgrammingError):
+            _ensure_banner_table()
+            try:
+                banners = HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at')
+                serializer = PublicHomepageBannerSerializer(banners, many=True, context={'request': request})
+                return Response(serializer.data)
+            except Exception:
+                return Response([])
 
 
 class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
@@ -34,6 +54,23 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
     search_fields = ['title', 'subtitle', 'badge_text', 'cta_text']
+
+    def list(self, request, *args, **kwargs):
+        try:
+            return super().list(request, *args, **kwargs)
+        except (OperationalError, ProgrammingError):
+            _ensure_banner_table()
+            try:
+                return super().list(request, *args, **kwargs)
+            except Exception:
+                return Response([])
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except (OperationalError, ProgrammingError):
+            _ensure_banner_table()
+            return super().create(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user)

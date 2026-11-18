@@ -122,7 +122,7 @@ export function MarketplaceSection({ products }: Props) {
           <Link href="/marketplace">
             <Button
               variant="outline"
-              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] inline-flex items-center gap-2 group shadow-sm"
+              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[48px] px-7 rounded-[12px] font-[700] text-[14px] inline-flex items-center gap-2 group shadow-xs"
             >
               Browse Entire Marketplace
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

@@ -676,6 +676,38 @@ export interface AdminNotification {
   updatedAt: string;
 }
 
+export interface AdminBanner {
+  id: number;
+  title: string;
+  subtitle: string;
+  badge_text: string;
+  cta_text: string;
+  cta_url: string;
+  cta_secondary_text: string;
+  cta_secondary_url: string;
+  image_url: string | null;
+  mobile_image_url: string | null;
+  is_active: boolean;
+  display_order: number;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminBannerInput {
+  title?: string;
+  subtitle?: string;
+  badge_text?: string;
+  cta_text?: string;
+  cta_url?: string;
+  cta_secondary_text?: string;
+  cta_secondary_url?: string;
+  image?: File | null;
+  mobile_image?: File | null;
+  is_active?: boolean;
+  display_order?: number;
+}
+
 export interface AdminTestimonial {
   id: number;
   name: string;
@@ -1313,6 +1345,65 @@ export const adminApi = {
     try {
       await fetch("/api/revalidate?tag=testimonials&path=/", { method: "POST" });
     } catch {}
+  },
+
+  getBanners: async (search?: string): Promise<AdminBanner[]> => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const res = await apiClient<any>(`/admin/banners/${query}`);
+    return Array.isArray(res) ? res : res.results ?? [];
+  },
+
+  createBanner: async (data: FormData): Promise<AdminBanner> => {
+    const res = await apiClient<AdminBanner>("/admin/banners/", {
+      method: "POST",
+      body: data,
+    });
+    try {
+      await fetch("/api/revalidate?tag=banners&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  updateBanner: async (id: number, data: FormData | Record<string, any>): Promise<AdminBanner> => {
+    const isFormData = data instanceof FormData;
+    const res = await apiClient<AdminBanner>(`/admin/banners/${id}/`, {
+      method: "PATCH",
+      body: isFormData ? data : JSON.stringify(data),
+    });
+    try {
+      await fetch("/api/revalidate?tag=banners&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  deleteBanner: async (id: number): Promise<void> => {
+    await apiClient<void>(`/admin/banners/${id}/`, {
+      method: "DELETE",
+    });
+    try {
+      await fetch("/api/revalidate?tag=banners&path=/", { method: "POST" });
+    } catch {}
+  },
+
+  toggleBannerActive: async (id: number): Promise<{ id: number; is_active: boolean }> => {
+    const res = await apiClient<{ id: number; is_active: boolean }>(`/admin/banners/${id}/toggle/`, {
+      method: "PATCH",
+    });
+    try {
+      await fetch("/api/revalidate?tag=banners&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  reorderBanners: async (items: { id: number; display_order: number }[]): Promise<any> => {
+    const res = await apiClient<any>("/admin/banners/reorder/", {
+      method: "POST",
+      body: JSON.stringify(items),
+    });
+    try {
+      await fetch("/api/revalidate?tag=banners&path=/", { method: "POST" });
+    } catch {}
+    return res;
   },
 
   getWebsitePages: async (): Promise<AdminWebsitePage[]> => {

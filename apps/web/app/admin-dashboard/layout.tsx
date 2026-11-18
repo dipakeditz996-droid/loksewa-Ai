@@ -57,6 +57,7 @@ import {
   Banknote,
   Coins,
   Wallet,
+  Image as ImageIcon,
 } from "lucide-react";
 
 
@@ -119,6 +120,7 @@ const SIDEBAR_NAV: NavSection[] = [
   {
     title: "Platform",
     items: [
+      { title: "Hero Banners", href: "/admin-dashboard/banners", icon: ImageIcon },
       { title: "Notifications", href: "/admin-dashboard/notifications", icon: Bell },
       { title: "Community", href: "/admin-dashboard/community", icon: Users as any },
       { title: "Testimonials", href: "/admin-dashboard/testimonials", icon: Quote },

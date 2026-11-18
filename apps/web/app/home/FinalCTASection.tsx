@@ -42,7 +42,7 @@ export function FinalCTASection() {
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link href="/register" className="w-full sm:w-auto">
-            <Button className="btn-gold-gradient relative overflow-hidden w-full sm:w-auto text-[#020611] h-[60px] px-10 rounded-[14px] font-[800] text-[17px] shadow-[0_12px_40px_-8px_rgba(37,99,235,0.5)] border-none flex items-center justify-center gap-2.5 group">
+            <Button className="btn-gold-gradient relative overflow-hidden w-full sm:w-auto text-white h-[56px] px-10 rounded-[14px] font-[800] text-[16px] shadow-[0_12px_40px_-8px_rgba(37,99,235,0.5)] border-none flex items-center justify-center gap-2.5 group">
               <span className="absolute inset-0 bg-white/20 -translate-x-full group-hover:animate-[shimmer_1.5s_ease-in-out]" />
               Create Free Account
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

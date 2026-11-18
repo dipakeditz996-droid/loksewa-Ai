@@ -191,7 +191,7 @@ export function PracticeSection() {
                 <div className="text-[14px] font-[800] text-white mb-1">View All Practice</div>
                 <div className="text-[12px] text-slate-300">1,000+ practice sets</div>
               </div>
-              <ArrowRight className="w-4 h-4 text-[#2563EB] shrink-0" />
+              <ArrowRight className="w-4 h-4 text-cyan-300 shrink-0 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>
         </div>

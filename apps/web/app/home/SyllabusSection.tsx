@@ -88,7 +88,7 @@ export function SyllabusSection({ notes }: Props) {
           <Link href="/syllabus">
             <Button
               variant="outline"
-              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[44px] px-6 rounded-[10px] font-[600] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-sm"
+              className="border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 bg-transparent transition-all h-[48px] px-6 rounded-[12px] font-[700] text-[14px] flex items-center gap-2 group whitespace-nowrap shadow-xs"
             >
               Explore Syllabus
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -213,7 +213,7 @@ export function SyllabusSection({ notes }: Props) {
             {/* Bottom CTA Button */}
             <div className="pt-4 mt-3 border-t border-slate-100 dark:border-white/[0.05]">
               <Link href="/syllabus" className="block">
-                <Button className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-95 text-white h-[46px] rounded-[12px] font-[700] text-[14px] flex items-center justify-center gap-2 group border-none shadow-[0_4px_16px_rgba(16,185,129,0.25)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.35)] transition-all">
+                <Button className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-[48px] rounded-[12px] font-[700] text-[14px] flex items-center justify-center gap-2 group border-none shadow-[0_4px_16px_rgba(37,99,235,0.25)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.35)] transition-all">
                   Explore Full Syllabus
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </Button>

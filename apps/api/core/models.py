@@ -368,6 +368,39 @@ class WebsitePage(models.Model):
         return f"{self.title} ({self.slug}, {self.status})"
 
 
+class HomepageBanner(models.Model):
+    """Admin-controlled banner image for the homepage hero carousel.
+    Supports desktop & mobile images, headings, subtitles, badges, and CTAs."""
+    title = models.CharField(max_length=255, blank=True, help_text="Headline for this slide")
+    subtitle = models.CharField(max_length=500, blank=True, help_text="Concise subtext for this slide")
+    badge_text = models.CharField(max_length=100, blank=True, help_text="Badge e.g. 'IOE Entrance 2081/82'")
+    cta_text = models.CharField(max_length=100, blank=True, help_text="Primary button text e.g. 'Start Mock Exam'")
+    cta_url = models.CharField(max_length=500, blank=True, default='/exams', help_text="Destination URL")
+    cta_secondary_text = models.CharField(max_length=100, blank=True, help_text="Secondary button text e.g. 'Explore Courses'")
+    cta_secondary_url = models.CharField(max_length=500, blank=True, default='/courses', help_text="Secondary destination URL")
+    image = models.ImageField(upload_to='banners/%Y/%m/', help_text="Desktop banner image")
+    mobile_image = models.ImageField(upload_to='banners/mobile/%Y/%m/', null=True, blank=True, help_text="Optional mobile optimized banner image")
+    is_active = models.BooleanField(default=True, help_text="Whether this slide is shown on homepage")
+    display_order = models.PositiveIntegerField(default=0, help_text="Order in carousel (lowest first)")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='banners_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', '-created_at']
+
+    def __str__(self):
+        return f"{self.title or f'Banner #{self.id}'} ({'active' if self.is_active else 'inactive'}, order: {self.display_order})"
+
+
+@receiver([post_save, post_delete], sender=HomepageBanner)
+def _invalidate_banner_cache_on_change(sender, **kwargs):
+    try:
+        cache.delete('public_homepage_banners')
+    except Exception:
+        pass
+
+
 class AdminNotification(models.Model):
     """System-wide announcements/notifications created by admins."""
     TYPE_CHOICES = (

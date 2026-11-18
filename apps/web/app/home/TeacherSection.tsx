@@ -54,16 +54,16 @@ export function TeacherSection() {
                 ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                <Button asChild className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] border-none flex items-center justify-center gap-2 group transition-all hover:-translate-y-0.5 shadow-[0_8px_25px_rgba(37,99,235,0.3)]">
+              <div className="flex flex-col sm:flex-row gap-3.5">
+                <Button asChild className="w-full sm:w-auto bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-[48px] px-8 rounded-[12px] font-[800] text-[15px] border-none flex items-center justify-center gap-2 group transition-all hover:-translate-y-0.5 shadow-[0_8px_25px_-5px_rgba(37,99,235,0.4)]">
                   <Link href="/login">
                     Go to Teacher Portal
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </Link>
                 </Button>
-                <Button asChild variant="outline" className="w-full sm:w-auto h-[50px] px-8 rounded-[12px] font-[600] text-[15px] border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] bg-transparent hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 flex items-center justify-center transition-all shadow-sm">
+                <Button asChild variant="outline" className="w-full sm:w-auto h-[48px] px-8 rounded-[12px] font-[700] text-[15px] border-slate-300 dark:border-white/15 text-slate-800 dark:text-white hover:text-slate-900 dark:hover:text-[#2563EB] bg-transparent hover:bg-slate-100 dark:hover:bg-white/10 hover:border-[#2563EB]/50 dark:hover:border-[#2563EB]/50 flex items-center justify-center transition-all shadow-xs">
                   <Link href="/contact">
-                    Apply to Tech
+                    Apply to Teach
                   </Link>
                 </Button>
               </div>
@@ -73,7 +73,7 @@ export function TeacherSection() {
             <div className="relative">
               <div className="bg-white dark:bg-[#04080F] border border-slate-200 dark:border-white/[0.08] rounded-[20px] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.08)] dark:shadow-[0_20px_80px_rgba(0,0,0,0.6)] relative z-20">
                 <div className="flex items-center gap-3 mb-5 border-b border-slate-100 dark:border-white/[0.06] pb-4">
-                  <div className="w-10 h-10 rounded-[10px] bg-[#2563EB] flex items-center justify-center text-[#020611] font-[800] text-[16px]">RP</div>
+                  <div className="w-10 h-10 rounded-[10px] bg-[#2563EB] flex items-center justify-center text-white font-[800] text-[16px]">RP</div>
                   <div>
                     <div className="text-[14px] font-[800] text-slate-800 dark:text-white">Ramesh Poudel</div>
                     <div className="text-[11px] text-[#2563EB] dark:text-[#2563EB] font-[600]">Verified Educator</div>

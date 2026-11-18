@@ -44,7 +44,7 @@ export function AnalyticsSection() {
             </div>
 
             <Link href="/register">
-              <Button className="bg-gradient-to-r from-[#1D4ED8] to-[#60A5FA] hover:opacity-90 text-[#020611] h-[50px] px-8 rounded-[12px] font-[700] text-[15px] shadow-[0_8px_30px_rgba(37,99,235,0.3)] flex items-center gap-2 group border-none">
+              <Button className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white h-[48px] px-8 rounded-[12px] font-[800] text-[15px] shadow-[0_8px_25px_-5px_rgba(37,99,235,0.4)] flex items-center gap-2 group border-none transition-all">
                 Start Tracking Free
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Button>

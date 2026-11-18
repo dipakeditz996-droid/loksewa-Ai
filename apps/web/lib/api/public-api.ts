@@ -24,6 +24,20 @@ export interface PublicCategory {
 
 // ── Courses (real, public) ───────────────────────────────────────────────────
 
+export interface PublicBanner {
+  id: number;
+  title: string;
+  subtitle: string;
+  badge_text: string;
+  cta_text: string;
+  cta_url: string;
+  cta_secondary_text: string;
+  cta_secondary_url: string;
+  image_url: string | null;
+  mobile_image_url: string | null;
+  display_order: number;
+}
+
 export interface PublicCoursePlan {
   id: number;
   name: string;
@@ -363,6 +377,10 @@ export const publicApi = {
    */
   getTestimonials: (): Promise<PublicTestimonial[] | null> =>
     safeGet<PublicTestimonial[]>("/public/testimonials/", 300, ["testimonials", "public-reviews"]),
+
+  /** Get published active homepage banners for hero section. */
+  getBanners: (): Promise<PublicBanner[] | null> =>
+    safeGet<PublicBanner[]>("/public/banners/", 300, ["banners", "homepage-hero"]),
 
   /** Get the progressive academic hierarchy (Category -> Exam -> Level -> Faculty -> Course) */
   getCourseHierarchy: (): Promise<any[] | null> =>

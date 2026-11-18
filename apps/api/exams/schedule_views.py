@@ -214,7 +214,7 @@ class StudentExamScheduleNextView(APIView):
         if not schedule:
             res_data = {
                 "schedule": None,
-                "message": "No upcoming Loksewa exam scheduled.",
+                "message": "No upcoming official examination scheduled.",
                 "server_time": timezone.now().isoformat()
             }
             try:

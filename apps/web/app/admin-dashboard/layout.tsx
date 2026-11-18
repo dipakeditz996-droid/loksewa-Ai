@@ -120,11 +120,11 @@ const SIDEBAR_NAV: NavSection[] = [
   {
     title: "Platform",
     items: [
-      { title: "Hero Banners", href: "/admin-dashboard/banners", icon: ImageIcon },
       { title: "Notifications", href: "/admin-dashboard/notifications", icon: Bell },
       { title: "Community", href: "/admin-dashboard/community", icon: Users as any },
       { title: "Testimonials", href: "/admin-dashboard/testimonials", icon: Quote },
       { title: "Website Content", href: "/admin-dashboard/website-content", icon: Globe },
+      { title: "Hero Banners", href: "/admin-dashboard/banners", icon: ImageIcon },
       { title: "Help & Support", href: "/admin-dashboard/support", icon: LifeBuoy },
       { title: "AI Tutor", href: "/admin-dashboard/ai-tutor", icon: Brain },
       { title: "Marketplace", href: "/admin-dashboard/marketplace", icon: Store },

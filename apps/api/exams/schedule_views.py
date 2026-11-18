@@ -228,6 +228,13 @@ class StudentExamScheduleNextView(APIView):
                 exam_date__gte=today
             ).select_related('exam_category', 'exam').order_by('exam_date', 'exam_time').first()
 
+        # Fallback: if admin explicitly marked an exam as Active & Published, respect admin intent
+        if not schedule:
+            schedule = ExamSchedule.objects.filter(
+                is_active=True,
+                is_published=True
+            ).select_related('exam_category', 'exam').order_by('-exam_date', '-created_at').first()
+
         if not schedule:
             res_data = {
                 "schedule": None,

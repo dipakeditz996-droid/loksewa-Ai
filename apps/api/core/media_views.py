@@ -26,7 +26,7 @@ logger = logging.getLogger('core.media_views')
 def _find_in_local_storage(file_id, candidate_models=None):
     """
     Attempt to locate a file in local MEDIA_ROOT if referenced by an existing database model.
-    Only falls back to local disk if there is a known model reference.
+    Falls back to walking MEDIA_ROOT if candidate model check does not resolve.
     """
     media_root = getattr(settings, 'MEDIA_ROOT', None)
     if not media_root or not os.path.exists(media_root):
@@ -39,6 +39,8 @@ def _find_in_local_storage(file_id, candidate_models=None):
                 or getattr(obj, 'question_paper_pdf', None)
                 or getattr(obj, 'answer_pdf', None)
                 or getattr(obj, 'pdf_file', None)
+                or getattr(obj, 'image', None)
+                or getattr(obj, 'mobile_image', None)
             )
             if file_field:
                 field_name = getattr(file_field, 'name', str(file_field))
@@ -49,6 +51,19 @@ def _find_in_local_storage(file_id, candidate_models=None):
                             return fp.read(), os.path.basename(candidate_path)
                     except Exception as exc:
                         logger.debug("Failed to read local fallback file %s: %s", candidate_path, exc)
+
+    # Broad search in media_root for any file matching file_id
+    try:
+        for root_dir, _, files in os.walk(media_root):
+            for fname in files:
+                if file_id in fname:
+                    cpath = os.path.join(root_dir, fname)
+                    if os.path.isfile(cpath):
+                        with open(cpath, 'rb') as fp:
+                            return fp.read(), fname
+    except Exception:
+        pass
+
     return None, None
 
 
@@ -157,6 +172,15 @@ def drive_media_proxy(request, file_id):
                 matching_question_set = qset
                 break
 
+    matching_banner = None
+    try:
+        from core.models import HomepageBanner
+        matching_banner = HomepageBanner.objects.filter(image__contains=file_id).first()
+        if not matching_banner:
+            matching_banner = HomepageBanner.objects.filter(mobile_image__contains=file_id).first()
+    except Exception:
+        pass
+
     is_protected = bool(matching_material or matching_exam or matching_submission or matching_question_set)
 
     # Reject unauthenticated/unauthorized proxy access for genuinely protected materials.
@@ -188,7 +212,7 @@ def drive_media_proxy(request, file_id):
             return HttpResponseForbidden("You do not have access to this protected resource.")
 
     matched_candidates = [
-        obj for obj in (matching_material, matching_exam, matching_submission, matching_question_set) if obj is not None
+        obj for obj in (matching_material, matching_exam, matching_submission, matching_question_set, matching_banner) if obj is not None
     ]
 
     meta = None

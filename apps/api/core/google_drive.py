@@ -288,7 +288,7 @@ def download_file(file_id):
     from googleapiclient.http import MediaIoBaseDownload
 
     service = _get_service()
-    request = service.files().get_media(fileId=file_id)
+    request = service.files().get_media(fileId=file_id, supportsAllDrives=True)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
@@ -307,7 +307,7 @@ def get_file(file_id):
     """Returns metadata for a Drive file, or None if it doesn't exist."""
     service = _get_service()
     try:
-        return service.files().get(fileId=file_id, fields='id, name, mimeType, size, webViewLink').execute()
+        return service.files().get(fileId=file_id, fields='id, name, mimeType, size, webViewLink', supportsAllDrives=True).execute()
     except Exception as e:
         status = getattr(getattr(e, 'resp', None), 'status', None)
         if status == 404:
@@ -322,7 +322,7 @@ def delete_file(file_id):
     which should be a no-op for a missing file)."""
     service = _get_service()
     try:
-        service.files().delete(fileId=file_id).execute()
+        service.files().delete(fileId=file_id, supportsAllDrives=True).execute()
         return True
     except Exception as e:
         status = getattr(getattr(e, 'resp', None), 'status', None)

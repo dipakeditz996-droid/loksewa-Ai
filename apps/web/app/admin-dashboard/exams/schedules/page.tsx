@@ -286,6 +286,11 @@ export default function AdminExamSchedulesPage() {
                       {activeSchedule.category_name}
                     </Badge>
                   )}
+                  {activeSchedule.exam_name && (
+                    <Badge variant="secondary" className="bg-white/10 text-white text-[11px]">
+                      {activeSchedule.exam_name}
+                    </Badge>
+                  )}
                   {activeSchedule.exam_type && activeSchedule.exam_type !== "all" && (
                     <Badge variant="secondary" className="bg-[#D4A72C]/20 text-[#D4A72C] text-[11px] font-bold border-none uppercase tracking-wider">
                       {activeSchedule.exam_type === "topicwise" ? "Topicwise Test" : activeSchedule.exam_type === "subjective" ? "Subjective Exam" : "Objective Exam"}

@@ -16,6 +16,24 @@ interface TimeLeft {
   isExpired: boolean;
 }
 
+function getNoticeLabel(schedule: { exam_name?: string | null; category_name?: string | null }): string {
+  if (schedule.exam_name && schedule.exam_name.trim()) {
+    const name = schedule.exam_name.trim();
+    if (/notice/i.test(name)) {
+      return name.toLowerCase().startsWith("official") ? name : `Official ${name}`;
+    }
+    return `Official ${name} Notice`;
+  }
+  if (schedule.category_name && schedule.category_name.trim()) {
+    const cat = schedule.category_name.trim();
+    if (/license/i.test(cat)) return "Official License Notice";
+    if (/psc/i.test(cat) || /loksewa/i.test(cat)) return "Official PSC Notice";
+    if (/notice/i.test(cat)) return `Official ${cat}`;
+    return `Official ${cat} Notice`;
+  }
+  return "Official Exam Notice";
+}
+
 // Shared query helper
 export const nextOfficialExamQuery = {
   queryKey: ["next-official-exam", null],
@@ -191,6 +209,11 @@ export function LoksewaExamCountdown({
                   {schedule.category_name}
                 </span>
               )}
+              {schedule.exam_name && (
+                <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] text-slate-200">
+                  {schedule.exam_name}
+                </span>
+              )}
             </div>
 
             {schedule.description && (
@@ -207,7 +230,7 @@ export function LoksewaExamCountdown({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-[#60A5FA] hover:underline font-semibold"
                 >
-                  Official PSC Notice <ExternalLink className="w-3 h-3" />
+                  {getNoticeLabel(schedule)} <ExternalLink className="w-3 h-3 shrink-0" />
                 </a>
               </div>
             )}

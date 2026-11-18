@@ -27,7 +27,8 @@ from .admin_views import (
 from .schedule_views import (
     AdminExamScheduleViewSet,
     StudentExamScheduleNextView,
-    StudentUpcomingMockExamView
+    StudentUpcomingMockExamView,
+    PublicExamScheduleListView,
 )
 from .public_views import (
     PublicSyllabusTreeView,
@@ -88,6 +89,8 @@ urlpatterns = [
     path('questions/availability/', QuestionAvailabilityView.as_view(), name='question-availability'),
     path('admin/academic/tree/', AdminAcademicTreeAPIView.as_view(), name='admin-academic-tree'),
     # Student Schedule & Countdown endpoints
+    path('public/schedules/', PublicExamScheduleListView.as_view(), name='public-schedules-list'),
+    path('schedules/upcoming/', PublicExamScheduleListView.as_view(), name='schedules-upcoming'),
     path('schedules/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next'),
     path('student/exam-schedule/next/', StudentExamScheduleNextView.as_view(), name='student-exam-schedule-next-alt'),
     path('student/mock-exams/upcoming/', StudentUpcomingMockExamView.as_view(), name='student-mock-exams-upcoming'),

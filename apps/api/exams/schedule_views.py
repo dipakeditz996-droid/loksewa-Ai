@@ -21,6 +21,7 @@ def invalidate_schedule_cache():
         cache.delete("next_official_exam:global")
         if hasattr(cache, 'delete_pattern'):
             cache.delete_pattern("next_official_exam:*")
+            cache.delete_pattern("public_exam_schedules:*")
     except Exception:
         pass
 
@@ -256,6 +257,65 @@ class StudentExamScheduleNextView(APIView):
             cache.set(cache_key, res_data, SCHEDULE_CACHE_TTL)
         except Exception:
             pass
+        return Response(res_data)
+
+
+class PublicExamScheduleListView(APIView):
+    """
+    Returns all eligible published upcoming examination schedules.
+    Active and upcoming schedules are ordered by priority (-is_active, exam_date, exam_time).
+    Excludes unpublished or expired examinations.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        today = timezone.now().date()
+        course_id_param = request.query_params.get('course_id')
+
+        from django.core.cache import cache
+        cache_key = f'public_exam_schedules:{course_id_param or "all"}'
+        if SCHEDULE_CACHE_TTL > 0:
+            try:
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    return Response(cached)
+            except Exception:
+                pass
+
+        qs = ExamSchedule.objects.filter(
+            is_published=True,
+            exam_date__gte=today
+        ).select_related('exam_category', 'exam').order_by('-is_active', 'exam_date', 'exam_time', '-created_at')
+
+        # If filtered by course context
+        if course_id_param:
+            try:
+                c_id = int(course_id_param)
+                from courses.models import Course
+                target_course = Course.objects.filter(id=c_id).first()
+                if target_course and target_course.exam_id:
+                    exam_ids = [target_course.exam_id]
+                    if target_course.exam and target_course.exam.parent_id:
+                        exam_ids.append(target_course.exam.parent_id)
+                    course_qs = qs.filter(exam_id__in=exam_ids)
+                    if course_qs.exists():
+                        qs = course_qs
+            except (ValueError, TypeError):
+                pass
+
+        serializer = StudentExamScheduleSerializer(qs, many=True)
+        res_data = {
+            "schedules": serializer.data,
+            "count": len(serializer.data),
+            "server_time": timezone.now().isoformat()
+        }
+
+        if SCHEDULE_CACHE_TTL > 0:
+            try:
+                cache.set(cache_key, res_data, 60)
+            except Exception:
+                pass
+
         return Response(res_data)
 
 

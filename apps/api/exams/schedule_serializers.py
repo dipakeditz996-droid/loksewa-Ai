@@ -55,7 +55,7 @@ class StudentExamScheduleSerializer(serializers.ModelSerializer):
             'exam', 'exam_name', 'description', 'exam_date',
             'exam_time', 'exam_datetime', 'timezone',
             'application_deadline', 'result_expected_date',
-            'official_notice_url', 'server_time'
+            'official_notice_url', 'is_active', 'is_published', 'server_time'
         ]
 
     def get_server_time(self, obj):

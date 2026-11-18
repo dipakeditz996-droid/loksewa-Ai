@@ -30,6 +30,12 @@ export interface OfficialExamScheduleNextResponse {
   server_time: string;
 }
 
+export interface UpcomingSchedulesResponse {
+  schedules: OfficialExamSchedule[];
+  count: number;
+  server_time: string;
+}
+
 export interface UpcomingMockExam {
   id: number;
   title: string;
@@ -57,7 +63,35 @@ export interface UpcomingMockExamResponse {
 }
 
 export const schedulesApi = {
-  // Student Public Endpoints
+  // Student & Public Endpoints
+  getUpcomingSchedules: async (courseId?: number): Promise<UpcomingSchedulesResponse> => {
+    try {
+      const url = courseId ? `/public/schedules/?course_id=${courseId}` : "/public/schedules/";
+      const res = await apiClient<UpcomingSchedulesResponse>(url, { skipRedirect: true });
+      if (res && Array.isArray(res.schedules)) {
+        return res;
+      }
+    } catch {
+      // Graceful fallback to single next schedule endpoint
+    }
+
+    try {
+      const fallbackUrl = courseId ? `/schedules/next/?course_id=${courseId}` : "/schedules/next/";
+      const fallback = await apiClient<OfficialExamScheduleNextResponse>(fallbackUrl, { skipRedirect: true });
+      return {
+        schedules: fallback.schedule ? [fallback.schedule] : [],
+        count: fallback.schedule ? 1 : 0,
+        server_time: fallback.server_time || new Date().toISOString(),
+      };
+    } catch {
+      return {
+        schedules: [],
+        count: 0,
+        server_time: new Date().toISOString(),
+      };
+    }
+  },
+
   getNextOfficialExam: async (courseId?: number): Promise<OfficialExamScheduleNextResponse> => {
     const url = courseId ? `/schedules/next/?course_id=${courseId}` : "/schedules/next/";
     return apiClient<OfficialExamScheduleNextResponse>(url, { skipRedirect: true });

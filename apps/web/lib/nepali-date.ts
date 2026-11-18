@@ -164,7 +164,7 @@ export function formatNepaliDateDisplay(
     }
   }
 
-  const bsText = options?.useNepaliScript ? bs.formattedNepali : `${bs.formattedReadable} BS`;
+  const bsText = options?.useNepaliScript ? bs.formattedNepali : bs.formattedReadable;
   if (options?.showAd) {
     try {
       const adPart = new Date(adDateStr).toLocaleDateString("en-US", {

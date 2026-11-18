@@ -135,7 +135,7 @@ export function NepaliDatePicker({
 
   // Display trigger label
   const displayLabel = bsInfo
-    ? `${bsInfo.bsYear} ${bsInfo.monthEn} ${bsInfo.bsDate} BS (${value} AD)`
+    ? `${bsInfo.bsYear} ${bsInfo.monthEn} ${bsInfo.bsDate} (${value} AD)`
     : "";
 
   return (

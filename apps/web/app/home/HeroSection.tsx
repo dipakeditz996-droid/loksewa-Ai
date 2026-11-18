@@ -59,8 +59,6 @@ const FALLBACK_BANNERS: PublicBanner[] = [
   },
 ];
 
-const EXAM_CHIPS = ["PSC Civil & Electrical", "NEC License", "IOE Entrance"];
-
 const DEFAULT_FALLBACK_IMAGES = [
   "/media/hero_background.webp",
   "/media/course.webp",
@@ -306,21 +304,6 @@ export function HeroSection({ banners: initialBanners }: HeroSectionProps) {
                   </Button>
                 </Link>
               )}
-            </div>
-
-            {/* Exam Tags */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-[11.5px] font-[800] uppercase tracking-wider text-slate-200 mr-1 drop-shadow-sm">
-                Curriculum:
-              </span>
-              {EXAM_CHIPS.map((chip) => (
-                <span
-                  key={chip}
-                  className="text-[12px] font-[700] text-white bg-slate-950/80 border border-white/20 px-3 py-1 rounded-full backdrop-blur-md shadow-sm"
-                >
-                  {chip}
-                </span>
-              ))}
             </div>
 
             {/* Trust Indicators */}

@@ -16,34 +16,63 @@ from .banner_serializers import PublicHomepageBannerSerializer, AdminHomepageBan
 CACHE_KEY_PUBLIC_BANNERS = 'public:homepage_banners'
 
 def _ensure_banner_table():
+    """Ensure core_homepagebanner exists via direct raw SQL for PostgreSQL and SQLite."""
     try:
-        from django.core.management import call_command
-        call_command('migrate', 'core', interactive=False)
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS core_homepagebanner (
+                    id BIGSERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL DEFAULT '',
+                    subtitle VARCHAR(500) NOT NULL DEFAULT '',
+                    badge_text VARCHAR(100) NOT NULL DEFAULT '',
+                    cta_text VARCHAR(100) NOT NULL DEFAULT '',
+                    cta_url VARCHAR(500) NOT NULL DEFAULT '/exams',
+                    cta_secondary_text VARCHAR(100) NOT NULL DEFAULT '',
+                    cta_secondary_url VARCHAR(500) NOT NULL DEFAULT '/courses',
+                    image VARCHAR(100) NOT NULL DEFAULT '',
+                    mobile_image VARCHAR(100) NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    display_order INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    created_by_id BIGINT NULL REFERENCES core_user(id) ON DELETE SET NULL
+                );
+            """)
     except Exception as e:
-        logger.warning(f"Auto-migration for core banner failed: {e}")
+        logger.warning(f"Raw SQL table ensure for core_homepagebanner failed: {e}")
+        try:
+            from django.core.management import call_command
+            call_command('migrate', 'core', interactive=False)
+        except Exception as e2:
+            logger.warning(f"Fallback migrate for core failed: {e2}")
 
 class PublicHomepageBannerView(APIView):
     """GET /api/public/banners/ - Returns active homepage banners in display order."""
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        cached = cache.get(CACHE_KEY_PUBLIC_BANNERS)
-        if cached is not None:
-            return Response(cached)
-
         try:
-            banners = HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at')
+            cached = cache.get(CACHE_KEY_PUBLIC_BANNERS)
+            if cached is not None:
+                return Response(cached)
+
+            banners = list(HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at'))
             serializer = PublicHomepageBannerSerializer(banners, many=True, context={'request': request})
             data = serializer.data
             cache.set(CACHE_KEY_PUBLIC_BANNERS, data, timeout=300)
             return Response(data)
         except Exception as e:
-            _ensure_banner_table()
+            logger.warning(f"Error reading banners, self-healing table: {e}")
             try:
-                banners = HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at')
+                from django.db import connection
+                connection.close()
+                _ensure_banner_table()
+                banners = list(HomepageBanner.objects.filter(is_active=True).order_by('display_order', '-created_at'))
                 serializer = PublicHomepageBannerSerializer(banners, many=True, context={'request': request})
                 return Response(serializer.data)
-            except Exception:
+            except Exception as inner_e:
+                logger.error(f"Failed to return banners after self-healing: {inner_e}")
                 return Response([])
 
 
@@ -58,9 +87,12 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         try:
             return super().list(request, *args, **kwargs)
-        except Exception:
-            _ensure_banner_table()
+        except Exception as e:
+            logger.warning(f"Admin banner list error: {e}")
             try:
+                from django.db import connection
+                connection.close()
+                _ensure_banner_table()
                 return super().list(request, *args, **kwargs)
             except Exception:
                 return Response([])
@@ -68,9 +100,16 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         try:
             return super().create(request, *args, **kwargs)
-        except Exception:
-            _ensure_banner_table()
-            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            logger.warning(f"Admin banner create error: {e}")
+            try:
+                from django.db import connection
+                connection.close()
+                _ensure_banner_table()
+                return super().create(request, *args, **kwargs)
+            except Exception as e2:
+                logger.error(f"Failed to create banner: {e2}")
+                return Response({"detail": f"Failed to save banner: {e2}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user)

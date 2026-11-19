@@ -687,6 +687,10 @@ export interface AdminBanner {
   cta_secondary_url: string;
   image_url: string | null;
   mobile_image_url: string | null;
+  image_width?: number | null;
+  image_height?: number | null;
+  mobile_image_width?: number | null;
+  mobile_image_height?: number | null;
   image_fit?: "cover" | "contain";
   image_focal_x?: "center" | "left" | "right";
   image_focal_y?: "center" | "top" | "bottom";

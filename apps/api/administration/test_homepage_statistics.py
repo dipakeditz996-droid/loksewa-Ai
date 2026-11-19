@@ -11,6 +11,9 @@ class HomepageStatisticsTests(TestCase):
         self.client = APIClient()
         cache.clear()
 
+        # Clean up any leftover test users
+        User.objects.filter(username__in=['admin_tester', 'student_tester']).delete()
+
         # Create admin user
         self.admin_user = User.objects.create_user(
             username='admin_tester',
@@ -68,6 +71,11 @@ class HomepageStatisticsTests(TestCase):
             is_active=True,
             created_by=self.admin_user,
         )
+
+    def tearDown(self):
+        User.objects.filter(username__in=['admin_tester', 'student_tester']).delete()
+        HomepageStatistic.objects.filter(label__in=['Aspirants Enrolled', 'Content Accuracy', 'Practice Sets', 'Live Active Students']).delete()
+        cache.clear()
 
     def test_public_statistics_endpoint(self):
         """Public endpoint should return active statistics grouped by hero and platform."""

@@ -8,6 +8,10 @@ MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 class PublicHomepageBannerSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     mobile_image_url = serializers.SerializerMethodField()
+    image_width = serializers.SerializerMethodField()
+    image_height = serializers.SerializerMethodField()
+    mobile_image_width = serializers.SerializerMethodField()
+    mobile_image_height = serializers.SerializerMethodField()
 
     class Meta:
         model = HomepageBanner
@@ -22,6 +26,10 @@ class PublicHomepageBannerSerializer(serializers.ModelSerializer):
             'cta_secondary_url',
             'image_url',
             'mobile_image_url',
+            'image_width',
+            'image_height',
+            'mobile_image_width',
+            'mobile_image_height',
             'image_fit',
             'image_focal_x',
             'image_focal_y',
@@ -55,10 +63,62 @@ class PublicHomepageBannerSerializer(serializers.ModelSerializer):
         except Exception:
             return None
 
+    def get_image_width(self, obj):
+        try:
+            return obj.image.width if obj.image else None
+        except Exception:
+            return None
+
+    def get_image_height(self, obj):
+        try:
+            return obj.image.height if obj.image else None
+        except Exception:
+            return None
+
+    def get_mobile_image_width(self, obj):
+        try:
+            return obj.mobile_image.width if obj.mobile_image else None
+        except Exception:
+            return None
+
+    def get_mobile_image_height(self, obj):
+        try:
+            return obj.mobile_image.height if obj.mobile_image else None
+        except Exception:
+            return None
+
+    def get_image_width(self, obj):
+        try:
+            return obj.image.width if obj.image else None
+        except Exception:
+            return None
+
+    def get_image_height(self, obj):
+        try:
+            return obj.image.height if obj.image else None
+        except Exception:
+            return None
+
+    def get_mobile_image_width(self, obj):
+        try:
+            return obj.mobile_image.width if obj.mobile_image else None
+        except Exception:
+            return None
+
+    def get_mobile_image_height(self, obj):
+        try:
+            return obj.mobile_image.height if obj.mobile_image else None
+        except Exception:
+            return None
+
 
 class AdminHomepageBannerSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     mobile_image_url = serializers.SerializerMethodField()
+    image_width = serializers.SerializerMethodField()
+    image_height = serializers.SerializerMethodField()
+    mobile_image_width = serializers.SerializerMethodField()
+    mobile_image_height = serializers.SerializerMethodField()
     created_by_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -76,6 +136,10 @@ class AdminHomepageBannerSerializer(serializers.ModelSerializer):
             'image_url',
             'mobile_image',
             'mobile_image_url',
+            'image_width',
+            'image_height',
+            'mobile_image_width',
+            'mobile_image_height',
             'image_fit',
             'image_focal_x',
             'image_focal_y',
@@ -146,6 +210,30 @@ class AdminHomepageBannerSerializer(serializers.ModelSerializer):
             if request and not url.startswith(('http://', 'https://')):
                 return request.build_absolute_uri(url)
             return url
+        except Exception:
+            return None
+
+    def get_image_width(self, obj):
+        try:
+            return obj.image.width if obj.image else None
+        except Exception:
+            return None
+
+    def get_image_height(self, obj):
+        try:
+            return obj.image.height if obj.image else None
+        except Exception:
+            return None
+
+    def get_mobile_image_width(self, obj):
+        try:
+            return obj.mobile_image.width if obj.mobile_image else None
+        except Exception:
+            return None
+
+    def get_mobile_image_height(self, obj):
+        try:
+            return obj.mobile_image.height if obj.mobile_image else None
         except Exception:
             return None
 

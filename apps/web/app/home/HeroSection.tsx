@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -133,7 +133,31 @@ export function HeroSection({ banners: initialBanners, stats: initialStats }: He
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isHovered, setIsHovered] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [naturalAspectRatios, setNaturalAspectRatios] = useState<Record<number, number>>({});
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
   const totalSlides = banners.length;
+
+  // Responsive mobile detection (SSR safe)
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Track intrinsic image dimensions on load
+  const handleImageLoad = useCallback((bannerId: number, width: number, height: number) => {
+    if (width > 0 && height > 0) {
+      setNaturalAspectRatios((prev) => ({
+        ...prev,
+        [bannerId]: width / height,
+      }));
+    }
+  }, []);
 
   // Auto transition every 5 seconds when multiple slides exist
   useEffect(() => {
@@ -155,6 +179,28 @@ export function HeroSection({ banners: initialBanners, stats: initialStats }: He
     if (totalSlides <= 1) return;
     setCurrentIndex((prev) => (prev + 1) % totalSlides);
   }, [totalSlides]);
+
+  // Touch swipe support for mobile / touch devices
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0]?.clientX ?? null;
+    touchEndX.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null || touchEndX.current === null) return;
+    const distance = touchStartX.current - touchEndX.current;
+    if (distance > 50) {
+      handleNext();
+    } else if (distance < -50) {
+      handlePrev();
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
 
   // If no valid banners configured by admin, do not render empty wrappers or fallback placeholders
   if (totalSlides === 0) {
@@ -179,7 +225,7 @@ export function HeroSection({ banners: initialBanners, stats: initialStats }: He
   const hasTextContent = Boolean(title || subtitle || badgeText || hasAnyCta);
   const hasImage = Boolean(currentBanner.image_url?.trim());
 
-  // Image fit and focal positioning
+  // Image fit and focal positioning (with active responsive mobile resolution)
   const desktopFit = currentBanner.image_fit === "contain" ? "contain" : "cover";
   const desktopFocalX = currentBanner.image_focal_x || "center";
   const desktopFocalY = currentBanner.image_focal_y || "center";
@@ -190,15 +236,21 @@ export function HeroSection({ banners: initialBanners, stats: initialStats }: He
   const mobileFocalY = currentBanner.mobile_image_focal_y || currentBanner.image_focal_y || "center";
   const mobilePosition = `${mobileFocalX} ${mobileFocalY}`;
 
+  const activeFit = isMobile ? mobileFit : desktopFit;
+  const activePosition = isMobile ? mobilePosition : desktopPosition;
+
   // Image-only slide click destination
   const imageOnlyLink = !hasTextContent && ctaUrl ? ctaUrl : null;
 
   return (
     <section
-      className={`relative flex items-center overflow-hidden bg-slate-950 text-white ${
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      className={`relative flex items-center overflow-hidden bg-slate-950 text-white w-full select-none transition-[min-height,height] duration-500 ease-out ${
         hasTextContent
-          ? "pt-20 pb-12 sm:pt-24 sm:pb-16 lg:pt-28 lg:pb-16 min-h-[460px] sm:min-h-[520px] lg:min-h-[580px]"
-          : "min-h-[260px] sm:min-h-[380px] md:min-h-[480px] lg:min-h-[560px]"
+          ? "pt-20 pb-12 sm:pt-24 sm:pb-16 lg:pt-28 lg:pb-16 min-h-[460px] sm:min-h-[500px] md:min-h-[520px] lg:min-h-[560px]"
+          : "min-h-[280px] sm:min-h-[350px] md:min-h-[420px] lg:min-h-[480px] h-[clamp(280px,36vw,560px)]"
       }`}
     >
       {/* ── Banner Media Background ────────────────────────────────────────── */}
@@ -210,31 +262,54 @@ export function HeroSection({ banners: initialBanners, stats: initialStats }: He
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: reducedMotion ? 0.3 : 0.6, ease: "easeInOut" }}
-            className="absolute inset-0"
+            className="absolute inset-0 w-full h-full"
           >
             {hasImage ? (
-              <picture className="w-full h-full block">
-                {currentBanner.mobile_image_url && (
-                  <source
-                    media="(max-width: 768px)"
-                    srcSet={currentBanner.mobile_image_url}
-                  />
+              <div className="relative w-full h-full overflow-hidden">
+                {/* Ambient Blurred Backdrop: Eliminates dark empty side voids when contain is chosen */}
+                {activeFit === "contain" && (
+                  <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                    <img
+                      src={
+                        isMobile && currentBanner.mobile_image_url
+                          ? currentBanner.mobile_image_url
+                          : currentBanner.image_url!
+                      }
+                      alt=""
+                      aria-hidden="true"
+                      className="w-full h-full object-cover blur-2xl opacity-45 scale-110 filter brightness-75 select-none"
+                    />
+                    <div className="absolute inset-0 bg-slate-950/20" />
+                  </div>
                 )}
-                <img
-                  src={currentBanner.image_url!}
-                  alt={title || "Homepage hero banner"}
-                  className="w-full h-full block transition-all duration-300"
-                  style={
-                    {
-                      objectFit: desktopFit,
-                      objectPosition: desktopPosition,
-                      "--mobile-fit": mobileFit,
-                      "--mobile-pos": mobilePosition,
-                    } as React.CSSProperties
-                  }
-                  loading="eager"
-                />
-              </picture>
+
+                {/* Sharp Foreground Responsive Image */}
+                <picture className="relative z-10 w-full h-full block">
+                  {currentBanner.mobile_image_url && (
+                    <source
+                      media="(max-width: 768px)"
+                      srcSet={currentBanner.mobile_image_url}
+                    />
+                  )}
+                  <img
+                    src={currentBanner.image_url!}
+                    alt={title || "Homepage hero banner"}
+                    onLoad={(e) =>
+                      handleImageLoad(
+                        currentBanner.id,
+                        e.currentTarget.naturalWidth,
+                        e.currentTarget.naturalHeight
+                      )
+                    }
+                    className="w-full h-full block transition-all duration-300 select-none"
+                    style={{
+                      objectFit: activeFit,
+                      objectPosition: activePosition,
+                    }}
+                    loading="eager"
+                  />
+                </picture>
+              </div>
             ) : (
               // Clean brand architectural backdrop for text-only banners
               <div className="w-full h-full bg-gradient-to-br from-[#102D40] via-[#0E2536] to-slate-950" />
@@ -243,8 +318,8 @@ export function HeroSection({ banners: initialBanners, stats: initialStats }: He
             {/* Contrast scrim: ONLY rendered when text exists, preserving clean visual for image-only banners */}
             {hasTextContent && (
               <>
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-transparent pointer-events-none" />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-slate-950/40 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/60 to-transparent pointer-events-none z-10" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-slate-950/40 pointer-events-none z-10" />
               </>
             )}
           </motion.div>

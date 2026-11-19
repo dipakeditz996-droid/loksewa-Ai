@@ -62,6 +62,32 @@ interface BannerFormData {
   display_order: number;
 }
 
+interface ImageDimensionMeta {
+  width: number;
+  height: number;
+  ratioStr: string;
+  isPortrait: boolean;
+  sizeKb?: number;
+}
+
+const calculateRatioString = (width: number, height: number): string => {
+  if (!width || !height) return "16:9";
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const divisor = gcd(width, height);
+  const wRatio = width / divisor;
+  const hRatio = height / divisor;
+  if (
+    (wRatio === 16 && hRatio === 9) ||
+    (wRatio === 4 && hRatio === 3) ||
+    (wRatio === 21 && hRatio === 9) ||
+    (wRatio === 1 && hRatio === 1) ||
+    (wRatio === 9 && hRatio === 16)
+  ) {
+    return `${wRatio}:${hRatio}`;
+  }
+  return `${(width / height).toFixed(2)}:1`;
+};
+
 const DEFAULT_FORM: BannerFormData = {
   title: "",
   subtitle: "",
@@ -93,14 +119,69 @@ export default function AdminBannersPage() {
   const [previewTab, setPreviewTab] = useState<"desktop" | "mobile">("desktop");
   const [showMobileControls, setShowMobileControls] = useState(false);
 
-  // File uploads
+  // File uploads & dimension metadata
   const [desktopFile, setDesktopFile] = useState<File | null>(null);
   const [desktopPreview, setDesktopPreview] = useState<string | null>(null);
+  const [desktopDimensions, setDesktopDimensions] = useState<ImageDimensionMeta | null>(null);
   const [mobileFile, setMobileFile] = useState<File | null>(null);
   const [mobilePreview, setMobilePreview] = useState<string | null>(null);
+  const [mobileDimensions, setMobileDimensions] = useState<ImageDimensionMeta | null>(null);
 
   const desktopInputRef = useRef<HTMLInputElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
+
+  // Measure dimensions from File
+  const inspectImageFile = (file: File, isMobileImage = false) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const meta: ImageDimensionMeta = {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        ratioStr: calculateRatioString(img.naturalWidth, img.naturalHeight),
+        isPortrait: img.naturalHeight > img.naturalWidth,
+        sizeKb: Math.round(file.size / 1024),
+      };
+      if (isMobileImage) {
+        setMobileDimensions(meta);
+      } else {
+        setDesktopDimensions(meta);
+      }
+    };
+    img.src = url;
+  };
+
+  // Measure dimensions from existing URL
+  const inspectImageUrl = (
+    url: string,
+    isMobileImage = false,
+    fallbackWidth?: number | null,
+    fallbackHeight?: number | null
+  ) => {
+    if (fallbackWidth && fallbackHeight) {
+      const meta: ImageDimensionMeta = {
+        width: fallbackWidth,
+        height: fallbackHeight,
+        ratioStr: calculateRatioString(fallbackWidth, fallbackHeight),
+        isPortrait: fallbackHeight > fallbackWidth,
+      };
+      if (isMobileImage) setMobileDimensions(meta);
+      else setDesktopDimensions(meta);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const meta: ImageDimensionMeta = {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        ratioStr: calculateRatioString(img.naturalWidth, img.naturalHeight),
+        isPortrait: img.naturalHeight > img.naturalWidth,
+      };
+      if (isMobileImage) setMobileDimensions(meta);
+      else setDesktopDimensions(meta);
+    };
+    img.src = url;
+  };
 
   // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<AdminBanner | null>(null);
@@ -153,8 +234,10 @@ export default function AdminBannersPage() {
     });
     setDesktopFile(null);
     setDesktopPreview(null);
+    setDesktopDimensions(null);
     setMobileFile(null);
     setMobilePreview(null);
+    setMobileDimensions(null);
     setPreviewTab("desktop");
     setShowMobileControls(false);
     setModalOpen(true);
@@ -181,8 +264,18 @@ export default function AdminBannersPage() {
     });
     setDesktopFile(null);
     setDesktopPreview(b.image_url);
+    setDesktopDimensions(null);
     setMobileFile(null);
     setMobilePreview(b.mobile_image_url);
+    setMobileDimensions(null);
+
+    if (b.image_url) {
+      inspectImageUrl(b.image_url, false, b.image_width, b.image_height);
+    }
+    if (b.mobile_image_url) {
+      inspectImageUrl(b.mobile_image_url, true, b.mobile_image_width, b.mobile_image_height);
+    }
+
     setPreviewTab("desktop");
     setShowMobileControls(Boolean(b.mobile_image_url));
     setModalOpen(true);
@@ -197,6 +290,7 @@ export default function AdminBannersPage() {
       }
       setDesktopFile(file);
       setDesktopPreview(URL.createObjectURL(file));
+      inspectImageFile(file, false);
     }
   };
 
@@ -209,6 +303,7 @@ export default function AdminBannersPage() {
       }
       setMobileFile(file);
       setMobilePreview(URL.createObjectURL(file));
+      inspectImageFile(file, true);
       setShowMobileControls(true);
     }
   };
@@ -330,6 +425,8 @@ export default function AdminBannersPage() {
   // Preview computations
   const currentPreviewImage =
     previewTab === "mobile" && mobilePreview ? mobilePreview : desktopPreview;
+  const currentDimensions =
+    previewTab === "mobile" ? (mobileDimensions || desktopDimensions) : desktopDimensions;
   const currentFit =
     previewTab === "mobile" ? formData.mobile_image_fit : formData.image_fit;
   const currentFocalX =
@@ -648,7 +745,7 @@ export default function AdminBannersPage() {
               </div>
 
               {/* Preview Window Frame */}
-              <div className="flex justify-center items-center py-2">
+              <div className="flex flex-col justify-center items-center py-2 space-y-2">
                 <div
                   className={`relative overflow-hidden transition-all duration-300 rounded-[10px] border border-white/15 bg-slate-950 flex items-center justify-center ${
                     previewTab === "desktop"
@@ -657,15 +754,29 @@ export default function AdminBannersPage() {
                   }`}
                 >
                   {currentPreviewImage ? (
-                    <img
-                      src={currentPreviewImage}
-                      alt="Crop preview"
-                      className="w-full h-full block"
-                      style={{
-                        objectFit: currentFit,
-                        objectPosition: currentFocalPos,
-                      }}
-                    />
+                    <>
+                      {/* Ambient Blurred Backdrop for Contain Mode: Demonstrates no dark side voids */}
+                      {currentFit === "contain" && (
+                        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                          <img
+                            src={currentPreviewImage}
+                            alt=""
+                            aria-hidden="true"
+                            className="w-full h-full object-cover blur-md opacity-45 scale-110 filter brightness-75 select-none"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/20" />
+                        </div>
+                      )}
+                      <img
+                        src={currentPreviewImage}
+                        alt="Crop preview"
+                        className="relative z-10 w-full h-full block"
+                        style={{
+                          objectFit: currentFit,
+                          objectPosition: currentFocalPos,
+                        }}
+                      />
+                    </>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-xs text-slate-400 bg-gradient-to-br from-[#102D40] to-slate-950 p-4 text-center">
                       <ImageIcon className="w-6 h-6 mb-1 opacity-50" />
@@ -675,12 +786,12 @@ export default function AdminBannersPage() {
 
                   {/* Scrim overlay if text is present */}
                   {hasPreviewText && (
-                    <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/50 to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/50 to-transparent pointer-events-none z-10" />
                   )}
 
                   {/* Text Overlay Preview */}
                   {hasPreviewText ? (
-                    <div className="absolute inset-0 p-3 sm:p-4 flex flex-col justify-center items-start text-left pointer-events-none">
+                    <div className="absolute inset-0 p-3 sm:p-4 flex flex-col justify-center items-start text-left pointer-events-none z-20">
                       {formData.badge_text.trim() && (
                         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#2563EB]/40 border border-[#3B82F6]/50 mb-1.5 text-[9px] font-[800] uppercase text-[#93C5FD]">
                           <Sparkles className="w-2.5 h-2.5" />
@@ -704,10 +815,36 @@ export default function AdminBannersPage() {
                       )}
                     </div>
                   ) : currentPreviewImage ? (
-                    <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded text-[9px] font-[700] text-slate-300">
+                    <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded text-[9px] font-[700] text-slate-300 z-20">
                       Image-only banner (no text overlay)
                     </div>
                   ) : null}
+                </div>
+
+                {/* Dimension & Aspect Ratio Metadata Indicator */}
+                <div className="w-full flex flex-wrap items-center justify-between text-[11px] text-slate-400 px-1 pt-1 border-t border-white/10 gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-[700] text-slate-300">
+                      {previewTab === "desktop" ? "Desktop Preview" : "Mobile Preview"}:
+                    </span>
+                    {currentDimensions ? (
+                      <span className="text-emerald-400 font-[700] inline-flex items-center gap-1">
+                        ✓ {currentDimensions.width} × {currentDimensions.height} px
+                        <span className="text-slate-400 font-[500]">
+                          ({currentDimensions.ratioStr} {currentDimensions.isPortrait ? "Portrait" : "Landscape"}
+                          {currentDimensions.sizeKb ? ` • ${currentDimensions.sizeKb} KB` : ""})
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 italic">No image dimensions detected</span>
+                    )}
+                  </div>
+                  <div className="text-[10.5px] text-slate-400">
+                    Mode:{" "}
+                    <strong className="text-white font-[700]">
+                      {currentFit === "cover" ? "Full-Width Fill (Adaptive)" : "Contain with Ambient Backdrop"}
+                    </strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -716,10 +853,17 @@ export default function AdminBannersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Desktop Image */}
               <div className="space-y-2">
-                <label className="text-xs font-[800] uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Monitor className="w-3.5 h-3.5 text-[#2563EB]" />
-                  Desktop Image (JPG, PNG, WebP &le; 5MB)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-[800] uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Monitor className="w-3.5 h-3.5 text-[#2563EB]" />
+                    Desktop Image (JPG, PNG, WebP &le; 5MB)
+                  </label>
+                  {desktopDimensions && (
+                    <span className="text-[10px] font-[700] text-emerald-600 dark:text-emerald-400">
+                      {desktopDimensions.width}×{desktopDimensions.height} ({desktopDimensions.ratioStr})
+                    </span>
+                  )}
+                </div>
                 <div
                   onClick={() => desktopInputRef.current?.click()}
                   className="relative h-32 rounded-[12px] border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-[#2563EB] bg-slate-50 dark:bg-white/[0.02] flex flex-col items-center justify-center p-2 cursor-pointer transition-colors overflow-hidden group"
@@ -731,8 +875,15 @@ export default function AdminBannersPage() {
                         alt="Desktop preview"
                         className="w-full h-full object-cover rounded-[8px]"
                       />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-[700] gap-1.5">
-                        <Upload className="w-4 h-4" /> Change Desktop Image
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs font-[700] gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <Upload className="w-4 h-4" /> Change Desktop Image
+                        </div>
+                        {desktopDimensions && (
+                          <span className="text-[10px] text-emerald-300 font-[600]">
+                            {desktopDimensions.width} × {desktopDimensions.height} px ({desktopDimensions.ratioStr})
+                          </span>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -742,7 +893,7 @@ export default function AdminBannersPage() {
                         Select Desktop Image
                       </span>
                       <span className="text-[10px] text-slate-400 block mt-0.5">
-                        Recommended 1920x1080 (16:9)
+                        Recommended 1920x1080 (16:9) or 16:7 Banner
                       </span>
                     </div>
                   )}
@@ -758,10 +909,17 @@ export default function AdminBannersPage() {
 
               {/* Mobile Image */}
               <div className="space-y-2">
-                <label className="text-xs font-[800] uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
-                  Mobile Image (Optional)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-[800] uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-emerald-500" />
+                    Mobile Image (Optional)
+                  </label>
+                  {mobileDimensions && (
+                    <span className="text-[10px] font-[700] text-emerald-600 dark:text-emerald-400">
+                      {mobileDimensions.width}×{mobileDimensions.height} ({mobileDimensions.ratioStr})
+                    </span>
+                  )}
+                </div>
                 <div
                   onClick={() => mobileInputRef.current?.click()}
                   className="relative h-32 rounded-[12px] border-2 border-dashed border-slate-300 dark:border-white/15 hover:border-emerald-500 bg-slate-50 dark:bg-white/[0.02] flex flex-col items-center justify-center p-2 cursor-pointer transition-colors overflow-hidden group"
@@ -773,8 +931,15 @@ export default function AdminBannersPage() {
                         alt="Mobile preview"
                         className="w-full h-full object-cover rounded-[8px]"
                       />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-[700] gap-1.5">
-                        <Upload className="w-4 h-4" /> Change Mobile Image
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs font-[700] gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <Upload className="w-4 h-4" /> Change Mobile Image
+                        </div>
+                        {mobileDimensions && (
+                          <span className="text-[10px] text-emerald-300 font-[600]">
+                            {mobileDimensions.width} × {mobileDimensions.height} px ({mobileDimensions.ratioStr})
+                          </span>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -822,8 +987,8 @@ export default function AdminBannersPage() {
                     }
                     className="w-full h-9 rounded-[8px] border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-xs px-2.5 font-[600]"
                   >
-                    <option value="cover">Cover (Fill & Crop)</option>
-                    <option value="contain">Contain (Show Full Image)</option>
+                    <option value="cover">Cover (Full Width Fill & Adaptive Crop - Recommended)</option>
+                    <option value="contain">Contain (Show Full Graphic with Ambient Backdrop Fill)</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -890,8 +1055,8 @@ export default function AdminBannersPage() {
                       }
                       className="w-full h-9 rounded-[8px] border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-xs px-2.5 font-[600]"
                     >
-                      <option value="cover">Cover (Fill & Crop)</option>
-                      <option value="contain">Contain (Show Full Image)</option>
+                      <option value="cover">Cover (Full Width Fill & Adaptive Crop)</option>
+                      <option value="contain">Contain (Show Full Graphic with Ambient Backdrop)</option>
                     </select>
                   </div>
                   <div className="space-y-1">

@@ -242,7 +242,7 @@ export function ExamScheduleCard({
       } ${
         isSingle
           ? "max-w-4xl mx-auto rounded-2xl"
-          : "md:w-[620px] lg:w-[680px] min-h-[195px] md:h-[215px] lg:h-[225px] rounded-2xl"
+          : "w-full sm:w-[540px] md:w-[600px] lg:w-[560px] xl:w-[590px] min-h-[195px] md:h-[215px] lg:h-[225px] rounded-2xl shrink-0"
       }`}
     >
       {/* Restrained subtle ambient glow */}
@@ -450,38 +450,38 @@ export function LoksewaExamCountdown({
   const schedules = data?.schedules ?? [];
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
 
-  // Responsive state (Desktop vs Mobile)
-  const [isDesktop, setIsDesktop] = useState(false);
-  const [mobileActiveIndex, setMobileActiveIndex] = useState(0);
-
-  // Carousel & Animation States (Desktop only)
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Active slide index & autoplay control states
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [userPaused, setUserPaused] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
-  const [userPaused, setUserPaused] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [isTabVisible, setIsTabVisible] = useState(true);
+  const [timerResetKey, setTimerResetKey] = useState(0);
 
-  // Drag coordinates and click-guarding
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeIndexRef = useRef(0);
+  activeIndexRef.current = activeIndex;
+
+  const schedulesCountRef = useRef(schedules.length);
+  schedulesCountRef.current = schedules.length;
+
+  const interactTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Drag coordinates & touch tracking
+  const isMouseDownRef = useRef(false);
   const dragStartXRef = useRef(0);
-  const scrollStartRef = useRef(0);
+  const dragStartScrollLeftRef = useRef(0);
   const hasDraggedRef = useRef(false);
   const wasDraggingRecentlyRef = useRef(false);
-  const interactTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const accumulatedScrollRef = useRef(0);
 
-  // Viewport breakpoint listener
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const updateSize = () => {
-      setIsDesktop(window.innerWidth >= 768);
-    };
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
-  }, []);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const touchDeltaXRef = useRef(0);
+  const isSwipingHorizontallyRef = useRef(false);
 
   // Server offset calculation
   useEffect(() => {
@@ -495,12 +495,18 @@ export function LoksewaExamCountdown({
     if (typeof window === "undefined") return;
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     setPrefersReducedMotion(mediaQuery.matches);
-    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
+    if (mediaQuery.matches) {
+      setUserPaused(true);
+    }
+    const handler = (e: MediaQueryListEvent) => {
+      setPrefersReducedMotion(e.matches);
+      if (e.matches) setUserPaused(true);
+    };
     mediaQuery.addEventListener("change", handler);
     return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
-  // Browser tab visibility listener (pause RAF when tab hidden)
+  // Browser tab visibility listener (pauses timer while tab is hidden)
   useEffect(() => {
     if (typeof document === "undefined") return;
     const handleVisibilityChange = () => {
@@ -510,154 +516,250 @@ export function LoksewaExamCountdown({
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
-  // Items to display: On mobile, exact 1-to-1 list for scroll snapping; on desktop, cloned for infinite looping
-  const repeatCount = schedules.length < 3 ? 4 : schedules.length < 5 ? 3 : 2;
-  const displayItems = isDesktop && schedules.length >= 2
-    ? Array.from({ length: repeatCount }, () => schedules).flat()
-    : schedules;
+  // Cleanup pending timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (interactTimeoutRef.current) clearTimeout(interactTimeoutRef.current);
+      if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    };
+  }, []);
 
-  // Active pause state: hovered, focused, user paused, dragging, touching, reduced motion, or tab hidden
-  const isPaused =
-    !isDesktop || // Autoplay disabled on mobile
+  // Reset autoplay timer key
+  const resetAutoplayTimer = useCallback(() => {
+    setTimerResetKey((prev) => prev + 1);
+  }, []);
+
+  // Scroll to a specific card index smoothly
+  const scrollToCard = useCallback(
+    (index: number, smooth = true) => {
+      const container = containerRef.current;
+      if (!container || schedulesCountRef.current === 0) return;
+
+      const targetIndex = ((index % schedulesCountRef.current) + schedulesCountRef.current) % schedulesCountRef.current;
+      const children = container.children;
+      const targetElement = children[targetIndex] as HTMLElement | undefined;
+      if (!targetElement) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const cardRect = targetElement.getBoundingClientRect();
+      const targetScrollLeft = container.scrollLeft + (cardRect.left - containerRect.left);
+
+      container.scrollTo({
+        left: Math.max(0, targetScrollLeft),
+        behavior: smooth && !prefersReducedMotion ? "smooth" : "auto",
+      });
+
+      setActiveIndex(targetIndex);
+    },
+    [prefersReducedMotion]
+  );
+
+  // Resume autoplay safely after user interaction ends
+  const resumeAfterInteraction = useCallback(
+    (durationMs = 2500) => {
+      if (interactTimeoutRef.current) clearTimeout(interactTimeoutRef.current);
+      interactTimeoutRef.current = setTimeout(() => {
+        setIsInteracting(false);
+        resetAutoplayTimer();
+      }, durationMs);
+    },
+    [resetAutoplayTimer]
+  );
+
+  // Previous and Next handlers
+  const handlePrev = useCallback(() => {
+    if (schedulesCountRef.current <= 1) return;
+    const prevIndex = (activeIndexRef.current - 1 + schedulesCountRef.current) % schedulesCountRef.current;
+    scrollToCard(prevIndex);
+    resetAutoplayTimer();
+  }, [scrollToCard, resetAutoplayTimer]);
+
+  const handleNext = useCallback(() => {
+    if (schedulesCountRef.current <= 1) return;
+    const nextIndex = (activeIndexRef.current + 1) % schedulesCountRef.current;
+    scrollToCard(nextIndex);
+    resetAutoplayTimer();
+  }, [scrollToCard, resetAutoplayTimer]);
+
+  const handleNextRef = useRef(handleNext);
+  handleNextRef.current = handleNext;
+
+  // Manual Play / Pause toggle
+  const togglePlayPause = useCallback(() => {
+    setUserPaused((prev) => !prev);
+    resetAutoplayTimer();
+  }, [resetAutoplayTimer]);
+
+  // Synchronize activeIndex when schedule count changes
+  useEffect(() => {
+    if (activeIndex >= schedules.length && schedules.length > 0) {
+      setActiveIndex(0);
+      scrollToCard(0, false);
+    }
+  }, [schedules.length, activeIndex, scrollToCard]);
+
+  // Determine whether autoplay is actively paused
+  const isEffectivelyPaused =
+    schedules.length <= 1 ||
+    userPaused ||
     isHovered ||
     isFocused ||
-    userPaused ||
     isInteracting ||
     isDragging ||
     prefersReducedMotion ||
     !isTabVisible;
 
-  // Smooth continuous auto-scrolling with RAF (Desktop only)
+  // 4.5s Timer-Based Autoplay Engine (Single clean interval, no RAF loop)
   useEffect(() => {
-    if (!isDesktop || schedules.length < 2) return;
+    if (isEffectivelyPaused) return;
 
-    let animationFrameId: number;
-    const speed = 0.55; // ~33px/sec, smooth and comfortable reading speed
-
-    const animate = () => {
-      const container = containerRef.current;
-      if (container && !isPaused) {
-        accumulatedScrollRef.current += speed;
-        container.scrollLeft = accumulatedScrollRef.current;
-
-        // Loop seamlessly when single set of duplicates is traversed
-        const singleSetWidth = container.scrollWidth / repeatCount;
-        if (accumulatedScrollRef.current >= singleSetWidth * (repeatCount - 1)) {
-          accumulatedScrollRef.current -= singleSetWidth;
-          container.scrollLeft = accumulatedScrollRef.current;
-        }
-      }
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    animationFrameId = requestAnimationFrame(animate);
+    const timer = setInterval(() => {
+      handleNextRef.current();
+    }, 4500);
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      clearInterval(timer);
     };
-  }, [schedules.length, isPaused, repeatCount, isDesktop]);
+  }, [isEffectivelyPaused, timerResetKey]);
 
-  // Handle manual interaction pauses
-  const markUserInteracting = useCallback((durationMs = 2000) => {
+  // Mobile Swipe Gesture Handlers
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     setIsInteracting(true);
-    if (interactTimerRef.current) clearTimeout(interactTimerRef.current);
-    interactTimerRef.current = setTimeout(() => {
-      setIsInteracting(false);
-      if (containerRef.current) {
-        accumulatedScrollRef.current = containerRef.current.scrollLeft;
-      }
-    }, durationMs);
-  }, []);
-
-  // Navigation button controls (works on both Desktop and Mobile)
-  const handleScrollBy = useCallback(
-    (offset: number) => {
-      const container = containerRef.current;
-      if (!container) return;
-
-      if (!isDesktop) {
-        // Mobile snap card by card
-        const targetIndex = offset > 0
-          ? Math.min(mobileActiveIndex + 1, schedules.length - 1)
-          : Math.max(mobileActiveIndex - 1, 0);
-        container.scrollTo({
-          left: targetIndex * container.clientWidth,
-          behavior: "smooth",
-        });
-        setMobileActiveIndex(targetIndex);
-      } else {
-        // Desktop smooth scroll
-        markUserInteracting(2500);
-        container.scrollBy({ left: offset, behavior: "smooth" });
-        setTimeout(() => {
-          if (container) accumulatedScrollRef.current = container.scrollLeft;
-        }, 400);
-      }
-    },
-    [isDesktop, mobileActiveIndex, schedules.length, markUserInteracting]
-  );
-
-  const handlePrev = () => handleScrollBy(isDesktop ? -640 : -1);
-  const handleNext = () => handleScrollBy(isDesktop ? 640 : 1);
-
-  const toggleUserPause = () => {
-    setUserPaused((prev) => !prev);
-    if (containerRef.current) {
-      accumulatedScrollRef.current = containerRef.current.scrollLeft;
-    }
+    if (interactTimeoutRef.current) clearTimeout(interactTimeoutRef.current);
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+    touchDeltaXRef.current = 0;
+    isSwipingHorizontallyRef.current = false;
   };
 
-  // Mouse drag handlers (Desktop only)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!isDesktop || !containerRef.current) return;
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartXRef.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStartXRef.current;
+    const deltaY = currentY - (touchStartYRef.current ?? currentY);
+
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+      isSwipingHorizontallyRef.current = true;
+    }
+    touchDeltaXRef.current = deltaX;
+  };
+
+  const handleTouchEnd = () => {
+    if (isSwipingHorizontallyRef.current && Math.abs(touchDeltaXRef.current) > 40) {
+      if (touchDeltaXRef.current < 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    touchDeltaXRef.current = 0;
+    isSwipingHorizontallyRef.current = false;
+    resumeAfterInteraction(3000);
+  };
+
+  const handleTouchCancel = () => {
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    touchDeltaXRef.current = 0;
+    isSwipingHorizontallyRef.current = false;
+    setIsInteracting(false);
+    resetAutoplayTimer();
+  };
+
+  // Desktop Mouse Drag Handlers
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || schedules.length <= 1) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    isMouseDownRef.current = true;
     dragStartXRef.current = e.clientX;
-    scrollStartRef.current = containerRef.current.scrollLeft;
+    dragStartScrollLeftRef.current = container.scrollLeft;
     hasDraggedRef.current = false;
     setIsDragging(true);
+    setIsInteracting(true);
+    if (interactTimeoutRef.current) clearTimeout(interactTimeoutRef.current);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDesktop || !isDragging || !containerRef.current) return;
-    const delta = e.clientX - dragStartXRef.current;
-    if (Math.abs(delta) > 5) {
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isMouseDownRef.current || !containerRef.current) return;
+    const deltaX = e.clientX - dragStartXRef.current;
+    if (Math.abs(deltaX) > 5) {
       hasDraggedRef.current = true;
     }
-    containerRef.current.scrollLeft = scrollStartRef.current - delta;
-    accumulatedScrollRef.current = containerRef.current.scrollLeft;
+    containerRef.current.scrollLeft = dragStartScrollLeftRef.current - deltaX;
   };
 
   const handleMouseUp = () => {
-    if (isDragging) {
-      setIsDragging(false);
-      if (hasDraggedRef.current) {
-        wasDraggingRecentlyRef.current = true;
-        setTimeout(() => {
-          wasDraggingRecentlyRef.current = false;
-        }, 150);
-      }
-      if (containerRef.current) {
-        accumulatedScrollRef.current = containerRef.current.scrollLeft;
-      }
-      markUserInteracting(1500);
+    if (!isMouseDownRef.current) return;
+    isMouseDownRef.current = false;
+    setIsDragging(false);
+
+    if (hasDraggedRef.current) {
+      wasDraggingRecentlyRef.current = true;
+      setTimeout(() => {
+        wasDraggingRecentlyRef.current = false;
+      }, 150);
+    }
+
+    resumeAfterInteraction(2000);
+  };
+
+  // Keyboard Navigation Handler (Accessibility)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      handlePrev();
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      handleNext();
+    } else if (e.key === " ") {
+      e.preventDefault();
+      togglePlayPause();
     }
   };
 
-  // Mobile scroll tracking for pagination dots
-  const handleMobileScroll = () => {
-    if (isDesktop || !containerRef.current) return;
-    const { scrollLeft, clientWidth } = containerRef.current;
-    if (clientWidth > 0) {
-      const index = Math.round(scrollLeft / clientWidth);
-      setMobileActiveIndex(Math.min(Math.max(index, 0), schedules.length - 1));
-    }
-  };
-
+  // Click guard for notice links when user was dragging
   const handleNoticeClick = (e: React.MouseEvent) => {
     if (wasDraggingRecentlyRef.current) {
       e.preventDefault();
       e.stopPropagation();
     }
   };
+
+  // Track scroll position to keep activeIndex in sync during inertial / manual scroll
+  const handleScroll = useCallback(() => {
+    if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+    scrollDebounceRef.current = setTimeout(() => {
+      const container = containerRef.current;
+      if (!container || schedules.length === 0) return;
+
+      const children = container.children;
+      if (!children.length) return;
+
+      const containerRect = container.getBoundingClientRect();
+      let closestIndex = 0;
+      let minDistance = Infinity;
+
+      for (let i = 0; i < schedules.length; i++) {
+        const child = children[i] as HTMLElement | undefined;
+        if (!child) continue;
+        const childRect = child.getBoundingClientRect();
+        const distance = Math.abs(childRect.left - containerRect.left);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestIndex = i;
+        }
+      }
+
+      if (closestIndex !== activeIndexRef.current) {
+        setActiveIndex(closestIndex);
+      }
+    }, 60);
+  }, [schedules.length]);
 
   // Loading Skeleton State
   if (loading) {
@@ -734,7 +836,7 @@ export function LoksewaExamCountdown({
     );
   }
 
-  // Multiple Schedules: Redesigned Carousel
+  // Multiple Schedules: Active Autoplay Carousel
   return (
     <div className={`space-y-2.5 ${className}`}>
       {/* Section Header: OFFICIAL EXAM SCHEDULES */}
@@ -748,12 +850,12 @@ export function LoksewaExamCountdown({
             Official Exam Schedules
           </h3>
           <span className="hidden sm:inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
-            {schedules.length} Active {schedules.length === 1 ? "Schedule" : "Schedules"}
+            {schedules.length} Active Schedules
           </span>
         </div>
 
         {/* Carousel Controls */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           <button
             type="button"
             onClick={handlePrev}
@@ -764,21 +866,19 @@ export function LoksewaExamCountdown({
             <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
 
-          {isDesktop && (
-            <button
-              type="button"
-              onClick={toggleUserPause}
-              aria-label={userPaused ? "Resume automatic scrolling" : "Pause automatic scrolling"}
-              className="p-1 sm:p-1.5 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              title={userPaused ? "Resume auto-scroll" : "Pause auto-scroll"}
-            >
-              {userPaused ? (
-                <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
-              ) : (
-                <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
-              )}
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={togglePlayPause}
+            aria-label={userPaused ? "Resume automatic scrolling" : "Pause automatic scrolling"}
+            className="p-1 sm:p-1.5 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title={userPaused ? "Resume auto-scroll" : "Pause auto-scroll"}
+          >
+            {userPaused ? (
+              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500 fill-emerald-500/20" />
+            ) : (
+              <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500 fill-amber-500/20" />
+            )}
+          </button>
 
           <button
             type="button"
@@ -795,37 +895,43 @@ export function LoksewaExamCountdown({
       {/* Track Container */}
       <div
         className="relative group"
-        onMouseEnter={() => isDesktop && setIsHovered(true)}
+        onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => {
-          if (isDesktop) {
-            setIsHovered(false);
-            handleMouseUp();
-          }
+          setIsHovered(false);
+          handleMouseUp();
         }}
-        onFocusCapture={() => isDesktop && setIsFocused(true)}
-        onBlurCapture={() => isDesktop && setIsFocused(false)}
+        onFocusCapture={() => setIsFocused(true)}
+        onBlurCapture={() => setIsFocused(false)}
       >
-        {/* Scrollable Track - Pure CSS snap on mobile, marquee on desktop */}
+        {/* Scrollable Track - Snap on mobile & tablet, smooth carousel on desktop */}
         <div
           ref={containerRef}
           role="region"
           aria-label="Official Examination Schedules Carousel"
           aria-roledescription="carousel"
           tabIndex={0}
-          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory md:snap-none gap-3 md:gap-5 md:cursor-grab md:active:cursor-grabbing"
-          style={{ scrollBehavior: isDragging ? "auto" : "smooth" }}
+          onKeyDown={handleKeyDown}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onScroll={!isDesktop ? handleMobileScroll : undefined}
+          onScroll={handleScroll}
+          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory gap-3 sm:gap-4 md:gap-5 cursor-grab active:cursor-grabbing"
+          style={{
+            scrollBehavior: isDragging || prefersReducedMotion ? "auto" : "smooth",
+            WebkitOverflowScrolling: "touch",
+          }}
         >
-          {displayItems.map((item, index) => (
+          {schedules.map((item, index) => (
             <div
               key={`${item.id}-${index}`}
               role="group"
               aria-roledescription="slide"
-              aria-label={`${(index % schedules.length) + 1} of ${schedules.length}: ${item.title}`}
-              className="w-full flex-none min-w-0 max-w-full snap-center md:snap-align-none md:w-auto"
+              aria-label={`${index + 1} of ${schedules.length}: ${item.title}`}
+              className="w-full sm:w-auto flex-none min-w-0 max-w-full snap-start"
             >
               <ExamScheduleCard
                 schedule={item}
@@ -838,32 +944,27 @@ export function LoksewaExamCountdown({
         </div>
       </div>
 
-      {/* Mobile Pagination Dots Indicator */}
-      {!isDesktop && schedules.length > 1 && (
-        <div className="flex md:hidden items-center justify-center gap-1.5 pt-1">
+      {/* Pagination Dots Indicator */}
+      {schedules.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5 pt-1.5">
           {schedules.map((_, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => {
-                if (containerRef.current) {
-                  containerRef.current.scrollTo({
-                    left: idx * containerRef.current.clientWidth,
-                    behavior: "smooth",
-                  });
-                  setMobileActiveIndex(idx);
-                }
+                scrollToCard(idx);
+                resetAutoplayTimer();
               }}
-              aria-label={`Go to slide ${idx + 1}`}
+              aria-label={`Go to schedule ${idx + 1}`}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                mobileActiveIndex === idx
-                  ? "w-5 bg-[#60A5FA]"
-                  : "w-1.5 bg-slate-300 dark:bg-white/20 hover:bg-slate-400"
+                activeIndex === idx
+                  ? "w-6 bg-[#60A5FA]"
+                  : "w-1.5 bg-slate-300 dark:bg-white/20 hover:bg-slate-400 dark:hover:bg-white/40"
               }`}
             />
           ))}
-          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-1.5">
-            {mobileActiveIndex + 1} / {schedules.length}
+          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-1.5 tabular-nums">
+            {activeIndex + 1} / {schedules.length}
           </span>
         </div>
       )}

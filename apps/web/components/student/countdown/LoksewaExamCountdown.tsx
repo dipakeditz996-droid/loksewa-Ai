@@ -74,88 +74,24 @@ function calculateTimeLeft(schedule: OfficialExamSchedule, serverOffsetMs: numbe
 }
 
 /**
- * Desktop Countdown Component (Compact horizontal blocks)
+ * Strips literal "BS" text from formatted Nepali date string
+ * e.g. "2083 Poush 20 BS (Jan 4, 2027)" -> "2083 Poush 20 (Jan 4, 2027)"
  */
-function DesktopCountdown({
-  schedule,
-  serverOffsetMs,
-}: {
-  schedule: OfficialExamSchedule;
-  serverOffsetMs: number;
-}) {
-  const [timeLeft, setTimeLeft] = useState<TimeLeft>(() =>
-    calculateTimeLeft(schedule, serverOffsetMs)
-  );
-
-  useEffect(() => {
-    setTimeLeft(calculateTimeLeft(schedule, serverOffsetMs));
-    const interval = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(schedule, serverOffsetMs));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [schedule, serverOffsetMs]);
-
-  if (!timeLeft.isValid) return null;
-
-  if (timeLeft.isExpired) {
-    return (
-      <div className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-3 py-2 rounded-xl text-center shadow-inner shrink-0">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-300 block">Status</span>
-        <span className="text-xs font-black tracking-tight text-white flex items-center justify-center gap-1 mt-0.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          Exam Day / In Progress
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      {/* Days */}
-      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-base font-black text-white leading-none">
-          {String(timeLeft.days).padStart(2, "0")}
-        </span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Days</span>
-      </div>
-
-      <span className="text-xs font-bold text-white/40 mb-1">:</span>
-
-      {/* Hours */}
-      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-base font-black text-[#60A5FA] leading-none">
-          {String(timeLeft.hours).padStart(2, "0")}
-        </span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Hours</span>
-      </div>
-
-      <span className="text-xs font-bold text-white/40 mb-1">:</span>
-
-      {/* Mins */}
-      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-base font-black text-white leading-none">
-          {String(timeLeft.minutes).padStart(2, "0")}
-        </span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Mins</span>
-      </div>
-
-      <span className="text-xs font-bold text-white/40 mb-1">:</span>
-
-      {/* Secs */}
-      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-base font-black text-blue-300 leading-none">
-          {String(timeLeft.seconds).padStart(2, "0")}
-        </span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Secs</span>
-      </div>
-    </div>
-  );
+function formatExamDateDisplay(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const raw = formatNepaliDateDisplay(dateStr, { showAd: true });
+  return raw
+    .replace(/\bBS\b/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .trim();
 }
 
 /**
- * Mobile Countdown Component (4 balanced equal blocks, 100% width)
+ * Clean Countdown Timer Component (Reference-aligned 4 blocks)
  */
-function MobileCountdown({
+function ExamCountdownTimer({
   schedule,
   serverOffsetMs,
 }: {
@@ -178,9 +114,10 @@ function MobileCountdown({
 
   if (timeLeft.isExpired) {
     return (
-      <div className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-3 py-1.5 rounded-lg text-center shadow-inner w-full">
-        <span className="text-xs font-black tracking-tight text-white flex items-center justify-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+      <div className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-4 py-2.5 rounded-xl text-center shadow-inner shrink-0 w-full md:w-auto">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300 block">Status</span>
+        <span className="text-sm font-black tracking-tight text-white flex items-center justify-center gap-1.5 mt-0.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           Exam Day / In Progress
         </span>
       </div>
@@ -188,37 +125,101 @@ function MobileCountdown({
   }
 
   return (
-    <div className="grid grid-cols-4 gap-1.5 w-full">
-      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
-        <span className="text-base font-black text-white leading-none">{String(timeLeft.days).padStart(2, "0")}</span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Days</span>
+    <>
+      {/* DESKTOP (md and up): 4 horizontal blocks with colons */}
+      <div className="hidden md:flex items-center gap-1.5 lg:gap-2.5 shrink-0">
+        {/* Days */}
+        <div className="flex flex-col items-center justify-center w-[64px] h-[76px] lg:w-[72px] lg:h-[84px] bg-white/5 backdrop-blur-sm rounded-2xl border border-white/15 shadow-inner">
+          <span className="text-2xl lg:text-3xl font-black text-white leading-none">
+            {String(timeLeft.days).padStart(2, "0")}
+          </span>
+          <span className="text-[9px] lg:text-[10px] font-bold uppercase text-slate-300 tracking-widest mt-1">
+            Days
+          </span>
+        </div>
+
+        <span className="text-sm font-bold text-slate-400/80 mb-2">:</span>
+
+        {/* Hours */}
+        <div className="flex flex-col items-center justify-center w-[64px] h-[76px] lg:w-[72px] lg:h-[84px] bg-white/5 backdrop-blur-sm rounded-2xl border border-white/15 shadow-inner">
+          <span className="text-2xl lg:text-3xl font-black text-[#60A5FA] leading-none">
+            {String(timeLeft.hours).padStart(2, "0")}
+          </span>
+          <span className="text-[9px] lg:text-[10px] font-bold uppercase text-[#60A5FA] tracking-widest mt-1">
+            Hours
+          </span>
+        </div>
+
+        <span className="text-sm font-bold text-slate-400/80 mb-2">:</span>
+
+        {/* Mins */}
+        <div className="flex flex-col items-center justify-center w-[64px] h-[76px] lg:w-[72px] lg:h-[84px] bg-white/5 backdrop-blur-sm rounded-2xl border border-white/15 shadow-inner">
+          <span className="text-2xl lg:text-3xl font-black text-white leading-none">
+            {String(timeLeft.minutes).padStart(2, "0")}
+          </span>
+          <span className="text-[9px] lg:text-[10px] font-bold uppercase text-slate-300 tracking-widest mt-1">
+            Mins
+          </span>
+        </div>
+
+        <span className="text-sm font-bold text-slate-400/80 mb-2">:</span>
+
+        {/* Secs */}
+        <div className="flex flex-col items-center justify-center w-[64px] h-[76px] lg:w-[72px] lg:h-[84px] bg-white/5 backdrop-blur-sm rounded-2xl border border-white/15 shadow-inner">
+          <span className="text-2xl lg:text-3xl font-black text-[#60A5FA] leading-none">
+            {String(timeLeft.seconds).padStart(2, "0")}
+          </span>
+          <span className="text-[9px] lg:text-[10px] font-bold uppercase text-[#60A5FA] tracking-widest mt-1">
+            Secs
+          </span>
+        </div>
       </div>
-      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
-        <span className="text-base font-black text-[#60A5FA] leading-none">{String(timeLeft.hours).padStart(2, "0")}</span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Hours</span>
+
+      {/* MOBILE (< md): 4 equal blocks in a clean grid */}
+      <div className="grid md:hidden grid-cols-4 gap-1.5 sm:gap-2 w-full mt-3">
+        <div className="flex flex-col items-center justify-center py-2 bg-white/5 backdrop-blur-sm rounded-xl border border-white/15 shadow-inner">
+          <span className="text-lg sm:text-xl font-black text-white leading-none">
+            {String(timeLeft.days).padStart(2, "0")}
+          </span>
+          <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">
+            Days
+          </span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-2 bg-white/5 backdrop-blur-sm rounded-xl border border-white/15 shadow-inner">
+          <span className="text-lg sm:text-xl font-black text-[#60A5FA] leading-none">
+            {String(timeLeft.hours).padStart(2, "0")}
+          </span>
+          <span className="text-[8px] font-bold uppercase text-[#60A5FA] tracking-wider mt-0.5">
+            Hours
+          </span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-2 bg-white/5 backdrop-blur-sm rounded-xl border border-white/15 shadow-inner">
+          <span className="text-lg sm:text-xl font-black text-white leading-none">
+            {String(timeLeft.minutes).padStart(2, "0")}
+          </span>
+          <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">
+            Mins
+          </span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-2 bg-white/5 backdrop-blur-sm rounded-xl border border-white/15 shadow-inner">
+          <span className="text-lg sm:text-xl font-black text-[#60A5FA] leading-none">
+            {String(timeLeft.seconds).padStart(2, "0")}
+          </span>
+          <span className="text-[8px] font-bold uppercase text-[#60A5FA] tracking-wider mt-0.5">
+            Secs
+          </span>
+        </div>
       </div>
-      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
-        <span className="text-base font-black text-white leading-none">{String(timeLeft.minutes).padStart(2, "0")}</span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Mins</span>
-      </div>
-      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
-        <span className="text-base font-black text-blue-300 leading-none">{String(timeLeft.seconds).padStart(2, "0")}</span>
-        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Secs</span>
-      </div>
-    </div>
+    </>
   );
 }
 
 /**
  * Premium NES Mastery Examination Schedule Card
- * Strictly follows the specified information hierarchy:
- * 1. Examination status label (Upcoming / Active)
- * 2. Examination title
- * 3. Examination category or level badge
- * 4. Official Exam Notice link (directly below the category badge)
- * 5. Examination date and time
- * 6. Short relevant details, if available
- * 7. Countdown timer
+ * Clean, wide horizontal card strictly matching the reference design:
+ * - LEFT SECTION: Badge, Title, Date (no BS), Time, Category, Level, Fee/Description
+ * - RIGHT SECTION: Large 4-block horizontal countdown (Days, Hours, Mins, Secs)
+ * - SEPARATE BOTTOM AREA: Dedicated Official Exam Notice link with top divider
  */
 export function ExamScheduleCard({
   schedule,
@@ -232,188 +233,110 @@ export function ExamScheduleCard({
   onNoticeClick?: (e: React.MouseEvent) => void;
 }) {
   const isHighlighted = schedule.is_active;
+  const displayDate = formatExamDateDisplay(schedule.exam_date);
+  const noticeTitle = schedule.exam_name || schedule.category_name || "";
+  const noticeLabel = noticeTitle ? `Official ${noticeTitle} Notice` : "Official Exam Notice";
 
   return (
     <Card
       className={`relative overflow-hidden text-white border shadow-xl transition-all duration-300 flex flex-col justify-between w-full min-w-0 max-w-full ${
         isHighlighted
-          ? "bg-gradient-to-br from-[#0B2545] via-[#0E2E54] to-[#123966] border-blue-400/30 ring-1 ring-blue-400/20"
-          : "bg-gradient-to-br from-[#081C35] via-[#0B2545] to-[#0E2E54] border-blue-500/15"
+          ? "bg-gradient-to-br from-[#102D40] via-[#0E283C] to-[#0A1F2E] border-blue-400/30 ring-1 ring-blue-400/20"
+          : "bg-gradient-to-br from-[#0D2435] via-[#0A1F2E] to-[#081824] border-blue-500/15"
       } ${
         isSingle
           ? "max-w-4xl mx-auto rounded-2xl"
-          : "w-full sm:w-[540px] md:w-[600px] lg:w-[560px] xl:w-[590px] min-h-[195px] md:h-[215px] lg:h-[225px] rounded-2xl shrink-0"
+          : "w-full sm:w-[580px] md:w-[680px] lg:w-[780px] xl:w-[840px] rounded-2xl shrink-0"
       }`}
     >
       {/* Restrained subtle ambient glow */}
-      <div className="absolute right-0 top-0 w-60 h-60 bg-[#60A5FA]/5 rounded-full blur-3xl pointer-events-none -mr-12 -mt-12" />
+      <div className="absolute right-0 top-0 w-64 h-64 bg-[#60A5FA]/5 rounded-full blur-3xl pointer-events-none -mr-12 -mt-12" />
 
-      <CardContent className="p-4 sm:p-5 relative z-10 flex flex-col justify-between h-full w-full min-w-0">
-        {/* DESKTOP LAYOUT (md and up) */}
-        <div className="hidden md:flex flex-col justify-between h-full">
-          {/* Top Section: Items 1 to 4 */}
-          <div className="space-y-1.5">
-            {/* 1. Status Label */}
-            <div className="flex items-center justify-between gap-2">
+      <CardContent className="p-4 sm:p-5 lg:p-6 relative z-10 flex flex-col justify-between h-full w-full min-w-0">
+        {/* Main Section: Exam Information on Left, Countdown on Right */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 lg:gap-6 w-full min-w-0">
+          {/* LEFT SECTION — EXAM INFORMATION */}
+          <div className="space-y-2 flex-1 min-w-0">
+            {/* 1. Official Examination Countdown badge */}
+            <div className="flex items-center gap-2">
               {isHighlighted ? (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-500/20 border border-blue-400/35 rounded-full text-[10px] font-bold tracking-wider text-[#60A5FA] uppercase shadow-sm">
-                  <Sparkles className="w-3 h-3 text-[#60A5FA] animate-pulse" /> Official Examination Countdown
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/15 border border-blue-400/25 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider text-[#60A5FA] uppercase shadow-sm">
+                  <Sparkles className="w-3 h-3 text-[#60A5FA] animate-pulse" />
+                  <span>Official Examination Countdown</span>
                 </div>
               ) : (
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/10 border border-white/15 rounded-full text-[10px] font-bold tracking-wider text-slate-200 uppercase shadow-sm">
-                  <Calendar className="w-3 h-3 text-[#60A5FA]" /> Upcoming Exam Schedule
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider text-slate-200 uppercase shadow-sm">
+                  <Calendar className="w-3 h-3 text-[#60A5FA]" />
+                  <span>Upcoming Exam Schedule</span>
                 </div>
               )}
             </div>
 
-            {/* 2. Examination Title */}
-            <h2 className="text-base lg:text-lg font-black text-white tracking-tight leading-snug line-clamp-1">
+            {/* 2. Exam title */}
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2 md:line-clamp-1">
               {schedule.title}
             </h2>
 
-            {/* 3. Category / Level Badges */}
-            <div className="flex items-center gap-1.5 flex-wrap">
+            {/* 3. Metadata Row: Date, Time, Exam Category, Level */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-300 font-medium">
+              {/* Date */}
+              <span className="inline-flex items-center gap-1.5 text-slate-200 font-medium">
+                <Calendar className="w-3.5 h-3.5 text-[#60A5FA] shrink-0" />
+                <span>{displayDate}</span>
+              </span>
+
+              {/* Time */}
+              {schedule.exam_time && (
+                <span className="inline-flex items-center gap-1.5 text-slate-300">
+                  <Clock className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+                  <span>{schedule.exam_time.slice(0, 5)} (NPT)</span>
+                </span>
+              )}
+
+              {/* Category */}
               {schedule.category_name && (
-                <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-200 border border-white/10">
+                <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10 text-[11px] sm:text-xs font-semibold">
                   {schedule.category_name}
                 </span>
               )}
+
+              {/* Specific Exam / Level */}
               {schedule.exam_name && (
-                <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-200 border border-white/10">
+                <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10 text-[11px] sm:text-xs font-semibold">
                   {schedule.exam_name}
                 </span>
               )}
             </div>
 
-            {/* 4. Official Exam Notice Link (directly below category badge) */}
-            {schedule.official_notice_url && (
-              <div>
-                <a
-                  href={schedule.official_notice_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={onNoticeClick}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#60A5FA] hover:text-blue-300 underline transition-colors group"
-                >
-                  <span>Official Exam Notice</span>
-                  <ExternalLink className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                </a>
-              </div>
+            {/* 4. Exam fee & additional details, if available */}
+            {schedule.description && (
+              <p className="text-xs sm:text-sm text-slate-300/85 font-medium line-clamp-1 max-w-xl">
+                {schedule.description}
+              </p>
             )}
           </div>
 
-          {/* Bottom Section: 5. Date & Time + 6. Details on Left, 7. Countdown on Right */}
-          <div className="flex items-end justify-between gap-4 pt-2.5 border-t border-white/10 mt-auto">
-            <div className="space-y-1.5 flex-1 min-w-0">
-              {/* 5. Date and Time */}
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-300 font-medium">
-                <span className="flex items-center gap-1 bg-black/30 px-2 py-0.5 rounded border border-white/5 text-[11px]">
-                  <Calendar className="w-3 h-3 text-[#60A5FA] shrink-0" />
-                  <span className="font-semibold text-white">
-                    {formatNepaliDateDisplay(schedule.exam_date, { showAd: true })}
-                  </span>
-                </span>
-
-                {schedule.exam_time && (
-                  <span className="flex items-center gap-1 bg-black/30 px-2 py-0.5 rounded border border-white/5 text-[11px]">
-                    <Clock className="w-3 h-3 text-blue-300 shrink-0" />
-                    <span>{schedule.exam_time.slice(0, 5)} (NPT)</span>
-                  </span>
-                )}
-              </div>
-
-              {/* 6. Short Details */}
-              {schedule.description && (
-                <p className="text-[11px] text-slate-300/80 line-clamp-1 max-w-sm">
-                  {schedule.description}
-                </p>
-              )}
-            </div>
-
-            {/* 7. Countdown Timer */}
-            <DesktopCountdown schedule={schedule} serverOffsetMs={serverOffsetMs} />
+          {/* RIGHT SECTION — COUNTDOWN */}
+          <div className="shrink-0 w-full md:w-auto">
+            <ExamCountdownTimer schedule={schedule} serverOffsetMs={serverOffsetMs} />
           </div>
         </div>
 
-        {/* MOBILE LAYOUT (< md) - Strictly sequential, 100% width, never clipped */}
-        <div className="flex md:hidden flex-col justify-between h-full space-y-2 w-full min-w-0">
-          {/* 1. Status Label */}
-          <div className="flex items-center justify-between gap-2">
-            {isHighlighted ? (
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/25 border border-blue-400/40 rounded-full text-[9px] font-bold tracking-wider text-[#60A5FA] uppercase shadow-sm">
-                <Sparkles className="w-2.5 h-2.5 text-[#60A5FA] animate-pulse" /> Official Exam Countdown
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/10 border border-white/15 rounded-full text-[9px] font-bold tracking-wider text-slate-200 uppercase shadow-sm">
-                <Calendar className="w-2.5 h-2.5 text-[#60A5FA]" /> Upcoming Exam Schedule
-              </div>
-            )}
+        {/* 2. OFFICIAL EXAM NOTICE — SEPARATE BOTTOM AREA */}
+        {schedule.official_notice_url && (
+          <div className="pt-3 mt-3.5 border-t border-white/10 flex items-center">
+            <a
+              href={schedule.official_notice_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onNoticeClick}
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-[#60A5FA] hover:text-blue-300 transition-colors group cursor-pointer"
+            >
+              <span>{noticeLabel}</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
           </div>
-
-          {/* 2. Examination Title */}
-          <h2 className="text-sm font-black text-white tracking-tight leading-snug line-clamp-2">
-            {schedule.title}
-          </h2>
-
-          {/* 3. Category / Level Badges */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {schedule.category_name && (
-              <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] font-semibold text-slate-200 border border-white/10">
-                {schedule.category_name}
-              </span>
-            )}
-            {schedule.exam_name && (
-              <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] font-semibold text-slate-200 border border-white/10">
-                {schedule.exam_name}
-              </span>
-            )}
-          </div>
-
-          {/* 4. Official Notice Link directly below category badge */}
-          {schedule.official_notice_url && (
-            <div>
-              <a
-                href={schedule.official_notice_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={onNoticeClick}
-                className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#60A5FA] hover:text-blue-300 underline transition-colors"
-              >
-                <span>Official Exam Notice</span>
-                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
-              </a>
-            </div>
-          )}
-
-          {/* 5. Date & Time */}
-          <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-300 font-medium">
-            <span className="flex items-center gap-1 bg-black/30 px-1.5 py-0.5 rounded border border-white/5">
-              <Calendar className="w-2.5 h-2.5 text-[#60A5FA] shrink-0" />
-              <span className="font-semibold text-white">
-                {formatNepaliDateDisplay(schedule.exam_date, { showAd: true })}
-              </span>
-            </span>
-
-            {schedule.exam_time && (
-              <span className="flex items-center gap-1 bg-black/30 px-1.5 py-0.5 rounded border border-white/5">
-                <Clock className="w-2.5 h-2.5 text-blue-300 shrink-0" />
-                <span>{schedule.exam_time.slice(0, 5)} (NPT)</span>
-              </span>
-            )}
-          </div>
-
-          {/* 6. Short Details (if available) */}
-          {schedule.description && (
-            <p className="text-[10px] text-slate-300/80 line-clamp-1">
-              {schedule.description}
-            </p>
-          )}
-
-          {/* 7. Mobile Countdown (4 balanced blocks, 100% full width) */}
-          <div className="pt-1.5 border-t border-white/10 w-full min-w-0">
-            <MobileCountdown schedule={schedule} serverOffsetMs={serverOffsetMs} />
-          </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

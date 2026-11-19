@@ -234,8 +234,7 @@ export function ExamScheduleCard({
 }) {
   const isHighlighted = schedule.is_active;
   const displayDate = formatExamDateDisplay(schedule.exam_date);
-  const noticeTitle = schedule.exam_name || schedule.category_name || "";
-  const noticeLabel = noticeTitle ? `Official ${noticeTitle} Notice` : "Official Exam Notice";
+  const noticeLabel = "Official Exam Notice";
 
   return (
     <Card

@@ -21,10 +21,12 @@ function formatNumberDisplay(
   num: number,
   precision: number,
   thousandSeparator: boolean,
-  prefix: string,
-  suffix: string
+  prefix?: string,
+  suffix?: string
 ): string {
-  if (isNaN(num)) return `${prefix}${num}${suffix}`;
+  const safePrefix = prefix || "";
+  const safeSuffix = suffix || "";
+  if (isNaN(num)) return `${safePrefix}${num}${safeSuffix}`;
 
   let formattedNum: string;
   if (precision > 0) {
@@ -39,7 +41,7 @@ function formatNumberDisplay(
     formattedNum = thousandSeparator ? intVal.toLocaleString("en-US") : intVal.toString();
   }
 
-  return `${prefix}${formattedNum}${suffix}`;
+  return `${safePrefix}${formattedNum}${safeSuffix}`;
 }
 
 /**

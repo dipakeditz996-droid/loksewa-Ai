@@ -50,8 +50,15 @@ function HeroStatistics({ stats: initialStats }: HeroStatisticsProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-4 border-t border-white/20 mt-6 w-full max-w-[620px]">
       {stats.map((stat, idx) => {
-        const isRating = stat.icon === "star" || stat.accent_style === "amber" || stat.suffix.includes("/5");
-        const isUsers = stat.icon === "users" || stat.label.toLowerCase().includes("aspirant") || stat.label.toLowerCase().includes("enrolled");
+        const isRating =
+          stat.icon === "star" ||
+          stat.accent_style === "amber" ||
+          Boolean(stat.suffix && String(stat.suffix).includes("/5"));
+        const labelLower = (stat.label || "").toLowerCase();
+        const isUsers =
+          stat.icon === "users" ||
+          labelLower.includes("aspirant") ||
+          labelLower.includes("enrolled");
 
         return (
           <React.Fragment key={stat.id || stat.label}>

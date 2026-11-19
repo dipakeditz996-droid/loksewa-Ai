@@ -687,6 +687,12 @@ export interface AdminBanner {
   cta_secondary_url: string;
   image_url: string | null;
   mobile_image_url: string | null;
+  image_fit?: "cover" | "contain";
+  image_focal_x?: "center" | "left" | "right";
+  image_focal_y?: "center" | "top" | "bottom";
+  mobile_image_fit?: "cover" | "contain";
+  mobile_image_focal_x?: "center" | "left" | "right";
+  mobile_image_focal_y?: "center" | "top" | "bottom";
   is_active: boolean;
   display_order: number;
   created_by_name: string | null;
@@ -704,6 +710,12 @@ export interface AdminBannerInput {
   cta_secondary_url?: string;
   image?: File | null;
   mobile_image?: File | null;
+  image_fit?: "cover" | "contain";
+  image_focal_x?: "center" | "left" | "right";
+  image_focal_y?: "center" | "top" | "bottom";
+  mobile_image_fit?: "cover" | "contain";
+  mobile_image_focal_x?: "center" | "left" | "right";
+  mobile_image_focal_y?: "center" | "top" | "bottom";
   is_active?: boolean;
   display_order?: number;
 }
@@ -722,6 +734,43 @@ export interface AdminTestimonial {
   /** True when a student wrote this from the homepage, rather than an admin authoring it directly. */
   submitted_by_student: boolean;
   submitted_by_name: string | null;
+}
+
+export interface AdminHomepageStatistic {
+  id: number;
+  placement: "hero" | "platform";
+  label: string;
+  description: string;
+  source_type: "manual" | "automatic";
+  automatic_metric: string;
+  value: number;
+  raw_value: string;
+  prefix: string;
+  suffix: string;
+  precision: number;
+  thousand_separator: boolean;
+  animation_enabled: boolean;
+  animation_duration: number;
+  animation_start_value: number;
+  icon: string;
+  accent_style: "default" | "gold" | "blue" | "emerald" | "amber";
+  display_order: number;
+  is_active: boolean;
+  resolved_value: number | string;
+  formatted_value: string;
+  live_metric_count: number | null;
+  created_by?: number | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomaticMetricOption {
+  key: string;
+  name: string;
+  description: string;
+  current_value: number | null;
+  evaluated_at: string;
 }
 
 export interface AdminTestimonialInput {
@@ -1404,6 +1453,69 @@ export const adminApi = {
       await fetch("/api/revalidate?tag=banners&path=/", { method: "POST" });
     } catch {}
     return res;
+  },
+
+  getHomepageStatistics: async (search?: string): Promise<AdminHomepageStatistic[]> => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const res = await apiClient<any>(`/admin/homepage-statistics/${query}`);
+    return Array.isArray(res) ? res : res.results ?? [];
+  },
+
+  createHomepageStatistic: async (data: Partial<AdminHomepageStatistic>): Promise<AdminHomepageStatistic> => {
+    const res = await apiClient<AdminHomepageStatistic>("/admin/homepage-statistics/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    try {
+      await fetch("/api/revalidate?tag=homepage-statistics&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  updateHomepageStatistic: async (id: number, data: Partial<AdminHomepageStatistic>): Promise<AdminHomepageStatistic> => {
+    const res = await apiClient<AdminHomepageStatistic>(`/admin/homepage-statistics/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    try {
+      await fetch("/api/revalidate?tag=homepage-statistics&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  deleteHomepageStatistic: async (id: number): Promise<void> => {
+    await apiClient<void>(`/admin/homepage-statistics/${id}/`, {
+      method: "DELETE",
+    });
+    try {
+      await fetch("/api/revalidate?tag=homepage-statistics&path=/", { method: "POST" });
+    } catch {}
+  },
+
+  toggleHomepageStatisticActive: async (id: number): Promise<{ id: number; is_active: boolean }> => {
+    const res = await apiClient<{ id: number; is_active: boolean }>(`/admin/homepage-statistics/${id}/toggle/`, {
+      method: "PATCH",
+    });
+    try {
+      await fetch("/api/revalidate?tag=homepage-statistics&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  reorderHomepageStatistics: async (items: { id: number; display_order: number }[]): Promise<any> => {
+    const res = await apiClient<any>("/admin/homepage-statistics/reorder/", {
+      method: "POST",
+      body: JSON.stringify(items),
+    });
+    try {
+      await fetch("/api/revalidate?tag=homepage-statistics&path=/", { method: "POST" });
+    } catch {}
+    return res;
+  },
+
+  getAutomaticMetrics: async (): Promise<AutomaticMetricOption[]> => {
+    const res = await apiClient<any>("/admin/homepage-statistics/automatic-metrics/");
+    return Array.isArray(res) ? res : [];
   },
 
   getWebsitePages: async (): Promise<AdminWebsitePage[]> => {

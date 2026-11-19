@@ -375,11 +375,17 @@ class HomepageBanner(models.Model):
     subtitle = models.CharField(max_length=500, blank=True, help_text="Concise subtext for this slide")
     badge_text = models.CharField(max_length=100, blank=True, help_text="Badge e.g. 'IOE Entrance 2081/82'")
     cta_text = models.CharField(max_length=100, blank=True, help_text="Primary button text e.g. 'Start Mock Exam'")
-    cta_url = models.CharField(max_length=500, blank=True, default='/exams', help_text="Destination URL")
+    cta_url = models.CharField(max_length=500, blank=True, default='', help_text="Destination URL")
     cta_secondary_text = models.CharField(max_length=100, blank=True, help_text="Secondary button text e.g. 'Explore Courses'")
-    cta_secondary_url = models.CharField(max_length=500, blank=True, default='/courses', help_text="Secondary destination URL")
-    image = models.ImageField(upload_to='banners/%Y/%m/', help_text="Desktop banner image")
+    cta_secondary_url = models.CharField(max_length=500, blank=True, default='', help_text="Secondary destination URL")
+    image = models.ImageField(upload_to='banners/%Y/%m/', null=True, blank=True, help_text="Desktop banner image")
     mobile_image = models.ImageField(upload_to='banners/mobile/%Y/%m/', null=True, blank=True, help_text="Optional mobile optimized banner image")
+    image_fit = models.CharField(max_length=20, default='cover', blank=True, choices=[('cover', 'Cover'), ('contain', 'Contain')], help_text="Desktop image fit mode (cover or contain)")
+    image_focal_x = models.CharField(max_length=20, default='center', blank=True, choices=[('center', 'Center'), ('left', 'Left'), ('right', 'Right')], help_text="Desktop focal position horizontal")
+    image_focal_y = models.CharField(max_length=20, default='center', blank=True, choices=[('center', 'Center'), ('top', 'Top'), ('bottom', 'Bottom')], help_text="Desktop focal position vertical")
+    mobile_image_fit = models.CharField(max_length=20, default='cover', blank=True, choices=[('cover', 'Cover'), ('contain', 'Contain')], help_text="Mobile image fit mode (cover or contain)")
+    mobile_image_focal_x = models.CharField(max_length=20, default='center', blank=True, choices=[('center', 'Center'), ('left', 'Left'), ('right', 'Right')], help_text="Mobile focal position horizontal")
+    mobile_image_focal_y = models.CharField(max_length=20, default='center', blank=True, choices=[('center', 'Center'), ('top', 'Top'), ('bottom', 'Bottom')], help_text="Mobile focal position vertical")
     is_active = models.BooleanField(default=True, help_text="Whether this slide is shown on homepage")
     display_order = models.PositiveIntegerField(default=0, help_text="Order in carousel (lowest first)")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='banners_created')
@@ -396,7 +402,135 @@ class HomepageBanner(models.Model):
 @receiver([post_save, post_delete], sender=HomepageBanner)
 def _invalidate_banner_cache_on_change(sender, **kwargs):
     try:
+        cache.delete('public:homepage_banners')
         cache.delete('public_homepage_banners')
+    except Exception:
+        pass
+
+
+class HomepageStatistic(models.Model):
+    """Admin-controlled homepage metrics for Hero Statistics and Platform Statistics."""
+    PLACEMENT_CHOICES = (
+        ('hero', 'Hero Statistics'),
+        ('platform', 'Platform Statistics'),
+    )
+    SOURCE_CHOICES = (
+        ('manual', 'Manual Mode'),
+        ('automatic', 'Automatic Mode'),
+    )
+    AUTOMATIC_METRIC_CHOICES = (
+        ('enrolled_students', 'Total Enrolled Students (Active Course Enrollments)'),
+        ('active_students', 'Active Students (Active Student Accounts)'),
+        ('registered_students', 'Total Registered Students'),
+        ('published_questions', 'Published Exam Questions (Approved Status)'),
+        ('published_practice_sets', 'Published Practice Sets (Question Sets)'),
+        ('published_exams', 'Published Mock Examinations'),
+        ('total_reviews', 'Student Reviews Count (Published Testimonials)'),
+        ('average_rating', 'Student Rating (Average from Testimonials)'),
+    )
+    ACCENT_CHOICES = (
+        ('default', 'Default'),
+        ('gold', 'Gold Gradient'),
+        ('blue', 'Electric Blue'),
+        ('emerald', 'Emerald Green'),
+        ('amber', 'Amber Stars'),
+    )
+
+    placement = models.CharField(max_length=20, choices=PLACEMENT_CHOICES, default='platform', db_index=True)
+    label = models.CharField(max_length=150, help_text="Statistic label (e.g. 'Aspirants Enrolled')")
+    description = models.CharField(max_length=255, blank=True, default='', help_text="Secondary description (e.g. 'Active learners')")
+    source_type = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
+    automatic_metric = models.CharField(max_length=50, blank=True, default='', choices=AUTOMATIC_METRIC_CHOICES)
+    value = models.DecimalField(max_digits=12, decimal_places=2, default=0.0, help_text="Numeric target value")
+    raw_value = models.CharField(max_length=100, blank=True, default='', help_text="Optional non-numeric text override (e.g. 'A+', '24/7')")
+    prefix = models.CharField(max_length=30, blank=True, default='', help_text="Prefix (e.g. 'NPR ')")
+    suffix = models.CharField(max_length=30, blank=True, default='', help_text="Suffix (e.g. '+', '%', '/5')")
+    precision = models.PositiveSmallIntegerField(default=0, help_text="Number of decimal places (0 for integers, 1 for 4.9)")
+    thousand_separator = models.BooleanField(default=True, help_text="Include comma thousand separator (e.g. 10,000)")
+    animation_enabled = models.BooleanField(default=True, help_text="Whether to animate count-up on viewport entry")
+    animation_duration = models.FloatField(default=1.5, help_text="Animation duration in seconds (0.2 to 10.0)")
+    animation_start_value = models.FloatField(default=0.0, help_text="Starting value for count-up animation")
+    icon = models.CharField(max_length=50, blank=True, default='', help_text="Icon identifier (e.g. 'users', 'star', 'book-open')")
+    accent_style = models.CharField(max_length=30, choices=ACCENT_CHOICES, default='default', help_text="Visual accent style")
+    display_order = models.PositiveIntegerField(default=0, db_index=True, help_text="Display order (lowest first)")
+    is_active = models.BooleanField(default=True, db_index=True, help_text="Whether this statistic is visible on homepage")
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='statistics_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['placement', 'display_order', '-created_at']
+
+    def __str__(self):
+        return f"[{self.get_placement_display()}] {self.label}: {self.get_formatted_display()} ({'active' if self.is_active else 'inactive'}, order: {self.display_order})"
+
+    def resolve_target_value(self):
+        """Returns the actual numeric or text value based on source_type."""
+        if self.raw_value.strip():
+            return self.raw_value.strip()
+
+        if self.source_type == 'automatic' and self.automatic_metric:
+            auto_val = self.calculate_automatic_metric(self.automatic_metric)
+            if auto_val is not None:
+                return auto_val
+
+        return float(self.value)
+
+    @staticmethod
+    def calculate_automatic_metric(metric_key):
+        """Calculates live verified platform metrics from genuine database records."""
+        try:
+            if metric_key == 'enrolled_students':
+                from courses.models import Enrollment
+                return Enrollment.objects.filter(status='active').values('student_id').distinct().count()
+            elif metric_key == 'active_students':
+                return User.objects.filter(role='student', is_active=True).count()
+            elif metric_key == 'registered_students':
+                return User.objects.filter(role='student').count()
+            elif metric_key == 'published_questions':
+                from exams.models import Question
+                return Question.objects.filter(status='approved').count()
+            elif metric_key == 'published_practice_sets':
+                from exams.models import QuestionSet
+                return QuestionSet.objects.filter(status='published').count()
+            elif metric_key == 'published_exams':
+                from exams.models import Examination
+                return Examination.objects.filter(status='published').count()
+            elif metric_key == 'total_reviews':
+                return Testimonial.objects.filter(is_published=True).count()
+            elif metric_key == 'average_rating':
+                from django.db.models import Avg
+                agg = Testimonial.objects.filter(is_published=True).aggregate(avg=Avg('rating'))['avg']
+                return round(float(agg), 1) if agg is not None else 5.0
+        except Exception:
+            return None
+        return None
+
+    def get_formatted_display(self):
+        """Returns the fully formatted display string."""
+        resolved = self.resolve_target_value()
+        if isinstance(resolved, str):
+            return f"{self.prefix}{resolved}{self.suffix}"
+
+        num = float(resolved)
+        if self.precision > 0:
+            formatted_num = f"{num:.{self.precision}f}"
+            if self.thousand_separator:
+                parts = formatted_num.split('.')
+                parts[0] = f"{int(parts[0]):,}"
+                formatted_num = '.'.join(parts)
+        else:
+            int_val = int(round(num))
+            formatted_num = f"{int_val:,}" if self.thousand_separator else str(int_val)
+
+        return f"{self.prefix}{formatted_num}{self.suffix}"
+
+
+@receiver([post_save, post_delete], sender=HomepageStatistic)
+def _invalidate_statistic_cache_on_change(sender, **kwargs):
+    try:
+        cache.delete('public:homepage_statistics')
+        cache.delete('public:stats')
     except Exception:
         pass
 

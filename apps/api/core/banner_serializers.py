@@ -1,5 +1,9 @@
+import os
 from rest_framework import serializers
 from .models import HomepageBanner
+
+ALLOWED_IMAGE_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'svg'}
+MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 class PublicHomepageBannerSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
@@ -18,6 +22,12 @@ class PublicHomepageBannerSerializer(serializers.ModelSerializer):
             'cta_secondary_url',
             'image_url',
             'mobile_image_url',
+            'image_fit',
+            'image_focal_x',
+            'image_focal_y',
+            'mobile_image_fit',
+            'mobile_image_focal_x',
+            'mobile_image_focal_y',
             'display_order',
         ]
 
@@ -66,6 +76,12 @@ class AdminHomepageBannerSerializer(serializers.ModelSerializer):
             'image_url',
             'mobile_image',
             'mobile_image_url',
+            'image_fit',
+            'image_focal_x',
+            'image_focal_y',
+            'mobile_image_fit',
+            'mobile_image_focal_x',
+            'mobile_image_focal_y',
             'is_active',
             'display_order',
             'created_by',
@@ -75,9 +91,39 @@ class AdminHomepageBannerSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
         extra_kwargs = {
-            'image': {'required': False},
-            'mobile_image': {'required': False},
+            'image': {'required': False, 'allow_null': True},
+            'mobile_image': {'required': False, 'allow_null': True},
         }
+
+    def validate_image(self, value):
+        if value:
+            if hasattr(value, 'size') and value.size > MAX_IMAGE_FILE_SIZE:
+                raise serializers.ValidationError("Desktop image size cannot exceed 5MB.")
+            ext = os.path.splitext(getattr(value, 'name', ''))[1].lstrip('.').lower()
+            if ext and ext not in ALLOWED_IMAGE_EXTENSIONS:
+                raise serializers.ValidationError(
+                    f"Unsupported format '.{ext}'. Supported formats: JPG, PNG, WEBP, GIF, AVIF, SVG."
+                )
+        return value
+
+    def validate_mobile_image(self, value):
+        if value:
+            if hasattr(value, 'size') and value.size > MAX_IMAGE_FILE_SIZE:
+                raise serializers.ValidationError("Mobile image size cannot exceed 5MB.")
+            ext = os.path.splitext(getattr(value, 'name', ''))[1].lstrip('.').lower()
+            if ext and ext not in ALLOWED_IMAGE_EXTENSIONS:
+                raise serializers.ValidationError(
+                    f"Unsupported format '.{ext}'. Supported formats: JPG, PNG, WEBP, GIF, AVIF, SVG."
+                )
+        return value
+
+    def validate(self, attrs):
+        if not self.instance:
+            has_image = bool(attrs.get('image'))
+            has_title = bool((attrs.get('title') or '').strip())
+            if not has_image and not has_title:
+                raise serializers.ValidationError("Please provide either a banner image or a headline.")
+        return attrs
 
     def get_image_url(self, obj):
         if not obj.image:

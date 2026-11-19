@@ -1,17 +1,12 @@
+"use client";
+
 import React from "react";
 import { Star, CheckCircle } from "lucide-react";
-import { PublicTestimonial, PublicStats } from "@/lib/api/public-api";
+import { PublicTestimonial, PublicHomepageStatistic, publicApi } from "@/lib/api/public-api";
 import { RetryImage } from "@/components/ui/retry-image";
 import { WriteReviewTrigger } from "@/components/home/WriteReviewTrigger";
-
-// Fallback only for when /public/stats/ can't be reached (outage) — the real
-// endpoint always returns real, floor-guaranteed counts, never these.
-const STATIC_METRICS = [
-  { value: "100+", label: "Aspirants", description: "Active learners" },
-  { value: "1,000+", label: "Questions", description: "Practice questions" },
-  { value: "20+", label: "Practice Sets", description: "Topic-wise sets" },
-  { value: "95%", label: "Content Accuracy", description: "Verified by experts" },
-];
+import { CountUp } from "@/components/ui/count-up";
+import { useQuery } from "@tanstack/react-query";
 
 const AVATAR_COLORS = [
   "from-blue-500 to-violet-600",
@@ -21,53 +16,50 @@ const AVATAR_COLORS = [
 
 interface Props {
   testimonials?: PublicTestimonial[] | null;
-  stats?: PublicStats | null;
+  stats?: PublicHomepageStatistic[] | null;
 }
 
-export function SocialProofSection({ testimonials, stats }: Props) {
+export function SocialProofSection({ testimonials, stats: initialStats }: Props) {
+  // Client-side live query so uploaded admin statistics show immediately
+  const { data: livePlatformStats } = useQuery({
+    queryKey: ["public-platform-statistics"],
+    queryFn: async () => {
+      const res = await publicApi.getHomepageStatistics();
+      return res?.platform ?? null;
+    },
+    initialData: initialStats && initialStats.length > 0 ? initialStats : undefined,
+    staleTime: 60 * 1000,
+    refetchOnMount: true,
+  });
+
+  const platformStats = (livePlatformStats && livePlatformStats.length > 0) ? livePlatformStats : initialStats;
+
   // Real, admin-authored testimonials only — no fabricated names/quotes. When
-  // an admin hasn't published any yet, the section simply omits this row
-  // rather than inventing reviewers.
+  // an admin hasn't published any yet, the section simply omits this row.
   const displayTestimonials = testimonials && testimonials.length > 0 ? testimonials : [];
 
-  // Format numbers to requested realistic platform floors
-  const aspirantsValue = stats?.total_aspirants
-    ? `${stats.total_aspirants.toLocaleString()}+`
-    : "100+";
+  const hasStats = Boolean(platformStats && platformStats.length > 0);
+  const hasTestimonials = Boolean(displayTestimonials.length > 0);
 
-  const questionsValue = stats?.total_questions
-    ? `${stats.total_questions.toLocaleString()}+`
-    : "1,000+";
-
-  const practiceSetsValue = stats?.practice_sets
-    ? `${stats.practice_sets.toLocaleString()}+`
-    : "20+";
-
-  const accuracyValue = stats?.content_accuracy
-    ? `${stats.content_accuracy}%`
-    : "80.8%";
-
-  const metrics = [
-    { value: aspirantsValue, label: "Aspirants", description: "Active learners" },
-    { value: questionsValue, label: "Questions", description: "Practice questions" },
-    { value: practiceSetsValue, label: "Practice Sets", description: "Topic-wise sets" },
-    { value: accuracyValue, label: "Content Accuracy", description: "Verified by experts" },
-  ];
+  // If both stats and testimonials are empty, do not render an empty section
+  if (!hasStats && !hasTestimonials) {
+    return null;
+  }
 
   return (
     <section className="py-12 sm:py-14 lg:py-16 bg-white dark:bg-[#020611] relative overflow-hidden">
-
       {/* Background */}
       <div className="absolute inset-0 bg-neural-grid-light dark:bg-neural-grid opacity-50 pointer-events-none" />
       <div className="absolute top-0 left-0 w-full h-px section-divider-light dark:section-divider" />
 
       <div className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8">
-
         {/* Header */}
         <div className="text-center mb-8 sm:mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-[#0B1F3A]/50 border border-slate-200 dark:border-[#102D40]/50 mb-4 sm:mb-5">
             <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-[#4B8BE0]">Trusted by Aspirants</span>
+            <span className="text-[10.5px] font-[800] uppercase tracking-widest text-slate-700 dark:text-[#4B8BE0]">
+              Trusted by Aspirants
+            </span>
           </div>
           <h2 className="text-[30px] sm:text-[36px] md:text-[44px] font-[900] text-slate-900 dark:text-white tracking-tight mb-3 sm:mb-4 leading-[1.1]">
             Built for serious{" "}
@@ -81,26 +73,64 @@ export function SocialProofSection({ testimonials, stats }: Props) {
           </div>
         </div>
 
-        {/* Metrics */}
-        <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${displayTestimonials.length > 0 ? "mb-8 sm:mb-10 md:mb-12" : ""}`}>
-          {metrics.map((m, i) => (
-            <div
-              key={m.label}
-              className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 text-center group hover:border-[#2563EB]/30 dark:hover:border-[#2563EB]/20 transition-all card-hover overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-[#2563EB]/[0.02] to-transparent rounded-[16px] sm:rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className={`text-[24px] xs:text-[28px] sm:text-[36px] md:text-[44px] font-[900] mb-1 leading-tight tracking-tight tabular-nums ${i === 3 ? "text-gradient-gold" : "text-slate-900 dark:text-white"
-                }`}>
-                {m.value}
-              </div>
-              <div className="text-[12px] sm:text-[13px] font-[700] text-slate-800 dark:text-slate-100 mb-1">{m.label}</div>
-              <div className="text-[10.5px] sm:text-[11.5px] text-slate-600 dark:text-slate-300 font-[500] leading-tight">{m.description}</div>
-            </div>
-          ))}
-        </div>
+        {/* Dynamic Platform Metrics */}
+        {hasStats && (
+          <div
+            className={`grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 ${
+              hasTestimonials ? "mb-8 sm:mb-10 md:mb-12" : ""
+            }`}
+          >
+            {platformStats!.map((stat, i) => {
+              const accentClass =
+                stat.accent_style === "gold"
+                  ? "text-gradient-gold"
+                  : stat.accent_style === "blue"
+                  ? "text-[#2563EB] dark:text-[#60A5FA]"
+                  : stat.accent_style === "emerald"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : stat.accent_style === "amber"
+                  ? "text-amber-500 dark:text-amber-400"
+                  : i === 3
+                  ? "text-gradient-gold"
+                  : "text-slate-900 dark:text-white";
+
+              return (
+                <div
+                  key={stat.id || stat.label}
+                  className="relative bg-slate-50 dark:bg-[#040B14] border border-slate-200 dark:border-white/[0.05] rounded-[16px] sm:rounded-[20px] p-4 sm:p-6 text-center group hover:border-[#2563EB]/30 dark:hover:border-[#2563EB]/20 transition-all card-hover overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#2563EB]/[0.02] to-transparent rounded-[16px] sm:rounded-[20px] opacity-0 group-hover:opacity-100 transition-opacity" />
+                  
+                  <div
+                    className={`text-[24px] xs:text-[28px] sm:text-[36px] md:text-[44px] font-[900] mb-1 leading-tight tracking-tight tabular-nums ${accentClass}`}
+                  >
+                    <CountUp
+                      value={stat.value}
+                      startValue={stat.animation_start_value}
+                      duration={stat.animation_duration || 2.0}
+                      precision={stat.precision}
+                      thousandSeparator={stat.thousand_separator}
+                      prefix={stat.prefix}
+                      suffix={stat.suffix}
+                      enabled={stat.animation_enabled}
+                    />
+                  </div>
+                  <div className="text-[12px] sm:text-[13px] font-[700] text-slate-800 dark:text-slate-100 mb-1">
+                    {stat.label}
+                  </div>
+                  {stat.description && (
+                    <div className="text-[10.5px] sm:text-[11.5px] text-slate-600 dark:text-slate-300 font-[500] leading-tight">
+                      {stat.description}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Testimonials — omitted entirely until an admin publishes at least one */}
-        {displayTestimonials.length > 0 && (
+        {hasTestimonials && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {displayTestimonials.slice(0, 3).map((t, i) => (
               <div
@@ -124,7 +154,11 @@ export function SocialProofSection({ testimonials, stats }: Props) {
                   {t.avatar ? (
                     <RetryImage src={t.avatar} alt={t.name} className="w-9 h-9 rounded-full object-cover" />
                   ) : (
-                    <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white font-[700] text-[13px]`}>
+                    <div
+                      className={`w-9 h-9 rounded-full bg-gradient-to-br ${
+                        AVATAR_COLORS[i % AVATAR_COLORS.length]
+                      } flex items-center justify-center text-white font-[700] text-[13px]`}
+                    >
                       {t.name.charAt(0)}
                     </div>
                   )}
@@ -137,7 +171,6 @@ export function SocialProofSection({ testimonials, stats }: Props) {
             ))}
           </div>
         )}
-
       </div>
     </section>
   );

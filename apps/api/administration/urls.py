@@ -134,10 +134,12 @@ from exams.schedule_views import AdminExamScheduleViewSet
 from core.testimonial_views import AdminTestimonialViewSet
 from core.website_page_views import AdminWebsitePageViewSet
 from core.banner_views import AdminHomepageBannerViewSet
+from core.statistic_views import AdminHomepageStatisticViewSet
 from exams.issue_views import AdminQuestionIssueReportViewSet
 
 router = DefaultRouter()
 router.register(r'banners', AdminHomepageBannerViewSet, basename='admin-banners')
+router.register(r'homepage-statistics', AdminHomepageStatisticViewSet, basename='admin-homepage-statistics')
 router.register(r'data-safety/trash', AdminTrashViewSet, basename='admin-data-safety-trash')
 router.register(r'data-safety/backups', AdminDatabaseBackupViewSet, basename='admin-data-safety-backups')
 router.register(r'questions', AdminQuestionViewSet, basename='admin-questions')

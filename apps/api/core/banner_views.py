@@ -15,6 +15,13 @@ from .banner_serializers import PublicHomepageBannerSerializer, AdminHomepageBan
 
 CACHE_KEY_PUBLIC_BANNERS = 'public:homepage_banners'
 
+def invalidate_banner_cache():
+    try:
+        cache.delete(CACHE_KEY_PUBLIC_BANNERS)
+        cache.delete('public_homepage_banners')
+    except Exception:
+        pass
+
 def _ensure_banner_table():
     """Ensure core_homepagebanner exists via direct raw SQL for PostgreSQL and SQLite."""
     try:
@@ -27,17 +34,29 @@ def _ensure_banner_table():
                     subtitle VARCHAR(500) NOT NULL DEFAULT '',
                     badge_text VARCHAR(100) NOT NULL DEFAULT '',
                     cta_text VARCHAR(100) NOT NULL DEFAULT '',
-                    cta_url VARCHAR(500) NOT NULL DEFAULT '/exams',
+                    cta_url VARCHAR(500) NOT NULL DEFAULT '',
                     cta_secondary_text VARCHAR(100) NOT NULL DEFAULT '',
-                    cta_secondary_url VARCHAR(500) NOT NULL DEFAULT '/courses',
-                    image VARCHAR(100) NOT NULL DEFAULT '',
+                    cta_secondary_url VARCHAR(500) NOT NULL DEFAULT '',
+                    image VARCHAR(100) NULL,
                     mobile_image VARCHAR(100) NULL,
+                    image_fit VARCHAR(20) NOT NULL DEFAULT 'cover',
+                    image_focal_x VARCHAR(20) NOT NULL DEFAULT 'center',
+                    image_focal_y VARCHAR(20) NOT NULL DEFAULT 'center',
+                    mobile_image_fit VARCHAR(20) NOT NULL DEFAULT 'cover',
+                    mobile_image_focal_x VARCHAR(20) NOT NULL DEFAULT 'center',
+                    mobile_image_focal_y VARCHAR(20) NOT NULL DEFAULT 'center',
                     is_active BOOLEAN NOT NULL DEFAULT TRUE,
                     display_order INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     created_by_id BIGINT NULL REFERENCES core_user(id) ON DELETE SET NULL
                 );
+                ALTER TABLE core_homepagebanner ADD COLUMN IF NOT EXISTS image_fit VARCHAR(20) NOT NULL DEFAULT 'cover';
+                ALTER TABLE core_homepagebanner ADD COLUMN IF NOT EXISTS image_focal_x VARCHAR(20) NOT NULL DEFAULT 'center';
+                ALTER TABLE core_homepagebanner ADD COLUMN IF NOT EXISTS image_focal_y VARCHAR(20) NOT NULL DEFAULT 'center';
+                ALTER TABLE core_homepagebanner ADD COLUMN IF NOT EXISTS mobile_image_fit VARCHAR(20) NOT NULL DEFAULT 'cover';
+                ALTER TABLE core_homepagebanner ADD COLUMN IF NOT EXISTS mobile_image_focal_x VARCHAR(20) NOT NULL DEFAULT 'center';
+                ALTER TABLE core_homepagebanner ADD COLUMN IF NOT EXISTS mobile_image_focal_y VARCHAR(20) NOT NULL DEFAULT 'center';
             """)
     except Exception as e:
         logger.warning(f"Raw SQL table ensure for core_homepagebanner failed: {e}")
@@ -113,7 +132,7 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         instance = serializer.save(created_by=self.request.user)
-        cache.delete(CACHE_KEY_PUBLIC_BANNERS)
+        invalidate_banner_cache()
         try:
             AuditLog.objects.create(
                 actor=self.request.user,
@@ -127,7 +146,7 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance = serializer.save()
-        cache.delete(CACHE_KEY_PUBLIC_BANNERS)
+        invalidate_banner_cache()
         try:
             AuditLog.objects.create(
                 actor=self.request.user,
@@ -143,7 +162,7 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
         instance_id = str(instance.id)
         details = {'title': instance.title, 'order': instance.display_order}
         instance.delete()
-        cache.delete(CACHE_KEY_PUBLIC_BANNERS)
+        invalidate_banner_cache()
         try:
             AuditLog.objects.create(
                 actor=self.request.user,
@@ -160,7 +179,7 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
         banner = self.get_object()
         banner.is_active = not banner.is_active
         banner.save(update_fields=['is_active', 'updated_at'])
-        cache.delete(CACHE_KEY_PUBLIC_BANNERS)
+        invalidate_banner_cache()
         return Response({'id': banner.id, 'is_active': banner.is_active})
 
     @action(detail=False, methods=['post'], url_path='reorder')
@@ -197,5 +216,5 @@ class AdminHomepageBannerViewSet(viewsets.ModelViewSet):
                     HomepageBanner.objects.filter(id=banner_id).update(display_order=order)
                     updated_count += 1
 
-        cache.delete(CACHE_KEY_PUBLIC_BANNERS)
+        invalidate_banner_cache()
         return Response({'success': True, 'updated': updated_count})

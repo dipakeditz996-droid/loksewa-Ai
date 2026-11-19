@@ -35,6 +35,12 @@ export interface PublicBanner {
   cta_secondary_url: string;
   image_url: string | null;
   mobile_image_url: string | null;
+  image_fit?: "cover" | "contain";
+  image_focal_x?: "center" | "left" | "right";
+  image_focal_y?: "center" | "top" | "bottom";
+  mobile_image_fit?: "cover" | "contain";
+  mobile_image_focal_x?: "center" | "left" | "right";
+  mobile_image_focal_y?: "center" | "top" | "bottom";
   display_order: number;
 }
 
@@ -238,13 +244,38 @@ export interface PublicPackage {
   color_accent: string; // hex color for card styling
 }
 
-// ── Platform Stats (integration-ready — endpoint TBD) ────────────────────────
+// ── Platform Stats ──────────────────────────────────────────────────────────
 
 export interface PublicStats {
   total_aspirants: number;
   total_questions: number;
   practice_sets: number;
   content_accuracy: number;
+}
+
+export interface PublicHomepageStatistic {
+  id: number;
+  placement: "hero" | "platform";
+  label: string;
+  description: string;
+  value: number | string;
+  raw_value: string;
+  formatted_value: string;
+  prefix: string;
+  suffix: string;
+  precision: number;
+  thousand_separator: boolean;
+  animation_enabled: boolean;
+  animation_duration: number;
+  animation_start_value: number;
+  icon: string;
+  accent_style: "default" | "gold" | "blue" | "emerald" | "amber";
+  display_order: number;
+}
+
+export interface PublicHomepageStatisticsResponse {
+  hero: PublicHomepageStatistic[];
+  platform: PublicHomepageStatistic[];
 }
 
 // ── Testimonials (integration-ready — endpoint TBD) ──────────────────────────
@@ -370,6 +401,10 @@ export const publicApi = {
    */
   getStats: (): Promise<PublicStats | null> =>
     safeGet<PublicStats>("/public/stats/"),
+
+  /** Get dynamic homepage statistics for hero and platform social proof sections */
+  getHomepageStatistics: (): Promise<PublicHomepageStatisticsResponse | null> =>
+    safeGet<PublicHomepageStatisticsResponse>("/public/statistics/", 60, ["homepage-statistics", "homepage-stats"]),
 
   /**
    * Get approved student testimonials.

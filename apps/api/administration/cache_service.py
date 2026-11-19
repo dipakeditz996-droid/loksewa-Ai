@@ -24,6 +24,8 @@ CACHE_KEY_PACKAGES_LIST = 'admin:packages:list'
 CACHE_KEY_DATA_SAFETY_OVERVIEW = 'admin:data_safety:overview'
 CACHE_KEY_PUBLIC_TESTIMONIALS = 'public:testimonials'
 CACHE_KEY_PUBLIC_TESTIMONIAL_STATS = 'public:testimonials:stats'
+CACHE_KEY_PUBLIC_STATISTICS = 'public:homepage_statistics'
+CACHE_KEY_PUBLIC_STATS = 'public:stats'
 
 
 CACHE_KEY_EXAMS_VERSION = 'admin:exams:version'
@@ -155,3 +157,15 @@ class AdminCacheService:
             ])
         except Exception as e:
             logger.warning("Failed to invalidate testimonials cache: %s", e)
+
+    @staticmethod
+    def invalidate_homepage_statistics():
+        """Invalidate public homepage statistics and platform stats caches."""
+        try:
+            cache.delete_many([
+                CACHE_KEY_PUBLIC_STATISTICS,
+                CACHE_KEY_PUBLIC_STATS,
+                CACHE_KEY_DASHBOARD_STATS,
+            ])
+        except Exception as e:
+            logger.warning("Failed to invalidate homepage statistics cache: %s", e)

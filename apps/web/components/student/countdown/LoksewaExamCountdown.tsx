@@ -27,7 +27,7 @@ interface TimeLeft {
   isValid: boolean;
 }
 
-// Shared query helper for backward compatibility
+// Shared query helpers for backward compatibility
 export const nextOfficialExamQuery = {
   queryKey: ["next-official-exam", null],
   queryFn: () => schedulesApi.getNextOfficialExam(),
@@ -74,9 +74,9 @@ function calculateTimeLeft(schedule: OfficialExamSchedule, serverOffsetMs: numbe
 }
 
 /**
- * Isolated Countdown component for each card to prevent re-rendering the whole carousel every second.
+ * Desktop Countdown Component (Compact horizontal blocks)
  */
-function ExamCardCountdown({
+function DesktopCountdown({
   schedule,
   serverOffsetMs,
 }: {
@@ -95,18 +95,14 @@ function ExamCardCountdown({
     return () => clearInterval(interval);
   }, [schedule, serverOffsetMs]);
 
-  if (!timeLeft.isValid) {
-    return null;
-  }
+  if (!timeLeft.isValid) return null;
 
   if (timeLeft.isExpired) {
     return (
-      <div className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-4 sm:px-6 py-2.5 sm:py-3.5 rounded-2xl text-center shadow-inner">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300 block mb-0.5">
-          Current Status
-        </span>
-        <span className="text-sm sm:text-base font-black tracking-tight text-white flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+      <div className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-3 py-2 rounded-xl text-center shadow-inner shrink-0">
+        <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-300 block">Status</span>
+        <span className="text-xs font-black tracking-tight text-white flex items-center justify-center gap-1 mt-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           Exam Day / In Progress
         </span>
       </div>
@@ -114,51 +110,100 @@ function ExamCardCountdown({
   }
 
   return (
-    <div className="flex items-center gap-1 sm:gap-2">
+    <div className="flex items-center gap-1.5 shrink-0">
       {/* Days */}
-      <div className="flex flex-col items-center justify-center w-12 sm:w-14 h-13 sm:h-16 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-lg sm:text-2xl font-black text-white leading-none">
+      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
+        <span className="text-base font-black text-white leading-none">
           {String(timeLeft.days).padStart(2, "0")}
         </span>
-        <span className="text-[9px] sm:text-[10px] font-bold uppercase text-slate-300 tracking-wider mt-0.5 sm:mt-1">
-          Days
-        </span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Days</span>
       </div>
 
-      <span className="text-sm sm:text-base font-bold text-white/40 mb-1">:</span>
+      <span className="text-xs font-bold text-white/40 mb-1">:</span>
 
       {/* Hours */}
-      <div className="flex flex-col items-center justify-center w-12 sm:w-14 h-13 sm:h-16 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-lg sm:text-2xl font-black text-[#60A5FA] leading-none">
+      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
+        <span className="text-base font-black text-[#60A5FA] leading-none">
           {String(timeLeft.hours).padStart(2, "0")}
         </span>
-        <span className="text-[9px] sm:text-[10px] font-bold uppercase text-slate-300 tracking-wider mt-0.5 sm:mt-1">
-          Hours
-        </span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Hours</span>
       </div>
 
-      <span className="text-sm sm:text-base font-bold text-white/40 mb-1">:</span>
+      <span className="text-xs font-bold text-white/40 mb-1">:</span>
 
-      {/* Minutes */}
-      <div className="flex flex-col items-center justify-center w-12 sm:w-14 h-13 sm:h-16 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-lg sm:text-2xl font-black text-white leading-none">
+      {/* Mins */}
+      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
+        <span className="text-base font-black text-white leading-none">
           {String(timeLeft.minutes).padStart(2, "0")}
         </span>
-        <span className="text-[9px] sm:text-[10px] font-bold uppercase text-slate-300 tracking-wider mt-0.5 sm:mt-1">
-          Mins
-        </span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Mins</span>
       </div>
 
-      <span className="text-sm sm:text-base font-bold text-white/40 mb-1">:</span>
+      <span className="text-xs font-bold text-white/40 mb-1">:</span>
 
-      {/* Seconds */}
-      <div className="flex flex-col items-center justify-center w-12 sm:w-14 h-13 sm:h-16 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
-        <span className="text-lg sm:text-2xl font-black text-blue-300 leading-none">
+      {/* Secs */}
+      <div className="flex flex-col items-center justify-center w-12 h-14 bg-white/10 backdrop-blur-md rounded-xl border border-white/15 shadow-inner">
+        <span className="text-base font-black text-blue-300 leading-none">
           {String(timeLeft.seconds).padStart(2, "0")}
         </span>
-        <span className="text-[9px] sm:text-[10px] font-bold uppercase text-slate-300 tracking-wider mt-0.5 sm:mt-1">
-          Secs
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-1">Secs</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile Countdown Component (4 balanced equal blocks, 100% width)
+ */
+function MobileCountdown({
+  schedule,
+  serverOffsetMs,
+}: {
+  schedule: OfficialExamSchedule;
+  serverOffsetMs: number;
+}) {
+  const [timeLeft, setTimeLeft] = useState<TimeLeft>(() =>
+    calculateTimeLeft(schedule, serverOffsetMs)
+  );
+
+  useEffect(() => {
+    setTimeLeft(calculateTimeLeft(schedule, serverOffsetMs));
+    const interval = setInterval(() => {
+      setTimeLeft(calculateTimeLeft(schedule, serverOffsetMs));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [schedule, serverOffsetMs]);
+
+  if (!timeLeft.isValid) return null;
+
+  if (timeLeft.isExpired) {
+    return (
+      <div className="bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 px-3 py-1.5 rounded-lg text-center shadow-inner w-full">
+        <span className="text-xs font-black tracking-tight text-white flex items-center justify-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          Exam Day / In Progress
         </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-4 gap-1.5 w-full">
+      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
+        <span className="text-base font-black text-white leading-none">{String(timeLeft.days).padStart(2, "0")}</span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Days</span>
+      </div>
+      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
+        <span className="text-base font-black text-[#60A5FA] leading-none">{String(timeLeft.hours).padStart(2, "0")}</span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Hours</span>
+      </div>
+      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
+        <span className="text-base font-black text-white leading-none">{String(timeLeft.minutes).padStart(2, "0")}</span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Mins</span>
+      </div>
+      <div className="flex flex-col items-center justify-center py-1.5 bg-white/10 backdrop-blur-md rounded-lg border border-white/15 shadow-inner">
+        <span className="text-base font-black text-blue-300 leading-none">{String(timeLeft.seconds).padStart(2, "0")}</span>
+        <span className="text-[8px] font-bold uppercase text-slate-300 tracking-wider mt-0.5">Secs</span>
       </div>
     </div>
   );
@@ -166,6 +211,14 @@ function ExamCardCountdown({
 
 /**
  * Premium NES Mastery Examination Schedule Card
+ * Strictly follows the specified information hierarchy:
+ * 1. Examination status label (Upcoming / Active)
+ * 2. Examination title
+ * 3. Examination category or level badge
+ * 4. Official Exam Notice link (directly below the category badge)
+ * 5. Examination date and time
+ * 6. Short relevant details, if available
+ * 7. Countdown timer
  */
 export function ExamScheduleCard({
   schedule,
@@ -182,77 +235,57 @@ export function ExamScheduleCard({
 
   return (
     <Card
-      className={`relative overflow-hidden text-white border border-blue-400/20 shadow-xl transition-all duration-300 flex flex-col justify-between ${
+      className={`relative overflow-hidden text-white border shadow-xl transition-all duration-300 flex flex-col justify-between w-full min-w-0 max-w-full ${
         isHighlighted
-          ? "bg-gradient-to-br from-[#0B2545] via-[#10345E] to-[#174A68] ring-1 ring-blue-400/35"
-          : "bg-gradient-to-br from-[#091E36] via-[#0D2847] to-[#123658]"
+          ? "bg-gradient-to-br from-[#0B2545] via-[#0E2E54] to-[#123966] border-blue-400/30 ring-1 ring-blue-400/20"
+          : "bg-gradient-to-br from-[#081C35] via-[#0B2545] to-[#0E2E54] border-blue-500/15"
       } ${
         isSingle
-          ? "w-full max-w-4xl mx-auto rounded-2xl sm:rounded-3xl"
-          : "w-[310px] sm:w-[540px] lg:w-[620px] min-h-[320px] sm:min-h-[260px] sm:h-[260px] shrink-0 rounded-2xl"
+          ? "max-w-4xl mx-auto rounded-2xl"
+          : "md:w-[620px] lg:w-[680px] min-h-[195px] md:h-[215px] lg:h-[225px] rounded-2xl"
       }`}
     >
-      {/* Decorative ambient background glow */}
-      <div className="absolute right-0 top-0 w-72 h-72 bg-[#60A5FA]/10 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16" />
-      <div className="absolute left-0 bottom-0 w-48 h-48 bg-blue-500/5 rounded-full blur-2xl pointer-events-none -ml-10 -mb-10" />
+      {/* Restrained subtle ambient glow */}
+      <div className="absolute right-0 top-0 w-60 h-60 bg-[#60A5FA]/5 rounded-full blur-3xl pointer-events-none -mr-12 -mt-12" />
 
-      <CardContent className="p-4 sm:p-6 relative z-10 flex flex-col justify-between h-full">
-        {/* Top Section: Badges & Full-width Title */}
-        <div className="space-y-1.5 sm:space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            {isHighlighted ? (
-              <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-blue-500/25 border border-blue-400/40 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider text-[#60A5FA] uppercase shadow-sm">
-                <Sparkles className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-[#60A5FA] animate-pulse" /> Official Examination Countdown
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 bg-white/10 border border-white/15 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider text-slate-200 uppercase shadow-sm">
-                <Calendar className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-[#60A5FA]" /> Upcoming Exam Schedule
-              </div>
-            )}
-            {schedule.category_name && (
-              <span className="hidden sm:inline-block bg-white/10 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-slate-200 border border-white/10">
-                {schedule.category_name}
-              </span>
-            )}
-          </div>
+      <CardContent className="p-4 sm:p-5 relative z-10 flex flex-col justify-between h-full w-full min-w-0">
+        {/* DESKTOP LAYOUT (md and up) */}
+        <div className="hidden md:flex flex-col justify-between h-full">
+          {/* Top Section: Items 1 to 4 */}
+          <div className="space-y-1.5">
+            {/* 1. Status Label */}
+            <div className="flex items-center justify-between gap-2">
+              {isHighlighted ? (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-500/20 border border-blue-400/35 rounded-full text-[10px] font-bold tracking-wider text-[#60A5FA] uppercase shadow-sm">
+                  <Sparkles className="w-3 h-3 text-[#60A5FA] animate-pulse" /> Official Examination Countdown
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-white/10 border border-white/15 rounded-full text-[10px] font-bold tracking-wider text-slate-200 uppercase shadow-sm">
+                  <Calendar className="w-3 h-3 text-[#60A5FA]" /> Upcoming Exam Schedule
+                </div>
+              )}
+            </div>
 
-          <h2 className="text-base sm:text-lg md:text-xl font-black text-white tracking-tight leading-snug line-clamp-2">
-            {schedule.title}
-          </h2>
-        </div>
+            {/* 2. Examination Title */}
+            <h2 className="text-base lg:text-lg font-black text-white tracking-tight leading-snug line-clamp-1">
+              {schedule.title}
+            </h2>
 
-        {/* Bottom Section: Details on Left, Countdown on Right */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 pt-2.5 sm:pt-3 border-t border-white/10 mt-auto">
-          {/* Details */}
-          <div className="space-y-1.5 sm:space-y-2 flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-y-1 gap-x-1.5 sm:gap-x-2 text-xs text-slate-300 font-medium">
-              <span className="flex items-center gap-1 sm:gap-1.5 bg-black/30 px-2 py-0.5 rounded border border-white/5 text-[11px] sm:text-xs">
-                <Calendar className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-[#60A5FA] shrink-0" />
-                <span className="font-semibold text-white">
-                  {formatNepaliDateDisplay(schedule.exam_date, { showAd: true })}
-                </span>
-              </span>
-
-              {schedule.exam_time && (
-                <span className="flex items-center gap-1 bg-black/30 px-2 py-0.5 rounded border border-white/5 text-[11px] sm:text-xs">
-                  <Clock className="w-3 h-3 text-blue-300 shrink-0" />
-                  <span>{schedule.exam_time.slice(0, 5)} (NPT)</span>
+            {/* 3. Category / Level Badges */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {schedule.category_name && (
+                <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-200 border border-white/10">
+                  {schedule.category_name}
                 </span>
               )}
-
               {schedule.exam_name && (
-                <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold text-slate-200">
+                <span className="bg-white/10 px-2 py-0.5 rounded text-[11px] font-semibold text-slate-200 border border-white/10">
                   {schedule.exam_name}
                 </span>
               )}
             </div>
 
-            {schedule.description && (
-              <p className="text-[11px] sm:text-xs text-slate-300/85 line-clamp-1 max-w-sm">
-                {schedule.description}
-              </p>
-            )}
-
+            {/* 4. Official Exam Notice Link (directly below category badge) */}
             {schedule.official_notice_url && (
               <div>
                 <a
@@ -260,18 +293,125 @@ export function ExamScheduleCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={onNoticeClick}
-                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-[#60A5FA] hover:text-blue-200 underline font-semibold transition-colors group"
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#60A5FA] hover:text-blue-300 underline transition-colors group"
                 >
-                  Official Exam Notice
+                  <span>Official Exam Notice</span>
                   <ExternalLink className="w-3 h-3 shrink-0 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </a>
               </div>
             )}
           </div>
 
-          {/* Countdown Clock */}
-          <div className="shrink-0 flex items-center justify-start sm:justify-end pt-1 sm:pt-0">
-            <ExamCardCountdown schedule={schedule} serverOffsetMs={serverOffsetMs} />
+          {/* Bottom Section: 5. Date & Time + 6. Details on Left, 7. Countdown on Right */}
+          <div className="flex items-end justify-between gap-4 pt-2.5 border-t border-white/10 mt-auto">
+            <div className="space-y-1.5 flex-1 min-w-0">
+              {/* 5. Date and Time */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-300 font-medium">
+                <span className="flex items-center gap-1 bg-black/30 px-2 py-0.5 rounded border border-white/5 text-[11px]">
+                  <Calendar className="w-3 h-3 text-[#60A5FA] shrink-0" />
+                  <span className="font-semibold text-white">
+                    {formatNepaliDateDisplay(schedule.exam_date, { showAd: true })}
+                  </span>
+                </span>
+
+                {schedule.exam_time && (
+                  <span className="flex items-center gap-1 bg-black/30 px-2 py-0.5 rounded border border-white/5 text-[11px]">
+                    <Clock className="w-3 h-3 text-blue-300 shrink-0" />
+                    <span>{schedule.exam_time.slice(0, 5)} (NPT)</span>
+                  </span>
+                )}
+              </div>
+
+              {/* 6. Short Details */}
+              {schedule.description && (
+                <p className="text-[11px] text-slate-300/80 line-clamp-1 max-w-sm">
+                  {schedule.description}
+                </p>
+              )}
+            </div>
+
+            {/* 7. Countdown Timer */}
+            <DesktopCountdown schedule={schedule} serverOffsetMs={serverOffsetMs} />
+          </div>
+        </div>
+
+        {/* MOBILE LAYOUT (< md) - Strictly sequential, 100% width, never clipped */}
+        <div className="flex md:hidden flex-col justify-between h-full space-y-2 w-full min-w-0">
+          {/* 1. Status Label */}
+          <div className="flex items-center justify-between gap-2">
+            {isHighlighted ? (
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-500/25 border border-blue-400/40 rounded-full text-[9px] font-bold tracking-wider text-[#60A5FA] uppercase shadow-sm">
+                <Sparkles className="w-2.5 h-2.5 text-[#60A5FA] animate-pulse" /> Official Exam Countdown
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/10 border border-white/15 rounded-full text-[9px] font-bold tracking-wider text-slate-200 uppercase shadow-sm">
+                <Calendar className="w-2.5 h-2.5 text-[#60A5FA]" /> Upcoming Exam Schedule
+              </div>
+            )}
+          </div>
+
+          {/* 2. Examination Title */}
+          <h2 className="text-sm font-black text-white tracking-tight leading-snug line-clamp-2">
+            {schedule.title}
+          </h2>
+
+          {/* 3. Category / Level Badges */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {schedule.category_name && (
+              <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] font-semibold text-slate-200 border border-white/10">
+                {schedule.category_name}
+              </span>
+            )}
+            {schedule.exam_name && (
+              <span className="bg-white/10 px-2 py-0.5 rounded text-[10px] font-semibold text-slate-200 border border-white/10">
+                {schedule.exam_name}
+              </span>
+            )}
+          </div>
+
+          {/* 4. Official Notice Link directly below category badge */}
+          {schedule.official_notice_url && (
+            <div>
+              <a
+                href={schedule.official_notice_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onNoticeClick}
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#60A5FA] hover:text-blue-300 underline transition-colors"
+              >
+                <span>Official Exam Notice</span>
+                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+              </a>
+            </div>
+          )}
+
+          {/* 5. Date & Time */}
+          <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-300 font-medium">
+            <span className="flex items-center gap-1 bg-black/30 px-1.5 py-0.5 rounded border border-white/5">
+              <Calendar className="w-2.5 h-2.5 text-[#60A5FA] shrink-0" />
+              <span className="font-semibold text-white">
+                {formatNepaliDateDisplay(schedule.exam_date, { showAd: true })}
+              </span>
+            </span>
+
+            {schedule.exam_time && (
+              <span className="flex items-center gap-1 bg-black/30 px-1.5 py-0.5 rounded border border-white/5">
+                <Clock className="w-2.5 h-2.5 text-blue-300 shrink-0" />
+                <span>{schedule.exam_time.slice(0, 5)} (NPT)</span>
+              </span>
+            )}
+          </div>
+
+          {/* 6. Short Details (if available) */}
+          {schedule.description && (
+            <p className="text-[10px] text-slate-300/80 line-clamp-1">
+              {schedule.description}
+            </p>
+          )}
+
+          {/* 7. Mobile Countdown (4 balanced blocks, 100% full width) */}
+          <div className="pt-1.5 border-t border-white/10 w-full min-w-0">
+            <MobileCountdown schedule={schedule} serverOffsetMs={serverOffsetMs} />
           </div>
         </div>
       </CardContent>
@@ -310,7 +450,11 @@ export function LoksewaExamCountdown({
   const schedules = data?.schedules ?? [];
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
 
-  // Carousel & Animation States
+  // Responsive state (Desktop vs Mobile)
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [mobileActiveIndex, setMobileActiveIndex] = useState(0);
+
+  // Carousel & Animation States (Desktop only)
   const containerRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -327,6 +471,17 @@ export function LoksewaExamCountdown({
   const wasDraggingRecentlyRef = useRef(false);
   const interactTimerRef = useRef<NodeJS.Timeout | null>(null);
   const accumulatedScrollRef = useRef(0);
+
+  // Viewport breakpoint listener
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const updateSize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
 
   // Server offset calculation
   useEffect(() => {
@@ -355,14 +510,15 @@ export function LoksewaExamCountdown({
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
-  // Multiplier for presentation-layer seamless looping
+  // Items to display: On mobile, exact 1-to-1 list for scroll snapping; on desktop, cloned for infinite looping
   const repeatCount = schedules.length < 3 ? 4 : schedules.length < 5 ? 3 : 2;
-  const displayItems = schedules.length >= 2
+  const displayItems = isDesktop && schedules.length >= 2
     ? Array.from({ length: repeatCount }, () => schedules).flat()
     : schedules;
 
   // Active pause state: hovered, focused, user paused, dragging, touching, reduced motion, or tab hidden
   const isPaused =
+    !isDesktop || // Autoplay disabled on mobile
     isHovered ||
     isFocused ||
     userPaused ||
@@ -371,12 +527,12 @@ export function LoksewaExamCountdown({
     prefersReducedMotion ||
     !isTabVisible;
 
-  // Smooth continuous auto-scrolling with RAF
+  // Smooth continuous auto-scrolling with RAF (Desktop only)
   useEffect(() => {
-    if (schedules.length < 2) return;
+    if (!isDesktop || schedules.length < 2) return;
 
     let animationFrameId: number;
-    const speed = 0.65; // ~39px/sec, moderate, comfortable reading speed
+    const speed = 0.55; // ~33px/sec, smooth and comfortable reading speed
 
     const animate = () => {
       const container = containerRef.current;
@@ -384,7 +540,7 @@ export function LoksewaExamCountdown({
         accumulatedScrollRef.current += speed;
         container.scrollLeft = accumulatedScrollRef.current;
 
-        // Loop seamlessly when half of duplicate track is traversed
+        // Loop seamlessly when single set of duplicates is traversed
         const singleSetWidth = container.scrollWidth / repeatCount;
         if (accumulatedScrollRef.current >= singleSetWidth * (repeatCount - 1)) {
           accumulatedScrollRef.current -= singleSetWidth;
@@ -399,7 +555,7 @@ export function LoksewaExamCountdown({
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [schedules.length, isPaused, repeatCount]);
+  }, [schedules.length, isPaused, repeatCount, isDesktop]);
 
   // Handle manual interaction pauses
   const markUserInteracting = useCallback((durationMs = 2000) => {
@@ -413,22 +569,36 @@ export function LoksewaExamCountdown({
     }, durationMs);
   }, []);
 
-  // Navigation button controls
+  // Navigation button controls (works on both Desktop and Mobile)
   const handleScrollBy = useCallback(
     (offset: number) => {
       const container = containerRef.current;
       if (!container) return;
-      markUserInteracting(2500);
-      container.scrollBy({ left: offset, behavior: "smooth" });
-      setTimeout(() => {
-        if (container) accumulatedScrollRef.current = container.scrollLeft;
-      }, 400);
+
+      if (!isDesktop) {
+        // Mobile snap card by card
+        const targetIndex = offset > 0
+          ? Math.min(mobileActiveIndex + 1, schedules.length - 1)
+          : Math.max(mobileActiveIndex - 1, 0);
+        container.scrollTo({
+          left: targetIndex * container.clientWidth,
+          behavior: "smooth",
+        });
+        setMobileActiveIndex(targetIndex);
+      } else {
+        // Desktop smooth scroll
+        markUserInteracting(2500);
+        container.scrollBy({ left: offset, behavior: "smooth" });
+        setTimeout(() => {
+          if (container) accumulatedScrollRef.current = container.scrollLeft;
+        }, 400);
+      }
     },
-    [markUserInteracting]
+    [isDesktop, mobileActiveIndex, schedules.length, markUserInteracting]
   );
 
-  const handlePrev = () => handleScrollBy(-480);
-  const handleNext = () => handleScrollBy(480);
+  const handlePrev = () => handleScrollBy(isDesktop ? -640 : -1);
+  const handleNext = () => handleScrollBy(isDesktop ? 640 : 1);
 
   const toggleUserPause = () => {
     setUserPaused((prev) => !prev);
@@ -437,9 +607,9 @@ export function LoksewaExamCountdown({
     }
   };
 
-  // Mouse drag handlers
+  // Mouse drag handlers (Desktop only)
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!containerRef.current) return;
+    if (!isDesktop || !containerRef.current) return;
     dragStartXRef.current = e.clientX;
     scrollStartRef.current = containerRef.current.scrollLeft;
     hasDraggedRef.current = false;
@@ -447,7 +617,7 @@ export function LoksewaExamCountdown({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !containerRef.current) return;
+    if (!isDesktop || !isDragging || !containerRef.current) return;
     const delta = e.clientX - dragStartXRef.current;
     if (Math.abs(delta) > 5) {
       hasDraggedRef.current = true;
@@ -472,21 +642,13 @@ export function LoksewaExamCountdown({
     }
   };
 
-  const handleTouchStart = () => {
-    markUserInteracting(3000);
-  };
-
-  const handleTouchEnd = () => {
-    markUserInteracting(2000);
-    if (containerRef.current) {
-      accumulatedScrollRef.current = containerRef.current.scrollLeft;
-    }
-  };
-
-  const handleWheel = () => {
-    markUserInteracting(1500);
-    if (containerRef.current) {
-      accumulatedScrollRef.current = containerRef.current.scrollLeft;
+  // Mobile scroll tracking for pagination dots
+  const handleMobileScroll = () => {
+    if (isDesktop || !containerRef.current) return;
+    const { scrollLeft, clientWidth } = containerRef.current;
+    if (clientWidth > 0) {
+      const index = Math.round(scrollLeft / clientWidth);
+      setMobileActiveIndex(Math.min(Math.max(index, 0), schedules.length - 1));
     }
   };
 
@@ -501,7 +663,7 @@ export function LoksewaExamCountdown({
   if (loading) {
     return (
       <Card className={`bg-card border-border shadow-sm overflow-hidden ${className}`}>
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-5">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 animate-pulse">
             <div className="space-y-2 w-full md:w-1/2">
               <div className="h-4 bg-muted rounded w-1/3" />
@@ -510,7 +672,7 @@ export function LoksewaExamCountdown({
             </div>
             <div className="grid grid-cols-4 gap-2 w-full md:w-auto">
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-16 w-16 bg-muted rounded-xl" />
+                <div key={i} className="h-14 w-14 bg-muted rounded-xl" />
               ))}
             </div>
           </div>
@@ -523,7 +685,7 @@ export function LoksewaExamCountdown({
   if (error) {
     return (
       <Card className={`bg-card border-border shadow-sm ${className}`}>
-        <CardContent className="p-5 flex items-center gap-3 text-muted-foreground">
+        <CardContent className="p-4 sm:p-5 flex items-center gap-3 text-muted-foreground">
           <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
           <p className="text-xs">Unable to load examination schedule right now.</p>
           <button
@@ -542,7 +704,7 @@ export function LoksewaExamCountdown({
   if (schedules.length === 0) {
     return (
       <Card className={`bg-card border-border border-dashed shadow-sm ${className}`}>
-        <CardContent className="p-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+        <CardContent className="p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-muted rounded-xl text-muted-foreground">
               <Calendar className="w-5 h-5" />
@@ -572,25 +734,25 @@ export function LoksewaExamCountdown({
     );
   }
 
-  // Multiple Schedules: Premium Auto-Scrolling Carousel
+  // Multiple Schedules: Redesigned Carousel
   return (
     <div className={`space-y-2.5 ${className}`}>
-      {/* Carousel Control Bar */}
+      {/* Section Header: OFFICIAL EXAM SCHEDULES */}
       <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
-          <span className="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="relative flex h-2 w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-emerald-500" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
           </span>
-          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 truncate">
+          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 truncate">
             Official Exam Schedules
           </h3>
           <span className="hidden sm:inline-flex px-2 py-0.5 text-[11px] font-semibold rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
-            {schedules.length} Active Schedules
+            {schedules.length} Active {schedules.length === 1 ? "Schedule" : "Schedules"}
           </span>
         </div>
 
-        {/* Navigation & Pause Controls */}
+        {/* Carousel Controls */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
@@ -601,19 +763,23 @@ export function LoksewaExamCountdown({
           >
             <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
-          <button
-            type="button"
-            onClick={toggleUserPause}
-            aria-label={userPaused ? "Resume automatic scrolling" : "Pause automatic scrolling"}
-            className="p-1 sm:p-1.5 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-            title={userPaused ? "Resume auto-scroll" : "Pause auto-scroll"}
-          >
-            {userPaused ? (
-              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
-            ) : (
-              <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
-            )}
-          </button>
+
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={toggleUserPause}
+              aria-label={userPaused ? "Resume automatic scrolling" : "Pause automatic scrolling"}
+              className="p-1 sm:p-1.5 rounded-lg bg-slate-200/80 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title={userPaused ? "Resume auto-scroll" : "Pause auto-scroll"}
+            >
+              {userPaused ? (
+                <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
+              ) : (
+                <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+              )}
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleNext}
@@ -626,36 +792,32 @@ export function LoksewaExamCountdown({
         </div>
       </div>
 
-      {/* Marquee Carousel Container */}
+      {/* Track Container */}
       <div
         className="relative group"
-        onMouseEnter={() => setIsHovered(true)}
+        onMouseEnter={() => isDesktop && setIsHovered(true)}
         onMouseLeave={() => {
-          setIsHovered(false);
-          handleMouseUp();
+          if (isDesktop) {
+            setIsHovered(false);
+            handleMouseUp();
+          }
         }}
-        onFocusCapture={() => setIsFocused(true)}
-        onBlurCapture={() => setIsFocused(false)}
+        onFocusCapture={() => isDesktop && setIsFocused(true)}
+        onBlurCapture={() => isDesktop && setIsFocused(false)}
       >
-        {/* Subtle Edge Fade Gradients */}
-        <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 sm:w-12 bg-gradient-to-r from-slate-50 dark:from-[#020611] to-transparent z-10" />
-        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 sm:w-12 bg-gradient-to-l from-slate-50 dark:from-[#020611] to-transparent z-10" />
-
-        {/* Scrollable Track */}
+        {/* Scrollable Track - Pure CSS snap on mobile, marquee on desktop */}
         <div
           ref={containerRef}
           role="region"
           aria-label="Official Examination Schedules Carousel"
           aria-roledescription="carousel"
           tabIndex={0}
-          className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-none py-2 px-1 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl cursor-grab active:cursor-grabbing select-none"
+          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory md:snap-none gap-3 md:gap-5 md:cursor-grab md:active:cursor-grabbing"
           style={{ scrollBehavior: isDragging ? "auto" : "smooth" }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onWheel={handleWheel}
+          onScroll={!isDesktop ? handleMobileScroll : undefined}
         >
           {displayItems.map((item, index) => (
             <div
@@ -663,7 +825,7 @@ export function LoksewaExamCountdown({
               role="group"
               aria-roledescription="slide"
               aria-label={`${(index % schedules.length) + 1} of ${schedules.length}: ${item.title}`}
-              className="shrink-0"
+              className="w-full flex-none min-w-0 max-w-full snap-center md:snap-align-none md:w-auto"
             >
               <ExamScheduleCard
                 schedule={item}
@@ -675,6 +837,36 @@ export function LoksewaExamCountdown({
           ))}
         </div>
       </div>
+
+      {/* Mobile Pagination Dots Indicator */}
+      {!isDesktop && schedules.length > 1 && (
+        <div className="flex md:hidden items-center justify-center gap-1.5 pt-1">
+          {schedules.map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => {
+                if (containerRef.current) {
+                  containerRef.current.scrollTo({
+                    left: idx * containerRef.current.clientWidth,
+                    behavior: "smooth",
+                  });
+                  setMobileActiveIndex(idx);
+                }
+              }}
+              aria-label={`Go to slide ${idx + 1}`}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                mobileActiveIndex === idx
+                  ? "w-5 bg-[#60A5FA]"
+                  : "w-1.5 bg-slate-300 dark:bg-white/20 hover:bg-slate-400"
+              }`}
+            />
+          ))}
+          <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-1.5">
+            {mobileActiveIndex + 1} / {schedules.length}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

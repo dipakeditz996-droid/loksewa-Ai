@@ -242,11 +242,7 @@ export function ExamScheduleCard({
         isHighlighted
           ? "bg-gradient-to-br from-[#102D40] via-[#0E283C] to-[#0A1F2E] border-blue-400/30 ring-1 ring-blue-400/20"
           : "bg-gradient-to-br from-[#0D2435] via-[#0A1F2E] to-[#081824] border-blue-500/15"
-      } ${
-        isSingle
-          ? "max-w-4xl mx-auto rounded-2xl"
-          : "w-full sm:w-[580px] md:w-[680px] lg:w-[780px] xl:w-[840px] rounded-2xl shrink-0"
-      }`}
+      } w-full rounded-2xl`}
     >
       {/* Restrained subtle ambient glow */}
       <div className="absolute right-0 top-0 w-64 h-64 bg-[#60A5FA]/5 rounded-full blur-3xl pointer-events-none -mr-12 -mt-12" />
@@ -271,8 +267,8 @@ export function ExamScheduleCard({
               )}
             </div>
 
-            {/* 2. Exam title */}
-            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white tracking-tight leading-snug line-clamp-2 md:line-clamp-1">
+            {/* 2. Exam title — never cut or truncated */}
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-white tracking-tight leading-snug break-words">
               {schedule.title}
             </h2>
 
@@ -294,14 +290,14 @@ export function ExamScheduleCard({
 
               {/* Category */}
               {schedule.category_name && (
-                <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10 text-[11px] sm:text-xs font-semibold">
+                <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10 text-[11px] sm:text-xs font-semibold whitespace-normal">
                   {schedule.category_name}
                 </span>
               )}
 
               {/* Specific Exam / Level */}
               {schedule.exam_name && (
-                <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10 text-[11px] sm:text-xs font-semibold">
+                <span className="px-2.5 py-0.5 rounded-md bg-white/10 text-slate-200 border border-white/10 text-[11px] sm:text-xs font-semibold whitespace-normal">
                   {schedule.exam_name}
                 </span>
               )}
@@ -309,7 +305,7 @@ export function ExamScheduleCard({
 
             {/* 4. Exam fee & additional details, if available */}
             {schedule.description && (
-              <p className="text-xs sm:text-sm text-slate-300/85 font-medium line-clamp-1 max-w-xl">
+              <p className="text-xs sm:text-sm text-slate-300/85 font-medium max-w-2xl break-words">
                 {schedule.description}
               </p>
             )}
@@ -538,6 +534,16 @@ export function LoksewaExamCountdown({
       scrollToCard(0, false);
     }
   }, [schedules.length, activeIndex, scrollToCard]);
+
+  // Keep active card snapped on window resize
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleResize = () => {
+      scrollToCard(activeIndexRef.current, false);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [scrollToCard]);
 
   // Determine whether autoplay is actively paused
   const isEffectivelyPaused =
@@ -861,7 +867,7 @@ export function LoksewaExamCountdown({
           handleMouseUp();
         }}
       >
-        {/* Scrollable Track - Snap on mobile & tablet, smooth carousel on desktop */}
+        {/* Scrollable Track - Shows exactly one schedule card at a time with smooth snap */}
         <div
           ref={containerRef}
           role="region"
@@ -877,7 +883,7 @@ export function LoksewaExamCountdown({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onScroll={handleScroll}
-          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory md:snap-none gap-3 sm:gap-4 md:gap-5 cursor-grab active:cursor-grabbing"
+          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory gap-4 sm:gap-6 cursor-grab active:cursor-grabbing"
           style={{
             scrollBehavior: isDragging || prefersReducedMotion ? "auto" : "smooth",
             WebkitOverflowScrolling: "touch",
@@ -889,7 +895,7 @@ export function LoksewaExamCountdown({
               role="group"
               aria-roledescription="slide"
               aria-label={`${index + 1} of ${schedules.length}: ${item.title}`}
-              className="w-full sm:w-auto flex-none min-w-0 max-w-full snap-start"
+              className="w-full min-w-full max-w-full flex-none snap-start"
             >
               <ExamScheduleCard
                 schedule={item}

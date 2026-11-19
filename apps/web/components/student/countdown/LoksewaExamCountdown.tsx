@@ -624,18 +624,21 @@ export function LoksewaExamCountdown({
 
   // Mobile Swipe Gesture Handlers
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const touch = e.touches[0];
+    if (!touch) return;
     setIsInteracting(true);
     if (interactTimeoutRef.current) clearTimeout(interactTimeoutRef.current);
-    touchStartXRef.current = e.touches[0].clientX;
-    touchStartYRef.current = e.touches[0].clientY;
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
     touchDeltaXRef.current = 0;
     isSwipingHorizontallyRef.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartXRef.current === null) return;
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
+    const touch = e.touches[0];
+    if (touchStartXRef.current === null || !touch) return;
+    const currentX = touch.clientX;
+    const currentY = touch.clientY;
     const deltaX = currentX - touchStartXRef.current;
     const deltaY = currentY - (touchStartYRef.current ?? currentY);
 

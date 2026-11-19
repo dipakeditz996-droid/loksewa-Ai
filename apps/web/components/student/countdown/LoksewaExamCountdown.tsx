@@ -454,7 +454,6 @@ export function LoksewaExamCountdown({
   const [activeIndex, setActiveIndex] = useState(0);
   const [userPaused, setUserPaused] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -468,6 +467,8 @@ export function LoksewaExamCountdown({
   const schedulesCountRef = useRef(schedules.length);
   schedulesCountRef.current = schedules.length;
 
+  const isAutoScrollingRef = useRef(false);
+  const autoScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const interactTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -521,6 +522,7 @@ export function LoksewaExamCountdown({
     return () => {
       if (interactTimeoutRef.current) clearTimeout(interactTimeoutRef.current);
       if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
+      if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
     };
   }, []);
 
@@ -533,22 +535,40 @@ export function LoksewaExamCountdown({
   const scrollToCard = useCallback(
     (index: number, smooth = true) => {
       const container = containerRef.current;
-      if (!container || schedulesCountRef.current === 0) return;
+      const total = schedulesCountRef.current;
+      if (!container || total === 0) return;
 
-      const targetIndex = ((index % schedulesCountRef.current) + schedulesCountRef.current) % schedulesCountRef.current;
+      const targetIndex = ((index % total) + total) % total;
       const children = container.children;
       const targetElement = children[targetIndex] as HTMLElement | undefined;
       if (!targetElement) return;
 
-      const containerRect = container.getBoundingClientRect();
-      const cardRect = targetElement.getBoundingClientRect();
-      const targetScrollLeft = container.scrollLeft + (cardRect.left - containerRect.left);
+      // Lock out onScroll event handler while programmatic scroll animation runs
+      isAutoScrollingRef.current = true;
+      if (autoScrollTimeoutRef.current) clearTimeout(autoScrollTimeoutRef.current);
+      autoScrollTimeoutRef.current = setTimeout(() => {
+        isAutoScrollingRef.current = false;
+      }, 700);
+
+      // Compute exact static offset to align target card at container start
+      let targetScrollLeft = targetElement.offsetLeft - container.offsetLeft;
+
+      // Explicit edge anchoring
+      if (targetIndex === 0) {
+        targetScrollLeft = 0;
+      } else {
+        const maxScroll = container.scrollWidth - container.clientWidth;
+        if (targetScrollLeft > maxScroll && maxScroll > 0) {
+          targetScrollLeft = maxScroll;
+        }
+      }
 
       container.scrollTo({
         left: Math.max(0, targetScrollLeft),
         behavior: smooth && !prefersReducedMotion ? "smooth" : "auto",
       });
 
+      activeIndexRef.current = targetIndex;
       setActiveIndex(targetIndex);
     },
     [prefersReducedMotion]
@@ -568,21 +588,20 @@ export function LoksewaExamCountdown({
 
   // Previous and Next handlers
   const handlePrev = useCallback(() => {
-    if (schedulesCountRef.current <= 1) return;
-    const prevIndex = (activeIndexRef.current - 1 + schedulesCountRef.current) % schedulesCountRef.current;
+    const total = schedulesCountRef.current;
+    if (total <= 1) return;
+    const prevIndex = (activeIndexRef.current - 1 + total) % total;
     scrollToCard(prevIndex);
     resetAutoplayTimer();
   }, [scrollToCard, resetAutoplayTimer]);
 
   const handleNext = useCallback(() => {
-    if (schedulesCountRef.current <= 1) return;
-    const nextIndex = (activeIndexRef.current + 1) % schedulesCountRef.current;
+    const total = schedulesCountRef.current;
+    if (total <= 1) return;
+    const nextIndex = (activeIndexRef.current + 1) % total;
     scrollToCard(nextIndex);
     resetAutoplayTimer();
   }, [scrollToCard, resetAutoplayTimer]);
-
-  const handleNextRef = useRef(handleNext);
-  handleNextRef.current = handleNext;
 
   // Manual Play / Pause toggle
   const togglePlayPause = useCallback(() => {
@@ -603,24 +622,23 @@ export function LoksewaExamCountdown({
     schedules.length <= 1 ||
     userPaused ||
     isHovered ||
-    isFocused ||
     isInteracting ||
     isDragging ||
     prefersReducedMotion ||
     !isTabVisible;
 
-  // 4.5s Timer-Based Autoplay Engine (Single clean interval, no RAF loop)
+  // 4.5s Timer-Based Autoplay Engine (Single clean interval, reliable continuous loop)
   useEffect(() => {
     if (isEffectivelyPaused) return;
 
     const timer = setInterval(() => {
-      handleNextRef.current();
+      handleNext();
     }, 4500);
 
     return () => {
       clearInterval(timer);
     };
-  }, [isEffectivelyPaused, timerResetKey]);
+  }, [isEffectivelyPaused, timerResetKey, handleNext]);
 
   // Mobile Swipe Gesture Handlers
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -735,19 +753,37 @@ export function LoksewaExamCountdown({
 
   // Track scroll position to keep activeIndex in sync during inertial / manual scroll
   const handleScroll = useCallback(() => {
+    if (isAutoScrollingRef.current) return;
+
     if (scrollDebounceRef.current) clearTimeout(scrollDebounceRef.current);
     scrollDebounceRef.current = setTimeout(() => {
+      if (isAutoScrollingRef.current) return;
       const container = containerRef.current;
-      if (!container || schedules.length === 0) return;
+      const total = schedulesCountRef.current;
+      if (!container || total === 0) return;
 
       const children = container.children;
       if (!children.length) return;
+
+      const maxScroll = container.scrollWidth - container.clientWidth;
+      if (maxScroll > 0 && container.scrollLeft >= maxScroll - 20) {
+        const lastIdx = total - 1;
+        activeIndexRef.current = lastIdx;
+        setActiveIndex(lastIdx);
+        return;
+      }
+
+      if (container.scrollLeft <= 20) {
+        activeIndexRef.current = 0;
+        setActiveIndex(0);
+        return;
+      }
 
       const containerRect = container.getBoundingClientRect();
       let closestIndex = 0;
       let minDistance = Infinity;
 
-      for (let i = 0; i < schedules.length; i++) {
+      for (let i = 0; i < total; i++) {
         const child = children[i] as HTMLElement | undefined;
         if (!child) continue;
         const childRect = child.getBoundingClientRect();
@@ -758,11 +794,10 @@ export function LoksewaExamCountdown({
         }
       }
 
-      if (closestIndex !== activeIndexRef.current) {
-        setActiveIndex(closestIndex);
-      }
-    }, 60);
-  }, [schedules.length]);
+      activeIndexRef.current = closestIndex;
+      setActiveIndex(closestIndex);
+    }, 50);
+  }, []);
 
   // Loading Skeleton State
   if (loading) {
@@ -903,8 +938,6 @@ export function LoksewaExamCountdown({
           setIsHovered(false);
           handleMouseUp();
         }}
-        onFocusCapture={() => setIsFocused(true)}
-        onBlurCapture={() => setIsFocused(false)}
       >
         {/* Scrollable Track - Snap on mobile & tablet, smooth carousel on desktop */}
         <div
@@ -922,7 +955,7 @@ export function LoksewaExamCountdown({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onScroll={handleScroll}
-          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory gap-3 sm:gap-4 md:gap-5 cursor-grab active:cursor-grabbing"
+          className="w-full min-w-0 max-w-full flex overflow-x-auto scrollbar-none py-1 px-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 rounded-2xl select-none snap-x snap-mandatory md:snap-none gap-3 sm:gap-4 md:gap-5 cursor-grab active:cursor-grabbing"
           style={{
             scrollBehavior: isDragging || prefersReducedMotion ? "auto" : "smooth",
             WebkitOverflowScrolling: "touch",

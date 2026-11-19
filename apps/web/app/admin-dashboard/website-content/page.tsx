@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { Globe, Mail, Shield, FileText, RotateCcw, ChevronRight, Loader2, Image as ImageIcon } from "lucide-react";
+import { Globe, Mail, Shield, FileText, RotateCcw, ChevronRight, Loader2, Image as ImageIcon, BarChart3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { adminApi, AdminWebsitePage } from "@/lib/api/admin";
 import toast from "react-hot-toast";
@@ -71,6 +71,33 @@ export default function WebsiteContentPage() {
               </p>
             </div>
             <span className="flex items-center gap-1 text-sm font-semibold text-[#0B2545] group-hover:text-[#2563EB] transition-colors shrink-0">
+              Manage <ChevronRight className="w-4 h-4" />
+            </span>
+          </Link>
+
+          <Link
+            href="/admin-dashboard/website-content/statistics"
+            className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors group"
+          >
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <BarChart3 className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold text-[#0B2545]">Homepage Statistics</p>
+                <Badge
+                  variant="outline"
+                  className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]"
+                >
+                  Animated Count-Up
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">Manage hero trust numbers, platform metrics, manual/automatic data sources, and count-up animations.</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Admin controlled &middot; /admin-dashboard/website-content/statistics
+              </p>
+            </div>
+            <span className="flex items-center gap-1 text-sm font-semibold text-[#0B2545] group-hover:text-emerald-600 transition-colors shrink-0">
               Manage <ChevronRight className="w-4 h-4" />
             </span>
           </Link>

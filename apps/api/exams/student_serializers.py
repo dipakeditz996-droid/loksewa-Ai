@@ -77,6 +77,9 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
 
     has_expert_solution = serializers.SerializerMethodField()
     is_expert_solution_published = serializers.BooleanField(read_only=True)
+    computed_status = serializers.CharField(read_only=True)
+    server_time = serializers.SerializerMethodField()
+    effective_end_time = serializers.SerializerMethodField()
 
     # The raw admin-set category, plus effective_category which auto-promotes
     # a Live Exam into the Model Exams listing 48h after its scheduled start
@@ -92,7 +95,8 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
             'total_questions', 'time_limit', 'total_marks',
             'passing_marks', 'marks_per_question', 'negative_marking',
             'negative_marking_value', 'max_attempts', 'allow_resume',
-            'auto_submit', 'start_time', 'end_time', 'status',
+            'auto_submit', 'start_time', 'end_time', 'effective_end_time', 'server_time',
+            'status', 'computed_status',
             'has_attempted', 'attempts_used', 'attempts_remaining',
             'active_attempt_id', 'latest_attempt_id', 'latest_attempt_status',
             'is_result_published', 'requires_admin_request',
@@ -169,6 +173,12 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
             return bool(sub and sub.is_published)
         return latest.status == 'evaluated' or (latest.status == 'submitted' and obj.result_visibility == 'immediate')
 
+    def get_server_time(self, obj):
+        return timezone.now().isoformat()
+
+    def get_effective_end_time(self, obj):
+        return obj.effective_end_time.isoformat() if obj.effective_end_time else None
+
     def get_requires_admin_request(self, obj):
         return obj.requires_admin_request
 
@@ -183,17 +193,18 @@ class StudentExaminationSerializer(serializers.ModelSerializer):
             return 'This exam is not currently active.'
 
         now = timezone.now()
+        effective_end = obj.effective_end_time
         if obj.is_scheduled_live:
-            if not obj.start_time or not obj.end_time:
+            if not obj.start_time:
                 return 'This Live Exam schedule is not configured.'
             if obj.start_time and now < obj.start_time:
                 return 'This exam has not opened yet.'
-            if obj.end_time and now > obj.end_time:
+            if effective_end and now >= effective_end:
                 return 'This exam window has closed.'
         elif not obj.starts_anytime_after_approval:
             if obj.start_time and now < obj.start_time:
                 return 'This exam has not opened yet.'
-            if obj.end_time and now > obj.end_time:
+            if effective_end and now >= effective_end:
                 return 'This exam window has closed.'
 
         # Subjective exam must have a valid question paper attached

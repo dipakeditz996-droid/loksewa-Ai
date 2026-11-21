@@ -1,34 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Search, SlidersHorizontal, ArrowRight, Clock, Calendar,
   Target, Zap, BrainCircuit, BarChart2, CheckCircle2, AlertCircle,
   FileText, ShieldCheck, Trophy, Layers, PlayCircle, BookOpen, User, Sparkles, Activity, Loader2
 } from "lucide-react";
 import { publicApi, type PublicExamination } from "@/lib/api/public-api";
-
-const STATUS_LABELS: Record<PublicExamination["status"], string> = {
-  DRAFT: "Draft",
-  UPCOMING: "Upcoming",
-  LIVE: "Live",
-  COMPLETED: "Completed",
-};
+import { useDynamicExams } from "@/hooks/useDynamicExams";
+import { DynamicExamCard } from "@/components/exams/DynamicExamCard";
 
 export default function ExamsPage() {
   const [exams, setExams] = useState<PublicExamination[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedExam, setSelectedExam] = useState<PublicExamination | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "LIVE" | "UPCOMING" | "COMPLETED">("ALL");
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +27,27 @@ export default function ExamsPage() {
     });
     return () => { mounted = false; };
   }, []);
+
+  const { liveExams, upcomingExams, completedExams, allSortedExams, counts } = useDynamicExams(exams);
+
+  // Filter exams based on status and search
+  const filteredExams = useMemo(() => {
+    let source = allSortedExams;
+    if (statusFilter === "LIVE") source = liveExams;
+    else if (statusFilter === "UPCOMING") source = upcomingExams;
+    else if (statusFilter === "COMPLETED") source = completedExams;
+
+    if (!searchQuery.trim()) return source;
+    const q = searchQuery.toLowerCase().trim();
+    return source.filter((e) => {
+      const matchesTitle = e.title.toLowerCase().includes(q);
+      const matchesLevel = (e.level || "").toLowerCase().includes(q);
+      const matchesPaper = (e.paper || "").toLowerCase().includes(q);
+      const matchesType = (e.type || "").toLowerCase().includes(q);
+      const matchesSubject = e.subjects.some((s) => s.toLowerCase().includes(q));
+      return matchesTitle || matchesLevel || matchesPaper || matchesType || matchesSubject;
+    });
+  }, [allSortedExams, liveExams, upcomingExams, completedExams, statusFilter, searchQuery]);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-[#0A1118]">
@@ -102,7 +111,7 @@ export default function ExamsPage() {
       <section className="py-10 sm:py-12 lg:py-14 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5 relative z-20">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-8 text-center">Choose Your Exam Experience</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Practice Exam */}
             <div className="group p-8 rounded-[20px] bg-slate-50 dark:bg-[#0A1118] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/30 dark:hover:border-white/20 hover:shadow-xl transition-all duration-300 relative overflow-hidden flex flex-col h-full">
@@ -177,12 +186,14 @@ export default function ExamsPage() {
       <section className="py-6 sm:py-8 bg-slate-50 dark:bg-[#0A1118]">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <div className="bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/10 rounded-[20px] p-4 shadow-sm">
-            
+
             <div className="relative mb-4">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input 
-                type="text" 
-                placeholder="Search exams, subjects, papers..." 
+              <input
+                type="text"
+                placeholder="Search exams, subjects, papers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full h-14 pl-12 pr-4 rounded-[12px] border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0A1118] text-slate-900 dark:text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#D4A72C]/50 transition-all font-[500]"
               />
             </div>
@@ -225,7 +236,7 @@ export default function ExamsPage() {
                 <option>Most Questions</option>
               </select>
             </div>
-            
+
           </div>
         </div>
       </section>
@@ -244,11 +255,11 @@ export default function ExamsPage() {
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-[6px] bg-[#D4A72C]/20 text-[#D4A72C] text-xs font-[800] uppercase tracking-wider mb-6 border border-[#D4A72C]/30">
                   <Sparkles className="w-3.5 h-3.5" /> FEATURED
                 </div>
-                
+
                 <h2 className="text-3xl md:text-4xl font-[900] text-white mb-4">
                   Section Officer — Full Model Examination
                 </h2>
-                
+
                 <p className="text-slate-300 font-[500] text-lg mb-8 max-w-2xl">
                   Experience a complete exam-style assessment covering multiple subjects based on the latest competitive examination syllabus. Test your readiness under real time constraints.
                 </p>
@@ -289,148 +300,100 @@ export default function ExamsPage() {
       {/* 5. AVAILABLE EXAMS */}
       <section className="py-10 sm:py-12 lg:py-14 bg-slate-50 dark:bg-[#0A1118]">
         <div className="container mx-auto px-4 max-w-[1200px]">
-          <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-2">Available Examinations</h2>
-          <p className="text-slate-600 dark:text-slate-400 font-[500] mb-6">Choose an assessment based on your target exam and preparation level.</p>
-          
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-2">Available Examinations</h2>
+              <p className="text-slate-600 dark:text-slate-400 font-[500]">Choose an assessment based on your target exam and preparation level.</p>
+            </div>
+
+            {/* Status Tabs */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setStatusFilter("ALL")}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-[800] transition-all flex items-center gap-1.5 ${
+                  statusFilter === "ALL"
+                    ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm"
+                    : "bg-white text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10"
+                }`}
+              >
+                All ({counts.total})
+              </button>
+
+              {counts.live > 0 && (
+                <button
+                  onClick={() => setStatusFilter("LIVE")}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-[800] transition-all flex items-center gap-1.5 ${
+                    statusFilter === "LIVE"
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 border border-emerald-200 dark:border-emerald-500/20"
+                  }`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  Live ({counts.live})
+                </button>
+              )}
+
+              {counts.upcoming > 0 && (
+                <button
+                  onClick={() => setStatusFilter("UPCOMING")}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-[800] transition-all flex items-center gap-1.5 ${
+                    statusFilter === "UPCOMING"
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20 border border-amber-200 dark:border-amber-500/20"
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  Upcoming ({counts.upcoming})
+                </button>
+              )}
+
+              {counts.completed > 0 && (
+                <button
+                  onClick={() => setStatusFilter("COMPLETED")}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-[800] transition-all flex items-center gap-1.5 ${
+                    statusFilter === "COMPLETED"
+                      ? "bg-slate-700 text-white dark:bg-slate-600 shadow-sm"
+                      : "bg-white text-slate-600 hover:bg-slate-100 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10"
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Ended ({counts.completed})
+                </button>
+              )}
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
             </div>
-          ) : exams.length === 0 ? (
-            <p className="text-slate-500 font-[500]">No examinations have been published yet. Check back soon.</p>
+          ) : filteredExams.length === 0 ? (
+            <div className="text-center py-16 bg-white dark:bg-[#0B1521] rounded-[20px] border border-slate-200 dark:border-white/10 p-8">
+              <p className="text-base font-[600] text-slate-500 dark:text-slate-400">
+                {searchQuery
+                  ? `No examinations found matching "${searchQuery}".`
+                  : "No examinations available in this category."}
+              </p>
+              {searchQuery && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSearchQuery("")}
+                  className="mt-4"
+                >
+                  Clear Search
+                </Button>
+              )}
+            </div>
           ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {exams.map((exam) => (
-              <Dialog key={exam.id}>
-                <DialogTrigger asChild>
-                  {/* 6. EXAM CARD DESIGN */}
-                  <div className="p-6 rounded-[20px] bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 hover:border-[#163E6B]/40 dark:hover:border-white/20 hover:shadow-lg transition-all group cursor-pointer flex flex-col h-full relative overflow-hidden">
-
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[6px] bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 text-[10px] font-[800] uppercase tracking-wider">
-                        {exam.type}
-                      </div>
-                      {exam.status === "LIVE" || exam.status === "UPCOMING" ? (
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                      ) : (
-                        <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                      )}
-                    </div>
-
-                    <h3 className="text-lg font-[800] text-slate-900 dark:text-white mb-1 group-hover:text-[#163E6B] dark:group-hover:text-[#D4A72C] transition-colors leading-tight">
-                      {exam.title}
-                    </h3>
-                    <p className="text-sm font-[600] text-slate-500 dark:text-slate-400 mb-6">{exam.level || "General"} • {exam.paper}</p>
-
-                    <div className="grid grid-cols-2 gap-3 mb-6 mt-auto">
-                      <div className="bg-slate-50 dark:bg-[#0A1118] p-3 rounded-[10px] border border-slate-100 dark:border-white/5">
-                        <div className="text-[10px] font-[800] text-slate-400 uppercase tracking-wider mb-1">Questions</div>
-                        <div className="text-sm font-[800] text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5" /> {exam.questions}
-                        </div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0A1118] p-3 rounded-[10px] border border-slate-100 dark:border-white/5">
-                        <div className="text-[10px] font-[800] text-slate-400 uppercase tracking-wider mb-1">Duration</div>
-                        <div className="text-sm font-[800] text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" /> {exam.duration}m
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-2 pt-4 border-t border-slate-100 dark:border-white/5">
-                      <span className={`text-xs font-[800] px-2 py-1 rounded-[4px]
-                        ${exam.status === 'LIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' :
-                          exam.status === 'UPCOMING' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' :
-                          'bg-slate-100 text-slate-600 dark:bg-white/5 dark:text-slate-400'}`}>
-                        {STATUS_LABELS[exam.status]}
-                      </span>
-
-                      <span className="text-sm font-[800] text-[#163E6B] dark:text-[#D4A72C] flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                        {exam.status === "COMPLETED" ? "View Details" : "Start Exam"} <ArrowRight className="w-4 h-4 ml-1" />
-                      </span>
-                    </div>
-                  </div>
-                </DialogTrigger>
-
-                {/* 7. EXAM DETAIL PREVIEW (Modal) */}
-                <DialogContent className="max-w-2xl bg-white dark:bg-[#0B1521] border-slate-200 dark:border-white/10 rounded-[24px] p-0 overflow-hidden">
-                  <div className="bg-slate-50 dark:bg-[#0A1420] p-6 md:p-8 border-b border-slate-200 dark:border-white/10 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4A72C]/10 rounded-bl-full pointer-events-none"></div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-[6px] bg-[#163E6B]/10 dark:bg-white/10 text-[#163E6B] dark:text-white text-xs font-[800] uppercase tracking-wider mb-4 border border-[#163E6B]/20 dark:border-white/20">
-                      Exam Overview
-                    </div>
-                    <DialogTitle className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-2">{exam.title}</DialogTitle>
-                    <DialogDescription className="text-slate-600 dark:text-slate-400 font-[500]">
-                      {exam.level || "General"} • {exam.type} • {exam.paper}
-                    </DialogDescription>
-                  </div>
-
-                  <div className="p-6 md:p-8">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                      <div className="bg-slate-50 dark:bg-[#0A1118] p-4 rounded-[12px] border border-slate-100 dark:border-white/5 text-center">
-                        <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Questions</div>
-                        <div className="text-xl font-[900] text-slate-900 dark:text-white">{exam.questions}</div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0A1118] p-4 rounded-[12px] border border-slate-100 dark:border-white/5 text-center">
-                        <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Duration</div>
-                        <div className="text-xl font-[900] text-slate-900 dark:text-white">{exam.duration}m</div>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-[#0A1118] p-4 rounded-[12px] border border-slate-100 dark:border-white/5 text-center">
-                        <div className="text-xs font-[800] text-slate-500 uppercase mb-1">Status</div>
-                        <div className="text-xl font-[900] text-slate-900 dark:text-white">{STATUS_LABELS[exam.status]}</div>
-                      </div>
-                    </div>
-
-                    {exam.subjects.length > 0 && (
-                    <div className="mb-8">
-                      <h4 className="text-sm font-[800] text-slate-900 dark:text-white mb-3 uppercase tracking-wider">Subjects Covered</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {exam.subjects.map((sub, i) => (
-                          <span key={i} className="px-3 py-1.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-[8px] text-sm font-[600] text-slate-700 dark:text-slate-300">
-                            {sub}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    )}
-
-                    <div className="mb-8 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-[12px] p-5">
-                      <h4 className="text-sm font-[800] text-amber-900 dark:text-amber-500 mb-3 uppercase tracking-wider flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> Instructions
-                      </h4>
-                      <ul className="space-y-2">
-                        <li className="text-sm font-[500] text-amber-800 dark:text-amber-200/70 flex items-start gap-2">
-                          <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-500 shrink-0"></span> Read each question carefully before answering.
-                        </li>
-                        <li className="text-sm font-[500] text-amber-800 dark:text-amber-200/70 flex items-start gap-2">
-                          <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-500 shrink-0"></span> You can navigate freely between questions.
-                        </li>
-                        <li className="text-sm font-[500] text-amber-800 dark:text-amber-200/70 flex items-start gap-2">
-                          <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-500 shrink-0"></span> Review all your answers before final submission.
-                        </li>
-                        <li className="text-sm font-[500] text-amber-800 dark:text-amber-200/70 flex items-start gap-2">
-                          <span className="mt-1.5 w-1 h-1 rounded-full bg-amber-500 shrink-0"></span> The exam will automatically submit when the timer expires.
-                        </li>
-                      </ul>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Link href="/login" className="flex-1">
-                        <Button className="w-full h-14 rounded-[12px] bg-[#163E6B] dark:bg-[#D4A72C] hover:bg-[#163E6B]/90 dark:hover:bg-[#D4A72C]/90 text-white dark:text-[#0A1118] font-[800] text-[16px]">
-                          Start Examination <ArrowRight className="w-5 h-5 ml-2" />
-                        </Button>
-                      </Link>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="h-14 px-8 rounded-[12px] border-slate-300 dark:border-white/20 text-slate-700 dark:text-slate-300 font-[700]">
-                          Cancel
-                        </Button>
-                      </DialogTrigger>
-                    </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
-            ))}
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredExams.map((exam) => (
+                <DynamicExamCard key={exam.id} exam={exam} />
+              ))}
+            </div>
           )}
         </div>
       </section>
@@ -444,9 +407,9 @@ export default function ExamsPage() {
               Our interface mirrors actual computer-based testing environments to ensure you are comfortable on exam day.
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            
+
             {/* Exam Interface Mockup */}
             <div className="bg-slate-100 dark:bg-[#0A1118] border border-slate-200 dark:border-white/10 rounded-[20px] shadow-xl overflow-hidden flex flex-col">
               {/* Mock Header */}
@@ -457,7 +420,7 @@ export default function ExamsPage() {
                   <span className="font-[900] text-rose-600 dark:text-rose-400 font-mono">01:12:48</span>
                 </div>
               </div>
-              
+
               {/* Mock Body */}
               <div className="p-6 flex-1 bg-white/50 dark:bg-transparent">
                 <p className="text-lg font-[600] text-slate-800 dark:text-slate-200 mb-8 leading-relaxed">
@@ -482,16 +445,16 @@ export default function ExamsPage() {
                   <Button variant="outline" className="h-10 text-xs font-[700] border-amber-200 text-amber-700 dark:border-amber-500/30 dark:text-amber-500 bg-amber-50 dark:bg-amber-500/10 cursor-not-allowed">Mark for Review</Button>
                   <Button className="h-10 text-xs font-[700] bg-[#163E6B] dark:bg-white text-white dark:text-[#0A1118] cursor-not-allowed">Next Question</Button>
                 </div>
-                
+
                 <div className="border-t border-slate-100 dark:border-white/5 pt-4">
                   <div className="text-[10px] font-[800] text-slate-400 uppercase tracking-wider mb-2">Question Palette</div>
                   <div className="flex flex-wrap gap-1.5">
                     {[...Array(10)].map((_, i) => (
                       <div key={i} className={`w-7 h-7 rounded-[4px] flex items-center justify-center text-[10px] font-[800] 
-                        ${i < 3 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 
-                          i === 3 ? 'bg-[#163E6B] text-white dark:bg-[#D4A72C] dark:text-[#0A1118]' : 
-                          i === 7 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' : 
-                          'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-400'}`}>
+                        ${i < 3 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
+                          i === 3 ? 'bg-[#163E6B] text-white dark:bg-[#D4A72C] dark:text-[#0A1118]' :
+                            i === 7 ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' :
+                              'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-400'}`}>
                         {i + 21}
                       </div>
                     ))}
@@ -507,10 +470,10 @@ export default function ExamsPage() {
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-[6px] bg-slate-100 dark:bg-white/5 text-xs font-[800] text-slate-600 dark:text-slate-400 uppercase tracking-wider w-fit border border-slate-200 dark:border-white/10">
                 Sample Performance View
               </div>
-              
+
               <div className="bg-slate-50 dark:bg-[#0A1118] border border-slate-200 dark:border-white/10 rounded-[20px] p-8 shadow-sm flex-1 flex flex-col">
                 <h3 className="text-xl font-[900] text-slate-900 dark:text-white mb-8">Know Your Performance</h3>
-                
+
                 <div className="grid grid-cols-2 gap-4 mb-8">
                   <div className="p-5 bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 rounded-[16px] flex flex-col items-center justify-center text-center">
                     <div className="text-3xl font-[900] text-[#163E6B] dark:text-[#D4A72C] mb-1">82<span className="text-lg text-slate-400">/100</span></div>
@@ -534,14 +497,14 @@ export default function ExamsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-auto">
                   <div className="bg-white dark:bg-[#0B1521] p-5 border border-slate-200 dark:border-white/5 rounded-[16px]">
-                    <h5 className="text-sm font-[800] text-slate-900 dark:text-white mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500"/> Strong</h5>
+                    <h5 className="text-sm font-[800] text-slate-900 dark:text-white mb-3 flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500" /> Strong</h5>
                     <ul className="space-y-2">
                       <li className="text-sm font-[600] text-slate-600 dark:text-slate-300">General Knowledge</li>
                       <li className="text-sm font-[600] text-slate-600 dark:text-slate-300">Constitution</li>
                     </ul>
                   </div>
                   <div className="bg-white dark:bg-[#0B1521] p-5 border border-slate-200 dark:border-white/5 rounded-[16px]">
-                    <h5 className="text-sm font-[800] text-slate-900 dark:text-white mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-rose-500"/> Needs Improvement</h5>
+                    <h5 className="text-sm font-[800] text-slate-900 dark:text-white mb-3 flex items-center gap-2"><AlertCircle className="w-4 h-4 text-rose-500" /> Needs Improvement</h5>
                     <ul className="space-y-2">
                       <li className="text-sm font-[600] text-slate-600 dark:text-slate-300">Current Affairs</li>
                       <li className="text-sm font-[600] text-slate-600 dark:text-slate-300">Public Admin.</li>
@@ -588,7 +551,7 @@ export default function ExamsPage() {
       <section className="py-20 bg-white dark:bg-[#0B1521] border-y border-slate-200 dark:border-white/5">
         <div className="container mx-auto px-4 max-w-[1200px]">
           <h2 className="text-2xl md:text-3xl font-[900] text-slate-900 dark:text-white mb-16 text-center">How Exams Work</h2>
-          
+
           <div className="flex flex-col md:flex-row justify-between items-start md:items-start relative gap-8 md:gap-4">
             {/* Desktop connecting line */}
             <div className="hidden md:block absolute top-6 left-[8%] right-[8%] h-px bg-slate-200 dark:bg-white/10 z-0"></div>
@@ -619,7 +582,7 @@ export default function ExamsPage() {
       <section className="py-20 bg-slate-50 dark:bg-[#0A1118]">
         <div className="container mx-auto px-4 max-w-[1000px] text-center">
           <h2 className="text-3xl font-[900] text-slate-900 dark:text-white mb-10">Find the Right Exam For You</h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12 text-left">
             <div className="p-8 bg-white dark:bg-[#0B1521] border border-slate-200 dark:border-white/5 rounded-[20px] hover:border-[#163E6B]/30 dark:hover:border-white/20 transition-all">
               <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center mb-4 text-emerald-600 dark:text-emerald-400">
@@ -684,15 +647,15 @@ export default function ExamsPage() {
               READY FOR THE REAL TEST?
             </span>
           </div>
-          
+
           <h2 className="text-4xl md:text-5xl font-[900] text-white mb-6 tracking-tight">
             Turn Preparation Into Performance.
           </h2>
-          
+
           <p className="text-lg md:text-xl text-slate-300 font-[500] mb-10 leading-relaxed">
             Take structured examinations, discover your weak areas, and prepare with confidence.
           </p>
-          
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/courses">
               <Button variant="outline" className="h-14 px-8 rounded-[12px] bg-transparent border-white/30 text-white hover:bg-white/10 font-[700] text-[16px]">

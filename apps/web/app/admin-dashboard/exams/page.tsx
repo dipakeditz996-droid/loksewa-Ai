@@ -453,10 +453,22 @@ export default function ExamsOverviewPage() {
                     </TableCell>
 
                     <TableCell className="align-top">
-                      <StatusBadge status={exam.status} />
-                      <div className="text-[10px] text-slate-400 mt-1.5 flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {new Date(exam.updated_at).toLocaleDateString()}
+                      <div className="flex flex-col gap-1 items-start">
+                        <StatusBadge status={exam.status} />
+                        {exam.computed_status && exam.computed_status.toLowerCase() !== exam.status.toLowerCase() && (
+                          <Badge variant="outline" className={`text-[10px] font-bold ${
+                            exam.computed_status === 'LIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            exam.computed_status === 'UPCOMING' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                            exam.computed_status === 'COMPLETED' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            'bg-slate-50 text-slate-600 border-slate-200'
+                          }`}>
+                            Computed: {exam.computed_status}
+                          </Badge>
+                        )}
+                        <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(exam.updated_at).toLocaleDateString()}
+                        </div>
                       </div>
                     </TableCell>
 

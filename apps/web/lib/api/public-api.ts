@@ -202,11 +202,17 @@ export interface PublicExamination {
   title: string;
   level: string | null;
   type: string;
+  category?: string | null;
   paper: string;
   questions: number;
   duration: number;
   subjects: string[];
   status: "DRAFT" | "UPCOMING" | "LIVE" | "COMPLETED";
+  start_time?: string | null;
+  end_time?: string | null;
+  server_time?: string | null;
+  is_free?: boolean;
+  total_marks?: number;
 }
 
 // ── Public subjects & practice sets (real, public) ───────────────────────────

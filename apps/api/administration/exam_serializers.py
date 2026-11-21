@@ -16,6 +16,7 @@ class ExaminationSerializer(serializers.ModelSerializer):
     subject_name = serializers.CharField(source='subject.name', read_only=True)
     topic_name = serializers.CharField(source='topic.name', read_only=True, allow_null=True)
     question_set_name = serializers.CharField(source='question_set.name', read_only=True)
+    computed_status = serializers.CharField(read_only=True)
     attempts_count = serializers.SerializerMethodField()
     evaluation_type = serializers.ChoiceField(
         choices=[
@@ -46,7 +47,7 @@ class ExaminationSerializer(serializers.ModelSerializer):
             'passing_marks', 'marks_per_question', 'negative_marking', 'negative_marking_value',
             'max_attempts', 'allow_resume', 'auto_submit', 'result_visibility', 
             'show_correct_answers', 'randomize_questions', 'randomize_options', 
-            'start_time', 'end_time', 'status', 'created_at', 'updated_at', 
+            'start_time', 'end_time', 'status', 'computed_status', 'created_at', 'updated_at', 
             'eligibility_rules', 'attempts_count',
             'question_paper_pdf', 'question_paper_page_count', 'question_paper_file_size',
             'expert_solution_pdf', 'expert_solution_page_count', 'expert_solution_file_size',
@@ -93,6 +94,17 @@ class ExaminationSerializer(serializers.ModelSerializer):
         if exam_type == 'subjective':
             attrs['randomize_questions'] = False
             attrs['randomize_options'] = False
+
+        # Schedule and duration validation
+        time_limit = attrs.get('time_limit', getattr(self.instance, 'time_limit', None))
+        if time_limit is not None and time_limit <= 0:
+            raise serializers.ValidationError({'time_limit': 'Time limit must be greater than 0 minutes.'})
+
+        start_time = attrs.get('start_time', getattr(self.instance, 'start_time', None))
+        end_time = attrs.get('end_time', getattr(self.instance, 'end_time', None))
+        if start_time and end_time and end_time <= start_time:
+            raise serializers.ValidationError({'end_time': 'End time must be after start time.'})
+
         return attrs
 
     @staticmethod

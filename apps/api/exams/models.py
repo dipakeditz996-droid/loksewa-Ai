@@ -798,20 +798,35 @@ class Examination(models.Model):
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
     @property
+    def effective_end_time(self):
+        """
+        Authoritative end time of this examination window.
+        Uses end_time if explicitly set; otherwise, if start_time and time_limit exist,
+        effective_end_time = start_time + timedelta(minutes=time_limit).
+        """
+        if self.end_time:
+            return self.end_time
+        if self.start_time and self.time_limit:
+            from datetime import timedelta
+            return self.start_time + timedelta(minutes=self.time_limit)
+        return None
+
+    @property
     def computed_status(self):
         """
         Calculates server-authoritative status:
         - 'DRAFT' (if status not in ['published', 'live'])
         - 'UPCOMING' (if status in ['published', 'live'] and start_time and timezone.now() < start_time)
-        - 'LIVE' (if status in ['published', 'live'] and (not start_time or start_time <= timezone.now()) and (not end_time or timezone.now() <= end_time))
-        - 'COMPLETED' (if status in ['published', 'live'] and end_time and timezone.now() > end_time)
+        - 'COMPLETED' (if status in ['published', 'live'] and effective_end_time and timezone.now() >= effective_end_time)
+        - 'LIVE' (if status in ['published', 'live'])
         """
         if self.status not in ('published', 'live'):
             return 'DRAFT'
         now = timezone.now()
         if self.start_time and now < self.start_time:
             return 'UPCOMING'
-        if self.end_time and now > self.end_time:
+        end = self.effective_end_time
+        if end and now >= end:
             return 'COMPLETED'
         return 'LIVE'
 

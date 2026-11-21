@@ -76,6 +76,7 @@ export interface Examination {
   start_time?: string;
   end_time?: string;
   status: ExaminationStatus;
+  computed_status?: 'DRAFT' | 'UPCOMING' | 'LIVE' | 'COMPLETED' | string;
   created_at: string;
   updated_at: string;
   eligibility_rules: EligibilityRule[];

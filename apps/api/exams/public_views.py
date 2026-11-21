@@ -187,29 +187,69 @@ class PublicSyllabusTreeView(APIView):
 class PublicExaminationListView(APIView):
     """GET /api/public/exams/ - published mock/practice examinations for the
     anonymous Exams page. Only metadata is exposed; questions themselves are
-    never returned pre-login."""
+    never returned pre-login.
+    
+    Automatic Priority Sorting:
+      Priority 1 — LIVE EXAMS (first, ordered by scheduled start_time or created_at)
+      Priority 2 — UPCOMING EXAMS (next, ordered by nearest start_time ascending)
+      Priority 3 — COMPLETED EXAMS (last, ordered by effective_end_time descending)
+    """
     permission_classes = [AllowAny]
 
     def get(self, request):
-        exams = Examination.objects.filter(status='published').select_related(
-            'exam', 'subject', 'subject__paper'
-        ).order_by('-created_at')[:30]
+        from django.utils import timezone
+        now = timezone.now()
+        exams = list(Examination.objects.filter(status='published').select_related(
+            'exam', 'subject', 'subject__paper', 'category'
+        ))
 
-        data = []
+        live_exams = []
+        upcoming_exams = []
+        completed_exams = []
+
         for e in exams:
+            status = e.computed_status
+            if status == 'LIVE':
+                live_exams.append(e)
+            elif status == 'UPCOMING':
+                upcoming_exams.append(e)
+            elif status == 'COMPLETED':
+                completed_exams.append(e)
+
+        # Sort Priority 1: LIVE exams by start_time or created_at (descending)
+        live_exams.sort(key=lambda x: x.start_time or x.created_at, reverse=True)
+
+        # Sort Priority 2: UPCOMING exams by nearest start_time first (ascending)
+        upcoming_exams.sort(key=lambda x: x.start_time or now)
+
+        # Sort Priority 3: COMPLETED exams by most recently completed first (descending)
+        completed_exams.sort(key=lambda x: x.effective_end_time or x.updated_at, reverse=True)
+
+        sorted_exams = (live_exams + upcoming_exams + completed_exams)[:30]
+
+        now_iso = now.isoformat()
+        data = []
+        for e in sorted_exams:
             data.append({
                 'id': e.id,
                 'title': e.title,
                 'level': e.exam.name if e.exam else None,
                 'type': e.get_exam_type_display(),
+                'category': e.category.name if e.category else None,
                 'paper': e.subject.paper.name if e.subject and e.subject.paper else 'Mixed',
                 'questions': e.total_questions,
                 'duration': e.time_limit,
                 'subjects': [e.subject.name] if e.subject else [],
                 'status': e.computed_status,
+                'start_time': e.start_time.isoformat() if e.start_time else None,
+                'end_time': e.effective_end_time.isoformat() if e.effective_end_time else None,
+                'server_time': now_iso,
+                'is_free': e.is_free,
+                'total_marks': e.total_marks,
             })
         response = Response(data)
-        response['Cache-Control'] = 'public, max-age=300, s-maxage=300, stale-while-revalidate=600'
+        response['X-Server-Time'] = now_iso
+        response['Cache-Control'] = 'public, max-age=15, s-maxage=15, stale-while-revalidate=30'
         return response
 
 
